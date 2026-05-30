@@ -1,9 +1,9 @@
 import Foundation
 import Combine
 
-/// Drives playback of a single email: speaks it block by block, handles images
-/// per the user's preference, tracks position for highlighting, and marks the
-/// message read when it finishes.
+/// Drives playback of a single email: speaks it block by block (via whichever
+/// `SpeechEngine` is configured), handles images per the user's preference,
+/// tracks position for highlighting, and marks the message read when it finishes.
 @MainActor
 final class EmailPlayerViewModel: ObservableObject {
 
@@ -32,14 +32,17 @@ final class EmailPlayerViewModel: ObservableObject {
     private var mailService: MailService
     private let settings: AppSettings
     private let highlights: HighlightStore
-    private let speech = SpeechReader()
+
+    private var engine: SpeechEngine
+    /// Identifies the engine config in use, so we rebuild only when it changes.
+    private var engineSignature = ""
 
     private var hasStarted = false
     private var timer: Timer?
     private var estimatedDuration: TimeInterval = 1
     /// Log of (blockIndex, elapsedAtStart) for the highlight lookback window.
     private var spokenLog: [(index: Int, start: TimeInterval)] = []
-    private var cancellables = Set<AnyCancellable>()
+    private let remote = RemoteCommandController()
 
     init(mailService: MailService,
          settings: AppSettings = .shared,
@@ -47,13 +50,9 @@ final class EmailPlayerViewModel: ObservableObject {
         self.mailService = mailService
         self.settings = settings
         self.highlights = highlights
-
-        speech.onFinish = { [weak self] natural in
-            self?.handleUtteranceFinished(natural: natural)
-        }
-        speech.$spokenWordRange
-            .sink { [weak self] range in self?.spokenWordRange = range }
-            .store(in: &cancellables)
+        self.engine = EmailPlayerViewModel.makeEngine(settings: settings)
+        wire(engine)
+        engineSignature = currentEngineSignature()
     }
 
     /// Rebind to the active backend (demo vs Google) once `AppState` knows it.
@@ -66,6 +65,10 @@ final class EmailPlayerViewModel: ObservableObject {
     var currentBlock: ContentBlock? {
         blocks.indices.contains(currentBlockIndex) ? blocks[currentBlockIndex] : nil
     }
+
+    /// True when the player is currently sitting on an image (e.g. paused to
+    /// digest it). The UI/lock screen offers a "skip image" affordance then.
+    var isOnImage: Bool { currentBlock?.isImage ?? false }
 
     /// 0...1 progress through the email, by block position.
     var progress: Double {
@@ -104,8 +107,8 @@ final class EmailPlayerViewModel: ObservableObject {
             speakBlock(at: 0)
             return
         }
-        if speech.isPaused {
-            speech.resume()
+        if engine.isPaused {
+            engine.resume()
             isPlaying = true
             startTimer()
             updateNowPlaying()
@@ -116,7 +119,7 @@ final class EmailPlayerViewModel: ObservableObject {
     }
 
     func pause() {
-        speech.pause()
+        engine.pause()
         isPlaying = false
         stopTimer()
         updateNowPlaying()
@@ -132,6 +135,12 @@ final class EmailPlayerViewModel: ObservableObject {
         guard parsed != nil else { return }
         hasStarted = true
         speakBlock(at: max(currentBlockIndex - 1, 0))
+    }
+
+    /// Skip past the current image to the next block.
+    func skipImage() {
+        guard isOnImage else { return }
+        nextSentence()
     }
 
     func jump(toBlock index: Int) {
@@ -150,7 +159,7 @@ final class EmailPlayerViewModel: ObservableObject {
     }
 
     func stop() {
-        speech.stop()
+        engine.stop()
         isPlaying = false
         stopTimer()
     }
@@ -162,14 +171,12 @@ final class EmailPlayerViewModel: ObservableObject {
             complete()
             return
         }
+        ensureEngine()
         currentBlockIndex = index
         spokenLog.append((index, elapsed))
         let block = blocks[index]
         let pauseAfter = settings.removeSilence ? 0 : 0.2
-        speech.speak(block.spokenText,
-                     speed: settings.speed,
-                     voiceIdentifier: settings.voiceIdentifier,
-                     pauseAfter: pauseAfter)
+        engine.speak(block.spokenText, speed: settings.speed, pauseAfter: pauseAfter)
         isPlaying = true
         startTimer()
         updateNowPlaying()
@@ -190,14 +197,61 @@ final class EmailPlayerViewModel: ObservableObject {
         speakBlock(at: finished + 1)
     }
 
+    private func handleEngineError(_ message: String) {
+        errorMessage = message
+        isPlaying = false
+        stopTimer()
+        updateNowPlaying()
+    }
+
     private func complete() {
         isComplete = true
         isPlaying = false
         stopTimer()
         updateNowPlaying()
         guard let id = parsed?.email.id else { return }
+        markRead(id: id)
+    }
+
+    /// Mark the email read on the server and locally — used both on completion
+    /// and when the listener marks it read without finishing.
+    private func markRead(id: String) {
         onMarkedRead?(id)
         Task { try? await mailService.markRead(id: id) }
+    }
+
+    // MARK: - Engine selection
+
+    private func currentEngineSignature() -> String {
+        settings.elevenLabsActive
+            ? "eleven:\(settings.elevenLabsVoiceID)"
+            : "system:\(settings.voiceIdentifier)"
+    }
+
+    private static func makeEngine(settings: AppSettings) -> SpeechEngine {
+        if settings.elevenLabsActive {
+            return ElevenLabsSpeechEngine(
+                client: ElevenLabsClient(apiKey: settings.elevenLabsAPIKey),
+                voiceID: settings.elevenLabsVoiceID
+            )
+        }
+        return SystemSpeechEngine(voiceIdentifier: settings.voiceIdentifier)
+    }
+
+    /// Rebuild the engine if the user changed voice provider/voice in settings.
+    private func ensureEngine() {
+        let signature = currentEngineSignature()
+        guard signature != engineSignature else { return }
+        engine.stop()
+        engine = Self.makeEngine(settings: settings)
+        wire(engine)
+        engineSignature = signature
+    }
+
+    private func wire(_ engine: SpeechEngine) {
+        engine.onFinish = { [weak self] natural in self?.handleUtteranceFinished(natural: natural) }
+        engine.onWordRange = { [weak self] range in self?.spokenWordRange = range }
+        engine.onError = { [weak self] message in self?.handleEngineError(message) }
     }
 
     // MARK: - Highlighting
@@ -241,17 +295,25 @@ final class EmailPlayerViewModel: ObservableObject {
         timer = nil
     }
 
-    private let remote = RemoteCommandController()
-
     /// Wire hardware/transport controls (AirPods, lock screen) to this player.
-    func bindRemoteCommands(airPodsHighlight: Bool) {
-        remote.airPodsHighlightEnabled = airPodsHighlight
+    /// The next-track button is context-aware: it skips the current image when
+    /// one is showing, otherwise it captures a highlight (if AirPods-highlight
+    /// is on) or skips to the next sentence.
+    func bindRemoteCommands() {
         remote.onTogglePlayPause = { [weak self] in self?.togglePlayPause() }
         remote.onPlay = { [weak self] in self?.play() }
         remote.onPause = { [weak self] in self?.pause() }
-        remote.onNextSentence = { [weak self] in self?.nextSentence() }
-        remote.onPreviousSentence = { [weak self] in self?.previousSentence() }
-        remote.onHighlight = { [weak self] in self?.captureHighlight() }
+        remote.onPrevious = { [weak self] in self?.previousSentence() }
+        remote.onNext = { [weak self] in
+            guard let self else { return }
+            if self.isOnImage {
+                self.skipImage()
+            } else if self.settings.airPodsHighlightEnabled {
+                self.captureHighlight()
+            } else {
+                self.nextSentence()
+            }
+        }
         remote.start()
     }
 
@@ -262,12 +324,17 @@ final class EmailPlayerViewModel: ObservableObject {
 
     private func updateNowPlaying() {
         guard let parsed else { return }
+        var imageURL: URL?
+        if case .image(let image)? = currentBlock {
+            imageURL = image.remoteURL
+        }
         remote.updateNowPlaying(
             title: parsed.email.subjectOrFallback,
             sender: parsed.email.from.displayName,
             isPlaying: isPlaying,
             elapsed: elapsed,
-            duration: estimatedDuration
+            duration: estimatedDuration,
+            imageURL: imageURL
         )
     }
 

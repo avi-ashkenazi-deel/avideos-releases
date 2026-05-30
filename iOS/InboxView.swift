@@ -25,6 +25,16 @@ struct InboxView: View {
                         } label: {
                             EmailRow(email: email)
                         }
+                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                            if !email.isRead {
+                                Button {
+                                    Task { await viewModel.markRead(email.id) }
+                                } label: {
+                                    Label("Mark read", systemImage: "envelope.open")
+                                }
+                                .tint(.blue)
+                            }
+                        }
                     }
                     .listStyle(.plain)
                     .refreshable { await viewModel.load() }

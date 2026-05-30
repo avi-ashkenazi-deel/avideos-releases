@@ -44,6 +44,11 @@ struct EmailPlayerView: View {
         .overlay(alignment: .top) {
             if showCompletion { completionBanner }
         }
+        .alert("Playback problem", isPresented: .constant(viewModel.errorMessage != nil)) {
+            Button("OK") { viewModel.errorMessage = nil }
+        } message: {
+            Text(viewModel.errorMessage ?? "")
+        }
     }
 
     // MARK: - Transcript
@@ -81,8 +86,10 @@ struct EmailPlayerView: View {
                 .contentShape(Rectangle())
                 .onTapGesture { viewModel.jump(toBlock: index) }
         case .image(let image):
-            ImageBlockView(image: image, isCurrent: isCurrent)
-                .onTapGesture { viewModel.jump(toBlock: index) }
+            ImageBlockView(image: image, isCurrent: isCurrent) {
+                viewModel.skipImage()
+            }
+            .onTapGesture { viewModel.jump(toBlock: index) }
         }
     }
 
@@ -101,7 +108,7 @@ struct EmailPlayerView: View {
     }
 
     private func bindControls() {
-        viewModel.bindRemoteCommands(airPodsHighlight: appState.settings.airPodsHighlightEnabled)
+        viewModel.bindRemoteCommands()
         #if canImport(WatchConnectivity)
         WatchConnectivityBridge.shared.onCommand = { command in
             switch command {
@@ -154,12 +161,24 @@ private struct SentenceText: View {
 private struct ImageBlockView: View {
     let image: InlineImage
     let isCurrent: Bool
+    let onSkip: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label("Image", systemImage: "photo")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
+            HStack {
+                Label("Image", systemImage: "photo")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                if isCurrent {
+                    Button(action: onSkip) {
+                        Label("Skip", systemImage: "forward.end.fill")
+                            .font(.caption.weight(.semibold))
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                }
+            }
 
             Group {
                 if let url = image.remoteURL {

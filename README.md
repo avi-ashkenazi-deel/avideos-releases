@@ -65,6 +65,11 @@ move them to the Keychain before shipping.)
 | Highlight last 10s + write a note | `EmailPlayerViewModel.captureHighlight()`, `iOS/HighlightComposerView.swift`, `Shared/Services/HighlightStore.swift` |
 | AirPods press to highlight | `Shared/Services/RemoteCommandController.swift` |
 | Apple Watch app to do the same | `Watch/` + `Shared/Services/WatchConnectivityBridge.swift` |
+| Email image on the lock screen | `RemoteCommandController.updateNowPlaying(...imageURL:)` |
+| Skip the image from the lock-screen player | `EmailPlayerViewModel.skipImage()` (next-track is context-aware) |
+| ElevenLabs voice option | `Shared/Services/ElevenLabsClient.swift`, `Shared/Services/ElevenLabsSpeechEngine.swift`, `SettingsView` |
+| Pluggable speech backend (system vs cloud) | `SpeechEngine` protocol in `Shared/Services/SpeechReader.swift` |
+| Mark read without listening | `iOS/InboxView.swift` swipe action → `InboxViewModel.markRead(_:)` |
 
 ---
 
@@ -86,10 +91,15 @@ Watch/             SwiftUI screens for watchOS
 - **`EmailParser`** flattens an email body (HTML or plain text) into an ordered
   list of `ContentBlock`s — sentences interleaved with the images encountered,
   preserving position so images show up at the right moment.
-- **`SpeechReader`** wraps `AVSpeechSynthesizer`, speaking one block at a time
-  and reporting the live word range for on-screen highlighting. The audio
-  session is configured for spoken playback so it keeps going with the screen
-  locked and routes through AirPods.
+- **`SpeechEngine`** is a protocol with two implementations: `SystemSpeechEngine`
+  (on-device `AVSpeechSynthesizer`, with live word-range highlighting) and
+  `ElevenLabsSpeechEngine` (fetches MP3 from the ElevenLabs API and plays it via
+  `AVAudioPlayer`, with speed applied as a playback-rate multiplier). The player
+  swaps engines based on Settings. The audio session is configured for spoken
+  playback so it keeps going with the screen locked and routes through AirPods.
+- **Lock screen:** when the player reaches an image, that image is loaded and set
+  as Now Playing artwork, so it shows on the lock screen. The next-track control
+  is context-aware — while an image is showing it *skips the image*.
 - **`EmailPlayerViewModel`** is the brain: it drives playback block by block,
   applies the image behavior, tracks elapsed time for the 10-second highlight
   lookback, and marks the message read on completion.
@@ -105,6 +115,11 @@ Watch/             SwiftUI screens for watchOS
   sentences in that mode. Toggle it off to make AirPods skip as usual.
 - **"Remove silence"** with synthesized speech means *no pause between
   sentences* (vs. a short natural pause). It is not waveform silence-trimming.
+- **ElevenLabs** synthesizes one sentence per request, so expect a short network
+  gap between sentences and per-character billing on your ElevenLabs account.
+  The API key is stored in shared `UserDefaults` for now — move it to the
+  Keychain before shipping. There's no per-word highlight with ElevenLabs (the
+  whole active sentence highlights instead).
 - **Image content:** images are shown and announced ("there's an image", plus
   alt text when present). We don't yet describe image *contents*.
 - **Watch backend:** the watch currently reads the bundled demo inbox. Syncing a

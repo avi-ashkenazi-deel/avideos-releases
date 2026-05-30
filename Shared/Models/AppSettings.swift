@@ -58,6 +58,31 @@ final class AppSettings: ObservableObject {
         didSet { defaults.set(airPodsHighlightEnabled, forKey: Key.airPodsHighlight) }
     }
 
+    // MARK: ElevenLabs
+
+    /// Use ElevenLabs cloud voices instead of the on-device system voice.
+    @Published var useElevenLabs: Bool {
+        didSet { defaults.set(useElevenLabs, forKey: Key.useElevenLabs) }
+    }
+
+    @Published var elevenLabsAPIKey: String {
+        didSet { defaults.set(elevenLabsAPIKey, forKey: Key.elevenLabsAPIKey) }
+    }
+
+    @Published var elevenLabsVoiceID: String {
+        didSet { defaults.set(elevenLabsVoiceID, forKey: Key.elevenLabsVoiceID) }
+    }
+
+    /// Display name for the chosen voice (so settings can show it without a fetch).
+    @Published var elevenLabsVoiceName: String {
+        didSet { defaults.set(elevenLabsVoiceName, forKey: Key.elevenLabsVoiceName) }
+    }
+
+    /// True only when ElevenLabs is enabled *and* usable (key + voice present).
+    var elevenLabsActive: Bool {
+        useElevenLabs && !elevenLabsAPIKey.isEmpty && !elevenLabsVoiceID.isEmpty
+    }
+
     private let defaults: UserDefaults
 
     private enum Key {
@@ -66,6 +91,10 @@ final class AppSettings: ObservableObject {
         static let removeSilence = "settings.removeSilence"
         static let voiceIdentifier = "settings.voiceIdentifier"
         static let airPodsHighlight = "settings.airPodsHighlight"
+        static let useElevenLabs = "settings.useElevenLabs"
+        static let elevenLabsAPIKey = "settings.elevenLabsAPIKey"
+        static let elevenLabsVoiceID = "settings.elevenLabsVoiceID"
+        static let elevenLabsVoiceName = "settings.elevenLabsVoiceName"
     }
 
     init(defaults: UserDefaults = .voiceInbox) {
@@ -76,6 +105,10 @@ final class AppSettings: ObservableObject {
         self.removeSilence = defaults.object(forKey: Key.removeSilence) as? Bool ?? false
         self.voiceIdentifier = defaults.string(forKey: Key.voiceIdentifier) ?? ""
         self.airPodsHighlightEnabled = defaults.object(forKey: Key.airPodsHighlight) as? Bool ?? true
+        self.useElevenLabs = defaults.object(forKey: Key.useElevenLabs) as? Bool ?? false
+        self.elevenLabsAPIKey = defaults.string(forKey: Key.elevenLabsAPIKey) ?? ""
+        self.elevenLabsVoiceID = defaults.string(forKey: Key.elevenLabsVoiceID) ?? ""
+        self.elevenLabsVoiceName = defaults.string(forKey: Key.elevenLabsVoiceName) ?? ""
     }
 
     /// Clamp a friendly multiplier into the supported range.

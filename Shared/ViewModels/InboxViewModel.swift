@@ -37,4 +37,14 @@ final class InboxViewModel: ObservableObject {
         guard let idx = emails.firstIndex(where: { $0.id == id }) else { return }
         emails[idx].isRead = true
     }
+
+    /// Mark an email read on the server without opening/listening to it.
+    func markRead(_ id: String) async {
+        markReadLocally(id)
+        do {
+            try await mailService.markRead(id: id)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
 }
