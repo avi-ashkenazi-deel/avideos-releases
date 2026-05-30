@@ -83,6 +83,19 @@ struct SettingsView: View {
                 Button("Done") { dismiss() }
             }
         }
+        .onChange(of: settings.elevenLabsAPIKey) { _, _ in relayElevenLabs() }
+        .onChange(of: settings.elevenLabsVoiceID) { _, _ in relayElevenLabs() }
+        .onChange(of: settings.useElevenLabs) { _, _ in relayElevenLabs() }
+    }
+
+    /// Push the ElevenLabs config to the watch (the key isn't shared via the
+    /// app group because it lives in the per-app Keychain).
+    private func relayElevenLabs() {
+        WatchConnectivityBridge.shared.syncElevenLabsConfig(
+            key: settings.elevenLabsAPIKey,
+            voiceID: settings.elevenLabsVoiceID,
+            enabled: settings.useElevenLabs
+        )
     }
 
     private var voices: [AVSpeechSynthesisVoice] {

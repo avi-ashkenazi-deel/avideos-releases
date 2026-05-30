@@ -12,10 +12,32 @@ struct WatchPlayerView: View {
     var body: some View {
         VStack(spacing: 10) {
             ScrollView {
-                Text(currentText)
-                    .font(.body)
-                    .multilineTextAlignment(.center)
+                if case .image(let image)? = viewModel.currentBlock {
+                    VStack(spacing: 6) {
+                        if let url = image.remoteURL {
+                            AsyncImage(url: url) { img in
+                                img.resizable().scaledToFit()
+                            } placeholder: {
+                                Image(systemName: "photo").font(.title)
+                            }
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                        }
+                        Text(image.spokenDescription)
+                            .font(.footnote)
+                            .multilineTextAlignment(.center)
+                        Button { viewModel.skipImage() } label: {
+                            Label("Skip image", systemImage: "forward.end.fill")
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.small)
+                    }
                     .frame(maxWidth: .infinity)
+                } else {
+                    Text(currentText)
+                        .font(.body)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity)
+                }
             }
 
             ProgressView(value: viewModel.progress).tint(.accentColor)

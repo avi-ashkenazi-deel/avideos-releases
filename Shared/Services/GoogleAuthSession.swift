@@ -13,27 +13,28 @@ import AuthenticationServices
 final class GoogleAuthSession: NSObject {
 
     private let config: GoogleOAuthConfig
-    private let defaults: UserDefaults
     private var webSession: ASWebAuthenticationSession?
 
     private let authEndpoint = URL(string: "https://accounts.google.com/o/oauth2/v2/auth")!
     private let tokenEndpoint = URL(string: "https://oauth2.googleapis.com/token")!
 
-    init(config: GoogleOAuthConfig = .placeholder, defaults: UserDefaults = .voiceInbox) {
+    init(config: GoogleOAuthConfig = .placeholder) {
         self.config = config
-        self.defaults = defaults
     }
 
     var storedTokens: GoogleTokens? {
         get {
-            guard let data = defaults.data(forKey: "google.tokens") else { return nil }
+            guard let json = KeychainStore.get(account: KeychainStore.Account.googleTokens),
+                  let data = json.data(using: .utf8) else { return nil }
             return try? JSONDecoder().decode(GoogleTokens.self, from: data)
         }
         set {
-            if let newValue, let data = try? JSONEncoder().encode(newValue) {
-                defaults.set(data, forKey: "google.tokens")
+            if let newValue,
+               let data = try? JSONEncoder().encode(newValue),
+               let json = String(data: data, encoding: .utf8) {
+                KeychainStore.set(json, account: KeychainStore.Account.googleTokens)
             } else {
-                defaults.removeObject(forKey: "google.tokens")
+                KeychainStore.delete(account: KeychainStore.Account.googleTokens)
             }
         }
     }

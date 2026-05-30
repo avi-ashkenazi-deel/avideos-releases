@@ -44,8 +44,7 @@ Minimum targets: **iOS 17**, **watchOS 10**.
 
 Once configured, **"Continue with Google"** runs a real PKCE OAuth flow and the
 app reads, displays, plays, and marks-as-read your actual Gmail inbox. No client
-secret is stored on device. (Tokens are kept in shared `UserDefaults` for now —
-move them to the Keychain before shipping.)
+secret is stored on device, and the OAuth tokens are kept in the **Keychain**.
 
 ---
 
@@ -117,20 +116,24 @@ Watch/             SwiftUI screens for watchOS
   sentences* (vs. a short natural pause). It is not waveform silence-trimming.
 - **ElevenLabs** synthesizes one sentence per request, so expect a short network
   gap between sentences and per-character billing on your ElevenLabs account.
-  The API key is stored in shared `UserDefaults` for now — move it to the
-  Keychain before shipping. There's no per-word highlight with ElevenLabs (the
-  whole active sentence highlights instead).
+  The API key is stored in the **Keychain** (`KeychainStore`). Because that's
+  per-app, the phone relays the cloud-voice config (key, voice, on/off) to the
+  watch over the encrypted WatchConnectivity channel so the watch can use the
+  same voice. There's no per-word highlight with ElevenLabs (the whole active
+  sentence highlights instead).
 - **Image content:** images are shown and announced ("there's an image", plus
   alt text when present). We don't yet describe image *contents*.
-- **Watch backend:** the watch currently reads the bundled demo inbox. Syncing a
-  live Gmail session (token relay over `WatchConnectivity`) is a follow-up.
+- **Watch backend:** the watch currently reads the bundled demo inbox, but it
+  has the full player — play/pause, skip, highlight, system *and* ElevenLabs
+  voices, and an image view with a skip-image button. Syncing a live Gmail
+  session (token relay over `WatchConnectivity`) is a follow-up.
 - This project was authored in a Linux container and **has not been compiled in
   Xcode**. Generate the project and build on a Mac; expect to fix minor issues
   (signing, app-group provisioning) on first run.
 
 ## Possible next steps
 
-- Keychain-backed token storage and silent token refresh on launch.
+- Silent Google token refresh on launch (tokens already live in the Keychain).
 - Relay the Gmail session to the watch so it reads real mail.
 - On-device image description (Vision / VisionKit) for richer image stops.
 - Per-email playback resume and a global "play my whole inbox" queue.

@@ -11,6 +11,12 @@ struct VoiceInboxApp: App {
                 .task {
                     await appState.bootstrap()
                     WatchConnectivityBridge.shared.activate()
+                    let s = appState.settings
+                    WatchConnectivityBridge.shared.syncElevenLabsConfig(
+                        key: s.elevenLabsAPIKey,
+                        voiceID: s.elevenLabsVoiceID,
+                        enabled: s.useElevenLabs
+                    )
                 }
         }
     }

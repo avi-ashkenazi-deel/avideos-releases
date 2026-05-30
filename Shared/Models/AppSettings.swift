@@ -66,7 +66,7 @@ final class AppSettings: ObservableObject {
     }
 
     @Published var elevenLabsAPIKey: String {
-        didSet { defaults.set(elevenLabsAPIKey, forKey: Key.elevenLabsAPIKey) }
+        didSet { KeychainStore.set(elevenLabsAPIKey, account: KeychainStore.Account.elevenLabsAPIKey) }
     }
 
     @Published var elevenLabsVoiceID: String {
@@ -92,7 +92,6 @@ final class AppSettings: ObservableObject {
         static let voiceIdentifier = "settings.voiceIdentifier"
         static let airPodsHighlight = "settings.airPodsHighlight"
         static let useElevenLabs = "settings.useElevenLabs"
-        static let elevenLabsAPIKey = "settings.elevenLabsAPIKey"
         static let elevenLabsVoiceID = "settings.elevenLabsVoiceID"
         static let elevenLabsVoiceName = "settings.elevenLabsVoiceName"
     }
@@ -106,7 +105,7 @@ final class AppSettings: ObservableObject {
         self.voiceIdentifier = defaults.string(forKey: Key.voiceIdentifier) ?? ""
         self.airPodsHighlightEnabled = defaults.object(forKey: Key.airPodsHighlight) as? Bool ?? true
         self.useElevenLabs = defaults.object(forKey: Key.useElevenLabs) as? Bool ?? false
-        self.elevenLabsAPIKey = defaults.string(forKey: Key.elevenLabsAPIKey) ?? ""
+        self.elevenLabsAPIKey = KeychainStore.get(account: KeychainStore.Account.elevenLabsAPIKey) ?? ""
         self.elevenLabsVoiceID = defaults.string(forKey: Key.elevenLabsVoiceID) ?? ""
         self.elevenLabsVoiceName = defaults.string(forKey: Key.elevenLabsVoiceName) ?? ""
     }

@@ -23,6 +23,10 @@ final class WatchConnectivityBridge: NSObject, ObservableObject {
     /// Set by whichever side wants to react to incoming messages.
     var onHighlight: ((Highlight) -> Void)?
     var onCommand: ((PlayerCommand) -> Void)?
+    /// The ElevenLabs API key lives in the per-app Keychain, so the phone relays
+    /// the cloud-voice config to the watch (over the encrypted WatchConnectivity
+    /// channel) so the watch can use the same voice. `(key, voiceID, enabled)`.
+    var onElevenLabsConfig: ((String, String, Bool) -> Void)?
 
     @Published private(set) var isReachable = false
 
@@ -45,6 +49,11 @@ final class WatchConnectivityBridge: NSObject, ObservableObject {
         sendPayload(["highlight": data])
     }
 
+    /// Relay the ElevenLabs cloud-voice config to the counterpart (phone → watch).
+    func syncElevenLabsConfig(key: String, voiceID: String, enabled: Bool) {
+        sendPayload(["elevenKey": key, "elevenVoiceID": voiceID, "elevenEnabled": enabled])
+    }
+
     private func sendPayload(_ payload: [String: Any]) {
         guard let session, session.activationState == .activated else { return }
         if session.isReachable {
@@ -62,6 +71,11 @@ final class WatchConnectivityBridge: NSObject, ObservableObject {
         if let data = payload["highlight"] as? Data,
            let highlight = try? JSONDecoder.iso.decode(Highlight.self, from: data) {
             onHighlight?(highlight)
+        }
+        if let key = payload["elevenKey"] as? String {
+            let voiceID = payload["elevenVoiceID"] as? String ?? ""
+            let enabled = payload["elevenEnabled"] as? Bool ?? false
+            onElevenLabsConfig?(key, voiceID, enabled)
         }
     }
 }
