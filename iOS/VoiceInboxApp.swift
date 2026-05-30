@@ -10,6 +10,10 @@ struct VoiceInboxApp: App {
                 .environmentObject(appState)
                 .task {
                     await appState.bootstrap()
+                    // Save highlights captured on the watch into the shared store.
+                    WatchConnectivityBridge.shared.onHighlight = { highlight in
+                        HighlightStore.shared.add(highlight)
+                    }
                     WatchConnectivityBridge.shared.activate()
                     let s = appState.settings
                     WatchConnectivityBridge.shared.syncElevenLabsConfig(

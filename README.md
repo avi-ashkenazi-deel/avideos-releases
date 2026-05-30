@@ -62,6 +62,7 @@ secret is stored on device, and the OAuth tokens are kept in the **Keychain**.
 | Images appear on screen + "there's an image" | `Shared/Services/EmailParser.swift`, `ImageBlockView` in `EmailPlayerView.swift` |
 | Setting: pause on images vs. announce & continue | `ImageBehavior` in `AppSettings.swift`, handled in `EmailPlayerViewModel` |
 | Highlight last 10s + write a note | `EmailPlayerViewModel.captureHighlight()`, `iOS/HighlightComposerView.swift`, `Shared/Services/HighlightStore.swift` |
+| Notes section that links back to the email | `iOS/HighlightsListView.swift` → `iOS/HighlightDetailView.swift` (`EmailFromHighlightView` reopens the email and `seek`s to the captured block) |
 | AirPods press to highlight | `Shared/Services/RemoteCommandController.swift` |
 | Apple Watch app to do the same | `Watch/` + `Shared/Services/WatchConnectivityBridge.swift` |
 | Email image on the lock screen | `RemoteCommandController.updateNowPlaying(...imageURL:)` |

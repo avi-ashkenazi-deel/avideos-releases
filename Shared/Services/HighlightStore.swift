@@ -21,6 +21,8 @@ final class HighlightStore: ObservableObject {
     }
 
     func add(_ highlight: Highlight) {
+        // Idempotent by id so a highlight relayed from the watch isn't duplicated.
+        guard !highlights.contains(where: { $0.id == highlight.id }) else { return }
         highlights.insert(highlight, at: 0)
         save()
     }

@@ -38,6 +38,9 @@ final class EmailPlayerViewModel: ObservableObject {
     private var engineSignature = ""
 
     private var hasStarted = false
+    /// True when the current block has finished and we're idle on it (e.g.
+    /// paused to digest an image), so the next Play advances past it.
+    private var currentBlockSpoken = false
     private var timer: Timer?
     private var estimatedDuration: TimeInterval = 1
     /// Log of (blockIndex, elapsedAtStart) for the highlight lookback window.
@@ -89,6 +92,7 @@ final class EmailPlayerViewModel: ObservableObject {
             self.currentBlockIndex = 0
             self.isComplete = false
             self.hasStarted = false
+            self.currentBlockSpoken = false
             self.elapsed = 0
             self.spokenLog = []
         } catch {
@@ -102,11 +106,6 @@ final class EmailPlayerViewModel: ObservableObject {
 
     func play() {
         guard parsed != nil, !isComplete else { return }
-        if !hasStarted {
-            hasStarted = true
-            speakBlock(at: 0)
-            return
-        }
         if engine.isPaused {
             engine.resume()
             isPlaying = true
@@ -114,8 +113,14 @@ final class EmailPlayerViewModel: ObservableObject {
             updateNowPlaying()
             return
         }
-        // Idle because we stopped on an image to digest it — continue past it.
-        speakBlock(at: currentBlockIndex + 1)
+        if !hasStarted {
+            hasStarted = true
+            speakBlock(at: 0)
+            return
+        }
+        // Speak the current block, unless we already finished it (e.g. stopped on
+        // an image to digest it), in which case continue to the next one.
+        speakBlock(at: currentBlockSpoken ? currentBlockIndex + 1 : currentBlockIndex)
     }
 
     func pause() {
@@ -150,6 +155,19 @@ final class EmailPlayerViewModel: ObservableObject {
         speakBlock(at: index)
     }
 
+    /// Move to a block and wait there (no audio) — used when opening an email
+    /// from a saved highlight, so the listener can press play to resume from
+    /// the spot they bookmarked.
+    func seek(toBlock index: Int) {
+        guard blocks.indices.contains(index) else { return }
+        stop()
+        isComplete = false
+        hasStarted = true
+        currentBlockSpoken = false
+        currentBlockIndex = index
+        updateNowPlaying()
+    }
+
     /// Apply a new speed; if currently playing, re-speak the current block so
     /// the change takes effect immediately.
     func setSpeed(_ speed: Double) {
@@ -173,6 +191,7 @@ final class EmailPlayerViewModel: ObservableObject {
         }
         ensureEngine()
         currentBlockIndex = index
+        currentBlockSpoken = false
         spokenLog.append((index, elapsed))
         let block = blocks[index]
         let pauseAfter = settings.removeSilence ? 0 : 0.2
@@ -189,6 +208,7 @@ final class EmailPlayerViewModel: ObservableObject {
         if blocks.indices.contains(finished),
            blocks[finished].isImage,
            settings.imageBehavior == .pauseAndDigest {
+            currentBlockSpoken = true
             isPlaying = false
             stopTimer()
             updateNowPlaying()
@@ -271,6 +291,7 @@ final class EmailPlayerViewModel: ObservableObject {
             emailID: parsed.email.id,
             emailSubject: parsed.email.subjectOrFallback,
             audioOffset: elapsed,
+            blockIndex: currentBlockIndex,
             capturedText: text.isEmpty ? (currentBlock?.spokenText ?? "") : text
         )
         highlights.add(highlight)

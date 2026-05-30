@@ -9,7 +9,9 @@ struct EmailPlayerView: View {
     @StateObject private var viewModel = EmailPlayerViewModel(mailService: MockMailService())
 
     let email: Email
-    let onMarkedRead: (String) -> Void
+    /// When opened from a saved highlight, the block to position at on load.
+    var startBlockIndex: Int? = nil
+    var onMarkedRead: (String) -> Void = { _ in }
 
     @State private var highlightToAnnotate: Highlight?
     @State private var showCompletion = false
@@ -32,6 +34,7 @@ struct EmailPlayerView: View {
             viewModel.onMarkedRead = onMarkedRead
             viewModel.onHighlightCaptured = { highlight in highlightToAnnotate = highlight }
             await viewModel.load(email: email)
+            if let startBlockIndex { viewModel.seek(toBlock: startBlockIndex) }
         }
         .onAppear { bindControls() }
         .onDisappear { viewModel.unbindRemoteCommands() }

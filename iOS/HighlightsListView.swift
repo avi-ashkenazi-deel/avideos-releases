@@ -15,24 +15,28 @@ struct HighlightsListView: View {
             } else {
                 List {
                     ForEach(store.highlights) { highlight in
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(highlight.emailSubject)
-                                .font(.subheadline.weight(.semibold))
-                                .lineLimit(1)
-                            Text(highlight.capturedText)
-                                .font(.callout)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(3)
-                            if !highlight.note.isEmpty {
-                                Label(highlight.note, systemImage: "note.text")
-                                    .font(.footnote)
-                                    .foregroundStyle(.primary)
+                        NavigationLink {
+                            HighlightDetailView(highlight: highlight)
+                        } label: {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(highlight.emailSubject)
+                                    .font(.subheadline.weight(.semibold))
+                                    .lineLimit(1)
+                                Text(highlight.capturedText)
+                                    .font(.callout)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(3)
+                                if !highlight.note.isEmpty {
+                                    Label(highlight.note, systemImage: "note.text")
+                                        .font(.footnote)
+                                        .foregroundStyle(.primary)
+                                }
+                                Text(highlight.createdAt, format: .dateTime.month().day().hour().minute())
+                                    .font(.caption2)
+                                    .foregroundStyle(.tertiary)
                             }
-                            Text(highlight.createdAt, format: .dateTime.month().day().hour().minute())
-                                .font(.caption2)
-                                .foregroundStyle(.tertiary)
+                            .padding(.vertical, 2)
                         }
-                        .padding(.vertical, 2)
                     }
                     .onDelete { indexSet in
                         indexSet.map { store.highlights[$0].id }.forEach(store.remove)
@@ -40,7 +44,7 @@ struct HighlightsListView: View {
                 }
             }
         }
-        .navigationTitle("Highlights")
+        .navigationTitle("Highlights & Notes")
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
                 Button("Done") { dismiss() }
