@@ -1,0 +1,22 @@
+# Xcode / Swift
+build/
+DerivedData/
+*.xcodeproj/*
+!*.xcodeproj/project.pbxproj
+!*.xcodeproj/xcshareddata/
+*.xcworkspace/xcuserdata/
+xcuserdata/
+*.xcuserstate
+*.moved-aside
+.DS_Store
+
+# XcodeGen generates the project; keep it out of source control.
+VoiceInbox.xcodeproj/
+
+# Swift Package Manager
+.build/
+.swiftpm/
+
+# Secrets — never commit real OAuth credentials.
+Secrets.xcconfig
+GoogleService-Info.plist

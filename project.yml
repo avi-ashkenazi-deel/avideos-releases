@@ -1,0 +1,72 @@
+# XcodeGen project definition for VoiceInbox.
+#
+# This file is the source of truth for the Xcode project. The generated
+# `VoiceInbox.xcodeproj` is intentionally NOT committed (see .gitignore).
+#
+# To generate / regenerate the Xcode project on a Mac:
+#
+#     brew install xcodegen   # one time
+#     xcodegen generate
+#     open VoiceInbox.xcodeproj
+#
+# Then set your Apple Developer team and a unique bundle id prefix in
+# Xcode's signing settings (or in Secrets.xcconfig) before running on device.
+
+name: VoiceInbox
+
+options:
+  bundleIdPrefix: com.voiceinbox
+  createIntermediateGroups: true
+  deploymentTarget:
+    iOS: "17.0"
+    watchOS: "10.0"
+  groupSortPosition: top
+
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    DEVELOPMENT_TEAM: "" # <- set your team id here or in Xcode signing.
+
+targets:
+
+  # ---------------------------------------------------------------------------
+  # iPhone / iPad app
+  # ---------------------------------------------------------------------------
+  VoiceInbox:
+    type: application
+    platform: iOS
+    sources:
+      - path: iOS
+      - path: Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.voiceinbox.app
+        INFOPLIST_FILE: iOS/Info.plist
+        CODE_SIGN_ENTITLEMENTS: iOS/VoiceInbox.entitlements
+        TARGETED_DEVICE_FAMILY: "1,2"   # iPhone + iPad
+        GENERATE_INFOPLIST_FILE: NO
+        ENABLE_PREVIEWS: YES
+        SUPPORTS_MACCATALYST: NO
+    dependencies:
+      - target: VoiceInboxWatch
+        embed: true
+
+  # ---------------------------------------------------------------------------
+  # Apple Watch app (modern single-target watchOS app)
+  # ---------------------------------------------------------------------------
+  VoiceInboxWatch:
+    type: application
+    platform: watchOS
+    sources:
+      - path: Watch
+      - path: Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.voiceinbox.app.watchkitapp
+        INFOPLIST_FILE: Watch/Info.plist
+        CODE_SIGN_ENTITLEMENTS: Watch/VoiceInboxWatch.entitlements
+        GENERATE_INFOPLIST_FILE: NO
+        ENABLE_PREVIEWS: YES
+        WATCHOS_DEPLOYMENT_TARGET: "10.0"

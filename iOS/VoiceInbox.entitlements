@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- App Group lets the phone and watch share highlights/notes and settings. -->
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.com.voiceinbox.shared</string>
+	</array>
+</dict>
+</plist>
