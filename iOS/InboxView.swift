@@ -4,6 +4,7 @@ struct InboxView: View {
     @EnvironmentObject private var appState: AppState
     @StateObject private var viewModel: InboxViewModel
     @StateObject private var progress = ListeningProgressStore.shared
+    @StateObject private var readingTimes = ReadingTimeStore.shared
     @State private var showSettings = false
     @State private var showHighlights = false
 
@@ -44,7 +45,11 @@ struct InboxView: View {
                                 nextUnreadProvider: { id in viewModel.nextUnread(after: id) }
                             )
                         } label: {
-                            EmailRow(email: email, progress: progress.progress(for: email.id))
+                            EmailRow(
+                                email: email,
+                                readMinutes: readingTimes.minutes(for: email.id),
+                                progress: progress.progress(for: email.id)
+                            )
                         }
                         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                             Button {
@@ -64,7 +69,10 @@ struct InboxView: View {
                         }
                     }
                     .listStyle(.plain)
-                    .refreshable { await viewModel.load() }
+                    .refreshable {
+                        await viewModel.load()
+                        await viewModel.prefetchReadingTimes()
+                    }
                 }
             }
             .navigationTitle("Inbox")
@@ -97,6 +105,7 @@ struct InboxView: View {
             if viewModel.emails.isEmpty {
                 await viewModel.load()
             }
+            await viewModel.prefetchReadingTimes()
         }
     }
 }
@@ -128,6 +137,7 @@ private struct InboxStateView: View {
 
 private struct EmailRow: View {
     let email: Email
+    var readMinutes: Int? = nil
     var progress: ListeningProgress? = nil
 
     var body: some View {
@@ -154,11 +164,14 @@ private struct EmailRow: View {
                 Text(email.subjectOrFallback)
                     .font(.subheadline)
                     .fontWeight(email.isRead ? .regular : .medium)
-                    .lineLimit(1)
-                Text(email.snippet)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
                     .lineLimit(2)
+
+                if let readMinutes {
+                    Label("\(readMinutes) min read", systemImage: "clock")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.top, 1)
+                }
 
                 if let progress, progress.fraction > 0 {
                     HStack(spacing: 6) {

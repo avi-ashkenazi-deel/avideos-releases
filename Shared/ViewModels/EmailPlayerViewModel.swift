@@ -135,6 +135,12 @@ final class EmailPlayerViewModel: ObservableObject {
             parsed = ParsedEmail(email: parsed.email, blocks: [intro] + parsed.blocks)
         }
         self.parsed = parsed
+        // Cache an accurate reading-time estimate from the real text so the
+        // inbox shows it for opened messages without a separate fetch.
+        ReadingTimeStore.shared.record(
+            id: parsed.email.id,
+            minutes: ReadingTime.minutes(forText: parsed.blocks.map(\.spokenText).joined(separator: " "))
+        )
         self.estimatedDuration = Self.estimateDuration(parsed, speed: settings.speed)
         self.currentBlockIndex = 0
         self.isComplete = false

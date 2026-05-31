@@ -50,6 +50,32 @@ final class InboxViewModel: ObservableObject {
         emails[idx].isRead = true
     }
 
+    /// Fill in "X min read" for emails we don't have a cached estimate for yet,
+    /// by fetching bodies in small concurrent batches. Cached and persisted, so
+    /// it's a one-time cost per message (and skips ones already known).
+    func prefetchReadingTimes() async {
+        let store = ReadingTimeStore.shared
+        let missing = emails.map(\.id).filter { store.minutes(for: $0) == nil }
+        guard !missing.isEmpty else { return }
+        for start in stride(from: 0, to: missing.count, by: 5) {
+            let batch = Array(missing[start..<min(start + 5, missing.count)])
+            await withTaskGroup(of: (String, Int?).self) { group in
+                for id in batch {
+                    let service = mailService
+                    group.addTask {
+                        guard let full = try? await service.fetchFullEmail(id: id) else {
+                            return (id, nil)
+                        }
+                        return (id, ReadingTime.minutes(for: full))
+                    }
+                }
+                for await (id, minutes) in group {
+                    if let minutes { store.record(id: id, minutes: minutes) }
+                }
+            }
+        }
+    }
+
     /// Mark an email read on the server without opening/listening to it.
     func markRead(_ id: String) async {
         markReadLocally(id)
