@@ -63,6 +63,15 @@ struct GoogleTokens: Codable {
             expiresAt = Date()
         }
     }
+
+    // Explicit encoder: the `expiresIn` CodingKey has no matching property
+    // (it's only read from Google's response), which blocks synthesis.
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(accessToken, forKey: .accessToken)
+        try c.encodeIfPresent(refreshToken, forKey: .refreshToken)
+        try c.encode(expiresAt, forKey: .expiresAt)
+    }
 }
 
 /// PKCE helper: generates the verifier/challenge pair Google requires for
