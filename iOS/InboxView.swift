@@ -116,16 +116,16 @@ struct InboxView: View {
         }
     }
 
-    /// Load the email into the shared player and expand the Now Playing view.
+    /// Open the email in the shared player. If a different email is already
+    /// playing, this previews it without interrupting; otherwise it loads ready
+    /// to play.
     private func open(_ email: Email) {
-        player.onMarkedRead = { [weak viewModel] id in viewModel?.markReadLocally(id) }
-        player.markReadOverride = nil
-        player.nextUnreadProvider = { [weak viewModel] id in viewModel?.nextUnread(after: id) }
-        player.isExpanded = true
-        Task {
-            await player.load(email: email)
-            player.resumeIfAvailable()
-        }
+        player.open(
+            email: email,
+            isLocal: false,
+            onMarkedRead: { [weak viewModel] id in viewModel?.markReadLocally(id) },
+            nextUnreadProvider: { [weak viewModel] id in viewModel?.nextUnread(after: id) }
+        )
     }
 }
 

@@ -27,6 +27,19 @@ final class EmailPlayerViewModel: ObservableObject {
     /// stays visible whenever `parsed != nil`.
     @Published var isExpanded = false
 
+    /// An email opened for viewing while a *different* one is still playing. The
+    /// listener sees it and can choose to play it (which makes it active) without
+    /// interrupting current playback.
+    @Published private(set) var staged: ParsedEmail?
+    private var stagedConfig: StagedConfig?
+
+    private struct StagedConfig {
+        var onMarkedRead: ((String) -> Void)?
+        var markReadOverride: ((String) -> Void)?
+        var nextUnreadProvider: ((String) -> Email?)?
+        var startBlock: Int?
+    }
+
     /// Called after the email is marked read, so the inbox can update.
     var onMarkedRead: ((String) -> Void)?
     /// When set, used instead of the mail service to persist "read" — e.g. saved
@@ -116,6 +129,82 @@ final class EmailPlayerViewModel: ObservableObject {
         await apply(email)
     }
 
+    /// Open an item in the Now Playing view. If a *different* email is currently
+    /// playing, the new one is shown as a preview (staged) and playback continues
+    /// until the listener taps play; otherwise it loads and is ready immediately.
+    func open(email: Email,
+              isLocal: Bool,
+              startBlock: Int? = nil,
+              onMarkedRead: ((String) -> Void)? = nil,
+              markReadOverride: ((String) -> Void)? = nil,
+              nextUnreadProvider: ((String) -> Email?)? = nil) {
+        isExpanded = true
+        let config = StagedConfig(onMarkedRead: onMarkedRead,
+                                  markReadOverride: markReadOverride,
+                                  nextUnreadProvider: nextUnreadProvider,
+                                  startBlock: startBlock)
+        if isPlaying, parsed?.email.id != email.id {
+            Task { await stage(email: email, isLocal: isLocal, config: config) }
+        } else {
+            discardStaged()
+            self.onMarkedRead = onMarkedRead
+            self.markReadOverride = markReadOverride
+            self.nextUnreadProvider = nextUnreadProvider
+            Task {
+                if isLocal { await loadLocal(email) } else { await load(email: email) }
+                if let startBlock { seek(toBlock: startBlock) } else { resumeIfAvailable() }
+            }
+        }
+    }
+
+    private func stage(email: Email, isLocal: Bool, config: StagedConfig) async {
+        let full: Email
+        if isLocal {
+            full = email
+        } else {
+            do { full = try await mailService.fetchFullEmail(id: email.id) }
+            catch { errorMessage = error.localizedDescription; return }
+        }
+        let parsed = await Task.detached(priority: .userInitiated) { EmailParser.parse(full) }.value
+        staged = parsed
+        stagedConfig = config
+    }
+
+    /// Commit the staged item: stop current playback, make it active, and play.
+    func playStaged() {
+        guard let stagedEmail = staged, let config = stagedConfig else { return }
+        stop()
+        onMarkedRead = config.onMarkedRead
+        markReadOverride = config.markReadOverride
+        nextUnreadProvider = config.nextUnreadProvider
+        parsed = stagedEmail
+        staged = nil
+        stagedConfig = nil
+        currentBlockIndex = 0
+        isComplete = false
+        hasStarted = false
+        currentBlockSpoken = false
+        elapsed = 0
+        spokenLog = []
+        estimatedDuration = Self.estimateDuration(stagedEmail, speed: settings.speed)
+        ReadingTimeStore.shared.record(
+            id: stagedEmail.email.id,
+            minutes: ReadingTime.minutes(forText: stagedEmail.blocks.map(\.spokenText).joined(separator: " "))
+        )
+        if let startBlock = config.startBlock {
+            currentBlockIndex = startBlock
+            hasStarted = true
+        } else {
+            resumeIfAvailable()
+        }
+        play()
+    }
+
+    func discardStaged() {
+        staged = nil
+        stagedConfig = nil
+    }
+
     /// Resume at the block the listener last reached, if any (and not finished).
     /// Positions without playing, so the transcript scrolls there and Play picks
     /// up from the spot. Called after `load` when not opening a highlight.
@@ -132,6 +221,8 @@ final class EmailPlayerViewModel: ObservableObject {
         stop()
         remote.clearNowPlaying()
         parsed = nil
+        staged = nil
+        stagedConfig = nil
         isExpanded = false
         elapsed = 0
         hasStarted = false
@@ -322,7 +413,16 @@ final class EmailPlayerViewModel: ObservableObject {
         if let markReadOverride {
             markReadOverride(id)
         } else {
-            Task { try? await mailService.markRead(id: id) }
+            let service = mailService
+            Task { [weak self] in
+                do {
+                    try await service.markRead(id: id)
+                } catch {
+                    // Don't swallow: a failure here usually means the Gmail token
+                    // lacks the modify scope (sign out and back in to grant it).
+                    self?.errorMessage = "Couldn't mark this read in Gmail: \(error.localizedDescription)"
+                }
+            }
         }
     }
 

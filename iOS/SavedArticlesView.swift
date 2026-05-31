@@ -79,14 +79,11 @@ struct SavedArticlesView: View {
             Task { await store.retry(article.id) }
             return
         }
-        player.onMarkedRead = { _ in }
-        player.markReadOverride = { [weak store] id in store?.markRead(id) }
-        player.nextUnreadProvider = nil
-        player.isExpanded = true
-        Task {
-            await player.loadLocal(article.makeEmail(html: html))
-            player.resumeIfAvailable()
-        }
+        player.open(
+            email: article.makeEmail(html: html),
+            isLocal: true,
+            markReadOverride: { [weak store] id in store?.markRead(id) }
+        )
     }
 }
 

@@ -58,17 +58,11 @@ struct HighlightDetailView: View {
     /// block, expanding the Now Playing view.
     private func listen() {
         openError = nil
-        player.onMarkedRead = { _ in }
-        player.markReadOverride = nil
-        player.nextUnreadProvider = nil
-        player.isExpanded = true
         Task {
             do {
                 let email = try await appState.mailService.fetchFullEmail(id: highlight.emailID)
-                await player.loadLocal(email)
-                player.seek(toBlock: highlight.blockIndex)
+                player.open(email: email, isLocal: true, startBlock: highlight.blockIndex)
             } catch {
-                player.isExpanded = false
                 openError = error.localizedDescription
             }
         }

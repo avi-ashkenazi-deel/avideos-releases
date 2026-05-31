@@ -4,37 +4,36 @@ import SwiftUI
 /// the single, app-wide `EmailPlayerViewModel` from the environment, so playback
 /// continues no matter where you navigate; collapsing just hides this view and
 /// leaves the mini-player running at the bottom.
+///
+/// If you open an email while a *different* one is still playing, this shows the
+/// new one as a preview (the old keeps playing) with a "Play this email" button.
 struct NowPlayingView: View {
     @EnvironmentObject private var player: EmailPlayerViewModel
 
     @State private var highlightToAnnotate: Highlight?
     @State private var showCompletion = false
 
-    private var displayEmail: Email? { player.parsed?.email }
-
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                if player.parsed == nil {
-                    Spacer()
-                    ProgressView("Opening…")
-                    Spacer()
+                if let staged = player.staged {
+                    previewMode(staged)
+                } else if player.parsed == nil {
+                    Spacer(); ProgressView("Opening…"); Spacer()
                 } else {
-                    transcript
+                    activeMode
                 }
-                Divider()
-                PlayerControlsView(viewModel: player) {
-                    _ = player.captureHighlight()
-                }
-                .padding(.horizontal)
-                .padding(.vertical, 12)
-                .background(.bar)
             }
-            .navigationTitle(displayEmail?.from.displayName ?? "")
+            .navigationTitle(player.staged?.email.from.displayName
+                             ?? player.parsed?.email.from.displayName ?? "")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button { player.isExpanded = false } label: {
+                    Button {
+                        // Abandoning a preview returns focus to what's playing.
+                        if player.staged != nil { player.discardStaged() }
+                        player.isExpanded = false
+                    } label: {
                         Image(systemName: "chevron.down")
                     }
                 }
@@ -59,45 +58,99 @@ struct NowPlayingView: View {
         }
     }
 
-    // MARK: - Transcript
+    // MARK: - Active (playing) mode
 
-    private var transcript: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    Text(displayEmail?.subjectOrFallback ?? "")
-                        .font(.title2.bold())
-                        .padding(.bottom, 4)
-
-                    ForEach(Array(player.blocks.enumerated()), id: \.element.id) { index, block in
-                        blockView(block, index: index)
-                            .id(index)
-                    }
+    private var activeMode: some View {
+        let email = player.parsed?.email
+        return VStack(spacing: 0) {
+            ScrollViewReader { proxy in
+                ScrollView {
+                    transcriptBody(subject: email?.subjectOrFallback ?? "",
+                                   blocks: player.blocks,
+                                   currentIndex: player.currentBlockIndex,
+                                   isActive: true)
                 }
-                .padding()
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .onChange(of: player.currentBlockIndex) { _, index in
+                    withAnimation(.easeInOut) { proxy.scrollTo(index, anchor: .center) }
+                }
             }
-            .onChange(of: player.currentBlockIndex) { _, index in
-                withAnimation(.easeInOut) { proxy.scrollTo(index, anchor: .center) }
+            Divider()
+            PlayerControlsView(viewModel: player) {
+                _ = player.captureHighlight()
             }
+            .padding(.horizontal)
+            .padding(.vertical, 12)
+            .background(.bar)
         }
     }
 
+    // MARK: - Preview (staged) mode
+
+    private func previewMode(_ staged: ParsedEmail) -> some View {
+        VStack(spacing: 0) {
+            ScrollView {
+                transcriptBody(subject: staged.email.subjectOrFallback,
+                               blocks: staged.blocks,
+                               currentIndex: nil,
+                               isActive: false)
+            }
+            Divider()
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Still playing")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    Text(player.parsed?.email.from.displayName ?? "")
+                        .font(.caption.weight(.medium))
+                        .lineLimit(1)
+                }
+                Spacer()
+                Button { player.playStaged() } label: {
+                    Label("Play this email", systemImage: "play.fill")
+                        .fontWeight(.semibold)
+                }
+                .buttonStyle(.borderedProminent)
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 12)
+            .background(.bar)
+        }
+    }
+
+    // MARK: - Transcript
+
+    private func transcriptBody(subject: String, blocks: [ContentBlock],
+                                currentIndex: Int?, isActive: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text(subject)
+                .font(.title.bold())
+                .padding(.bottom, 4)
+
+            ForEach(Array(blocks.enumerated()), id: \.element.id) { index, block in
+                blockView(block, index: index, currentIndex: currentIndex, isActive: isActive)
+                    .id(index)
+            }
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
     @ViewBuilder
-    private func blockView(_ block: ContentBlock, index: Int) -> some View {
-        let isCurrent = index == player.currentBlockIndex
+    private func blockView(_ block: ContentBlock, index: Int,
+                           currentIndex: Int?, isActive: Bool) -> some View {
+        let isCurrent = currentIndex == index
         switch block {
         case .sentence(let sentence):
             SentenceText(text: sentence.text,
                          isCurrent: isCurrent,
                          wordRange: isCurrent ? player.spokenWordRange : nil)
                 .contentShape(Rectangle())
-                .onTapGesture { player.jump(toBlock: index) }
+                .onTapGesture { if isActive { player.jump(toBlock: index) } }
         case .image(let image):
             ImageBlockView(image: image, isCurrent: isCurrent) {
                 player.skipImage()
             }
-            .onTapGesture { player.jump(toBlock: index) }
+            .onTapGesture { if isActive { player.jump(toBlock: index) } }
         }
     }
 
@@ -125,8 +178,8 @@ private struct SentenceText: View {
 
     var body: some View {
         Text(attributed)
-            .font(.title3)
-            .lineSpacing(4)
+            .font(.title2)
+            .lineSpacing(5)
             .padding(.horizontal, 8).padding(.vertical, 6)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
