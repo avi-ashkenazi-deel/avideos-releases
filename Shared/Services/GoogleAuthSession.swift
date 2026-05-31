@@ -73,8 +73,8 @@ final class GoogleAuthSession: NSObject {
     func validAccessToken() async throws -> String {
         guard let tokens = storedTokens else { throw MailServiceError.notAuthenticated }
         if !tokens.isExpired { return tokens.accessToken }
-        guard let refresh = tokens.refreshToken else { throw MailServiceError.notAuthenticated }
-        let refreshed = try await refresh(refreshToken: refresh)
+        guard let refreshToken = tokens.refreshToken else { throw MailServiceError.notAuthenticated }
+        let refreshed = try await refresh(refreshToken: refreshToken)
         storedTokens = refreshed
         return refreshed.accessToken
     }
