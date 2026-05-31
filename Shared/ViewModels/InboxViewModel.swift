@@ -24,6 +24,7 @@ final class InboxViewModel: ObservableObject {
 
     func load() async {
         isLoading = true
+        errorMessage = nil
         defer { isLoading = false }
         do {
             emails = try await mailService.fetchInbox(limit: 50)

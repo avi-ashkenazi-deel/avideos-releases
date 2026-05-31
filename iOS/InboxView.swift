@@ -16,6 +16,24 @@ struct InboxView: View {
             Group {
                 if viewModel.isLoading && viewModel.emails.isEmpty {
                     ProgressView("Loading inbox…")
+                } else if let errorMessage = viewModel.errorMessage, viewModel.emails.isEmpty {
+                    InboxStateView(
+                        systemImage: "exclamationmark.triangle",
+                        title: "Couldn't load your inbox",
+                        message: errorMessage,
+                        actionTitle: "Try again"
+                    ) {
+                        Task { await viewModel.load() }
+                    }
+                } else if viewModel.emails.isEmpty {
+                    InboxStateView(
+                        systemImage: "tray",
+                        title: "Inbox is empty",
+                        message: "No messages in this account's inbox.",
+                        actionTitle: "Refresh"
+                    ) {
+                        Task { await viewModel.load() }
+                    }
                 } else {
                     List(viewModel.emails) { email in
                         NavigationLink {
@@ -77,6 +95,31 @@ struct InboxView: View {
                 await viewModel.load()
             }
         }
+    }
+}
+
+private struct InboxStateView: View {
+    let systemImage: String
+    let title: String
+    let message: String
+    let actionTitle: String
+    let action: () -> Void
+
+    var body: some View {
+        VStack(spacing: 16) {
+            Image(systemName: systemImage)
+                .font(.largeTitle)
+                .foregroundStyle(.secondary)
+            Text(title)
+                .font(.headline)
+            Text(message)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+            Button(actionTitle, action: action)
+                .buttonStyle(.borderedProminent)
+        }
+        .padding(40)
     }
 }
 
