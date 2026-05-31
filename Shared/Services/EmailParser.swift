@@ -29,7 +29,26 @@ enum EmailParser {
         pattern: "<img\\b[^>]*>", options: [.caseInsensitive]
     )
 
-    private static func parseHTML(_ html: String) -> [ContentBlock] {
+    /// `<style>`/`<script>`/`<head>` blocks and comments carry no spoken content,
+    /// but real-world (esp. marketing) email HTML packs tens of KB of CSS/JS into
+    /// them. Left in, that text floods the sentence tokenizer — garbage on screen
+    /// and a long main-thread stall. Strip them before anything else.
+    private static let nonContentRegex = try! NSRegularExpression(
+        pattern: "<(script|style|head)\\b[^>]*>[\\s\\S]*?</\\1>|<!--[\\s\\S]*?-->",
+        options: [.caseInsensitive]
+    )
+
+    private static func stripNonContent(_ html: String) -> String {
+        let ns = html as NSString
+        return nonContentRegex.stringByReplacingMatches(
+            in: html,
+            range: NSRange(location: 0, length: ns.length),
+            withTemplate: " "
+        )
+    }
+
+    private static func parseHTML(_ rawHTML: String) -> [ContentBlock] {
+        let html = stripNonContent(rawHTML)
         var blocks: [ContentBlock] = []
         var index = 0
         let ns = html as NSString

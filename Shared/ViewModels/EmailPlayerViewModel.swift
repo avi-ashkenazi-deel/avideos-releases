@@ -86,7 +86,11 @@ final class EmailPlayerViewModel: ObservableObject {
         defer { isLoading = false }
         do {
             let full = try await mailService.fetchFullEmail(id: email.id)
-            let parsed = EmailParser.parse(full)
+            // Parse off the main thread: real email HTML can be large, and the
+            // tokenizer pass would otherwise freeze the UI.
+            let parsed = await Task.detached(priority: .userInitiated) {
+                EmailParser.parse(full)
+            }.value
             self.parsed = parsed
             self.estimatedDuration = Self.estimateDuration(parsed, speed: settings.speed)
             self.currentBlockIndex = 0
