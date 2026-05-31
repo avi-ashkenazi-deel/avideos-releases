@@ -94,3 +94,30 @@ targets:
         GENERATE_INFOPLIST_FILE: NO
         ENABLE_PREVIEWS: YES
         WATCHOS_DEPLOYMENT_TARGET: "10.0"
+
+# Declare schemes explicitly so regenerating the project always keeps a
+# runnable scheme for the app (and the watch) — Xcode's auto-created schemes
+# don't survive `xcodegen generate`.
+schemes:
+  VoiceInbox:
+    build:
+      targets:
+        VoiceInbox: all
+    run:
+      config: Debug
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release
+
+  VoiceInboxWatch:
+    build:
+      targets:
+        VoiceInboxWatch: all
+    run:
+      config: Debug
+    archive:
+      config: Release
+
