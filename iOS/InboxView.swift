@@ -2,6 +2,7 @@ import SwiftUI
 
 struct InboxView: View {
     @EnvironmentObject private var appState: AppState
+    @EnvironmentObject private var player: EmailPlayerViewModel
     @StateObject private var viewModel: InboxViewModel
     @StateObject private var progress = ListeningProgressStore.shared
     @StateObject private var readingTimes = ReadingTimeStore.shared
@@ -39,12 +40,8 @@ struct InboxView: View {
                     }
                 } else {
                     List(viewModel.emails) { email in
-                        NavigationLink {
-                            EmailPlayerView(
-                                email: email,
-                                onMarkedRead: { id in viewModel.markReadLocally(id) },
-                                nextUnreadProvider: { id in viewModel.nextUnread(after: id) }
-                            )
+                        Button {
+                            open(email)
                         } label: {
                             EmailRow(
                                 email: email,
@@ -52,6 +49,7 @@ struct InboxView: View {
                                 progress: progress.progress(for: email.id)
                             )
                         }
+                        .buttonStyle(.plain)
                         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                             Button {
                                 Task { await viewModel.markRead(email.id) }
@@ -102,6 +100,8 @@ struct InboxView: View {
             }
             .sheet(isPresented: $showHighlights) {
                 NavigationStack { HighlightsListView() }
+                    .environmentObject(player)
+                    .environmentObject(appState)
             }
             .sheet(isPresented: $showAnalytics) {
                 NavigationStack { AnalyticsView() }
@@ -113,6 +113,18 @@ struct InboxView: View {
                 await viewModel.load()
             }
             await viewModel.prefetchReadingTimes()
+        }
+    }
+
+    /// Load the email into the shared player and expand the Now Playing view.
+    private func open(_ email: Email) {
+        player.onMarkedRead = { [weak viewModel] id in viewModel?.markReadLocally(id) }
+        player.markReadOverride = nil
+        player.nextUnreadProvider = { [weak viewModel] id in viewModel?.nextUnread(after: id) }
+        player.isExpanded = true
+        Task {
+            await player.load(email: email)
+            player.resumeIfAvailable()
         }
     }
 }
@@ -149,13 +161,8 @@ private struct EmailRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            ZStack {
-                Circle().fill(email.isRead ? Color.gray.opacity(0.2) : Color.accentColor.opacity(0.2))
-                Text(email.from.initial)
-                    .font(.headline)
-                    .foregroundStyle(email.isRead ? .secondary : Color.accentColor)
-            }
-            .frame(width: 40, height: 40)
+            // Sender thumbnail with a listening-progress ring around it.
+            SenderAvatar(email: email, progress: progress)
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack {
@@ -174,22 +181,11 @@ private struct EmailRow: View {
                     .lineLimit(2)
 
                 if let readMinutes {
-                    Label("\(readMinutes) min read", systemImage: "clock")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .padding(.top, 1)
-                }
-
-                if let progress, progress.fraction > 0 {
-                    HStack(spacing: 6) {
-                        ProgressView(value: progress.fraction)
-                            .frame(maxWidth: 90)
-                        Text(progress.isComplete
-                             ? "Listened"
-                             : "\(Int((progress.fraction * 100).rounded()))% listened")
-                            .font(.caption2)
-                            .foregroundStyle(progress.isComplete ? Color.green : .secondary)
+                    HStack(spacing: 4) {
+                        Image(systemName: "clock").font(.caption2)
+                        Text("\(readMinutes) min read").font(.caption)
                     }
+                    .foregroundStyle(.secondary)
                     .padding(.top, 1)
                 }
             }

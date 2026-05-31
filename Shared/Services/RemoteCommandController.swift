@@ -26,6 +26,9 @@ final class RemoteCommandController {
     private var artworkCache: [URL: UIImage] = [:]
 
     func start() {
+        // Clear any existing handlers first so re-binding doesn't stack duplicates.
+        [center.togglePlayPauseCommand, center.playCommand, center.pauseCommand,
+         center.nextTrackCommand, center.previousTrackCommand].forEach { $0.removeTarget(nil) }
         center.togglePlayPauseCommand.isEnabled = true
         center.togglePlayPauseCommand.addTarget { [weak self] _ in self?.onTogglePlayPause?(); return .success }
         center.playCommand.isEnabled = true
@@ -41,6 +44,12 @@ final class RemoteCommandController {
     func stop() {
         [center.togglePlayPauseCommand, center.playCommand, center.pauseCommand,
          center.nextTrackCommand, center.previousTrackCommand].forEach { $0.removeTarget(nil) }
+        clearNowPlaying()
+    }
+
+    /// Clear the lock-screen / Control Center entry without unbinding the
+    /// transport commands (the single app-wide player keeps them bound).
+    func clearNowPlaying() {
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
         MPNowPlayingInfoCenter.default().playbackState = .stopped
         artworkURL = nil
@@ -120,6 +129,7 @@ final class RemoteCommandController {
 
     func start() {}
     func stop() {}
+    func clearNowPlaying() {}
     func updateNowPlaying(title: String, sender: String, isPlaying: Bool,
                           elapsed: TimeInterval, duration: TimeInterval, imageURL: URL?) {}
 }

@@ -23,6 +23,10 @@ final class EmailPlayerViewModel: ObservableObject {
     // Elapsed playback seconds (advances only while speaking).
     @Published private(set) var elapsed: TimeInterval = 0
 
+    /// Whether the full-screen Now Playing view is presented. The mini-player
+    /// stays visible whenever `parsed != nil`.
+    @Published var isExpanded = false
+
     /// Called after the email is marked read, so the inbox can update.
     var onMarkedRead: ((String) -> Void)?
     /// When set, used instead of the mail service to persist "read" — e.g. saved
@@ -123,7 +127,20 @@ final class EmailPlayerViewModel: ObservableObject {
         seek(toBlock: saved.blockIndex)
     }
 
+    /// Dismiss the mini-player and stop playback entirely.
+    func clear() {
+        stop()
+        remote.clearNowPlaying()
+        parsed = nil
+        isExpanded = false
+        elapsed = 0
+        hasStarted = false
+        isComplete = false
+    }
+
     private func apply(_ email: Email, announce: Bool = false) async {
+        // Stop whatever was playing before swapping in new content.
+        stop()
         // Parse off the main thread: real email/article HTML can be large, and
         // the tokenizer pass would otherwise freeze the UI.
         var parsed = await Task.detached(priority: .userInitiated) {
@@ -441,6 +458,20 @@ final class EmailPlayerViewModel: ObservableObject {
             }
         }
         remote.start()
+
+        #if canImport(WatchConnectivity)
+        // Relay watch transport commands to this (single, app-wide) player.
+        WatchConnectivityBridge.shared.onCommand = { [weak self] command in
+            guard let self else { return }
+            switch command {
+            case .play: self.play()
+            case .pause: self.pause()
+            case .nextSentence: self.nextSentence()
+            case .previousSentence: self.previousSentence()
+            case .highlight: _ = self.captureHighlight()
+            }
+        }
+        #endif
     }
 
     func unbindRemoteCommands() {

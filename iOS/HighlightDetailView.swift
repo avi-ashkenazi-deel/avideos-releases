@@ -3,9 +3,12 @@ import SwiftUI
 /// A saved highlight with its note, and a link back to the source email — open
 /// it to listen again starting from the exact spot the highlight was captured.
 struct HighlightDetailView: View {
+    @EnvironmentObject private var appState: AppState
+    @EnvironmentObject private var player: EmailPlayerViewModel
     @ObservedObject private var store = HighlightStore.shared
     let highlight: Highlight
     @State private var note: String
+    @State private var openError: String?
 
     init(highlight: Highlight) {
         self.highlight = highlight
@@ -26,10 +29,13 @@ struct HighlightDetailView: View {
             }
 
             Section {
-                NavigationLink {
-                    EmailFromHighlightView(highlight: highlight)
+                Button {
+                    listen()
                 } label: {
                     Label("Listen in “\(highlight.emailSubject)”", systemImage: "play.circle.fill")
+                }
+                if let openError {
+                    Text(openError).font(.footnote).foregroundStyle(.red)
                 }
             } footer: {
                 Text("Opens the email and resumes from where you bookmarked it.")
@@ -47,34 +53,23 @@ struct HighlightDetailView: View {
             store.updateNote(for: highlight.id, note: newValue)
         }
     }
-}
 
-/// Loads the highlight's source email by id, then shows the player positioned at
-/// the captured block. Used to "link back to the email" from a note.
-struct EmailFromHighlightView: View {
-    @EnvironmentObject private var appState: AppState
-    let highlight: Highlight
-
-    @State private var email: Email?
-    @State private var loadError: String?
-
-    var body: some View {
-        Group {
-            if let email {
-                EmailPlayerView(email: email, startBlockIndex: highlight.blockIndex)
-            } else if let loadError {
-                ContentUnavailableView("Couldn't open the email",
-                                       systemImage: "exclamationmark.triangle",
-                                       description: Text(loadError))
-            } else {
-                ProgressView("Opening…")
-            }
-        }
-        .task {
+    /// Load the source email into the shared player and resume at the captured
+    /// block, expanding the Now Playing view.
+    private func listen() {
+        openError = nil
+        player.onMarkedRead = { _ in }
+        player.markReadOverride = nil
+        player.nextUnreadProvider = nil
+        player.isExpanded = true
+        Task {
             do {
-                email = try await appState.mailService.fetchFullEmail(id: highlight.emailID)
+                let email = try await appState.mailService.fetchFullEmail(id: highlight.emailID)
+                await player.loadLocal(email)
+                player.seek(toBlock: highlight.blockIndex)
             } catch {
-                loadError = error.localizedDescription
+                player.isExpanded = false
+                openError = error.localizedDescription
             }
         }
     }

@@ -41,7 +41,7 @@ struct PlayerControlsView: View {
                 Button(action: onHighlight) {
                     Image(systemName: "highlighter").font(.title2)
                 }
-                .tint(.yellow)
+                .tint(.primary)
             }
 
             HStack(spacing: 10) {

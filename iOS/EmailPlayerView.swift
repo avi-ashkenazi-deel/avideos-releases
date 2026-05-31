@@ -1,77 +1,61 @@
 import SwiftUI
 
-/// The reading screen: the email's sentences (with images inline), and the
-/// player controls underneath. Press play to listen; the active sentence
-/// highlights and scrolls into view. Highlight the last 10 seconds with the
-/// button, an AirPods press, or the watch.
-struct EmailPlayerView: View {
-    @EnvironmentObject private var appState: AppState
-    @StateObject private var viewModel = EmailPlayerViewModel(mailService: MockMailService())
-
-    let email: Email
-    /// When opened from a saved highlight, the block to position at on load.
-    var startBlockIndex: Int? = nil
-    /// True when `email` already carries its body (a cached saved article), so we
-    /// parse it directly instead of fetching from the mail service.
-    var isLocalContent: Bool = false
-    var onMarkedRead: (String) -> Void = { _ in }
-    /// For saved articles: persist "read" to the local store instead of Gmail.
-    var onMarkReadPersist: ((String) -> Void)? = nil
-    /// Supplies the next unread email for auto-advance (inbox only).
-    var nextUnreadProvider: ((String) -> Email?)? = nil
+/// The full-screen "Now Playing" reading view, presented over the app. It drives
+/// the single, app-wide `EmailPlayerViewModel` from the environment, so playback
+/// continues no matter where you navigate; collapsing just hides this view and
+/// leaves the mini-player running at the bottom.
+struct NowPlayingView: View {
+    @EnvironmentObject private var player: EmailPlayerViewModel
 
     @State private var highlightToAnnotate: Highlight?
     @State private var showCompletion = false
 
-    /// The email currently loaded in the player — follows auto-advance, falling
-    /// back to the one this screen was opened with.
-    private var displayEmail: Email { viewModel.parsed?.email ?? email }
+    private var displayEmail: Email? { player.parsed?.email }
 
     var body: some View {
-        VStack(spacing: 0) {
-            transcript
-            Divider()
-            PlayerControlsView(viewModel: viewModel) {
-                _ = viewModel.captureHighlight()
+        NavigationStack {
+            VStack(spacing: 0) {
+                if player.parsed == nil {
+                    Spacer()
+                    ProgressView("Opening…")
+                    Spacer()
+                } else {
+                    transcript
+                }
+                Divider()
+                PlayerControlsView(viewModel: player) {
+                    _ = player.captureHighlight()
+                }
+                .padding(.horizontal)
+                .padding(.vertical, 12)
+                .background(.bar)
             }
-            .padding(.horizontal)
-            .padding(.vertical, 12)
-            .background(.bar)
-        }
-        .navigationTitle(displayEmail.from.displayName)
-        .navigationBarTitleDisplayMode(.inline)
-        .task {
-            viewModel.configure(appState.mailService)
-            viewModel.onMarkedRead = onMarkedRead
-            viewModel.markReadOverride = onMarkReadPersist
-            viewModel.nextUnreadProvider = nextUnreadProvider
-            viewModel.onHighlightCaptured = { highlight in highlightToAnnotate = highlight }
-            if isLocalContent {
-                await viewModel.loadLocal(email)
-            } else {
-                await viewModel.load(email: email)
+            .navigationTitle(displayEmail?.from.displayName ?? "")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button { player.isExpanded = false } label: {
+                        Image(systemName: "chevron.down")
+                    }
+                }
             }
-            if let startBlockIndex {
-                viewModel.seek(toBlock: startBlockIndex)
-            } else {
-                viewModel.resumeIfAvailable()
+            .onAppear {
+                player.onHighlightCaptured = { highlight in highlightToAnnotate = highlight }
             }
-        }
-        .onAppear { bindControls() }
-        .onDisappear { viewModel.unbindRemoteCommands() }
-        .onChange(of: viewModel.isComplete) { _, complete in
-            if complete { showCompletion = true }
-        }
-        .sheet(item: $highlightToAnnotate) { highlight in
-            NavigationStack { HighlightComposerView(highlight: highlight) }
-        }
-        .overlay(alignment: .top) {
-            if showCompletion { completionBanner }
-        }
-        .alert("Playback problem", isPresented: .constant(viewModel.errorMessage != nil)) {
-            Button("OK") { viewModel.errorMessage = nil }
-        } message: {
-            Text(viewModel.errorMessage ?? "")
+            .onChange(of: player.isComplete) { _, complete in
+                if complete { showCompletion = true }
+            }
+            .sheet(item: $highlightToAnnotate) { highlight in
+                NavigationStack { HighlightComposerView(highlight: highlight) }
+            }
+            .overlay(alignment: .top) {
+                if showCompletion { completionBanner }
+            }
+            .alert("Playback problem", isPresented: .constant(player.errorMessage != nil)) {
+                Button("OK") { player.errorMessage = nil }
+            } message: {
+                Text(player.errorMessage ?? "")
+            }
         }
     }
 
@@ -81,11 +65,11 @@ struct EmailPlayerView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    Text(displayEmail.subjectOrFallback)
+                    Text(displayEmail?.subjectOrFallback ?? "")
                         .font(.title2.bold())
                         .padding(.bottom, 4)
 
-                    ForEach(Array(viewModel.blocks.enumerated()), id: \.element.id) { index, block in
+                    ForEach(Array(player.blocks.enumerated()), id: \.element.id) { index, block in
                         blockView(block, index: index)
                             .id(index)
                     }
@@ -93,7 +77,7 @@ struct EmailPlayerView: View {
                 .padding()
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .onChange(of: viewModel.currentBlockIndex) { _, index in
+            .onChange(of: player.currentBlockIndex) { _, index in
                 withAnimation(.easeInOut) { proxy.scrollTo(index, anchor: .center) }
             }
         }
@@ -101,19 +85,19 @@ struct EmailPlayerView: View {
 
     @ViewBuilder
     private func blockView(_ block: ContentBlock, index: Int) -> some View {
-        let isCurrent = index == viewModel.currentBlockIndex
+        let isCurrent = index == player.currentBlockIndex
         switch block {
         case .sentence(let sentence):
             SentenceText(text: sentence.text,
                          isCurrent: isCurrent,
-                         wordRange: isCurrent ? viewModel.spokenWordRange : nil)
+                         wordRange: isCurrent ? player.spokenWordRange : nil)
                 .contentShape(Rectangle())
-                .onTapGesture { viewModel.jump(toBlock: index) }
+                .onTapGesture { player.jump(toBlock: index) }
         case .image(let image):
             ImageBlockView(image: image, isCurrent: isCurrent) {
-                viewModel.skipImage()
+                player.skipImage()
             }
-            .onTapGesture { viewModel.jump(toBlock: index) }
+            .onTapGesture { player.jump(toBlock: index) }
         }
     }
 
@@ -129,21 +113,6 @@ struct EmailPlayerView: View {
                 try? await Task.sleep(nanoseconds: 2_500_000_000)
                 withAnimation { showCompletion = false }
             }
-    }
-
-    private func bindControls() {
-        viewModel.bindRemoteCommands()
-        #if canImport(WatchConnectivity)
-        WatchConnectivityBridge.shared.onCommand = { command in
-            switch command {
-            case .play: viewModel.play()
-            case .pause: viewModel.pause()
-            case .nextSentence: viewModel.nextSentence()
-            case .previousSentence: viewModel.previousSentence()
-            case .highlight: _ = viewModel.captureHighlight()
-            }
-        }
-        #endif
     }
 }
 

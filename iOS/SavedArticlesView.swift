@@ -4,6 +4,7 @@ import SwiftUI
 /// Each ready article plays through the same listening UI as email, fully
 /// offline once its content has been cached.
 struct SavedArticlesView: View {
+    @EnvironmentObject private var player: EmailPlayerViewModel
     @StateObject private var store = SavedArticleStore.shared
 
     var body: some View {
@@ -35,20 +36,12 @@ struct SavedArticlesView: View {
     private func row(for article: SavedArticle) -> some View {
         switch article.status {
         case .ready:
-            NavigationLink {
-                if let html = store.content(for: article.id) {
-                    EmailPlayerView(
-                        email: article.makeEmail(html: html),
-                        isLocalContent: true,
-                        onMarkReadPersist: { id in store.markRead(id) }
-                    )
-                } else {
-                    // Content file missing (e.g. cleared storage): re-fetch.
-                    MissingContentView { Task { await store.retry(article.id) } }
-                }
+            Button {
+                open(article)
             } label: {
                 SavedArticleRow(article: article)
             }
+            .buttonStyle(.plain)
             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                 Button(role: .destructive) { store.delete(article.id) } label: {
                     Label("Delete", systemImage: "trash")
@@ -76,6 +69,23 @@ struct SavedArticlesView: View {
                         .tint(.orange)
                     }
                 }
+        }
+    }
+
+    /// Load the cached article into the shared player and expand Now Playing.
+    private func open(_ article: SavedArticle) {
+        guard let html = store.content(for: article.id) else {
+            // Offline copy missing (e.g. cleared storage): re-fetch it.
+            Task { await store.retry(article.id) }
+            return
+        }
+        player.onMarkedRead = { _ in }
+        player.markReadOverride = { [weak store] id in store?.markRead(id) }
+        player.nextUnreadProvider = nil
+        player.isExpanded = true
+        Task {
+            await player.loadLocal(article.makeEmail(html: html))
+            player.resumeIfAvailable()
         }
     }
 }
@@ -141,20 +151,6 @@ private struct SavedEmptyState: View {
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
-        }
-        .padding(40)
-    }
-}
-
-private struct MissingContentView: View {
-    let retry: () -> Void
-    var body: some View {
-        VStack(spacing: 16) {
-            Text("This article's offline copy is missing.")
-                .font(.headline)
-                .multilineTextAlignment(.center)
-            Button("Download again", action: retry)
-                .buttonStyle(.borderedProminent)
         }
         .padding(40)
     }
