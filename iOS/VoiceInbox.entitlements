@@ -5,10 +5,17 @@
 	<!-- App Group: shares saved articles (from the Share Extension), highlights,
 	     and settings across the app, the Share Extension, and the watch.
 	     Requires a paid Apple Developer account; the id must match
-	     AppGroup.identifier and be registered for your team. -->
+	     AppGroup.identifier and be registered for your team.
+
+	     TEMPORARILY DISABLED so the app signs/runs on a personal team. While
+	     commented out, AppGroup falls back to each process's own container, so
+	     the in-app Saved tab works but the Share Extension can't hand links to
+	     the app. Re-enable by uncommenting (and add the App Groups capability in
+	     Xcode for both targets):
 	<key>com.apple.security.application-groups</key>
 	<array>
 		<string>group.com.voiceinbox.shared</string>
 	</array>
+	-->
 </dict>
 </plist>

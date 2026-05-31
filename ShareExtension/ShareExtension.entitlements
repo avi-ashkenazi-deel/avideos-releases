@@ -2,9 +2,13 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<!-- App Group temporarily disabled to allow signing on a personal team.
+	     Re-enable alongside the main app's entitlement (and add the App Groups
+	     capability in Xcode) to make the Share Extension hand links to the app:
 	<key>com.apple.security.application-groups</key>
 	<array>
 		<string>group.com.voiceinbox.shared</string>
 	</array>
+	-->
 </dict>
 </plist>
