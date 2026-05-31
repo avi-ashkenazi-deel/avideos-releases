@@ -41,4 +41,7 @@ protocol MailService: Sendable {
 
     /// Mark a message as read on the server (removes Gmail's UNREAD label).
     func markRead(id: String) async throws
+
+    /// Mark a message as unread on the server (adds Gmail's UNREAD label).
+    func markUnread(id: String) async throws
 }

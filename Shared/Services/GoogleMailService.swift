@@ -53,6 +53,12 @@ actor GoogleMailService: MailService {
         _ = try await send(url, method: "POST", body: body)
     }
 
+    func markUnread(id: String) async throws {
+        let url = base.appendingPathComponent("messages/\(id)/modify")
+        let body = try JSONSerialization.data(withJSONObject: ["addLabelIds": ["UNREAD"]])
+        _ = try await send(url, method: "POST", body: body)
+    }
+
     // MARK: - Profile
 
     private func fetchProfile() async throws -> MailAccount {

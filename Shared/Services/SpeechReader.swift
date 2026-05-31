@@ -55,6 +55,9 @@ final class SystemSpeechEngine: NSObject, SpeechEngine {
         self.voiceIdentifier = voiceIdentifier
         super.init()
         synthesizer.delegate = self
+        // Route through our configured audio session so Now Playing / lock-screen
+        // controls and AirPods work, and audio continues when the screen locks.
+        synthesizer.usesApplicationAudioSession = true
     }
 
     func speak(_ text: String, speed: Double, pauseAfter: TimeInterval) {

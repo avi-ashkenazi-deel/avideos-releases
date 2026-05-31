@@ -21,8 +21,6 @@ struct SettingsView: View {
                 )) {
                     ForEach(speeds, id: \.self) { Text("\($0, specifier: "%g")×").tag($0) }
                 }
-
-                Toggle("Remove silence", isOn: $settings.removeSilence)
             }
 
             Section {

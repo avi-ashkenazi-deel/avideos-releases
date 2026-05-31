@@ -26,14 +26,20 @@ struct InboxView: View {
                             EmailRow(email: email)
                         }
                         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                            if !email.isRead {
-                                Button {
-                                    Task { await viewModel.markRead(email.id) }
-                                } label: {
-                                    Label("Mark read", systemImage: "envelope.open")
-                                }
-                                .tint(.blue)
+                            Button {
+                                Task { await viewModel.markRead(email.id) }
+                            } label: {
+                                Label("Read", systemImage: "envelope.open")
                             }
+                            .tint(.blue)
+                        }
+                        .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                            Button {
+                                Task { await viewModel.markUnread(email.id) }
+                            } label: {
+                                Label("Unread", systemImage: "envelope.badge")
+                            }
+                            .tint(.orange)
                         }
                     }
                     .listStyle(.plain)

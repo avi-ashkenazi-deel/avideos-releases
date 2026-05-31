@@ -52,16 +52,6 @@ struct PlayerControlsView: View {
                 }
                 .tint(.yellow)
             }
-
-            Toggle(isOn: Binding(
-                get: { appState.settings.removeSilence },
-                set: { appState.settings.removeSilence = $0 }
-            )) {
-                Label("Remove silence", systemImage: "waveform.path")
-                    .font(.footnote)
-            }
-            .toggleStyle(.button)
-            .controlSize(.small)
         }
     }
 

@@ -42,6 +42,7 @@ final class RemoteCommandController {
         [center.togglePlayPauseCommand, center.playCommand, center.pauseCommand,
          center.nextTrackCommand, center.previousTrackCommand].forEach { $0.removeTarget(nil) }
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+        MPNowPlayingInfoCenter.default().playbackState = .stopped
         artworkURL = nil
     }
 
@@ -62,14 +63,29 @@ final class RemoteCommandController {
         if let imageURL {
             if let cached = artworkCache[imageURL] {
                 info[MPMediaItemPropertyArtwork] = Self.artwork(from: cached)
+            } else if let fallback = Self.defaultArtwork {
+                info[MPMediaItemPropertyArtwork] = fallback
             }
             loadArtwork(from: imageURL)
         } else {
             artworkURL = nil
+            if let fallback = Self.defaultArtwork {
+                info[MPMediaItemPropertyArtwork] = fallback
+            }
         }
 
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+        // Setting the playback state explicitly is what reliably makes the
+        // Lock Screen / Control Center transport controls appear.
+        MPNowPlayingInfoCenter.default().playbackState = isPlaying ? .playing : .paused
     }
+
+    /// A simple app glyph used when the email isn't showing an image.
+    private static let defaultArtwork: MPMediaItemArtwork? = {
+        let config = UIImage.SymbolConfiguration(pointSize: 256)
+        guard let image = UIImage(systemName: "headphones", withConfiguration: config) else { return nil }
+        return MPMediaItemArtwork(boundsSize: image.size) { _ in image }
+    }()
 
     private func loadArtwork(from url: URL) {
         artworkURL = url

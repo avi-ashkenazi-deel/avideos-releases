@@ -43,11 +43,6 @@ final class AppSettings: ObservableObject {
         didSet { defaults.set(imageBehavior.rawValue, forKey: Key.imageBehavior) }
     }
 
-    /// When on, pauses between sentences are removed for tighter, faster listening.
-    @Published var removeSilence: Bool {
-        didSet { defaults.set(removeSilence, forKey: Key.removeSilence) }
-    }
-
     /// Identifier of the preferred `AVSpeechSynthesisVoice`; empty = system default.
     @Published var voiceIdentifier: String {
         didSet { defaults.set(voiceIdentifier, forKey: Key.voiceIdentifier) }
@@ -88,7 +83,6 @@ final class AppSettings: ObservableObject {
     private enum Key {
         static let speed = "settings.speed"
         static let imageBehavior = "settings.imageBehavior"
-        static let removeSilence = "settings.removeSilence"
         static let voiceIdentifier = "settings.voiceIdentifier"
         static let airPodsHighlight = "settings.airPodsHighlight"
         static let useElevenLabs = "settings.useElevenLabs"
@@ -101,7 +95,6 @@ final class AppSettings: ObservableObject {
         self.speed = defaults.object(forKey: Key.speed) as? Double ?? 1.0
         self.imageBehavior = ImageBehavior(rawValue: defaults.string(forKey: Key.imageBehavior) ?? "")
             ?? .pauseAndDigest
-        self.removeSilence = defaults.object(forKey: Key.removeSilence) as? Bool ?? false
         self.voiceIdentifier = defaults.string(forKey: Key.voiceIdentifier) ?? ""
         self.airPodsHighlightEnabled = defaults.object(forKey: Key.airPodsHighlight) as? Bool ?? true
         self.useElevenLabs = defaults.object(forKey: Key.useElevenLabs) as? Bool ?? false

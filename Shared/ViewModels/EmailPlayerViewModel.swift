@@ -194,8 +194,7 @@ final class EmailPlayerViewModel: ObservableObject {
         currentBlockSpoken = false
         spokenLog.append((index, elapsed))
         let block = blocks[index]
-        let pauseAfter = settings.removeSilence ? 0 : 0.2
-        engine.speak(block.spokenText, speed: settings.speed, pauseAfter: pauseAfter)
+        engine.speak(block.spokenText, speed: settings.speed, pauseAfter: 0.2)
         isPlaying = true
         startTimer()
         updateNowPlaying()

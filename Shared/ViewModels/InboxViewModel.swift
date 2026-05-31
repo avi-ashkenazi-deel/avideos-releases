@@ -47,4 +47,16 @@ final class InboxViewModel: ObservableObject {
             errorMessage = error.localizedDescription
         }
     }
+
+    /// Mark an email unread on the server.
+    func markUnread(_ id: String) async {
+        if let idx = emails.firstIndex(where: { $0.id == id }) {
+            emails[idx].isRead = false
+        }
+        do {
+            try await mailService.markUnread(id: id)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
 }
