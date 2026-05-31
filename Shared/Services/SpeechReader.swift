@@ -30,7 +30,12 @@ enum SpeechAudioSession {
         #if os(watchOS)
         try? session.setCategory(.playback, mode: .spokenAudio)
         #else
-        try? session.setCategory(.playback, mode: .spokenAudio, options: [.allowBluetoothA2DP, .duckOthers])
+        // Plain `.playback` (no mixing): VoiceInbox must interrupt other audio to
+        // become the system "Now Playing" app — that's what puts it on the lock
+        // screen / Control Center and routes the transport controls here. With a
+        // mixing option like `.duckOthers`, iOS treats us as secondary audio and
+        // leaves Now Playing with whatever app was already playing.
+        try? session.setCategory(.playback, mode: .spokenAudio, options: [.allowBluetoothA2DP])
         #endif
         try? session.setActive(true)
     }
