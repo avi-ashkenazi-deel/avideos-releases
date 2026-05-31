@@ -93,6 +93,9 @@ unusual layouts.
 | Pluggable speech backend (system vs cloud) | `SpeechEngine` protocol in `Shared/Services/SpeechReader.swift` |
 | Mark read without listening | `iOS/InboxView.swift` swipe action → `InboxViewModel.markRead(_:)` |
 | Save web pages from other apps to listen offline | `ShareExtension/`, `Shared/Services/SavedArticleStore.swift`, `ArticleExtractor.swift`, `iOS/SavedArticlesView.swift` |
+| Per-email listening progress (% in the inbox) + resume where you left off | `Shared/Services/ListeningProgressStore.swift`, `EmailPlayerViewModel.resumeIfAvailable()` |
+| Speed slider up to 2.5× | `iOS/PlayerControlsView.swift`, `AppSettings.clampSpeed` |
+| Auto-play next unread (announces sender + subject, keeps reading) | `AppSettings.autoAdvance`, `EmailPlayerViewModel.advanceToNextUnread()`, `InboxViewModel.nextUnread(after:)` |
 
 ---
 

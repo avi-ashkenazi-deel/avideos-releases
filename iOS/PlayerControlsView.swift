@@ -1,13 +1,15 @@
 import SwiftUI
 
 /// Transport controls under the transcript: progress, play/pause, skip,
-/// highlight, speed, and remove-silence.
+/// highlight, and a speed slider.
 struct PlayerControlsView: View {
     @ObservedObject var viewModel: EmailPlayerViewModel
     @EnvironmentObject private var appState: AppState
     let onHighlight: () -> Void
 
-    private let speeds: [Double] = [0.75, 1.0, 1.25, 1.5, 1.75, 2.0]
+    /// Live slider value; applied to the player when the drag ends so we don't
+    /// restart the current sentence on every tick.
+    @State private var draftSpeed: Double = 1.0
 
     var body: some View {
         VStack(spacing: 14) {
@@ -15,20 +17,9 @@ struct PlayerControlsView: View {
                 .tint(.accentColor)
 
             HStack {
-                Menu {
-                    ForEach(speeds, id: \.self) { speed in
-                        Button {
-                            viewModel.setSpeed(speed)
-                        } label: {
-                            Label(speedLabel(speed),
-                                  systemImage: appState.settings.speed == speed ? "checkmark" : "")
-                        }
-                    }
-                } label: {
-                    Text(speedLabel(appState.settings.speed))
-                        .font(.subheadline.monospacedDigit().weight(.semibold))
-                        .frame(width: 52)
-                }
+                Text(speedLabel(draftSpeed))
+                    .font(.subheadline.monospacedDigit().weight(.semibold))
+                    .frame(width: 56, alignment: .leading)
 
                 Spacer()
 
@@ -52,11 +43,29 @@ struct PlayerControlsView: View {
                 }
                 .tint(.yellow)
             }
+
+            HStack(spacing: 10) {
+                Image(systemName: "tortoise.fill")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                Slider(value: $draftSpeed, in: 0.5...2.5) { editing in
+                    if !editing { viewModel.setSpeed(draftSpeed) }
+                }
+                .tint(.accentColor)
+                Image(systemName: "hare.fill")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .onAppear { draftSpeed = appState.settings.speed }
+        .onChange(of: appState.settings.speed) { _, newValue in
+            if abs(draftSpeed - newValue) > 0.001 { draftSpeed = newValue }
         }
     }
 
     private func speedLabel(_ speed: Double) -> String {
-        let trimmed = speed == speed.rounded() ? String(format: "%.0f", speed) : String(format: "%.2g", speed)
-        return "\(trimmed)×"
+        // Round to the nearest 0.05 for a tidy label (e.g. 1×, 1.5×, 1.75×).
+        let rounded = (speed * 20).rounded() / 20
+        return String(format: "%g×", rounded)
     }
 }

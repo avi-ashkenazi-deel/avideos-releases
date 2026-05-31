@@ -34,9 +34,15 @@ final class AppSettings: ObservableObject {
     static let shared = AppSettings()
 
     /// AVSpeechUtterance rate is 0.0...1.0 with a "normal" of ~0.5. We expose a
-    /// friendlier 0.5x...2.0x multiplier on top of that.
+    /// friendlier 0.5x...2.5x multiplier on top of that.
     @Published var speed: Double {
         didSet { defaults.set(speed, forKey: Key.speed) }
+    }
+
+    /// When an email finishes, automatically open the next unread one, announce
+    /// its sender and subject, and keep reading.
+    @Published var autoAdvance: Bool {
+        didSet { defaults.set(autoAdvance, forKey: Key.autoAdvance) }
     }
 
     @Published var imageBehavior: ImageBehavior {
@@ -82,6 +88,7 @@ final class AppSettings: ObservableObject {
 
     private enum Key {
         static let speed = "settings.speed"
+        static let autoAdvance = "settings.autoAdvance"
         static let imageBehavior = "settings.imageBehavior"
         static let voiceIdentifier = "settings.voiceIdentifier"
         static let airPodsHighlight = "settings.airPodsHighlight"
@@ -93,6 +100,7 @@ final class AppSettings: ObservableObject {
     init(defaults: UserDefaults = .voiceInbox) {
         self.defaults = defaults
         self.speed = defaults.object(forKey: Key.speed) as? Double ?? 1.0
+        self.autoAdvance = defaults.object(forKey: Key.autoAdvance) as? Bool ?? false
         self.imageBehavior = ImageBehavior(rawValue: defaults.string(forKey: Key.imageBehavior) ?? "")
             ?? .pauseAndDigest
         self.voiceIdentifier = defaults.string(forKey: Key.voiceIdentifier) ?? ""
@@ -105,7 +113,7 @@ final class AppSettings: ObservableObject {
 
     /// Clamp a friendly multiplier into the supported range.
     static func clampSpeed(_ value: Double) -> Double {
-        min(max(value, 0.5), 2.0)
+        min(max(value, 0.5), 2.5)
     }
 }
 

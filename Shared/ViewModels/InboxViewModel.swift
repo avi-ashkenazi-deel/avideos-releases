@@ -22,6 +22,17 @@ final class InboxViewModel: ObservableObject {
 
     var unreadCount: Int { emails.filter { !$0.isRead }.count }
 
+    /// The next unread email to auto-advance to after finishing `id`. The inbox
+    /// is newest-first, so we prefer the next unread *below* the finished one
+    /// (older), then fall back to any other unread.
+    func nextUnread(after id: String) -> Email? {
+        if let idx = emails.firstIndex(where: { $0.id == id }),
+           let next = emails[(idx + 1)...].first(where: { !$0.isRead }) {
+            return next
+        }
+        return emails.first { !$0.isRead && $0.id != id }
+    }
+
     func load() async {
         isLoading = true
         errorMessage = nil

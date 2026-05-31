@@ -3,6 +3,7 @@ import SwiftUI
 struct InboxView: View {
     @EnvironmentObject private var appState: AppState
     @StateObject private var viewModel: InboxViewModel
+    @StateObject private var progress = ListeningProgressStore.shared
     @State private var showSettings = false
     @State private var showHighlights = false
 
@@ -37,11 +38,13 @@ struct InboxView: View {
                 } else {
                     List(viewModel.emails) { email in
                         NavigationLink {
-                            EmailPlayerView(email: email, onMarkedRead: { id in
-                                viewModel.markReadLocally(id)
-                            })
+                            EmailPlayerView(
+                                email: email,
+                                onMarkedRead: { id in viewModel.markReadLocally(id) },
+                                nextUnreadProvider: { id in viewModel.nextUnread(after: id) }
+                            )
                         } label: {
-                            EmailRow(email: email)
+                            EmailRow(email: email, progress: progress.progress(for: email.id))
                         }
                         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                             Button {
@@ -125,6 +128,7 @@ private struct InboxStateView: View {
 
 private struct EmailRow: View {
     let email: Email
+    var progress: ListeningProgress? = nil
 
     var body: some View {
         HStack(spacing: 12) {
@@ -155,6 +159,19 @@ private struct EmailRow: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
+
+                if let progress, progress.fraction > 0 {
+                    HStack(spacing: 6) {
+                        ProgressView(value: progress.fraction)
+                            .frame(maxWidth: 90)
+                        Text(progress.isComplete
+                             ? "Listened"
+                             : "\(Int((progress.fraction * 100).rounded()))% listened")
+                            .font(.caption2)
+                            .foregroundStyle(progress.isComplete ? Color.green : .secondary)
+                    }
+                    .padding(.top, 1)
+                }
             }
         }
         .padding(.vertical, 4)

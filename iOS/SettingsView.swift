@@ -6,7 +6,7 @@ struct SettingsView: View {
     @ObservedObject private var settings = AppSettings.shared
     @Environment(\.dismiss) private var dismiss
 
-    private let speeds: [Double] = [0.75, 1.0, 1.25, 1.5, 1.75, 2.0]
+    private let speeds: [Double] = [0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.25, 2.5]
 
     @State private var elevenVoices: [ElevenLabsVoice] = []
     @State private var loadingVoices = false
@@ -14,13 +14,19 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
-            Section("Playback") {
+            Section {
                 Picker("Default speed", selection: Binding(
                     get: { settings.speed },
                     set: { settings.speed = $0 }
                 )) {
                     ForEach(speeds, id: \.self) { Text("\($0, specifier: "%g")×").tag($0) }
                 }
+
+                Toggle("Auto-play next unread", isOn: $settings.autoAdvance)
+            } header: {
+                Text("Playback")
+            } footer: {
+                Text("When an email finishes, automatically open the next unread one, announce who it's from and its subject, then keep reading.")
             }
 
             Section {

@@ -31,10 +31,14 @@ final class EmailPlayerViewModel: ObservableObject {
     /// Called when a highlight is captured (e.g. via AirPods) so the UI can
     /// offer to add a note.
     var onHighlightCaptured: ((Highlight) -> Void)?
+    /// Supplies the next unread email to auto-advance to after one finishes,
+    /// given the id just completed. Set by the inbox; nil disables auto-advance.
+    var nextUnreadProvider: ((String) -> Email?)?
 
     private var mailService: MailService
     private let settings: AppSettings
     private let highlights: HighlightStore
+    private let progressStore: ListeningProgressStore
 
     private var engine: SpeechEngine
     /// Identifies the engine config in use, so we rebuild only when it changes.
@@ -52,10 +56,12 @@ final class EmailPlayerViewModel: ObservableObject {
 
     init(mailService: MailService,
          settings: AppSettings = .shared,
-         highlights: HighlightStore = .shared) {
+         highlights: HighlightStore = .shared,
+         progress: ListeningProgressStore = .shared) {
         self.mailService = mailService
         self.settings = settings
         self.highlights = highlights
+        self.progressStore = progress
         self.engine = EmailPlayerViewModel.makeEngine(settings: settings)
         wire(engine)
         engineSignature = currentEngineSignature()
@@ -84,12 +90,12 @@ final class EmailPlayerViewModel: ObservableObject {
 
     // MARK: - Loading
 
-    func load(email: Email) async {
+    func load(email: Email, announce: Bool = false) async {
         isLoading = true
         defer { isLoading = false }
         do {
             let full = try await mailService.fetchFullEmail(id: email.id)
-            await apply(full)
+            await apply(full, announce: announce)
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -103,12 +109,31 @@ final class EmailPlayerViewModel: ObservableObject {
         await apply(email)
     }
 
-    private func apply(_ email: Email) async {
+    /// Resume at the block the listener last reached, if any (and not finished).
+    /// Positions without playing, so the transcript scrolls there and Play picks
+    /// up from the spot. Called after `load` when not opening a highlight.
+    func resumeIfAvailable() {
+        guard let id = parsed?.email.id,
+              let saved = progressStore.progress(for: id),
+              !saved.isComplete, saved.blockIndex > 0,
+              blocks.indices.contains(saved.blockIndex) else { return }
+        seek(toBlock: saved.blockIndex)
+    }
+
+    private func apply(_ email: Email, announce: Bool = false) async {
         // Parse off the main thread: real email/article HTML can be large, and
         // the tokenizer pass would otherwise freeze the UI.
-        let parsed = await Task.detached(priority: .userInitiated) {
+        var parsed = await Task.detached(priority: .userInitiated) {
             EmailParser.parse(email)
         }.value
+        // On auto-advance, lead with a spoken header so the listener knows who
+        // it's from and what it is before the body starts.
+        if announce {
+            let intro = ContentBlock.sentence(
+                Sentence(blockIndex: 0, text: Self.announcement(for: parsed.email))
+            )
+            parsed = ParsedEmail(email: parsed.email, blocks: [intro] + parsed.blocks)
+        }
         self.parsed = parsed
         self.estimatedDuration = Self.estimateDuration(parsed, speed: settings.speed)
         self.currentBlockIndex = 0
@@ -147,6 +172,7 @@ final class EmailPlayerViewModel: ObservableObject {
         isPlaying = false
         stopTimer()
         updateNowPlaying()
+        recordProgress()
     }
 
     func nextSentence() {
@@ -217,6 +243,7 @@ final class EmailPlayerViewModel: ObservableObject {
         isPlaying = true
         startTimer()
         updateNowPlaying()
+        recordProgress()
     }
 
     private func handleUtteranceFinished(natural: Bool) {
@@ -247,8 +274,9 @@ final class EmailPlayerViewModel: ObservableObject {
         isPlaying = false
         stopTimer()
         updateNowPlaying()
-        guard let id = parsed?.email.id else { return }
-        markRead(id: id)
+        recordProgress()
+        if let id = parsed?.email.id { markRead(id: id) }
+        advanceToNextUnread()
     }
 
     /// Mark the email read on the server and locally — used both on completion
@@ -260,6 +288,37 @@ final class EmailPlayerViewModel: ObservableObject {
         } else {
             Task { try? await mailService.markRead(id: id) }
         }
+    }
+
+    // MARK: - Progress & auto-advance
+
+    /// Persist how far the listener has reached, so the inbox shows progress and
+    /// reopening resumes here.
+    private func recordProgress() {
+        guard let id = parsed?.email.id, !blocks.isEmpty else { return }
+        progressStore.record(
+            id: id,
+            blockIndex: currentBlockIndex,
+            blockCount: blocks.count,
+            isComplete: isComplete
+        )
+    }
+
+    /// If auto-advance is on, load the next unread email, announce it, and play.
+    private func advanceToNextUnread() {
+        guard settings.autoAdvance,
+              let provider = nextUnreadProvider,
+              let currentID = parsed?.email.id,
+              let next = provider(currentID) else { return }
+        Task {
+            await load(email: next, announce: true)
+            guard errorMessage == nil else { return }
+            play()
+        }
+    }
+
+    private static func announcement(for email: Email) -> String {
+        "From \(email.from.displayName). \(email.subjectOrFallback)."
     }
 
     // MARK: - Engine selection

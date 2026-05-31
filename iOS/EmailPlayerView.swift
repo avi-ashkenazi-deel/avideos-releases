@@ -17,9 +17,15 @@ struct EmailPlayerView: View {
     var onMarkedRead: (String) -> Void = { _ in }
     /// For saved articles: persist "read" to the local store instead of Gmail.
     var onMarkReadPersist: ((String) -> Void)? = nil
+    /// Supplies the next unread email for auto-advance (inbox only).
+    var nextUnreadProvider: ((String) -> Email?)? = nil
 
     @State private var highlightToAnnotate: Highlight?
     @State private var showCompletion = false
+
+    /// The email currently loaded in the player — follows auto-advance, falling
+    /// back to the one this screen was opened with.
+    private var displayEmail: Email { viewModel.parsed?.email ?? email }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -32,19 +38,24 @@ struct EmailPlayerView: View {
             .padding(.vertical, 12)
             .background(.bar)
         }
-        .navigationTitle(email.from.displayName)
+        .navigationTitle(displayEmail.from.displayName)
         .navigationBarTitleDisplayMode(.inline)
         .task {
             viewModel.configure(appState.mailService)
             viewModel.onMarkedRead = onMarkedRead
             viewModel.markReadOverride = onMarkReadPersist
+            viewModel.nextUnreadProvider = nextUnreadProvider
             viewModel.onHighlightCaptured = { highlight in highlightToAnnotate = highlight }
             if isLocalContent {
                 await viewModel.loadLocal(email)
             } else {
                 await viewModel.load(email: email)
             }
-            if let startBlockIndex { viewModel.seek(toBlock: startBlockIndex) }
+            if let startBlockIndex {
+                viewModel.seek(toBlock: startBlockIndex)
+            } else {
+                viewModel.resumeIfAvailable()
+            }
         }
         .onAppear { bindControls() }
         .onDisappear { viewModel.unbindRemoteCommands() }
@@ -70,7 +81,7 @@ struct EmailPlayerView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    Text(email.subjectOrFallback)
+                    Text(displayEmail.subjectOrFallback)
                         .font(.title2.bold())
                         .padding(.bottom, 4)
 
