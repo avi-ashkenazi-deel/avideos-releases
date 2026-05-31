@@ -22,8 +22,11 @@ final class RemoteCommandController {
     var onPrevious: (() -> Void)?
 
     private let center = MPRemoteCommandCenter.shared()
-    private var artworkURL: URL?
-    private var artworkCache: [URL: UIImage] = [:]
+    /// Identifies the artwork currently wanted (first candidate URL); used to
+    /// drop stale loads when the block/sender changes mid-fetch.
+    private var artworkKey: String?
+    private var loadingKey: String?
+    private var artworkCache: [String: UIImage] = [:]
 
     func start() {
         // Clear any existing handlers first so re-binding doesn't stack duplicates.
@@ -52,14 +55,16 @@ final class RemoteCommandController {
     func clearNowPlaying() {
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
         MPNowPlayingInfoCenter.default().playbackState = .stopped
-        artworkURL = nil
+        artworkKey = nil
+        loadingKey = nil
     }
 
-    /// Reflect the current email in Now Playing. When `imageURL` is non-nil
-    /// (the player is on an image), it's loaded and shown as artwork so the
-    /// image appears on the lock screen.
+    /// Reflect the current email in Now Playing. `imageCandidates` are tried in
+    /// order (the email's own image when reading one, otherwise the sender's
+    /// photo/logo); the app logo is shown until/if one loads.
     func updateNowPlaying(title: String, sender: String, isPlaying: Bool,
-                          elapsed: TimeInterval, duration: TimeInterval, imageURL: URL?) {
+                          elapsed: TimeInterval, duration: TimeInterval,
+                          imageCandidates: [URL]) {
         var info: [String: Any] = [
             MPMediaItemPropertyTitle: title,
             MPMediaItemPropertyArtist: sender,
@@ -69,44 +74,54 @@ final class RemoteCommandController {
             MPNowPlayingInfoPropertyMediaType: MPNowPlayingInfoMediaType.audio.rawValue
         ]
 
-        if let imageURL {
-            if let cached = artworkCache[imageURL] {
-                info[MPMediaItemPropertyArtwork] = Self.artwork(from: cached)
-            } else if let fallback = Self.defaultArtwork {
-                info[MPMediaItemPropertyArtwork] = fallback
-            }
-            loadArtwork(from: imageURL)
-        } else {
-            artworkURL = nil
-            if let fallback = Self.defaultArtwork {
-                info[MPMediaItemPropertyArtwork] = fallback
-            }
+        let key = imageCandidates.first?.absoluteString
+        if let key, let cached = artworkCache[key] {
+            info[MPMediaItemPropertyArtwork] = Self.artwork(from: cached)
+        } else if let fallback = Self.defaultArtwork {
+            info[MPMediaItemPropertyArtwork] = fallback
         }
 
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
         // Setting the playback state explicitly is what reliably makes the
         // Lock Screen / Control Center transport controls appear.
         MPNowPlayingInfoCenter.default().playbackState = isPlaying ? .playing : .paused
+
+        loadArtwork(candidates: imageCandidates)
     }
 
-    /// A simple app glyph used when the email isn't showing an image.
+    /// The app logo (asset named "AppLogo" if present) or a headphones glyph,
+    /// shown when there's no sender/email image.
     private static let defaultArtwork: MPMediaItemArtwork? = {
-        let config = UIImage.SymbolConfiguration(pointSize: 256)
-        guard let image = UIImage(systemName: "headphones", withConfiguration: config) else { return nil }
+        let image = UIImage(named: "AppLogo")
+            ?? UIImage(systemName: "headphones",
+                       withConfiguration: UIImage.SymbolConfiguration(pointSize: 256))
+        guard let image else { return nil }
         return MPMediaItemArtwork(boundsSize: image.size) { _ in image }
     }()
 
-    private func loadArtwork(from url: URL) {
-        artworkURL = url
-        if artworkCache[url] != nil { return }
+    private func loadArtwork(candidates: [URL]) {
+        let key = candidates.first?.absoluteString
+        artworkKey = key
+        guard let key else { return }
+        if artworkCache[key] != nil || loadingKey == key { return }
+        loadingKey = key
         Task { [weak self] in
-            guard let (data, _) = try? await URLSession.shared.data(from: url),
-                  let image = UIImage(data: data) else { return }
-            guard let self, self.artworkURL == url else { return }
-            self.artworkCache[url] = image
-            // Merge artwork into the existing Now Playing info.
+            var loaded: UIImage?
+            for url in candidates {
+                if let (data, response) = try? await URLSession.shared.data(from: url),
+                   let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode),
+                   let image = UIImage(data: data) {
+                    loaded = image
+                    break
+                }
+            }
+            guard let self else { return }
+            if self.loadingKey == key { self.loadingKey = nil }
+            // Only apply if this is still the artwork we want.
+            guard let loaded, self.artworkKey == key else { return }
+            self.artworkCache[key] = loaded
             var info = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
-            info[MPMediaItemPropertyArtwork] = Self.artwork(from: image)
+            info[MPMediaItemPropertyArtwork] = Self.artwork(from: loaded)
             MPNowPlayingInfoCenter.default().nowPlayingInfo = info
         }
     }
@@ -131,7 +146,8 @@ final class RemoteCommandController {
     func stop() {}
     func clearNowPlaying() {}
     func updateNowPlaying(title: String, sender: String, isPlaying: Bool,
-                          elapsed: TimeInterval, duration: TimeInterval, imageURL: URL?) {}
+                          elapsed: TimeInterval, duration: TimeInterval,
+                          imageCandidates: [URL]) {}
 }
 
 #endif

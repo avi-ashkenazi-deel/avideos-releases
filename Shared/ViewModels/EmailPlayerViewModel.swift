@@ -581,9 +581,13 @@ final class EmailPlayerViewModel: ObservableObject {
 
     private func updateNowPlaying() {
         guard let parsed else { return }
-        var imageURL: URL?
-        if case .image(let image)? = currentBlock {
-            imageURL = image.remoteURL
+        // Show the email's own image while reading one; otherwise show the
+        // sender's photo/logo (with the app logo as the ultimate fallback).
+        let imageCandidates: [URL]
+        if case .image(let image)? = currentBlock, let url = image.remoteURL {
+            imageCandidates = [url]
+        } else {
+            imageCandidates = SenderImage.candidateURLs(forAddress: parsed.email.from.address)
         }
         remote.updateNowPlaying(
             title: parsed.email.subjectOrFallback,
@@ -591,7 +595,7 @@ final class EmailPlayerViewModel: ObservableObject {
             isPlaying: isPlaying,
             elapsed: elapsed,
             duration: estimatedDuration,
-            imageURL: imageURL
+            imageCandidates: imageCandidates
         )
     }
 
