@@ -24,8 +24,8 @@ struct RootView: View {
                 if player.parsed != nil {
                     MiniPlayerBar()
                         .environmentObject(player)
-                        // Float just above the standard tab bar.
-                        .padding(.bottom, 49)
+                        // Float just above the standard tab bar (≈49pt) with a gap.
+                        .padding(.bottom, 53)
                 }
             }
             .animation(.easeInOut(duration: 0.2), value: player.parsed != nil)
