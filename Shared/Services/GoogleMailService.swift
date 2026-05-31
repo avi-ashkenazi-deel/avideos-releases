@@ -181,7 +181,13 @@ private struct Payload: Decodable {
     let parts: [Payload]?
 
     var headerMap: [String: String] {
-        Dictionary(uniqueKeysWithValues: (headers ?? []).map { ($0.name.lowercased(), $0.value) })
+        // Gmail payloads can repeat header names (e.g. several `Received:`),
+        // so dedupe by keeping the first value — `uniqueKeysWithValues` would
+        // trap on a duplicate key and crash the email fetch.
+        Dictionary(
+            (headers ?? []).map { ($0.name.lowercased(), $0.value) },
+            uniquingKeysWith: { first, _ in first }
+        )
     }
 
     /// Walk the MIME tree and pull out the first HTML and plain-text bodies.
