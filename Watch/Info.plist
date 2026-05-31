@@ -17,7 +17,7 @@
 	<key>WKApplication</key>
 	<true/>
 	<key>WKCompanionAppBundleIdentifier</key>
-	<string>com.voiceinbox.app</string>
+	<string>com.aviashkenazi.voiceinbox</string>
 
 	<key>UIBackgroundModes</key>
 	<array>

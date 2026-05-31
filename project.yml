@@ -15,7 +15,7 @@
 name: VoiceInbox
 
 options:
-  bundleIdPrefix: com.voiceinbox
+  bundleIdPrefix: com.aviashkenazi
   createIntermediateGroups: true
   deploymentTarget:
     iOS: "17.0"
@@ -42,7 +42,7 @@ targets:
       - path: Shared
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.voiceinbox.app
+        PRODUCT_BUNDLE_IDENTIFIER: com.aviashkenazi.voiceinbox
         INFOPLIST_FILE: iOS/Info.plist
         CODE_SIGN_ENTITLEMENTS: iOS/VoiceInbox.entitlements
         TARGETED_DEVICE_FAMILY: "1,2"   # iPhone + iPad
@@ -64,7 +64,7 @@ targets:
       - path: Shared
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.voiceinbox.app.watchkitapp
+        PRODUCT_BUNDLE_IDENTIFIER: com.aviashkenazi.voiceinbox.watchkitapp
         INFOPLIST_FILE: Watch/Info.plist
         CODE_SIGN_ENTITLEMENTS: Watch/VoiceInboxWatch.entitlements
         GENERATE_INFOPLIST_FILE: NO
