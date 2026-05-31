@@ -113,6 +113,6 @@ extension UserDefaults {
     /// Shared defaults backed by the app group so phone + watch agree on settings.
     /// Falls back to `.standard` if the app group isn't configured (e.g. in previews).
     static let voiceInbox: UserDefaults = {
-        UserDefaults(suiteName: "group.com.voiceinbox.shared") ?? .standard
+        AppGroup.sharedDefaults
     }()
 }

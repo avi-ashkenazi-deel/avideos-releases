@@ -12,7 +12,7 @@ final class HighlightStore: ObservableObject {
 
     private let fileURL: URL
 
-    init(appGroup: String = "group.com.voiceinbox.shared") {
+    init(appGroup: String = AppGroup.identifier) {
         let base = FileManager.default
             .containerURL(forSecurityApplicationGroupIdentifier: appGroup)
             ?? FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
@@ -55,21 +55,5 @@ final class HighlightStore: ObservableObject {
     private func save() {
         guard let data = try? JSONEncoder.iso.encode(highlights) else { return }
         try? data.write(to: fileURL, options: .atomic)
-    }
-}
-
-extension JSONEncoder {
-    static var iso: JSONEncoder {
-        let e = JSONEncoder()
-        e.dateEncodingStrategy = .iso8601
-        return e
-    }
-}
-
-extension JSONDecoder {
-    static var iso: JSONDecoder {
-        let d = JSONDecoder()
-        d.dateDecodingStrategy = .iso8601
-        return d
     }
 }

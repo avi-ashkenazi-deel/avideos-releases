@@ -37,9 +37,9 @@ struct InboxView: View {
                 } else {
                     List(viewModel.emails) { email in
                         NavigationLink {
-                            EmailPlayerView(email: email) { id in
+                            EmailPlayerView(email: email, onMarkedRead: { id in
                                 viewModel.markReadLocally(id)
-                            }
+                            })
                         } label: {
                             EmailRow(email: email)
                         }

@@ -11,7 +11,12 @@ struct EmailPlayerView: View {
     let email: Email
     /// When opened from a saved highlight, the block to position at on load.
     var startBlockIndex: Int? = nil
+    /// True when `email` already carries its body (a cached saved article), so we
+    /// parse it directly instead of fetching from the mail service.
+    var isLocalContent: Bool = false
     var onMarkedRead: (String) -> Void = { _ in }
+    /// For saved articles: persist "read" to the local store instead of Gmail.
+    var onMarkReadPersist: ((String) -> Void)? = nil
 
     @State private var highlightToAnnotate: Highlight?
     @State private var showCompletion = false
@@ -32,8 +37,13 @@ struct EmailPlayerView: View {
         .task {
             viewModel.configure(appState.mailService)
             viewModel.onMarkedRead = onMarkedRead
+            viewModel.markReadOverride = onMarkReadPersist
             viewModel.onHighlightCaptured = { highlight in highlightToAnnotate = highlight }
-            await viewModel.load(email: email)
+            if isLocalContent {
+                await viewModel.loadLocal(email)
+            } else {
+                await viewModel.load(email: email)
+            }
             if let startBlockIndex { viewModel.seek(toBlock: startBlockIndex) }
         }
         .onAppear { bindControls() }

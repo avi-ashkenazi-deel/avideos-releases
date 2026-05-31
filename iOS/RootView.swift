@@ -8,7 +8,13 @@ struct RootView: View {
         case .onboarding:
             OnboardingView()
         case .ready:
-            InboxView()
+            TabView {
+                InboxView()
+                    .tabItem { Label("Inbox", systemImage: "tray.full") }
+
+                SavedArticlesView()
+                    .tabItem { Label("Saved", systemImage: "bookmark") }
+            }
         }
     }
 }

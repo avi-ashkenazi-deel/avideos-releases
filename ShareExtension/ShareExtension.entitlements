@@ -2,10 +2,6 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<!-- App Group: shares saved articles (from the Share Extension), highlights,
-	     and settings across the app, the Share Extension, and the watch.
-	     Requires a paid Apple Developer account; the id must match
-	     AppGroup.identifier and be registered for your team. -->
 	<key>com.apple.security.application-groups</key>
 	<array>
 		<string>group.com.voiceinbox.shared</string>

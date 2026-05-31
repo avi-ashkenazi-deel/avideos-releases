@@ -52,6 +52,30 @@ targets:
     dependencies:
       - target: VoiceInboxWatch
         embed: true
+      - target: ShareExtension
+        embed: true
+
+  # ---------------------------------------------------------------------------
+  # Share Extension: save web links from Safari/Feedly to listen offline
+  # ---------------------------------------------------------------------------
+  ShareExtension:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: ShareExtension
+      # Compile just the minimal shared sources the extension needs (it only
+      # writes a pending stub to the app group; no fetch/extract/UI).
+      - path: Shared/Services/AppGroup.swift
+      - path: Shared/Services/JSONCoders.swift
+      - path: Shared/Services/SavedArticleStorage.swift
+      - path: Shared/Models/SavedArticle.swift
+      - path: Shared/Models/Email.swift
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.aviashkenazi.voiceinbox.ShareExtension
+        INFOPLIST_FILE: ShareExtension/Info.plist
+        CODE_SIGN_ENTITLEMENTS: ShareExtension/ShareExtension.entitlements
+        GENERATE_INFOPLIST_FILE: NO
 
   # ---------------------------------------------------------------------------
   # Apple Watch app (modern single-target watchOS app)

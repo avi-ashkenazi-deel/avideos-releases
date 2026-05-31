@@ -46,6 +46,28 @@ Once configured, **"Continue with Google"** runs a real PKCE OAuth flow and the
 app reads, displays, plays, and marks-as-read your actual Gmail inbox. No client
 secret is stored on device, and the OAuth tokens are kept in the **Keychain**.
 
+### Saving web pages to listen offline (Share Extension)
+
+The app ships a **Share Extension** so you can send articles from Safari,
+Feedly, or any app: tap **Share → VoiceInbox**, and the link is saved to the
+**Saved** tab. The app then fetches the page, extracts the readable text, and
+**caches it for offline listening** — like Pocket, but read aloud.
+
+This uses an **App Group** (`group.com.voiceinbox.shared`, see `AppGroup.swift`)
+to hand the link from the extension to the app, which **requires a paid Apple
+Developer account**:
+
+1. In the Apple Developer portal, register the App Group id for your team.
+2. In Xcode, add the **App Groups** capability to both the `VoiceInbox` and
+   `ShareExtension` targets and tick that group (the entitlement files already
+   declare it).
+3. Build & run. The extension appears in the system share sheet.
+
+Article text is cached and plays fully offline; inline **images** still load
+over the network. Extraction is a dependency-free, heuristic reader mode — it
+works for the large majority of articles but can include some page chrome on
+unusual layouts.
+
 ---
 
 ## How the requested features map to the code
@@ -70,6 +92,7 @@ secret is stored on device, and the OAuth tokens are kept in the **Keychain**.
 | ElevenLabs voice option | `Shared/Services/ElevenLabsClient.swift`, `Shared/Services/ElevenLabsSpeechEngine.swift`, `SettingsView` |
 | Pluggable speech backend (system vs cloud) | `SpeechEngine` protocol in `Shared/Services/SpeechReader.swift` |
 | Mark read without listening | `iOS/InboxView.swift` swipe action → `InboxViewModel.markRead(_:)` |
+| Save web pages from other apps to listen offline | `ShareExtension/`, `Shared/Services/SavedArticleStore.swift`, `ArticleExtractor.swift`, `iOS/SavedArticlesView.swift` |
 
 ---
 

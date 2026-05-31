@@ -25,6 +25,9 @@ final class EmailPlayerViewModel: ObservableObject {
 
     /// Called after the email is marked read, so the inbox can update.
     var onMarkedRead: ((String) -> Void)?
+    /// When set, used instead of the mail service to persist "read" — e.g. saved
+    /// articles, which live in the local store rather than on a mail server.
+    var markReadOverride: ((String) -> Void)?
     /// Called when a highlight is captured (e.g. via AirPods) so the UI can
     /// offer to add a note.
     var onHighlightCaptured: ((Highlight) -> Void)?
@@ -86,22 +89,34 @@ final class EmailPlayerViewModel: ObservableObject {
         defer { isLoading = false }
         do {
             let full = try await mailService.fetchFullEmail(id: email.id)
-            // Parse off the main thread: real email HTML can be large, and the
-            // tokenizer pass would otherwise freeze the UI.
-            let parsed = await Task.detached(priority: .userInitiated) {
-                EmailParser.parse(full)
-            }.value
-            self.parsed = parsed
-            self.estimatedDuration = Self.estimateDuration(parsed, speed: settings.speed)
-            self.currentBlockIndex = 0
-            self.isComplete = false
-            self.hasStarted = false
-            self.currentBlockSpoken = false
-            self.elapsed = 0
-            self.spokenLog = []
+            await apply(full)
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    /// Load already-fetched content (e.g. a cached saved article) without a
+    /// network round-trip.
+    func loadLocal(_ email: Email) async {
+        isLoading = true
+        defer { isLoading = false }
+        await apply(email)
+    }
+
+    private func apply(_ email: Email) async {
+        // Parse off the main thread: real email/article HTML can be large, and
+        // the tokenizer pass would otherwise freeze the UI.
+        let parsed = await Task.detached(priority: .userInitiated) {
+            EmailParser.parse(email)
+        }.value
+        self.parsed = parsed
+        self.estimatedDuration = Self.estimateDuration(parsed, speed: settings.speed)
+        self.currentBlockIndex = 0
+        self.isComplete = false
+        self.hasStarted = false
+        self.currentBlockSpoken = false
+        self.elapsed = 0
+        self.spokenLog = []
     }
 
     // MARK: - Transport
@@ -240,7 +255,11 @@ final class EmailPlayerViewModel: ObservableObject {
     /// and when the listener marks it read without finishing.
     private func markRead(id: String) {
         onMarkedRead?(id)
-        Task { try? await mailService.markRead(id: id) }
+        if let markReadOverride {
+            markReadOverride(id)
+        } else {
+            Task { try? await mailService.markRead(id: id) }
+        }
     }
 
     // MARK: - Engine selection

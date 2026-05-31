@@ -3,6 +3,7 @@ import SwiftUI
 @main
 struct VoiceInboxApp: App {
     @StateObject private var appState = AppState()
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
         WindowGroup {
@@ -21,7 +22,15 @@ struct VoiceInboxApp: App {
                         voiceID: s.elevenLabsVoiceID,
                         enabled: s.useElevenLabs
                     )
+                    // Process anything shared into the app while we were closed.
+                    await SavedArticleStore.shared.refresh()
                 }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            // Pick up and fetch articles shared via the Share Extension.
+            if phase == .active {
+                Task { await SavedArticleStore.shared.refresh() }
+            }
         }
     }
 }
