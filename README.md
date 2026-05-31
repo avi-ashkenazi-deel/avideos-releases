@@ -96,6 +96,7 @@ unusual layouts.
 | Per-email listening progress (% in the inbox) + resume where you left off | `Shared/Services/ListeningProgressStore.swift`, `EmailPlayerViewModel.resumeIfAvailable()` |
 | Speed slider up to 2.5× | `iOS/PlayerControlsView.swift`, `AppSettings.clampSpeed` |
 | Auto-play next unread (announces sender + subject, keeps reading) | `AppSettings.autoAdvance`, `EmailPlayerViewModel.advanceToNextUnread()`, `InboxViewModel.nextUnread(after:)` |
+| Listening analytics: emails/words/time, top senders, ElevenLabs usage + cost | `Shared/Services/AnalyticsStore.swift`, `iOS/AnalyticsView.swift` (chart button in the inbox) |
 
 ---
 

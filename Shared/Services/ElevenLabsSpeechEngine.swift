@@ -12,6 +12,9 @@ final class ElevenLabsSpeechEngine: NSObject, SpeechEngine {
     var onFinish: ((Bool) -> Void)?
     var onWordRange: ((NSRange?) -> Void)?
     var onError: ((String) -> Void)?
+    /// Reports the character count of each successful synthesis request, for
+    /// usage/cost tracking (ElevenLabs bills per character).
+    var onSynthesized: ((Int) -> Void)?
 
     private(set) var isPaused = false
 
@@ -35,6 +38,9 @@ final class ElevenLabsSpeechEngine: NSObject, SpeechEngine {
             guard let self else { return }
             do {
                 let data = try await client.synthesize(text: text, voiceID: voiceID)
+                // The request completed, so it's billed regardless of whether a
+                // newer request cancels playback below.
+                self.onSynthesized?(text.count)
                 if Task.isCancelled { return }
                 try self.startPlayback(data: data, rate: clampedSpeed, pauseAfter: pauseAfter)
             } catch is CancellationError {

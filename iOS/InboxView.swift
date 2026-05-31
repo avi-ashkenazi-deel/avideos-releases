@@ -7,6 +7,7 @@ struct InboxView: View {
     @StateObject private var readingTimes = ReadingTimeStore.shared
     @State private var showSettings = false
     @State private var showHighlights = false
+    @State private var showAnalytics = false
 
     init() {
         // Placeholder; replaced in onAppear once we have appState's service.
@@ -85,6 +86,9 @@ struct InboxView: View {
                     }
                 }
                 ToolbarItemGroup(placement: .topBarTrailing) {
+                    Button { showAnalytics = true } label: {
+                        Image(systemName: "chart.bar")
+                    }
                     Button { showHighlights = true } label: {
                         Image(systemName: "highlighter")
                     }
@@ -98,6 +102,9 @@ struct InboxView: View {
             }
             .sheet(isPresented: $showHighlights) {
                 NavigationStack { HighlightsListView() }
+            }
+            .sheet(isPresented: $showAnalytics) {
+                NavigationStack { AnalyticsView() }
             }
         }
         .task {

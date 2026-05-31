@@ -39,6 +39,7 @@ final class EmailPlayerViewModel: ObservableObject {
     private let settings: AppSettings
     private let highlights: HighlightStore
     private let progressStore: ListeningProgressStore
+    private let analytics: AnalyticsStore
 
     private var engine: SpeechEngine
     /// Identifies the engine config in use, so we rebuild only when it changes.
@@ -57,11 +58,13 @@ final class EmailPlayerViewModel: ObservableObject {
     init(mailService: MailService,
          settings: AppSettings = .shared,
          highlights: HighlightStore = .shared,
-         progress: ListeningProgressStore = .shared) {
+         progress: ListeningProgressStore = .shared,
+         analytics: AnalyticsStore = .shared) {
         self.mailService = mailService
         self.settings = settings
         self.highlights = highlights
         self.progressStore = progress
+        self.analytics = analytics
         self.engine = EmailPlayerViewModel.makeEngine(settings: settings)
         wire(engine)
         engineSignature = currentEngineSignature()
@@ -281,8 +284,18 @@ final class EmailPlayerViewModel: ObservableObject {
         stopTimer()
         updateNowPlaying()
         recordProgress()
+        recordCompletedAnalytics()
         if let id = parsed?.email.id { markRead(id: id) }
         advanceToNextUnread()
+    }
+
+    /// Count a finished email/article toward the listening analytics.
+    private func recordCompletedAnalytics() {
+        guard let parsed else { return }
+        let words = parsed.blocks.reduce(0) {
+            $0 + $1.spokenText.split { c in c == " " || c == "\n" || c == "\t" || c == "\r" }.count
+        }
+        analytics.recordCompleted(from: parsed.email.from, words: words, seconds: elapsed)
     }
 
     /// Mark the email read on the server and locally — used both on completion
@@ -359,6 +372,11 @@ final class EmailPlayerViewModel: ObservableObject {
         engine.onFinish = { [weak self] natural in self?.handleUtteranceFinished(natural: natural) }
         engine.onWordRange = { [weak self] range in self?.spokenWordRange = range }
         engine.onError = { [weak self] message in self?.handleEngineError(message) }
+        if let eleven = engine as? ElevenLabsSpeechEngine {
+            eleven.onSynthesized = { [weak self] chars in
+                self?.analytics.recordElevenLabsCharacters(chars)
+            }
+        }
     }
 
     // MARK: - Highlighting
