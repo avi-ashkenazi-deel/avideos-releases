@@ -22,8 +22,8 @@ struct GoogleOAuthConfig {
     /// Placeholder until you add credentials. `isConfigured` gates whether the
     /// app offers the real Google path or falls back to the demo inbox.
     static let placeholder = GoogleOAuthConfig(
-        clientID: "REPLACE_WITH_CLIENT_ID.apps.googleusercontent.com",
-        redirectScheme: "com.googleusercontent.apps.REPLACE_WITH_REVERSED_CLIENT_ID",
+        clientID: "1010510206522-1pc27rqvv9ip4p35t6inu6ktnl1gilav.apps.googleusercontent.com",
+        redirectScheme: "com.googleusercontent.apps.1010510206522-1pc27rqvv9ip4p35t6inu6ktnl1gilav",
         scopes: gmailReadModify
     )
 
