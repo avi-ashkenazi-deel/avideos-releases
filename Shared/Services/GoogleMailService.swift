@@ -32,14 +32,37 @@ actor GoogleMailService: MailService {
             .init(name: "maxResults", value: String(limit))
         ]
         let list: MessageList = try await get(comps.url!)
-        // Fetch metadata for each id concurrently.
-        return try await withThrowingTaskGroup(of: Email.self) { group in
-            for ref in list.messages ?? [] {
-                group.addTask { try await self.fetchMessage(id: ref.id, full: false) }
+        let ids = (list.messages ?? []).map(\.id)
+        // Fetch metadata with bounded concurrency so we don't burst past Gmail's
+        // per-second quota (which returns 429) on a cold inbox load.
+        let emails = try await mapConcurrently(ids, maxConcurrent: 6) { id in
+            try await self.fetchMessage(id: id, full: false)
+        }
+        return emails.sorted { $0.receivedAt > $1.receivedAt }
+    }
+
+    /// Run `transform` over `items` with at most `maxConcurrent` in flight at once.
+    private func mapConcurrently<Input: Sendable, Output: Sendable>(
+        _ items: [Input],
+        maxConcurrent: Int,
+        _ transform: @Sendable @escaping (Input) async throws -> Output
+    ) async throws -> [Output] {
+        try await withThrowingTaskGroup(of: Output.self) { group in
+            var result: [Output] = []
+            var index = 0
+            let initial = min(maxConcurrent, items.count)
+            while index < initial {
+                let item = items[index]; index += 1
+                group.addTask { try await transform(item) }
             }
-            var result: [Email] = []
-            for try await email in group { result.append(email) }
-            return result.sorted { $0.receivedAt > $1.receivedAt }
+            while let output = try await group.next() {
+                result.append(output)
+                if index < items.count {
+                    let item = items[index]; index += 1
+                    group.addTask { try await transform(item) }
+                }
+            }
+            return result
         }
     }
 
@@ -133,23 +156,35 @@ actor GoogleMailService: MailService {
 
     @discardableResult
     private func send(_ url: URL, method: String, body: Data?) async throws -> Data {
-        let token = try await tokenProvider()
-        var request = URLRequest(url: url)
-        request.httpMethod = method
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        if let body {
-            request.httpBody = body
-            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        }
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse else {
-            throw MailServiceError.network("No HTTP response")
-        }
-        guard (200..<300).contains(http.statusCode) else {
+        let maxAttempts = 4
+        var attempt = 0
+        while true {
+            attempt += 1
+            let token = try await tokenProvider()
+            var request = URLRequest(url: url)
+            request.httpMethod = method
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            if let body {
+                request.httpBody = body
+                request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            }
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse else {
+                throw MailServiceError.network("No HTTP response")
+            }
+            if (200..<300).contains(http.statusCode) { return data }
             if http.statusCode == 401 { throw MailServiceError.notAuthenticated }
+            // Rate limiting (429) and transient server errors (5xx) are retried
+            // with exponential backoff + jitter, honoring Retry-After if present.
+            if (http.statusCode == 429 || (500..<600).contains(http.statusCode)), attempt < maxAttempts {
+                let retryAfter = http.value(forHTTPHeaderField: "Retry-After").flatMap(Double.init)
+                let backoff = retryAfter ?? (pow(2.0, Double(attempt - 1)) * 0.5)
+                let jitter = Double.random(in: 0...0.3)
+                try await Task.sleep(nanoseconds: UInt64((backoff + jitter) * 1_000_000_000))
+                continue
+            }
             throw MailServiceError.network("Status \(http.statusCode)")
         }
-        return data
     }
 }
 

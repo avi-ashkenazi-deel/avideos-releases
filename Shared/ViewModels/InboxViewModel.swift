@@ -57,8 +57,11 @@ final class InboxViewModel: ObservableObject {
         let store = ReadingTimeStore.shared
         let missing = emails.map(\.id).filter { store.minutes(for: $0) == nil }
         guard !missing.isEmpty else { return }
-        for start in stride(from: 0, to: missing.count, by: 5) {
-            let batch = Array(missing[start..<min(start + 5, missing.count)])
+        for start in stride(from: 0, to: missing.count, by: 4) {
+            let batch = Array(missing[start..<min(start + 4, missing.count)])
+            // Small pause between batches so this background backfill stays well
+            // under Gmail's rate limit and doesn't compete with foreground loads.
+            if start > 0 { try? await Task.sleep(nanoseconds: 300_000_000) }
             await withTaskGroup(of: (String, Int?).self) { group in
                 for id in batch {
                     let service = mailService
