@@ -8,11 +8,33 @@ final class InboxViewModel: ObservableObject {
     @Published private(set) var emails: [Email] = []
     @Published private(set) var isLoading = false
     @Published var errorMessage: String?
+    /// Folders/labels available to listen to, for the picker.
+    @Published private(set) var labels: [MailLabel] = []
 
     private var mailService: MailService
+    private let settings: AppSettings
 
-    init(mailService: MailService) {
+    init(mailService: MailService, settings: AppSettings = .shared) {
         self.mailService = mailService
+        self.settings = settings
+    }
+
+    var selectedLabelName: String { settings.mailLabelName }
+    var selectedLabelId: String { settings.mailLabelId }
+
+    /// Load the folder list (Inbox, categories, user labels), filtered + sorted.
+    func loadLabels() async {
+        guard let fetched = try? await mailService.fetchLabels() else { return }
+        labels = fetched
+            .filter { $0.isListenable }
+            .sorted { ($0.sortRank, $0.displayName) < ($1.sortRank, $1.displayName) }
+    }
+
+    /// Switch the folder being listened to and reload.
+    func selectLabel(_ label: MailLabel) async {
+        settings.mailLabelId = label.id
+        settings.mailLabelName = label.displayName
+        await load()
     }
 
     /// Rebind to the active backend (demo vs Google) once `AppState` knows it.
@@ -38,7 +60,7 @@ final class InboxViewModel: ObservableObject {
         errorMessage = nil
         defer { isLoading = false }
         do {
-            emails = try await mailService.fetchInbox(limit: 50)
+            emails = try await mailService.fetchInbox(labelId: settings.mailLabelId, limit: 50)
         } catch {
             errorMessage = error.localizedDescription
         }

@@ -58,6 +58,12 @@ The reliable archive workflow: **quit Xcode → `xcodegen generate` → delete
 DerivedData → reopen → reselect Team → clean → archive.** Quitting Xcode before
 regenerating was essential (otherwise it archives a stale project).
 
+### Post-upload tweaks (same day)
+- **Locked to portrait** orientation.
+- **Folder/label picker**: choose which Gmail label, category (Promotions/
+  Updates/…), or custom folder to listen to — e.g. only a "Newsletters" folder.
+  Inbox title reflects the folder; choice persists.
+
 ### Next up
 - Open TestFlight to more testers (Google OAuth consent screen: External +
   test users; restricted-scope verification before public launch).

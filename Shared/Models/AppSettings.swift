@@ -45,6 +45,16 @@ final class AppSettings: ObservableObject {
         didSet { defaults.set(autoAdvance, forKey: Key.autoAdvance) }
     }
 
+    /// Which Gmail label/folder to listen to (default the whole inbox).
+    @Published var mailLabelId: String {
+        didSet { defaults.set(mailLabelId, forKey: Key.mailLabelId) }
+    }
+
+    /// Display name of the chosen label, so the UI can show it without a fetch.
+    @Published var mailLabelName: String {
+        didSet { defaults.set(mailLabelName, forKey: Key.mailLabelName) }
+    }
+
     @Published var imageBehavior: ImageBehavior {
         didSet { defaults.set(imageBehavior.rawValue, forKey: Key.imageBehavior) }
     }
@@ -89,6 +99,8 @@ final class AppSettings: ObservableObject {
     private enum Key {
         static let speed = "settings.speed"
         static let autoAdvance = "settings.autoAdvance"
+        static let mailLabelId = "settings.mailLabelId"
+        static let mailLabelName = "settings.mailLabelName"
         static let imageBehavior = "settings.imageBehavior"
         static let voiceIdentifier = "settings.voiceIdentifier"
         static let airPodsHighlight = "settings.airPodsHighlight"
@@ -101,6 +113,8 @@ final class AppSettings: ObservableObject {
         self.defaults = defaults
         self.speed = defaults.object(forKey: Key.speed) as? Double ?? 1.0
         self.autoAdvance = defaults.object(forKey: Key.autoAdvance) as? Bool ?? false
+        self.mailLabelId = defaults.string(forKey: Key.mailLabelId) ?? "INBOX"
+        self.mailLabelName = defaults.string(forKey: Key.mailLabelName) ?? "Inbox"
         self.imageBehavior = ImageBehavior(rawValue: defaults.string(forKey: Key.imageBehavior) ?? "")
             ?? .pauseAndDigest
         self.voiceIdentifier = defaults.string(forKey: Key.voiceIdentifier) ?? ""

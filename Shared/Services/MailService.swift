@@ -32,8 +32,11 @@ protocol MailService: Sendable {
     /// The account currently signed in, if any.
     var account: MailAccount? { get async }
 
-    /// Fetch the most recent messages in the inbox, newest first.
-    func fetchInbox(limit: Int) async throws -> [Email]
+    /// Fetch the most recent messages for a label/folder, newest first.
+    func fetchInbox(labelId: String, limit: Int) async throws -> [Email]
+
+    /// The user's labels (folders + categories) for the folder picker.
+    func fetchLabels() async throws -> [MailLabel]
 
     /// Fetch the full body for a message (mock returns it inline; Gmail fetches
     /// the full payload on demand).

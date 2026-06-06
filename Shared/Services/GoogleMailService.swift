@@ -25,10 +25,19 @@ actor GoogleMailService: MailService {
 
     // MARK: - MailService
 
-    func fetchInbox(limit: Int) async throws -> [Email] {
+    func fetchLabels() async throws -> [MailLabel] {
+        struct LabelList: Decodable {
+            struct GLabel: Decodable { let id: String; let name: String; let type: String? }
+            let labels: [GLabel]?
+        }
+        let list: LabelList = try await get(base.appendingPathComponent("labels"))
+        return (list.labels ?? []).map { MailLabel(id: $0.id, name: $0.name, type: $0.type) }
+    }
+
+    func fetchInbox(labelId: String, limit: Int) async throws -> [Email] {
         var comps = URLComponents(url: base.appendingPathComponent("messages"), resolvingAgainstBaseURL: false)!
         comps.queryItems = [
-            .init(name: "labelIds", value: "INBOX"),
+            .init(name: "labelIds", value: labelId),
             .init(name: "maxResults", value: String(limit))
         ]
         let list: MessageList = try await get(comps.url!)

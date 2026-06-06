@@ -18,10 +18,20 @@ actor MockMailService: MailService {
 
     var account: MailAccount? { mockAccount }
 
-    func fetchInbox(limit: Int) async throws -> [Email] {
-        // Simulate a little network latency.
+    func fetchInbox(labelId: String, limit: Int) async throws -> [Email] {
+        // Simulate a little network latency. The demo ignores the label and
+        // returns the same sample set for any folder.
         try? await Task.sleep(nanoseconds: 350_000_000)
         return Array(emails.sorted { $0.receivedAt > $1.receivedAt }.prefix(limit))
+    }
+
+    func fetchLabels() async throws -> [MailLabel] {
+        [
+            MailLabel(id: "INBOX", name: "INBOX", type: "system"),
+            MailLabel(id: "CATEGORY_UPDATES", name: "CATEGORY_UPDATES", type: "system"),
+            MailLabel(id: "CATEGORY_PROMOTIONS", name: "CATEGORY_PROMOTIONS", type: "system"),
+            MailLabel(id: "Newsletters", name: "Newsletters", type: "user")
+        ]
     }
 
     func fetchFullEmail(id: String) async throws -> Email {

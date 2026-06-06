@@ -74,7 +74,7 @@ struct InboxView: View {
                     }
                 }
             }
-            .navigationTitle("Inbox")
+            .navigationTitle(viewModel.selectedLabelName)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     if viewModel.unreadCount > 0 {
@@ -84,6 +84,22 @@ struct InboxView: View {
                     }
                 }
                 ToolbarItemGroup(placement: .topBarTrailing) {
+                    Menu {
+                        ForEach(viewModel.labels) { label in
+                            Button {
+                                Task { await viewModel.selectLabel(label) }
+                            } label: {
+                                if label.id == viewModel.selectedLabelId {
+                                    Label(label.displayName, systemImage: "checkmark")
+                                } else {
+                                    Text(label.displayName)
+                                }
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "line.3.horizontal.decrease.circle")
+                    }
+
                     Button { showAnalytics = true } label: {
                         Image(systemName: "chart.bar")
                     }
@@ -112,6 +128,7 @@ struct InboxView: View {
             if viewModel.emails.isEmpty {
                 await viewModel.load()
             }
+            await viewModel.loadLabels()
             await viewModel.prefetchReadingTimes()
         }
     }
