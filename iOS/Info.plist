@@ -18,6 +18,10 @@
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<!-- Names the asset-catalog app icon. Normally actool injects this, but with
+	     a manual Info.plist it must be declared so App Store upload accepts it. -->
+	<key>CFBundleIconName</key>
+	<string>AppIcon</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<!-- The app uses only standard HTTPS encryption, which is exempt — declaring
