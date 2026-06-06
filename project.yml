@@ -50,8 +50,10 @@ targets:
         ENABLE_PREVIEWS: YES
         SUPPORTS_MACCATALYST: NO
     dependencies:
-      - target: VoiceInboxWatch
-        embed: true
+      # Watch app temporarily not embedded so the first TestFlight build ships
+      # iPhone-only (no watch icon / watch validation needed). Re-enable later:
+      # - target: VoiceInboxWatch
+      #   embed: true
       - target: ShareExtension
         embed: true
 
