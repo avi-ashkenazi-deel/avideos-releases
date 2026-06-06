@@ -49,6 +49,9 @@ targets:
         GENERATE_INFOPLIST_FILE: NO
         ENABLE_PREVIEWS: YES
         SUPPORTS_MACCATALYST: NO
+        # Tell the asset-catalog compiler which set is the app icon; without this
+        # no icon (or CFBundleIconName) is emitted and App Store upload fails.
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     dependencies:
       # Watch app temporarily not embedded so the first TestFlight build ships
       # iPhone-only (no watch icon / watch validation needed). Re-enable later:
