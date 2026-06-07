@@ -93,7 +93,60 @@ regenerating was essential (otherwise it archives a stale project).
   a "Continue with Outlook" button, folder picker via Graph mail folders, and
   search via Graph $search. Needs an Azure app client id (see README/below).
 
+## 2026-06-07 — Multi-account, onboarding, sync, and a round of polish
+
+### Multiple mailboxes
+- **Connect several accounts** (Gmail + Outlook mix) and **switch between them**
+  from Settings (tap to switch, swipe to remove, "Sign out of all"). Tokens are
+  stored **per-account** in the Keychain; settings, saved links, and highlights
+  stay shared. Existing single sign-ins are **migrated** automatically.
+- "Add another account" opens a **sheet** (Google / Outlook).
+- **Outlook is live**: wired in the real Azure **client id**; "Continue with
+  Outlook" does a real Microsoft sign-in (Graph). Removed the demo inbox option.
+
+### First-run onboarding
+- **Animated splash** (logo + tagline) then a swipeable **feature tour** (listen
+  to email · marks read in your real inbox · AirPods bookmark/notes · save to
+  listen offline) → Get Started → sign-in. Splash is built to drop in a **Rive**
+  file later. Fixed bootstrap so first launch actually shows onboarding (it was
+  auto-entering the demo and skipping it).
+
+### Saved links follow your account
+- Saved links now **back up to private iCloud (CloudKit)**, keyed by the
+  signed-in email, so they survive uninstall/reinstall. Metadata only — no email
+  messages, and article content is re-extracted on the new device.
+
+### Hebrew / voice fixes
+- **Hebrew now reads correctly**: use the email's **dominant language** to pick
+  the voice (per-sentence detection mis-tagged Hebrew as Yiddish/English → silent
+  English fallback). Map Yiddish → Hebrew (no Yiddish voice exists).
+
+### Images
+- **Load lazy-loaded images** (prefer `data-src`/`srcset`, fix protocol-relative
+  URLs) so newsletter images actually show.
+- **Stop announcing junk images**: skip hidden elements, 1×1 tracking pixels, and
+  small/footer social icons (by size and by alt text) — fixes the Substack
+  "there's an image" spam.
+- Lock screen **keeps the last image** until the next one (time to glance at it).
+
+### Reliability
+- **Fixed playback wedging** when switching emails (AVSpeechSynthesizer dropped a
+  `speak` issued in the same turn as `stop`; now staged via `didCancel`).
+- AirPods highlight: **haptic confirmation** + cleaner audio-session handoff.
+
+### UI polish
+- Inbox title is a **tappable folder switcher** showing **"Inbox (44)"** with a
+  chevron (replaced the cramped, dropped funnel icon and the "44 unread" label).
+- **Removed dividers** between inbox rows for a cleaner look.
+- Swipe **left = read, right = unread**, each shown only when it applies.
+- **AirPods controls help screen** (detects your AirPods, shows the gestures).
+- **Version row** in Settings; build bumped so installs are identifiable.
+- **Separate Debug app icon** (`AppIcon-Dev`) so local builds are easy to spot.
+
 ### Next up
-- Open TestFlight to more testers (Google OAuth consent screen: External +
-  test users; restricted-scope verification before public launch).
+- Add the actual **Rive** splash animation once the file is ready.
+- Open TestFlight to more testers (Google OAuth consent: External + test users;
+  restricted-scope verification before public launch).
+- Optional: **merged "all inboxes"** view; per-account settings; CloudKit schema
+  deploy to Production before TestFlight relies on saved-link sync.
 - Re-add the Apple Watch app (with its own icon) in a later build.
