@@ -55,6 +55,10 @@ final class SystemSpeechEngine: NSObject, SpeechEngine {
     private let voiceIdentifier: String
     private let synthesizer = AVSpeechSynthesizer()
     private var activeUtterance: AVSpeechUtterance?
+    /// An utterance waiting for an in-flight `stopSpeaking` to land before it
+    /// starts, so we never call `speak` in the same turn as a stop (which
+    /// AVSpeechSynthesizer often drops, wedging playback).
+    private var pendingUtterance: AVSpeechUtterance?
 
     init(voiceIdentifier: String) {
         self.voiceIdentifier = voiceIdentifier
@@ -66,15 +70,36 @@ final class SystemSpeechEngine: NSObject, SpeechEngine {
     }
 
     func speak(_ text: String, speed: Double, pauseAfter: TimeInterval) {
-        stop()
         let utterance = AVSpeechUtterance(string: text)
         utterance.rate = Self.utteranceRate(for: speed)
         utterance.postUtteranceDelay = pauseAfter
         utterance.voice = voice(for: text)
-        activeUtterance = utterance
         isPaused = false
         onWordRange?(nil)
         SpeechAudioSession.activate()
+
+        if activeUtterance != nil || synthesizer.isSpeaking || synthesizer.isPaused {
+            // Interrupting something: `stopSpeaking` is asynchronous, and calling
+            // `speak` in the same turn frequently drops the new utterance. Stage
+            // it and start once the cancel lands (`didCancel`), with a short
+            // fallback in case the delegate doesn't fire.
+            pendingUtterance = utterance
+            activeUtterance = nil
+            synthesizer.stopSpeaking(at: .immediate)
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(nanoseconds: 80_000_000)
+                guard let self, self.pendingUtterance === utterance else { return }
+                self.startSpeaking(utterance)
+            }
+        } else {
+            startSpeaking(utterance)
+        }
+    }
+
+    private func startSpeaking(_ utterance: AVSpeechUtterance) {
+        pendingUtterance = nil
+        activeUtterance = utterance
+        isPaused = false
         synthesizer.speak(utterance)
     }
 
@@ -108,6 +133,7 @@ final class SystemSpeechEngine: NSObject, SpeechEngine {
     }
 
     func stop() {
+        pendingUtterance = nil
         activeUtterance = nil
         isPaused = false
         onWordRange?(nil)
@@ -130,6 +156,15 @@ extension SystemSpeechEngine: AVSpeechSynthesizerDelegate {
             self.isPaused = false
             self.onWordRange?(nil)
             self.onFinish?(true)
+        }
+    }
+
+    nonisolated func speechSynthesizer(_ s: AVSpeechSynthesizer, didCancel u: AVSpeechUtterance) {
+        // The interrupted utterance has actually stopped — now it's safe to start
+        // the one staged in `speak`.
+        Task { @MainActor in
+            guard let pending = self.pendingUtterance else { return }
+            self.startSpeaking(pending)
         }
     }
 

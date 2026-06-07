@@ -74,6 +74,9 @@ final class EmailPlayerViewModel: ObservableObject {
     /// paused to digest an image), so the next Play advances past it.
     private var currentBlockSpoken = false
     private var timer: Timer?
+    /// Bumped on every speak/stop so an in-flight async image description can tell
+    /// it's stale (the listener moved on / switched email) and not speak.
+    private var playToken = 0
     private var estimatedDuration: TimeInterval = 1
     /// Log of (blockIndex, elapsedAtStart) for the highlight lookback window.
     private var spokenLog: [(index: Int, start: TimeInterval)] = []
@@ -361,6 +364,7 @@ final class EmailPlayerViewModel: ObservableObject {
     }
 
     func stop() {
+        playToken += 1
         engine.stop()
         isPlaying = false
         stopTimer()
@@ -379,6 +383,7 @@ final class EmailPlayerViewModel: ObservableObject {
             return
         }
         ensureEngine()
+        playToken += 1
         currentBlockIndex = index
         currentBlockSpoken = false
         spokenLog.append((index, elapsed))
@@ -392,9 +397,11 @@ final class EmailPlayerViewModel: ObservableObject {
             // Try to describe the image (on-device Vision); fall back to the
             // default phrase when offline / nothing recognized.
             let fallback = block.spokenText
+            let token = playToken
             Task { [weak self] in
                 let text = await self?.imageDescriber.describe(image) ?? fallback
-                guard let self, self.currentBlockIndex == index, self.isPlaying else { return }
+                // Bail if the listener moved on or switched email while we fetched.
+                guard let self, self.playToken == token, self.isPlaying else { return }
                 self.engine.speak(text, speed: self.settings.speed, pauseAfter: 0.2)
             }
         } else {
@@ -586,8 +593,13 @@ final class EmailPlayerViewModel: ObservableObject {
     /// note and dictate it — all hands-free — before resuming playback.
     func captureHighlightAndDictate() {
         guard let highlight = captureHighlight(presentComposer: false) else { return }
+        // Confirm the capture immediately (the screen may be in a pocket), so the
+        // listener knows the press registered before the spoken prompt.
+        Haptics.success()
         let wasPlaying = isPlaying
-        pause()
+        // Fully stop (not pause): the recorder switches the audio session to
+        // record mode, which a merely-paused synthesizer would keep fighting for.
+        stop()
         Task { [weak self] in
             guard let self else { return }
             let outcome = await self.voiceRecorder.captureNote()
