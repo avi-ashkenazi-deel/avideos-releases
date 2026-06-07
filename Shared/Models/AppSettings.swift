@@ -7,6 +7,8 @@ enum ImageBehavior: String, Codable, CaseIterable, Identifiable, Sendable {
     case pauseAndDigest
     /// Say "there's an image" and keep reading.
     case announceAndContinue
+    /// Don't mention images at all — keep them on screen and read straight past.
+    case skipSilently
 
     var id: String { rawValue }
 
@@ -14,6 +16,7 @@ enum ImageBehavior: String, Codable, CaseIterable, Identifiable, Sendable {
         switch self {
         case .pauseAndDigest: return "Pause on images"
         case .announceAndContinue: return "Announce and continue"
+        case .skipSilently: return "Skip images silently"
         }
     }
 
@@ -23,6 +26,8 @@ enum ImageBehavior: String, Codable, CaseIterable, Identifiable, Sendable {
             return "Stop when an image appears so you can look at it. Press play to continue."
         case .announceAndContinue:
             return "Just say there's an image and keep reading."
+        case .skipSilently:
+            return "Don't announce images — keep them on screen and read straight through."
         }
     }
 }

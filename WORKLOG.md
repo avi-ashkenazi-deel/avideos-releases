@@ -79,6 +79,12 @@ regenerating was essential (otherwise it archives a stale project).
 - **Load all emails**: the inbox now **paginates** (infinite scroll) instead of
   stopping at 50 — scroll and it keeps loading the folder/search results.
 
+### Audio cues + image option
+- **Success chime** when an email finishes; **transition chime** before the
+  spoken "From … / subject" announcement when auto-advancing to the next email.
+- New image setting **"Skip images silently"**: don't announce images, just keep
+  them on screen and read straight through.
+
 ### Next up
 - Open TestFlight to more testers (Google OAuth consent screen: External +
   test users; restricted-scope verification before public launch).

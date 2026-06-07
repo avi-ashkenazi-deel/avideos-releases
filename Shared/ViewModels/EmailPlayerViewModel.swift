@@ -372,6 +372,11 @@ final class EmailPlayerViewModel: ObservableObject {
             complete()
             return
         }
+        // Skip-silently: read straight past images without announcing them.
+        if blocks[index].isImage, settings.imageBehavior == .skipSilently {
+            speakBlock(at: index + 1)
+            return
+        }
         ensureEngine()
         currentBlockIndex = index
         currentBlockSpoken = false
@@ -414,6 +419,7 @@ final class EmailPlayerViewModel: ObservableObject {
         updateNowPlaying()
         recordProgress()
         recordCompletedAnalytics()
+        SoundEffects.shared.play(.success)   // "finished this email" chime
         if let id = parsed?.email.id { markRead(id: id) }
         advanceToNextUnread()
     }
@@ -470,10 +476,15 @@ final class EmailPlayerViewModel: ObservableObject {
         Task {
             await load(email: next, announce: true)
             guard errorMessage == nil else { return }
+            // Transition chime, then the spoken "From … / subject" announcement.
+            SoundEffects.shared.play(.transition)
+            try? await Task.sleep(nanoseconds: 500_000_000)
             play()
         }
     }
 
+    /// Spoken header read at the start of an auto-advanced email: who it's from
+    /// and its subject.
     private static func announcement(for email: Email) -> String {
         "From \(email.from.displayName). \(email.subjectOrFallback)."
     }
