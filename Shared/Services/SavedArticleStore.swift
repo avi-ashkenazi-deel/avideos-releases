@@ -14,8 +14,61 @@ final class SavedArticleStore: ObservableObject {
 
     private var processing = false
 
+    /// Email the saved list is backed up under in iCloud (nil = not signed in /
+    /// cloud sync off). Set by `AppState` once it knows who's signed in.
+    private var ownerEmail: String?
+    private var pushTask: Task<Void, Never>?
+
     private init() {
         reload()
+    }
+
+    // MARK: - iCloud sync
+
+    /// Tie cloud backup to the signed-in email. Passing a new email pulls that
+    /// account's saved list down and merges it; nil turns cloud sync off.
+    func configureCloud(email: String?) {
+        guard email != ownerEmail else { return }
+        ownerEmail = email
+        guard email != nil else { return }
+        Task { await syncWithCloud() }
+    }
+
+    /// Pull the email's saved list from iCloud, merge it with what's on device
+    /// (re-extracting content that isn't cached here), then push the union back.
+    func syncWithCloud() async {
+        guard let email = ownerEmail, await SavedArticleCloudSync.shared.isAvailable() else { return }
+        let cloud = try? await SavedArticleCloudSync.shared.fetch(forEmail: email)
+        var merged = SavedArticleStorage.load()
+        if let cloud {
+            let localIDs = Set(merged.map(\.id))
+            for var item in cloud where !localIDs.contains(item.id) {
+                // Content isn't synced; mark it for re-extraction on this device.
+                if SavedArticleStorage.content(for: item.id) == nil {
+                    item.status = .pending
+                    item.failureReason = nil
+                }
+                merged.append(item)
+            }
+        }
+        SavedArticleStorage.save(merged)
+        reload()
+        // Back up the union so links saved before sign-in (or via the Share
+        // Extension) are captured too.
+        try? await SavedArticleCloudSync.shared.save(articles, forEmail: email)
+        await processPending()
+    }
+
+    /// Debounced push of the current list to iCloud after any change.
+    private func pushToCloud() {
+        guard let email = ownerEmail else { return }
+        let snapshot = articles
+        pushTask?.cancel()
+        pushTask = Task {
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            guard !Task.isCancelled else { return }
+            try? await SavedArticleCloudSync.shared.save(snapshot, forEmail: email)
+        }
     }
 
     var unreadCount: Int { articles.filter { !$0.isRead && $0.status == .ready }.count }
@@ -96,5 +149,6 @@ final class SavedArticleStore: ObservableObject {
 
     private func persist() {
         SavedArticleStorage.save(articles)
+        pushToCloud()
     }
 }

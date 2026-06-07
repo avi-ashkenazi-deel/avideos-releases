@@ -11,5 +11,17 @@
 	<array>
 		<string>group.com.voiceinbox.shared</string>
 	</array>
+	<!-- iCloud / CloudKit: backs up the user's saved-link list (metadata only) to
+	     their private database so it survives uninstall/reinstall. Enable the
+	     iCloud capability with CloudKit and create the container below in Xcode →
+	     Signing & Capabilities (and the Apple Developer portal). -->
+	<key>com.apple.developer.icloud-services</key>
+	<array>
+		<string>CloudKit</string>
+	</array>
+	<key>com.apple.developer.icloud-container-identifiers</key>
+	<array>
+		<string>iCloud.com.aviashkenazi.voiceinbox</string>
+	</array>
 </dict>
 </plist>

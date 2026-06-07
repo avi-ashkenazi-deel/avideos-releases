@@ -12,7 +12,9 @@ final class AppState: ObservableObject {
     }
 
     @Published private(set) var phase: Phase = .onboarding
-    @Published private(set) var account: MailAccount?
+    @Published private(set) var account: MailAccount? {
+        didSet { syncSavedLinksAccount() }
+    }
     @Published var errorMessage: String?
 
     let settings = AppSettings.shared
@@ -46,6 +48,13 @@ final class AppState: ObservableObject {
         #else
         return false
         #endif
+    }
+
+    /// Back up saved links under the real signed-in email (skip the demo account),
+    /// so the list follows the user across uninstall/reinstall via their iCloud.
+    private func syncSavedLinksAccount() {
+        let email = (account?.provider == .demo) ? nil : account?.emailAddress
+        SavedArticleStore.shared.configureCloud(email: email)
     }
 
     func bootstrap() async {
