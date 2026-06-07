@@ -52,6 +52,7 @@ struct InboxView: View {
                                 )
                             }
                             .buttonStyle(.plain)
+                            .listRowSeparator(.hidden)
                             .onAppear {
                                 // Infinite scroll: pull the next page near the end.
                                 if email.id == viewModel.emails.last?.id {
