@@ -65,16 +65,27 @@ enum EmailParser {
 
             // The image itself.
             let imgTag = ns.substring(with: match.range)
+            cursor = match.range.location + match.range.length
+
+            // Drop spacers, tracking pixels, and the rows of tiny social/footer
+            // icons that newsletters (Substack, CNBC, …) pile up — they'd just be
+            // announced as "there's an image here" over and over.
+            if isDecorative(imgTag) { continue }
+
+            let url = resolveBestSource(from: imgTag)
+            let cid = contentID(from: attribute("src", in: imgTag))
+            // Nothing we can actually show (empty/unsupported source) — skip it
+            // rather than announce a blank image.
+            if url == nil, cid == nil { continue }
+
             let image = InlineImage(
                 blockIndex: index,
-                remoteURL: attribute("src", in: imgTag).flatMap(resolveImageSource),
-                contentID: contentID(from: attribute("src", in: imgTag)),
+                remoteURL: url,
+                contentID: cid,
                 altText: attribute("alt", in: imgTag)
             )
             blocks.append(.image(image))
             index += 1
-
-            cursor = match.range.location + match.range.length
         }
 
         // Trailing text after the last image.
@@ -87,10 +98,67 @@ enum EmailParser {
         return blocks
     }
 
-    /// `src="cid:abc"` references an inline attachment rather than a URL.
-    private static func resolveImageSource(_ src: String) -> URL? {
-        guard !src.lowercased().hasPrefix("cid:") else { return nil }
-        return URL(string: src)
+    /// Best loadable image URL for an `<img>`. Marketing/newsletter HTML often
+    /// lazy-loads: the real URL sits in `data-src`/`srcset` while plain `src` is a
+    /// 1×1 placeholder or `data:` URI. Prefer the real ones, take the largest
+    /// `srcset` candidate, normalize protocol-relative `//host/x.png`, and only
+    /// accept http(s) (so `cid:`/`data:` fall through to the content-id path).
+    private static func resolveBestSource(from tag: String) -> URL? {
+        func httpURL(_ raw: String?) -> URL? {
+            guard let raw else { return nil }
+            var s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            if s.hasPrefix("//") { s = "https:" + s }
+            guard let url = URL(string: s),
+                  let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" else {
+                return nil
+            }
+            return url
+        }
+        // "urlA 320w, urlB 640w" / "urlA 1x, urlB 2x" → last (largest) candidate.
+        func fromSrcset(_ raw: String?) -> URL? {
+            guard let last = raw?.split(separator: ",").last else { return nil }
+            return httpURL(last.trimmingCharacters(in: .whitespaces).split(separator: " ").first.map(String.init))
+        }
+        return httpURL(attribute("data-src", in: tag))
+            ?? fromSrcset(attribute("data-srcset", in: tag))
+            ?? fromSrcset(attribute("srcset", in: tag))
+            ?? httpURL(attribute("src", in: tag))
+    }
+
+    /// True for images that carry no spoken/visual value: hidden elements, 1×1
+    /// spacers/tracking pixels, and the small icons (≤ ~64px) common in footers.
+    private static func isDecorative(_ tag: String) -> Bool {
+        if let style = attribute("style", in: tag)?.lowercased(),
+           style.contains("display:none") || style.contains("display: none")
+            || style.contains("visibility:hidden") || style.contains("visibility: hidden") {
+            return true
+        }
+        let w = pixelDimension("width", in: tag)
+        let h = pixelDimension("height", in: tag)
+        if let w, w <= 2 { return true }
+        if let h, h <= 2 { return true }
+        if let maxDim = [w, h].compactMap({ $0 }).max(), maxDim < 64 { return true }
+        return false
+    }
+
+    /// A pixel dimension from a `width`/`height` attribute (quoted or not) or an
+    /// inline `style`. Percentages (e.g. width="100%") return nil — unknown, keep.
+    private static func pixelDimension(_ name: String, in tag: String) -> Int? {
+        func firstInt(_ pattern: String, in string: String) -> Int? {
+            guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else { return nil }
+            let ns = string as NSString
+            guard let m = regex.firstMatch(in: string, range: NSRange(location: 0, length: ns.length)),
+                  m.range(at: 1).location != NSNotFound else { return nil }
+            return Int(ns.substring(with: m.range(at: 1)))
+        }
+        // width=48 / width="48" / width="48px" — but not when it's a percentage.
+        if let attr = attribute(name, in: tag), attr.contains("%") { /* percentage: skip */ }
+        else if let value = firstInt("(?<![\\w-])\(name)\\s*=\\s*[\"']?(\\d+)", in: tag) { return value }
+        // style="width:48px"
+        if let style = attribute("style", in: tag) {
+            return firstInt("(?<![\\w-])\(name)\\s*:\\s*(\\d+)\\s*px", in: style)
+        }
+        return nil
     }
 
     private static func contentID(from src: String?) -> String? {
@@ -106,8 +174,9 @@ enum EmailParser {
         if let cached = attrRegexCache.object(forKey: key) {
             regex = cached
         } else {
-            // Matches name="..." or name='...'
-            let pattern = "\(name)\\s*=\\s*(?:\"([^\"]*)\"|'([^']*)')"
+            // Matches name="..." or name='...'. The leading look-behind keeps
+            // `src` from matching `data-src`/`srcset` and `width` from `max-width`.
+            let pattern = "(?<![\\w-])\(name)\\s*=\\s*(?:\"([^\"]*)\"|'([^']*)')"
             regex = try! NSRegularExpression(pattern: pattern, options: [.caseInsensitive])
             attrRegexCache.setObject(regex, forKey: key)
         }
