@@ -59,20 +59,26 @@ struct InboxView: View {
                                 }
                             }
                             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                Button {
-                                    Task { await viewModel.markRead(email.id) }
-                                } label: {
-                                    Label("Read", systemImage: "envelope.open")
+                                // Swipe left → mark read (only meaningful when unread).
+                                if !email.isRead {
+                                    Button {
+                                        Task { await viewModel.markRead(email.id) }
+                                    } label: {
+                                        Label("Read", systemImage: "envelope.open")
+                                    }
+                                    .tint(.blue)
                                 }
-                                .tint(.blue)
                             }
                             .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                                Button {
-                                    Task { await viewModel.markUnread(email.id) }
-                                } label: {
-                                    Label("Unread", systemImage: "envelope.badge")
+                                // Swipe right → mark unread / reset (only when read).
+                                if email.isRead {
+                                    Button {
+                                        Task { await viewModel.markUnread(email.id) }
+                                    } label: {
+                                        Label("Unread", systemImage: "envelope.badge")
+                                    }
+                                    .tint(.orange)
                                 }
-                                .tint(.orange)
                             }
                         }
 
