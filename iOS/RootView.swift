@@ -5,11 +5,16 @@ struct RootView: View {
     // The single, app-wide player. Lives here so playback survives navigating
     // between tabs and emails; the mini-player and Now Playing view both drive it.
     @StateObject private var player = EmailPlayerViewModel(mailService: MockMailService())
+    @AppStorage("hasCompletedWelcome") private var hasCompletedWelcome = false
 
     var body: some View {
         switch appState.phase {
         case .onboarding:
-            OnboardingView()
+            if hasCompletedWelcome {
+                OnboardingView()
+            } else {
+                WelcomeView { hasCompletedWelcome = true }
+            }
         case .ready:
             ZStack(alignment: .bottom) {
                 TabView {
