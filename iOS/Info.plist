@@ -61,6 +61,14 @@
 				<string>com.googleusercontent.apps.1010510206522-1pc27rqvv9ip4p35t6inu6ktnl1gilav</string>
 			</array>
 		</dict>
+		<!-- Outlook/Microsoft sign-in redirect (register the matching redirect URI
+		     msauth.com.aviashkenazi.voiceinbox://auth in your Azure app). -->
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>msauth.com.aviashkenazi.voiceinbox</string>
+			</array>
+		</dict>
 	</array>
 </dict>
 </plist>

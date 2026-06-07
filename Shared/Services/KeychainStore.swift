@@ -54,5 +54,6 @@ enum KeychainStore {
     enum Account {
         static let elevenLabsAPIKey = "elevenLabsAPIKey"
         static let googleTokens = "google.tokens"
+        static let microsoftTokens = "microsoft.tokens"
     }
 }

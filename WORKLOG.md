@@ -85,6 +85,14 @@ regenerating was essential (otherwise it archives a stale project).
 - New image setting **"Skip images silently"**: don't announce images, just keep
   them on screen and read straight through.
 
+### Image descriptions + Outlook
+- **On-device image descriptions**: reaching an image, classify it with Vision
+  and speak e.g. "Image of beach, ocean and sky" (falls back to alt text /
+  "there's an image here" offline).
+- **Outlook / Microsoft sign-in**: new Microsoft Graph backend + OAuth (PKCE),
+  a "Continue with Outlook" button, folder picker via Graph mail folders, and
+  search via Graph $search. Needs an Azure app client id (see README/below).
+
 ### Next up
 - Open TestFlight to more testers (Google OAuth consent screen: External +
   test users; restricted-scope verification before public launch).

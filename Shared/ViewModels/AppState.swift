@@ -22,6 +22,7 @@ final class AppState: ObservableObject {
 
     #if os(iOS)
     private let googleAuth = GoogleAuthSession(config: .placeholder)
+    private let microsoftAuth = MicrosoftAuthSession(config: .placeholder)
     #endif
 
     init() {
@@ -38,15 +39,26 @@ final class AppState: ObservableObject {
         #endif
     }
 
+    /// Whether Microsoft/Outlook sign-in is available (Azure client id filled in).
+    var microsoftAvailable: Bool {
+        #if os(iOS)
+        return MicrosoftOAuthConfig.placeholder.isConfigured
+        #else
+        return false
+        #endif
+    }
+
     func bootstrap() async {
         if let account = await mailService.account {
             self.account = account
             self.phase = .ready
         }
         #if os(iOS)
-        // If we have stored Google tokens, prefer the real backend.
+        // Prefer a real backend if we have stored tokens for one.
         if googleAvailable, googleAuth.storedTokens != nil {
             await useGoogleBackend()
+        } else if microsoftAvailable, microsoftAuth.storedTokens != nil {
+            await useMicrosoftBackend()
         }
         #endif
     }
@@ -79,12 +91,44 @@ final class AppState: ObservableObject {
         mailService = GoogleMailService(tokenProvider: {
             try await auth.validAccessToken()
         })
+        resetFolderToInbox()
         account = await mailService.account
         phase = .ready
     }
 
+    func signInWithMicrosoft() async {
+        guard microsoftAvailable else {
+            errorMessage = "Outlook sign-in isn't configured yet. Showing the demo inbox."
+            await continueWithDemo()
+            return
+        }
+        do {
+            _ = try await microsoftAuth.authenticate()
+            await useMicrosoftBackend()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func useMicrosoftBackend() async {
+        let auth = microsoftAuth
+        mailService = MicrosoftMailService(tokenProvider: {
+            try await auth.validAccessToken()
+        })
+        resetFolderToInbox()
+        account = await mailService.account
+        phase = .ready
+    }
+
+    /// Label ids differ per provider, so reset to the inbox when the backend changes.
+    private func resetFolderToInbox() {
+        settings.mailLabelId = "INBOX"
+        settings.mailLabelName = "Inbox"
+    }
+
     func signOut() {
         googleAuth.signOut()
+        microsoftAuth.signOut()
         mailService = MockMailService()
         account = nil
         phase = .onboarding

@@ -36,6 +36,15 @@ struct OnboardingView: View {
                 .controlSize(.large)
 
                 Button {
+                    Task { await connectMicrosoft() }
+                } label: {
+                    Label("Continue with Outlook", systemImage: "envelope.fill")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.large)
+
+                Button {
                     Task { await useDemo() }
                 } label: {
                     Text("Try the demo inbox")
@@ -69,6 +78,16 @@ struct OnboardingView: View {
         defer { isWorking = false }
         #if os(iOS)
         await appState.signInWithGoogle()
+        #else
+        await appState.continueWithDemo()
+        #endif
+    }
+
+    private func connectMicrosoft() async {
+        isWorking = true
+        defer { isWorking = false }
+        #if os(iOS)
+        await appState.signInWithMicrosoft()
         #else
         await appState.continueWithDemo()
         #endif

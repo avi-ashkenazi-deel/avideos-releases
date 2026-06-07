@@ -4,6 +4,7 @@ import Foundation
 struct MailAccount: Codable, Hashable, Sendable {
     enum Provider: String, Codable, Sendable {
         case google
+        case microsoft
         case demo
     }
 
