@@ -40,12 +40,20 @@ final class VoiceNoteRecorder: NSObject {
 
         await speak("Do you want to add a note?")
         let answer = await listen(maxSilence: 1.3, maxDuration: 5)
-        guard Self.isAffirmative(answer) else { return .declined }
+        guard Self.isAffirmative(answer) else {
+            await speak("Okay.")
+            return .declined
+        }
 
         await speak("Go ahead.")
         let note = await listen(maxSilence: 2.0, maxDuration: 40)
         let trimmed = note.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? .declined : .note(trimmed)
+        guard !trimmed.isEmpty else {
+            await speak("I didn't catch that, so I didn't save a note.")
+            return .declined
+        }
+        await speak("Note saved.")
+        return .note(trimmed)
     }
 
     // MARK: - Permissions
