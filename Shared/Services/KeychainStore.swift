@@ -22,7 +22,10 @@ enum KeychainStore {
 
         var add = base
         add[kSecValueData as String] = Data(value.utf8)
-        add[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
+        // ThisDeviceOnly: secrets (OAuth refresh tokens, API key) stay on this
+        // device and never migrate via encrypted backup or iCloud Keychain.
+        // Still readable after first unlock, so background token refresh works.
+        add[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
         SecItemAdd(add as CFDictionary, nil)
     }
 

@@ -92,7 +92,6 @@ struct WelcomeView: View {
 // MARK: - Splash
 
 private struct SplashPage: View {
-    @State private var appear = false
     @State private var textIn = false
 
     var body: some View {
