@@ -273,14 +273,25 @@ final class EmailPlayerViewModel: ObservableObject {
         checkVoiceAvailability(for: parsed)
     }
 
-    /// Flag when the email's language has no installed on-device voice, so the UI
-    /// can prompt the listener to add one. Skipped when ElevenLabs (multilingual)
-    /// is active, or when a matching voice exists.
+    /// The email's dominant language code (e.g. "he"), detected once from a large
+    /// sample so short blocks don't have to detect on their own.
+    private var dominantLanguageCode: String?
+
+    /// Detect the email's dominant language, hand it to the engine as a hint, and
+    /// flag when there's no installed on-device voice for it so the UI can prompt
+    /// to add one. Skipped when ElevenLabs (multilingual) is active.
     private func checkVoiceAvailability(for parsed: ParsedEmail) {
         missingVoiceLanguage = nil
-        guard !settings.elevenLabsActive else { return }
-        let sample = parsed.blocks.prefix(50).map(\.spokenText).joined(separator: " ")
-        guard sample.count > 20, let code = LanguageTools.languageCode(for: sample) else { return }
+        // Sample real spoken sentences (skip image placeholders) for detection.
+        let sample = parsed.blocks
+            .compactMap { if case .image = $0 { return nil } else { return $0.spokenText } }
+            .prefix(80)
+            .joined(separator: " ")
+        let code = sample.count > 20 ? LanguageTools.languageCode(for: sample) : nil
+        dominantLanguageCode = code
+        engine.preferredLanguage = code
+
+        guard !settings.elevenLabsActive, let code else { return }
         if SystemSpeechEngine.bestVoice(forLanguage: code) == nil {
             missingVoiceLanguage = Locale.current.localizedString(forLanguageCode: code) ?? code
         }
@@ -547,6 +558,7 @@ final class EmailPlayerViewModel: ObservableObject {
         guard signature != engineSignature else { return }
         engine.stop()
         engine = Self.makeEngine(settings: settings)
+        engine.preferredLanguage = dominantLanguageCode
         wire(engine)
         engineSignature = signature
     }

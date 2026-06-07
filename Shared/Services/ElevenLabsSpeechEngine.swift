@@ -17,6 +17,8 @@ final class ElevenLabsSpeechEngine: NSObject, SpeechEngine {
     var onSynthesized: ((Int) -> Void)?
 
     private(set) var isPaused = false
+    /// Ignored: ElevenLabs is multilingual and detects the language from the text.
+    var preferredLanguage: String?
 
     private let client: ElevenLabsClient
     private let voiceID: String

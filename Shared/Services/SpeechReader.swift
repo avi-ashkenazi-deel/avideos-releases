@@ -16,6 +16,11 @@ protocol SpeechEngine: AnyObject {
 
     var isPaused: Bool { get }
 
+    /// Optional hint of the content's dominant language (BCP-47 base, e.g. "he"),
+    /// used to pick a matching voice when an individual chunk is too short to
+    /// detect on its own. Engines that don't need it (cloud, multilingual) ignore it.
+    var preferredLanguage: String? { get set }
+
     func speak(_ text: String, speed: Double, pauseAfter: TimeInterval)
     func pause()
     func resume()
@@ -51,6 +56,7 @@ final class SystemSpeechEngine: NSObject, SpeechEngine {
     var onError: ((String) -> Void)?
 
     private(set) var isPaused = false
+    var preferredLanguage: String?
 
     private let voiceIdentifier: String
     private let synthesizer = AVSpeechSynthesizer()
@@ -108,7 +114,10 @@ final class SystemSpeechEngine: NSObject, SpeechEngine {
     /// the detected language (so e.g. Hebrew text is read by a Hebrew voice).
     private func voice(for text: String) -> AVSpeechSynthesisVoice? {
         let preferred = voiceIdentifier.isEmpty ? nil : AVSpeechSynthesisVoice(identifier: voiceIdentifier)
-        guard let code = LanguageTools.languageCode(for: text) else { return preferred }
+        // Prefer the chunk's own detected language; fall back to the email's
+        // dominant language for short chunks (a number, one word, punctuation)
+        // that don't detect reliably on their own.
+        guard let code = LanguageTools.languageCode(for: text) ?? preferredLanguage else { return preferred }
         if let preferred, preferred.language.hasPrefix(code) { return preferred }
         return Self.bestVoice(forLanguage: code) ?? preferred
     }
