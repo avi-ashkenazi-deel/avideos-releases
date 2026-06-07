@@ -4,8 +4,9 @@ import Foundation
 import AuthenticationServices
 
 /// Microsoft identity-platform OAuth (PKCE) via `ASWebAuthenticationSession`,
-/// then token exchange/refresh against the v2.0 token endpoint. Mirrors
-/// `GoogleAuthSession`; reuses `GoogleTokens` as the standard OAuth token bundle.
+/// then token exchange/refresh against the v2.0 token endpoint. Reuses
+/// `GoogleTokens` as the standard OAuth token bundle, and persists tokens in the
+/// Keychain **per account** so multiple mailboxes can be connected.
 @MainActor
 final class MicrosoftAuthSession: NSObject {
 
@@ -15,32 +16,14 @@ final class MicrosoftAuthSession: NSObject {
     private var authEndpoint: URL {
         URL(string: "https://login.microsoftonline.com/\(config.tenant)/oauth2/v2.0/authorize")!
     }
-    private var tokenEndpoint: URL {
+
+    private static func tokenEndpoint(_ config: MicrosoftOAuthConfig) -> URL {
         URL(string: "https://login.microsoftonline.com/\(config.tenant)/oauth2/v2.0/token")!
     }
 
     init(config: MicrosoftOAuthConfig = .placeholder) {
         self.config = config
     }
-
-    var storedTokens: GoogleTokens? {
-        get {
-            guard let json = KeychainStore.get(account: KeychainStore.Account.microsoftTokens),
-                  let data = json.data(using: .utf8) else { return nil }
-            return try? JSONDecoder().decode(GoogleTokens.self, from: data)
-        }
-        set {
-            if let newValue,
-               let data = try? JSONEncoder().encode(newValue),
-               let json = String(data: data, encoding: .utf8) {
-                KeychainStore.set(json, account: KeychainStore.Account.microsoftTokens)
-            } else {
-                KeychainStore.delete(account: KeychainStore.Account.microsoftTokens)
-            }
-        }
-    }
-
-    func signOut() { storedTokens = nil }
 
     func authenticate() async throws -> GoogleTokens {
         let verifier = PKCE.makeVerifier()
@@ -63,24 +46,37 @@ final class MicrosoftAuthSession: NSObject {
             .queryItems?.first(where: { $0.name == "code" })?.value else {
             throw MailServiceError.network("No authorization code returned")
         }
-
-        let tokens = try await exchange(code: code, verifier: verifier)
-        storedTokens = tokens
-        return tokens
+        return try await Self.exchange(code: code, verifier: verifier, config: config)
     }
 
-    func validAccessToken() async throws -> String {
-        guard let tokens = storedTokens else { throw MailServiceError.notAuthenticated }
+    // MARK: - Per-account token storage
+
+    static func tokens(key: String) -> GoogleTokens? {
+        guard let json = KeychainStore.get(account: key), let data = json.data(using: .utf8) else { return nil }
+        return try? JSONDecoder().decode(GoogleTokens.self, from: data)
+    }
+
+    static func store(_ tokens: GoogleTokens?, key: String) {
+        if let tokens, let data = try? JSONEncoder().encode(tokens), let json = String(data: data, encoding: .utf8) {
+            KeychainStore.set(json, account: key)
+        } else {
+            KeychainStore.delete(account: key)
+        }
+    }
+
+    static func validAccessToken(key: String, config: MicrosoftOAuthConfig = .placeholder) async throws -> String {
+        guard let tokens = tokens(key: key) else { throw MailServiceError.notAuthenticated }
         if !tokens.isExpired { return tokens.accessToken }
         guard let refreshToken = tokens.refreshToken else { throw MailServiceError.notAuthenticated }
-        let refreshed = try await refresh(refreshToken: refreshToken)
-        storedTokens = refreshed
+        var refreshed = try await refresh(refreshToken: refreshToken, config: config)
+        if refreshed.refreshToken == nil { refreshed.refreshToken = refreshToken }
+        store(refreshed, key: key)
         return refreshed.accessToken
     }
 
     // MARK: - Token endpoint
 
-    private func exchange(code: String, verifier: String) async throws -> GoogleTokens {
+    private static func exchange(code: String, verifier: String, config: MicrosoftOAuthConfig) async throws -> GoogleTokens {
         try await postToken([
             "client_id": config.clientID,
             "code": code,
@@ -88,22 +84,20 @@ final class MicrosoftAuthSession: NSObject {
             "grant_type": "authorization_code",
             "redirect_uri": config.redirectURI,
             "scope": config.scopes.joined(separator: " ")
-        ])
+        ], config: config)
     }
 
-    private func refresh(refreshToken: String) async throws -> GoogleTokens {
-        var tokens = try await postToken([
+    private static func refresh(refreshToken: String, config: MicrosoftOAuthConfig) async throws -> GoogleTokens {
+        try await postToken([
             "client_id": config.clientID,
             "refresh_token": refreshToken,
             "grant_type": "refresh_token",
             "scope": config.scopes.joined(separator: " ")
-        ])
-        if tokens.refreshToken == nil { tokens.refreshToken = refreshToken }
-        return tokens
+        ], config: config)
     }
 
-    private func postToken(_ params: [String: String]) async throws -> GoogleTokens {
-        var request = URLRequest(url: tokenEndpoint)
+    private static func postToken(_ params: [String: String], config: MicrosoftOAuthConfig) async throws -> GoogleTokens {
+        var request = URLRequest(url: tokenEndpoint(config))
         request.httpMethod = "POST"
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
         request.httpBody = params

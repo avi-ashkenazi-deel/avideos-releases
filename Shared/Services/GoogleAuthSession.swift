@@ -7,46 +7,28 @@ import AuthenticationServices
 /// `ASWebAuthenticationSession`, then exchanges/refreshes tokens against
 /// Google's token endpoint. No client secret is stored on device.
 ///
-/// Tokens are persisted to the shared defaults for simplicity; for production
-/// move them to the Keychain.
+/// Tokens are persisted in the Keychain **per account** (keyed by the caller),
+/// so several mailboxes can be connected at once.
 @MainActor
 final class GoogleAuthSession: NSObject {
 
     private let config: GoogleOAuthConfig
     private var webSession: ASWebAuthenticationSession?
 
-    private let authEndpoint = URL(string: "https://accounts.google.com/o/oauth2/v2/auth")!
-    private let tokenEndpoint = URL(string: "https://oauth2.googleapis.com/token")!
+    private static let authEndpoint = URL(string: "https://accounts.google.com/o/oauth2/v2/auth")!
+    private static let tokenEndpoint = URL(string: "https://oauth2.googleapis.com/token")!
 
     init(config: GoogleOAuthConfig = .placeholder) {
         self.config = config
     }
 
-    var storedTokens: GoogleTokens? {
-        get {
-            guard let json = KeychainStore.get(account: KeychainStore.Account.googleTokens),
-                  let data = json.data(using: .utf8) else { return nil }
-            return try? JSONDecoder().decode(GoogleTokens.self, from: data)
-        }
-        set {
-            if let newValue,
-               let data = try? JSONEncoder().encode(newValue),
-               let json = String(data: data, encoding: .utf8) {
-                KeychainStore.set(json, account: KeychainStore.Account.googleTokens)
-            } else {
-                KeychainStore.delete(account: KeychainStore.Account.googleTokens)
-            }
-        }
-    }
-
-    func signOut() { storedTokens = nil }
-
-    /// Present the consent screen and return tokens.
+    /// Present the consent screen and return tokens. The caller persists them
+    /// under the right per-account key (we don't know the email until after).
     func authenticate() async throws -> GoogleTokens {
         let verifier = PKCE.makeVerifier()
         let challenge = PKCE.challenge(for: verifier)
 
-        var comps = URLComponents(url: authEndpoint, resolvingAgainstBaseURL: false)!
+        var comps = URLComponents(url: Self.authEndpoint, resolvingAgainstBaseURL: false)!
         comps.queryItems = [
             .init(name: "client_id", value: config.clientID),
             .init(name: "redirect_uri", value: config.redirectURI),
@@ -63,25 +45,39 @@ final class GoogleAuthSession: NSObject {
             .queryItems?.first(where: { $0.name == "code" })?.value else {
             throw MailServiceError.network("No authorization code returned")
         }
-
-        let tokens = try await exchange(code: code, verifier: verifier)
-        storedTokens = tokens
-        return tokens
+        return try await Self.exchange(code: code, verifier: verifier, config: config)
     }
 
-    /// Return a valid access token, refreshing if needed.
-    func validAccessToken() async throws -> String {
-        guard let tokens = storedTokens else { throw MailServiceError.notAuthenticated }
+    // MARK: - Per-account token storage
+
+    static func tokens(key: String) -> GoogleTokens? {
+        guard let json = KeychainStore.get(account: key), let data = json.data(using: .utf8) else { return nil }
+        return try? JSONDecoder().decode(GoogleTokens.self, from: data)
+    }
+
+    static func store(_ tokens: GoogleTokens?, key: String) {
+        if let tokens, let data = try? JSONEncoder().encode(tokens), let json = String(data: data, encoding: .utf8) {
+            KeychainStore.set(json, account: key)
+        } else {
+            KeychainStore.delete(account: key)
+        }
+    }
+
+    /// A valid access token for the account stored under `key`, refreshing if needed.
+    static func validAccessToken(key: String, config: GoogleOAuthConfig = .placeholder) async throws -> String {
+        guard let tokens = tokens(key: key) else { throw MailServiceError.notAuthenticated }
         if !tokens.isExpired { return tokens.accessToken }
         guard let refreshToken = tokens.refreshToken else { throw MailServiceError.notAuthenticated }
-        let refreshed = try await refresh(refreshToken: refreshToken)
-        storedTokens = refreshed
+        var refreshed = try await refresh(refreshToken: refreshToken, config: config)
+        // Google omits the refresh token on refresh; keep the old one.
+        if refreshed.refreshToken == nil { refreshed.refreshToken = refreshToken }
+        store(refreshed, key: key)
         return refreshed.accessToken
     }
 
     // MARK: - Token endpoint
 
-    private func exchange(code: String, verifier: String) async throws -> GoogleTokens {
+    private static func exchange(code: String, verifier: String, config: GoogleOAuthConfig) async throws -> GoogleTokens {
         try await postToken([
             "client_id": config.clientID,
             "code": code,
@@ -91,18 +87,15 @@ final class GoogleAuthSession: NSObject {
         ])
     }
 
-    private func refresh(refreshToken: String) async throws -> GoogleTokens {
-        var tokens = try await postToken([
+    private static func refresh(refreshToken: String, config: GoogleOAuthConfig) async throws -> GoogleTokens {
+        try await postToken([
             "client_id": config.clientID,
             "refresh_token": refreshToken,
             "grant_type": "refresh_token"
         ])
-        // Google omits the refresh token on refresh; keep the old one.
-        if tokens.refreshToken == nil { tokens.refreshToken = refreshToken }
-        return tokens
     }
 
-    private func postToken(_ params: [String: String]) async throws -> GoogleTokens {
+    private static func postToken(_ params: [String: String]) async throws -> GoogleTokens {
         var request = URLRequest(url: tokenEndpoint)
         request.httpMethod = "POST"
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")

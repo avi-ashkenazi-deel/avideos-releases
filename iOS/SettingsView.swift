@@ -11,6 +11,7 @@ struct SettingsView: View {
     @State private var elevenVoices: [ElevenLabsVoice] = []
     @State private var loadingVoices = false
     @State private var voiceError: String?
+    @State private var showAddAccount = false
 
     var body: some View {
         Form {
@@ -74,18 +75,59 @@ struct SettingsView: View {
                 Text("While an image is showing, an AirPods press (or the lock-screen skip button) skips the image. Otherwise, when this is on a press captures a highlight of the last 10 seconds, then asks out loud if you'd like to add a note — say yes and dictate it, hands-free. When off, a press skips to the next sentence. Tap “AirPods controls & gestures” to see the exact presses for your AirPods.")
             }
 
-            Section("Account") {
-                if let account = appState.account {
-                    LabeledContent("Signed in", value: account.emailAddress)
+            Section {
+                ForEach(appState.connectedAccounts) { acc in
+                    Button {
+                        Task { await appState.switchTo(acc.id) }
+                    } label: {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(acc.displayName).foregroundStyle(.primary)
+                                Text(acc.email).font(.caption).foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            if acc.id == appState.activeAccountID {
+                                Image(systemName: "checkmark").foregroundStyle(.tint)
+                            }
+                        }
+                    }
+                    .swipeActions {
+                        Button(role: .destructive) {
+                            Task { await appState.removeAccount(acc.id) }
+                        } label: {
+                            Label("Remove", systemImage: "trash")
+                        }
+                    }
                 }
+                #if os(iOS)
+                Button {
+                    showAddAccount = true
+                } label: {
+                    Label("Add another account", systemImage: "plus.circle")
+                }
+                #endif
+            } header: {
+                Text(appState.connectedAccounts.isEmpty ? "Account" : "Accounts")
+            } footer: {
+                if appState.connectedAccounts.count > 1 {
+                    Text("Tap an account to switch its inbox. Settings, saved links, and highlights are shared across all accounts.")
+                }
+            }
+
+            Section {
                 LabeledContent("Version", value: Self.versionString)
                 #if os(iOS)
-                Button("Sign out", role: .destructive) {
+                Button("Sign out of all", role: .destructive) {
                     appState.signOut()
                     dismiss()
                 }
                 #endif
             }
+        }
+        .confirmationDialog("Add account", isPresented: $showAddAccount, titleVisibility: .visible) {
+            Button("Google") { Task { await appState.addAccount(provider: .google) } }
+            Button("Outlook") { Task { await appState.addAccount(provider: .microsoft) } }
+            Button("Cancel", role: .cancel) {}
         }
         .navigationTitle("Settings")
         .toolbar {
