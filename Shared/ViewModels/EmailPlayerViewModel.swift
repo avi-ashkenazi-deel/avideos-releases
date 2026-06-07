@@ -496,6 +496,20 @@ final class EmailPlayerViewModel: ObservableObject {
         }
     }
 
+    /// The remote URL of the last image at or before the current block — the
+    /// image stays as lock-screen artwork until a later image replaces it.
+    private func mostRecentImageURL() -> URL? {
+        guard !blocks.isEmpty else { return nil }
+        let upTo = min(currentBlockIndex, blocks.count - 1)
+        guard upTo >= 0 else { return nil }
+        for i in stride(from: upTo, through: 0, by: -1) {
+            if case .image(let image) = blocks[i], let url = image.remoteURL {
+                return url
+            }
+        }
+        return nil
+    }
+
     /// Spoken header read at the start of an auto-advanced email: who it's from
     /// and its subject.
     private static func announcement(for email: Email) -> String {
@@ -647,10 +661,11 @@ final class EmailPlayerViewModel: ObservableObject {
 
     private func updateNowPlaying() {
         guard let parsed else { return }
-        // Show the email's own image while reading one; otherwise show the
-        // sender's photo/logo (with the app logo as the ultimate fallback).
+        // Keep the most recently passed image on the lock screen until the next
+        // image (so the listener can still glance at it), falling back to the
+        // sender's photo/logo before any image has appeared.
         let imageCandidates: [URL]
-        if case .image(let image)? = currentBlock, let url = image.remoteURL {
+        if let url = mostRecentImageURL() {
             imageCandidates = [url]
         } else {
             imageCandidates = SenderImage.candidateURLs(forAddress: parsed.email.from.address)
