@@ -33,6 +33,14 @@ final class AppState: ObservableObject {
     /// Sentinel `activeAccountID` meaning "the bundled demo inbox".
     private static let demoID = "demo"
 
+    #if DEBUG
+    /// Debug-only: when true, every local launch shows the first-run onboarding
+    /// (splash → feature tour → sign-in) so it can be reviewed. Connected accounts
+    /// are kept, so set this back to false to resume normal launch (no re-sign-in).
+    /// Has no effect on Release / TestFlight.
+    static let previewOnboardingOnLaunch = true
+    #endif
+
     #if os(iOS)
     private let googleAuth = GoogleAuthSession(config: .placeholder)
     private let microsoftAuth = MicrosoftAuthSession(config: .placeholder)
@@ -62,6 +70,14 @@ final class AppState: ObservableObject {
     // MARK: - Bootstrap
 
     func bootstrap() async {
+        #if DEBUG
+        if Self.previewOnboardingOnLaunch {
+            // Force the first-run experience for review (keeps stored accounts).
+            UserDefaults.standard.set(false, forKey: "hasCompletedWelcome")
+            phase = .onboarding
+            return
+        }
+        #endif
         #if os(iOS)
         await migrateLegacyTokensIfNeeded()
         #endif
