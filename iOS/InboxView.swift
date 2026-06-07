@@ -16,6 +16,13 @@ struct InboxView: View {
         _viewModel = StateObject(wrappedValue: InboxViewModel(mailService: MockMailService()))
     }
 
+    /// Folder name with the unread count appended, e.g. "Inbox (44)".
+    private var titleText: String {
+        viewModel.unreadCount > 0
+            ? "\(viewModel.selectedLabelName) (\(viewModel.unreadCount))"
+            : viewModel.selectedLabelName
+    }
+
     var body: some View {
         NavigationStack {
             Group {
@@ -113,20 +120,13 @@ struct InboxView: View {
                             }
                         } label: {
                             HStack(spacing: 4) {
-                                Text(viewModel.selectedLabelName).font(.headline)
+                                Text(titleText).font(.headline)
                                 Image(systemName: "chevron.down").font(.caption2.weight(.bold))
                             }
                             .foregroundStyle(.primary)
                         }
                     } else {
-                        Text(viewModel.selectedLabelName).font(.headline)
-                    }
-                }
-                ToolbarItem(placement: .topBarLeading) {
-                    if viewModel.unreadCount > 0 {
-                        Text("\(viewModel.unreadCount) unread")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                        Text(titleText).font(.headline)
                     }
                 }
                 ToolbarItemGroup(placement: .topBarTrailing) {
