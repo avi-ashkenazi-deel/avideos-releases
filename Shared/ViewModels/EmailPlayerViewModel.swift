@@ -61,6 +61,7 @@ final class EmailPlayerViewModel: ObservableObject {
     private var engine: SpeechEngine
     /// Identifies the engine config in use, so we rebuild only when it changes.
     private var engineSignature = ""
+    private let voiceRecorder = VoiceNoteRecorder()
 
     private var hasStarted = false
     /// True when the current block has finished and we're idle on it (e.g.
@@ -498,9 +499,11 @@ final class EmailPlayerViewModel: ObservableObject {
 
     // MARK: - Highlighting
 
-    /// Capture the trailing ~10 seconds of speech as a highlight.
+    /// Capture the trailing ~10 seconds of speech as a highlight. When
+    /// `presentComposer` is true the UI is asked to offer a typed note;
+    /// the hands-free AirPods path passes false and dictates instead.
     @discardableResult
-    func captureHighlight() -> Highlight? {
+    func captureHighlight(presentComposer: Bool = true) -> Highlight? {
         guard let parsed else { return nil }
         let cutoff = elapsed - Highlight.lookbackWindow
         let startIdx = spokenLog.lastIndex(where: { $0.start <= cutoff }) ?? spokenLog.startIndex
@@ -517,8 +520,27 @@ final class EmailPlayerViewModel: ObservableObject {
             capturedText: text.isEmpty ? (currentBlock?.spokenText ?? "") : text
         )
         highlights.add(highlight)
-        onHighlightCaptured?(highlight)
+        if presentComposer { onHighlightCaptured?(highlight) }
         return highlight
+    }
+
+    /// AirPods flow: capture a highlight, then ask (out loud) whether to add a
+    /// note and dictate it — all hands-free — before resuming playback.
+    func captureHighlightAndDictate() {
+        guard let highlight = captureHighlight(presentComposer: false) else { return }
+        let wasPlaying = isPlaying
+        pause()
+        Task { [weak self] in
+            guard let self else { return }
+            let outcome = await self.voiceRecorder.captureNote()
+            if case .note(let text) = outcome {
+                self.highlights.updateNote(for: highlight.id, note: text)
+            }
+            // Restore the playback session the recorder reconfigured, then
+            // re-speak the current sentence so we pick up cleanly.
+            SpeechAudioSession.activate()
+            if wasPlaying { self.speakBlock(at: self.currentBlockIndex) }
+        }
     }
 
     // MARK: - Timer / now playing
@@ -552,7 +574,7 @@ final class EmailPlayerViewModel: ObservableObject {
             if self.isOnImage {
                 self.skipImage()
             } else if self.settings.airPodsHighlightEnabled {
-                self.captureHighlight()
+                self.captureHighlightAndDictate()
             } else {
                 self.nextSentence()
             }

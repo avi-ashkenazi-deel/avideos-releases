@@ -64,6 +64,12 @@ regenerating was essential (otherwise it archives a stale project).
   Updates/…), or custom folder to listen to — e.g. only a "Newsletters" folder.
   Inbox title reflects the folder; choice persists.
 
+### Hands-free voice notes (AirPods)
+- With AirPods highlighting on, an AirPods press captures a highlight, then the
+  app **speaks "Add a note?"**, **listens for yes/no**, and if yes **records and
+  transcribes a spoken note** (on-device) onto the highlight — then resumes.
+- Added microphone + speech-recognition usage strings.
+
 ### Next up
 - Open TestFlight to more testers (Google OAuth consent screen: External +
   test users; restricted-scope verification before public launch).

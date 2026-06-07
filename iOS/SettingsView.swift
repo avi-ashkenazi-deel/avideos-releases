@@ -62,11 +62,11 @@ struct SettingsView: View {
             elevenLabsSection
 
             Section {
-                Toggle("Highlight with AirPods", isOn: $settings.airPodsHighlightEnabled)
+                Toggle("Highlight & voice notes with AirPods", isOn: $settings.airPodsHighlightEnabled)
             } header: {
                 Text("AirPods")
             } footer: {
-                Text("While an image is showing, an AirPods press (or the lock-screen skip button) skips the image. Otherwise, when this is on a press captures a highlight of the last 10 seconds; when off it skips to the next sentence.")
+                Text("While an image is showing, an AirPods press (or the lock-screen skip button) skips the image. Otherwise, when this is on a press captures a highlight of the last 10 seconds, then asks out loud if you'd like to add a note — say yes and dictate it, hands-free. When off, a press skips to the next sentence.")
             }
 
             Section("Account") {

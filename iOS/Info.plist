@@ -22,6 +22,11 @@
 	     a manual Info.plist it must be declared so App Store upload accepts it. -->
 	<key>CFBundleIconName</key>
 	<string>AppIcon</string>
+	<!-- Hands-free voice notes on highlights (AirPods press). -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>VoiceInbox uses the microphone so you can dictate a note on a highlight, hands-free with your AirPods.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>VoiceInbox transcribes your spoken note into text for the highlight.</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<!-- The app uses only standard HTTPS encryption, which is exempt — declaring
