@@ -67,6 +67,7 @@ final class EmailPlayerViewModel: ObservableObject {
     /// Identifies the engine config in use, so we rebuild only when it changes.
     private var engineSignature = ""
     private let voiceRecorder = VoiceNoteRecorder()
+    private let imageDescriber = ImageDescriber()
 
     private var hasStarted = false
     /// True when the current block has finished and we're idle on it (e.g.
@@ -381,12 +382,24 @@ final class EmailPlayerViewModel: ObservableObject {
         currentBlockIndex = index
         currentBlockSpoken = false
         spokenLog.append((index, elapsed))
-        let block = blocks[index]
-        engine.speak(block.spokenText, speed: settings.speed, pauseAfter: 0.2)
         isPlaying = true
         startTimer()
         updateNowPlaying()
         recordProgress()
+
+        let block = blocks[index]
+        if case .image(let image) = block {
+            // Try to describe the image (on-device Vision); fall back to the
+            // default phrase when offline / nothing recognized.
+            let fallback = block.spokenText
+            Task { [weak self] in
+                let text = await self?.imageDescriber.describe(image) ?? fallback
+                guard let self, self.currentBlockIndex == index, self.isPlaying else { return }
+                self.engine.speak(text, speed: self.settings.speed, pauseAfter: 0.2)
+            }
+        } else {
+            engine.speak(block.spokenText, speed: settings.speed, pauseAfter: 0.2)
+        }
     }
 
     private func handleUtteranceFinished(natural: Bool) {
