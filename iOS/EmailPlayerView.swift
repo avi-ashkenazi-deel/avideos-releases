@@ -124,6 +124,9 @@ struct NowPlayingView: View {
         VStack(alignment: .leading, spacing: 16) {
             Text(subject)
                 .font(.title.bold())
+                .multilineTextAlignment(LanguageTools.isRightToLeft(subject) ? .trailing : .leading)
+                .frame(maxWidth: .infinity,
+                       alignment: LanguageTools.isRightToLeft(subject) ? .trailing : .leading)
                 .padding(.bottom, 4)
 
             ForEach(Array(blocks.enumerated()), id: \.element.id) { index, block in
@@ -176,12 +179,16 @@ private struct SentenceText: View {
     let isCurrent: Bool
     let wordRange: NSRange?
 
+    private var isRTL: Bool { LanguageTools.isRightToLeft(text) }
+
     var body: some View {
         Text(attributed)
             .font(.title2)
             .lineSpacing(5)
+            .multilineTextAlignment(isRTL ? .trailing : .leading)
+            .environment(\.layoutDirection, isRTL ? .rightToLeft : .leftToRight)
             .padding(.horizontal, 8).padding(.vertical, 6)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: isRTL ? .trailing : .leading)
             .background(
                 RoundedRectangle(cornerRadius: 8)
                     .fill(isCurrent ? Color.accentColor.opacity(0.15) : .clear)

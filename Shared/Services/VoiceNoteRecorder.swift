@@ -155,8 +155,12 @@ final class VoiceNoteRecorder: NSObject {
 
     private static func isAffirmative(_ text: String) -> Bool {
         let lower = text.lowercased()
-        if lower.contains("no") && !lower.contains("yes") { return false }
-        let yes = ["yes", "yeah", "yep", "yup", "sure", "ok", "okay", "please", "go ahead", "definitely"]
+        let no = ["no", "nope", "nah", "non", "nein", "لا", "לא"]
+        let yes = ["yes", "yeah", "yep", "yup", "sure", "ok", "okay", "please", "go ahead",
+                   "definitely", "כן", "نعم", "oui", "sí", "ja", "sim"]
+        if no.contains(where: { lower.contains($0) }) && !yes.contains(where: { lower.contains($0) }) {
+            return false
+        }
         return yes.contains { lower.contains($0) }
     }
 }

@@ -70,14 +70,29 @@ final class SystemSpeechEngine: NSObject, SpeechEngine {
         let utterance = AVSpeechUtterance(string: text)
         utterance.rate = Self.utteranceRate(for: speed)
         utterance.postUtteranceDelay = pauseAfter
-        if !voiceIdentifier.isEmpty, let voice = AVSpeechSynthesisVoice(identifier: voiceIdentifier) {
-            utterance.voice = voice
-        }
+        utterance.voice = voice(for: text)
         activeUtterance = utterance
         isPaused = false
         onWordRange?(nil)
         SpeechAudioSession.activate()
         synthesizer.speak(utterance)
+    }
+
+    /// Pick a voice that matches the text's language. Uses the listener's chosen
+    /// voice when it speaks that language; otherwise the best installed voice for
+    /// the detected language (so e.g. Hebrew text is read by a Hebrew voice).
+    private func voice(for text: String) -> AVSpeechSynthesisVoice? {
+        let preferred = voiceIdentifier.isEmpty ? nil : AVSpeechSynthesisVoice(identifier: voiceIdentifier)
+        guard let code = LanguageTools.languageCode(for: text) else { return preferred }
+        if let preferred, preferred.language.hasPrefix(code) { return preferred }
+        return Self.bestVoice(forLanguage: code) ?? preferred
+    }
+
+    /// Best-quality installed voice whose language matches `code` (e.g. "he").
+    static func bestVoice(forLanguage code: String) -> AVSpeechSynthesisVoice? {
+        AVSpeechSynthesisVoice.speechVoices()
+            .filter { $0.language == code || $0.language.hasPrefix(code + "-") }
+            .max { $0.quality.rawValue < $1.quality.rawValue }
     }
 
     func pause() {
