@@ -92,7 +92,35 @@ struct InboxView: View {
                 }
             }
             .navigationTitle(viewModel.selectedLabelName)
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .principal) {
+                    // Tap the title to switch folder/category. (This used to be a
+                    // toolbar funnel icon that got dropped when the bar was crowded.)
+                    if viewModel.labels.count > 1 {
+                        Menu {
+                            ForEach(viewModel.labels) { label in
+                                Button {
+                                    Task { await viewModel.selectLabel(label) }
+                                } label: {
+                                    if label.id == viewModel.selectedLabelId {
+                                        Label(label.displayName, systemImage: "checkmark")
+                                    } else {
+                                        Text(label.displayName)
+                                    }
+                                }
+                            }
+                        } label: {
+                            HStack(spacing: 4) {
+                                Text(viewModel.selectedLabelName).font(.headline)
+                                Image(systemName: "chevron.down").font(.caption2.weight(.bold))
+                            }
+                            .foregroundStyle(.primary)
+                        }
+                    } else {
+                        Text(viewModel.selectedLabelName).font(.headline)
+                    }
+                }
                 ToolbarItem(placement: .topBarLeading) {
                     if viewModel.unreadCount > 0 {
                         Text("\(viewModel.unreadCount) unread")
@@ -101,22 +129,6 @@ struct InboxView: View {
                     }
                 }
                 ToolbarItemGroup(placement: .topBarTrailing) {
-                    Menu {
-                        ForEach(viewModel.labels) { label in
-                            Button {
-                                Task { await viewModel.selectLabel(label) }
-                            } label: {
-                                if label.id == viewModel.selectedLabelId {
-                                    Label(label.displayName, systemImage: "checkmark")
-                                } else {
-                                    Text(label.displayName)
-                                }
-                            }
-                        }
-                    } label: {
-                        Image(systemName: "line.3.horizontal.decrease.circle")
-                    }
-
                     Button { showAnalytics = true } label: {
                         Image(systemName: "chart.bar")
                     }
