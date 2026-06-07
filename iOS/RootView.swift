@@ -34,7 +34,8 @@ struct RootView: View {
                 }
             }
             .animation(.easeInOut(duration: 0.2), value: player.parsed != nil)
-            .task {
+            .task(id: appState.activeAccountID) {
+                // Rebind the player to the active account's mailbox on switch.
                 player.configure(appState.mailService)
                 player.bindRemoteCommands()
             }

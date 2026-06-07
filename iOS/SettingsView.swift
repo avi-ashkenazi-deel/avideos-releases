@@ -90,7 +90,9 @@ struct SettingsView: View {
                                 Image(systemName: "checkmark").foregroundStyle(.tint)
                             }
                         }
+                        .contentShape(Rectangle())
                     }
+                    .buttonStyle(.plain)
                     .swipeActions {
                         Button(role: .destructive) {
                             Task { await appState.removeAccount(acc.id) }
@@ -124,10 +126,8 @@ struct SettingsView: View {
                 #endif
             }
         }
-        .confirmationDialog("Add account", isPresented: $showAddAccount, titleVisibility: .visible) {
-            Button("Google") { Task { await appState.addAccount(provider: .google) } }
-            Button("Outlook") { Task { await appState.addAccount(provider: .microsoft) } }
-            Button("Cancel", role: .cancel) {}
+        .sheet(isPresented: $showAddAccount) {
+            AddAccountSheet()
         }
         .navigationTitle("Settings")
         .toolbar {
@@ -226,5 +226,38 @@ struct SettingsView: View {
             }
             loadingVoices = false
         }
+    }
+}
+
+/// Compact sheet for choosing which provider to connect. Dismisses before the
+/// OAuth web flow presents, so the sign-in sheet isn't fighting this one.
+private struct AddAccountSheet: View {
+    @EnvironmentObject private var appState: AppState
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Button { connect(.google) } label: {
+                    Label("Google", systemImage: "envelope.fill")
+                }
+                Button { connect(.microsoft) } label: {
+                    Label("Outlook", systemImage: "envelope.fill")
+                }
+            }
+            .navigationTitle("Add account")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+            }
+        }
+        .presentationDetents([.height(240)])
+    }
+
+    private func connect(_ provider: MailAccount.Provider) {
+        dismiss()
+        Task { await appState.addAccount(provider: provider) }
     }
 }

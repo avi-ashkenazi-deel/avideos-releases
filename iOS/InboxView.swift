@@ -162,11 +162,11 @@ struct InboxView: View {
                 }
             }
         }
-        .task {
+        .task(id: appState.activeAccountID) {
+            // Re-runs whenever the active account changes, so switching accounts
+            // rebinds to the new mailbox and reloads its inbox + folders.
             viewModel.configure(appState.mailService)
-            if viewModel.emails.isEmpty {
-                await viewModel.load()
-            }
+            await viewModel.load()
             await viewModel.loadLabels()
         }
     }

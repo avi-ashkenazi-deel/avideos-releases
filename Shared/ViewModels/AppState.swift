@@ -70,6 +70,9 @@ final class AppState: ObservableObject {
     // MARK: - Bootstrap
 
     func bootstrap() async {
+        #if os(iOS)
+        await migrateLegacyTokensIfNeeded()
+        #endif
         #if DEBUG
         if Self.previewOnboardingOnLaunch {
             // Force the first-run experience for review (keeps stored accounts).
@@ -77,9 +80,6 @@ final class AppState: ObservableObject {
             phase = .onboarding
             return
         }
-        #endif
-        #if os(iOS)
-        await migrateLegacyTokensIfNeeded()
         #endif
         if activeAccountID == Self.demoID {
             await continueWithDemo()
