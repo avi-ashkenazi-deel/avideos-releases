@@ -20,6 +20,10 @@ final class RemoteCommandController {
     var onPause: (() -> Void)?
     var onNext: (() -> Void)?
     var onPrevious: (() -> Void)?
+    /// Scrub to a position (seconds) — driven by the lock-screen progress bar.
+    var onSeek: ((TimeInterval) -> Void)?
+    /// Bookmark/highlight the current spot (shown on CarPlay / Apple Watch).
+    var onBookmark: (() -> Void)?
 
     private let center = MPRemoteCommandCenter.shared()
     /// Identifies the artwork currently wanted (first candidate URL); used to
@@ -28,10 +32,15 @@ final class RemoteCommandController {
     private var loadingKey: String?
     private var artworkCache: [String: UIImage] = [:]
 
+    private var managedCommands: [MPRemoteCommand] {
+        [center.togglePlayPauseCommand, center.playCommand, center.pauseCommand,
+         center.nextTrackCommand, center.previousTrackCommand,
+         center.changePlaybackPositionCommand, center.bookmarkCommand]
+    }
+
     func start() {
         // Clear any existing handlers first so re-binding doesn't stack duplicates.
-        [center.togglePlayPauseCommand, center.playCommand, center.pauseCommand,
-         center.nextTrackCommand, center.previousTrackCommand].forEach { $0.removeTarget(nil) }
+        managedCommands.forEach { $0.removeTarget(nil) }
         center.togglePlayPauseCommand.isEnabled = true
         center.togglePlayPauseCommand.addTarget { [weak self] _ in self?.onTogglePlayPause?(); return .success }
         center.playCommand.isEnabled = true
@@ -42,11 +51,20 @@ final class RemoteCommandController {
         center.nextTrackCommand.addTarget { [weak self] _ in self?.onNext?(); return .success }
         center.previousTrackCommand.isEnabled = true
         center.previousTrackCommand.addTarget { [weak self] _ in self?.onPrevious?(); return .success }
+        // Draggable progress bar on the lock screen / Control Center.
+        center.changePlaybackPositionCommand.isEnabled = true
+        center.changePlaybackPositionCommand.addTarget { [weak self] event in
+            guard let event = event as? MPChangePlaybackPositionCommandEvent else { return .commandFailed }
+            self?.onSeek?(event.positionTime)
+            return .success
+        }
+        // Bookmark = capture a highlight (surfaces on CarPlay / Apple Watch).
+        center.bookmarkCommand.isEnabled = true
+        center.bookmarkCommand.addTarget { [weak self] _ in self?.onBookmark?(); return .success }
     }
 
     func stop() {
-        [center.togglePlayPauseCommand, center.playCommand, center.pauseCommand,
-         center.nextTrackCommand, center.previousTrackCommand].forEach { $0.removeTarget(nil) }
+        managedCommands.forEach { $0.removeTarget(nil) }
         clearNowPlaying()
     }
 

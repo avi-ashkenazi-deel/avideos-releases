@@ -366,6 +366,16 @@ final class EmailPlayerViewModel: ObservableObject {
         updateNowPlaying()
     }
 
+    /// Seek to a playback position (seconds), from the lock-screen scrubber.
+    /// We read by sentence, so map the position to the nearest block.
+    func seek(toTime time: TimeInterval) {
+        guard parsed != nil, !blocks.isEmpty, estimatedDuration > 0 else { return }
+        let fraction = max(0, min(1, time / estimatedDuration))
+        let index = Int((fraction * Double(blocks.count - 1)).rounded())
+        elapsed = time
+        jump(toBlock: index)
+    }
+
     /// Apply a new speed; if currently playing, re-speak the current block so
     /// the change takes effect immediately.
     func setSpeed(_ speed: Double) {
@@ -642,10 +652,9 @@ final class EmailPlayerViewModel: ObservableObject {
         timer = nil
     }
 
-    /// Wire hardware/transport controls (AirPods, lock screen) to this player.
-    /// The next-track button is context-aware: it skips the current image when
-    /// one is showing, otherwise it captures a highlight (if AirPods-highlight
-    /// is on) or skips to the next sentence.
+    /// Wire hardware/transport controls (AirPods, lock screen, CarPlay) to this
+    /// player. Next/Previous always move by sentence; the lock-screen scrubber
+    /// seeks by position; Bookmark captures a highlight.
     func bindRemoteCommands() {
         remote.onTogglePlayPause = { [weak self] in self?.togglePlayPause() }
         remote.onPlay = { [weak self] in self?.play() }
@@ -653,12 +662,18 @@ final class EmailPlayerViewModel: ObservableObject {
         remote.onPrevious = { [weak self] in self?.previousSentence() }
         remote.onNext = { [weak self] in
             guard let self else { return }
-            if self.isOnImage {
-                self.skipImage()
-            } else if self.settings.airPodsHighlightEnabled {
+            // While an image is showing, Next skips it; otherwise next sentence.
+            if self.isOnImage { self.skipImage() } else { self.nextSentence() }
+        }
+        remote.onSeek = { [weak self] time in self?.seek(toTime: time) }
+        remote.onBookmark = { [weak self] in
+            guard let self else { return }
+            // Capture a highlight; if voice notes are on, offer to dictate one.
+            if self.settings.airPodsHighlightEnabled {
                 self.captureHighlightAndDictate()
             } else {
-                self.nextSentence()
+                _ = self.captureHighlight(presentComposer: false)
+                Haptics.success()
             }
         }
         remote.start()

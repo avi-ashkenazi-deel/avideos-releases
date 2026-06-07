@@ -77,11 +77,11 @@ struct AirPodsControlsView: View {
             }
 
             Section {
-                Toggle("Highlight & voice notes", isOn: $settings.airPodsHighlightEnabled)
+                Toggle("Voice notes on highlights", isOn: $settings.airPodsHighlightEnabled)
             } footer: {
                 Text(settings.airPodsHighlightEnabled
-                     ? "On: the next-track gesture saves a highlight of the last 10 seconds, then asks out loud “Do you want to add a note?” — say yes and dictate it, hands-free."
-                     : "Off: the next-track gesture just skips to the next sentence.")
+                     ? "On: bookmarking a moment asks out loud “Do you want to add a note?” — say yes and dictate it, hands-free (needs the screen unlocked for the mic)."
+                     : "Off: bookmarks are saved silently. Next/Previous always move by sentence.")
             }
 
             Section("Gestures") {
@@ -123,11 +123,9 @@ struct AirPodsControlsView: View {
         }
     }
 
-    /// The "next track" gesture's meaning depends on the highlight toggle.
+    /// Next always moves by sentence (and skips an image when one is showing).
     private var nextAction: String {
-        settings.airPodsHighlightEnabled
-            ? "Highlight the last 10 seconds (then asks to add a note). Skips the image when one is on screen."
-            : "Skip to the next sentence. Skips the image when one is on screen."
+        "Skip to the next sentence. Skips the image when one is on screen."
     }
 
     private var gestures: [GestureRow] {
