@@ -1,15 +1,13 @@
 import SwiftUI
 
-/// Transport controls under the transcript: progress, play/pause, skip,
-/// highlight, and a speed slider.
+/// Transport controls under the transcript: progress, a tappable speed chip,
+/// skip, play/pause, and highlight.
 struct PlayerControlsView: View {
     @ObservedObject var viewModel: EmailPlayerViewModel
-    @EnvironmentObject private var appState: AppState
+    @ObservedObject private var settings = AppSettings.shared
     let onHighlight: () -> Void
 
-    /// Live slider value; applied to the player when the drag ends so we don't
-    /// restart the current sentence on every tick.
-    @State private var draftSpeed: Double = 1.0
+    private let speeds: [Double] = [0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.25, 2.5]
 
     var body: some View {
         VStack(spacing: 14) {
@@ -17,9 +15,8 @@ struct PlayerControlsView: View {
                 .tint(.accentColor)
 
             HStack {
-                Text(speedLabel(draftSpeed))
-                    .font(.subheadline.monospacedDigit().weight(.semibold))
-                    .frame(width: 56, alignment: .leading)
+                speedChip
+                    .frame(width: 64, alignment: .leading)
 
                 Spacer()
 
@@ -43,24 +40,29 @@ struct PlayerControlsView: View {
                 }
                 .tint(.primary)
             }
+        }
+    }
 
-            HStack(spacing: 10) {
-                Image(systemName: "tortoise.fill")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                Slider(value: $draftSpeed, in: 0.5...2.5) { editing in
-                    if !editing { viewModel.setSpeed(draftSpeed) }
+    /// Compact speed control: shows the current speed; tap for slower/faster.
+    private var speedChip: some View {
+        Menu {
+            ForEach(speeds, id: \.self) { speed in
+                Button { viewModel.setSpeed(speed) } label: {
+                    if abs(settings.speed - speed) < 0.001 {
+                        Label(speedLabel(speed), systemImage: "checkmark")
+                    } else {
+                        Text(speedLabel(speed))
+                    }
                 }
-                .tint(.accentColor)
-                Image(systemName: "hare.fill")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
             }
+        } label: {
+            Text(speedLabel(settings.speed))
+                .font(.subheadline.monospacedDigit().weight(.bold))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(Capsule().fill(Color.secondary.opacity(0.15)))
         }
-        .onAppear { draftSpeed = appState.settings.speed }
-        .onChange(of: appState.settings.speed) { _, newValue in
-            if abs(draftSpeed - newValue) > 0.001 { draftSpeed = newValue }
-        }
+        .tint(.primary)
     }
 
     private func speedLabel(_ speed: Double) -> String {
