@@ -159,6 +159,8 @@ final class RemoteCommandController {
     var onPause: (() -> Void)?
     var onNext: (() -> Void)?
     var onPrevious: (() -> Void)?
+    var onSeek: ((TimeInterval) -> Void)?
+    var onBookmark: (() -> Void)?
 
     func start() {}
     func stop() {}
