@@ -43,6 +43,10 @@
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
 	</array>
+	<!-- Portrait-only on iPad too: opt out of multitasking so App Store validation
+	     doesn't require all four orientations. -->
+	<key>UIRequiresFullScreen</key>
+	<true/>
 
 	<!-- Keep reading email aloud while the app is backgrounded or the screen is locked. -->
 	<key>UIBackgroundModes</key>
