@@ -9,6 +9,7 @@ struct InboxView: View {
     @State private var showSettings = false
     @State private var showHighlights = false
     @State private var showAnalytics = false
+    @State private var searchDebounce: Task<Void, Never>?
 
     init() {
         // Placeholder; replaced in onAppear once we have appState's service.
@@ -39,39 +40,49 @@ struct InboxView: View {
                         Task { await viewModel.load() }
                     }
                 } else {
-                    List(viewModel.emails) { email in
-                        Button {
-                            open(email)
-                        } label: {
-                            EmailRow(
-                                email: email,
-                                readMinutes: readingTimes.minutes(for: email.id),
-                                progress: progress.progress(for: email.id)
-                            )
-                        }
-                        .buttonStyle(.plain)
-                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                    List {
+                        ForEach(viewModel.emails) { email in
                             Button {
-                                Task { await viewModel.markRead(email.id) }
+                                open(email)
                             } label: {
-                                Label("Read", systemImage: "envelope.open")
+                                EmailRow(
+                                    email: email,
+                                    readMinutes: readingTimes.minutes(for: email.id),
+                                    progress: progress.progress(for: email.id)
+                                )
                             }
-                            .tint(.blue)
+                            .buttonStyle(.plain)
+                            .onAppear {
+                                // Infinite scroll: pull the next page near the end.
+                                if email.id == viewModel.emails.last?.id {
+                                    Task { await viewModel.loadMore() }
+                                }
+                            }
+                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                Button {
+                                    Task { await viewModel.markRead(email.id) }
+                                } label: {
+                                    Label("Read", systemImage: "envelope.open")
+                                }
+                                .tint(.blue)
+                            }
+                            .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                                Button {
+                                    Task { await viewModel.markUnread(email.id) }
+                                } label: {
+                                    Label("Unread", systemImage: "envelope.badge")
+                                }
+                                .tint(.orange)
+                            }
                         }
-                        .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                            Button {
-                                Task { await viewModel.markUnread(email.id) }
-                            } label: {
-                                Label("Unread", systemImage: "envelope.badge")
-                            }
-                            .tint(.orange)
+
+                        if viewModel.isLoadingMore {
+                            HStack { Spacer(); ProgressView(); Spacer() }
+                                .listRowSeparator(.hidden)
                         }
                     }
                     .listStyle(.plain)
-                    .refreshable {
-                        await viewModel.load()
-                        await viewModel.prefetchReadingTimes()
-                    }
+                    .refreshable { await viewModel.load() }
                 }
             }
             .navigationTitle(viewModel.selectedLabelName)
@@ -122,6 +133,15 @@ struct InboxView: View {
             .sheet(isPresented: $showAnalytics) {
                 NavigationStack { AnalyticsView() }
             }
+            .searchable(text: $viewModel.searchText, prompt: "Search by sender or subject")
+            .onChange(of: viewModel.searchText) { _, _ in
+                searchDebounce?.cancel()
+                searchDebounce = Task {
+                    try? await Task.sleep(nanoseconds: 400_000_000)
+                    guard !Task.isCancelled else { return }
+                    await viewModel.load()
+                }
+            }
         }
         .task {
             viewModel.configure(appState.mailService)
@@ -129,7 +149,6 @@ struct InboxView: View {
                 await viewModel.load()
             }
             await viewModel.loadLabels()
-            await viewModel.prefetchReadingTimes()
         }
     }
 

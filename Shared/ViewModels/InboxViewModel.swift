@@ -7,12 +7,22 @@ final class InboxViewModel: ObservableObject {
 
     @Published private(set) var emails: [Email] = []
     @Published private(set) var isLoading = false
+    @Published private(set) var isLoadingMore = false
     @Published var errorMessage: String?
     /// Folders/labels available to listen to, for the picker.
     @Published private(set) var labels: [MailLabel] = []
+    /// Current search text ("" = browsing the selected folder).
+    @Published var searchText = ""
 
     private var mailService: MailService
     private let settings: AppSettings
+    private var nextPageToken: String?
+    private let pageSize = 50
+
+    private var searchQuery: String? {
+        let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
 
     init(mailService: MailService, settings: AppSettings = .shared) {
         self.mailService = mailService
@@ -58,13 +68,43 @@ final class InboxViewModel: ObservableObject {
     func load() async {
         isLoading = true
         errorMessage = nil
+        nextPageToken = nil
         defer { isLoading = false }
         do {
-            emails = try await mailService.fetchInbox(labelId: settings.mailLabelId, limit: 50)
+            let page = try await mailService.fetchInbox(
+                labelId: settings.mailLabelId, query: searchQuery, pageToken: nil, limit: pageSize)
+            emails = page.emails
+            nextPageToken = page.nextPageToken
         } catch {
             errorMessage = error.localizedDescription
         }
+        await prefetchReadingTimes()
     }
+
+    /// Load the next page (infinite scroll) until the whole folder/search is in.
+    func loadMore() async {
+        guard !isLoading, !isLoadingMore, let token = nextPageToken else { return }
+        isLoadingMore = true
+        defer { isLoadingMore = false }
+        do {
+            let page = try await mailService.fetchInbox(
+                labelId: settings.mailLabelId, query: searchQuery, pageToken: token, limit: pageSize)
+            let known = Set(emails.map(\.id))
+            emails.append(contentsOf: page.emails.filter { !known.contains($0.id) })
+            nextPageToken = page.nextPageToken
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        await prefetchReadingTimes()
+    }
+
+    /// Apply a new search query (or clear it) and reload from the top.
+    func runSearch(_ text: String) async {
+        searchText = text
+        await load()
+    }
+
+    var hasMore: Bool { nextPageToken != nil }
 
     /// Reflect a just-finished email as read without a full reload.
     func markReadLocally(_ id: String) {

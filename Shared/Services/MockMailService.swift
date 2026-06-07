@@ -18,11 +18,20 @@ actor MockMailService: MailService {
 
     var account: MailAccount? { mockAccount }
 
-    func fetchInbox(labelId: String, limit: Int) async throws -> [Email] {
+    func fetchInbox(labelId: String, query: String?, pageToken: String?, limit: Int) async throws -> EmailPage {
         // Simulate a little network latency. The demo ignores the label and
         // returns the same sample set for any folder.
         try? await Task.sleep(nanoseconds: 350_000_000)
-        return Array(emails.sorted { $0.receivedAt > $1.receivedAt }.prefix(limit))
+        var result = emails.sorted { $0.receivedAt > $1.receivedAt }
+        if let query, !query.isEmpty {
+            let q = query.lowercased()
+            result = result.filter {
+                $0.subject.lowercased().contains(q)
+                    || $0.from.displayName.lowercased().contains(q)
+                    || $0.from.address.lowercased().contains(q)
+            }
+        }
+        return EmailPage(emails: Array(result.prefix(limit)), nextPageToken: nil)
     }
 
     func fetchLabels() async throws -> [MailLabel] {

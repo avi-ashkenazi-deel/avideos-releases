@@ -26,14 +26,22 @@ enum MailServiceError: LocalizedError {
     }
 }
 
+/// One page of messages plus the token to fetch the next page (nil when there
+/// are no more), so the inbox can load everything by scrolling.
+struct EmailPage: Sendable {
+    let emails: [Email]
+    let nextPageToken: String?
+}
+
 /// Abstraction over an email backend so the UI doesn't care whether it's talking
 /// to the real Gmail API or local mock data. Swap implementations in `AppState`.
 protocol MailService: Sendable {
     /// The account currently signed in, if any.
     var account: MailAccount? { get async }
 
-    /// Fetch the most recent messages for a label/folder, newest first.
-    func fetchInbox(labelId: String, limit: Int) async throws -> [Email]
+    /// Fetch a page of messages for a label/folder (or a search `query`), newest
+    /// first. Pass the previous page's `nextPageToken` to continue.
+    func fetchInbox(labelId: String, query: String?, pageToken: String?, limit: Int) async throws -> EmailPage
 
     /// The user's labels (folders + categories) for the folder picker.
     func fetchLabels() async throws -> [MailLabel]

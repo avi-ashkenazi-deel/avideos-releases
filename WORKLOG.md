@@ -70,6 +70,15 @@ regenerating was essential (otherwise it archives a stale project).
   transcribes a spoken note** (on-device) onto the highlight — then resumes.
 - Added microphone + speech-recognition usage strings.
 
+### Languages, search, and loading everything
+- **Multilingual reading**: detect each sentence's language and read it with a
+  matching system voice; **right-to-left (Hebrew/Arabic) text displays
+  correctly** in the reading view.
+- **Search** the mailbox by sender or subject (Gmail `q` search), with a search
+  bar in the inbox.
+- **Load all emails**: the inbox now **paginates** (infinite scroll) instead of
+  stopping at 50 — scroll and it keeps loading the folder/search results.
+
 ### Next up
 - Open TestFlight to more testers (Google OAuth consent screen: External +
   test users; restricted-scope verification before public launch).

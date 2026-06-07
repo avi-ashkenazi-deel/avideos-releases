@@ -34,12 +34,20 @@ actor GoogleMailService: MailService {
         return (list.labels ?? []).map { MailLabel(id: $0.id, name: $0.name, type: $0.type) }
     }
 
-    func fetchInbox(labelId: String, limit: Int) async throws -> [Email] {
+    func fetchInbox(labelId: String, query: String?, pageToken: String?, limit: Int) async throws -> EmailPage {
         var comps = URLComponents(url: base.appendingPathComponent("messages"), resolvingAgainstBaseURL: false)!
-        comps.queryItems = [
-            .init(name: "labelIds", value: labelId),
-            .init(name: "maxResults", value: String(limit))
-        ]
+        var items: [URLQueryItem] = [.init(name: "maxResults", value: String(limit))]
+        if let query, !query.isEmpty {
+            // Gmail search (matches sender, subject, body); spans all mail.
+            items.append(.init(name: "q", value: query))
+        } else {
+            items.append(.init(name: "labelIds", value: labelId))
+        }
+        if let pageToken, !pageToken.isEmpty {
+            items.append(.init(name: "pageToken", value: pageToken))
+        }
+        comps.queryItems = items
+
         let list: MessageList = try await get(comps.url!)
         let ids = (list.messages ?? []).map(\.id)
         // Fetch metadata with bounded concurrency so we don't burst past Gmail's
@@ -47,7 +55,8 @@ actor GoogleMailService: MailService {
         let emails = try await mapConcurrently(ids, maxConcurrent: 6) { id in
             try await self.fetchMessage(id: id, full: false)
         }
-        return emails.sorted { $0.receivedAt > $1.receivedAt }
+        return EmailPage(emails: emails.sorted { $0.receivedAt > $1.receivedAt },
+                         nextPageToken: list.nextPageToken)
     }
 
     /// Run `transform` over `items` with at most `maxConcurrent` in flight at once.
@@ -202,6 +211,7 @@ actor GoogleMailService: MailService {
 private struct MessageList: Decodable {
     struct Ref: Decodable { let id: String }
     let messages: [Ref]?
+    let nextPageToken: String?
 }
 
 private struct Profile: Decodable { let emailAddress: String }
