@@ -9,7 +9,11 @@ enum LanguageTools {
     static func languageCode(for text: String) -> String? {
         let recognizer = NLLanguageRecognizer()
         recognizer.processString(text)
-        return recognizer.dominantLanguage?.rawValue
+        guard let raw = recognizer.dominantLanguage?.rawValue else { return nil }
+        // Yiddish shares the Hebrew script and the recognizer often tags modern
+        // Hebrew as Yiddish; there's no Yiddish TTS voice, so map it to Hebrew
+        // (otherwise the text falls back to a silent English voice).
+        return raw == "yi" ? "he" : raw
     }
 
     /// True when the text is mostly a right-to-left script (Hebrew, Arabic, …),

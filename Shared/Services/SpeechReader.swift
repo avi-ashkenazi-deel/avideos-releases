@@ -114,10 +114,11 @@ final class SystemSpeechEngine: NSObject, SpeechEngine {
     /// the detected language (so e.g. Hebrew text is read by a Hebrew voice).
     private func voice(for text: String) -> AVSpeechSynthesisVoice? {
         let preferred = voiceIdentifier.isEmpty ? nil : AVSpeechSynthesisVoice(identifier: voiceIdentifier)
-        // Prefer the chunk's own detected language; fall back to the email's
-        // dominant language for short chunks (a number, one word, punctuation)
-        // that don't detect reliably on their own.
-        guard let code = LanguageTools.languageCode(for: text) ?? preferredLanguage else { return preferred }
+        // Use the email's dominant language as the authoritative choice. Detecting
+        // each short block on its own is noisy — Hebrew in particular is often
+        // misread as Yiddish (no voice -> silent English fallback) or as English
+        // when a line has digits. Only detect per-chunk when there's no hint.
+        guard let code = preferredLanguage ?? LanguageTools.languageCode(for: text) else { return preferred }
         if let preferred, preferred.language.hasPrefix(code) { return preferred }
         return Self.bestVoice(forLanguage: code) ?? preferred
     }
