@@ -38,7 +38,7 @@ final class AppState: ObservableObject {
     /// (splash → feature tour → sign-in) so it can be reviewed. Connected accounts
     /// are kept, so set this back to false to resume normal launch (no re-sign-in).
     /// Has no effect on Release / TestFlight.
-    static let previewOnboardingOnLaunch = true
+    static let previewOnboardingOnLaunch = false
     #endif
 
     #if os(iOS)
