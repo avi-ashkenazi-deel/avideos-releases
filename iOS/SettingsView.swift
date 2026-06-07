@@ -78,6 +78,7 @@ struct SettingsView: View {
                 if let account = appState.account {
                     LabeledContent("Signed in", value: account.emailAddress)
                 }
+                LabeledContent("Version", value: Self.versionString)
                 #if os(iOS)
                 Button("Sign out", role: .destructive) {
                     appState.signOut()
@@ -110,6 +111,13 @@ struct SettingsView: View {
     private var voices: [AVSpeechSynthesisVoice] {
         AVSpeechSynthesisVoice.speechVoices()
             .sorted { $0.language == $1.language ? $0.name < $1.name : $0.language < $1.language }
+    }
+
+    /// App version + build, so it's easy to confirm which TestFlight build is installed.
+    private static var versionString: String {
+        let v = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
+        let b = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?"
+        return "\(v) (\(b))"
     }
 
     // MARK: - ElevenLabs

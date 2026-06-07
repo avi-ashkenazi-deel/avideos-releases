@@ -133,6 +133,12 @@ enum EmailParser {
             || style.contains("visibility:hidden") || style.contains("visibility: hidden") {
             return true
         }
+        // Social / share / subscribe buttons (Substack et al.) — UI controls, not
+        // content — usually carry a tell-tale alt even without small dimensions.
+        if let alt = attribute("alt", in: tag)?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
+           uiControlAlts.contains(alt) {
+            return true
+        }
         let w = pixelDimension("width", in: tag)
         let h = pixelDimension("height", in: tag)
         if let w, w <= 2 { return true }
@@ -140,6 +146,13 @@ enum EmailParser {
         if let maxDim = [w, h].compactMap({ $0 }).max(), maxDim < 64 { return true }
         return false
     }
+
+    private static let uiControlAlts: Set<String> = [
+        "share", "comment", "comments", "like", "likes", "restack", "subscribe",
+        "subscribe now", "unsubscribe", "follow", "view in browser", "open in app",
+        "twitter", "x", "facebook", "instagram", "linkedin", "youtube", "threads",
+        "tiktok", "pinterest", "whatsapp", "telegram", "app store", "google play"
+    ]
 
     /// A pixel dimension from a `width`/`height` attribute (quoted or not) or an
     /// inline `style`. Percentages (e.g. width="100%") return nil — unknown, keep.
