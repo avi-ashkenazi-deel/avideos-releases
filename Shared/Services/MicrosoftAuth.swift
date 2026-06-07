@@ -22,7 +22,7 @@ struct MicrosoftOAuthConfig {
     ]
 
     static let placeholder = MicrosoftOAuthConfig(
-        clientID: "REPLACE_WITH_AZURE_CLIENT_ID",
+        clientID: "9c78c637-68dc-48cf-b881-54c40a8d835f",
         redirectScheme: "msauth.com.aviashkenazi.voiceinbox",
         scopes: mailScopes
     )
