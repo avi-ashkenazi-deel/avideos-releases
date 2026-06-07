@@ -20,6 +20,11 @@ final class EmailPlayerViewModel: ObservableObject {
     // Live word being spoken (for on-screen underline), valid for sentence blocks.
     @Published private(set) var spokenWordRange: NSRange?
 
+    /// Set to a language's display name (e.g. "Hebrew") when the email is in a
+    /// language that has no installed system voice, so the UI can prompt to add
+    /// one. Nil when a voice is available (or ElevenLabs is in use).
+    @Published var missingVoiceLanguage: String?
+
     // Elapsed playback seconds (advances only while speaking).
     @Published private(set) var elapsed: TimeInterval = 0
 
@@ -192,6 +197,7 @@ final class EmailPlayerViewModel: ObservableObject {
             id: stagedEmail.email.id,
             minutes: ReadingTime.minutes(forText: stagedEmail.blocks.map(\.spokenText).joined(separator: " "))
         )
+        checkVoiceAvailability(for: stagedEmail)
         if let startBlock = config.startBlock {
             currentBlockIndex = startBlock
             hasStarted = true
@@ -260,6 +266,20 @@ final class EmailPlayerViewModel: ObservableObject {
         self.currentBlockSpoken = false
         self.elapsed = 0
         self.spokenLog = []
+        checkVoiceAvailability(for: parsed)
+    }
+
+    /// Flag when the email's language has no installed on-device voice, so the UI
+    /// can prompt the listener to add one. Skipped when ElevenLabs (multilingual)
+    /// is active, or when a matching voice exists.
+    private func checkVoiceAvailability(for parsed: ParsedEmail) {
+        missingVoiceLanguage = nil
+        guard !settings.elevenLabsActive else { return }
+        let sample = parsed.blocks.prefix(50).map(\.spokenText).joined(separator: " ")
+        guard sample.count > 20, let code = LanguageTools.languageCode(for: sample) else { return }
+        if SystemSpeechEngine.bestVoice(forLanguage: code) == nil {
+            missingVoiceLanguage = Locale.current.localizedString(forLanguageCode: code) ?? code
+        }
     }
 
     // MARK: - Transport

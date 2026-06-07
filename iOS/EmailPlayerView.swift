@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// The full-screen "Now Playing" reading view, presented over the app. It drives
 /// the single, app-wide `EmailPlayerViewModel` from the environment, so playback
@@ -12,10 +13,14 @@ struct NowPlayingView: View {
 
     @State private var highlightToAnnotate: Highlight?
     @State private var showCompletion = false
+    @State private var dismissedVoiceWarning = false
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
+                if let language = player.missingVoiceLanguage, !dismissedVoiceWarning {
+                    voiceWarning(language)
+                }
                 if let staged = player.staged {
                     previewMode(staged)
                 } else if player.parsed == nil {
@@ -24,6 +29,7 @@ struct NowPlayingView: View {
                     activeMode
                 }
             }
+            .onChange(of: player.parsed?.email.id) { _, _ in dismissedVoiceWarning = false }
             .navigationTitle(player.staged?.email.from.displayName
                              ?? player.parsed?.email.from.displayName ?? "")
             .navigationBarTitleDisplayMode(.inline)
@@ -155,6 +161,34 @@ struct NowPlayingView: View {
             }
             .onTapGesture { if isActive { player.jump(toBlock: index) } }
         }
+    }
+
+    private func voiceWarning(_ language: String) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "speaker.slash.fill")
+                .foregroundStyle(.orange)
+            VStack(alignment: .leading, spacing: 3) {
+                Text("No \(language) voice installed")
+                    .font(.subheadline.weight(.semibold))
+                Text("This email looks like it's in \(language), but there's no \(language) voice on this device, so it may not read correctly. Add one in Settings → Accessibility → Spoken Content → Voices.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                HStack(spacing: 16) {
+                    Button("Open Settings") {
+                        if let url = URL(string: UIApplication.openSettingsURLString) {
+                            UIApplication.shared.open(url)
+                        }
+                    }
+                    Button("Dismiss") { dismissedVoiceWarning = true }
+                        .foregroundStyle(.secondary)
+                }
+                .font(.caption.weight(.medium))
+                .padding(.top, 2)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(12)
+        .background(Color.orange.opacity(0.12))
     }
 
     private var completionBanner: some View {
