@@ -1,7 +1,6 @@
 import SwiftUI
 
-/// First-run screen. Connect a mailbox (Google to start) — or jump in with the
-/// bundled demo inbox.
+/// First-run screen. Connect a mailbox with Google or Outlook.
 struct OnboardingView: View {
     @EnvironmentObject private var appState: AppState
     @State private var isWorking = false
@@ -43,22 +42,6 @@ struct OnboardingView: View {
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.large)
-
-                Button {
-                    Task { await useDemo() }
-                } label: {
-                    Text("Try the demo inbox")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.large)
-
-                if !appState.googleAvailable {
-                    Text("Add your Google OAuth client id to enable real sign-in. Until then, the demo inbox shows every feature.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                }
             }
             .padding(.horizontal, 24)
             .disabled(isWorking)
@@ -91,11 +74,5 @@ struct OnboardingView: View {
         #else
         await appState.continueWithDemo()
         #endif
-    }
-
-    private func useDemo() async {
-        isWorking = true
-        defer { isWorking = false }
-        await appState.continueWithDemo()
     }
 }
