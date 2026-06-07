@@ -105,6 +105,10 @@ final class VoiceNoteRecorder: NSObject {
 
         let input = audioEngine.inputNode
         let format = input.outputFormat(forBus: 0)
+        // No usable mic route (e.g. triggered while the screen is locked) — bail
+        // instead of installing a tap with an invalid format, which crashes
+        // AVAudioEngine with a "channelCount > 0" assertion.
+        guard format.channelCount > 0, format.sampleRate > 0 else { return "" }
         input.installTap(onBus: 0, bufferSize: 1024, format: format) { buffer, _ in
             request.append(buffer)
         }

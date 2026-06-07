@@ -123,7 +123,9 @@ final class AppSettings: ObservableObject {
         self.imageBehavior = ImageBehavior(rawValue: defaults.string(forKey: Key.imageBehavior) ?? "")
             ?? .pauseAndDigest
         self.voiceIdentifier = defaults.string(forKey: Key.voiceIdentifier) ?? ""
-        self.airPodsHighlightEnabled = defaults.object(forKey: Key.airPodsHighlight) as? Bool ?? true
+        // Default off so the next button skips a sentence (expected). Turn on to
+        // make an AirPods/lock-screen next-press capture a highlight + voice note.
+        self.airPodsHighlightEnabled = defaults.object(forKey: Key.airPodsHighlight) as? Bool ?? false
         self.useElevenLabs = defaults.object(forKey: Key.useElevenLabs) as? Bool ?? false
         self.elevenLabsAPIKey = KeychainStore.get(account: KeychainStore.Account.elevenLabsAPIKey) ?? ""
         self.elevenLabsVoiceID = defaults.string(forKey: Key.elevenLabsVoiceID) ?? ""
