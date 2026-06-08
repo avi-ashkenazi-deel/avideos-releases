@@ -18,6 +18,9 @@
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<!-- Names the asset-catalog app icon so the watch app validates for upload. -->
+	<key>CFBundleIconName</key>
+	<string>$(ASSETCATALOG_COMPILER_APPICON_NAME)</string>
 
 	<!-- Modern single-target watchOS app. -->
 	<key>WKApplication</key>

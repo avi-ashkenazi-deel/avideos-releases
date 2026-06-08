@@ -60,10 +60,8 @@ targets:
         Debug:
           ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon-Dev
     dependencies:
-      # Watch app temporarily not embedded so the first TestFlight build ships
-      # iPhone-only (no watch icon / watch validation needed). Re-enable later:
-      # - target: VoiceInboxWatch
-      #   embed: true
+      - target: VoiceInboxWatch
+        embed: true
       - target: ShareExtension
         embed: true
 
@@ -106,6 +104,8 @@ targets:
         GENERATE_INFOPLIST_FILE: NO
         ENABLE_PREVIEWS: YES
         WATCHOS_DEPLOYMENT_TARGET: "10.0"
+        # Watch app icon (required for embedding + App Store validation).
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
 
 # Declare schemes explicitly so regenerating the project always keeps a
 # runnable scheme for the app (and the watch) — Xcode's auto-created schemes
