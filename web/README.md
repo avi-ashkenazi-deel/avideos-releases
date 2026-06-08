@@ -40,6 +40,9 @@ All content is in `src/data/` (typed by `src/data/types.ts`):
 - `tools.ts` — apps you've built (thumbnail + url)
 - `projects.ts` — richer project entries (used by `/projects` + detail pages)
 - `gallery.photography.ts` / `gallery.projects.ts` — gallery images
+  (currently the real archive from superavi.com/portfolio, stored in
+  `public/images/portfolio/`; the source only serves 176×88 thumbnails, so swap
+  in higher-resolution files under the same filenames to sharpen the zoom view)
 - `socials.ts` — social links
 
 ### Adding images
