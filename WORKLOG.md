@@ -2,6 +2,22 @@
 
 A running log of what we've built and shipped.
 
+## 2026-06-08 — Offline support + Substack footer trim
+
+- **Offline mailbox cache** (`MailCache` + `CachingMailService`): the folder
+  listing, the most recent ~120 full message bodies, labels, and the account
+  profile are cached per account in the app group. Offline (detected instantly
+  via `NetworkMonitor`/NWPathMonitor) the inbox still lists, opens, and
+  auto-advances to the next email. Bodies are cached whenever fetched online
+  (opening + the reading-time prefetch), so browsing online warms the cache.
+- **No more offline "logged out" lockout:** `AppState.activate` now reaches
+  `.ready` immediately from the stored account identity and refreshes the live
+  profile in the background, instead of blocking launch on a network call that
+  hangs ~60s offline. Legacy-token migration is skipped offline.
+- **Substack footer trim:** `EmailParser` now drops the trailing
+  share/comment/restack/subscribe/copyright lines (text rows; the icons were
+  already stripped). Trims from the end only, stops at real content.
+
 ## 2026-06-08 — Watch is now a live remote for the phone
 
 Reworked the watch app from a disconnected, demo-inbox local player into a

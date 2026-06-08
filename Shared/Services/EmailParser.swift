@@ -16,11 +16,60 @@ enum EmailParser {
             blocks = sentences(from: email.bodyText ?? email.snippet, startIndex: 0)
         }
 
+        // Drop the boilerplate footer newsletters (Substack et al.) tack on:
+        // "Share / Comment / Restack / Upgrade to paid / © … / Subscribe for free…".
+        let trimmed = trimTrailingBoilerplate(blocks)
+        // Don't let trimming wipe everything (e.g. a body that's all footer).
+        let kept = trimmed.isEmpty ? blocks : trimmed
+
         // Guarantee at least one block so the player always has something to read.
-        let finalBlocks = blocks.isEmpty
+        let finalBlocks = kept.isEmpty
             ? sentences(from: email.snippet, startIndex: 0)
-            : blocks
+            : kept
         return ParsedEmail(email: email, blocks: finalBlocks)
+    }
+
+    // MARK: - Trailing boilerplate
+
+    /// Trim the run of footer lines at the very end of the email — the share /
+    /// comment / subscribe / copyright rows. Only trims from the end and stops at
+    /// the first real sentence (or any image), so mid-body text is never touched.
+    private static func trimTrailingBoilerplate(_ blocks: [ContentBlock]) -> [ContentBlock] {
+        var end = blocks.count
+        while end > 0, case .sentence(let s) = blocks[end - 1], isFooterLine(s.text) {
+            end -= 1
+        }
+        return Array(blocks[0..<end])
+    }
+
+    /// Short UI labels that appear as their own line in newsletter footers.
+    private static let footerExactLines: Set<String> = [
+        "share", "comment", "comments", "like", "likes", "restack", "subscribe",
+        "subscribe now", "unsubscribe", "follow", "view in browser", "open in app",
+        "read in app", "get the app", "start writing", "leave a comment",
+        "share this post", "upgrade to paid", "pledge", "give a gift subscription"
+    ]
+
+    /// Phrases that, appearing in a trailing line, mark it as footer regardless of
+    /// length (Substack's standard sign-off / legal / promo lines).
+    private static let footerMarkers: [String] = [
+        "is the home for great culture", "subscribe for free to receive",
+        "to receive new posts and support", "collection notice", "privacy ∙ terms",
+        "privacy · terms", "© 20", "you're a free subscriber",
+        "you’re a free subscriber", "you're currently a free subscriber",
+        "you’re currently a free subscriber", "this post is for paid subscribers",
+        "upgrade to paid"
+    ]
+
+    private static func isFooterLine(_ text: String) -> Bool {
+        let trimmedPunct = CharacterSet(charactersIn: ".,!?:;·•|-–—()[]")
+        let t = text.lowercased()
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: trimmedPunct)
+            .trimmingCharacters(in: .whitespaces)
+        if t.isEmpty { return true }
+        if footerExactLines.contains(t) { return true }
+        return footerMarkers.contains { t.contains($0) }
     }
 
     // MARK: - HTML

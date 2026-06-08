@@ -137,10 +137,12 @@ final class AppState: ObservableObject {
         #if os(iOS)
         case .google:
             let key = account.tokenKey
-            mailService = GoogleMailService(tokenProvider: { try await GoogleAuthSession.validAccessToken(key: key) })
+            let base = GoogleMailService(tokenProvider: { try await GoogleAuthSession.validAccessToken(key: key) })
+            mailService = CachingMailService(base: base, accountID: account.id)
         case .microsoft:
             let key = account.tokenKey
-            mailService = MicrosoftMailService(tokenProvider: { try await MicrosoftAuthSession.validAccessToken(key: key) })
+            let base = MicrosoftMailService(tokenProvider: { try await MicrosoftAuthSession.validAccessToken(key: key) })
+            mailService = CachingMailService(base: base, accountID: account.id)
         #else
         default:
             mailService = MockMailService()
@@ -151,9 +153,20 @@ final class AppState: ObservableObject {
         // Label ids differ per account/provider, so reset to the inbox on switch.
         settings.mailLabelId = "INBOX"
         settings.mailLabelName = "Inbox"
-        self.account = await mailService.account
-            ?? MailAccount(provider: account.provider, emailAddress: account.email, displayName: account.displayName)
+        // Use the stored identity immediately so launch is instant and never blocks
+        // on the network. Fetching the live profile offline can hang until timeout —
+        // that delay is what made a cold offline launch look like it logged you out.
+        self.account = MailAccount(provider: account.provider,
+                                   emailAddress: account.email,
+                                   displayName: account.displayName)
         phase = .ready
+        // Best-effort: refresh the live profile in the background (ignore offline).
+        let service = mailService
+        Task { @MainActor [weak self] in
+            if let live = await service.account, !live.emailAddress.isEmpty {
+                self?.account = live
+            }
+        }
     }
 
     #if os(iOS)
@@ -252,6 +265,9 @@ final class AppState: ObservableObject {
     /// per-account storage, so already signed-in users stay signed in.
     private func migrateLegacyTokensIfNeeded() async {
         guard connectedAccounts.isEmpty else { return }
+        // Migration probes the network; skip it offline so a cold launch with no
+        // migrated accounts yet doesn't hang on a timeout.
+        guard NetworkMonitor.shared.isOnline else { return }
         if let tokens = GoogleAuthSession.tokens(key: KeychainStore.Account.googleTokens) {
             let probe = GoogleMailService(tokenProvider: {
                 try await GoogleAuthSession.validAccessToken(key: KeychainStore.Account.googleTokens)
