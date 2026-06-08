@@ -39,12 +39,16 @@
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
 	</array>
+	<!-- iPad allows portrait + both landscapes so the list/reading split view can
+	     show side-by-side however the device is held. UIRequiresFullScreen below
+	     opts out of multitasking, so App Store validation doesn't require all four
+	     orientations (no upside-down). -->
 	<key>UISupportedInterfaceOrientations~ipad</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
-	<!-- Portrait-only on iPad too: opt out of multitasking so App Store validation
-	     doesn't require all four orientations. -->
 	<key>UIRequiresFullScreen</key>
 	<true/>
 

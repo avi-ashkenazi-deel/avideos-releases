@@ -45,7 +45,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.aviashkenazi.voiceinbox
         INFOPLIST_FILE: iOS/Info.plist
         CODE_SIGN_ENTITLEMENTS: iOS/VoiceInbox.entitlements
-        TARGETED_DEVICE_FAMILY: "1"   # iPhone only (avoids the iPad multitasking orientation requirement)
+        TARGETED_DEVICE_FAMILY: "1,2"   # iPhone + iPad (iPad uses a dedicated split layout; UIRequiresFullScreen opts out of multitasking so all-orientations isn't required)
         GENERATE_INFOPLIST_FILE: NO
         ENABLE_PREVIEWS: YES
         SUPPORTS_MACCATALYST: NO

@@ -1,6 +1,21 @@
 import SwiftUI
 
+/// iPhone inbox tab: the inbox list wrapped in its own `NavigationStack`.
 struct InboxView: View {
+    var body: some View {
+        NavigationStack { InboxList() }
+    }
+}
+
+/// The inbox list plus its toolbar, search, and sheets — but **no**
+/// `NavigationStack` of its own, so it can be hosted two ways: wrapped by
+/// `InboxView` as the iPhone tab, and dropped into the iPad split view's sidebar
+/// column (where the split view supplies the navigation context).
+struct InboxList: View {
+    /// On iPad the inbox is the only top-level list, so it carries a toolbar button
+    /// to reach Saved articles (a separate tab on iPhone). `nil` hides the button.
+    var onShowSaved: (() -> Void)?
+
     @EnvironmentObject private var appState: AppState
     @EnvironmentObject private var player: EmailPlayerViewModel
     @StateObject private var viewModel: InboxViewModel
@@ -11,7 +26,8 @@ struct InboxView: View {
     @State private var showAnalytics = false
     @State private var searchDebounce: Task<Void, Never>?
 
-    init() {
+    init(onShowSaved: (() -> Void)? = nil) {
+        self.onShowSaved = onShowSaved
         // Placeholder; replaced in onAppear once we have appState's service.
         _viewModel = StateObject(wrappedValue: InboxViewModel(mailService: MockMailService()))
     }
@@ -24,142 +40,147 @@ struct InboxView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            Group {
-                if viewModel.isLoading && viewModel.emails.isEmpty {
-                    ProgressView("Loading inbox…")
-                } else if let errorMessage = viewModel.errorMessage, viewModel.emails.isEmpty {
-                    InboxStateView(
-                        systemImage: "exclamationmark.triangle",
-                        title: "Couldn't load your inbox",
-                        message: errorMessage,
-                        actionTitle: "Try again"
-                    ) {
-                        Task { await viewModel.load() }
+        Group {
+            if viewModel.isLoading && viewModel.emails.isEmpty {
+                ProgressView("Loading inbox…")
+            } else if let errorMessage = viewModel.errorMessage, viewModel.emails.isEmpty {
+                InboxStateView(
+                    systemImage: "exclamationmark.triangle",
+                    title: "Couldn't load your inbox",
+                    message: errorMessage,
+                    actionTitle: "Try again"
+                ) {
+                    Task { await viewModel.load() }
+                }
+            } else if viewModel.emails.isEmpty {
+                InboxStateView(
+                    systemImage: "tray",
+                    title: "Inbox is empty",
+                    message: "No messages in this account's inbox.",
+                    actionTitle: "Refresh"
+                ) {
+                    Task { await viewModel.load() }
+                }
+            } else {
+                List {
+                    ForEach(viewModel.emails) { email in
+                        Button {
+                            open(email)
+                        } label: {
+                            EmailRow(
+                                email: email,
+                                readMinutes: readingTimes.minutes(for: email.id),
+                                progress: progress.progress(for: email.id)
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .listRowSeparator(.hidden)
+                        .onAppear {
+                            // Infinite scroll: pull the next page near the end.
+                            if email.id == viewModel.emails.last?.id {
+                                Task { await viewModel.loadMore() }
+                            }
+                        }
+                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                            // Swipe left → mark read (only meaningful when unread).
+                            if !email.isRead {
+                                Button {
+                                    Task { await viewModel.markRead(email.id) }
+                                } label: {
+                                    Label("Read", systemImage: "envelope.open")
+                                }
+                                .tint(.blue)
+                            }
+                        }
+                        .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                            // Swipe right → mark unread / reset (only when read).
+                            if email.isRead {
+                                Button {
+                                    Task { await viewModel.markUnread(email.id) }
+                                } label: {
+                                    Label("Unread", systemImage: "envelope.badge")
+                                }
+                                .tint(.orange)
+                            }
+                        }
                     }
-                } else if viewModel.emails.isEmpty {
-                    InboxStateView(
-                        systemImage: "tray",
-                        title: "Inbox is empty",
-                        message: "No messages in this account's inbox.",
-                        actionTitle: "Refresh"
-                    ) {
-                        Task { await viewModel.load() }
+
+                    if viewModel.isLoadingMore {
+                        HStack { Spacer(); ProgressView(); Spacer() }
+                            .listRowSeparator(.hidden)
+                    }
+                }
+                .listStyle(.plain)
+                .refreshable { await viewModel.load() }
+            }
+        }
+        .navigationTitle(viewModel.selectedLabelName)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                // Tap the title to switch folder/category. (This used to be a
+                // toolbar funnel icon that got dropped when the bar was crowded.)
+                if viewModel.labels.count > 1 {
+                    Menu {
+                        ForEach(viewModel.labels) { label in
+                            Button {
+                                Task { await viewModel.selectLabel(label) }
+                            } label: {
+                                if label.id == viewModel.selectedLabelId {
+                                    Label(label.displayName, systemImage: "checkmark")
+                                } else {
+                                    Text(label.displayName)
+                                }
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text(titleText).font(.headline)
+                            Image(systemName: "chevron.down").font(.caption2.weight(.bold))
+                        }
+                        .foregroundStyle(.primary)
                     }
                 } else {
-                    List {
-                        ForEach(viewModel.emails) { email in
-                            Button {
-                                open(email)
-                            } label: {
-                                EmailRow(
-                                    email: email,
-                                    readMinutes: readingTimes.minutes(for: email.id),
-                                    progress: progress.progress(for: email.id)
-                                )
-                            }
-                            .buttonStyle(.plain)
-                            .listRowSeparator(.hidden)
-                            .onAppear {
-                                // Infinite scroll: pull the next page near the end.
-                                if email.id == viewModel.emails.last?.id {
-                                    Task { await viewModel.loadMore() }
-                                }
-                            }
-                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                // Swipe left → mark read (only meaningful when unread).
-                                if !email.isRead {
-                                    Button {
-                                        Task { await viewModel.markRead(email.id) }
-                                    } label: {
-                                        Label("Read", systemImage: "envelope.open")
-                                    }
-                                    .tint(.blue)
-                                }
-                            }
-                            .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                                // Swipe right → mark unread / reset (only when read).
-                                if email.isRead {
-                                    Button {
-                                        Task { await viewModel.markUnread(email.id) }
-                                    } label: {
-                                        Label("Unread", systemImage: "envelope.badge")
-                                    }
-                                    .tint(.orange)
-                                }
-                            }
-                        }
-
-                        if viewModel.isLoadingMore {
-                            HStack { Spacer(); ProgressView(); Spacer() }
-                                .listRowSeparator(.hidden)
-                        }
-                    }
-                    .listStyle(.plain)
-                    .refreshable { await viewModel.load() }
+                    Text(titleText).font(.headline)
                 }
             }
-            .navigationTitle(viewModel.selectedLabelName)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    // Tap the title to switch folder/category. (This used to be a
-                    // toolbar funnel icon that got dropped when the bar was crowded.)
-                    if viewModel.labels.count > 1 {
-                        Menu {
-                            ForEach(viewModel.labels) { label in
-                                Button {
-                                    Task { await viewModel.selectLabel(label) }
-                                } label: {
-                                    if label.id == viewModel.selectedLabelId {
-                                        Label(label.displayName, systemImage: "checkmark")
-                                    } else {
-                                        Text(label.displayName)
-                                    }
-                                }
-                            }
-                        } label: {
-                            HStack(spacing: 4) {
-                                Text(titleText).font(.headline)
-                                Image(systemName: "chevron.down").font(.caption2.weight(.bold))
-                            }
-                            .foregroundStyle(.primary)
-                        }
-                    } else {
-                        Text(titleText).font(.headline)
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                // Saved lives in its own tab on iPhone; on iPad (split view) it's
+                // reached from here instead.
+                if let onShowSaved {
+                    Button { onShowSaved() } label: {
+                        Image(systemName: "bookmark")
                     }
                 }
-                ToolbarItemGroup(placement: .topBarTrailing) {
-                    Button { showAnalytics = true } label: {
-                        Image(systemName: "chart.bar")
-                    }
-                    Button { showHighlights = true } label: {
-                        Image(systemName: "highlighter")
-                    }
-                    Button { showSettings = true } label: {
-                        Image(systemName: "gearshape")
-                    }
+                Button { showAnalytics = true } label: {
+                    Image(systemName: "chart.bar")
+                }
+                Button { showHighlights = true } label: {
+                    Image(systemName: "highlighter")
+                }
+                Button { showSettings = true } label: {
+                    Image(systemName: "gearshape")
                 }
             }
-            .sheet(isPresented: $showSettings) {
-                NavigationStack { SettingsView() }
-            }
-            .sheet(isPresented: $showHighlights) {
-                NavigationStack { HighlightsListView() }
-                    .environmentObject(player)
-                    .environmentObject(appState)
-            }
-            .sheet(isPresented: $showAnalytics) {
-                NavigationStack { AnalyticsView() }
-            }
-            .searchable(text: $viewModel.searchText, prompt: "Search by sender or subject")
-            .onChange(of: viewModel.searchText) { _, _ in
-                searchDebounce?.cancel()
-                searchDebounce = Task {
-                    try? await Task.sleep(nanoseconds: 400_000_000)
-                    guard !Task.isCancelled else { return }
-                    await viewModel.load()
-                }
+        }
+        .sheet(isPresented: $showSettings) {
+            NavigationStack { SettingsView() }
+        }
+        .sheet(isPresented: $showHighlights) {
+            NavigationStack { HighlightsListView() }
+                .environmentObject(player)
+                .environmentObject(appState)
+        }
+        .sheet(isPresented: $showAnalytics) {
+            NavigationStack { AnalyticsView() }
+        }
+        .searchable(text: $viewModel.searchText, prompt: "Search by sender or subject")
+        .onChange(of: viewModel.searchText) { _, _ in
+            searchDebounce?.cancel()
+            searchDebounce = Task {
+                try? await Task.sleep(nanoseconds: 400_000_000)
+                guard !Task.isCancelled else { return }
+                await viewModel.load()
             }
         }
         .task(id: appState.activeAccountID) {

@@ -1,14 +1,19 @@
 import SwiftUI
 import UIKit
 
-/// The full-screen "Now Playing" reading view, presented over the app. It drives
-/// the single, app-wide `EmailPlayerViewModel` from the environment, so playback
-/// continues no matter where you navigate; collapsing just hides this view and
-/// leaves the mini-player running at the bottom.
+/// The reading + player surface: an optional voice warning, the live-highlighted
+/// transcript, and the transport controls. It drives the single, app-wide
+/// `EmailPlayerViewModel` from the environment so playback continues no matter
+/// where you navigate.
+///
+/// This view carries *no* presentation chrome of its own (no `NavigationStack`,
+/// no collapse button), so it can be reused two ways: wrapped by `NowPlayingView`
+/// as the iPhone full-screen sheet, and dropped straight into the iPad split
+/// view's detail column. Callers supply the surrounding navigation.
 ///
 /// If you open an email while a *different* one is still playing, this shows the
 /// new one as a preview (the old keeps playing) with a "Play this email" button.
-struct NowPlayingView: View {
+struct PlayerDetailContent: View {
     @EnvironmentObject private var player: EmailPlayerViewModel
     @ObservedObject private var settings = AppSettings.shared
 
@@ -17,51 +22,38 @@ struct NowPlayingView: View {
     @State private var dismissedVoiceWarning = false
 
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                if let language = player.missingVoiceLanguage, !dismissedVoiceWarning {
-                    voiceWarning(language)
-                }
-                if let staged = player.staged {
-                    previewMode(staged)
-                } else if player.parsed == nil {
-                    Spacer(); ProgressView("Opening…"); Spacer()
-                } else {
-                    activeMode
-                }
+        VStack(spacing: 0) {
+            if let language = player.missingVoiceLanguage, !dismissedVoiceWarning {
+                voiceWarning(language)
             }
-            .onChange(of: player.parsed?.email.id) { _, _ in dismissedVoiceWarning = false }
-            .navigationTitle(player.staged?.email.from.displayName
-                             ?? player.parsed?.email.from.displayName ?? "")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        // Abandoning a preview returns focus to what's playing.
-                        if player.staged != nil { player.discardStaged() }
-                        player.isExpanded = false
-                    } label: {
-                        Image(systemName: "chevron.down")
-                    }
-                }
+            if let staged = player.staged {
+                previewMode(staged)
+            } else if player.parsed == nil {
+                Spacer(); ProgressView("Opening…"); Spacer()
+            } else {
+                activeMode
             }
-            .onAppear {
-                player.onHighlightCaptured = { highlight in highlightToAnnotate = highlight }
-            }
-            .onChange(of: player.isComplete) { _, complete in
-                if complete { showCompletion = true }
-            }
-            .sheet(item: $highlightToAnnotate) { highlight in
-                NavigationStack { HighlightComposerView(highlight: highlight) }
-            }
-            .overlay(alignment: .top) {
-                if showCompletion { completionBanner }
-            }
-            .alert("Playback problem", isPresented: .constant(player.errorMessage != nil)) {
-                Button("OK") { player.errorMessage = nil }
-            } message: {
-                Text(player.errorMessage ?? "")
-            }
+        }
+        .onChange(of: player.parsed?.email.id) { _, _ in dismissedVoiceWarning = false }
+        .navigationTitle(player.staged?.email.from.displayName
+                         ?? player.parsed?.email.from.displayName ?? "")
+        .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            player.onHighlightCaptured = { highlight in highlightToAnnotate = highlight }
+        }
+        .onChange(of: player.isComplete) { _, complete in
+            if complete { showCompletion = true }
+        }
+        .sheet(item: $highlightToAnnotate) { highlight in
+            NavigationStack { HighlightComposerView(highlight: highlight) }
+        }
+        .overlay(alignment: .top) {
+            if showCompletion { completionBanner }
+        }
+        .alert("Playback problem", isPresented: .constant(player.errorMessage != nil)) {
+            Button("OK") { player.errorMessage = nil }
+        } message: {
+            Text(player.errorMessage ?? "")
         }
     }
 
@@ -205,6 +197,32 @@ struct NowPlayingView: View {
                 try? await Task.sleep(nanoseconds: 2_500_000_000)
                 withAnimation { showCompletion = false }
             }
+    }
+}
+
+/// iPhone full-screen "Now Playing": the shared reading/player surface plus a
+/// collapse button that hides it back down to the mini-player. Presented over the
+/// app, so playback continues underneath when collapsed. (On iPad the same
+/// `PlayerDetailContent` lives permanently in the split view's detail column, so
+/// there's nothing to collapse and this wrapper isn't used.)
+struct NowPlayingView: View {
+    @EnvironmentObject private var player: EmailPlayerViewModel
+
+    var body: some View {
+        NavigationStack {
+            PlayerDetailContent()
+                .toolbar {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button {
+                            // Abandoning a preview returns focus to what's playing.
+                            if player.staged != nil { player.discardStaged() }
+                            player.isExpanded = false
+                        } label: {
+                            Image(systemName: "chevron.down")
+                        }
+                    }
+                }
+        }
     }
 }
 
