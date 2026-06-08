@@ -232,11 +232,9 @@ private struct EmailRow: View {
     var progress: ListeningProgress? = nil
 
     var body: some View {
-        HStack(spacing: 0) {
-            // Sender thumbnail with a listening-progress ring around it. It carries
-            // its own trailing gap so that when there's no image to show it
-            // collapses completely and the text fills the row.
-            SenderAvatar(email: email, progress: progress, trailingSpace: 12)
+        HStack(spacing: 12) {
+            // Sender thumbnail with a listening-progress ring around it.
+            SenderAvatar(email: email, progress: progress)
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack {
