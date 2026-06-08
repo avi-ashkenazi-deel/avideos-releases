@@ -23,12 +23,17 @@ final class WatchConnectivityBridge: NSObject, ObservableObject {
     /// Set by whichever side wants to react to incoming messages.
     var onHighlight: ((Highlight) -> Void)?
     var onCommand: ((PlayerCommand) -> Void)?
+    /// Phone-side: the watch asked to change playback speed (0.5...2.5×).
+    var onSpeed: ((Double) -> Void)?
     /// The ElevenLabs API key lives in the per-app Keychain, so the phone relays
     /// the cloud-voice config to the watch (over the encrypted WatchConnectivity
     /// channel) so the watch can use the same voice. `(key, voiceID, enabled)`.
     var onElevenLabsConfig: ((String, String, Bool) -> Void)?
 
     @Published private(set) var isReachable = false
+    /// Watch-side: the latest snapshot of what the phone is playing, so the watch
+    /// remote can mirror it. `nil` until the phone sends its first update.
+    @Published private(set) var nowPlaying: NowPlayingState?
 
     private var session: WCSession? {
         WCSession.isSupported() ? WCSession.default : nil
@@ -47,6 +52,17 @@ final class WatchConnectivityBridge: NSObject, ObservableObject {
     func send(highlight: Highlight) {
         guard let data = try? JSONEncoder.iso.encode(highlight) else { return }
         sendPayload(["highlight": data])
+    }
+
+    /// Phone → watch: the current player snapshot (mirrored by the watch remote).
+    func send(nowPlaying state: NowPlayingState) {
+        guard let data = try? JSONEncoder.iso.encode(state) else { return }
+        sendPayload(["nowPlaying": data])
+    }
+
+    /// Watch → phone: change playback speed.
+    func send(speed: Double) {
+        sendPayload(["speed": speed])
     }
 
     /// Relay the ElevenLabs cloud-voice config to the counterpart (phone → watch).
@@ -71,6 +87,13 @@ final class WatchConnectivityBridge: NSObject, ObservableObject {
         if let data = payload["highlight"] as? Data,
            let highlight = try? JSONDecoder.iso.decode(Highlight.self, from: data) {
             onHighlight?(highlight)
+        }
+        if let data = payload["nowPlaying"] as? Data,
+           let state = try? JSONDecoder.iso.decode(NowPlayingState.self, from: data) {
+            nowPlaying = state
+        }
+        if let speed = payload["speed"] as? Double {
+            onSpeed?(speed)
         }
         if let key = payload["elevenKey"] as? String {
             let voiceID = payload["elevenVoiceID"] as? String ?? ""

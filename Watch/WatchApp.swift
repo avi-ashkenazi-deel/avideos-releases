@@ -4,16 +4,14 @@ import SwiftUI
 struct VoiceInboxWatchApp: App {
     var body: some Scene {
         WindowGroup {
-            WatchInboxView()
-                .task {
-                    WatchConnectivityBridge.shared.onElevenLabsConfig = { key, voiceID, enabled in
-                        let settings = AppSettings.shared
-                        settings.elevenLabsAPIKey = key
-                        settings.elevenLabsVoiceID = voiceID
-                        settings.useElevenLabs = enabled
-                    }
-                    WatchConnectivityBridge.shared.activate()
-                }
+            NavigationStack {
+                WatchNowPlayingView()
+            }
+            .task {
+                // Activate the link to the phone; the bridge then receives the
+                // phone's now-playing snapshots and relays transport commands back.
+                WatchConnectivityBridge.shared.activate()
+            }
         }
     }
 }

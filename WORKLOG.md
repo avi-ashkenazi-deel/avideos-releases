@@ -2,6 +2,24 @@
 
 A running log of what we've built and shipped.
 
+## 2026-06-08 — Watch is now a live remote for the phone
+
+Reworked the watch app from a disconnected, demo-inbox local player into a
+**remote that mirrors and controls the phone's playback** (the original gripe:
+"it doesn't reflect what's playing on the phone, and I can't control it").
+
+- New `NowPlayingState` snapshot (sender, subject, artwork address, isPlaying,
+  progress, time left, speed) pushed phone → watch over WatchConnectivity on
+  every state change and on reconnect.
+- Watch transport (play/pause, skip, speed, highlight) sends commands back; the
+  phone runs them against the single shared player.
+- Redesigned watch layout (podcast-remote style): progress + "time left" on top,
+  artwork + show/subject, transport buttons, then a speed row. Volume isn't
+  controllable on the phone from the watch via Apple APIs, so the bottom row is
+  playback speed instead.
+- Removed the watch's local inbox + local player (`WatchInboxView`,
+  `WatchPlayerView`); the watch no longer plays its own audio.
+
 ## 2026-06-08 — iPad split layout + watch re-embedded
 
 - **iPad layout** — on regular width the app now uses a three-column

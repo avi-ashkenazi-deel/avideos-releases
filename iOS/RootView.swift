@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 
 struct RootView: View {
     @EnvironmentObject private var appState: AppState
@@ -6,6 +7,7 @@ struct RootView: View {
     // between tabs and emails; the mini-player, Now Playing view, and the iPad
     // detail pane all drive it.
     @StateObject private var player = EmailPlayerViewModel(mailService: MockMailService())
+    @ObservedObject private var settings = AppSettings.shared
     @AppStorage("hasCompletedWelcome") private var hasCompletedWelcome = false
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
@@ -25,7 +27,53 @@ struct RootView: View {
                     player.configure(appState.mailService)
                     player.bindRemoteCommands()
                 }
+                // Keep the Apple Watch remote in sync: push a snapshot whenever
+                // playback state changes, and re-push when the watch reconnects.
+                .onAppear { connectWatchRemote() }
+                .onChange(of: player.isPlaying) { _, _ in pushNowPlaying() }
+                .onChange(of: player.currentBlockIndex) { _, _ in pushNowPlaying() }
+                .onChange(of: player.parsed?.email.id) { _, _ in pushNowPlaying() }
+                .onChange(of: settings.speed) { _, _ in pushNowPlaying() }
+                .onReceive(WatchConnectivityBridge.shared.$isReachable) { reachable in
+                    if reachable { pushNowPlaying() }
+                }
         }
+    }
+
+    /// Wire the watch as a remote: run its transport commands against the shared
+    /// player, and apply speed changes it sends.
+    private func connectWatchRemote() {
+        let bridge = WatchConnectivityBridge.shared
+        bridge.onCommand = { command in
+            switch command {
+            case .play:             if !player.isPlaying { player.togglePlayPause() }
+            case .pause:            if player.isPlaying { player.togglePlayPause() }
+            case .nextSentence:     player.nextSentence()
+            case .previousSentence: player.previousSentence()
+            case .highlight:        _ = player.captureHighlight()
+            }
+        }
+        bridge.onSpeed = { newValue in AppSettings.shared.speed = newValue }
+        pushNowPlaying()
+    }
+
+    /// Send the current player snapshot to the watch remote.
+    private func pushNowPlaying() {
+        let state: NowPlayingState
+        if let email = player.parsed?.email {
+            state = NowPlayingState(
+                sender: email.from.displayName,
+                subject: email.subjectOrFallback,
+                senderAddress: email.from.address,
+                isPlaying: player.isPlaying,
+                progress: player.progress,
+                secondsRemaining: Int((player.duration * (1 - player.progress)).rounded()),
+                speed: settings.speed
+            )
+        } else {
+            state = .empty
+        }
+        WatchConnectivityBridge.shared.send(nowPlaying: state)
     }
 
     /// iPad (regular width) gets a two-column split — the email list on the left,
