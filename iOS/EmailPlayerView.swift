@@ -305,13 +305,11 @@ private struct ImageBlockView: View {
                 case .success(let img):
                     img.resizable().scaledToFit()
                 case .failure:
-                    // Mark failed → the block collapses; and if the player is
-                    // parked on this image (pause-and-digest mode), skip past it
-                    // so we're not stuck waiting on an image that isn't there.
-                    Color.clear.frame(height: 0).onAppear {
-                        failed = true
-                        if isCurrent { onSkip() }
-                    }
+                    // Mark failed → the card collapses so there's no empty box.
+                    // We deliberately don't touch playback here: the player still
+                    // announces this image in audio (core behavior) regardless of
+                    // whether its picture could be fetched.
+                    Color.clear.frame(height: 0).onAppear { failed = true }
                 default:
                     ProgressView().frame(maxWidth: .infinity, minHeight: 120)
                 }
