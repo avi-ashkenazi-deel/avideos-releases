@@ -7,54 +7,48 @@ import CryptoKit
 ///   1. Gravatar — a profile photo/face for that address (personal senders).
 ///   2. Clearbit / Google favicon — the company logo for the sender's domain
 ///      (newsletters, brands, services).
-///   3. The sender's initial as a last resort.
+/// If none of those load, the avatar shows **nothing** and collapses to zero
+/// size, so the surrounding row text fills the space (no placeholder bubble).
 /// Results are cached per address so the list doesn't re-fetch while scrolling.
 struct SenderAvatar: View {
     let email: Email
     var progress: ListeningProgress?
     var size: CGFloat = 46
+    /// Horizontal gap to reserve *after* the avatar, applied only when an image
+    /// is actually shown. With no image the whole view (and this gap) collapses.
+    var trailingSpace: CGFloat = 0
 
     @StateObject private var loader = AvatarLoader()
 
+    private var hasImage: Bool { loader.image != nil }
+
     var body: some View {
         ZStack {
-            Circle()
-                .stroke(Color.secondary.opacity(0.2), lineWidth: 3)
-
-            if let progress, progress.fraction > 0 {
+            if let image = loader.image {
                 Circle()
-                    .trim(from: 0, to: progress.fraction)
-                    .stroke(progress.isComplete ? Color.green : Color.accentColor,
-                            style: StrokeStyle(lineWidth: 3, lineCap: .round))
-                    .rotationEffect(.degrees(-90))
-            }
+                    .stroke(Color.secondary.opacity(0.2), lineWidth: 3)
 
-            content.padding(5)
+                if let progress, progress.fraction > 0 {
+                    Circle()
+                        .trim(from: 0, to: progress.fraction)
+                        .stroke(progress.isComplete ? Color.green : Color.accentColor,
+                                style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                        .rotationEffect(.degrees(-90))
+                }
+
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .clipShape(Circle())
+                    .padding(5)
+            }
+            // No image → empty ZStack, collapsed to 0×0 by the frame below. (The
+            // ZStack still exists, so the .task keeps running to attempt the load.)
         }
-        .frame(width: size, height: size)
+        .frame(width: hasImage ? size : 0, height: hasImage ? size : 0)
+        .padding(.trailing, hasImage ? trailingSpace : 0)
         .task(id: email.from.address) {
             await loader.load(address: email.from.address)
-        }
-    }
-
-    @ViewBuilder
-    private var content: some View {
-        if let image = loader.image {
-            Image(uiImage: image)
-                .resizable()
-                .scaledToFill()
-                .clipShape(Circle())
-        } else {
-            initial
-        }
-    }
-
-    private var initial: some View {
-        ZStack {
-            Circle().fill(email.isRead ? Color.gray.opacity(0.2) : Color.accentColor.opacity(0.2))
-            Text(email.from.initial)
-                .font(.headline)
-                .foregroundStyle(email.isRead ? Color.secondary : Color.accentColor)
         }
     }
 }
