@@ -45,6 +45,18 @@ struct SettingsView: View {
             }
 
             Section {
+                Picker("Text size", selection: $settings.readingTextSize) {
+                    ForEach(ReadingTextSize.allCases) { size in
+                        Text(size.title).tag(size)
+                    }
+                }
+            } header: {
+                Text("Reading")
+            } footer: {
+                Text("Size of the text in the email/article reading view.")
+            }
+
+            Section {
                 Picker("Voice", selection: $settings.voiceIdentifier) {
                     Text("System default").tag("")
                     ForEach(voices, id: \.identifier) { voice in

@@ -32,6 +32,35 @@ enum ImageBehavior: String, Codable, CaseIterable, Identifiable, Sendable {
     }
 }
 
+/// Reading-view text size for the transcript, set globally in Settings.
+enum ReadingTextSize: String, Codable, CaseIterable, Identifiable, Sendable {
+    case small, medium, large, extraLarge
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .small: return "Small"
+        case .medium: return "Medium"
+        case .large: return "Large"
+        case .extraLarge: return "Extra Large"
+        }
+    }
+
+    /// Point size for the body sentences.
+    var bodyPointSize: CGFloat {
+        switch self {
+        case .small: return 18
+        case .medium: return 22
+        case .large: return 26
+        case .extraLarge: return 31
+        }
+    }
+
+    /// Point size for the subject heading.
+    var titlePointSize: CGFloat { bodyPointSize + 6 }
+}
+
 /// User-tunable playback preferences, persisted in the shared app-group
 /// defaults so the phone and watch stay in sync.
 final class AppSettings: ObservableObject {
@@ -62,6 +91,11 @@ final class AppSettings: ObservableObject {
 
     @Published var imageBehavior: ImageBehavior {
         didSet { defaults.set(imageBehavior.rawValue, forKey: Key.imageBehavior) }
+    }
+
+    /// Text size for the email/article reading view.
+    @Published var readingTextSize: ReadingTextSize {
+        didSet { defaults.set(readingTextSize.rawValue, forKey: Key.readingTextSize) }
     }
 
     /// Identifier of the preferred `AVSpeechSynthesisVoice`; empty = system default.
@@ -107,6 +141,7 @@ final class AppSettings: ObservableObject {
         static let mailLabelId = "settings.mailLabelId"
         static let mailLabelName = "settings.mailLabelName"
         static let imageBehavior = "settings.imageBehavior"
+        static let readingTextSize = "settings.readingTextSize"
         static let voiceIdentifier = "settings.voiceIdentifier"
         static let airPodsHighlight = "settings.airPodsHighlight"
         static let useElevenLabs = "settings.useElevenLabs"
@@ -122,6 +157,8 @@ final class AppSettings: ObservableObject {
         self.mailLabelName = defaults.string(forKey: Key.mailLabelName) ?? "Inbox"
         self.imageBehavior = ImageBehavior(rawValue: defaults.string(forKey: Key.imageBehavior) ?? "")
             ?? .pauseAndDigest
+        self.readingTextSize = ReadingTextSize(rawValue: defaults.string(forKey: Key.readingTextSize) ?? "")
+            ?? .medium
         self.voiceIdentifier = defaults.string(forKey: Key.voiceIdentifier) ?? ""
         // Default off so the next button skips a sentence (expected). Turn on to
         // make an AirPods/lock-screen next-press capture a highlight + voice note.

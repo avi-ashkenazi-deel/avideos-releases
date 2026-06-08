@@ -9,10 +9,31 @@ struct PlayerControlsView: View {
 
     private let speeds: [Double] = [0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.25, 2.5]
 
+    /// Live scrub position while dragging; otherwise tracks `viewModel.progress`.
+    @State private var draftProgress: Double = 0
+    @State private var isScrubbing = false
+
     var body: some View {
         VStack(spacing: 14) {
-            ProgressView(value: viewModel.progress)
+            VStack(spacing: 2) {
+                Slider(value: $draftProgress, in: 0...1) { editing in
+                    isScrubbing = editing
+                    if !editing { viewModel.seek(toTime: draftProgress * viewModel.duration) }
+                }
                 .tint(.accentColor)
+
+                HStack {
+                    Text(timeString(displayElapsed))
+                    Spacer()
+                    Text("-" + timeString(max(0, viewModel.duration - displayElapsed)))
+                }
+                .font(.caption2.monospacedDigit())
+                .foregroundStyle(.secondary)
+            }
+            .onAppear { draftProgress = viewModel.progress }
+            .onChange(of: viewModel.progress) { _, new in
+                if !isScrubbing { draftProgress = new }
+            }
 
             HStack {
                 speedChip
@@ -69,5 +90,15 @@ struct PlayerControlsView: View {
         // Round to the nearest 0.05 for a tidy label (e.g. 1×, 1.5×, 1.75×).
         let rounded = (speed * 20).rounded() / 20
         return String(format: "%g×", rounded)
+    }
+
+    /// Elapsed seconds to show — the scrub preview while dragging, else actual.
+    private var displayElapsed: TimeInterval {
+        isScrubbing ? draftProgress * viewModel.duration : viewModel.elapsed
+    }
+
+    private func timeString(_ seconds: TimeInterval) -> String {
+        let total = Int(seconds.rounded())
+        return String(format: "%d:%02d", total / 60, total % 60)
     }
 }

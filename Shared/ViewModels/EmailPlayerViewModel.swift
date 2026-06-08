@@ -118,6 +118,9 @@ final class EmailPlayerViewModel: ObservableObject {
         return Double(currentBlockIndex) / Double(max(blocks.count - 1, 1))
     }
 
+    /// Estimated total listening time (seconds), for the scrubber + time labels.
+    var duration: TimeInterval { max(estimatedDuration, 0.1) }
+
     // MARK: - Loading
 
     func load(email: Email, announce: Bool = false) async {

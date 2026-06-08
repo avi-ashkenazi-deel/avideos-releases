@@ -10,6 +10,7 @@ import UIKit
 /// new one as a preview (the old keeps playing) with a "Play this email" button.
 struct NowPlayingView: View {
     @EnvironmentObject private var player: EmailPlayerViewModel
+    @ObservedObject private var settings = AppSettings.shared
 
     @State private var highlightToAnnotate: Highlight?
     @State private var showCompletion = false
@@ -129,7 +130,7 @@ struct NowPlayingView: View {
                                 currentIndex: Int?, isActive: Bool) -> some View {
         VStack(alignment: .leading, spacing: 16) {
             Text(subject)
-                .font(.title.bold())
+                .font(.system(size: settings.readingTextSize.titlePointSize, weight: .bold))
                 .multilineTextAlignment(LanguageTools.isRightToLeft(subject) ? .trailing : .leading)
                 .frame(maxWidth: .infinity,
                        alignment: LanguageTools.isRightToLeft(subject) ? .trailing : .leading)
@@ -152,7 +153,8 @@ struct NowPlayingView: View {
         case .sentence(let sentence):
             SentenceText(text: sentence.text,
                          isCurrent: isCurrent,
-                         wordRange: isCurrent ? player.spokenWordRange : nil)
+                         wordRange: isCurrent ? player.spokenWordRange : nil,
+                         fontSize: settings.readingTextSize.bodyPointSize)
                 .contentShape(Rectangle())
                 .onTapGesture { if isActive { player.jump(toBlock: index) } }
         case .image(let image):
@@ -212,12 +214,13 @@ private struct SentenceText: View {
     let text: String
     let isCurrent: Bool
     let wordRange: NSRange?
+    var fontSize: CGFloat = 22
 
     private var isRTL: Bool { LanguageTools.isRightToLeft(text) }
 
     var body: some View {
         Text(attributed)
-            .font(.title2)
+            .font(.system(size: fontSize))
             .lineSpacing(5)
             .multilineTextAlignment(isRTL ? .trailing : .leading)
             .environment(\.layoutDirection, isRTL ? .rightToLeft : .leftToRight)
