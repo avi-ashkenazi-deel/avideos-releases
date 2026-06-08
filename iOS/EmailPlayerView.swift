@@ -271,7 +271,19 @@ private struct ImageBlockView: View {
     let isCurrent: Bool
     let onSkip: () -> Void
 
+    // Flips when the remote image fails to load, so we collapse the block rather
+    // than leave an empty grey box behind.
+    @State private var failed = false
+
     var body: some View {
+        // Only show the card when there's an image we can actually display. No URL
+        // or a failed fetch → render nothing at all (no empty placeholder).
+        if let url = image.remoteURL, !failed {
+            card(url: url)
+        }
+    }
+
+    private func card(url: URL) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Label("Image", systemImage: "photo")
@@ -288,20 +300,15 @@ private struct ImageBlockView: View {
                 }
             }
 
-            Group {
-                if let url = image.remoteURL {
-                    AsyncImage(url: url) { phase in
-                        switch phase {
-                        case .success(let img):
-                            img.resizable().scaledToFit()
-                        case .failure:
-                            placeholder
-                        default:
-                            ProgressView().frame(maxWidth: .infinity, minHeight: 120)
-                        }
-                    }
-                } else {
-                    placeholder
+            AsyncImage(url: url) { phase in
+                switch phase {
+                case .success(let img):
+                    img.resizable().scaledToFit()
+                case .failure:
+                    // Mark failed → the whole block collapses on the next pass.
+                    Color.clear.frame(height: 0).onAppear { failed = true }
+                default:
+                    ProgressView().frame(maxWidth: .infinity, minHeight: 120)
                 }
             }
             .clipShape(RoundedRectangle(cornerRadius: 12))
@@ -315,15 +322,5 @@ private struct ImageBlockView: View {
             RoundedRectangle(cornerRadius: 14)
                 .fill(isCurrent ? Color.accentColor.opacity(0.12) : Color.gray.opacity(0.08))
         )
-    }
-
-    private var placeholder: some View {
-        ZStack {
-            Rectangle().fill(.gray.opacity(0.15))
-            Image(systemName: "photo")
-                .font(.largeTitle)
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity, minHeight: 140)
     }
 }
