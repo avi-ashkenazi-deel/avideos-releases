@@ -149,12 +149,11 @@ struct PlayerDetailContent: View {
                          fontSize: settings.readingTextSize.bodyPointSize)
                 .contentShape(Rectangle())
                 .onTapGesture { if isActive { player.jump(toBlock: index) } }
-        case .image:
-            // Images are intentionally not shown in the reader — we're a
-            // listening app, so the transcript stays text-only. The player still
-            // handles image blocks for audio per the Settings "images" behavior
-            // (skip silently / pause to digest); they just aren't drawn here.
-            EmptyView()
+        case .image(let image):
+            ImageBlockView(image: image, isCurrent: isCurrent) {
+                player.skipImage()
+            }
+            .onTapGesture { if isActive { player.jump(toBlock: index) } }
         }
     }
 
@@ -262,5 +261,71 @@ private struct SentenceText: View {
         string[attrRange].inlinePresentationIntent = .stronglyEmphasized
         string[attrRange].foregroundColor = .accentColor
         return string
+    }
+}
+
+// MARK: - Image block
+
+private struct ImageBlockView: View {
+    let image: InlineImage
+    let isCurrent: Bool
+    let onSkip: () -> Void
+
+    // Flips when the remote image fails to load, so we collapse the block rather
+    // than leave an empty grey box behind.
+    @State private var failed = false
+
+    var body: some View {
+        // Only show the card when there's an image we can actually display. No URL
+        // or a failed fetch → render nothing at all (no empty placeholder).
+        if let url = image.remoteURL, !failed {
+            card(url: url)
+        }
+    }
+
+    private func card(url: URL) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Label("Image", systemImage: "photo")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                if isCurrent {
+                    Button(action: onSkip) {
+                        Label("Skip", systemImage: "forward.end.fill")
+                            .font(.caption.weight(.semibold))
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                }
+            }
+
+            AsyncImage(url: url) { phase in
+                switch phase {
+                case .success(let img):
+                    img.resizable().scaledToFit()
+                case .failure:
+                    // Mark failed → the block collapses; and if the player is
+                    // parked on this image (pause-and-digest mode), skip past it
+                    // so we're not stuck waiting on an image that isn't there.
+                    Color.clear.frame(height: 0).onAppear {
+                        failed = true
+                        if isCurrent { onSkip() }
+                    }
+                default:
+                    ProgressView().frame(maxWidth: .infinity, minHeight: 120)
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+
+            if let alt = image.altText, !alt.isEmpty {
+                Text(alt).font(.caption).foregroundStyle(.secondary)
+            }
+        }
+        .padding(10)
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(isCurrent ? Color.accentColor.opacity(0.12) : Color.gray.opacity(0.08))
+        )
     }
 }
