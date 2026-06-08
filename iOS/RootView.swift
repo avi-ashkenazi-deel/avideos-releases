@@ -72,20 +72,44 @@ private struct CompactLayout: View {
     }
 }
 
-/// iPad layout: a two-column split view. The inbox list is the sidebar; the
-/// reading view + player live permanently in the detail column, so there's no
-/// mini-player or full-screen cover — the email you tap simply appears on the
-/// right. Saved articles (a tab on iPhone) are reached from the list's toolbar.
+/// The two libraries the iPad source sidebar switches between.
+private enum LibrarySection: Hashable { case inbox, saved }
+
+/// iPad layout: a three-column split view, like Mail. A narrow source sidebar
+/// (Inbox / Saved) on the far left, the selected list in the middle, and the
+/// reading view + player permanently on the right — so there's no mini-player or
+/// full-screen cover; the email or article you tap simply appears on the right.
 private struct SplitLayout: View {
     @EnvironmentObject private var appState: AppState
     @EnvironmentObject private var player: EmailPlayerViewModel
     @State private var columnVisibility = NavigationSplitViewVisibility.all
-    @State private var showSaved = false
+    @State private var section: LibrarySection? = .inbox
+    @State private var showSettings = false
+    @State private var showHighlights = false
+    @State private var showAnalytics = false
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
-            InboxList(onShowSaved: { showSaved = true })
-                .navigationSplitViewColumnWidth(min: 320, ideal: 360, max: 460)
+            // Source sidebar + the utility actions that are toolbar buttons on the
+            // iPhone inbox (they'd be duplicated if left on the middle list too).
+            List(selection: $section) {
+                Label("Inbox", systemImage: "tray.full").tag(LibrarySection.inbox)
+                Label("Saved", systemImage: "bookmark").tag(LibrarySection.saved)
+            }
+            .navigationTitle("VoiceInbox")
+            .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 300)
+            .toolbar {
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    Button { showAnalytics = true } label: { Image(systemName: "chart.bar") }
+                    Button { showHighlights = true } label: { Image(systemName: "highlighter") }
+                    Button { showSettings = true } label: { Image(systemName: "gearshape") }
+                }
+            }
+        } content: {
+            switch section ?? .inbox {
+            case .inbox: InboxList(showsUtilityToolbar: false)
+            case .saved: SavedArticlesList()
+            }
         } detail: {
             NavigationStack {
                 if player.parsed != nil || player.staged != nil {
@@ -100,10 +124,16 @@ private struct SplitLayout: View {
             }
         }
         .navigationSplitViewStyle(.balanced)
-        .sheet(isPresented: $showSaved) {
-            SavedArticlesView()
+        .sheet(isPresented: $showSettings) {
+            NavigationStack { SettingsView() }
+        }
+        .sheet(isPresented: $showHighlights) {
+            NavigationStack { HighlightsListView() }
                 .environmentObject(player)
                 .environmentObject(appState)
+        }
+        .sheet(isPresented: $showAnalytics) {
+            NavigationStack { AnalyticsView() }
         }
     }
 }

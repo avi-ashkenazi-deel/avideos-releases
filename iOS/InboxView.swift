@@ -12,9 +12,10 @@ struct InboxView: View {
 /// `InboxView` as the iPhone tab, and dropped into the iPad split view's sidebar
 /// column (where the split view supplies the navigation context).
 struct InboxList: View {
-    /// On iPad the inbox is the only top-level list, so it carries a toolbar button
-    /// to reach Saved articles (a separate tab on iPhone). `nil` hides the button.
-    var onShowSaved: (() -> Void)?
+    /// Whether to show the Analytics/Highlights/Settings buttons in the trailing
+    /// toolbar. True on iPhone (this list owns them); false on iPad, where the
+    /// split view's source sidebar provides them instead, so they aren't doubled.
+    var showsUtilityToolbar: Bool
 
     @EnvironmentObject private var appState: AppState
     @EnvironmentObject private var player: EmailPlayerViewModel
@@ -26,8 +27,8 @@ struct InboxList: View {
     @State private var showAnalytics = false
     @State private var searchDebounce: Task<Void, Never>?
 
-    init(onShowSaved: (() -> Void)? = nil) {
-        self.onShowSaved = onShowSaved
+    init(showsUtilityToolbar: Bool = true) {
+        self.showsUtilityToolbar = showsUtilityToolbar
         // Placeholder; replaced in onAppear once we have appState's service.
         _viewModel = StateObject(wrappedValue: InboxViewModel(mailService: MockMailService()))
     }
@@ -144,22 +145,17 @@ struct InboxList: View {
                     Text(titleText).font(.headline)
                 }
             }
-            ToolbarItemGroup(placement: .topBarTrailing) {
-                // Saved lives in its own tab on iPhone; on iPad (split view) it's
-                // reached from here instead.
-                if let onShowSaved {
-                    Button { onShowSaved() } label: {
-                        Image(systemName: "bookmark")
+            if showsUtilityToolbar {
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    Button { showAnalytics = true } label: {
+                        Image(systemName: "chart.bar")
                     }
-                }
-                Button { showAnalytics = true } label: {
-                    Image(systemName: "chart.bar")
-                }
-                Button { showHighlights = true } label: {
-                    Image(systemName: "highlighter")
-                }
-                Button { showSettings = true } label: {
-                    Image(systemName: "gearshape")
+                    Button { showHighlights = true } label: {
+                        Image(systemName: "highlighter")
+                    }
+                    Button { showSettings = true } label: {
+                        Image(systemName: "gearshape")
+                    }
                 }
             }
         }

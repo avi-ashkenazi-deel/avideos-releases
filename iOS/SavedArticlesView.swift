@@ -4,31 +4,38 @@ import SwiftUI
 /// Each ready article plays through the same listening UI as email, fully
 /// offline once its content has been cached.
 struct SavedArticlesView: View {
+    var body: some View {
+        NavigationStack { SavedArticlesList() }
+    }
+}
+
+/// The saved-articles list plus its toolbar — but **no** `NavigationStack` of its
+/// own, so it can be the iPhone tab (wrapped by `SavedArticlesView`) or the iPad
+/// split view's content column (where the split view supplies navigation).
+struct SavedArticlesList: View {
     @EnvironmentObject private var player: EmailPlayerViewModel
     @StateObject private var store = SavedArticleStore.shared
 
     var body: some View {
-        NavigationStack {
-            Group {
-                if store.articles.isEmpty {
-                    SavedEmptyState()
-                } else {
-                    List {
-                        ForEach(store.articles) { article in
-                            row(for: article)
-                        }
+        Group {
+            if store.articles.isEmpty {
+                SavedEmptyState()
+            } else {
+                List {
+                    ForEach(store.articles) { article in
+                        row(for: article)
                     }
-                    .listStyle(.plain)
                 }
+                .listStyle(.plain)
             }
-            .navigationTitle("Saved")
-            .toolbar {
-                if store.isProcessing {
-                    ToolbarItem(placement: .topBarTrailing) { ProgressView() }
-                }
-            }
-            .refreshable { await store.refresh() }
         }
+        .navigationTitle("Saved")
+        .toolbar {
+            if store.isProcessing {
+                ToolbarItem(placement: .topBarTrailing) { ProgressView() }
+            }
+        }
+        .refreshable { await store.refresh() }
         .task { await store.refresh() }
     }
 

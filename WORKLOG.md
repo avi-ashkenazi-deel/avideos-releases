@@ -4,15 +4,16 @@ A running log of what we've built and shipped.
 
 ## 2026-06-08 — iPad split layout + watch re-embedded
 
-- **iPad layout** — on regular width the app now uses a two-column
-  `NavigationSplitView`: the email list on the left, the reading view + player
-  permanently on the right (no mini-player / full-screen cover on iPad). iPhone
-  keeps its tabs + mini-player unchanged. Enabled `TARGETED_DEVICE_FAMILY` for
-  iPad and allowed iPad landscape. Refactors: extracted `PlayerDetailContent`
-  (chrome-free reading/player surface, reused by `NowPlayingView` and the iPad
-  detail pane) and `InboxList` (the list without its own `NavigationStack`, used
-  as the split-view sidebar). Saved articles reachable from the list toolbar on
-  iPad.
+- **iPad layout** — on regular width the app now uses a three-column
+  `NavigationSplitView`, like Mail: a source sidebar (Inbox / Saved), the
+  selected list in the middle, and the reading view + player permanently on the
+  right (no mini-player / full-screen cover on iPad). iPhone keeps its tabs +
+  mini-player unchanged. Enabled `TARGETED_DEVICE_FAMILY` for iPad and allowed
+  iPad landscape. Refactors: extracted `PlayerDetailContent` (chrome-free
+  reading/player surface, reused by `NowPlayingView` and the iPad detail pane),
+  `InboxList`, and `SavedArticlesList` (the lists without their own
+  `NavigationStack`, used as the split-view columns). Analytics/Highlights/
+  Settings live in the sidebar toolbar on iPad.
 - **App icon** added (neon envelope), watch re-embedded and reusing the same
   icon via a symlink.
 
