@@ -1,0 +1,29 @@
+.list {
+  border-top: 1px solid var(--c-grey-4);
+  max-width: 720px;
+}
+
+.row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-3);
+  padding: var(--s-3) 0;
+  border-bottom: 1px solid var(--c-grey-4);
+  transition: padding-left var(--dur-fast) var(--ease-out);
+}
+.row:hover {
+  padding-left: var(--s-2);
+}
+
+.label {
+  font-size: clamp(1.25rem, 3vw, 2rem);
+  font-weight: 500;
+  letter-spacing: var(--tracking-tight);
+}
+
+.handle {
+  font-size: var(--fs-meta);
+  letter-spacing: var(--tracking-meta);
+  color: var(--c-grey-2);
+}

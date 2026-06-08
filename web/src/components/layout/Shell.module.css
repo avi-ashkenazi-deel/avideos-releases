@@ -1,0 +1,50 @@
+/* ---------- Desktop ---------- */
+.desktop {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+}
+
+.topbar {
+  flex: 0 0 auto;
+  padding: var(--s-3) 0;
+  border-bottom: 1px solid var(--c-grey-4);
+  background: var(--c-bg);
+  z-index: 10;
+}
+
+/* ---------- Mobile ---------- */
+.mobile {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  touch-action: pan-y;
+}
+
+.mobileBar {
+  flex: 0 0 auto;
+  display: flex;
+  gap: var(--s-3);
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: var(--s-2) var(--gutter);
+  padding-bottom: max(var(--s-2), env(safe-area-inset-bottom));
+  border-top: 1px solid var(--c-grey-4);
+  background: var(--c-bg);
+  z-index: 10;
+}
+.mobileBar::-webkit-scrollbar {
+  display: none;
+}
+
+.mobileLink {
+  flex: 0 0 auto;
+  font-size: var(--fs-meta);
+  letter-spacing: var(--tracking-meta);
+  text-transform: uppercase;
+  color: var(--c-grey-3);
+  white-space: nowrap;
+}
+.mobileLinkActive {
+  color: var(--c-fg);
+}

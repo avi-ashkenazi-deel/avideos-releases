@@ -1,0 +1,47 @@
+:root {
+  /* ---- Color: strictly monochrome, white-only theme ---- */
+  --c-bg: #ffffff;
+  --c-fg: #000000;
+  --c-grey-1: #111111; /* near-black */
+  --c-grey-2: #666666; /* secondary / meta */
+  --c-grey-3: #999999; /* tertiary */
+  --c-grey-4: #cccccc; /* hairlines */
+  --c-grey-5: #f2f2f2; /* faint fills */
+
+  /* ---- Type ---- */
+  --font-sans: 'Helvetica Neue', 'Inter', Helvetica, Arial, sans-serif;
+
+  --fs-display: clamp(3rem, 9vw, 8rem);
+  --fs-h1: clamp(2rem, 5vw, 3.5rem);
+  --fs-h2: clamp(1.5rem, 3vw, 2.25rem);
+  --fs-lead: clamp(1.125rem, 1.6vw, 1.375rem);
+  --fs-body: 1.0625rem;
+  --fs-meta: 0.8125rem;
+
+  --lh-tight: 0.95;
+  --lh-snug: 1.15;
+  --lh-body: 1.5;
+
+  --tracking-tight: -0.02em;
+  --tracking-meta: 0.04em;
+
+  /* ---- Spacing (8px base) ---- */
+  --s-1: 0.5rem;
+  --s-2: 1rem;
+  --s-3: 1.5rem;
+  --s-4: 2rem;
+  --s-5: 3rem;
+  --s-6: 4rem;
+  --s-7: 6rem;
+  --s-8: 8rem;
+  --s-section: clamp(4rem, 12vh, 10rem);
+
+  /* ---- Layout ---- */
+  --max-w: 1280px;
+  --gutter: clamp(1.25rem, 5vw, 4rem);
+
+  /* ---- Motion ---- */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-fast: 200ms;
+  --dur-med: 420ms;
+}

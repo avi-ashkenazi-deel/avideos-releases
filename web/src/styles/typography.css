@@ -1,0 +1,44 @@
+/*
+ * Helvetica Neue is licensed and cannot be bundled. Apple devices render it
+ * natively; everyone else falls back to Inter, self-hosted and metric-adjusted
+ * to approximate Helvetica Neue and minimize layout shift.
+ *
+ * NOTE: place Inter woff2 files in /public/fonts/ for the fallback to load.
+ * The site remains fully functional via Helvetica/Arial if they are absent.
+ */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/Inter-Regular.woff2') format('woff2');
+  size-adjust: 97%;
+  ascent-override: 95%;
+  descent-override: 24%;
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/Inter-Medium.woff2') format('woff2');
+  size-adjust: 97%;
+  ascent-override: 95%;
+  descent-override: 24%;
+}
+
+html {
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 400;
+  line-height: var(--lh-body);
+  text-rendering: optimizeLegibility;
+}
+
+h1,
+h2,
+h3 {
+  font-weight: 500;
+  line-height: var(--lh-snug);
+  letter-spacing: var(--tracking-tight);
+}

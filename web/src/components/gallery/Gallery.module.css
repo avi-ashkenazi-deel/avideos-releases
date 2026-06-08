@@ -1,0 +1,85 @@
+.wrap {
+  position: absolute;
+  inset: 0;
+  touch-action: none;
+  cursor: grab;
+  background: var(--c-bg);
+}
+.wrap:active {
+  cursor: grabbing;
+}
+
+.hint {
+  position: absolute;
+  left: 50%;
+  bottom: var(--s-3);
+  transform: translateX(-50%);
+  font-size: var(--fs-meta);
+  letter-spacing: var(--tracking-meta);
+  text-transform: uppercase;
+  color: var(--c-grey-3);
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* Detail overlay */
+.detail {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: var(--gutter);
+  pointer-events: none;
+}
+
+.detailText {
+  pointer-events: none;
+  max-width: 48ch;
+}
+
+.detailTitle {
+  font-size: clamp(1.5rem, 4vw, 2.5rem);
+  font-weight: 500;
+  letter-spacing: var(--tracking-tight);
+}
+
+.detailDesc {
+  color: var(--c-grey-1);
+  margin-top: var(--s-1);
+  font-size: var(--fs-lead);
+}
+
+.controls {
+  position: absolute;
+  top: var(--s-3);
+  right: var(--gutter);
+  display: flex;
+  gap: var(--s-3);
+  z-index: 4;
+}
+
+.ctrl {
+  pointer-events: auto;
+  font-size: var(--fs-meta);
+  letter-spacing: var(--tracking-meta);
+  text-transform: uppercase;
+  color: var(--c-grey-2);
+  background: var(--c-bg);
+  padding: 6px 10px;
+  border: 1px solid var(--c-grey-4);
+}
+.ctrl:hover {
+  color: var(--c-fg);
+  border-color: var(--c-fg);
+}
+
+.nav {
+  position: absolute;
+  bottom: var(--gutter);
+  right: var(--gutter);
+  display: flex;
+  gap: var(--s-2);
+  z-index: 4;
+}

@@ -1,0 +1,29 @@
+.viewport {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.layer {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  background: var(--c-bg);
+}
+
+.layerMobile {
+  border-top: 1px solid var(--c-grey-4);
+}
+
+.loading {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  font-size: var(--fs-meta);
+  letter-spacing: var(--tracking-meta);
+  text-transform: uppercase;
+  color: var(--c-grey-3);
+}

@@ -1,0 +1,11 @@
+.body {
+  max-width: 60ch;
+  white-space: pre-line;
+  font-size: var(--fs-lead);
+  line-height: 1.5;
+  color: var(--c-grey-1);
+}
+
+.body p + p {
+  margin-top: var(--s-3);
+}

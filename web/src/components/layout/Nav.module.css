@@ -1,0 +1,46 @@
+.nav {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-4);
+  flex-wrap: wrap;
+}
+
+.wordmark {
+  font-weight: 500;
+  letter-spacing: var(--tracking-tight);
+  font-size: 1.0625rem;
+  margin-right: auto;
+}
+
+.links {
+  display: flex;
+  gap: var(--s-3);
+  flex-wrap: wrap;
+}
+
+.link {
+  font-size: var(--fs-meta);
+  letter-spacing: var(--tracking-meta);
+  text-transform: uppercase;
+  color: var(--c-grey-2);
+  transition: color var(--dur-fast) var(--ease-out);
+  position: relative;
+}
+
+.link:hover {
+  color: var(--c-fg);
+}
+
+.active {
+  color: var(--c-fg);
+}
+
+.active::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -4px;
+  height: 1px;
+  background: var(--c-fg);
+}
