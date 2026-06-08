@@ -138,25 +138,29 @@ private struct SplitLayout: View {
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
-            // Source sidebar + the utility actions that are toolbar buttons on the
-            // iPhone inbox (they'd be duplicated if left on the middle list too).
+            // Source sidebar. (Utility actions live on the middle column's toolbar,
+            // which is always visible — the sidebar collapses in portrait.)
             List(selection: $section) {
                 Label("Inbox", systemImage: "tray.full").tag(LibrarySection.inbox)
                 Label("Saved", systemImage: "bookmark").tag(LibrarySection.saved)
             }
             .navigationTitle("VoiceInbox")
             .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 300)
+        } content: {
+            Group {
+                switch section ?? .inbox {
+                case .inbox: InboxList(showsUtilityToolbar: false)
+                case .saved: SavedArticlesList()
+                }
+            }
+            // Analytics / Highlights / Settings — on the always-visible list column
+            // so they're reachable in portrait too (the sidebar hides there).
             .toolbar {
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     Button { showAnalytics = true } label: { Image(systemName: "chart.bar") }
                     Button { showHighlights = true } label: { Image(systemName: "highlighter") }
                     Button { showSettings = true } label: { Image(systemName: "gearshape") }
                 }
-            }
-        } content: {
-            switch section ?? .inbox {
-            case .inbox: InboxList(showsUtilityToolbar: false)
-            case .saved: SavedArticlesList()
             }
         } detail: {
             NavigationStack {
