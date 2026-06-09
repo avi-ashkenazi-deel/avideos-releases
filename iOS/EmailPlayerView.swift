@@ -40,7 +40,11 @@ struct PlayerDetailContent: View {
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             player.onHighlightCaptured = { highlight in highlightToAnnotate = highlight }
+            updateIdleTimer()
         }
+        .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
+        .onChange(of: player.isPlaying) { _, _ in updateIdleTimer() }
+        .onChange(of: settings.keepScreenAwake) { _, _ in updateIdleTimer() }
         .onChange(of: player.isComplete) { _, complete in
             if complete { showCompletion = true }
         }
@@ -55,6 +59,12 @@ struct PlayerDetailContent: View {
         } message: {
             Text(player.errorMessage ?? "")
         }
+    }
+
+    /// Hold the screen on while you're watching it read (like a video), per the
+    /// "Keep screen awake" setting. Released when paused or the view goes away.
+    private func updateIdleTimer() {
+        UIApplication.shared.isIdleTimerDisabled = settings.keepScreenAwake && player.isPlaying
     }
 
     // MARK: - Active (playing) mode

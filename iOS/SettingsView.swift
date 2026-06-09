@@ -50,10 +50,11 @@ struct SettingsView: View {
                         Text(size.title).tag(size)
                     }
                 }
+                Toggle("Keep screen awake", isOn: $settings.keepScreenAwake)
             } header: {
                 Text("Reading")
             } footer: {
-                Text("Size of the text in the email/article reading view.")
+                Text("Size of the text in the email/article reading view. When \"Keep screen awake\" is on, the screen won't auto-lock while you're watching it read — like watching a video.")
             }
 
             Section {

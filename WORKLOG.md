@@ -2,6 +2,18 @@
 
 A running log of what we've built and shipped.
 
+## 2026-06-08 — Keep-awake while reading + offline read receipts
+
+- **Keep screen awake**: while the reading view is open and playing, the screen
+  no longer auto-locks (like watching a video). New "Keep screen awake" setting
+  (Reading section), default on; releases the lock on pause / leaving the view.
+- **Offline read receipts**: marking read/unread offline (incl. auto-mark on
+  finishing an email) no longer errors — it's queued in `PendingReceiptStore`
+  and replayed automatically once back online. Genuine non-network errors (e.g.
+  missing Gmail scope) still surface; network blips are queued silently.
+- (Picture-in-Picture requested — tracked as a separate, larger build since PiP
+  needs a custom video layer and on-device testing.)
+
 ## 2026-06-08 — Offline support + Substack footer trim
 
 - **Offline mailbox cache** (`MailCache` + `CachingMailService`): the folder

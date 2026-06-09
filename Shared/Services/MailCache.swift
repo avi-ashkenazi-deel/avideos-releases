@@ -94,19 +94,88 @@ actor MailCache {
     }
 }
 
+/// Read/unread receipts captured while offline (or when the server call failed),
+/// replayed once the connection is back. Persisted per account in the app group
+/// so they survive relaunches. Latest state per message wins.
+actor PendingReceiptStore {
+    private let dir: URL
+    private let url: URL
+    private var receipts: [String: Bool] = [:]   // message id → isRead
+    private var loaded = false
+    private var flushing = false
+
+    init(accountID: String) {
+        dir = AppGroup.containerURL.appendingPathComponent("MailCache", isDirectory: true)
+        let safe = accountID.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? "account"
+        url = dir.appendingPathComponent("receipts-\(safe).json")
+    }
+
+    private func loadIfNeeded() {
+        guard !loaded else { return }
+        loaded = true
+        if let data = try? Data(contentsOf: url),
+           let map = try? JSONDecoder().decode([String: Bool].self, from: data) {
+            receipts = map
+        }
+    }
+
+    func enqueue(id: String, read: Bool) { loadIfNeeded(); receipts[id] = read; persist() }
+    func all() -> [String: Bool] { loadIfNeeded(); return receipts }
+    func remove(_ id: String) { loadIfNeeded(); receipts[id] = nil; persist() }
+    /// Returns false if a flush is already running (so we don't double-send).
+    func beginFlush() -> Bool { loadIfNeeded(); if flushing { return false }; flushing = true; return true }
+    func endFlush() { flushing = false }
+
+    private func persist() {
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        guard let data = try? JSONEncoder().encode(receipts) else { return }
+        try? data.write(to: url, options: .atomic)
+    }
+}
+
 /// Wraps a real `MailService` with an offline cache. Online, it passes through and
 /// records results; offline (or on failure), it serves the last cached copy so the
-/// inbox still lists, opens, and auto-advances without a connection.
+/// inbox still lists, opens, and auto-advances without a connection. Read/unread
+/// changes made offline are queued and replayed automatically when back online.
 final class CachingMailService: MailService {
     private let base: MailService
     private let cache: MailCache
+    private let pending: PendingReceiptStore
 
     init(base: MailService, accountID: String) {
         self.base = base
         self.cache = MailCache(accountID: accountID)
+        self.pending = PendingReceiptStore(accountID: accountID)
     }
 
     private var isOnline: Bool { NetworkMonitor.shared.isOnline }
+
+    private func isNetworkError(_ error: Error) -> Bool {
+        if error is URLError { return true }
+        if let e = error as? MailServiceError, case .network = e { return true }
+        return false
+    }
+
+    /// Replay queued read/unread receipts once we're back online. Stops if the
+    /// network drops again; drops entries that fail for a non-network reason (e.g.
+    /// a permission error that retrying won't fix).
+    private func flushPending() async {
+        guard isOnline, await pending.beginFlush() else { return }
+        for (id, read) in await pending.all() {
+            do {
+                if read { try await base.markRead(id: id) } else { try await base.markUnread(id: id) }
+                await pending.remove(id)
+            } catch {
+                if isNetworkError(error) { await pending.endFlush(); return }
+                await pending.remove(id)   // permanent failure — don't retry forever
+            }
+        }
+        await pending.endFlush()
+    }
+
+    private func flushPendingInBackground() {
+        Task { await self.flushPending() }
+    }
 
     var account: MailAccount? {
         get async {
@@ -137,6 +206,7 @@ final class CachingMailService: MailService {
             if cacheable {
                 await cache.store(listing: page.emails, label: labelId, replace: pageToken == nil)
             }
+            flushPendingInBackground()   // we're clearly online — deliver queued receipts
             return page
         } catch {
             if let page = await cached() { return page }
@@ -176,11 +246,25 @@ final class CachingMailService: MailService {
         }
     }
 
-    func markRead(id: String) async throws {
-        try await base.markRead(id: id)
-    }
+    func markRead(id: String) async throws { try await applyReceipt(id: id, read: true) }
+    func markUnread(id: String) async throws { try await applyReceipt(id: id, read: false) }
 
-    func markUnread(id: String) async throws {
-        try await base.markUnread(id: id)
+    /// Mark read/unread on the server, but never bother the listener about it when
+    /// offline: queue it and let `flushPending()` deliver the receipt once online.
+    private func applyReceipt(id: String, read: Bool) async throws {
+        guard isOnline else {
+            await pending.enqueue(id: id, read: read)
+            return
+        }
+        do {
+            if read { try await base.markRead(id: id) } else { try await base.markUnread(id: id) }
+            flushPendingInBackground()   // online → also drain any backlog
+        } catch {
+            if isNetworkError(error) {
+                await pending.enqueue(id: id, read: read)   // a blip — queue silently
+            } else {
+                throw error   // a real error (e.g. missing Gmail scope) still surfaces
+            }
+        }
     }
 }

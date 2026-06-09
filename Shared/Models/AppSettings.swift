@@ -98,6 +98,12 @@ final class AppSettings: ObservableObject {
         didSet { defaults.set(readingTextSize.rawValue, forKey: Key.readingTextSize) }
     }
 
+    /// Keep the screen on while the reading view is open and playing — treat it
+    /// like watching a video, so it doesn't auto-lock mid-email.
+    @Published var keepScreenAwake: Bool {
+        didSet { defaults.set(keepScreenAwake, forKey: Key.keepScreenAwake) }
+    }
+
     /// Identifier of the preferred `AVSpeechSynthesisVoice`; empty = system default.
     @Published var voiceIdentifier: String {
         didSet { defaults.set(voiceIdentifier, forKey: Key.voiceIdentifier) }
@@ -142,6 +148,7 @@ final class AppSettings: ObservableObject {
         static let mailLabelName = "settings.mailLabelName"
         static let imageBehavior = "settings.imageBehavior"
         static let readingTextSize = "settings.readingTextSize"
+        static let keepScreenAwake = "settings.keepScreenAwake"
         static let voiceIdentifier = "settings.voiceIdentifier"
         static let airPodsHighlight = "settings.airPodsHighlight"
         static let useElevenLabs = "settings.useElevenLabs"
@@ -159,6 +166,8 @@ final class AppSettings: ObservableObject {
             ?? .pauseAndDigest
         self.readingTextSize = ReadingTextSize(rawValue: defaults.string(forKey: Key.readingTextSize) ?? "")
             ?? .medium
+        // Default on: while you're watching it read, keep the screen awake.
+        self.keepScreenAwake = defaults.object(forKey: Key.keepScreenAwake) as? Bool ?? true
         self.voiceIdentifier = defaults.string(forKey: Key.voiceIdentifier) ?? ""
         // Default off so the next button skips a sentence (expected). Turn on to
         // make an AirPods/lock-screen next-press capture a highlight + voice note.
