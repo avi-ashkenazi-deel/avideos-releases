@@ -63,9 +63,24 @@ For a consistent fallback elsewhere, drop `Inter-Regular.woff2` and
 
 ## Deploy
 
-`dist/` is fully static. Host on Cloudflare Pages / Vercel / Netlify with the
-build root set to `web/` (build: `npm run build`, output: `dist`), then point the
-`superavi.com` domain at it.
+Deploys automatically to **GitHub Pages** via `.github/workflows/deploy-web.yml`
+on every push to the site branch. One-time repo setup:
+
+1. **Settings → Pages → Build and deployment → Source: GitHub Actions.**
+2. If the deploy is blocked by the environment, go to **Settings → Environments
+   → github-pages → Deployment branches** and allow the site branch
+   (`claude/superavi-portfolio-site-S46kO`).
+
+The site then publishes at `https://<owner>.github.io/avideos-releases/`. The
+workflow builds with `VITE_BASE=/avideos-releases/` (project subpath) and copies
+`index.html` to `404.html` for SPA deep-link fallback.
+
+### Custom domain (superavi.com)
+
+Point the domain at GitHub Pages and set it under Settings → Pages. Then change
+`VITE_BASE` in the workflow to `/` (root) so asset/route paths drop the subpath.
+`dist/` is plain static output, so it can also go to Cloudflare Pages / Vercel /
+Netlify (build root `web/`, command `npm run build`, output `dist`).
 
 ## Tech notes
 

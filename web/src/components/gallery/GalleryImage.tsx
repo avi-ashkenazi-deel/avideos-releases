@@ -3,6 +3,7 @@ import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { GalleryImage as GalleryImageData } from '@/data/types';
 import { makePlaceholderTexture } from './texture';
+import { asset } from '@/lib/asset';
 
 export interface PlanePlacement {
   base: THREE.Vector2; // base position within the tile
@@ -52,7 +53,7 @@ export function GalleryImage({
     if (item.src && item.src !== '') {
       const loader = new THREE.TextureLoader();
       loader.load(
-        item.src,
+        asset(item.src),
         (tex) => {
           if (cancelled) return;
           tex.colorSpace = THREE.SRGBColorSpace;

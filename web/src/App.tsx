@@ -8,8 +8,11 @@ function ShellSwitch() {
 }
 
 export default function App() {
+  // Strip the trailing slash so routing works under a project subpath
+  // (e.g. GitHub Pages '/avideos-releases/') as well as at the domain root.
+  const basename = import.meta.env.BASE_URL.replace(/\/$/, '');
   return (
-    <BrowserRouter>
+    <BrowserRouter basename={basename}>
       <ShellSwitch />
     </BrowserRouter>
   );

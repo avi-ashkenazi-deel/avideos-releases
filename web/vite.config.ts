@@ -4,7 +4,10 @@ import glsl from 'vite-plugin-glsl';
 import { VitePWA } from 'vite-plugin-pwa';
 import { fileURLToPath, URL } from 'node:url';
 
+// `base` defaults to '/' (custom domain / local dev). The GitHub Pages build
+// sets VITE_BASE to the project subpath, e.g. '/avideos-releases/'.
 export default defineConfig({
+  base: process.env.VITE_BASE || '/',
   plugins: [
     react(),
     glsl(),

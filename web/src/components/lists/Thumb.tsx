@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { asset } from '@/lib/asset';
 import styles from './Thumb.module.css';
 
 interface ThumbProps {
@@ -22,7 +23,7 @@ export function Thumb({ src, label }: ThumbProps) {
 
   return (
     <img
-      src={src}
+      src={asset(src)}
       alt={label}
       loading="lazy"
       onError={() => setFailed(true)}
