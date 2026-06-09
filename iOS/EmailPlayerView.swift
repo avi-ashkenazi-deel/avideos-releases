@@ -34,17 +34,30 @@ struct PlayerDetailContent: View {
                 activeMode
             }
         }
-        .onChange(of: player.parsed?.email.id) { _, _ in dismissedVoiceWarning = false }
+        .background(PiPHostView().frame(width: 2, height: 2).opacity(0.02).allowsHitTesting(false))
+        .onChange(of: player.parsed?.email.id) { _, _ in
+            dismissedVoiceWarning = false
+            renderPiP()
+        }
         .navigationTitle(player.staged?.email.from.displayName
                          ?? player.parsed?.email.from.displayName ?? "")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             player.onHighlightCaptured = { highlight in highlightToAnnotate = highlight }
             updateIdleTimer()
+            configurePiP()
         }
-        .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
-        .onChange(of: player.isPlaying) { _, _ in updateIdleTimer() }
+        .onDisappear {
+            UIApplication.shared.isIdleTimerDisabled = false
+            ReaderPiPController.shared.teardown()
+        }
+        .onChange(of: player.isPlaying) { _, _ in
+            updateIdleTimer()
+            ReaderPiPController.shared.playbackStateChanged()
+        }
+        .onChange(of: player.currentBlockIndex) { _, _ in renderPiP() }
         .onChange(of: settings.keepScreenAwake) { _, _ in updateIdleTimer() }
+        .onChange(of: settings.pictureInPicture) { _, _ in updatePiPEnabled() }
         .onChange(of: player.isComplete) { _, complete in
             if complete { showCompletion = true }
         }
@@ -65,6 +78,42 @@ struct PlayerDetailContent: View {
     /// "Keep screen awake" setting. Released when paused or the view goes away.
     private func updateIdleTimer() {
         UIApplication.shared.isIdleTimerDisabled = settings.keepScreenAwake && player.isPlaying
+    }
+
+    // MARK: - Picture in Picture
+
+    /// Point PiP's transport at the shared player and enable it per the setting.
+    private func configurePiP() {
+        let pip = ReaderPiPController.shared
+        pip.isPlayingProvider = { [weak player] in player?.isPlaying ?? false }
+        pip.onTogglePlay = { [weak player] in player?.togglePlayPause() }
+        pip.onSkip = { [weak player] forward in
+            forward ? player?.nextSentence() : player?.previousSentence()
+        }
+        updatePiPEnabled()
+    }
+
+    private func updatePiPEnabled() {
+        let pip = ReaderPiPController.shared
+        if settings.pictureInPicture {
+            pip.setAutoStart(true)
+            renderPiP()
+        } else {
+            pip.teardown()
+        }
+    }
+
+    /// Push a fresh PiP frame showing what's being read right now.
+    private func renderPiP() {
+        guard settings.pictureInPicture else { return }
+        let header = player.parsed?.email.from.displayName ?? ""
+        let sentence: String
+        switch player.currentBlock {
+        case .sentence(let s)?: sentence = s.text
+        case .image?:           sentence = "🖼 Image"
+        case nil:               sentence = player.parsed?.email.subjectOrFallback ?? ""
+        }
+        ReaderPiPController.shared.render(header: header, sentence: sentence, progress: player.progress)
     }
 
     // MARK: - Active (playing) mode

@@ -51,10 +51,11 @@ struct SettingsView: View {
                     }
                 }
                 Toggle("Keep screen awake", isOn: $settings.keepScreenAwake)
+                Toggle("Picture in Picture", isOn: $settings.pictureInPicture)
             } header: {
                 Text("Reading")
             } footer: {
-                Text("Size of the text in the email/article reading view. When \"Keep screen awake\" is on, the screen won't auto-lock while you're watching it read — like watching a video.")
+                Text("Size of the text in the email/article reading view. \"Keep screen awake\" stops the screen auto-locking while you watch it read. \"Picture in Picture\" floats what's being read in a small window when you leave the app mid-email.")
             }
 
             Section {

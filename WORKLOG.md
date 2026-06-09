@@ -11,8 +11,12 @@ A running log of what we've built and shipped.
   finishing an email) no longer errors — it's queued in `PendingReceiptStore`
   and replayed automatically once back online. Genuine non-network errors (e.g.
   missing Gmail scope) still surface; network blips are queued silently.
-- (Picture-in-Picture requested — tracked as a separate, larger build since PiP
-  needs a custom video layer and on-device testing.)
+- **Picture in Picture** (`ReaderPiP`): renders what's being read (sender +
+  current sentence + progress) into an `AVSampleBufferDisplayLayer` and drives
+  `AVPictureInPictureController`, so leaving the app mid-email floats a PiP
+  window. New "Picture in Picture" setting (Reading section), default off; PiP's
+  play/pause + skip drive the shared player. PiP only runs on a real device
+  (not the Simulator) and needs on-device iteration.
 
 ## 2026-06-08 — Offline support + Substack footer trim
 
