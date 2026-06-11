@@ -48,6 +48,20 @@ final class ReaderPiPController: NSObject, ObservableObject {
         controller?.canStartPictureInPictureAutomaticallyFromInline = enabled
     }
 
+    var isSupported: Bool { AVPictureInPictureController.isPictureInPictureSupported() }
+
+    /// Manually start PiP (reliable trigger — auto-start-on-background can be
+    /// flaky). Safe to call repeatedly.
+    func start() {
+        setupIfNeeded()
+        guard let controller, !controller.isPictureInPictureActive else { return }
+        controller.startPictureInPicture()
+    }
+
+    func stop() {
+        controller?.stopPictureInPicture()
+    }
+
     /// Stop auto-starting and clear the layer (leaving the reader / turning it off).
     func teardown() {
         controller?.canStartPictureInPictureAutomaticallyFromInline = false

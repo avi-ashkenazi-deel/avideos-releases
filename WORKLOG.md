@@ -2,6 +2,25 @@
 
 A running log of what we've built and shipped.
 
+## 2026-06-08 — Launch splash, smoother audio, footer trim v2, row tap, PiP button
+
+- **Splash screen / no sign-in flash**: added a `.launching` phase (now the
+  initial state) showing an animated splash while `AppState` checks stored
+  accounts, so a logged-in user never flashes the sign-in screen — offline or on.
+- **Smoother skip audio**: `SpeechAudioSession` now sets the category once instead
+  of on every sentence; re-running `setCategory` was renegotiating the route and
+  causing the drop when skipping/tapping between sentences.
+- **Substack footer v2**: `EmailParser` now cuts from the first strong footer
+  anchor in the email's tail (Like/Comment/Restack/Upgrade to paid/"Read … in the
+  app"/copyright), clearing the whole footer block even with stray lines between
+  anchors — not just a contiguous trailing run.
+- **Whole inbox row tappable**: `EmailRow` fills width + `contentShape`, so taps
+  anywhere on the row open the email (not only on the text).
+- **PiP**: added a manual "enter PiP" button in the reader (auto-start on
+  background is unreliable) plus start/stop on the controller. Still device-only.
+
+
+
 ## 2026-06-08 — Keep-awake while reading + offline read receipts
 
 - **Keep screen awake**: while the reading view is open and playing, the screen

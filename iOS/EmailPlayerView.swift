@@ -42,6 +42,15 @@ struct PlayerDetailContent: View {
         .navigationTitle(player.staged?.email.from.displayName
                          ?? player.parsed?.email.from.displayName ?? "")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if settings.pictureInPicture && ReaderPiPController.shared.isSupported {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { ReaderPiPController.shared.start() } label: {
+                        Image(systemName: "pip.enter")
+                    }
+                }
+            }
+        }
         .onAppear {
             player.onHighlightCaptured = { highlight in highlightToAnnotate = highlight }
             updateIdleTimer()

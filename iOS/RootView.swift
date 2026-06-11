@@ -13,6 +13,8 @@ struct RootView: View {
 
     var body: some View {
         switch appState.phase {
+        case .launching:
+            SplashView()
         case .onboarding:
             if hasCompletedWelcome {
                 OnboardingView()

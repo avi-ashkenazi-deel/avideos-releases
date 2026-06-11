@@ -30,18 +30,27 @@ protocol SpeechEngine: AnyObject {
 /// Shared audio-session setup for spoken playback so audio continues with the
 /// screen locked and routes through AirPods.
 enum SpeechAudioSession {
+    /// Set the category once. Re-running `setCategory` on every sentence can
+    /// renegotiate the audio route and cause an audible glitch/drop — exactly what
+    /// you hear when skipping between sentences — so we configure it a single time.
+    private static var configured = false
+
     static func activate() {
         let session = AVAudioSession.sharedInstance()
-        #if os(watchOS)
-        try? session.setCategory(.playback, mode: .spokenAudio)
-        #else
-        // Plain `.playback` (no mixing): VoiceInbox must interrupt other audio to
-        // become the system "Now Playing" app — that's what puts it on the lock
-        // screen / Control Center and routes the transport controls here. With a
-        // mixing option like `.duckOthers`, iOS treats us as secondary audio and
-        // leaves Now Playing with whatever app was already playing.
-        try? session.setCategory(.playback, mode: .spokenAudio, options: [.allowBluetoothA2DP])
-        #endif
+        if !configured {
+            #if os(watchOS)
+            try? session.setCategory(.playback, mode: .spokenAudio)
+            #else
+            // Plain `.playback` (no mixing): VoiceInbox must interrupt other audio to
+            // become the system "Now Playing" app — that's what puts it on the lock
+            // screen / Control Center and routes the transport controls here. With a
+            // mixing option like `.duckOthers`, iOS treats us as secondary audio and
+            // leaves Now Playing with whatever app was already playing.
+            try? session.setCategory(.playback, mode: .spokenAudio, options: [.allowBluetoothA2DP])
+            #endif
+            configured = true
+        }
+        // Cheap and safe to call repeatedly; also recovers after an interruption.
         try? session.setActive(true)
     }
 }

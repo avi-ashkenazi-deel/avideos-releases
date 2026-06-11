@@ -8,11 +8,14 @@ import Combine
 final class AppState: ObservableObject {
 
     enum Phase {
+        /// Deciding what to show (checking stored accounts). Shows the splash, so
+        /// a logged-in user never flashes the sign-in screen on launch.
+        case launching
         case onboarding
         case ready
     }
 
-    @Published private(set) var phase: Phase = .onboarding
+    @Published private(set) var phase: Phase = .launching
     @Published private(set) var account: MailAccount? {
         didSet { syncSavedLinksAccount() }
     }

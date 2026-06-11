@@ -263,5 +263,8 @@ private struct EmailRow: View {
             }
         }
         .padding(.vertical, 4)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        // Make the whole row tappable, not just where the text sits.
+        .contentShape(Rectangle())
     }
 }
