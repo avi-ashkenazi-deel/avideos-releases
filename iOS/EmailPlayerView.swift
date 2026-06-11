@@ -385,6 +385,14 @@ private struct SentenceText: View {
                 RoundedRectangle(cornerRadius: 8)
                     .fill(backgroundFill)
             )
+            // While a noted passage is the sentence being read, keep its yellow
+            // wash but add the "now reading" accent as a ring, so both read clearly.
+            .overlay {
+                if isCurrent && isNoted {
+                    RoundedRectangle(cornerRadius: 8)
+                        .strokeBorder(Color.accentColor, lineWidth: 2)
+                }
+            }
             // A persistent marker so a noted passage is recognisable at a glance,
             // even while it's the sentence currently being read.
             .overlay(alignment: isRTL ? .topLeading : .topTrailing) {
@@ -398,11 +406,12 @@ private struct SentenceText: View {
             .foregroundStyle(isCurrent || isNoted ? .primary : .secondary)
     }
 
-    /// Current sentence wins (accent); otherwise a noted passage shows a
-    /// highlighter-yellow wash; plain sentences have no background.
+    /// A noted passage stays highlighter-yellow even while it's being read (the
+    /// "now reading" accent is added as a ring on top); a plain current sentence
+    /// gets the accent wash; everything else is clear.
     private var backgroundFill: Color {
-        if isCurrent { return Color.accentColor.opacity(0.15) }
         if isNoted { return Color.yellow.opacity(0.30) }
+        if isCurrent { return Color.accentColor.opacity(0.15) }
         return .clear
     }
 
