@@ -73,7 +73,7 @@ struct WatchNowPlayingView: View {
             .padding(.vertical, 2)
 
             // 4 — highlight the current sentence
-            transportButton("highlighter", tint: .yellow) {
+            transportButton("highlighter", tint: .primary, font: .title2) {
                 bridge.send(command: .highlight)
                 flashHighlight()
             }
@@ -82,11 +82,11 @@ struct WatchNowPlayingView: View {
     }
 
     private func transportButton(_ symbol: String, large: Bool = false,
-                                 tint: Color = .primary,
+                                 tint: Color = .primary, font: Font? = nil,
                                  action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: symbol)
-                .font(large ? .title : .title3)
+                .font(font ?? (large ? .title : .title3))
                 .foregroundStyle(tint)
                 .frame(width: large ? 46 : 36, height: large ? 46 : 36)
                 .contentShape(Circle())

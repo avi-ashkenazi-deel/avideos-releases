@@ -210,7 +210,7 @@ struct PlayerDetailContent: View {
 
     private func transcriptBody(subject: String, emailID: String, blocks: [ContentBlock],
                                 currentIndex: Int?, isActive: Bool) -> some View {
-        let noted = notedBlocks(emailID: emailID, blocks: blocks)
+        let layout = notedLayout(emailID: emailID, blocks: blocks)
         return VStack(alignment: .leading, spacing: 16) {
             Text(subject)
                 .font(.system(size: settings.readingTextSize.titlePointSize, weight: .bold))
@@ -221,8 +221,7 @@ struct PlayerDetailContent: View {
 
             ForEach(Array(blocks.enumerated()), id: \.element.id) { index, block in
                 blockView(block, index: index, currentIndex: currentIndex, isActive: isActive,
-                          isNoted: noted.highlighted.contains(index),
-                          hasNote: noted.withNote.contains(index))
+                          noted: layout[index] ?? NotedInfo())
                     .id(index)
             }
         }
@@ -230,16 +229,15 @@ struct PlayerDetailContent: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    /// Which sentence blocks fall inside a saved highlight for this email, so the
-    /// transcript can show them with a persistent highlight (and a note marker when
-    /// the highlight carries a written/dictated note). A block counts as "noted"
-    /// when its spoken text appears in a highlight's captured passage, or it is the
-    /// highlight's anchor block.
-    private func notedBlocks(emailID: String, blocks: [ContentBlock])
-        -> (highlighted: Set<Int>, withNote: Set<Int>) {
-        guard !emailID.isEmpty else { return ([], []) }
+    /// Maps each sentence block to how it should render its saved-highlight state.
+    /// A block counts as "noted" when its spoken text appears in a highlight's
+    /// captured passage, or it is the highlight's anchor block. Consecutive noted
+    /// blocks are then grouped into runs so a passage spanning several sentences
+    /// reads as one continuous highlight with a single marker — not several boxes.
+    private func notedLayout(emailID: String, blocks: [ContentBlock]) -> [Int: NotedInfo] {
+        guard !emailID.isEmpty else { return [:] }
         let saved = highlightStore.highlights(forEmail: emailID)
-        guard !saved.isEmpty else { return ([], []) }
+        guard !saved.isEmpty else { return [:] }
 
         var highlighted = Set<Int>(), withNote = Set<Int>()
         for (index, block) in blocks.enumerated() {
@@ -253,20 +251,46 @@ struct PlayerDetailContent: View {
                 }
             }
         }
-        return (highlighted, withNote)
+        guard !highlighted.isEmpty else { return [:] }
+
+        var layout = [Int: NotedInfo]()
+        let sorted = highlighted.sorted()
+        var i = 0
+        while i < sorted.count {
+            var j = i
+            while j + 1 < sorted.count && sorted[j + 1] == sorted[j] + 1 { j += 1 }
+            let run = Array(sorted[i...j])
+            let runHasNote = run.contains { withNote.contains($0) }
+            for (k, idx) in run.enumerated() {
+                var info = NotedInfo()
+                if run.count == 1 { info.position = .single }
+                else if k == 0 { info.position = .first }
+                else if k == run.count - 1 { info.position = .last }
+                else { info.position = .middle }
+                // One marker per run, on its first sentence.
+                if info.position == .single || info.position == .first {
+                    info.showMarker = true
+                    info.markerIsNote = runHasNote
+                }
+                layout[idx] = info
+            }
+            i = j + 1
+        }
+        return layout
     }
 
     @ViewBuilder
     private func blockView(_ block: ContentBlock, index: Int,
                            currentIndex: Int?, isActive: Bool,
-                           isNoted: Bool, hasNote: Bool) -> some View {
+                           noted: NotedInfo) -> some View {
         let isCurrent = currentIndex == index
         switch block {
         case .sentence(let sentence):
             SentenceText(text: sentence.text,
                          isCurrent: isCurrent,
-                         isNoted: isNoted,
-                         hasNote: hasNote,
+                         notedPosition: noted.position,
+                         showMarker: noted.showMarker,
+                         markerIsNote: noted.markerIsNote,
                          wordRange: isCurrent ? player.spokenWordRange : nil,
                          fontSize: settings.readingTextSize.bodyPointSize)
                 .contentShape(Rectangle())
@@ -378,15 +402,36 @@ struct NowPlayingView: View {
 
 // MARK: - Sentence
 
+/// Where a sentence sits within a run of consecutive saved-highlight sentences,
+/// so the run can be drawn as one continuous block instead of separate boxes.
+private enum HighlightRunPosition { case none, single, first, middle, last }
+
+/// Per-block highlight rendering info derived from saved highlights.
+private struct NotedInfo {
+    var position: HighlightRunPosition = .none
+    var showMarker = false
+    var markerIsNote = false
+}
+
 private struct SentenceText: View {
     let text: String
     let isCurrent: Bool
-    var isNoted: Bool = false
-    var hasNote: Bool = false
+    var notedPosition: HighlightRunPosition = .none
+    var showMarker: Bool = false
+    var markerIsNote: Bool = false
     let wordRange: NSRange?
     var fontSize: CGFloat = 22
 
+    /// Must match the transcript's `VStack` spacing so a run's fill bridges the
+    /// gap to the next sentence exactly, with no seam and no overlap.
+    private static let blockSpacing: CGFloat = 16
+    private static let cornerRadius: CGFloat = 8
+
     private var isRTL: Bool { LanguageTools.isRightToLeft(text) }
+    private var isNoted: Bool { notedPosition != .none }
+    private var roundsTop: Bool { notedPosition == .single || notedPosition == .first }
+    private var roundsBottom: Bool { notedPosition == .single || notedPosition == .last }
+    private var bridgesToNext: Bool { notedPosition == .first || notedPosition == .middle }
 
     var body: some View {
         Text(attributed)
@@ -396,23 +441,20 @@ private struct SentenceText: View {
             .environment(\.layoutDirection, isRTL ? .rightToLeft : .leftToRight)
             .padding(.horizontal, 8).padding(.vertical, 6)
             .frame(maxWidth: .infinity, alignment: isRTL ? .trailing : .leading)
-            .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(backgroundFill)
-            )
-            // While a noted passage is the sentence being read, keep its yellow
-            // wash but add the "now reading" accent as a ring, so both read clearly.
+            .background(highlightBackground)
+            // A lone noted sentence that's being read gets the "now reading" accent
+            // as a ring; within a multi-sentence run the highlighted word suffices.
             .overlay {
-                if isCurrent && isNoted {
-                    RoundedRectangle(cornerRadius: 8)
+                if isCurrent && notedPosition == .single {
+                    RoundedRectangle(cornerRadius: Self.cornerRadius)
                         .strokeBorder(Color.accentColor, lineWidth: 2)
                 }
             }
-            // A persistent marker so a noted passage is recognisable at a glance,
-            // even while it's the sentence currently being read.
+            // One marker for the whole highlight (on its first sentence), so a
+            // passage spanning several sentences doesn't look like several notes.
             .overlay(alignment: isRTL ? .topLeading : .topTrailing) {
-                if isNoted {
-                    Image(systemName: hasNote ? "note.text" : "highlighter")
+                if showMarker {
+                    Image(systemName: markerIsNote ? "note.text" : "highlighter")
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(.orange)
                         .padding(5)
@@ -421,13 +463,24 @@ private struct SentenceText: View {
             .foregroundStyle(isCurrent || isNoted ? .primary : .secondary)
     }
 
-    /// A noted passage stays highlighter-yellow even while it's being read (the
-    /// "now reading" accent is added as a ring on top); a plain current sentence
-    /// gets the accent wash; everything else is clear.
-    private var backgroundFill: Color {
-        if isNoted { return Color.yellow.opacity(0.30) }
-        if isCurrent { return Color.accentColor.opacity(0.15) }
-        return .clear
+    /// A noted run renders as one continuous yellow shape: only the run's ends are
+    /// rounded, and every sentence but the last reaches down into the inter-sentence
+    /// gap to meet the next one. A plain current sentence gets the accent wash.
+    @ViewBuilder
+    private var highlightBackground: some View {
+        if isNoted {
+            UnevenRoundedRectangle(
+                topLeadingRadius: roundsTop ? Self.cornerRadius : 0,
+                bottomLeadingRadius: roundsBottom ? Self.cornerRadius : 0,
+                bottomTrailingRadius: roundsBottom ? Self.cornerRadius : 0,
+                topTrailingRadius: roundsTop ? Self.cornerRadius : 0
+            )
+            .fill(Color.yellow.opacity(0.30))
+            .padding(.bottom, bridgesToNext ? -Self.blockSpacing : 0)
+        } else if isCurrent {
+            RoundedRectangle(cornerRadius: Self.cornerRadius)
+                .fill(Color.accentColor.opacity(0.15))
+        }
     }
 
     private var attributed: AttributedString {

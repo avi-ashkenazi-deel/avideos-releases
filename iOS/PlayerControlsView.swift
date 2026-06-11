@@ -15,12 +15,11 @@ struct PlayerControlsView: View {
 
     var body: some View {
         VStack(spacing: 14) {
-            VStack(spacing: 2) {
-                Slider(value: $draftProgress, in: 0...1) { editing in
+            VStack(spacing: 6) {
+                ScrubBar(progress: $draftProgress) { editing in
                     isScrubbing = editing
                     if !editing { viewModel.seek(toTime: draftProgress * viewModel.duration) }
                 }
-                .tint(.accentColor)
 
                 HStack {
                     Text(timeString(displayElapsed))
@@ -100,5 +99,40 @@ struct PlayerControlsView: View {
     private func timeString(_ seconds: TimeInterval) -> String {
         let total = Int(seconds.rounded())
         return String(format: "%d:%02d", total / 60, total % 60)
+    }
+}
+
+/// A thin progress line you can scrub. The accent-coloured fill grows across the
+/// track as playback advances (and follows your finger while dragging), so the
+/// position is always visible — unlike the stock `Slider`, whose large thumb and
+/// hairline track read as a single flat bar.
+private struct ScrubBar: View {
+    @Binding var progress: Double
+    let onScrub: (Bool) -> Void
+
+    private let trackHeight: CGFloat = 4
+
+    var body: some View {
+        GeometryReader { geo in
+            let width = geo.size.width
+            let fraction = min(max(progress, 0), 1)
+            ZStack(alignment: .leading) {
+                Capsule().fill(Color.secondary.opacity(0.25))
+                Capsule().fill(Color.accentColor)
+                    .frame(width: width * fraction)
+            }
+            .frame(height: trackHeight)
+            .frame(maxHeight: .infinity)          // centre the line in the touch area
+            .contentShape(Rectangle())            // whole height is draggable
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { value in
+                        onScrub(true)
+                        progress = min(max(value.location.x / width, 0), 1)
+                    }
+                    .onEnded { _ in onScrub(false) }
+            )
+        }
+        .frame(height: 22)
     }
 }
