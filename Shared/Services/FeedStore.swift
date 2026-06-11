@@ -130,6 +130,13 @@ final class FeedStore: ObservableObject {
 
     var unreadCount: Int { items.filter { !$0.isRead }.count }
 
+    /// Mark every stored item read (used by the "Mark all read" toolbar action).
+    func markAllRead() {
+        guard items.contains(where: { !$0.isRead }) else { return }
+        for idx in items.indices { items[idx].isRead = true }
+        persist()
+    }
+
     // MARK: - Search
 
     /// Case-insensitive search across every followed feed (title, summary, feed name).

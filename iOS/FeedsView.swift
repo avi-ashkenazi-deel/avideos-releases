@@ -71,6 +71,12 @@ struct FeedsList: View {
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
                 if store.isRefreshing { ProgressView() }
+                if store.unreadCount > 0 {
+                    Button { store.markAllRead() } label: {
+                        Image(systemName: "checkmark.circle")
+                    }
+                    .accessibilityLabel("Mark all read")
+                }
                 Button { showAddFeed = true } label: { Image(systemName: "plus") }
                 Button { showManage = true } label: { Image(systemName: "slider.horizontal.3") }
             }
@@ -113,14 +119,17 @@ struct FeedsList: View {
     }
 
     /// Read the item: prefer the feed-supplied full content; otherwise fetch the
-    /// article page and extract it (falls back to the summary offline).
+    /// article page and extract it (falls back to the summary offline). Marks read
+    /// when it finishes playing (mirroring emails), not merely on open.
     private func open(_ item: RSSItem) {
         let feedTitle = store.feed(for: item.feedID)?.title ?? "Feed"
-        store.markRead(item.id)
+        // The played email's id is prefixed ("rss-…"), so capture the item id directly.
+        let markRead: (String) -> Void = { [weak store] _ in store?.markRead(item.id) }
 
         // Enough inline content → play immediately.
         if let html = item.contentHTML, html.count > 400 {
-            player.open(email: item.makeEmail(feedTitle: feedTitle), isLocal: true)
+            player.open(email: item.makeEmail(feedTitle: feedTitle), isLocal: true,
+                        markReadOverride: markRead)
             return
         }
         // Try the full article; fall back to whatever the feed gave us.
@@ -128,10 +137,11 @@ struct FeedsList: View {
             Task {
                 let full = try? await ArticleExtractor.fetch(link)
                 player.open(email: item.makeEmail(feedTitle: feedTitle, fullHTML: full?.html),
-                            isLocal: true)
+                            isLocal: true, markReadOverride: markRead)
             }
         } else {
-            player.open(email: item.makeEmail(feedTitle: feedTitle), isLocal: true)
+            player.open(email: item.makeEmail(feedTitle: feedTitle), isLocal: true,
+                        markReadOverride: markRead)
         }
     }
 }

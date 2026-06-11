@@ -1,5 +1,6 @@
 import SwiftUI
 import AVFoundation
+import UIKit
 
 struct SettingsView: View {
     @EnvironmentObject private var appState: AppState
@@ -62,8 +63,18 @@ struct SettingsView: View {
                 Picker("Voice", selection: $settings.voiceIdentifier) {
                     Text("System default").tag("")
                     ForEach(voices, id: \.identifier) { voice in
-                        Text("\(voice.name) (\(voice.language))").tag(voice.identifier)
+                        Text("\(voice.name) — \(Self.qualityLabel(voice.quality)) · \(voice.language)")
+                            .tag(voice.identifier)
                     }
+                }
+                .disabled(settings.useElevenLabs)
+
+                Button {
+                    if let url = URL(string: UIApplication.openSettingsURLString) {
+                        UIApplication.shared.open(url)
+                    }
+                } label: {
+                    Label("Get higher-quality voices", systemImage: "arrow.down.circle")
                 }
                 .disabled(settings.useElevenLabs)
             } header: {
@@ -71,6 +82,8 @@ struct SettingsView: View {
             } footer: {
                 if settings.useElevenLabs {
                     Text("Disabled while ElevenLabs is on.")
+                } else {
+                    Text("Voices marked “Basic” are the lightweight ones built into iOS — they sound robotic. “Enhanced” and “Premium” voices sound far more natural (close to what Safari’s “Listen to Page” uses). Tap “Get higher-quality voices”, then go to Accessibility ▸ Spoken Content ▸ Voices to download one, and pick it here.")
                 }
             }
 
@@ -165,8 +178,21 @@ struct SettingsView: View {
     }
 
     private var voices: [AVSpeechSynthesisVoice] {
-        AVSpeechSynthesisVoice.speechVoices()
-            .sorted { $0.language == $1.language ? $0.name < $1.name : $0.language < $1.language }
+        AVSpeechSynthesisVoice.speechVoices().sorted {
+            if $0.language != $1.language { return $0.language < $1.language }
+            // Within a language, list the better-sounding voices first.
+            if $0.quality.rawValue != $1.quality.rawValue { return $0.quality.rawValue > $1.quality.rawValue }
+            return $0.name < $1.name
+        }
+    }
+
+    /// Human-readable quality tier so it's obvious which voices sound natural.
+    static func qualityLabel(_ quality: AVSpeechSynthesisVoiceQuality) -> String {
+        switch quality {
+        case .premium: return "Premium"
+        case .enhanced: return "Enhanced"
+        default: return "Basic"
+        }
     }
 
     /// App version + build, so it's easy to confirm which TestFlight build is installed.

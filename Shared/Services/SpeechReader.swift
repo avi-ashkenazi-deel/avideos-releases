@@ -128,8 +128,16 @@ final class SystemSpeechEngine: NSObject, SpeechEngine {
         // misread as Yiddish (no voice -> silent English fallback) or as English
         // when a line has digits. Only detect per-chunk when there's no hint.
         guard let code = preferredLanguage ?? LanguageTools.languageCode(for: text) else { return preferred }
+        return Self.effectiveVoice(forLanguage: code, preferredIdentifier: voiceIdentifier) ?? preferred
+    }
+
+    /// The voice that will actually be used for `code`: the listener's chosen voice
+    /// when it speaks that language, otherwise the best installed match. Centralised
+    /// so the UI can tell ahead of time which voice (and quality) a read will use.
+    static func effectiveVoice(forLanguage code: String, preferredIdentifier: String) -> AVSpeechSynthesisVoice? {
+        let preferred = preferredIdentifier.isEmpty ? nil : AVSpeechSynthesisVoice(identifier: preferredIdentifier)
         if let preferred, preferred.language.hasPrefix(code) { return preferred }
-        return Self.bestVoice(forLanguage: code) ?? preferred
+        return bestVoice(forLanguage: code) ?? preferred
     }
 
     /// Best-quality installed voice whose language matches `code` (e.g. "he").
