@@ -1,4 +1,6 @@
-export type SourceTag = 'LinkedIn' | 'Blog' | 'Substack';
+// Small label shown next to a writing item — a category ('Design', 'Audio'…)
+// or a source ('LinkedIn', 'Substack').
+export type SourceTag = string;
 
 export interface WritingItem {
   id: string;

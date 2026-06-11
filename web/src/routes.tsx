@@ -10,8 +10,8 @@ const Tools = lazy(() => import('./pages/Tools'));
 const Gallery = lazy(() => import('./pages/Gallery'));
 const Photography = lazy(() => import('./pages/Photography'));
 const About = lazy(() => import('./pages/About'));
-const Socials = lazy(() => import('./pages/Socials'));
 
+// Used by the mobile (paginated) shell. Desktop composes its own scroll page.
 export const routes: RouteObject[] = [
   { path: '/', element: <Home /> },
   { path: '/writing', element: <Writing /> },
@@ -24,6 +24,5 @@ export const routes: RouteObject[] = [
   { path: '/photography', element: <Photography /> },
   { path: '/photography/:id', element: <Photography /> },
   { path: '/about', element: <About /> },
-  { path: '/socials', element: <Socials /> },
   { path: '*', element: <Home /> },
 ];

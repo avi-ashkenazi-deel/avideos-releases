@@ -1,5 +1,5 @@
 // Single source of truth for top-level sections: drives nav, routes and the
-// mobile pager order.
+// mobile pager order. (Socials lives in the footer, not as a section.)
 export interface SectionDef {
   path: string;
   label: string;
@@ -15,11 +15,9 @@ export const sections: SectionDef[] = [
   { path: '/gallery', label: 'Gallery', index: '05' },
   { path: '/photography', label: 'Photography', index: '06' },
   { path: '/about', label: 'About', index: '07' },
-  { path: '/socials', label: 'Socials', index: '08' },
 ];
 
 export function sectionIndex(pathname: string): number {
-  // Match by first path segment so detail routes still resolve to a section.
   const seg = '/' + (pathname.split('/')[1] ?? '');
   const i = sections.findIndex((s) => s.path === seg);
   return i === -1 ? 0 : i;

@@ -1,0 +1,28 @@
+.header {
+  margin-bottom: clamp(2rem, 5vh, 3.5rem);
+}
+
+.index {
+  display: block;
+  font-size: var(--fs-meta);
+  letter-spacing: var(--tracking-meta);
+  text-transform: uppercase;
+  color: var(--c-grey-3);
+  margin-bottom: var(--s-2);
+}
+
+.title {
+  font-size: var(--fs-h1);
+  font-weight: 500;
+  letter-spacing: var(--tracking-h1);
+  line-height: var(--lh-tight);
+  text-transform: uppercase;
+}
+
+.intro {
+  font-size: var(--fs-lead);
+  color: var(--c-grey-2);
+  max-width: 44ch;
+  margin-top: var(--s-3);
+  letter-spacing: var(--tracking-tight);
+}

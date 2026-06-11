@@ -10,7 +10,61 @@
   padding: var(--s-3) 0;
   border-bottom: 1px solid var(--c-grey-4);
   background: var(--c-bg);
-  z-index: 10;
+  z-index: 30;
+}
+
+.nav {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-4);
+}
+
+.wordmark {
+  font-weight: 500;
+  letter-spacing: var(--tracking-tight);
+  text-transform: uppercase;
+  font-size: 1rem;
+  margin-right: auto;
+}
+
+.navLinks {
+  display: flex;
+  gap: var(--s-3);
+  flex-wrap: wrap;
+}
+
+.navLink {
+  font-size: var(--fs-meta);
+  letter-spacing: var(--tracking-meta);
+  text-transform: uppercase;
+  color: var(--c-grey-3);
+  transition: color var(--dur-fast) var(--ease-out);
+}
+.navLink:hover,
+.navLinkActive {
+  color: var(--c-fg);
+}
+
+.body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.scroller {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  background: var(--c-bg);
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 /* ---------- Mobile ---------- */
@@ -53,21 +107,24 @@
   padding: 10px 0 10px 16px;
 }
 
-/* Full-screen typographic menu (sheet) */
 .menu {
   position: absolute;
   inset: 0;
   top: calc(48px + env(safe-area-inset-top));
   z-index: 25;
   background: var(--c-bg);
-  display: flex;
-  align-items: center;
   overflow-y: auto;
 }
 
+.menuInner {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: var(--s-5) var(--gutter) calc(var(--tabbar-h) + var(--s-4));
+}
+
 .menuList {
-  width: 100%;
-  padding: var(--s-5) var(--gutter) calc(var(--tabbar-h) + var(--s-5));
   display: flex;
   flex-direction: column;
   gap: 0.35em;
@@ -96,7 +153,6 @@
   min-width: 1.8em;
 }
 
-/* Bottom tab bar — fixed app chrome, content scrolls underneath */
 .tabbar {
   position: absolute;
   left: 0;

@@ -1,68 +1,33 @@
 import type { WritingItem } from './types';
 
-// Curated entries. Add LinkedIn / Substack / blog posts here as desired.
-// `source` drives the small label; `url` opens the original externally.
+// All posts from superavi.com (via the WordPress REST API), newest first.
+// Add LinkedIn / Substack entries here too; `source` is the small label shown.
 export const writing: WritingItem[] = [
-  {
-    id: 'design-meets-business',
-    title: 'Design meets business podcast',
-    excerpt:
-      'A conversation with Christian Vasile on Deel, design and the age of AI.',
-    date: '2025-11-15',
-    source: 'Substack',
-    url: 'https://designmeetsbusiness.co/episodes/taste-craft-and-design-in-the-age-of-ai-with-avi-ashkenazi-ex-samsung-shopify-now-at-deel',
-  },
-  {
-    id: 'design-by-deel',
-    title: 'Design by Deel',
-    excerpt: 'An interview on design at Deel, featured on Tom Scott\'s Substack.',
-    date: '2025-11-15',
-    source: 'Substack',
-    url: 'https://verifiedinsider.substack.com/p/design-at-deel',
-  },
-  {
-    id: 'designing-up-podcast',
-    title: 'Designing up podcast',
-    excerpt:
-      'On shaping the future of design — AI, culture and leadership.',
-    date: '2025-11-15',
-    source: 'Substack',
-    url: 'https://www.youtube.com/watch?v=QPO0FGCM_IM',
-  },
-  {
-    id: 'shredder-framework',
-    title: 'The Shredder framework',
-    excerpt:
-      'A way to read a company and its competitors through multiple disciplinary lenses — fruits, flowers, leaves, branches, roots.',
-    date: '2020-06-22',
-    source: 'Blog',
-    url: 'https://superavi.com',
-  },
-  {
-    id: 'categorize-our-work',
-    title: 'How we categorize our work',
-    excerpt:
-      'Six buckets for design work: Urgent, Support, Lead, Self-serve, Overlook, and Wrong to do.',
-    date: '2020-03-13',
-    source: 'Blog',
-    url: 'https://superavi.com',
-  },
-  {
-    id: 'design-leadership-org',
-    title: 'A stab at building a better design leadership org',
-    excerpt:
-      'Scaling design teams through progression ladders, specialised roles and balanced management.',
-    date: '2019-03-07',
-    source: 'Blog',
-    url: 'https://superavi.com',
-  },
-  {
-    id: 'design-tasks-stay',
-    title: 'Design tasks are here to stay, and I like it',
-    excerpt:
-      'In defence of design tasks in interviews — speed, commitment, market understanding and process.',
-    date: '2019-02-18',
-    source: 'Blog',
-    url: 'https://superavi.com',
-  },
+  { id: 'design-meets-business-podcast', title: 'Design meets business podcast', excerpt: 'I participated in a podcast with Christian Vasile to talk about Deel, Design and everything in between.', date: '2025-11-15', source: 'Audio', url: 'https://superavi.com/design-meets-business-podcast/' },
+  { id: 'design-by-deel', title: 'Design by Deel', excerpt: 'Read the interview I did with Tom Scott on his substack', date: '2025-11-15', source: 'Writing', url: 'https://superavi.com/design-by-deel/' },
+  { id: 'designing-up-podcast', title: 'Designing up podcast', excerpt: 'Listen on: Apple Spotify YouTube', date: '2025-11-15', source: 'Audio', url: 'https://superavi.com/designing-up-podcast/' },
+  { id: 'ecom-design-conference-23-editing-commerce', title: 'ECOM Design conference 23′ – Editing commerce', excerpt: '', date: '2023-02-04', source: 'Design', url: 'https://superavi.com/ecom-design-conference-23-editing-commerce/' },
+  { id: 'ux-live-22-connecting-to-others', title: 'UX Live 22′ – Connecting to others', excerpt: '', date: '2022-12-07', source: 'Design', url: 'https://superavi.com/ux-live-22-connecting-to-others/' },
+  { id: 'how-we-shape-up-our-product-process-at-iwoca', title: 'How we Shape up our product process at iwoca', excerpt: 'Recently, I talked at the Fintech Design Summit about a new way of working we have in the User Journeys team at iwoca. In the past, we worked in Ag…', date: '2021-07-13', source: 'Writing', url: 'https://superavi.com/how-we-shape-up-our-product-process-at-iwoca/' },
+  { id: 'the-shredder-framework', title: 'The Shredder framework', excerpt: 'The Shredder is a method I’ve developed to try to unravel strategies whether they are for companies or products. The process of understanding requi…', date: '2020-06-22', source: 'Business Model', url: 'https://superavi.com/the-shredder-framework/' },
+  { id: 'how-we-categorize-our-work', title: 'How we categorize our work', excerpt: 'What’s this document? This is as a framework for categorizing our tasks. Hopefully, it should make it easier to reflect on your past projects and b…', date: '2020-03-13', source: 'Writing', url: 'https://superavi.com/how-we-categorize-our-work/' },
+  { id: 'a-stab-at-building-a-better-design-leadership-org', title: 'A stab at building a better design leadership org', excerpt: 'This article started as an answer to a task I did during my interview process for a company a while ago. While I can share the task I’ve adjusted t…', date: '2019-03-07', source: 'Writing', url: 'https://superavi.com/a-stab-at-building-a-better-design-leadership-org/' },
+  { id: 'design-tasks-are-here-to-stay-and-i-like-it', title: 'Design tasks are here to stay, and I like it', excerpt: 'Recently I’ve encountered a lot of conversations around design tasks, for and against, pros and cons. I support giving tasks during the interview s…', date: '2019-02-18', source: 'Design', url: 'https://superavi.com/design-tasks-are-here-to-stay-and-i-like-it/' },
+  { id: 'escape-routes-from-dead-end-design-careers', title: 'Escape routes from dead end Design careers', excerpt: 'Entering the design profession is sometimes like love at first sight, but it can also be something you simply want to do and learn to respect. Desi…', date: '2018-07-17', source: 'Design', url: 'https://superavi.com/escape-routes-from-dead-end-design-careers/' },
+  { id: 'are-you-boxed-in-getting-to-beyond-professional-roles-and-job-titles', title: 'Are you boxed in? Getting to beyond professional roles and job titles', excerpt: 'Every time I have had to look for a job, I have found myself having to box myself into an application template or a job spec. To cover every possib…', date: '2018-07-04', source: 'Future', url: 'https://superavi.com/are-you-boxed-in-getting-to-beyond-professional-roles-and-job-titles/' },
+  { id: '74-2', title: 'What happened Gmail?', excerpt: 'I’m a Google Inbox user, and since Inbox for iOS hasn’t been updated to match the screen size of iPhone X (which seems quite a trivial thing to fix…', date: '2018-04-27', source: 'Design', url: 'https://superavi.com/74-2/' },
+  { id: 'where-will-ads-live-the-answer-hardware', title: 'Where will ads live? The answer: Hardware', excerpt: 'There are countless businesses that build their value on the back of ads. Shamefully it became the default reaction to “what’s your business model?…', date: '2018-01-31', source: 'Advertising', url: 'https://superavi.com/where-will-ads-live-the-answer-hardware/' },
+  { id: 'facial-recognition-as-ux-driver-from-ar-to-emotion-detection-how-the-camera-turned-to-be-the-best-tool-to-decipher-the-world', title: 'Facial recognition as a UX driver. From AR to emotion detection, how the camera turned out to be the best tool to decipher the world', excerpt: 'The camera is finally on stage to solve UX, technology and communication between us all. Years after the Kinect was trashed and Google Glass failed…', date: '2017-09-13', source: 'Design', url: 'https://superavi.com/facial-recognition-as-ux-driver-from-ar-to-emotion-detection-how-the-camera-turned-to-be-the-best-tool-to-decipher-the-world/' },
+  { id: 'goodbye-stereo-hello-360o-sound', title: 'Goodbye Stereo, hello 360º Sound', excerpt: 'In the past five years, there has been a paradigm shift in the speakers market. We’ve started seeing a different form factor of audio capable devic…', date: '2017-08-27', source: 'Audio', url: 'https://superavi.com/goodbye-stereo-hello-360o-sound/' },
+  { id: 'designed-for-the-mute-scroller', title: 'Designed for the mute scroller', excerpt: 'Users consume content in a vacuum and it is usually mute. This is a short guide for designing for the mute scroller. How to grab their attention an…', date: '2017-08-27', source: 'Communication', url: 'https://superavi.com/designed-for-the-mute-scroller/' },
+  { id: 'the-slipperiness-of-ux-data', title: 'The slipperiness of UX data', excerpt: 'In my article proving design, I talked about how hard it is to have proofs for making the right product or product decisions. Some projects are so…', date: '2017-08-27', source: 'Business Model', url: 'https://superavi.com/the-slipperiness-of-ux-data/' },
+  { id: 'facebooks-ux-is-killing-the-home-button', title: 'Facebook’s UX is killing the “home” button', excerpt: 'Facebook has mastered making users ignore the bottom middle button; one of the most comfortable navigation areas. Look at the diagram below, it’s e…', date: '2017-08-27', source: 'Design', url: 'https://superavi.com/facebooks-ux-is-killing-the-home-button/' },
+  { id: 'finished-copying-snapchat-whats-next-in-messaging', title: 'Finished copying Snapchat? What’s next in messaging', excerpt: 'In the past year we’ve seen more copying than innovation in the world of messaging. In 2016 everyone did stories, disappearing messages etc. Instea…', date: '2017-08-27', source: 'Future', url: 'https://superavi.com/finished-copying-snapchat-whats-next-in-messaging/' },
+  { id: 'recruiters-dont-work-for-startups%e2%80%8a-%e2%80%8awhy-im-cutting-the-middleman', title: 'Recruiters don’t work for startups — Why I’m cutting the middleman', excerpt: 'We’ve all seen Google’s search results when you type recruiter. I’ve read multiple “open letters”, hate posts, attempts to explain how “companies”…', date: '2017-08-27', source: 'Business Model', url: 'https://superavi.com/recruiters-dont-work-for-startups%e2%80%8a-%e2%80%8awhy-im-cutting-the-middleman/' },
+  { id: 'subtitles-were-never-designed-the-missing-element-in-tv-typography-design', title: 'Subtitles were never designed. The missing element in TV typography design', excerpt: 'In the past three years I’ve been designing televisions and audio systems for Samsung. Throughout these years I found a problem that no one tried t…', date: '2017-08-27', source: 'Design', url: 'https://superavi.com/subtitles-were-never-designed-the-missing-element-in-tv-typography-design/' },
+  { id: 'communication-pyramid', title: 'Communication pyramid', excerpt: 'It is often said that “You are who your friends are,” but in many ways your friends are a product of the environment which you grew up in, your par…', date: '2017-08-27', source: 'Communication', url: 'https://superavi.com/communication-pyramid/' },
+  { id: 'reimagining-storage', title: 'Reimagining storage', excerpt: 'Storage is everywhere Look at your house, half of the things there are for storage. Sometimes there is storage for storage like a drawer for small…', date: '2017-08-27', source: 'Design', url: 'https://superavi.com/reimagining-storage/' },
+  { id: 'voice-assistance-and-privacy', title: 'Voice assistance and privacy', excerpt: 'Voice assistants technologies are hyped nowadays. However one of the main voiced concerns is about privacy. The main concern about privacy is that…', date: '2017-08-27', source: 'Audio', url: 'https://superavi.com/voice-assistance-and-privacy/' },
+  { id: 'the-ux-poet', title: 'The UX Poet', excerpt: 'Not too long ago I had an experience that made me look differently on the way I use words. We were holding a workshop with colleagues from Korea an…', date: '2017-08-27', source: 'Design', url: 'https://superavi.com/the-ux-poet/' },
+  { id: 'proving-your-design', title: 'Proving your Design', excerpt: 'Over the years I have had more experience working with developers than with designers. However in the past two years I have been more involved with…', date: '2017-05-21', source: 'Design', url: 'https://superavi.com/proving-your-design/' },
 ];
