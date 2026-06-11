@@ -25,18 +25,8 @@ struct PlayerDetailContent: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if let language = player.missingVoiceLanguage, !dismissedVoiceWarning {
-                voiceWarning(language)
-            } else if let voiceName = player.basicVoiceName, !dismissedBasicVoice {
-                basicVoiceNudge(voiceName)
-            }
-            if let staged = player.staged {
-                previewMode(staged)
-            } else if player.parsed == nil {
-                Spacer(); ProgressView("Opening…"); Spacer()
-            } else {
-                activeMode
-            }
+            voiceBanner
+            modeContent
         }
         .background(PiPHostView().frame(width: 2, height: 2).opacity(0.02).allowsHitTesting(false))
         .onChange(of: player.parsed?.email.id) { _, _ in
@@ -85,6 +75,31 @@ struct PlayerDetailContent: View {
             Button("OK") { player.errorMessage = nil }
         } message: {
             Text(player.errorMessage ?? "")
+        }
+    }
+
+    /// The dismissible voice-quality banners, kept out of `body` so the
+    /// type-checker handles each conditional branch separately.
+    @ViewBuilder
+    private var voiceBanner: some View {
+        if let language = player.missingVoiceLanguage, !dismissedVoiceWarning {
+            voiceWarning(language)
+        } else if let voiceName = player.basicVoiceName, !dismissedBasicVoice {
+            basicVoiceNudge(voiceName)
+        }
+    }
+
+    /// Preview / loading / active, split out of `body` for the same reason.
+    @ViewBuilder
+    private var modeContent: some View {
+        if let staged = player.staged {
+            previewMode(staged)
+        } else if player.parsed == nil {
+            Spacer()
+            ProgressView("Opening…")
+            Spacer()
+        } else {
+            activeMode
         }
     }
 
