@@ -13,6 +13,7 @@ struct FeedsView: View {
 struct FeedsList: View {
     @EnvironmentObject private var player: EmailPlayerViewModel
     @StateObject private var store = FeedStore.shared
+    @Environment(\.openURL) private var openURL
     @State private var searchText = ""
     @State private var showAddFeed = false
     @State private var showManage = false
@@ -49,6 +50,16 @@ struct FeedsList: View {
                                       systemImage: item.isRead ? "circle" : "checkmark.circle")
                             }
                             .tint(.blue)
+                        }
+                        .swipeActions(edge: .trailing) {
+                            if let link = item.link {
+                                Button {
+                                    openURL(link)
+                                } label: {
+                                    Label("Open", systemImage: "safari")
+                                }
+                                .tint(.gray)
+                            }
                         }
                     }
                 }
