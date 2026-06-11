@@ -105,6 +105,9 @@ private struct CompactLayout: View {
 
                 SavedArticlesView()
                     .tabItem { Label("Saved", systemImage: "bookmark") }
+
+                FeedsView()
+                    .tabItem { Label("Feeds", systemImage: "dot.radiowaves.up.forward") }
             }
 
             if player.parsed != nil {
@@ -122,8 +125,8 @@ private struct CompactLayout: View {
     }
 }
 
-/// The two libraries the iPad source sidebar switches between.
-private enum LibrarySection: Hashable { case inbox, saved }
+/// The libraries the iPad source sidebar switches between.
+private enum LibrarySection: Hashable { case inbox, saved, feeds }
 
 /// iPad layout: a three-column split view, like Mail. A narrow source sidebar
 /// (Inbox / Saved) on the far left, the selected list in the middle, and the
@@ -145,6 +148,7 @@ private struct SplitLayout: View {
             List(selection: $section) {
                 Label("Inbox", systemImage: "tray.full").tag(LibrarySection.inbox)
                 Label("Saved", systemImage: "bookmark").tag(LibrarySection.saved)
+                Label("Feeds", systemImage: "dot.radiowaves.up.forward").tag(LibrarySection.feeds)
             }
             .navigationTitle("VoiceInbox")
             .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 300)
@@ -153,6 +157,7 @@ private struct SplitLayout: View {
                 switch section ?? .inbox {
                 case .inbox: InboxList(showsUtilityToolbar: false)
                 case .saved: SavedArticlesList()
+                case .feeds: FeedsList()
                 }
             }
             // Analytics / Highlights / Settings — on the always-visible list column

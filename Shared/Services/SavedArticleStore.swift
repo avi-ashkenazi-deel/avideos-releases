@@ -89,6 +89,41 @@ final class SavedArticleStore: ObservableObject {
         SavedArticleStorage.content(for: id)
     }
 
+    /// Save pasted text as a ready-to-listen item (no fetch needed). The text is
+    /// wrapped in minimal HTML paragraphs so the email parser reads it naturally.
+    func addPastedText(title: String, text: String) {
+        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let body = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !body.isEmpty else { return }
+
+        let id = UUID().uuidString
+        let resolvedTitle = trimmedTitle.isEmpty
+            ? String(body.prefix(60)).replacingOccurrences(of: "\n", with: " ")
+            : trimmedTitle
+        let html = body
+            .split(separator: "\n", omittingEmptySubsequences: true)
+            .map { "<p>\(Self.escapeHTML(String($0)))</p>" }
+            .joined()
+
+        let article = SavedArticle(
+            id: id,
+            url: URL(string: "voiceinbox://text/\(id)")!,
+            title: resolvedTitle,
+            siteName: "Pasted text",
+            excerpt: String(body.prefix(140)),
+            status: .ready
+        )
+        SavedArticleStorage.writeContent(html, for: id)
+        articles.insert(article, at: 0)
+        persist()
+    }
+
+    private static func escapeHTML(_ s: String) -> String {
+        s.replacingOccurrences(of: "&", with: "&amp;")
+            .replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;")
+    }
+
     func markRead(_ id: SavedArticle.ID, read: Bool = true) {
         guard let idx = articles.firstIndex(where: { $0.id == id }) else { return }
         articles[idx].isRead = read

@@ -2,6 +2,22 @@
 
 A running log of what we've built and shipped.
 
+## 2026-06-08 — Paste-to-listen + RSS feeds tab
+
+- **Paste text → listen** (Saved): clipboard button in Saved opens a composer
+  (title optional + text); saved as a ready, offline-playable item via
+  `SavedArticleStore.addPastedText` (text wrapped in minimal HTML paragraphs).
+- **RSS feeds** (third tab + iPad sidebar entry, like a mini Feedly):
+  `FeedParser` (dependency-free RSS 2.0/Atom on `XMLParser`), `FeedStore`
+  (app-group persistence, refresh/merge with per-feed cap, unread state),
+  `FeedsView` (aggregated timeline, add/manage sheets, **search across all
+  feeds**, per-feed **"Notify on new articles"** toggle). Items play through the
+  existing email pipeline; full article fetched via `ArticleExtractor` when the
+  feed only carries a summary.
+- **Background refresh**: BGAppRefreshTask (`…voiceinbox.feedrefresh`, fetch
+  background mode) refreshes feeds when iOS allows and posts local notifications
+  for feeds with notifications on. iOS controls timing — not real-time push.
+
 ## 2026-06-08 — Launch splash, smoother audio, footer trim v2, row tap, PiP button
 
 - **Splash screen / no sign-in flash**: added a `.launching` phase (now the

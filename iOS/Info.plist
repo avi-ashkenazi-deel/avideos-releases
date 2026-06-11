@@ -52,10 +52,18 @@
 	<key>UIRequiresFullScreen</key>
 	<true/>
 
-	<!-- Keep reading email aloud while the app is backgrounded or the screen is locked. -->
+	<!-- Keep reading email aloud while the app is backgrounded or the screen is
+	     locked; fetch lets iOS wake us periodically to refresh RSS feeds and post
+	     new-article notifications. -->
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>audio</string>
+		<string>fetch</string>
+	</array>
+	<!-- Identifier for the BGAppRefreshTask that refreshes feeds in the background. -->
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>com.aviashkenazi.voiceinbox.feedrefresh</string>
 	</array>
 
 	<!-- Google Sign-In redirects back to the app via a reversed-client-id URL scheme.

@@ -15,6 +15,7 @@ struct SavedArticlesView: View {
 struct SavedArticlesList: View {
     @EnvironmentObject private var player: EmailPlayerViewModel
     @StateObject private var store = SavedArticleStore.shared
+    @State private var showPasteText = false
 
     var body: some View {
         Group {
@@ -31,9 +32,16 @@ struct SavedArticlesList: View {
         }
         .navigationTitle("Saved")
         .toolbar {
-            if store.isProcessing {
-                ToolbarItem(placement: .topBarTrailing) { ProgressView() }
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                if store.isProcessing { ProgressView() }
+                // Paste any text (a doc, a message, notes) and listen to it.
+                Button { showPasteText = true } label: {
+                    Image(systemName: "doc.on.clipboard")
+                }
             }
+        }
+        .sheet(isPresented: $showPasteText) {
+            NavigationStack { PasteTextView() }
         }
         .refreshable { await store.refresh() }
         .task { await store.refresh() }
