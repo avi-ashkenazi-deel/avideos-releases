@@ -3,13 +3,13 @@ import UIKit
 
 /// The watch is a live remote for the phone's player. It mirrors what the phone
 /// is reading (artwork, show, subject, progress, time left) and drives transport
-/// from the wrist — play/pause, skip, speed, highlight — over WatchConnectivity.
+/// from the wrist — play/pause, skip, highlight — over WatchConnectivity.
 ///
 /// Layout, top → bottom (modeled on a podcast remote):
 ///   1. progress bar + "time left"
 ///   2. artwork + show / subject
 ///   3. transport buttons (skip back · play/pause · skip forward)
-///   4. speed (− value +) + highlight
+///   4. highlight the current sentence
 struct WatchNowPlayingView: View {
     @ObservedObject private var bridge = WatchConnectivityBridge.shared
     @State private var showHighlightConfirmation = false
@@ -72,37 +72,22 @@ struct WatchNowPlayingView: View {
             }
             .padding(.vertical, 2)
 
-            // 4 — speed + highlight
-            HStack(spacing: 8) {
-                Button { changeSpeed(by: -0.25, from: state.speed) } label: {
-                    Image(systemName: "minus")
-                }
-                Text(speedLabel(state.speed))
-                    .font(.footnote.weight(.semibold))
-                    .monospacedDigit()
-                    .frame(minWidth: 40)
-                Button { changeSpeed(by: 0.25, from: state.speed) } label: {
-                    Image(systemName: "plus")
-                }
-                Button {
-                    bridge.send(command: .highlight)
-                    flashHighlight()
-                } label: {
-                    Image(systemName: "highlighter")
-                }
-                .tint(.yellow)
+            // 4 — highlight the current sentence
+            transportButton("highlighter", tint: .yellow) {
+                bridge.send(command: .highlight)
+                flashHighlight()
             }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
         }
         .padding(.horizontal, 6)
     }
 
     private func transportButton(_ symbol: String, large: Bool = false,
+                                 tint: Color = .primary,
                                  action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: symbol)
                 .font(large ? .title : .title3)
+                .foregroundStyle(tint)
                 .frame(width: large ? 46 : 36, height: large ? 46 : 36)
                 .contentShape(Circle())
         }
@@ -140,22 +125,8 @@ struct WatchNowPlayingView: View {
 
     // MARK: - Actions
 
-    private func changeSpeed(by delta: Double, from current: Double) {
-        let next = ((current + delta) * 100).rounded() / 100
-        bridge.send(speed: min(max(next, 0.5), 2.5))
-    }
-
     private func flashHighlight() {
         showHighlightConfirmation = true
-    }
-
-    private func speedLabel(_ speed: Double) -> String {
-        // 1.0 → "1×", 1.25 → "1.25×", 1.5 → "1.5×" (trim trailing zeros)
-        if speed == speed.rounded() { return "\(Int(speed))×" }
-        var s = String(format: "%.2f", speed)
-        while s.hasSuffix("0") { s.removeLast() }
-        if s.hasSuffix(".") { s.removeLast() }
-        return "\(s)×"
     }
 }
 
