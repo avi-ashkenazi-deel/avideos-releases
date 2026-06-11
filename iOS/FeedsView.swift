@@ -170,12 +170,12 @@ private struct AddFeedView: View {
     var body: some View {
         Form {
             Section {
-                TextField("Feed URL (e.g. stratechery.com/feed)", text: $urlText)
+                TextField("Site or feed URL (e.g. stratechery.com)", text: $urlText)
                     .keyboardType(.URL)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
             } footer: {
-                Text("Paste the site's RSS/Atom feed URL. Most blogs and newsletters expose one (often at /feed or /rss).")
+                Text("Paste a site address or a direct RSS/Atom URL — the app finds the feed automatically.")
             }
             if let error {
                 Section { Text(error).foregroundStyle(.red) }

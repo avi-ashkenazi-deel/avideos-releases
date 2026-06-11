@@ -30,17 +30,17 @@ final class FeedStore: ObservableObject {
 
     // MARK: - Follow / unfollow / settings
 
-    /// Add a feed by URL: fetches and parses it (also resolves the title), then
-    /// merges its current items.
+    /// Add a feed by URL. Accepts either a direct feed URL *or* a site URL — in
+    /// the latter case it discovers the feed from the page's `<link>` tags, then
+    /// falls back to common feed paths (/feed, /rss, …).
     func add(urlString: String) async throws {
         var raw = urlString.trimmingCharacters(in: .whitespacesAndNewlines)
         if !raw.lowercased().hasPrefix("http") { raw = "https://" + raw }
-        guard let url = URL(string: raw) else { throw FeedParser.FeedError.notAFeed }
-        let candidate = RSSFeed(url: url)
-        guard !feeds.contains(where: { $0.id == candidate.id }) else { return }
+        guard let entered = URL(string: raw) else { throw FeedParser.FeedError.notAFeed }
 
-        let (data, _) = try await URLSession.shared.data(from: url)
-        let parsed = try FeedParser.parse(data: data)
+        let (feedURL, parsed) = try await resolveFeed(from: entered)
+        let candidate = RSSFeed(url: feedURL)
+        guard !feeds.contains(where: { $0.id == candidate.id }) else { return }
 
         var feed = candidate
         feed.title = parsed.title ?? feed.title
@@ -48,6 +48,56 @@ final class FeedStore: ObservableObject {
         feeds.append(feed)
         merge(parsed.items, into: feed)
         persist()
+    }
+
+    /// Resolve the entered URL to an actual feed: direct feed → HTML autodiscovery
+    /// → common feed paths.
+    private func resolveFeed(from url: URL) async throws -> (URL, FeedParser.Result) {
+        let (data, _) = try await URLSession.shared.data(from: url)
+        if let parsed = try? FeedParser.parse(data: data) {
+            return (url, parsed)
+        }
+        // Treat the response as a web page and look for a declared feed link.
+        if let html = String(data: data, encoding: .utf8),
+           let discovered = Self.feedLink(inHTML: html, baseURL: url),
+           let (feedData, _) = try? await URLSession.shared.data(from: discovered),
+           let parsed = try? FeedParser.parse(data: feedData) {
+            return (discovered, parsed)
+        }
+        // Last resort: probe the usual feed paths off the site root.
+        for path in ["/feed", "/rss", "/feed.xml", "/rss.xml", "/atom.xml", "/index.xml", "/feed/"] {
+            guard let candidate = URL(string: path, relativeTo: url)?.absoluteURL,
+                  let (feedData, _) = try? await URLSession.shared.data(from: candidate),
+                  let parsed = try? FeedParser.parse(data: feedData) else { continue }
+            return (candidate, parsed)
+        }
+        throw FeedParser.FeedError.notAFeed
+    }
+
+    /// Find a feed URL declared in a page's `<link rel="alternate" type="…rss/atom…">`.
+    private static func feedLink(inHTML html: String, baseURL: URL) -> URL? {
+        guard let linkRegex = try? NSRegularExpression(pattern: "<link[^>]+>", options: [.caseInsensitive]) else {
+            return nil
+        }
+        let ns = html as NSString
+        for match in linkRegex.matches(in: html, range: NSRange(location: 0, length: ns.length)) {
+            let tag = ns.substring(with: match.range)
+            let lower = tag.lowercased()
+            guard lower.contains("application/rss+xml") || lower.contains("application/atom+xml"),
+                  let href = attribute("href", in: tag),
+                  let url = URL(string: href, relativeTo: baseURL)?.absoluteURL else { continue }
+            return url
+        }
+        return nil
+    }
+
+    private static func attribute(_ name: String, in tag: String) -> String? {
+        guard let regex = try? NSRegularExpression(
+            pattern: "\(name)\\s*=\\s*[\"']([^\"']+)[\"']", options: [.caseInsensitive]) else { return nil }
+        let ns = tag as NSString
+        guard let m = regex.firstMatch(in: tag, range: NSRange(location: 0, length: ns.length)),
+              m.range(at: 1).location != NSNotFound else { return nil }
+        return ns.substring(with: m.range(at: 1))
     }
 
     func remove(_ feedID: RSSFeed.ID) {
