@@ -1,11 +1,12 @@
 .body {
-  max-width: 60ch;
-  white-space: pre-line;
-  font-size: var(--fs-lead);
-  line-height: 1.5;
-  color: var(--c-grey-1);
+  max-width: 38ch;
+  font-size: clamp(1.35rem, 2.6vw, 2.3rem);
+  font-weight: 400;
+  letter-spacing: var(--tracking-h2);
+  line-height: 1.22;
+  color: var(--c-fg);
 }
 
 .body p + p {
-  margin-top: var(--s-3);
+  margin-top: var(--s-5);
 }

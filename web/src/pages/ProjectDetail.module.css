@@ -11,22 +11,25 @@
 }
 
 .tagline {
-  font-size: var(--fs-lead);
+  font-size: var(--fs-h2);
+  font-weight: 400;
+  letter-spacing: var(--tracking-h2);
+  line-height: var(--lh-snug);
   color: var(--c-grey-1);
-  max-width: 50ch;
+  max-width: 24ch;
   margin-top: var(--s-2);
 }
 
 .meta {
   display: flex;
-  gap: var(--s-4);
-  margin: var(--s-4) 0;
+  gap: var(--s-5);
+  margin: var(--s-5) 0;
   flex-wrap: wrap;
 }
 .metaItem {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
 }
 .metaLabel {
   font-size: var(--fs-meta);
@@ -36,10 +39,13 @@
 }
 
 .body {
-  max-width: 60ch;
+  max-width: 58ch;
   margin-top: var(--s-4);
   white-space: pre-line;
   color: var(--c-grey-1);
+  font-size: var(--fs-lead);
+  letter-spacing: var(--tracking-tight);
+  line-height: 1.45;
 }
 
 .links {
@@ -48,14 +54,16 @@
   margin-top: var(--s-4);
 }
 .link {
+  font-size: var(--fs-meta);
+  letter-spacing: var(--tracking-meta);
+  text-transform: uppercase;
   border-bottom: 1px solid var(--c-fg);
-  padding-bottom: 2px;
+  padding-bottom: 3px;
 }
 
 .cover {
   margin-top: var(--s-6);
   aspect-ratio: 16 / 9;
-  border: 1px solid var(--c-grey-4);
   background: var(--c-grey-5);
   overflow: hidden;
 }

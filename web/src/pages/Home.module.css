@@ -21,7 +21,7 @@
   flex-direction: column;
   justify-content: flex-end;
   padding: var(--gutter);
-  padding-bottom: clamp(2rem, 8vh, 6rem);
+  padding-bottom: max(clamp(2rem, 8vh, 5rem), calc(var(--tabbar-h) + 1rem));
   pointer-events: none;
 }
 
@@ -29,22 +29,26 @@
   font-size: var(--fs-display);
   font-weight: 500;
   line-height: var(--lh-tight);
-  letter-spacing: var(--tracking-tight);
+  letter-spacing: var(--tracking-display);
+  text-transform: uppercase;
   margin-bottom: var(--s-3);
   mix-blend-mode: multiply;
+  /* allow the tight tracking without clipping the last glyph */
+  padding-right: 0.05em;
 }
 
 .bio {
   font-size: var(--fs-lead);
-  max-width: 34ch;
+  max-width: 36ch;
   color: var(--c-grey-1);
+  letter-spacing: var(--tracking-tight);
   mix-blend-mode: multiply;
 }
 
 .enter {
   pointer-events: auto;
   display: inline-flex;
-  gap: var(--s-2);
+  gap: var(--s-3);
   margin-top: var(--s-4);
   flex-wrap: wrap;
 }
@@ -56,7 +60,9 @@
   text-transform: uppercase;
   color: var(--c-grey-2);
   border-bottom: 1px solid transparent;
-  transition: color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
+  transition:
+    color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
 }
 .enterLink:hover {
   color: var(--c-fg);

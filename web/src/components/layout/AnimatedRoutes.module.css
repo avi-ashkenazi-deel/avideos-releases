@@ -15,7 +15,12 @@
 }
 
 .layerMobile {
-  border-top: 1px solid var(--c-grey-4);
+  overscroll-behavior: contain;
+  /* hide scrollbars for an app feel */
+  scrollbar-width: none;
+}
+.layerMobile::-webkit-scrollbar {
+  display: none;
 }
 
 .loading {

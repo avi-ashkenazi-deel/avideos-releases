@@ -11,19 +11,26 @@
   /* ---- Type ---- */
   --font-sans: 'Helvetica Neue', 'Inter', Helvetica, Arial, sans-serif;
 
-  --fs-display: clamp(3rem, 9vw, 8rem);
-  --fs-h1: clamp(2rem, 5vw, 3.5rem);
-  --fs-h2: clamp(1.5rem, 3vw, 2.25rem);
-  --fs-lead: clamp(1.125rem, 1.6vw, 1.375rem);
+  /* Dramatic scale with a big jump between display and labels (moo-ar style). */
+  --fs-display: clamp(3.5rem, 13vw, 12rem);
+  --fs-h1: clamp(2.75rem, 9vw, 6.5rem);
+  --fs-h2: clamp(1.75rem, 5vw, 3.5rem);
+  --fs-row: clamp(1.6rem, 5.5vw, 3.5rem); /* big editorial list rows */
+  --fs-lead: clamp(1.2rem, 1.6vw, 1.6rem);
   --fs-body: 1.0625rem;
-  --fs-meta: 0.8125rem;
+  --fs-meta: 0.6875rem; /* ~11px tiny labels */
 
-  --lh-tight: 0.95;
-  --lh-snug: 1.15;
+  --lh-tight: 0.86;
+  --lh-snug: 0.95;
   --lh-body: 1.5;
 
+  /* Bigger type → tighter negative tracking. */
+  --tracking-display: -0.045em;
+  --tracking-h1: -0.038em;
+  --tracking-h2: -0.028em;
+  --tracking-row: -0.03em;
   --tracking-tight: -0.02em;
-  --tracking-meta: 0.04em;
+  --tracking-meta: 0.07em;
 
   /* ---- Spacing (8px base) ---- */
   --s-1: 0.5rem;
@@ -37,11 +44,18 @@
   --s-section: clamp(4rem, 12vh, 10rem);
 
   /* ---- Layout ---- */
-  --max-w: 1280px;
-  --gutter: clamp(1.25rem, 5vw, 4rem);
+  --max-w: 1440px;
+  --gutter: clamp(1.25rem, 5vw, 4.5rem);
 
   /* ---- Motion ---- */
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --dur-fast: 200ms;
   --dur-med: 420ms;
+
+  /* ---- Mobile chrome ---- */
+  --tabbar-h: 64px;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
 }

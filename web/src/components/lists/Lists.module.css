@@ -1,6 +1,6 @@
-/* Editorial row list (Writing, Talks) */
+/* Editorial row list (Writing, Talks) — the titles ARE the design. */
 .list {
-  border-top: 1px solid var(--c-grey-4);
+  border-top: 1px solid var(--c-fg);
 }
 
 .row {
@@ -8,13 +8,8 @@
   grid-template-columns: 1fr auto;
   align-items: baseline;
   gap: var(--s-3);
-  padding: var(--s-3) 0;
+  padding: clamp(1.1rem, 3vh, 1.8rem) 0;
   border-bottom: 1px solid var(--c-grey-4);
-  transition: padding-left var(--dur-fast) var(--ease-out);
-}
-
-.row:hover {
-  padding-left: var(--s-2);
 }
 
 .rowMain {
@@ -22,24 +17,30 @@
 }
 
 .rowTitle {
-  font-size: clamp(1.125rem, 2.4vw, 1.6rem);
+  font-size: var(--fs-row);
   font-weight: 500;
-  letter-spacing: var(--tracking-tight);
-  line-height: 1.2;
+  letter-spacing: var(--tracking-row);
+  line-height: var(--lh-snug);
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+
+.row:hover .rowTitle {
+  opacity: 0.35;
 }
 
 .rowExcerpt {
   margin-top: var(--s-1);
   color: var(--c-grey-2);
-  max-width: 60ch;
-  font-size: 1rem;
+  max-width: 56ch;
+  font-size: var(--fs-body);
+  letter-spacing: var(--tracking-tight);
 }
 
 .rowMeta {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 4px;
+  gap: 6px;
   text-align: right;
   white-space: nowrap;
 }
@@ -54,14 +55,15 @@
 .date {
   font-size: var(--fs-meta);
   letter-spacing: var(--tracking-meta);
+  text-transform: uppercase;
   color: var(--c-grey-2);
 }
 
 /* Grid (Tools, Projects) */
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: var(--s-5) var(--s-4);
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: var(--s-6) var(--s-4);
 }
 
 .card {
@@ -72,7 +74,6 @@
   aspect-ratio: 4 / 3;
   width: 100%;
   background: var(--c-grey-5);
-  border: 1px solid var(--c-grey-4);
   overflow: hidden;
 }
 
@@ -90,14 +91,17 @@
 .cardName {
   margin-top: var(--s-2);
   font-weight: 500;
-  letter-spacing: var(--tracking-tight);
-  font-size: 1.125rem;
+  letter-spacing: var(--tracking-h2);
+  font-size: var(--fs-h2);
+  line-height: var(--lh-snug);
 }
 
 .cardBlurb {
   color: var(--c-grey-2);
-  font-size: 0.95rem;
-  margin-top: 2px;
+  font-size: var(--fs-meta);
+  letter-spacing: var(--tracking-meta);
+  text-transform: uppercase;
+  margin-top: 6px;
 }
 
 @media (max-width: 768px) {
@@ -109,5 +113,8 @@
     flex-direction: row;
     gap: var(--s-2);
     margin-top: var(--s-1);
+  }
+  .grid {
+    grid-template-columns: 1fr;
   }
 }

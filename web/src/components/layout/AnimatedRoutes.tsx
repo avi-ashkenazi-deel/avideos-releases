@@ -11,17 +11,34 @@ const desktopVariants: Variants = {
   exit: { opacity: 0, y: -8, transition: { duration: 0.2 } },
 };
 
+/*
+ * iOS-modal feel: the incoming view rises from the bottom as a sheet with
+ * rounded top corners that settle flat; the outgoing view stays put, scaling
+ * back and dimming underneath it.
+ */
 const mobileVariants: Variants = {
-  initial: { y: '100%' },
+  initial: {
+    y: '100%',
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
+    boxShadow: '0 -12px 48px rgba(0,0,0,0.18)',
+  },
   enter: {
     y: 0,
-    transition: { type: 'spring', stiffness: 320, damping: 36, mass: 0.9 },
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 0,
+    boxShadow: '0 -12px 48px rgba(0,0,0,0)',
+    transition: {
+      y: { type: 'spring', stiffness: 360, damping: 38, mass: 0.9 },
+      borderTopLeftRadius: { delay: 0.28, duration: 0.25 },
+      borderTopRightRadius: { delay: 0.28, duration: 0.25 },
+      boxShadow: { delay: 0.28, duration: 0.25 },
+    },
   },
   exit: {
-    y: '8%',
-    opacity: 0.4,
-    scale: 0.96,
-    transition: { duration: 0.3, ease: [0.16, 1, 0.3, 1] },
+    scale: 0.94,
+    opacity: 0.5,
+    transition: { duration: 0.4, ease: [0.16, 1, 0.3, 1] },
   },
 };
 

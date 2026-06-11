@@ -1,33 +1,35 @@
 .page {
   width: 100%;
   min-height: 100%;
-  padding-top: var(--s-6);
-  padding-bottom: var(--s-section);
+  padding-top: var(--s-5);
+  padding-bottom: calc(var(--s-section) + var(--tabbar-h));
 }
 
 .header {
-  display: flex;
-  align-items: baseline;
-  gap: var(--s-3);
-  margin-bottom: var(--s-6);
+  margin-bottom: clamp(2rem, 6vh, 4.5rem);
 }
 
 .index {
+  display: block;
   font-size: var(--fs-meta);
   letter-spacing: var(--tracking-meta);
+  text-transform: uppercase;
   color: var(--c-grey-3);
+  margin-bottom: var(--s-2);
 }
 
 .title {
   font-size: var(--fs-h1);
   font-weight: 500;
-  letter-spacing: var(--tracking-tight);
-  line-height: var(--lh-snug);
+  letter-spacing: var(--tracking-h1);
+  line-height: var(--lh-tight);
+  text-transform: uppercase;
 }
 
 .intro {
   font-size: var(--fs-lead);
   color: var(--c-grey-2);
   max-width: 44ch;
-  margin-top: var(--s-2);
+  margin-top: var(--s-3);
+  letter-spacing: var(--tracking-tight);
 }
