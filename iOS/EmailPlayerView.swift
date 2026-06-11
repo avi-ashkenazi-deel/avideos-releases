@@ -16,6 +16,7 @@ import UIKit
 struct PlayerDetailContent: View {
     @EnvironmentObject private var player: EmailPlayerViewModel
     @ObservedObject private var settings = AppSettings.shared
+    @ObservedObject private var highlightStore = HighlightStore.shared
 
     @State private var highlightToAnnotate: Highlight?
     @State private var showCompletion = false
@@ -137,6 +138,7 @@ struct PlayerDetailContent: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     transcriptBody(subject: email?.subjectOrFallback ?? "",
+                                   emailID: email?.id ?? "",
                                    blocks: player.blocks,
                                    currentIndex: player.currentBlockIndex,
                                    isActive: true)
@@ -161,6 +163,7 @@ struct PlayerDetailContent: View {
         VStack(spacing: 0) {
             ScrollView {
                 transcriptBody(subject: staged.email.subjectOrFallback,
+                               emailID: staged.email.id,
                                blocks: staged.blocks,
                                currentIndex: nil,
                                isActive: false)
@@ -190,9 +193,10 @@ struct PlayerDetailContent: View {
 
     // MARK: - Transcript
 
-    private func transcriptBody(subject: String, blocks: [ContentBlock],
+    private func transcriptBody(subject: String, emailID: String, blocks: [ContentBlock],
                                 currentIndex: Int?, isActive: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 16) {
+        let noted = notedBlocks(emailID: emailID, blocks: blocks)
+        return VStack(alignment: .leading, spacing: 16) {
             Text(subject)
                 .font(.system(size: settings.readingTextSize.titlePointSize, weight: .bold))
                 .multilineTextAlignment(LanguageTools.isRightToLeft(subject) ? .trailing : .leading)
@@ -201,7 +205,9 @@ struct PlayerDetailContent: View {
                 .padding(.bottom, 4)
 
             ForEach(Array(blocks.enumerated()), id: \.element.id) { index, block in
-                blockView(block, index: index, currentIndex: currentIndex, isActive: isActive)
+                blockView(block, index: index, currentIndex: currentIndex, isActive: isActive,
+                          isNoted: noted.highlighted.contains(index),
+                          hasNote: noted.withNote.contains(index))
                     .id(index)
             }
         }
@@ -209,14 +215,43 @@ struct PlayerDetailContent: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    /// Which sentence blocks fall inside a saved highlight for this email, so the
+    /// transcript can show them with a persistent highlight (and a note marker when
+    /// the highlight carries a written/dictated note). A block counts as "noted"
+    /// when its spoken text appears in a highlight's captured passage, or it is the
+    /// highlight's anchor block.
+    private func notedBlocks(emailID: String, blocks: [ContentBlock])
+        -> (highlighted: Set<Int>, withNote: Set<Int>) {
+        guard !emailID.isEmpty else { return ([], []) }
+        let saved = highlightStore.highlights(forEmail: emailID)
+        guard !saved.isEmpty else { return ([], []) }
+
+        var highlighted = Set<Int>(), withNote = Set<Int>()
+        for (index, block) in blocks.enumerated() {
+            guard case .sentence = block else { continue }
+            let text = block.spokenText.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard text.count >= 4 else { continue }
+            for h in saved where (index == h.blockIndex && h.blockIndex > 0) || h.capturedText.contains(text) {
+                highlighted.insert(index)
+                if !h.note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    withNote.insert(index)
+                }
+            }
+        }
+        return (highlighted, withNote)
+    }
+
     @ViewBuilder
     private func blockView(_ block: ContentBlock, index: Int,
-                           currentIndex: Int?, isActive: Bool) -> some View {
+                           currentIndex: Int?, isActive: Bool,
+                           isNoted: Bool, hasNote: Bool) -> some View {
         let isCurrent = currentIndex == index
         switch block {
         case .sentence(let sentence):
             SentenceText(text: sentence.text,
                          isCurrent: isCurrent,
+                         isNoted: isNoted,
+                         hasNote: hasNote,
                          wordRange: isCurrent ? player.spokenWordRange : nil,
                          fontSize: settings.readingTextSize.bodyPointSize)
                 .contentShape(Rectangle())
@@ -331,6 +366,8 @@ struct NowPlayingView: View {
 private struct SentenceText: View {
     let text: String
     let isCurrent: Bool
+    var isNoted: Bool = false
+    var hasNote: Bool = false
     let wordRange: NSRange?
     var fontSize: CGFloat = 22
 
@@ -346,9 +383,27 @@ private struct SentenceText: View {
             .frame(maxWidth: .infinity, alignment: isRTL ? .trailing : .leading)
             .background(
                 RoundedRectangle(cornerRadius: 8)
-                    .fill(isCurrent ? Color.accentColor.opacity(0.15) : .clear)
+                    .fill(backgroundFill)
             )
-            .foregroundStyle(isCurrent ? .primary : .secondary)
+            // A persistent marker so a noted passage is recognisable at a glance,
+            // even while it's the sentence currently being read.
+            .overlay(alignment: isRTL ? .topLeading : .topTrailing) {
+                if isNoted {
+                    Image(systemName: hasNote ? "note.text" : "highlighter")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.orange)
+                        .padding(5)
+                }
+            }
+            .foregroundStyle(isCurrent || isNoted ? .primary : .secondary)
+    }
+
+    /// Current sentence wins (accent); otherwise a noted passage shows a
+    /// highlighter-yellow wash; plain sentences have no background.
+    private var backgroundFill: Color {
+        if isCurrent { return Color.accentColor.opacity(0.15) }
+        if isNoted { return Color.yellow.opacity(0.30) }
+        return .clear
     }
 
     private var attributed: AttributedString {
