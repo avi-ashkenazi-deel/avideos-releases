@@ -3,57 +3,57 @@ import Foundation
 import AVFoundation
 #endif
 
-/// Keeps the app alive in the background by playing a continuous *silent* audio
-/// loop while timers are running. With the `audio` background mode + an active
-/// playback session, iOS keeps the process scheduled, so the 0.1s tick keeps
-/// firing and spoken/haptic cues (the countdown, interval announcements) play
-/// live even with the screen locked — not just the fallback notifications.
+/// Keeps the app alive in the background by looping a *silent* audio track while
+/// timers run. With the `audio` background mode + an active playback session,
+/// iOS keeps the process scheduled, so the 0.1s tick keeps firing and spoken /
+/// haptic cues play live with the screen locked — not just the fallback
+/// notifications.
 ///
-/// The loop is true silence (a buffer of zeros), so it adds nothing audible and,
-/// because the session mixes rather than ducks, the user's music is untouched.
+/// We use `AVAudioPlayer` (not `AVAudioEngine`): the engine takes over the
+/// output node and prevents `AVSpeechSynthesizer` from speaking, whereas an
+/// `AVAudioPlayer` at zero volume mixes alongside speech without interfering.
 @MainActor
 final class BackgroundKeepAlive {
     #if canImport(AVFoundation) && !os(macOS)
-    private let engine = AVAudioEngine()
-    private let player = AVAudioPlayerNode()
-    private var prepared = false
+    private var player: AVAudioPlayer?
     #endif
-    private var running = false
 
     func start() {
         #if canImport(AVFoundation) && !os(macOS)
-        guard !running else { return }
         AudioSession.activate()
-        guard let format = AVAudioFormat(standardFormatWithSampleRate: 44_100, channels: 2),
-              let buffer = AVAudioPCMBuffer(pcmFormat: format,
-                                            frameCapacity: AVAudioFrameCount(format.sampleRate))
-        else { return }
-        buffer.frameLength = buffer.frameCapacity   // zero-filled == silence
-
-        if !prepared {
-            engine.attach(player)
-            engine.connect(player, to: engine.mainMixerNode, format: format)
-            prepared = true
+        if player == nil {
+            player = try? AVAudioPlayer(data: Self.silentWAV())
+            player?.numberOfLoops = -1   // loop forever
+            player?.volume = 0            // truly silent
+            player?.prepareToPlay()
         }
-        do {
-            try engine.start()
-            player.scheduleBuffer(buffer, at: nil, options: .loops)
-            player.play()
-            running = true
-        } catch {
-            #if DEBUG
-            print("BackgroundKeepAlive start failed: \(error)")
-            #endif
-        }
+        player?.play()
         #endif
     }
 
     func stop() {
         #if canImport(AVFoundation) && !os(macOS)
-        guard running else { return }
-        player.stop()
-        engine.stop()
+        player?.stop()
         #endif
-        running = false
     }
+
+    #if canImport(AVFoundation) && !os(macOS)
+    /// A tiny in-memory silent PCM WAV (1s, 8 kHz mono) we can loop indefinitely.
+    private static func silentWAV(seconds: Double = 1, sampleRate: Int = 8000) -> Data {
+        let channels = 1, bits = 16
+        let frames = Int(Double(sampleRate) * seconds)
+        let dataSize = frames * channels * bits / 8
+        var d = Data()
+        func str(_ s: String) { d.append(s.data(using: .ascii)!) }
+        func u32(_ v: UInt32) { var x = v.littleEndian; d.append(Data(bytes: &x, count: 4)) }
+        func u16(_ v: UInt16) { var x = v.littleEndian; d.append(Data(bytes: &x, count: 2)) }
+        str("RIFF"); u32(UInt32(36 + dataSize)); str("WAVE")
+        str("fmt "); u32(16); u16(1); u16(UInt16(channels))
+        u32(UInt32(sampleRate)); u32(UInt32(sampleRate * channels * bits / 8))
+        u16(UInt16(channels * bits / 8)); u16(UInt16(bits))
+        str("data"); u32(UInt32(dataSize))
+        d.append(Data(count: dataSize))   // zeros == silence
+        return d
+    }
+    #endif
 }

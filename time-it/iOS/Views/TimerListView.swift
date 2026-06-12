@@ -39,7 +39,8 @@ struct TimerListView: View {
             .sheet(isPresented: $creatingNew) {
                 PresetEditorView(
                     preset: TimerPreset(duration: 300,
-                                        intervals: IntervalPlan(spec: .even(count: 4))),
+                                        intervals: IntervalPlan(spec: .even(count: 4)),
+                                        colorHex: PresetPalette.random),
                     title: "New timer"
                 ) { presets.add($0) }
             }

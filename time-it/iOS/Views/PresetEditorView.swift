@@ -22,6 +22,11 @@ struct PresetEditorView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    TextField("Name", text: $draft.name)
+                    ColorPickerRow(selection: $draft.colorHex)
+                }
+
                 Section("Total time") {
                     DurationPicker(seconds: $draft.duration)
                 }
@@ -69,8 +74,6 @@ struct PresetEditorView: View {
 
                 Section("Options") {
                     Stepper("Repeat \(draft.repeatCount)×", value: $draft.repeatCount, in: 1...50)
-                    ColorPickerRow(selection: $draft.colorHex)
-                    TextField("Name (optional)", text: $draft.name)
                 }
             }
             .navigationTitle(title)
@@ -420,15 +423,28 @@ private struct ColorPickerRow: View {
     @Binding var selection: String
 
     var body: some View {
-        HStack(spacing: 14) {
+        // A single swatch that opens a dropdown of the palette when tapped.
+        Menu {
             ForEach(PresetPalette.hexes, id: \.self) { hex in
-                Circle()
-                    .fill(Color(hex: hex))
-                    .frame(width: 28, height: 28)
-                    .overlay(Circle().stroke(.primary, lineWidth: selection == hex ? 2 : 0))
-                    .onTapGesture { selection = hex }
+                Button { selection = hex } label: {
+                    Label {
+                        Text(PresetPalette.name(for: hex))
+                    } icon: {
+                        Image(systemName: selection == hex ? "checkmark.circle.fill" : "circle.fill")
+                            .foregroundStyle(Color(hex: hex))
+                    }
+                }
+            }
+        } label: {
+            HStack {
+                Text("Color")
+                Spacer()
+                Circle().fill(Color(hex: selection)).frame(width: 24, height: 24)
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.caption).foregroundStyle(.secondary)
             }
         }
+        .tint(.primary)
     }
 }
 

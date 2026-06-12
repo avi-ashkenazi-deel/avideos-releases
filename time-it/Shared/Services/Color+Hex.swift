@@ -20,4 +20,19 @@ extension Color {
 /// A small fixed palette for tinting presets, exposed in the editor.
 enum PresetPalette {
     static let hexes = ["#FF9500", "#0A84FF", "#30D158", "#FF375F", "#BF5AF2", "#FFD60A"]
+
+    /// A new preset gets a random tint from the palette.
+    static var random: String { hexes.randomElement() ?? "#FF9500" }
+
+    static func name(for hex: String) -> String {
+        switch hex.uppercased() {
+        case "#FF9500": return "Orange"
+        case "#0A84FF": return "Blue"
+        case "#30D158": return "Green"
+        case "#FF375F": return "Red"
+        case "#BF5AF2": return "Purple"
+        case "#FFD60A": return "Yellow"
+        default: return "Custom"
+        }
+    }
 }

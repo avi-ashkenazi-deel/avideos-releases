@@ -1,108 +1,105 @@
 import SwiftUI
 
-/// The running view for the single active timer. Takes over the whole screen
-/// while a timer runs; returns to the library automatically when it's stopped.
-/// Refreshes on the engine's published changes (which tick ~10×/sec).
+/// Full-screen running view for the single active timer. A colored fill drains
+/// downward as the time runs out, with a huge countdown — readable from across
+/// the gym. Takes over the whole screen while a timer runs and returns to the
+/// library automatically when it's stopped. Re-renders on the engine's ~10×/sec
+/// published ticks.
 struct RunningTimerScreen: View {
     @EnvironmentObject private var engine: TimerEngine
-
-    var body: some View {
-        NavigationStack {
-            VStack(spacing: 16) {
-                OutputModePicker()
-                    .padding(.horizontal)
-                    .padding(.top, 8)
-
-                Spacer()
-                if let timer = engine.running.first {
-                    RunningTimerCard(timer: timer)
-                        .padding(.horizontal)
-                }
-                Spacer()
-            }
-            .navigationTitle(engine.running.first?.preset.displayName ?? "Running")
-            .navigationBarTitleDisplayMode(.inline)
-        }
-    }
-}
-
-private struct RunningTimerCard: View {
-    @EnvironmentObject private var engine: TimerEngine
-    let timer: RunningTimerState
     @State private var editing = false
 
     var body: some View {
-        // Re-read live values each render; the engine publishes on every tick.
-        let now = Date()
-        let remaining = timer.remaining(now: now)
-        let progress = timer.progress(now: now)
-        let tint = Color(hex: timer.preset.colorHex)
-
-        VStack(spacing: 12) {
-            HStack {
-                Text(timer.preset.displayName).font(.headline)
-                if timer.preset.repeatCount > 1 {
-                    Text("set \(timer.currentRepeat)/\(timer.preset.repeatCount)")
-                        .font(.caption).foregroundStyle(.secondary)
+        if let timer = engine.running.first {
+            content(for: timer)
+                .sheet(isPresented: $editing) {
+                    PresetEditorView(preset: timer.preset, title: "Edit running") { updated in
+                        engine.editRunning(id: timer.id, to: updated)
+                    }
                 }
-                Spacer()
-                if !timer.isRunning {
-                    Text("Paused").font(.caption.bold()).foregroundStyle(.orange)
-                }
-                Button { editing = true } label: { Image(systemName: "slider.horizontal.3") }
-                    .buttonStyle(.plain)
-            }
-
-            ZStack {
-                Circle().stroke(tint.opacity(0.2), lineWidth: 10)
-                Circle()
-                    .trim(from: 0, to: progress)
-                    .stroke(tint, style: StrokeStyle(lineWidth: 10, lineCap: .round))
-                    .rotationEffect(.degrees(-90))
-                Text(formatClock(remaining))
-                    .font(.system(size: 40, weight: .semibold, design: .rounded))
-                    .monospacedDigit()
-            }
-            .frame(height: 180)
-
-            if let next = timer.nextCueLabel(now: now) {
-                Label("Next: \(next)", systemImage: "bell")
-                    .font(.caption).foregroundStyle(.secondary)
-            }
-
-            HStack(spacing: 24) {
-                ControlButton(system: "gobackward.10") { engine.adjust(id: timer.id, by: -10) }
-                if timer.isRunning {
-                    ControlButton(system: "pause.fill") { engine.pause(id: timer.id) }
-                } else {
-                    ControlButton(system: "play.fill") { engine.resume(id: timer.id) }
-                }
-                ControlButton(system: "goforward.30") { engine.adjust(id: timer.id, by: 30) }
-                ControlButton(system: "stop.fill", role: .destructive) { engine.stop(id: timer.id) }
-            }
+        } else {
+            Color.clear
         }
-        .padding()
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 20))
-        .sheet(isPresented: $editing) {
-            // Live edit: seed the editor with the running preset and apply the
-            // result to the running timer, preserving elapsed time.
-            PresetEditorView(preset: timer.preset, title: "Edit running") { updated in
-                engine.editRunning(id: timer.id, to: updated)
+    }
+
+    private func content(for timer: RunningTimerState) -> some View {
+        let now = Date()                              // fresh each publish
+        let tint = Color(hex: timer.preset.colorHex)
+        let remaining = timer.remaining(now: now)
+        let fraction = timer.preset.duration > 0
+            ? max(0, min(1, remaining / timer.preset.duration)) : 0
+
+        return GeometryReader { geo in
+            ZStack(alignment: .bottom) {
+                tint.opacity(0.12).ignoresSafeArea()
+
+                // The draining fill: full at the start, empties as time passes.
+                Rectangle()
+                    .fill(tint)
+                    .frame(height: geo.size.height * fraction)
+                    .ignoresSafeArea(edges: .bottom)
+                    .animation(.linear(duration: 0.12), value: fraction)
+
+                VStack(spacing: 12) {
+                    topBar(timer)
+                    OutputModePicker()
+                    Spacer()
+                    Text(formatClock(remaining))
+                        .font(.system(size: min(geo.size.width * 0.30, 160),
+                                      weight: .bold, design: .rounded))
+                        .monospacedDigit()
+                        .minimumScaleFactor(0.5)
+                        .foregroundStyle(.white)
+                        .shadow(radius: 8)
+                    if let next = timer.nextCueLabel(now: now) {
+                        Text("Next: \(next)")
+                            .font(.headline).foregroundStyle(.white.opacity(0.9))
+                            .shadow(radius: 4)
+                    }
+                    if timer.preset.repeatCount > 1 {
+                        Text("Set \(timer.currentRepeat) of \(timer.preset.repeatCount)")
+                            .font(.subheadline).foregroundStyle(.white.opacity(0.8))
+                    }
+                    Spacer()
+                    controls(timer)
+                }
+                .padding()
             }
         }
     }
-}
 
-private struct ControlButton: View {
-    let system: String
-    var role: ButtonRole? = nil
-    let action: () -> Void
-
-    var body: some View {
-        Button(role: role, action: action) {
-            Image(systemName: system).font(.title2)
+    private func topBar(_ timer: RunningTimerState) -> some View {
+        HStack {
+            Text(timer.preset.displayName)
+                .font(.title3.bold()).foregroundStyle(.white).shadow(radius: 4)
+            Spacer()
+            Button { editing = true } label: {
+                Image(systemName: "slider.horizontal.3").font(.title3)
+            }
+            .foregroundStyle(.white)
         }
-        .buttonStyle(.bordered)
-        .clipShape(Circle())
+    }
+
+    private func controls(_ timer: RunningTimerState) -> some View {
+        HStack(spacing: 20) {
+            roundButton("gobackward.10") { engine.adjust(id: timer.id, by: -10) }
+            if timer.isRunning {
+                roundButton("pause.fill") { engine.pause(id: timer.id) }
+            } else {
+                roundButton("play.fill") { engine.resume(id: timer.id) }
+            }
+            roundButton("goforward.30") { engine.adjust(id: timer.id, by: 30) }
+            roundButton("stop.fill") { engine.stop(id: timer.id) }
+        }
+    }
+
+    private func roundButton(_ system: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: system)
+                .font(.title2)
+                .foregroundStyle(.white)
+                .frame(width: 60, height: 60)
+                .background(.ultraThinMaterial, in: Circle())
+        }
     }
 }
