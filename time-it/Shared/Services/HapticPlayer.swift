@@ -50,27 +50,40 @@ enum HapticPlayer {
     #endif
 
     #if canImport(UIKit) && !os(watchOS)
+    // Feedback generators must be *retained* and `prepare()`d, or the Taptic
+    // engine often no-ops on a throwaway instance — which is why earlier builds
+    // felt like nothing happened. Keep one of each alive for the app's lifetime.
+    @MainActor private enum Gen {
+        static let notification = UINotificationFeedbackGenerator()
+        static let light = UIImpactFeedbackGenerator(style: .light)
+        static let soft = UIImpactFeedbackGenerator(style: .soft)
+        static let medium = UIImpactFeedbackGenerator(style: .medium)
+        static let heavy = UIImpactFeedbackGenerator(style: .heavy)
+    }
+
     @MainActor
     private static func playPhone(_ pattern: HapticPattern) {
         switch pattern {
         case .notification:
-            UINotificationFeedbackGenerator().notificationOccurred(.warning)
-        case .directionUp:
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-        case .directionDown:
-            UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+            Gen.notification.prepare()
+            Gen.notification.notificationOccurred(.warning)
         case .success:
-            UINotificationFeedbackGenerator().notificationOccurred(.success)
-        case .retry:
-            let g = UIImpactFeedbackGenerator(style: .medium)
-            g.impactOccurred()
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) { g.impactOccurred() }
-        case .stop:
-            UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
-        case .timeUp:
-            let g = UIImpactFeedbackGenerator(style: .heavy)
-            for i in 0..<3 {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35 * Double(i)) { g.impactOccurred() }
+            Gen.notification.prepare()
+            Gen.notification.notificationOccurred(.success)
+        case .directionUp:  impact(Gen.light)
+        case .directionDown: impact(Gen.soft)
+        case .retry:        impact(Gen.medium, times: 2, gap: 0.18)
+        case .stop:         impact(Gen.heavy)
+        case .timeUp:       impact(Gen.heavy, times: 3, gap: 0.35)
+        }
+    }
+
+    @MainActor
+    private static func impact(_ g: UIImpactFeedbackGenerator, times: Int = 1, gap: TimeInterval = 0) {
+        for i in 0..<max(1, times) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + gap * Double(i)) {
+                g.prepare()
+                g.impactOccurred(intensity: 1.0)
             }
         }
     }

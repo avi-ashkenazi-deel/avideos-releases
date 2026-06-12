@@ -43,6 +43,46 @@ struct RunningTimerState: Identifiable {
         preset.nextCue(afterElapsed: elapsed(now: now))?.displayLabel
     }
 
+    // MARK: Intervals (the segment currently in progress)
+
+    /// Segment boundaries — cue fire times plus the final end — ascending, >0.
+    /// These delimit the "intervals" the running view counts down within.
+    func segmentBoundaries() -> [TimeInterval] {
+        var b = Set(preset.cues().map(\.fireTime))
+        b.insert(preset.duration)
+        return b.filter { $0 > 0.0001 }.sorted()
+    }
+
+    /// Start / end (elapsed offsets) of the interval currently in progress.
+    func currentSegment(now: Date = Date()) -> (start: TimeInterval, end: TimeInterval) {
+        let e = elapsed(now: now)
+        let bounds = segmentBoundaries()
+        let end = bounds.first { $0 > e + 0.0001 } ?? preset.duration
+        let start = bounds.last { $0 <= e + 0.0001 } ?? 0
+        return (start, end)
+    }
+
+    /// Seconds left in the interval currently in progress.
+    func intervalRemaining(now: Date = Date()) -> TimeInterval {
+        max(0, currentSegment(now: now).end - elapsed(now: now))
+    }
+
+    /// 0...1 of the current interval remaining (drives the draining fill).
+    func intervalFraction(now: Date = Date()) -> Double {
+        let seg = currentSegment(now: now)
+        let len = seg.end - seg.start
+        guard len > 0 else { return 0 }
+        return max(0, min(1, intervalRemaining(now: now) / len))
+    }
+
+    /// Label of the interval currently in progress (e.g. "Interval 2", "Rest"),
+    /// taken from the cue that *starts* it; nil for the opening segment.
+    func currentIntervalLabel(now: Date = Date()) -> String? {
+        let start = currentSegment(now: now).start
+        guard start > 0.0001 else { return nil }
+        return preset.cues().first { abs($0.fireTime - start) < 0.5 }?.displayLabel
+    }
+
     /// Seconds elapsed in the current run.
     func elapsed(now: Date = Date()) -> TimeInterval {
         let live = isRunning ? now.timeIntervalSince(startDate) : 0

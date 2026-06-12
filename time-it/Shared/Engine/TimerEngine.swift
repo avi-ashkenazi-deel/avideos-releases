@@ -82,7 +82,43 @@ final class TimerEngine: ObservableObject {
         notifyChange()
     }
 
-    /// Replace a running timer's preset live (edit total time and/or its cues),
+    /// Jump to the start of the next interval (skips the rest of the current
+    /// one), advancing the overall elapsed time so the total updates too.
+    func skipToNextInterval(id: UUID, now: Date = Date()) {
+        guard let i = running.firstIndex(where: { $0.id == id }) else { return }
+        let e = running[i].elapsed(now: now)
+        let bounds = running[i].segmentBoundaries()
+        let target = bounds.first { $0 > e + 0.05 } ?? running[i].preset.duration
+        setElapsed(&running[i], to: target, now: now)
+        notifyChange()
+    }
+
+    /// Jump to the previous interval boundary. If we're more than ~1s into the
+    /// current interval, restart it; otherwise step back to the previous one.
+    func skipToPreviousInterval(id: UUID, now: Date = Date()) {
+        guard let i = running.firstIndex(where: { $0.id == id }) else { return }
+        let e = running[i].elapsed(now: now)
+        let starts = ([0] + running[i].segmentBoundaries()).sorted()
+        let curIdx = starts.lastIndex { $0 <= e + 0.0001 } ?? 0
+        let target = (e - starts[curIdx] > 1.0) ? starts[curIdx] : starts[max(0, curIdx - 1)]
+        setElapsed(&running[i], to: target, now: now)
+        notifyChange()
+    }
+
+    /// Re-baseline a running timer to a specific elapsed offset, preserving
+    /// run/pause state. Cues strictly before the new point are marked fired (so
+    /// they don't replay); a cue landing exactly on the new point still fires
+    /// (so skipping *to* an interval announces it).
+    private func setElapsed(_ s: inout RunningTimerState, to newElapsed: TimeInterval, now: Date) {
+        let clamped = max(0, min(newElapsed, s.preset.duration))
+        s.bankedElapsed = clamped
+        s.startDate = now
+        s.firedCueIDs = Set(s.preset.cues().filter { $0.fireTime < clamped - 0.05 }.map(\.id))
+        if let cd = s.preset.finalCountdown {
+            let remaining = s.preset.duration - clamped
+            s.lastCountdownSecondSpoken = remaining > Double(cd.lastSeconds) ? nil : Int(remaining.rounded(.up))
+        }
+    }
     /// preserving how much has already elapsed. Cues that now sit in the past are
     /// marked fired so they don't retroactively announce.
     func editRunning(id: UUID, to newPreset: TimerPreset, now: Date = Date()) {

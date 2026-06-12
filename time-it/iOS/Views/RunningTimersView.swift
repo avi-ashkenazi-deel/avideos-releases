@@ -25,15 +25,16 @@ struct RunningTimerScreen: View {
     private func content(for timer: RunningTimerState) -> some View {
         let now = Date()                              // fresh each publish
         let tint = Color(hex: timer.preset.colorHex)
-        let remaining = timer.remaining(now: now)
-        let fraction = timer.preset.duration > 0
-            ? max(0, min(1, remaining / timer.preset.duration)) : 0
+        let intervalRemaining = timer.intervalRemaining(now: now)
+        let totalRemaining = timer.remaining(now: now)
+        // The fill follows the *interval* (the big number), draining and
+        // resetting at each boundary.
+        let fraction = timer.intervalFraction(now: now)
 
         return GeometryReader { geo in
             ZStack(alignment: .bottom) {
                 tint.opacity(0.12).ignoresSafeArea()
 
-                // The draining fill: full at the start, empties as time passes.
                 Rectangle()
                     .fill(tint)
                     .frame(height: geo.size.height * fraction)
@@ -44,22 +45,36 @@ struct RunningTimerScreen: View {
                     topBar(timer)
                     OutputModePicker()
                     Spacer()
-                    Text(formatClock(remaining))
+
+                    // Hero: the current interval's countdown.
+                    if let label = timer.currentIntervalLabel(now: now) {
+                        Text(label)
+                            .font(.title2.bold()).foregroundStyle(.white)
+                            .shadow(radius: 4)
+                    }
+                    Text(formatClock(intervalRemaining))
                         .font(.system(size: min(geo.size.width * 0.30, 160),
                                       weight: .bold, design: .rounded))
                         .monospacedDigit()
                         .minimumScaleFactor(0.5)
                         .foregroundStyle(.white)
                         .shadow(radius: 8)
-                    if let next = timer.nextCueLabel(now: now) {
-                        Text("Next: \(next)")
-                            .font(.headline).foregroundStyle(.white.opacity(0.9))
-                            .shadow(radius: 4)
+
+                    // Secondary: total time left, plus what's next.
+                    VStack(spacing: 2) {
+                        Text("Total \(formatClock(totalRemaining))")
+                            .font(.title3).monospacedDigit()
+                        if let next = timer.nextCueLabel(now: now) {
+                            Text("Next: \(next)").font(.subheadline)
+                        }
+                        if timer.preset.repeatCount > 1 {
+                            Text("Set \(timer.currentRepeat) of \(timer.preset.repeatCount)")
+                                .font(.subheadline)
+                        }
                     }
-                    if timer.preset.repeatCount > 1 {
-                        Text("Set \(timer.currentRepeat) of \(timer.preset.repeatCount)")
-                            .font(.subheadline).foregroundStyle(.white.opacity(0.8))
-                    }
+                    .foregroundStyle(.white.opacity(0.9))
+                    .shadow(radius: 3)
+
                     Spacer()
                     controls(timer)
                 }
@@ -82,13 +97,14 @@ struct RunningTimerScreen: View {
 
     private func controls(_ timer: RunningTimerState) -> some View {
         HStack(spacing: 20) {
-            roundButton("gobackward.10") { engine.adjust(id: timer.id, by: -10) }
+            // Previous / next interval — also re-baselines the total.
+            roundButton("backward.end.fill") { engine.skipToPreviousInterval(id: timer.id) }
             if timer.isRunning {
                 roundButton("pause.fill") { engine.pause(id: timer.id) }
             } else {
                 roundButton("play.fill") { engine.resume(id: timer.id) }
             }
-            roundButton("goforward.30") { engine.adjust(id: timer.id, by: 30) }
+            roundButton("forward.end.fill") { engine.skipToNextInterval(id: timer.id) }
             roundButton("stop.fill") { engine.stop(id: timer.id) }
         }
     }

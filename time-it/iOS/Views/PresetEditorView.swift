@@ -462,13 +462,14 @@ private struct MilestoneEditorRow: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 14) {
             Picker("When", selection: kindBinding) {
                 ForEach(Kind.allCases) { Text($0.rawValue).tag($0) }
             }
             .pickerStyle(.segmented)
 
             valueControl
+                .padding(.top, 2)
 
             TextField("Spoken label (optional)", text: labelBinding)
                 .font(.subheadline)
