@@ -27,13 +27,20 @@ struct FeedsList: View {
             if store.feeds.isEmpty {
                 emptyState
             } else if shownItems.isEmpty {
-                ContentUnavailableView(
-                    searchText.isEmpty ? "No articles yet" : "No matches",
-                    systemImage: searchText.isEmpty ? "dot.radiowaves.up.forward" : "magnifyingglass",
-                    description: Text(searchText.isEmpty
-                        ? "Pull to refresh your feeds."
-                        : "No articles match “\(searchText)” across your feeds.")
-                )
+                // Wrapped in a ScrollView so pull-to-refresh actually works here —
+                // .refreshable only hooks onto a scrollable container, and this is
+                // the screen that tells you to pull. containerRelativeFrame keeps
+                // the message centred in the viewport.
+                ScrollView {
+                    ContentUnavailableView(
+                        searchText.isEmpty ? "No articles yet" : "No matches",
+                        systemImage: searchText.isEmpty ? "dot.radiowaves.up.forward" : "magnifyingglass",
+                        description: Text(searchText.isEmpty
+                            ? "Pull to refresh your feeds."
+                            : "No articles match “\(searchText)” across your feeds.")
+                    )
+                    .containerRelativeFrame([.horizontal, .vertical])
+                }
             } else {
                 List {
                     ForEach(shownItems) { item in
