@@ -96,8 +96,6 @@ struct RootView: View {
 private struct CompactLayout: View {
     @EnvironmentObject private var appState: AppState
     @EnvironmentObject private var player: EmailPlayerViewModel
-    @ObservedObject private var savedStore = SavedArticleStore.shared
-    @ObservedObject private var feedStore = FeedStore.shared
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -107,11 +105,9 @@ private struct CompactLayout: View {
 
                 SavedArticlesView()
                     .tabItem { Label("Saved", systemImage: "bookmark") }
-                    .badge(savedStore.unreadCount)
 
                 FeedsView()
                     .tabItem { Label("Feeds", systemImage: "dot.radiowaves.up.forward") }
-                    .badge(feedStore.unreadCount)
             }
 
             if player.parsed != nil {
@@ -139,8 +135,6 @@ private enum LibrarySection: Hashable { case inbox, saved, feeds }
 private struct SplitLayout: View {
     @EnvironmentObject private var appState: AppState
     @EnvironmentObject private var player: EmailPlayerViewModel
-    @ObservedObject private var savedStore = SavedArticleStore.shared
-    @ObservedObject private var feedStore = FeedStore.shared
     @State private var columnVisibility = NavigationSplitViewVisibility.all
     @State private var section: LibrarySection? = .inbox
     @State private var showSettings = false
@@ -154,9 +148,7 @@ private struct SplitLayout: View {
             List(selection: $section) {
                 Label("Inbox", systemImage: "tray.full").tag(LibrarySection.inbox)
                 Label("Saved", systemImage: "bookmark").tag(LibrarySection.saved)
-                    .badge(savedStore.unreadCount)
                 Label("Feeds", systemImage: "dot.radiowaves.up.forward").tag(LibrarySection.feeds)
-                    .badge(feedStore.unreadCount)
             }
             .navigationTitle("VoiceInbox")
             .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 300)
