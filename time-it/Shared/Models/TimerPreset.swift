@@ -47,16 +47,14 @@ struct TimerPreset: Codable, Hashable, Identifiable {
         var result: [TimerCue] = []
 
         if let plan = intervals {
-            let bounds = plan.boundaries(forDuration: duration)
-            for (idx, t) in bounds.enumerated() {
-                let number = idx + 1
+            for (idx, b) in plan.cuePoints(forDuration: duration).enumerated() {
                 result.append(TimerCue(
-                    id: "interval-\(number)",
-                    fireTime: t,
+                    id: "interval-\(idx + 1)",
+                    fireTime: b.time,
                     alert: plan.alert,
-                    haptic: plan.haptic,
-                    spokenText: plan.announceNumber ? "Interval \(number)" : "",
-                    displayLabel: "Interval \(number)"
+                    haptic: b.haptic,
+                    spokenText: b.spokenText,
+                    displayLabel: b.label
                 ))
             }
         }

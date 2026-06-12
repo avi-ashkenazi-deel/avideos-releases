@@ -137,6 +137,7 @@ private struct IntervalsSection: View {
         case even = "Even"
         case spacing = "Every"
         case custom = "Custom"
+        case workRest = "Work/Rest"
         var id: String { rawValue }
     }
 
@@ -173,8 +174,61 @@ private struct IntervalsSection: View {
         } header: {
             Text("Intervals")
         } footer: {
-            Text("Split the total into announced intervals — evenly, every N seconds, or custom lengths one by one.")
+            Text("Split the total into announced intervals — evenly, every N seconds, custom lengths one by one, or repeating work/rest sets.")
         }
+    }
+
+    /// For custom intervals: warn when the lengths don't add up to the total and
+    /// offer a one-tap fix. Even / Every / Work-Rest always fit by construction,
+    /// so they never need this.
+    @ViewBuilder private var customValidation: some View {
+        let total = customLengths.reduce(0, +)
+        let delta = total - duration
+        if delta > 0.5 {
+            // Over the total: the trailing intervals won't fully happen.
+            HStack(alignment: .top, spacing: 8) {
+                Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Intervals total \(formatClock(total)) — \(formatClock(delta)) over the \(formatClock(duration)) total.")
+                    Text("Reduce by \(formatClock(delta)), or fix it automatically.")
+                        .foregroundStyle(.secondary)
+                }
+                .font(.caption)
+                Spacer()
+                Button("Fix") { setSpec(.custom(lengths: Self.trimmed(customLengths, toTotal: duration))) }
+                    .font(.caption.bold())
+                    .buttonStyle(.borderedProminent)
+            }
+        } else if delta < -0.5 {
+            // Under the total: the last interval simply runs longer — informational.
+            Label("Last interval runs an extra \(formatClock(-delta)) to fill the total.",
+                  systemImage: "info.circle")
+                .font(.caption).foregroundStyle(.secondary)
+        } else {
+            Label("Fits the total exactly.", systemImage: "checkmark.circle")
+                .font(.caption).foregroundStyle(.green)
+        }
+    }
+
+    /// Trim interval lengths from the end until they sum to `total`, dropping any
+    /// that would shrink below a 5s minimum. Earlier intervals are left intact —
+    /// we only take the excess off the end.
+    static func trimmed(_ lengths: [TimeInterval], toTotal total: TimeInterval) -> [TimeInterval] {
+        var arr = lengths
+        var sum = arr.reduce(0, +)
+        var i = arr.count - 1
+        while sum - total > 0.5, i >= 0 {
+            let over = sum - total
+            if arr[i] - over >= 5 {
+                arr[i] -= over
+                sum -= over
+            } else {
+                sum -= arr[i]
+                arr.remove(at: i)
+            }
+            i -= 1
+        }
+        return arr
     }
 
     @ViewBuilder private func modeControls(_ plan: IntervalPlan) -> some View {
@@ -197,10 +251,22 @@ private struct IntervalsSection: View {
             Button {
                 setSpec(.custom(lengths: customLengths + [30]))
             } label: { Label("Add interval", systemImage: "plus") }
+            customValidation
+        case .workRest:
+            Stepper("Work \(formatClock(workSeconds))",
+                    value: workBinding, in: 5...max(5, duration), step: 5)
+            Stepper("Rest \(formatClock(restSeconds))",
+                    value: restBinding, in: 5...max(5, duration), step: 5)
         }
     }
 
     private func summary(_ plan: IntervalPlan) -> String {
+        if case .workRest = plan.spec {
+            let cues = plan.boundaries(forDuration: duration).count
+            // Each full round is one work + one rest segment.
+            let rounds = Int((duration / max(1, workSeconds + restSeconds)).rounded(.down))
+            return "≈\(rounds) round\(rounds == 1 ? "" : "s") · \(cues) cue\(cues == 1 ? "" : "s")"
+        }
         let count = plan.intervalCount(forDuration: duration)
         let bounds = plan.boundaries(forDuration: duration).count
         return "\(count) interval\(count == 1 ? "" : "s") · \(bounds) cue\(bounds == 1 ? "" : "s")"
@@ -220,6 +286,7 @@ private struct IntervalsSection: View {
         case .even: return .even
         case .spacing: return .spacing
         case .custom: return .custom
+        case .workRest: return .workRest
         case .none: return .even
         }
     }
@@ -229,8 +296,24 @@ private struct IntervalsSection: View {
             case .even: setSpec(.even(count: max(2, plan?.intervalCount(forDuration: duration) ?? 4)))
             case .spacing: setSpec(.spacing(seconds: spacingSeconds))
             case .custom: setSpec(.custom(lengths: customLengths))
+            case .workRest: setSpec(.workRest(work: workSeconds, rest: restSeconds))
             }
         })
+    }
+
+    private var workSeconds: TimeInterval {
+        if case .workRest(let w, _)? = plan?.spec { return w }
+        return min(60, max(5, duration / 3))
+    }
+    private var restSeconds: TimeInterval {
+        if case .workRest(_, let r)? = plan?.spec { return r }
+        return min(20, max(5, duration / 6))
+    }
+    private var workBinding: Binding<TimeInterval> {
+        Binding(get: { workSeconds }, set: { setSpec(.workRest(work: $0, rest: restSeconds)) })
+    }
+    private var restBinding: Binding<TimeInterval> {
+        Binding(get: { restSeconds }, set: { setSpec(.workRest(work: workSeconds, rest: $0)) })
     }
 
     private var evenCount: Int {
