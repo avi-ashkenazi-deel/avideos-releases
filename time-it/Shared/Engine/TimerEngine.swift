@@ -30,6 +30,10 @@ final class TimerEngine: ObservableObject {
     /// Activities and re-schedule background notifications.
     var onTimersChanged: ((_ running: [RunningTimerState]) -> Void)?
 
+    /// Fired when an interval/milestone cue fires, so the host can refresh the
+    /// Live Activity's "next" label without rescheduling notifications.
+    var onCueFired: ((_ running: [RunningTimerState]) -> Void)?
+
     init(announcer: Announcer? = nil) {
         self.announcer = announcer
     }
@@ -134,10 +138,11 @@ final class TimerEngine: ObservableObject {
         var completed: [UUID] = []
 
         var scheduleChanged = false
+        var cueFired = false
 
         for i in running.indices {
             guard running[i].isRunning else { continue }
-            processCues(&running[i], now: now)
+            if processCues(&running[i], now: now) { cueFired = true }
             processCountdown(&running[i], now: now)
 
             if running[i].isComplete(now: now) {
@@ -158,12 +163,14 @@ final class TimerEngine: ObservableObject {
         // Trigger a publish even when only derived values changed (progress).
         objectWillChange.send()
         if scheduleChanged { notifyChange() }
+        else if cueFired { onCueFired?(running) }
         stopTickerIfIdle()
     }
 
     // MARK: - Milestone / countdown side effects
 
-    private func processCues(_ s: inout RunningTimerState, now: Date) {
+    @discardableResult
+    private func processCues(_ s: inout RunningTimerState, now: Date) -> Bool {
         let elapsed = s.elapsed(now: now)
         let due = MilestoneScheduler.dueCues(
             s.preset.cues(), elapsed: elapsed, alreadyFired: s.firedCueIDs
@@ -176,6 +183,7 @@ final class TimerEngine: ObservableObject {
             if ch.haptic { announcer?.haptic(cue.haptic) }
             s.firedCueIDs.insert(cue.id)
         }
+        return !due.isEmpty
     }
 
     private func processCountdown(_ s: inout RunningTimerState, now: Date) {

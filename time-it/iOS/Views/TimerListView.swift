@@ -11,24 +11,20 @@ struct TimerListView: View {
     var body: some View {
         NavigationStack {
             List {
-                Section {
-                    OutputModePicker()
-                } header: { Text("Announce with") }
-
                 ForEach(presets.presets) { preset in
-                    PresetRow(preset: preset) {
-                        start(preset)
-                    }
-                    .contentShape(Rectangle())
-                    .swipeActions(edge: .trailing) {
-                        Button(role: .destructive) {
-                            presets.delete(id: preset.id)
-                        } label: { Label("Delete", systemImage: "trash") }
-                        Button {
-                            editing = preset
-                        } label: { Label("Edit", systemImage: "pencil") }
-                        .tint(.blue)
-                    }
+                    // Tapping anywhere on the row starts the timer; swipe still
+                    // exposes Edit / Delete.
+                    Button { start(preset) } label: { PresetRow(preset: preset) }
+                        .buttonStyle(.plain)
+                        .swipeActions(edge: .trailing) {
+                            Button(role: .destructive) {
+                                presets.delete(id: preset.id)
+                            } label: { Label("Delete", systemImage: "trash") }
+                            Button {
+                                editing = preset
+                            } label: { Label("Edit", systemImage: "pencil") }
+                            .tint(.blue)
+                        }
                 }
             }
             .navigationTitle("Time It")
@@ -50,16 +46,17 @@ struct TimerListView: View {
         }
     }
 
-    /// Start a preset, first applying its default output mode (if it carries one).
+    /// Start a preset (single timer at a time), applying its default output mode
+    /// (if it carries one) and stopping any current timer first.
     private func start(_ preset: TimerPreset) {
         if let mode = preset.defaultOutputMode { settings.outputMode = mode }
+        engine.stopAll()
         engine.start(preset)
     }
 }
 
 private struct PresetRow: View {
     let preset: TimerPreset
-    let onStart: () -> Void
 
     var body: some View {
         HStack(spacing: 14) {
@@ -71,12 +68,20 @@ private struct PresetRow: View {
                 Text(subtitle).font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
-            Button(action: onStart) {
-                Image(systemName: "play.circle.fill")
-                    .font(.title)
-                    .foregroundStyle(Color(hex: preset.colorHex))
+            // Output indicators: voice and/or vibrate.
+            HStack(spacing: 8) {
+                if preset.usesVoice {
+                    Image(systemName: "speaker.wave.2.fill")
+                }
+                if preset.usesHaptic {
+                    Image(systemName: "iphone.radiowaves.left.and.right")
+                }
             }
-            .buttonStyle(.plain)
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+            Image(systemName: "play.circle.fill")
+                .font(.title)
+                .foregroundStyle(Color(hex: preset.colorHex))
         }
         .padding(.vertical, 4)
     }

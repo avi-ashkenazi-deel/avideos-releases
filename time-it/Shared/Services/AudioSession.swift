@@ -3,9 +3,11 @@ import Foundation
 import AVFoundation
 #endif
 
-/// Configures the shared audio session for spoken cues. We *duck* other audio
-/// (the user's gym playlist) rather than stopping it, and mix so the music keeps
-/// playing between announcements.
+/// Configures the shared audio session for spoken cues. We *mix* with other
+/// audio (the user's gym playlist) so it keeps playing and our voice plays over
+/// it. We deliberately do NOT duck: while timers run we keep a silent keep-alive
+/// track playing (so speech can fire in the background), and `.duckOthers` would
+/// then hold the music down the entire time.
 ///
 /// `setCategory` is applied once (guarded) to avoid route re-negotiation glitches;
 /// `setActive(true)` is safe to call repeatedly (e.g. after interruptions).
@@ -20,7 +22,7 @@ enum AudioSession {
                 try session.setCategory(
                     .playback,
                     mode: .spokenAudio,
-                    options: [.duckOthers, .mixWithOthers, .allowBluetoothA2DP]
+                    options: [.mixWithOthers, .allowBluetoothA2DP]
                 )
                 configured = true
             } catch {

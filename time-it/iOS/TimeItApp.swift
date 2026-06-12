@@ -26,6 +26,7 @@ final class AppModel: ObservableObject {
     let bridge = ConnectivityBridge()
     private let announcer = SpeechAnnouncer()
     private let notifications = NotificationScheduler()
+    private let keepAlive = BackgroundKeepAlive()
     #if canImport(ActivityKit)
     private let liveActivity = LiveActivityController()
     #endif
@@ -43,10 +44,18 @@ final class AppModel: ObservableObject {
         notifications.configure()
         notifications.requestAuthorization()
 
-        // Keep the audio session active only while timers run, so the user's
-        // music returns to full volume when nothing's counting.
-        engine.onRunningSetChanged = { isEmpty in
-            if isEmpty { AudioSession.deactivate() } else { AudioSession.activate() }
+        // While timers run, keep a silent audio loop playing so the app stays
+        // alive in the background and spoken/haptic cues fire live (not just the
+        // fallback notifications). Stop it — and release the session — when idle.
+        engine.onRunningSetChanged = { [weak self] isEmpty in
+            guard let self else { return }
+            if isEmpty {
+                self.keepAlive.stop()
+                AudioSession.deactivate()
+            } else {
+                AudioSession.activate()
+                self.keepAlive.start()
+            }
         }
 
         // On any discrete schedule change: refresh the Dynamic Island Live
@@ -58,6 +67,14 @@ final class AppModel: ObservableObject {
             self.liveActivity.sync(running)
             #endif
             self.notifications.reschedule(for: running)
+        }
+
+        // Each interval/milestone cue: refresh the Live Activity so the Dynamic
+        // Island's "next" interval keeps up (no notification churn).
+        engine.onCueFired = { [weak self] running in
+            #if canImport(ActivityKit)
+            self?.liveActivity.sync(running)
+            #endif
         }
 
         // Output mode: local toggle → engine + watch; remote → engine + UI.
@@ -83,9 +100,11 @@ final class AppModel: ObservableObject {
         bridge.syncOutputMode(settings.outputMode)
     }
 
-    /// Start a preset, applying its default output mode (if any) first.
+    /// Start a preset, applying its default output mode (if any) first. Only one
+    /// timer runs at a time, so any current timer is stopped first.
     func startTimer(_ preset: TimerPreset) {
         if let mode = preset.defaultOutputMode { settings.outputMode = mode }
+        engine.stopAll()
         engine.start(preset)
     }
 }

@@ -1,44 +1,27 @@
 import SwiftUI
 
-/// Live dashboard of every concurrently running timer. Refreshes on the engine's
-/// published changes (which tick ~10×/sec while timers run).
-struct RunningTimersView: View {
+/// The running view for the single active timer. Takes over the whole screen
+/// while a timer runs; returns to the library automatically when it's stopped.
+/// Refreshes on the engine's published changes (which tick ~10×/sec).
+struct RunningTimerScreen: View {
     @EnvironmentObject private var engine: TimerEngine
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
+            VStack(spacing: 16) {
                 OutputModePicker()
                     .padding(.horizontal)
                     .padding(.top, 8)
 
-                if engine.running.isEmpty {
-                    Spacer()
-                    ContentUnavailableView(
-                        "No timers running",
-                        systemImage: "timer",
-                        description: Text("Start one from the Timers tab.")
-                    )
-                    Spacer()
-                } else {
-                    ScrollView {
-                        LazyVStack(spacing: 16) {
-                            ForEach(engine.running) { timer in
-                                RunningTimerCard(timer: timer)
-                            }
-                        }
-                        .padding()
-                    }
+                Spacer()
+                if let timer = engine.running.first {
+                    RunningTimerCard(timer: timer)
+                        .padding(.horizontal)
                 }
+                Spacer()
             }
-            .navigationTitle("Running")
-            .toolbar {
-                if !engine.running.isEmpty {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Button("Stop all", role: .destructive) { engine.stopAll() }
-                    }
-                }
-            }
+            .navigationTitle(engine.running.first?.preset.displayName ?? "Running")
+            .navigationBarTitleDisplayMode(.inline)
         }
     }
 }

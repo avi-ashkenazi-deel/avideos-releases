@@ -1,29 +1,20 @@
 import SwiftUI
 
-/// Two tabs: the live dashboard of running timers, and the preset library. When
-/// a timer is running the app focuses the Running tab automatically — there's no
-/// point lingering on the setup screen unless you go there deliberately.
+/// One screen, two states: the timer library, and — once you press play on a
+/// timer — the running view. Only one timer runs at a time, so the running view
+/// fully takes over and returns to the library when you stop.
 struct RootView: View {
     @EnvironmentObject private var engine: TimerEngine
 
-    private enum Tab { case running, timers }
-    @State private var selection: Tab = .timers
-
     var body: some View {
-        TabView(selection: $selection) {
-            RunningTimersView()
-                .tabItem { Label("Running", systemImage: "timer") }
-                .tag(Tab.running)
-
-            TimerListView()
-                .tabItem { Label("Timers", systemImage: "list.bullet") }
-                .tag(Tab.timers)
+        Group {
+            if engine.running.isEmpty {
+                TimerListView()
+            } else {
+                RunningTimerScreen()
+            }
         }
-        .onChange(of: engine.running.isEmpty) { _, isEmpty in
-            // Jump to the running view when a timer starts; fall back to the
-            // library when the last one ends.
-            selection = isEmpty ? .timers : .running
-        }
+        .animation(.snappy, value: engine.running.isEmpty)
     }
 }
 
