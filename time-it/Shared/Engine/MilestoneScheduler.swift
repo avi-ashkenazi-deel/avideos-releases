@@ -5,17 +5,16 @@ import Foundation
 /// platform (see `Tests/`). `TimerEngine` calls these on every tick.
 enum MilestoneScheduler {
 
-    /// Milestones whose fire-time has been reached but that haven't fired yet,
-    /// returned in fire order. (Several can come due in one tick.)
-    static func dueMilestones(
-        in preset: TimerPreset,
+    /// Cues whose fire-time has been reached but that haven't fired yet, returned
+    /// in fire order. (Several can come due in one tick.)
+    static func dueCues(
+        _ cues: [TimerCue],
         elapsed: TimeInterval,
-        alreadyFired: Set<UUID>
-    ) -> [TimerMilestone] {
-        preset.sortedMilestones().filter { m in
-            guard !alreadyFired.contains(m.id) else { return false }
-            return m.trigger.fireTime(forDuration: preset.duration) <= elapsed
-        }
+        alreadyFired: Set<String>
+    ) -> [TimerCue] {
+        cues
+            .filter { !alreadyFired.contains($0.id) && $0.fireTime <= elapsed }
+            .sorted { $0.fireTime < $1.fireTime }
     }
 
     /// The whole-second value the final countdown should speak right now, or nil

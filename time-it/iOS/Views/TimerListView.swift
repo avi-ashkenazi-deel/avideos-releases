@@ -38,12 +38,14 @@ struct TimerListView: View {
                 }
             }
             .sheet(item: $editing) { preset in
-                PresetEditorView(preset: preset) { presets.update($0) }
+                PresetEditorView(preset: preset, title: "Edit timer") { presets.update($0) }
             }
             .sheet(isPresented: $creatingNew) {
-                PresetEditorView(preset: TimerPreset(name: "New timer", duration: 60)) {
-                    presets.add($0)
-                }
+                PresetEditorView(
+                    preset: TimerPreset(duration: 300,
+                                        intervals: IntervalPlan(spec: .even(count: 4))),
+                    title: "New timer"
+                ) { presets.add($0) }
             }
         }
     }
@@ -65,7 +67,7 @@ private struct PresetRow: View {
                 .fill(Color(hex: preset.colorHex))
                 .frame(width: 12, height: 12)
             VStack(alignment: .leading, spacing: 2) {
-                Text(preset.name).font(.headline)
+                Text(preset.displayName).font(.headline)
                 Text(subtitle).font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
@@ -81,8 +83,9 @@ private struct PresetRow: View {
 
     private var subtitle: String {
         var parts = [formatClock(preset.duration)]
-        if !preset.milestones.isEmpty {
-            parts.append("\(preset.milestones.count) milestone\(preset.milestones.count == 1 ? "" : "s")")
+        let cueCount = preset.cues().count
+        if cueCount > 0 {
+            parts.append("\(cueCount) cue\(cueCount == 1 ? "" : "s")")
         }
         if preset.repeatCount > 1 { parts.append("×\(preset.repeatCount)") }
         return parts.joined(separator: " · ")

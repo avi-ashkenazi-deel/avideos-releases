@@ -29,7 +29,7 @@ private struct WatchTimerPage: View {
     var body: some View {
         let tint = Color(hex: timer.preset.colorHex)
         VStack(spacing: 8) {
-            Text(timer.preset.name).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+            Text(timer.preset.displayName).font(.caption).foregroundStyle(.secondary).lineLimit(1)
 
             TimelineView(.periodic(from: .now, by: 0.5)) { context in
                 let now = context.date

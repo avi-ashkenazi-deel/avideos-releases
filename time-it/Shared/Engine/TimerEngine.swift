@@ -25,6 +25,11 @@ final class TimerEngine: ObservableObject {
     /// manage background/keep-alive resources.
     var onRunningSetChanged: ((_ isEmpty: Bool) -> Void)?
 
+    /// Fired on every *discrete* schedule change (start/stop/pause/resume/adjust/
+    /// edit/complete) — not on every tick — so the host can refresh Live
+    /// Activities and re-schedule background notifications.
+    var onTimersChanged: ((_ running: [RunningTimerState]) -> Void)?
+
     init(announcer: Announcer? = nil) {
         self.announcer = announcer
     }
@@ -37,11 +42,11 @@ final class TimerEngine: ObservableObject {
         let state = RunningTimerState(preset: preset, now: now)
         running.append(state)
         if outputMode.speaksAnnouncements {
-            announcer?.speak("Starting \(preset.name)")
+            announcer?.speak("Starting \(preset.displayName)")
         } else {
             announcer?.haptic(.success)
         }
-        refreshActivity()
+        notifyChange()
         startTickerIfNeeded()
     }
 
@@ -49,14 +54,14 @@ final class TimerEngine: ObservableObject {
         guard let i = running.firstIndex(where: { $0.id == id }), running[i].isRunning else { return }
         running[i].bankedElapsed = running[i].elapsed(now: now)
         running[i].isRunning = false
-        refreshActivity()
+        notifyChange()
     }
 
     func resume(id: UUID, now: Date = Date()) {
         guard let i = running.firstIndex(where: { $0.id == id }), !running[i].isRunning else { return }
         running[i].startDate = now
         running[i].isRunning = true
-        refreshActivity()
+        notifyChange()
         startTickerIfNeeded()
     }
 
@@ -67,20 +72,42 @@ final class TimerEngine: ObservableObject {
         // has elapsed. Re-baseline the live portion to keep wall-clock accuracy.
         running[i].bankedElapsed = max(0, running[i].elapsed(now: now) - delta)
         running[i].startDate = now
-        // A backwards jump can "un-fire" milestones; recompute the fired set so
-        // they can announce again if we crossed back before them.
+        // A backwards jump can "un-fire" cues; recompute the fired set so they
+        // can announce again if we crossed back before them.
         reconcileFired(&running[i], now: now)
+        notifyChange()
+    }
+
+    /// Replace a running timer's preset live (edit total time and/or its cues),
+    /// preserving how much has already elapsed. Cues that now sit in the past are
+    /// marked fired so they don't retroactively announce.
+    func editRunning(id: UUID, to newPreset: TimerPreset, now: Date = Date()) {
+        guard let i = running.firstIndex(where: { $0.id == id }) else { return }
+        let elapsed = running[i].elapsed(now: now)
+        running[i].preset = newPreset
+        // Re-baseline so the elapsed amount is preserved against the new duration.
+        running[i].bankedElapsed = min(elapsed, newPreset.duration)
+        running[i].startDate = now
+        // Any cue already in the past on the new schedule is considered fired.
+        running[i].firedCueIDs = Set(
+            newPreset.cues().filter { $0.fireTime <= elapsed }.map(\.id)
+        )
+        if let cd = newPreset.finalCountdown {
+            let remaining = running[i].remaining(now: now)
+            running[i].lastCountdownSecondSpoken = remaining > Double(cd.lastSeconds) ? nil : Int(remaining.rounded(.up))
+        }
+        notifyChange()
     }
 
     func stop(id: UUID) {
         running.removeAll { $0.id == id }
-        refreshActivity()
+        notifyChange()
         stopTickerIfIdle()
     }
 
     func stopAll() {
         running.removeAll()
-        refreshActivity()
+        notifyChange()
         stopTickerIfIdle()
     }
 
@@ -106,16 +133,19 @@ final class TimerEngine: ObservableObject {
         guard !running.isEmpty else { stopTickerIfIdle(); return }
         var completed: [UUID] = []
 
+        var scheduleChanged = false
+
         for i in running.indices {
             guard running[i].isRunning else { continue }
-            processMilestones(&running[i], now: now)
+            processCues(&running[i], now: now)
             processCountdown(&running[i], now: now)
 
             if running[i].isComplete(now: now) {
                 if running[i].hasNextRepeat {
                     advanceRepeat(&running[i], now: now)
+                    scheduleChanged = true
                 } else {
-                    announceCompletion(name: running[i].preset.name)
+                    announceCompletion(name: running[i].preset.displayName)
                     completed.append(running[i].id)
                 }
             }
@@ -123,27 +153,28 @@ final class TimerEngine: ObservableObject {
 
         if !completed.isEmpty {
             running.removeAll { completed.contains($0.id) }
-            refreshActivity()
+            scheduleChanged = true
         }
         // Trigger a publish even when only derived values changed (progress).
         objectWillChange.send()
+        if scheduleChanged { notifyChange() }
         stopTickerIfIdle()
     }
 
     // MARK: - Milestone / countdown side effects
 
-    private func processMilestones(_ s: inout RunningTimerState, now: Date) {
+    private func processCues(_ s: inout RunningTimerState, now: Date) {
         let elapsed = s.elapsed(now: now)
-        let due = MilestoneScheduler.dueMilestones(
-            in: s.preset, elapsed: elapsed, alreadyFired: s.firedMilestoneIDs
+        let due = MilestoneScheduler.dueCues(
+            s.preset.cues(), elapsed: elapsed, alreadyFired: s.firedCueIDs
         )
-        for m in due {
-            // The OutputMode decides the channel(s); the milestone supplies the
-            // words and the buzz pattern.
-            let ch = outputMode.channels(forMilestoneAlert: m.alert)
-            if ch.voice { announcer?.speak(m.spokenText(forDuration: s.preset.duration)) }
-            if ch.haptic { announcer?.haptic(m.haptic) }
-            s.firedMilestoneIDs.insert(m.id)
+        for cue in due {
+            // The OutputMode decides the channel(s); the cue supplies the words
+            // and the buzz pattern.
+            let ch = outputMode.channels(forMilestoneAlert: cue.alert)
+            if ch.voice && !cue.spokenText.isEmpty { announcer?.speak(cue.spokenText) }
+            if ch.haptic { announcer?.haptic(cue.haptic) }
+            s.firedCueIDs.insert(cue.id)
         }
     }
 
@@ -175,17 +206,18 @@ final class TimerEngine: ObservableObject {
         s.currentRepeat += 1
         s.startDate = now
         s.bankedElapsed = 0
-        s.firedMilestoneIDs = []
+        s.firedCueIDs = []
         s.lastCountdownSecondSpoken = nil
     }
 
-    /// After a backwards time adjustment, drop fired flags for milestones that
-    /// now lie in the future again so they can re-announce.
+    /// After a backwards time adjustment, drop fired flags for cues that now lie
+    /// in the future again so they can re-announce.
     private func reconcileFired(_ s: inout RunningTimerState, now: Date) {
         let elapsed = s.elapsed(now: now)
-        s.firedMilestoneIDs = s.firedMilestoneIDs.filter { id in
-            guard let m = s.preset.milestones.first(where: { $0.id == id }) else { return false }
-            return m.trigger.fireTime(forDuration: s.preset.duration) <= elapsed
+        let cuesByID = Dictionary(uniqueKeysWithValues: s.preset.cues().map { ($0.id, $0) })
+        s.firedCueIDs = s.firedCueIDs.filter { id in
+            guard let cue = cuesByID[id] else { return false }
+            return cue.fireTime <= elapsed
         }
         if let cd = s.preset.finalCountdown {
             let remaining = s.remaining(now: now)
@@ -193,9 +225,17 @@ final class TimerEngine: ObservableObject {
         }
     }
 
+    /// Lightweight refresh used on every tick: keep `hasActiveTimer` accurate and
+    /// notify hosts of empty/non-empty transitions (no per-tick reschedule).
     private func refreshActivity() {
         let active = running.contains { $0.isRunning }
         if active != hasActiveTimer { hasActiveTimer = active }
         onRunningSetChanged?(running.isEmpty)
+    }
+
+    /// Full notify on discrete schedule changes: refresh + reschedule hook.
+    private func notifyChange() {
+        refreshActivity()
+        onTimersChanged?(running)
     }
 }

@@ -46,6 +46,7 @@ struct RunningTimersView: View {
 private struct RunningTimerCard: View {
     @EnvironmentObject private var engine: TimerEngine
     let timer: RunningTimerState
+    @State private var editing = false
 
     var body: some View {
         // Re-read live values each render; the engine publishes on every tick.
@@ -56,7 +57,7 @@ private struct RunningTimerCard: View {
 
         VStack(spacing: 12) {
             HStack {
-                Text(timer.preset.name).font(.headline)
+                Text(timer.preset.displayName).font(.headline)
                 if timer.preset.repeatCount > 1 {
                     Text("set \(timer.currentRepeat)/\(timer.preset.repeatCount)")
                         .font(.caption).foregroundStyle(.secondary)
@@ -65,6 +66,8 @@ private struct RunningTimerCard: View {
                 if !timer.isRunning {
                     Text("Paused").font(.caption.bold()).foregroundStyle(.orange)
                 }
+                Button { editing = true } label: { Image(systemName: "slider.horizontal.3") }
+                    .buttonStyle(.plain)
             }
 
             ZStack {
@@ -79,6 +82,11 @@ private struct RunningTimerCard: View {
             }
             .frame(height: 180)
 
+            if let next = timer.nextCueLabel(now: now) {
+                Label("Next: \(next)", systemImage: "bell")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+
             HStack(spacing: 24) {
                 ControlButton(system: "gobackward.10") { engine.adjust(id: timer.id, by: -10) }
                 if timer.isRunning {
@@ -92,6 +100,13 @@ private struct RunningTimerCard: View {
         }
         .padding()
         .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 20))
+        .sheet(isPresented: $editing) {
+            // Live edit: seed the editor with the running preset and apply the
+            // result to the running timer, preserving elapsed time.
+            PresetEditorView(preset: timer.preset, title: "Edit running") { updated in
+                engine.editRunning(id: timer.id, to: updated)
+            }
+        }
     }
 }
 

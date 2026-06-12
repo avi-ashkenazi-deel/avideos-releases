@@ -5,7 +5,8 @@ import Foundation
 /// a tick is delayed or the app is briefly suspended.
 struct RunningTimerState: Identifiable {
     let id: UUID
-    let preset: TimerPreset
+    /// Mutable so a running timer can be edited live (time + cues).
+    var preset: TimerPreset
 
     /// When the *current* run started counting (advances across repeats).
     var startDate: Date
@@ -15,8 +16,8 @@ struct RunningTimerState: Identifiable {
     /// Which repeat we're on (1-based).
     var currentRepeat: Int
 
-    /// Milestone ids already fired in the *current* run (reset each repeat).
-    var firedMilestoneIDs: Set<UUID>
+    /// Cue ids already fired in the *current* run (reset each repeat).
+    var firedCueIDs: Set<String>
     /// The last whole second spoken by the final countdown, to avoid repeats.
     var lastCountdownSecondSpoken: Int?
 
@@ -27,8 +28,19 @@ struct RunningTimerState: Identifiable {
         self.bankedElapsed = 0
         self.isRunning = true
         self.currentRepeat = 1
-        self.firedMilestoneIDs = []
+        self.firedCueIDs = []
         self.lastCountdownSecondSpoken = nil
+    }
+
+    /// Absolute wall-clock time at which the current run completes (assuming it
+    /// keeps running). Used to drive Live Activity / notification scheduling.
+    func endDate(now: Date = Date()) -> Date {
+        now.addingTimeInterval(remaining(now: now))
+    }
+
+    /// The next upcoming cue label after the current elapsed, if any.
+    func nextCueLabel(now: Date = Date()) -> String? {
+        preset.nextCue(afterElapsed: elapsed(now: now))?.displayLabel
     }
 
     /// Seconds elapsed in the current run.

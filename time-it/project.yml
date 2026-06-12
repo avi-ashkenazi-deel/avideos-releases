@@ -53,6 +53,29 @@ targets:
     dependencies:
       - target: TimeItWatch
         embed: true
+      - target: TimeItWidget
+        embed: true
+
+  # ---------------------------------------------------------------------------
+  # Widget extension: Live Activity (Lock Screen + Dynamic Island).
+  # ---------------------------------------------------------------------------
+  TimeItWidget:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: Widget
+      # The Live Activity attributes are shared with the app; the widget also
+      # needs the color + clock helpers. Compile just those, not all of Shared.
+      - path: Shared/LiveActivity/TimerActivityAttributes.swift
+      - path: Shared/Services/Color+Hex.swift
+      - path: Shared/Models/TimeFormatting.swift
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.aviashkenazi.timeit.widget
+        INFOPLIST_FILE: Widget/Info.plist
+        CODE_SIGN_ENTITLEMENTS: Widget/TimeItWidget.entitlements
+        GENERATE_INFOPLIST_FILE: NO
+        TARGETED_DEVICE_FAMILY: "1"
 
   # ---------------------------------------------------------------------------
   # Unit tests for the pure scheduling logic (runnable on macOS via `xcodebuild`).

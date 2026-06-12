@@ -25,6 +25,10 @@ final class AppModel: ObservableObject {
     let settings = AppSettings()
     let bridge = ConnectivityBridge()
     private let announcer = SpeechAnnouncer()
+    private let notifications = NotificationScheduler()
+    #if canImport(ActivityKit)
+    private let liveActivity = LiveActivityController()
+    #endif
 
     init() {
         engine = TimerEngine(announcer: announcer)
@@ -35,10 +39,25 @@ final class AppModel: ObservableObject {
         bridge.activate()
         engine.outputMode = settings.outputMode
 
+        // Background delivery: request permission and prepare the delegate.
+        notifications.configure()
+        notifications.requestAuthorization()
+
         // Keep the audio session active only while timers run, so the user's
         // music returns to full volume when nothing's counting.
         engine.onRunningSetChanged = { isEmpty in
             if isEmpty { AudioSession.deactivate() } else { AudioSession.activate() }
+        }
+
+        // On any discrete schedule change: refresh the Dynamic Island Live
+        // Activities and re-schedule background notifications so cues still fire
+        // when the app is suspended.
+        engine.onTimersChanged = { [weak self] running in
+            guard let self else { return }
+            #if canImport(ActivityKit)
+            self.liveActivity.sync(running)
+            #endif
+            self.notifications.reschedule(for: running)
         }
 
         // Output mode: local toggle → engine + watch; remote → engine + UI.
