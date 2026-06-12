@@ -80,10 +80,20 @@ struct PresetEditorView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") { onSave(draft); dismiss() }
-                        .disabled(draft.duration <= 0)
+                        .disabled(draft.duration <= 0 || customIntervalsOverTotal)
                 }
             }
         }
+    }
+
+    /// Custom intervals that add up to more than the total make trailing cues
+    /// impossible — block Save until they're fixed (Even/Every/Work-Rest always
+    /// fit, so they never trip this).
+    private var customIntervalsOverTotal: Bool {
+        if case .custom(let lengths)? = draft.intervals?.spec {
+            return lengths.reduce(0, +) - draft.duration > 0.5
+        }
+        return false
     }
 
     // MARK: Default output mode
