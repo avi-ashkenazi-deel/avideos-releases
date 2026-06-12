@@ -17,6 +17,27 @@ final class FeedStore: ObservableObject {
     @Published private(set) var isRefreshing = false
     @Published var errorMessage: String?
 
+    /// Set when the user turned on notifications but the system permission is off,
+    /// so the UI can offer a jump to Settings instead of silently doing nothing.
+    @Published var notificationsDenied = false
+
+    /// The app target sets this so the store can ask `BGTaskScheduler` to (re)schedule
+    /// a background refresh the moment the user opts in. (The scheduler itself lives
+    /// in the app target; this shared store can't reach it directly.)
+    var onRequestBackgroundRefresh: (() -> Void)?
+
+    private let defaults = UserDefaults.voiceInbox
+    private static let pitchSeenKey = "feeds.seenNotificationsPitch"
+
+    /// Whether the one-time "get notified about new articles" pitch has been shown
+    /// (on the first feed the user adds). Persisted so it only ever appears once.
+    var hasSeenNotificationsPitch: Bool {
+        get { defaults.bool(forKey: Self.pitchSeenKey) }
+        set { defaults.set(newValue, forKey: Self.pitchSeenKey) }
+    }
+
+    func markNotificationsPitchSeen() { hasSeenNotificationsPitch = true }
+
     private let dir = AppGroup.containerURL.appendingPathComponent("Feeds", isDirectory: true)
     private var feedsURL: URL { dir.appendingPathComponent("feeds.json") }
     private var itemsURL: URL { dir.appendingPathComponent("items.json") }
@@ -33,14 +54,17 @@ final class FeedStore: ObservableObject {
     /// Add a feed by URL. Accepts either a direct feed URL *or* a site URL — in
     /// the latter case it discovers the feed from the page's `<link>` tags, then
     /// falls back to common feed paths (/feed, /rss, …).
-    func add(urlString: String) async throws {
+    @discardableResult
+    func add(urlString: String) async throws -> RSSFeed.ID {
         var raw = urlString.trimmingCharacters(in: .whitespacesAndNewlines)
         if !raw.lowercased().hasPrefix("http") { raw = "https://" + raw }
         guard let entered = URL(string: raw) else { throw FeedParser.FeedError.notAFeed }
 
         let (feedURL, parsed) = try await resolveFeed(from: entered)
         let candidate = RSSFeed(url: feedURL)
-        guard !feeds.contains(where: { $0.id == candidate.id }) else { return }
+        // Already following it → just hand back the existing id (so the caller can
+        // still flip on notifications for it).
+        if let existing = feeds.first(where: { $0.id == candidate.id }) { return existing.id }
 
         var feed = candidate
         feed.title = parsed.title ?? feed.title
@@ -48,6 +72,7 @@ final class FeedStore: ObservableObject {
         feeds.append(feed)
         merge(parsed.items, into: feed)
         persist()
+        return feed.id
     }
 
     /// Resolve the entered URL to an actual feed: direct feed → HTML autodiscovery
@@ -106,14 +131,33 @@ final class FeedStore: ObservableObject {
         persist()
     }
 
-    /// Toggle per-feed new-item notifications (requests permission on first use).
+    /// Toggle per-feed new-item notifications. Turning it on requests system
+    /// permission (the only place we ever ask) and makes sure a background refresh
+    /// is scheduled so new articles can actually arrive while the app is closed.
     func setNotifications(_ enabled: Bool, for feedID: RSSFeed.ID) {
         guard let idx = feeds.firstIndex(where: { $0.id == feedID }) else { return }
         feeds[idx].notifyOnNewItems = enabled
         persist()
-        #if canImport(UserNotifications) && !os(watchOS)
         if enabled {
-            UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { _, _ in }
+            onRequestBackgroundRefresh?()
+            Task { await ensureNotificationPermission() }
+        }
+    }
+
+    /// Ask for notification permission the first time it's needed; afterwards just
+    /// reflect whether it's been granted so the UI can nudge toward Settings.
+    func ensureNotificationPermission() async {
+        #if canImport(UserNotifications) && !os(watchOS)
+        let center = UNUserNotificationCenter.current()
+        let status = await center.notificationSettings().authorizationStatus
+        switch status {
+        case .notDetermined:
+            let granted = (try? await center.requestAuthorization(options: [.alert, .badge, .sound])) ?? false
+            notificationsDenied = !granted
+        case .denied:
+            notificationsDenied = true
+        default:
+            notificationsDenied = false
         }
         #endif
     }

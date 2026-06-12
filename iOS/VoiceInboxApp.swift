@@ -19,6 +19,9 @@ struct VoiceInboxApp: App {
                 .environmentObject(appState)
                 .task {
                     await appState.bootstrap()
+                    // Let the feed store kick off a background-refresh schedule as
+                    // soon as the user turns on notifications for a feed.
+                    FeedStore.shared.onRequestBackgroundRefresh = { Self.scheduleFeedRefresh() }
                     // Save highlights captured on the watch into the shared store.
                     WatchConnectivityBridge.shared.onHighlight = { highlight in
                         HighlightStore.shared.add(highlight)
@@ -63,7 +66,9 @@ struct VoiceInboxApp: App {
 
     private static func scheduleFeedRefresh() {
         let request = BGAppRefreshTaskRequest(identifier: feedRefreshTaskID)
-        request.earliestBeginDate = Date(timeIntervalSinceNow: 30 * 60)   // ≥ 30 min out
+        // We ask for ~15 min; iOS treats this as the *earliest* it'll consider us
+        // and decides the real cadence from how the app is used, battery, etc.
+        request.earliestBeginDate = Date(timeIntervalSinceNow: 15 * 60)
         try? BGTaskScheduler.shared.submit(request)
     }
 }

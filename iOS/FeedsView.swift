@@ -185,11 +185,33 @@ private struct AddFeedView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var store = FeedStore.shared
     @State private var urlText = ""
+    @State private var notify = false
     @State private var adding = false
     @State private var error: String?
 
+    /// Show the one-time notifications pitch on the user's first-ever feed add.
+    @State private var showPitch = !FeedStore.shared.hasSeenNotificationsPitch
+
     var body: some View {
         Form {
+            if showPitch {
+                Section {
+                    HStack(alignment: .top, spacing: 12) {
+                        Image(systemName: "bell.badge.fill")
+                            .font(.title2)
+                            .foregroundStyle(.tint)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("Never miss a new article")
+                                .font(.subheadline.weight(.semibold))
+                            Text("Turn on the bell and we'll check this feed in the background — about every 15 minutes — and notify you when something new lands.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .padding(.vertical, 2)
+                }
+            }
+
             Section {
                 TextField("Site or feed URL (e.g. stratechery.com)", text: $urlText)
                     .keyboardType(.URL)
@@ -198,6 +220,15 @@ private struct AddFeedView: View {
             } footer: {
                 Text("Paste a site address or a direct RSS/Atom URL — the app finds the feed automatically.")
             }
+
+            Section {
+                Toggle(isOn: $notify) {
+                    Label("Notify me about new articles", systemImage: "bell")
+                }
+            } footer: {
+                Text("Only feeds with the bell on can send notifications. You can change this any time in Manage feeds.")
+            }
+
             if let error {
                 Section { Text(error).foregroundStyle(.red) }
             }
@@ -217,6 +248,16 @@ private struct AddFeedView: View {
                 }
             }
         }
+        .alert("Notifications are off", isPresented: $store.notificationsDenied) {
+            Button("Open Settings") {
+                if let url = URL(string: UIApplication.openSettingsURLString) {
+                    UIApplication.shared.open(url)
+                }
+            }
+            Button("Not now", role: .cancel) {}
+        } message: {
+            Text("You followed this feed with the bell on, but notifications are turned off for VoiceInbox. Enable them in Settings to get new-article alerts.")
+        }
     }
 
     private func add() {
@@ -224,7 +265,9 @@ private struct AddFeedView: View {
         error = nil
         Task {
             do {
-                try await store.add(urlString: urlText)
+                let id = try await store.add(urlString: urlText)
+                if notify { store.setNotifications(true, for: id) }
+                store.markNotificationsPitchSeen()
                 dismiss()
             } catch {
                 self.error = error.localizedDescription
@@ -271,6 +314,16 @@ private struct ManageFeedsView: View {
             if store.feeds.isEmpty {
                 ContentUnavailableView("No feeds", systemImage: "dot.radiowaves.up.forward")
             }
+        }
+        .alert("Notifications are off", isPresented: $store.notificationsDenied) {
+            Button("Open Settings") {
+                if let url = URL(string: UIApplication.openSettingsURLString) {
+                    UIApplication.shared.open(url)
+                }
+            }
+            Button("Not now", role: .cancel) {}
+        } message: {
+            Text("Notifications are turned off for VoiceInbox. Enable them in Settings to get new-article alerts.")
         }
     }
 }
