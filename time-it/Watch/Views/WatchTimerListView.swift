@@ -4,16 +4,23 @@ import SwiftUI
 struct WatchTimerListView: View {
     @EnvironmentObject private var engine: TimerEngine
     @EnvironmentObject private var presets: PresetStore
+    @EnvironmentObject private var settings: AppSettings
 
     var body: some View {
         List {
+            Picker("Announce", selection: $settings.outputMode) {
+                ForEach(OutputMode.allCases) { mode in
+                    Label(mode.displayName, systemImage: mode.systemImage).tag(mode)
+                }
+            }
+
             if presets.presets.isEmpty {
                 Text("No timers yet. Add some on your iPhone.")
                     .font(.footnote).foregroundStyle(.secondary)
             }
             ForEach(presets.presets) { preset in
                 Button {
-                    engine.start(preset)
+                    start(preset)
                 } label: {
                     HStack {
                         Circle().fill(Color(hex: preset.colorHex)).frame(width: 10, height: 10)
@@ -28,5 +35,10 @@ struct WatchTimerListView: View {
                 }
             }
         }
+    }
+
+    private func start(_ preset: TimerPreset) {
+        if let mode = preset.defaultOutputMode { settings.outputMode = mode }
+        engine.start(preset)
     }
 }

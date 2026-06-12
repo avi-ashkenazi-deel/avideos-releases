@@ -4,15 +4,20 @@ import SwiftUI
 struct TimerListView: View {
     @EnvironmentObject private var engine: TimerEngine
     @EnvironmentObject private var presets: PresetStore
+    @EnvironmentObject private var settings: AppSettings
     @State private var editing: TimerPreset?
     @State private var creatingNew = false
 
     var body: some View {
         NavigationStack {
             List {
+                Section {
+                    OutputModePicker()
+                } header: { Text("Announce with") }
+
                 ForEach(presets.presets) { preset in
                     PresetRow(preset: preset) {
-                        engine.start(preset)
+                        start(preset)
                     }
                     .contentShape(Rectangle())
                     .swipeActions(edge: .trailing) {
@@ -41,6 +46,12 @@ struct TimerListView: View {
                 }
             }
         }
+    }
+
+    /// Start a preset, first applying its default output mode (if it carries one).
+    private func start(_ preset: TimerPreset) {
+        if let mode = preset.defaultOutputMode { settings.outputMode = mode }
+        engine.start(preset)
     }
 }
 

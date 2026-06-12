@@ -20,6 +20,10 @@ struct TimerPreset: Codable, Hashable, Identifiable {
     var colorHex: String = "#FF9500"
     /// How many times to run back-to-back (gym sets). 1 == single run.
     var repeatCount: Int = 1
+    /// When set, starting this preset switches the app's master output mode to
+    /// this value — e.g. a "Talk" preset that always goes silent/vibrate. `nil`
+    /// leaves the current mode untouched.
+    var defaultOutputMode: OutputMode? = nil
 
     /// Milestones sorted by the order they fire during a run.
     func sortedMilestones() -> [TimerMilestone] {
@@ -43,7 +47,8 @@ struct TimerPreset: Codable, Hashable, Identifiable {
             ],
             finalCountdown: FinalCountdown(lastSeconds: 10, haptic: true),
             colorHex: "#FF9500",
-            repeatCount: 1
+            repeatCount: 1,
+            defaultOutputMode: .voiceOnly
         )
     }
 
@@ -62,7 +67,8 @@ struct TimerPreset: Codable, Hashable, Identifiable {
             ],
             finalCountdown: FinalCountdown(lastSeconds: 10, haptic: true),
             colorHex: "#0A84FF",
-            repeatCount: 1
+            repeatCount: 1,
+            defaultOutputMode: .vibrationOnly
         )
     }
 }

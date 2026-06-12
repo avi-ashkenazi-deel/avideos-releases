@@ -23,6 +23,19 @@ struct PresetEditorView: View {
                     ColorPickerRow(selection: $draft.colorHex)
                 }
 
+                Section {
+                    Picker("On start, switch to", selection: defaultModeBinding) {
+                        Text("Leave as-is").tag(DefaultModeChoice.unchanged)
+                        ForEach(OutputMode.allCases) { mode in
+                            Text(mode.displayName).tag(DefaultModeChoice.set(mode))
+                        }
+                    }
+                } header: {
+                    Text("Output mode")
+                } footer: {
+                    Text("Starting this timer can flip the app to Voice, Vibrate, or Both — handy for a silent \"talk\" preset.")
+                }
+
                 Section("Final countdown") {
                     Toggle("Speak the last seconds", isOn: finalCountdownEnabled)
                     if let cd = draft.finalCountdown {
@@ -56,6 +69,25 @@ struct PresetEditorView: View {
                 }
             }
         }
+    }
+
+    // MARK: Default output mode
+
+    private enum DefaultModeChoice: Hashable {
+        case unchanged
+        case set(OutputMode)
+    }
+
+    private var defaultModeBinding: Binding<DefaultModeChoice> {
+        Binding(
+            get: { draft.defaultOutputMode.map(DefaultModeChoice.set) ?? .unchanged },
+            set: { choice in
+                switch choice {
+                case .unchanged: draft.defaultOutputMode = nil
+                case .set(let m): draft.defaultOutputMode = m
+                }
+            }
+        )
     }
 
     // MARK: Bindings into the optional final-countdown

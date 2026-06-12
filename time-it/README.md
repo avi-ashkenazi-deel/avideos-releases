@@ -15,6 +15,11 @@ Built for two situations:
 
 ## How it works
 
+- **Master output switch** — one control flips *all* announcements between
+  **Voice**, **Vibrate**, or **Both**. Speak your cadence in the gym; go silent
+  and vibrate-only on stage. It's persisted and synced across iPhone and Watch,
+  and a preset can carry a default (a "talk" preset auto-switches to vibrate when
+  you start it).
 - **Per-timer milestones** can be defined as a **percentage** of the total
   (every 50%, at 30% remaining…) or as an **absolute time remaining** (30s left).
   Each milestone independently picks **voice**, **haptic**, or **both**, and which

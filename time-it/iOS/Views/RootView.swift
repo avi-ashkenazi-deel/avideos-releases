@@ -21,4 +21,5 @@ struct RootView: View {
         .environmentObject(model)
         .environmentObject(model.engine)
         .environmentObject(model.presets)
+        .environmentObject(model.settings)
 }

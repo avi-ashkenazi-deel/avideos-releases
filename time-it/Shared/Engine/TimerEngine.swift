@@ -14,6 +14,10 @@ final class TimerEngine: ObservableObject {
     /// watch app observes this to start/stop its workout keep-alive session.
     @Published private(set) var hasActiveTimer: Bool = false
 
+    /// Master output channel applied to every announcement. The host keeps this
+    /// in sync with `AppSettings.outputMode`.
+    var outputMode: OutputMode = .both
+
     private weak var announcer: Announcer?
     private var ticker: Timer?
 
@@ -32,7 +36,11 @@ final class TimerEngine: ObservableObject {
     func start(_ preset: TimerPreset, now: Date = Date()) {
         let state = RunningTimerState(preset: preset, now: now)
         running.append(state)
-        announcer?.speak("Starting \(preset.name)")
+        if outputMode.speaksAnnouncements {
+            announcer?.speak("Starting \(preset.name)")
+        } else {
+            announcer?.haptic(.success)
+        }
         refreshActivity()
         startTickerIfNeeded()
     }
@@ -107,7 +115,7 @@ final class TimerEngine: ObservableObject {
                 if running[i].hasNextRepeat {
                     advanceRepeat(&running[i], now: now)
                 } else {
-                    announcer?.timerCompleted(name: running[i].preset.name, isFinalRepeat: true)
+                    announceCompletion(name: running[i].preset.name)
                     completed.append(running[i].id)
                 }
             }
@@ -130,7 +138,11 @@ final class TimerEngine: ObservableObject {
             in: s.preset, elapsed: elapsed, alreadyFired: s.firedMilestoneIDs
         )
         for m in due {
-            announcer?.fire(m, duration: s.preset.duration)
+            // The OutputMode decides the channel(s); the milestone supplies the
+            // words and the buzz pattern.
+            let ch = outputMode.channels(forMilestoneAlert: m.alert)
+            if ch.voice { announcer?.speak(m.spokenText(forDuration: s.preset.duration)) }
+            if ch.haptic { announcer?.haptic(m.haptic) }
             s.firedMilestoneIDs.insert(m.id)
         }
     }
@@ -141,14 +153,25 @@ final class TimerEngine: ObservableObject {
         guard let second = MilestoneScheduler.countdownSecond(
             remaining: remaining, window: cd.lastSeconds, lastSpoken: s.lastCountdownSecondSpoken
         ) else { return }
-        announcer?.speak("\(second)")
-        if cd.haptic { announcer?.haptic(.notification) }
+        let ch = outputMode.countdownChannels(hapticEnabled: cd.haptic)
+        if ch.speak { announcer?.speak("\(second)") }
+        if ch.buzz { announcer?.haptic(.notification) }
         s.lastCountdownSecondSpoken = second
+    }
+
+    /// Announce a fully-completed timer: spoken "complete" (unless silent) plus
+    /// the emphatic "time's up" buzz (unless voice-only).
+    private func announceCompletion(name: String) {
+        let ch = outputMode.channels(forMilestoneAlert: .voiceAndHaptic)
+        if ch.voice { announcer?.speak("\(name) complete") }
+        if ch.haptic { announcer?.haptic(.timeUp) }
     }
 
     /// Begin the next back-to-back repeat, resetting per-run firing state.
     private func advanceRepeat(_ s: inout RunningTimerState, now: Date) {
-        announcer?.timerCompleted(name: s.preset.name, isFinalRepeat: false)
+        // Short between-repeats cue: buzz unless we're in pure voice mode.
+        if outputMode != .voiceOnly { announcer?.haptic(.success) }
+        if outputMode == .voiceOnly { announcer?.speak("Next") }
         s.currentRepeat += 1
         s.startDate = now
         s.bankedElapsed = 0

@@ -78,6 +78,48 @@ final class MilestoneSchedulerTests: XCTestCase {
 
     // MARK: RunningTimerState time math
 
+    // MARK: OutputMode channel resolution
+
+    func testBothModeHonorsMilestoneAlertStyle() {
+        let voiceOnly = AlertStyle.voice
+        let hapticOnly = AlertStyle.haptic
+        XCTAssertEqual(OutputMode.both.channels(forMilestoneAlert: voiceOnly).voice, true)
+        XCTAssertEqual(OutputMode.both.channels(forMilestoneAlert: voiceOnly).haptic, false)
+        XCTAssertEqual(OutputMode.both.channels(forMilestoneAlert: hapticOnly).voice, false)
+        XCTAssertEqual(OutputMode.both.channels(forMilestoneAlert: hapticOnly).haptic, true)
+    }
+
+    func testVoiceOnlyForcesSpeechEvenForHapticMilestone() {
+        let ch = OutputMode.voiceOnly.channels(forMilestoneAlert: .haptic)
+        XCTAssertTrue(ch.voice)
+        XCTAssertFalse(ch.haptic)
+    }
+
+    func testVibrationOnlyForcesBuzzEvenForVoiceMilestone() {
+        let ch = OutputMode.vibrationOnly.channels(forMilestoneAlert: .voice)
+        XCTAssertFalse(ch.voice)
+        XCTAssertTrue(ch.haptic)
+    }
+
+    func testCountdownChannelsPerMode() {
+        // Both honors the preset's per-second haptic toggle.
+        XCTAssertEqual(OutputMode.both.countdownChannels(hapticEnabled: true).speak, true)
+        XCTAssertEqual(OutputMode.both.countdownChannels(hapticEnabled: true).buzz, true)
+        XCTAssertEqual(OutputMode.both.countdownChannels(hapticEnabled: false).buzz, false)
+        // Voice-only never buzzes; vibrate-only never speaks.
+        XCTAssertEqual(OutputMode.voiceOnly.countdownChannels(hapticEnabled: true).buzz, false)
+        XCTAssertEqual(OutputMode.vibrationOnly.countdownChannels(hapticEnabled: false).speak, false)
+        XCTAssertEqual(OutputMode.vibrationOnly.countdownChannels(hapticEnabled: false).buzz, true)
+    }
+
+    func testSpeaksAnnouncements() {
+        XCTAssertTrue(OutputMode.both.speaksAnnouncements)
+        XCTAssertTrue(OutputMode.voiceOnly.speaksAnnouncements)
+        XCTAssertFalse(OutputMode.vibrationOnly.speaksAnnouncements)
+    }
+
+    // MARK: RunningTimerState time math
+
     func testRunningStateElapsedAndRemaining() {
         let preset = TimerPreset(name: "t", duration: 60)
         let start = Date()

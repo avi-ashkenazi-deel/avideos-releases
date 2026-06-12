@@ -49,16 +49,6 @@ final class SpeechAnnouncer: NSObject, Announcer {
         HapticPlayer.play(pattern)
     }
 
-    func timerCompleted(name: String, isFinalRepeat: Bool) {
-        if isFinalRepeat {
-            speak("\(name) complete")
-            haptic(.timeUp)
-        } else {
-            // Between repeats: short cue only.
-            haptic(.success)
-        }
-    }
-
     func stopSpeaking() {
         #if canImport(AVFoundation)
         synth.stopSpeaking(at: .immediate)

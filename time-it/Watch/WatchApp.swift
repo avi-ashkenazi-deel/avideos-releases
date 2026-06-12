@@ -10,6 +10,7 @@ struct TimeItWatchApp: App {
                 .environmentObject(model)
                 .environmentObject(model.engine)
                 .environmentObject(model.presets)
+                .environmentObject(model.settings)
                 .task { model.start() }
         }
     }
@@ -22,6 +23,7 @@ struct TimeItWatchApp: App {
 final class WatchModel: ObservableObject {
     let engine: TimerEngine
     let presets = PresetStore()
+    let settings = AppSettings()
     let bridge = ConnectivityBridge()
     let keepAlive = WorkoutKeepAlive()
     private let announcer = SpeechAnnouncer()
@@ -33,6 +35,7 @@ final class WatchModel: ObservableObject {
     func start() {
         AudioSession.configureForAnnouncements()
         bridge.activate()
+        engine.outputMode = settings.outputMode
 
         engine.onRunningSetChanged = { [weak self] isEmpty in
             guard let self else { return }
@@ -45,12 +48,28 @@ final class WatchModel: ObservableObject {
             }
         }
 
+        settings.onChange = { [weak self] mode in
+            self?.engine.outputMode = mode
+            self?.bridge.syncOutputMode(mode)
+        }
+        bridge.onOutputModeReceived = { [weak self] mode in
+            self?.settings.applyRemote(mode)
+            self?.engine.outputMode = mode
+        }
+
         presets.onLocalChange = { [weak self] list in self?.bridge.syncPresets(list) }
         bridge.onPresetsReceived = { [weak self] list in self?.presets.mergeFromRemote(list) }
         bridge.onStartCommand = { [weak self] id in
             guard let self, let preset = self.presets.presets.first(where: { $0.id == id }) else { return }
-            self.engine.start(preset)
+            self.startTimer(preset)
         }
         bridge.syncPresets(presets.presets)
+        bridge.syncOutputMode(settings.outputMode)
+    }
+
+    /// Start a preset, applying its default output mode (if any) first.
+    func startTimer(_ preset: TimerPreset) {
+        if let mode = preset.defaultOutputMode { settings.outputMode = mode }
+        engine.start(preset)
     }
 }

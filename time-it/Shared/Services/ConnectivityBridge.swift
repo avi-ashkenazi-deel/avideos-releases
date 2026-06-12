@@ -19,6 +19,8 @@ final class ConnectivityBridge: NSObject, ObservableObject {
     var onPresetsReceived: (([TimerPreset]) -> Void)?
     /// The other device asked to start a preset by id.
     var onStartCommand: ((UUID) -> Void)?
+    /// The other device changed the master output mode.
+    var onOutputModeReceived: ((OutputMode) -> Void)?
 
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
@@ -47,6 +49,14 @@ final class ConnectivityBridge: NSObject, ObservableObject {
         #endif
     }
 
+    func syncOutputMode(_ mode: OutputMode) {
+        #if canImport(WatchConnectivity)
+        guard let session, session.activationState == .activated else { return }
+        // Latest-wins; pairs fine with reachable sendMessage too.
+        try? session.updateApplicationContext(["outputMode": mode.rawValue])
+        #endif
+    }
+
     func sendStart(presetID: UUID) {
         #if canImport(WatchConnectivity)
         guard let session, session.activationState == .activated else { return }
@@ -68,6 +78,9 @@ final class ConnectivityBridge: NSObject, ObservableObject {
         }
         if let idString = dict["startPresetID"] as? String, let id = UUID(uuidString: idString) {
             onStartCommand?(id)
+        }
+        if let raw = dict["outputMode"] as? String, let mode = OutputMode(rawValue: raw) {
+            onOutputModeReceived?(mode)
         }
     }
 }

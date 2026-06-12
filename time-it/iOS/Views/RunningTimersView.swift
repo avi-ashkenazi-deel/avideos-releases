@@ -7,13 +7,19 @@ struct RunningTimersView: View {
 
     var body: some View {
         NavigationStack {
-            Group {
+            VStack(spacing: 0) {
+                OutputModePicker()
+                    .padding(.horizontal)
+                    .padding(.top, 8)
+
                 if engine.running.isEmpty {
+                    Spacer()
                     ContentUnavailableView(
                         "No timers running",
                         systemImage: "timer",
                         description: Text("Start one from the Timers tab.")
                     )
+                    Spacer()
                 } else {
                     ScrollView {
                         LazyVStack(spacing: 16) {

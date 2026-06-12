@@ -10,6 +10,7 @@ struct TimeItApp: App {
                 .environmentObject(model)
                 .environmentObject(model.engine)
                 .environmentObject(model.presets)
+                .environmentObject(model.settings)
                 .task { model.start() }
         }
     }
@@ -21,6 +22,7 @@ struct TimeItApp: App {
 final class AppModel: ObservableObject {
     let engine: TimerEngine
     let presets = PresetStore()
+    let settings = AppSettings()
     let bridge = ConnectivityBridge()
     private let announcer = SpeechAnnouncer()
 
@@ -31,11 +33,22 @@ final class AppModel: ObservableObject {
     func start() {
         AudioSession.configureForAnnouncements()
         bridge.activate()
+        engine.outputMode = settings.outputMode
 
         // Keep the audio session active only while timers run, so the user's
         // music returns to full volume when nothing's counting.
         engine.onRunningSetChanged = { isEmpty in
             if isEmpty { AudioSession.deactivate() } else { AudioSession.activate() }
+        }
+
+        // Output mode: local toggle → engine + watch; remote → engine + UI.
+        settings.onChange = { [weak self] mode in
+            self?.engine.outputMode = mode
+            self?.bridge.syncOutputMode(mode)
+        }
+        bridge.onOutputModeReceived = { [weak self] mode in
+            self?.settings.applyRemote(mode)
+            self?.engine.outputMode = mode
         }
 
         // Local preset edits → push to the watch.
@@ -44,9 +57,16 @@ final class AppModel: ObservableObject {
         bridge.onPresetsReceived = { [weak self] list in self?.presets.mergeFromRemote(list) }
         bridge.onStartCommand = { [weak self] id in
             guard let self, let preset = self.presets.presets.first(where: { $0.id == id }) else { return }
-            self.engine.start(preset)
+            self.startTimer(preset)
         }
-        // Send the current library so a freshly-installed watch catches up.
+        // Send the current library + mode so a freshly-installed watch catches up.
         bridge.syncPresets(presets.presets)
+        bridge.syncOutputMode(settings.outputMode)
+    }
+
+    /// Start a preset, applying its default output mode (if any) first.
+    func startTimer(_ preset: TimerPreset) {
+        if let mode = preset.defaultOutputMode { settings.outputMode = mode }
+        engine.start(preset)
     }
 }
