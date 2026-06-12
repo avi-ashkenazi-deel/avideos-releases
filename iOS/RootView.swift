@@ -126,7 +126,26 @@ private struct CompactLayout: View {
 }
 
 /// The libraries the iPad source sidebar switches between.
-private enum LibrarySection: Hashable { case inbox, saved, feeds }
+private enum LibrarySection: Hashable, CaseIterable, Identifiable {
+    case inbox, saved, feeds
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .inbox: "Inbox"
+        case .saved: "Saved"
+        case .feeds: "Feeds"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .inbox: "tray.full"
+        case .saved: "bookmark"
+        case .feeds: "dot.radiowaves.up.forward"
+        }
+    }
+}
 
 /// iPad layout: a three-column split view, like Mail. A narrow source sidebar
 /// (Inbox / Saved) on the far left, the selected list in the middle, and the
@@ -145,10 +164,13 @@ private struct SplitLayout: View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
             // Source sidebar. (Utility actions live on the middle column's toolbar,
             // which is always visible — the sidebar collapses in portrait.)
+            // Drive selection from a ForEach (not static tagged rows) — on iPadOS
+            // single-selection taps on static `Label().tag()` rows frequently don't
+            // register, which left the whole sidebar feeling unresponsive.
             List(selection: $section) {
-                Label("Inbox", systemImage: "tray.full").tag(LibrarySection.inbox)
-                Label("Saved", systemImage: "bookmark").tag(LibrarySection.saved)
-                Label("Feeds", systemImage: "dot.radiowaves.up.forward").tag(LibrarySection.feeds)
+                ForEach(LibrarySection.allCases) { sec in
+                    Label(sec.title, systemImage: sec.icon).tag(sec)
+                }
             }
             .navigationTitle("VoiceInbox")
             .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 300)
