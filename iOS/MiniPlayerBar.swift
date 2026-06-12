@@ -48,7 +48,6 @@ struct MiniPlayerBar: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(.regularMaterial)
             .overlay(alignment: .bottom) {
                 // Thin playback progress along the bottom edge of the card.
                 GeometryReader { geo in
@@ -60,11 +59,7 @@ struct MiniPlayerBar: View {
                 .frame(height: 2)
             }
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .strokeBorder(Color.primary.opacity(0.06))
-            )
-            .shadow(color: .black.opacity(0.18), radius: 8, y: 3)
+            .floatingGlass(cornerRadius: 16)
             .padding(.horizontal, 10)
             .transition(.move(edge: .bottom).combined(with: .opacity))
         }

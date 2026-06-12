@@ -21,7 +21,6 @@ struct PlayerDetailContent: View {
     @State private var highlightToAnnotate: Highlight?
     @State private var showCompletion = false
     @State private var dismissedVoiceWarning = false
-    @State private var dismissedBasicVoice = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -31,7 +30,6 @@ struct PlayerDetailContent: View {
         .background(PiPHostView().frame(width: 2, height: 2).opacity(0.02).allowsHitTesting(false))
         .onChange(of: player.parsed?.email.id) { _, _ in
             dismissedVoiceWarning = false
-            dismissedBasicVoice = false
             renderPiP()
         }
         .navigationTitle(player.staged?.email.from.displayName
@@ -84,8 +82,6 @@ struct PlayerDetailContent: View {
     private var voiceBanner: some View {
         if let language = player.missingVoiceLanguage, !dismissedVoiceWarning {
             voiceWarning(language)
-        } else if let voiceName = player.basicVoiceName, !dismissedBasicVoice {
-            basicVoiceNudge(voiceName)
         }
     }
 
@@ -149,26 +145,31 @@ struct PlayerDetailContent: View {
 
     private var activeMode: some View {
         let email = player.parsed?.email
-        return VStack(spacing: 0) {
-            ScrollViewReader { proxy in
-                ScrollView {
-                    transcriptBody(subject: email?.subjectOrFallback ?? "",
-                                   emailID: email?.id ?? "",
-                                   blocks: player.blocks,
-                                   currentIndex: player.currentBlockIndex,
-                                   isActive: true)
-                }
-                .onChange(of: player.currentBlockIndex) { _, index in
-                    withAnimation(.easeInOut) { proxy.scrollTo(index, anchor: .center) }
-                }
+        return ScrollViewReader { proxy in
+            ScrollView {
+                transcriptBody(subject: email?.subjectOrFallback ?? "",
+                               emailID: email?.id ?? "",
+                               blocks: player.blocks,
+                               currentIndex: player.currentBlockIndex,
+                               isActive: true)
+                    // Room so the last lines clear the floating transport panel.
+                    .padding(.bottom, 96)
             }
-            Divider()
+            .onChange(of: player.currentBlockIndex) { _, index in
+                withAnimation(.easeInOut) { proxy.scrollTo(index, anchor: .center) }
+            }
+        }
+        // The transport floats over the transcript as a Liquid Glass panel rather
+        // than a bar pinned to the bottom edge.
+        .overlay(alignment: .bottom) {
             PlayerControlsView(viewModel: player) {
                 _ = player.captureHighlight()
             }
             .padding(.horizontal)
             .padding(.vertical, 12)
-            .background(.bar)
+            .floatingGlass()
+            .padding(.horizontal, 10)
+            .padding(.bottom, 8)
         }
     }
 
@@ -329,34 +330,6 @@ struct PlayerDetailContent: View {
         }
         .padding(12)
         .background(Color.orange.opacity(0.12))
-    }
-
-    private func basicVoiceNudge(_ voiceName: String) -> some View {
-        HStack(alignment: .top, spacing: 10) {
-            Image(systemName: "wand.and.stars")
-                .foregroundStyle(.tint)
-            VStack(alignment: .leading, spacing: 3) {
-                Text("Reading with a basic voice (\(voiceName))")
-                    .font(.subheadline.weight(.semibold))
-                Text("This is the lightweight built-in voice — it sounds robotic. A free “Enhanced” or “Premium” voice sounds far more natural (like Safari’s read-aloud). Add one in Settings → Accessibility → Spoken Content → Voices, then pick it in this app’s Settings.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                HStack(spacing: 16) {
-                    Button("Open Settings") {
-                        if let url = URL(string: UIApplication.openSettingsURLString) {
-                            UIApplication.shared.open(url)
-                        }
-                    }
-                    Button("Dismiss") { dismissedBasicVoice = true }
-                        .foregroundStyle(.secondary)
-                }
-                .font(.caption.weight(.medium))
-                .padding(.top, 2)
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(12)
-        .background(Color.accentColor.opacity(0.1))
     }
 
     private var completionBanner: some View {
