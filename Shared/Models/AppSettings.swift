@@ -1,5 +1,33 @@
 import Foundation
 import Combine
+import SwiftUI
+
+/// How the app picks its light/dark appearance.
+enum AppearanceMode: String, Codable, CaseIterable, Identifiable, Sendable {
+    /// Follow the system setting — dark when the phone is in dark mode.
+    case system
+    case light
+    case dark
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .system: return "System"
+        case .light: return "Light"
+        case .dark: return "Dark"
+        }
+    }
+
+    /// `nil` means "follow the system"; otherwise force the scheme.
+    var colorScheme: ColorScheme? {
+        switch self {
+        case .system: return nil
+        case .light: return .light
+        case .dark: return .dark
+        }
+    }
+}
 
 /// What the player does when it reaches an image while reading.
 enum ImageBehavior: String, Codable, CaseIterable, Identifiable, Sendable {
@@ -98,6 +126,11 @@ final class AppSettings: ObservableObject {
         didSet { defaults.set(readingTextSize.rawValue, forKey: Key.readingTextSize) }
     }
 
+    /// Light / dark / follow-the-system appearance for the whole app.
+    @Published var appearance: AppearanceMode {
+        didSet { defaults.set(appearance.rawValue, forKey: Key.appearance) }
+    }
+
     /// Keep the screen on while the reading view is open and playing — treat it
     /// like watching a video, so it doesn't auto-lock mid-email.
     @Published var keepScreenAwake: Bool {
@@ -154,6 +187,7 @@ final class AppSettings: ObservableObject {
         static let mailLabelName = "settings.mailLabelName"
         static let imageBehavior = "settings.imageBehavior"
         static let readingTextSize = "settings.readingTextSize"
+        static let appearance = "settings.appearance"
         static let keepScreenAwake = "settings.keepScreenAwake"
         static let pictureInPicture = "settings.pictureInPicture"
         static let voiceIdentifier = "settings.voiceIdentifier"
@@ -173,6 +207,8 @@ final class AppSettings: ObservableObject {
             ?? .pauseAndDigest
         self.readingTextSize = ReadingTextSize(rawValue: defaults.string(forKey: Key.readingTextSize) ?? "")
             ?? .medium
+        self.appearance = AppearanceMode(rawValue: defaults.string(forKey: Key.appearance) ?? "")
+            ?? .system
         // Default on: while you're watching it read, keep the screen awake.
         self.keepScreenAwake = defaults.object(forKey: Key.keepScreenAwake) as? Bool ?? true
         // Default off: PiP is opt-in.

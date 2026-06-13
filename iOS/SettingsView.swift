@@ -46,6 +46,19 @@ struct SettingsView: View {
             }
 
             Section {
+                Picker("Appearance", selection: $settings.appearance) {
+                    ForEach(AppearanceMode.allCases) { mode in
+                        Text(mode.title).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+            } header: {
+                Text("Appearance")
+            } footer: {
+                Text("\"System\" follows your phone — dark when your phone is in dark mode. Pick Light or Dark to force it.")
+            }
+
+            Section {
                 Picker("Text size", selection: $settings.readingTextSize) {
                     ForEach(ReadingTextSize.allCases) { size in
                         Text(size.title).tag(size)

@@ -12,6 +12,13 @@ struct RootView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     var body: some View {
+        phaseContent
+            // Light / dark / follow-the-system, chosen in Settings.
+            .preferredColorScheme(settings.appearance.colorScheme)
+    }
+
+    @ViewBuilder
+    private var phaseContent: some View {
         switch appState.phase {
         case .launching:
             SplashView()
