@@ -353,12 +353,14 @@ final class EmailPlayerViewModel: ObservableObject {
     func nextSentence() {
         guard parsed != nil, !isComplete else { return }
         hasStarted = true
+        resetLookback()
         speakBlock(at: currentBlockIndex + 1)
     }
 
     func previousSentence() {
         guard parsed != nil else { return }
         hasStarted = true
+        resetLookback()
         speakBlock(at: max(currentBlockIndex - 1, 0))
     }
 
@@ -372,7 +374,18 @@ final class EmailPlayerViewModel: ObservableObject {
         guard blocks.indices.contains(index) else { return }
         hasStarted = true
         isComplete = false
+        resetLookback()
         speakBlock(at: index)
+    }
+
+    /// Forget the spoken-block history that feeds the highlight lookback window.
+    /// Called whenever the listener *manually* repositions (tap a sentence, skip,
+    /// go back). Without this, highlighting after going back grabbed both the
+    /// block you jumped to *and* the one you'd just heard — two sentences lit up
+    /// when you meant one. Natural sentence-to-sentence progression doesn't reset
+    /// it, so continuous listening still captures the trailing ~10 seconds.
+    private func resetLookback() {
+        spokenLog.removeAll(keepingCapacity: true)
     }
 
     /// Move to a block and wait there (no audio) — used when opening an email
@@ -385,6 +398,7 @@ final class EmailPlayerViewModel: ObservableObject {
         hasStarted = true
         currentBlockSpoken = false
         currentBlockIndex = index
+        resetLookback()
         updateNowPlaying()
     }
 
