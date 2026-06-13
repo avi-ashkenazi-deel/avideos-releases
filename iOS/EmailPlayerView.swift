@@ -22,6 +22,14 @@ struct PlayerDetailContent: View {
     @State private var showCompletion = false
     @State private var dismissedVoiceWarning = false
 
+    // The iPad reading pane is much wider than an iPhone, so the same point size
+    // looks small there. Scale the reading text up on iPad (every size, including
+    // Extra Large) while leaving the iPhone sizes untouched.
+    private var isPad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
+    private var readingScale: CGFloat { isPad ? 1.4 : 1 }
+    private var bodyFontSize: CGFloat { settings.readingTextSize.bodyPointSize * readingScale }
+    private var titleFontSize: CGFloat { settings.readingTextSize.titlePointSize * readingScale }
+
     var body: some View {
         VStack(spacing: 0) {
             voiceBanner
@@ -214,7 +222,7 @@ struct PlayerDetailContent: View {
         let layout = notedLayout(emailID: emailID, blocks: blocks)
         return VStack(alignment: .leading, spacing: 16) {
             Text(subject)
-                .font(.system(size: settings.readingTextSize.titlePointSize, weight: .bold))
+                .font(.system(size: titleFontSize, weight: .bold))
                 .multilineTextAlignment(LanguageTools.isRightToLeft(subject) ? .trailing : .leading)
                 .frame(maxWidth: .infinity,
                        alignment: LanguageTools.isRightToLeft(subject) ? .trailing : .leading)
@@ -293,7 +301,7 @@ struct PlayerDetailContent: View {
                          showMarker: noted.showMarker,
                          markerIsNote: noted.markerIsNote,
                          wordRange: isCurrent ? player.spokenWordRange : nil,
-                         fontSize: settings.readingTextSize.bodyPointSize)
+                         fontSize: bodyFontSize)
                 .contentShape(Rectangle())
                 .onTapGesture { if isActive { player.jump(toBlock: index) } }
         case .image(let image):
