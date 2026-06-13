@@ -23,5 +23,11 @@
 	<array>
 		<string>iCloud.com.aviashkenazi.voiceinbox</string>
 	</array>
+	<!-- iCloud Key-Value Store: syncs small per-device state (listening progress
+	     for each email/article) across the user's iPhone and iPad so a message
+	     you started on one device resumes where you left off on the other.
+	     Enable "iCloud → Key-value storage" on the app target. -->
+	<key>com.apple.developer.ubiquity-kvstore-identifier</key>
+	<string>$(TeamIdentifierPrefix)$(CFBundleIdentifier)</string>
 </dict>
 </plist>
