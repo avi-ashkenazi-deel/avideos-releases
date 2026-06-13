@@ -421,30 +421,45 @@ private struct DurationPicker: View {
 
 private struct ColorPickerRow: View {
     @Binding var selection: String
+    @State private var expanded = false
 
     var body: some View {
-        // A single swatch that opens a dropdown of the palette when tapped.
-        Menu {
-            ForEach(PresetPalette.hexes, id: \.self) { hex in
-                Button { selection = hex } label: {
-                    Label {
-                        Text(PresetPalette.name(for: hex))
-                    } icon: {
-                        Image(systemName: selection == hex ? "checkmark.circle.fill" : "circle.fill")
-                            .foregroundStyle(Color(hex: hex))
-                    }
-                }
-            }
-        } label: {
+        // A swatch row that expands to a row of *actual* colored circles. (A
+        // `Menu` renders its icons monochrome, so the colors wouldn't show.)
+        Button { withAnimation(.snappy) { expanded.toggle() } } label: {
             HStack {
-                Text("Color")
+                Text("Color").foregroundStyle(.primary)
                 Spacer()
                 Circle().fill(Color(hex: selection)).frame(width: 24, height: 24)
-                Image(systemName: "chevron.up.chevron.down")
+                Image(systemName: expanded ? "chevron.up" : "chevron.down")
                     .font(.caption).foregroundStyle(.secondary)
             }
+            .contentShape(Rectangle())
         }
-        .tint(.primary)
+        .buttonStyle(.plain)
+
+        if expanded {
+            HStack(spacing: 16) {
+                ForEach(PresetPalette.hexes, id: \.self) { hex in
+                    Button {
+                        selection = hex
+                        withAnimation(.snappy) { expanded = false }
+                    } label: {
+                        Circle()
+                            .fill(Color(hex: hex))
+                            .frame(width: 30, height: 30)
+                            .overlay(
+                                Circle().strokeBorder(.primary,
+                                                      lineWidth: selection == hex ? 3 : 0)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(PresetPalette.name(for: hex))
+                }
+                Spacer()
+            }
+            .padding(.vertical, 4)
+        }
     }
 }
 
