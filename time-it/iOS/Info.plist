@@ -36,5 +36,9 @@
     <!-- Live Activity on the Lock Screen + Dynamic Island. -->
     <key>NSSupportsLiveActivities</key>
     <true/>
+    <!-- No proprietary/non-exempt encryption — skips the export-compliance
+         question on every TestFlight upload so builds go live immediately. -->
+    <key>ITSAppUsesNonExemptEncryption</key>
+    <false/>
 </dict>
 </plist>
