@@ -271,7 +271,7 @@ final class EmailPlayerViewModel: ObservableObject {
             let intro = ContentBlock.sentence(
                 Sentence(blockIndex: 0, text: Self.announcement(for: parsed.email))
             )
-            parsed = ParsedEmail(email: parsed.email, blocks: [intro] + parsed.blocks)
+            parsed = ParsedEmail(email: parsed.email, blocks: [intro] + parsed.blocks, links: parsed.links)
         }
         self.parsed = parsed
         // Cache an accurate reading-time estimate from the real text so the

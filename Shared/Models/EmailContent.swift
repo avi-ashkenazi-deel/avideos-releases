@@ -80,11 +80,34 @@ enum ContentBlock: Identifiable, Hashable, Sendable {
     }
 }
 
+/// A hyperlink found in an email/article body, surfaced so the listener can see
+/// where a link goes — and save it to read later — without tapping through.
+struct EmailLink: Identifiable, Hashable, Sendable {
+    var id: String { url.absoluteString }
+    /// The link's visible anchor text (falls back to the host when empty).
+    let text: String
+    let url: URL
+
+    /// Host without a leading "www.", for a compact secondary label.
+    var displayHost: String {
+        let host = url.host ?? url.absoluteString
+        return host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
+    }
+}
+
 /// A fully parsed email ready to be played.
 struct ParsedEmail: Identifiable, Sendable {
     var id: String { email.id }
     let email: Email
     let blocks: [ContentBlock]
+    /// Links discovered in the body, in order of appearance, deduped by URL.
+    let links: [EmailLink]
+
+    init(email: Email, blocks: [ContentBlock], links: [EmailLink] = []) {
+        self.email = email
+        self.blocks = blocks
+        self.links = links
+    }
 
     var sentenceCount: Int {
         blocks.reduce(0) { $0 + ($1.isImage ? 0 : 1) }

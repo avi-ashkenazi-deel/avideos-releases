@@ -21,6 +21,12 @@ struct PlayerDetailContent: View {
     @State private var highlightToAnnotate: Highlight?
     @State private var showCompletion = false
     @State private var dismissedVoiceWarning = false
+    @State private var showLinks = false
+
+    /// Links from whatever's on screen (a staged preview takes precedence).
+    private var currentLinks: [EmailLink] {
+        player.staged?.links ?? player.parsed?.links ?? []
+    }
 
     // The iPad reading pane is much wider than an iPhone, so the same point size
     // looks small there. Scale the reading text up on iPad (every size, including
@@ -44,6 +50,14 @@ struct PlayerDetailContent: View {
                          ?? player.parsed?.email.from.displayName ?? "")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            if !currentLinks.isEmpty {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { showLinks = true } label: {
+                        Image(systemName: "link")
+                    }
+                    .accessibilityLabel("Links in this email")
+                }
+            }
             if settings.pictureInPicture && ReaderPiPController.shared.isSupported {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { ReaderPiPController.shared.start() } label: {
@@ -51,6 +65,9 @@ struct PlayerDetailContent: View {
                     }
                 }
             }
+        }
+        .sheet(isPresented: $showLinks) {
+            NavigationStack { LinksListView(links: currentLinks) }
         }
         .onAppear {
             player.onHighlightCaptured = { highlight in highlightToAnnotate = highlight }

@@ -10,8 +10,10 @@ enum EmailParser {
 
     static func parse(_ email: Email) -> ParsedEmail {
         let blocks: [ContentBlock]
+        var links: [EmailLink] = []
         if let html = email.bodyHTML, !html.isEmpty {
             blocks = parseHTML(html)
+            links = extractLinks(from: html)
         } else {
             blocks = sentences(from: email.bodyText ?? email.snippet, startIndex: 0)
         }
@@ -26,7 +28,57 @@ enum EmailParser {
         let finalBlocks = kept.isEmpty
             ? sentences(from: email.snippet, startIndex: 0)
             : kept
-        return ParsedEmail(email: email, blocks: finalBlocks)
+        return ParsedEmail(email: email, blocks: finalBlocks, links: links)
+    }
+
+    // MARK: - Links
+
+    private static let anchorRegex = try! NSRegularExpression(
+        pattern: "<a\\b[^>]*\\bhref\\s*=\\s*[\"']([^\"']+)[\"'][^>]*>([\\s\\S]*?)</a>",
+        options: [.caseInsensitive]
+    )
+
+    /// Anchor text (or, for image-only links, the link itself) that marks a link
+    /// as chrome rather than content the reader would want to save.
+    private static let junkLinkPhrases: [String] = [
+        "unsubscribe", "view in browser", "view this email", "view online",
+        "manage your subscription", "manage preferences", "update your preferences",
+        "email preferences", "notification settings", "privacy policy",
+        "terms of service", "terms of use", "read in app", "read in the app",
+        "open in app", "get the app", "leave a comment", "share", "restack",
+        "like", "comment"
+    ]
+
+    /// Pull http(s) links out of the email HTML, in document order, deduped by
+    /// URL, skipping the standard newsletter chrome (unsubscribe, "read in app", …)
+    /// so the list is just the links worth reading.
+    static func extractLinks(from rawHTML: String) -> [EmailLink] {
+        let html = stripNonContent(rawHTML)
+        let ns = html as NSString
+        var seen = Set<String>()
+        var out: [EmailLink] = []
+
+        for m in anchorRegex.matches(in: html, range: NSRange(location: 0, length: ns.length)) {
+            let href = ns.substring(with: m.range(at: 1)).trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let scheme = URL(string: href)?.scheme?.lowercased(),
+                  scheme == "http" || scheme == "https",
+                  let url = URL(string: href) else { continue }
+
+            let text = stripTags(ns.substring(with: m.range(at: 2)))
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if isJunkLink(text: text) { continue }
+
+            guard seen.insert(url.absoluteString).inserted else { continue }
+            let label = text.isEmpty ? (url.host ?? url.absoluteString) : text
+            out.append(EmailLink(text: label, url: url))
+        }
+        return out
+    }
+
+    private static func isJunkLink(text: String) -> Bool {
+        let t = normalized(text)
+        guard !t.isEmpty else { return false }   // empty text → keep (use host)
+        return junkLinkPhrases.contains { t == $0 || t.contains($0) }
     }
 
     // MARK: - Trailing boilerplate

@@ -118,6 +118,22 @@ final class SavedArticleStore: ObservableObject {
         persist()
     }
 
+    /// Save a link discovered while reading (e.g. a URL inside an email) into the
+    /// Saved area, then fetch + extract it so it's ready to listen to offline.
+    /// Returns false if that URL was already saved.
+    @discardableResult
+    func saveLink(_ url: URL, title: String? = nil) -> Bool {
+        guard SavedArticleStorage.appendPending(url: url, title: title) != nil else { return false }
+        reload()
+        Task { await processPending() }
+        return true
+    }
+
+    /// Whether a URL is already in the saved list (any status but failed).
+    func isSaved(_ url: URL) -> Bool {
+        articles.contains { $0.url == url && $0.status != .failed }
+    }
+
     private static func escapeHTML(_ s: String) -> String {
         s.replacingOccurrences(of: "&", with: "&amp;")
             .replacingOccurrences(of: "<", with: "&lt;")
