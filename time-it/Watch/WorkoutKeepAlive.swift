@@ -31,7 +31,7 @@ final class WorkoutKeepAlive: NSObject {
         #if os(watchOS)
         guard !isActive, HKHealthStore.isHealthDataAvailable() else { return }
         let config = HKWorkoutConfiguration()
-        config.activityType = .other
+        config.activityType = .functionalStrengthTraining
         config.locationType = .indoor
         do {
             let session = try HKWorkoutSession(healthStore: healthStore, configuration: config)

@@ -28,6 +28,11 @@ final class WatchModel: ObservableObject {
     let keepAlive = WorkoutKeepAlive()
     private let announcer = SpeechAnnouncer()
 
+    /// A freestyle "document the session" mode: the workout records as Functional
+    /// Strength Training and you fire on-demand rests between sets.
+    @Published var inSession = false
+    private(set) var sessionStart: Date?
+
     init() {
         engine = TimerEngine(announcer: announcer)
     }
@@ -39,7 +44,8 @@ final class WatchModel: ObservableObject {
 
         engine.onRunningSetChanged = { [weak self] isEmpty in
             guard let self else { return }
-            if isEmpty {
+            // Keep the workout alive while a timer runs OR a session is open.
+            if isEmpty && !self.inSession {
                 self.keepAlive.stop()
                 AudioSession.deactivate()
             } else {
@@ -67,9 +73,44 @@ final class WatchModel: ObservableObject {
         bridge.syncOutputMode(settings.outputMode)
     }
 
-    /// Start a preset, applying its default output mode (if any) first.
+    /// Start a preset, applying its default output mode (if any) first. One timer
+    /// at a time, so any current one is stopped.
     func startTimer(_ preset: TimerPreset) {
         if let mode = preset.defaultOutputMode { settings.outputMode = mode }
+        engine.stopAll()
         engine.start(preset)
+    }
+
+    // MARK: Freestyle session
+
+    func startSession() {
+        sessionStart = Date()
+        inSession = true
+        keepAlive.startIfNeeded()
+        AudioSession.activate()
+    }
+
+    func endSession() {
+        engine.stopAll()
+        inSession = false
+        sessionStart = nil
+        keepAlive.stop()
+        AudioSession.deactivate()
+    }
+
+    /// Fire an on-demand rest countdown (e.g. after a max set). It counts down,
+    /// speaks/buzzes the final seconds, and signals "go" at the end to bring you
+    /// back. Returns to the session view when it finishes.
+    func addRest(_ seconds: TimeInterval) {
+        let rest = TimerPreset(
+            name: "Rest",
+            duration: seconds,
+            intervals: nil,
+            milestones: [],
+            finalCountdown: FinalCountdown(lastSeconds: 5, haptic: true),
+            colorHex: "#0A84FF"
+        )
+        engine.stopAll()
+        engine.start(rest)
     }
 }

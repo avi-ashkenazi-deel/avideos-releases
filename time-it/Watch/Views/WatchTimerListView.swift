@@ -1,17 +1,17 @@
 import SwiftUI
 
-/// Compact preset list synced from the phone. Tap to start a timer on the watch.
+/// Compact preset list synced from the phone. Tap to start a timer on the watch,
+/// or start a freestyle session.
 struct WatchTimerListView: View {
-    @EnvironmentObject private var engine: TimerEngine
+    @EnvironmentObject private var model: WatchModel
     @EnvironmentObject private var presets: PresetStore
-    @EnvironmentObject private var settings: AppSettings
 
     var body: some View {
         List {
-            Picker("Announce", selection: $settings.outputMode) {
-                ForEach(OutputMode.allCases) { mode in
-                    Label(mode.displayName, systemImage: mode.systemImage).tag(mode)
-                }
+            Button {
+                model.startSession()
+            } label: {
+                Label("Start session", systemImage: "figure.strengthtraining.traditional")
             }
 
             if presets.presets.isEmpty {
@@ -35,10 +35,10 @@ struct WatchTimerListView: View {
                 }
             }
         }
+        .navigationTitle("Time It")
     }
 
     private func start(_ preset: TimerPreset) {
-        if let mode = preset.defaultOutputMode { settings.outputMode = mode }
-        engine.start(preset)
+        model.startTimer(preset)
     }
 }
