@@ -318,7 +318,9 @@ struct PlayerDetailContent: View {
                          showMarker: noted.showMarker,
                          markerIsNote: noted.markerIsNote,
                          wordRange: isCurrent ? player.spokenWordRange : nil,
-                         fontSize: bodyFontSize)
+                         fontSize: bodyFontSize,
+                         listDepth: sentence.listDepth,
+                         bulletMarker: sentence.bulletMarker)
                 .contentShape(Rectangle())
                 .onTapGesture { if isActive { player.jump(toBlock: index) } }
         case .image(let image):
@@ -419,6 +421,8 @@ private struct SentenceText: View {
     var markerIsNote: Bool = false
     let wordRange: NSRange?
     var fontSize: CGFloat = 22
+    var listDepth: Int = 0
+    var bulletMarker: String = ""
 
     /// Must match the transcript's `VStack` spacing so a run's fill bridges the
     /// gap to the next sentence exactly, with no seam and no overlap.
@@ -431,13 +435,16 @@ private struct SentenceText: View {
     private var roundsBottom: Bool { notedPosition == .single || notedPosition == .last }
     private var bridgesToNext: Bool { notedPosition == .first || notedPosition == .middle }
 
+    /// Extra leading inset per nesting level so nested bullets sit in from their
+    /// parent. Level 1 isn't indented; each deeper level adds a step.
+    private var listIndent: CGFloat { CGFloat(max(listDepth - 1, 0)) * 20 }
+
     var body: some View {
-        Text(attributed)
-            .font(.system(size: fontSize))
+        sentenceRow
             .lineSpacing(5)
-            .multilineTextAlignment(isRTL ? .trailing : .leading)
             .environment(\.layoutDirection, isRTL ? .rightToLeft : .leftToRight)
             .padding(.horizontal, 8).padding(.vertical, 6)
+            .padding(isRTL ? .trailing : .leading, listIndent)
             .frame(maxWidth: .infinity, alignment: isRTL ? .trailing : .leading)
             .background(highlightBackground)
             // A lone noted sentence that's being read gets the "now reading" accent
@@ -459,6 +466,28 @@ private struct SentenceText: View {
                 }
             }
             .foregroundStyle(isCurrent || isNoted ? .primary : .secondary)
+    }
+
+    /// The sentence text, with a bullet/number in front when it's the start of a
+    /// list item. The marker is its own `Text` so it never shifts the word-range
+    /// underline, which indexes into the spoken `text`.
+    @ViewBuilder
+    private var sentenceRow: some View {
+        if bulletMarker.isEmpty {
+            Text(attributed)
+                .font(.system(size: fontSize))
+                .multilineTextAlignment(isRTL ? .trailing : .leading)
+        } else {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(bulletMarker)
+                    .font(.system(size: fontSize))
+                    .foregroundStyle(.secondary)
+                Text(attributed)
+                    .font(.system(size: fontSize))
+                    .multilineTextAlignment(isRTL ? .trailing : .leading)
+                    .frame(maxWidth: .infinity, alignment: isRTL ? .trailing : .leading)
+            }
+        }
     }
 
     /// A noted run renders as one continuous yellow shape: only the run's ends are

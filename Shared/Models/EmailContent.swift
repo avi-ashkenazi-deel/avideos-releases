@@ -7,11 +7,21 @@ struct Sentence: Identifiable, Codable, Hashable, Sendable {
     /// scroll to and highlight the active block regardless of type.
     let blockIndex: Int
     let text: String
+    /// List nesting level (0 = not in a list, 1 = top-level bullet, 2 = nested…),
+    /// used to indent the sentence on screen.
+    let listDepth: Int
+    /// The bullet/number to show before the sentence (e.g. "•", "◦", "2."). Empty
+    /// when the sentence isn't the first line of a list item. Display-only — never
+    /// spoken, and kept out of `text` so the word-by-word highlight stays aligned.
+    let bulletMarker: String
 
-    init(id: String = UUID().uuidString, blockIndex: Int, text: String) {
+    init(id: String = UUID().uuidString, blockIndex: Int, text: String,
+         listDepth: Int = 0, bulletMarker: String = "") {
         self.id = id
         self.blockIndex = blockIndex
         self.text = text
+        self.listDepth = listDepth
+        self.bulletMarker = bulletMarker
     }
 }
 

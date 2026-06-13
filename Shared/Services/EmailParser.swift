@@ -191,7 +191,9 @@ enum EmailParser {
     }
 
     private static func parseHTML(_ rawHTML: String) -> [ContentBlock] {
-        let html = stripNonContent(rawHTML)
+        // Turn list/line structure into newline-delimited lines with bullet
+        // markers *before* tags are stripped, so lists keep their shape on screen.
+        let html = annotateLists(stripNonContent(rawHTML))
         var blocks: [ContentBlock] = []
         var index = 0
         let ns = html as NSString
@@ -202,7 +204,7 @@ enum EmailParser {
             // Text before this image.
             let textRange = NSRange(location: cursor, length: match.range.location - cursor)
             let textChunk = ns.substring(with: textRange)
-            let chunkBlocks = sentences(from: stripTags(textChunk), startIndex: index)
+            let chunkBlocks = renderText(textChunk, startIndex: index)
             blocks.append(contentsOf: chunkBlocks)
             index += chunkBlocks.count
 
@@ -234,7 +236,7 @@ enum EmailParser {
         // Trailing text after the last image.
         if cursor < ns.length {
             let tail = ns.substring(with: NSRange(location: cursor, length: ns.length - cursor))
-            let tailBlocks = sentences(from: stripTags(tail), startIndex: index)
+            let tailBlocks = renderText(tail, startIndex: index)
             blocks.append(contentsOf: tailBlocks)
         }
 
@@ -388,6 +390,123 @@ enum EmailParser {
         return result
     }
 
+    // MARK: - Lists & line structure
+
+    /// Invisible delimiters that carry a list item's depth and bullet marker from
+    /// `annotateLists`, through tag-stripping, into `renderText` — without ever
+    /// appearing as visible text.
+    private static let listSentinel = "\u{2063}"   // invisible separator
+    private static let listFieldSep = "\u{241F}"   // unit separator
+    /// Marks a line break we deliberately introduced (a new list item / end of a
+    /// list). A private-use scalar so it can't collide with body text, and it's a
+    /// non-whitespace character so it survives whitespace-collapsing — letting us
+    /// fold the email's own incidental newlines into spaces while keeping ours.
+    private static let lineBreak = "\u{F8FF}"
+
+    /// Rewrite list tags into newline-delimited lines: every `<li>` becomes a new
+    /// line tagged (via invisible sentinels) with its nesting depth and
+    /// bullet/number, and a closing list ends the line. `<img>` and all other tags
+    /// pass through untouched so the image scanner and tag-stripper still work.
+    private static func annotateLists(_ html: String) -> String {
+        let ns = html as NSString
+        let tags = tagRegex.matches(in: html, range: NSRange(location: 0, length: ns.length))
+        var output = ""
+        var cursor = 0
+        var lists: [(ordered: Bool, count: Int)] = []   // stack of open lists
+
+        for tag in tags {
+            if tag.range.location > cursor {
+                output += ns.substring(with: NSRange(location: cursor, length: tag.range.location - cursor))
+            }
+            cursor = tag.range.location + tag.range.length
+            let raw = ns.substring(with: tag.range)
+            switch tagName(raw) {
+            case "ul": lists.append((false, 0))
+            case "ol": lists.append((true, 0))
+            case "/ul", "/ol":
+                if !lists.isEmpty { lists.removeLast() }
+                output += lineBreak
+            case "li":
+                let depth = max(lists.count, 1)
+                let marker: String
+                if var top = lists.last, top.ordered {
+                    top.count += 1
+                    lists[lists.count - 1] = top
+                    marker = "\(top.count)."
+                } else {
+                    marker = unorderedGlyph(depth: depth)
+                }
+                output += lineBreak + listSentinel + "\(depth)" + listFieldSep + marker + listSentinel
+            default:
+                output += raw   // keep <img>, <a>, <br>, … for the later passes
+            }
+        }
+        if cursor < ns.length {
+            output += ns.substring(with: NSRange(location: cursor, length: ns.length - cursor))
+        }
+        return output
+    }
+
+    /// Lowercased element name from a raw tag: "<li ...>" → "li", "</ul>" → "/ul".
+    private static func tagName(_ rawTag: String) -> String {
+        let s = rawTag.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: "<> \t\n"))
+        var out = ""
+        for ch in s {
+            if ch == "/" && out.isEmpty { out.append(ch); continue }
+            if ch.isLetter || ch.isNumber { out.append(ch); continue }
+            break
+        }
+        return out
+    }
+
+    private static func unorderedGlyph(depth: Int) -> String {
+        switch depth {
+        case 1: return "•"
+        case 2: return "◦"
+        default: return "▪"
+        }
+    }
+
+    /// Strip tags from a chunk while keeping the newlines and list sentinels that
+    /// `annotateLists` inserted, then split into blocks: each list item stays one
+    /// line (its bullet on the first sentence), plain prose splits into sentences
+    /// as before.
+    private static func renderText(_ htmlChunk: String, startIndex: Int) -> [ContentBlock] {
+        let ns = htmlChunk as NSString
+        let noTags = tagRegex.stringByReplacingMatches(
+            in: htmlChunk, range: NSRange(location: 0, length: ns.length), withTemplate: " ")
+        let decoded = decodeEntities(noTags)
+            .replacingOccurrences(of: "\u{00A0}", with: " ")
+            // Collapse all real whitespace (incl. the email's own newlines) to
+            // single spaces; only our `lineBreak` sentinel splits lines.
+            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+
+        var result: [ContentBlock] = []
+        var index = startIndex
+        for rawLine in decoded.components(separatedBy: lineBreak) {
+            var line = rawLine.trimmingCharacters(in: .whitespaces)
+            var depth = 0
+            var marker = ""
+            if line.hasPrefix(listSentinel),
+               let close = line.range(of: listSentinel,
+                                      range: line.index(after: line.startIndex)..<line.endIndex) {
+                let fields = line[line.index(after: line.startIndex)..<close.lowerBound]
+                    .components(separatedBy: listFieldSep)
+                if fields.count == 2 { depth = Int(fields[0]) ?? 0; marker = fields[1] }
+                line = String(line[close.upperBound...]).trimmingCharacters(in: .whitespaces)
+            }
+            guard !line.isEmpty else { continue }
+            for (k, part) in splitSentences(line).enumerated() {
+                result.append(.sentence(Sentence(
+                    blockIndex: index, text: part,
+                    listDepth: depth,
+                    bulletMarker: k == 0 ? marker : "")))
+                index += 1
+            }
+        }
+        return result
+    }
+
     // MARK: - Sentences
 
     /// Split free text into `Sentence` blocks, numbering them from `startIndex`.
@@ -400,17 +519,22 @@ enum EmailParser {
 
         var result: [ContentBlock] = []
         var index = startIndex
-        cleaned.enumerateSubstrings(in: cleaned.startIndex..<cleaned.endIndex, options: .bySentences) { substring, _, _, _ in
-            let trimmed = substring?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            guard !trimmed.isEmpty else { return }
-            result.append(.sentence(Sentence(blockIndex: index, text: trimmed)))
+        for part in splitSentences(cleaned) {
+            result.append(.sentence(Sentence(blockIndex: index, text: part)))
             index += 1
         }
-
-        // Fallback if the tokenizer produced nothing (e.g. no terminal punctuation).
-        if result.isEmpty {
-            result.append(.sentence(Sentence(blockIndex: startIndex, text: cleaned)))
-        }
         return result
+    }
+
+    /// Tokenize already-cleaned text into sentence strings, falling back to the
+    /// whole string when there's no terminal punctuation to split on.
+    private static func splitSentences(_ text: String) -> [String] {
+        var parts: [String] = []
+        text.enumerateSubstrings(in: text.startIndex..<text.endIndex, options: .bySentences) { substring, _, _, _ in
+            let trimmed = substring?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            if !trimmed.isEmpty { parts.append(trimmed) }
+        }
+        if parts.isEmpty { parts.append(text) }
+        return parts
     }
 }
