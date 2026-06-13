@@ -36,8 +36,9 @@ struct SavedArticlesList: View {
                 if store.isProcessing { ProgressView() }
                 // Paste any text (a doc, a message, notes) and listen to it.
                 Button { showPasteText = true } label: {
-                    Image(systemName: "doc.on.clipboard")
+                    Image(systemName: "plus")
                 }
+                .accessibilityLabel("Add text to listen to")
             }
         }
         .sheet(isPresented: $showPasteText) {
