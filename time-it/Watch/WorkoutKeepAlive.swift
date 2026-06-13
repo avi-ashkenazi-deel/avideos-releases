@@ -54,14 +54,24 @@ final class WorkoutKeepAlive: NSObject {
     func stop() {
         #if os(watchOS)
         guard isActive else { return }
-        let end = Date()
-        session?.end()
-        builder?.endCollection(withEnd: end) { [weak self] _, _ in
-            self?.builder?.finishWorkout { _, _ in }
-        }
-        session = nil
-        builder = nil
-        #endif
         isActive = false
+        session?.end()
+        builder?.endCollection(withEnd: Date()) { [weak self] _, _ in
+            // The completion runs off the main actor; hop back before touching
+            // our main-actor-isolated builder/session.
+            Task { @MainActor in self?.finishWorkout() }
+        }
+        #else
+        isActive = false
+        #endif
     }
+
+    #if os(watchOS)
+    @MainActor
+    private func finishWorkout() {
+        builder?.finishWorkout { _, _ in }
+        builder = nil
+        session = nil
+    }
+    #endif
 }
