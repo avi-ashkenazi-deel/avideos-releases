@@ -13,6 +13,7 @@ struct FeedsView: View {
 struct FeedsList: View {
     @EnvironmentObject private var player: EmailPlayerViewModel
     @StateObject private var store = FeedStore.shared
+    @StateObject private var progress = ListeningProgressStore.shared
     @Environment(\.openURL) private var openURL
     @State private var searchText = ""
     @State private var showAddFeed = false
@@ -45,7 +46,9 @@ struct FeedsList: View {
                 List {
                     ForEach(shownItems) { item in
                         Button { open(item) } label: {
-                            FeedItemRow(item: item, feedTitle: store.feed(for: item.feedID)?.title ?? "")
+                            FeedItemRow(item: item,
+                                        feedTitle: store.feed(for: item.feedID)?.title ?? "",
+                                        progress: progress.progress(for: "rss-\(item.id)"))
                         }
                         .buttonStyle(.plain)
                         .listRowSeparator(.hidden)
@@ -156,33 +159,56 @@ struct FeedsList: View {
 private struct FeedItemRow: View {
     let item: RSSItem
     let feedTitle: String
+    var progress: ListeningProgress?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            HStack {
-                Text(feedTitle.uppercased())
-                    .font(.caption2.weight(.bold))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                Spacer()
-                Text(item.publishedAt, format: .relative(presentation: .numeric))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Text(item.title)
-                .font(.subheadline)
-                .fontWeight(item.isRead ? .regular : .semibold)
-                .lineLimit(2)
-            if let summary = item.summary, !summary.isEmpty {
-                Text(summary)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+        HStack(alignment: .top, spacing: 11) {
+            progressRing
+            VStack(alignment: .leading, spacing: 3) {
+                HStack {
+                    Text(feedTitle.uppercased())
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                    Spacer()
+                    Text(item.publishedAt, format: .relative(presentation: .numeric))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Text(item.title)
+                    .font(.subheadline)
+                    .fontWeight(item.isRead ? .regular : .semibold)
                     .lineLimit(2)
             }
         }
         .padding(.vertical, 4)
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
+    }
+
+    /// Listening-progress ring, mirroring the inbox: fills as you listen, turns
+    /// green when finished. Space is reserved even when there's no progress so
+    /// titles stay aligned.
+    private var progressRing: some View {
+        let fraction = progress?.fraction ?? 0
+        let isComplete = progress?.isComplete ?? false
+        return ZStack {
+            Circle().stroke(Color.secondary.opacity(0.2), lineWidth: 2.5)
+            if fraction > 0 {
+                Circle()
+                    .trim(from: 0, to: fraction)
+                    .stroke(isComplete ? Color.green : Color.accentColor,
+                            style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+            }
+            if isComplete {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(.green)
+            }
+        }
+        .frame(width: 20, height: 20)
+        .padding(.top, 2)
     }
 }
 
