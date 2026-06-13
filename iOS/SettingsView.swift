@@ -5,6 +5,7 @@ import UIKit
 struct SettingsView: View {
     @EnvironmentObject private var appState: AppState
     @ObservedObject private var settings = AppSettings.shared
+    @ObservedObject private var skipRules = SkipRuleStore.shared
     @Environment(\.dismiss) private var dismiss
 
     private let speeds: [Double] = [0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.25, 2.5]
@@ -70,6 +71,28 @@ struct SettingsView: View {
                 Text("Reading")
             } footer: {
                 Text("Size of the text in the email/article reading view. \"Keep screen awake\" stops the screen auto-locking while you watch it read. \"Picture in Picture\" floats what's being read in a small window when you leave the app mid-email.")
+            }
+
+            if !skipRules.rules.isEmpty {
+                Section {
+                    ForEach(skipRules.rules) { rule in
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(rule.phrase)
+                                .font(.subheadline)
+                                .lineLimit(2)
+                            Text(rule.scopeDescription)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .onDelete { offsets in
+                        offsets.map { skipRules.rules[$0].id }.forEach(skipRules.remove)
+                    }
+                } header: {
+                    Text("Skipped lines")
+                } footer: {
+                    Text("Lines you've chosen to never read aloud. Long-press any sentence while reading to add one (for that sender or everyone). Swipe to remove.")
+                }
             }
 
             Section {

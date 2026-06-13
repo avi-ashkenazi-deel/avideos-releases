@@ -323,11 +323,33 @@ struct PlayerDetailContent: View {
                          bulletMarker: sentence.bulletMarker)
                 .contentShape(Rectangle())
                 .onTapGesture { if isActive { player.jump(toBlock: index) } }
+                .contextMenu { skipMenu(for: sentence) }
         case .image(let image):
             ImageBlockView(image: image, isCurrent: isCurrent) {
                 player.skipImage()
             }
             .onTapGesture { if isActive { player.jump(toBlock: index) } }
+        }
+    }
+
+    /// Long-press menu on a sentence: teach the app to always skip this recurring
+    /// line — for this sender (e.g. Substack's "Read in app") or for everyone.
+    @ViewBuilder
+    private func skipMenu(for sentence: Sentence) -> some View {
+        if let from = player.parsed?.email.from ?? player.staged?.email.from {
+            let domain = SkipRuleStore.domain(of: from.address)
+            Button {
+                SkipRuleStore.shared.add(phrase: sentence.text, senderDomain: domain, label: from.displayName)
+                player.reapplySkipRules()
+            } label: {
+                Label("Always skip this from \(from.displayName)", systemImage: "speaker.slash")
+            }
+            Button {
+                SkipRuleStore.shared.add(phrase: sentence.text, senderDomain: "", label: from.displayName)
+                player.reapplySkipRules()
+            } label: {
+                Label("Always skip this from anyone", systemImage: "speaker.slash.fill")
+            }
         }
     }
 
