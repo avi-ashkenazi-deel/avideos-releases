@@ -30,6 +30,7 @@ private struct WatchTimesPage: View {
             TimelineView(.periodic(from: .now, by: 0.03)) { context in
                 let now = context.date
                 let fraction = timer.intervalFraction(now: now)
+                let pos = timer.intervalPosition(now: now)
                 ZStack(alignment: .bottom) {
                     tint.opacity(0.18)
                     Rectangle()
@@ -56,6 +57,15 @@ private struct WatchTimesPage: View {
                             .font(.caption)
                             .foregroundStyle(.white.opacity(0.85))
                             .shadow(radius: 2)
+
+                        // Sets (position through the cycle) + Cycle (repeat).
+                        HStack(spacing: 12) {
+                            if pos.total > 1 { stat("\(pos.index)/\(pos.total)", "Sets") }
+                            if timer.preset.repeatCount > 1 {
+                                stat("\(timer.currentRepeat)/\(timer.preset.repeatCount)", "Cycle")
+                            }
+                        }
+                        .padding(.top, 2)
                         Spacer()
                     }
                     .padding(.vertical, 6)
@@ -63,6 +73,14 @@ private struct WatchTimesPage: View {
             }
         }
         .ignoresSafeArea()
+    }
+
+    private func stat(_ value: String, _ label: String) -> some View {
+        HStack(spacing: 3) {
+            Text(value).font(.caption).bold().foregroundStyle(.white)
+            Text(label).font(.caption2).foregroundStyle(.white.opacity(0.7))
+        }
+        .shadow(radius: 2)
     }
 
     /// Interval label when there is one; for a plain rest with no intervals fall
