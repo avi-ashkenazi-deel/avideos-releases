@@ -85,11 +85,13 @@ final class SkipRuleStore: ObservableObject {
 
     // MARK: - Helpers
 
-    static func domain(of address: String) -> String {
+    // `nonisolated` so `SkipRule.matches` (a plain struct method) can call them
+    // without hopping to the main actor — they're pure string functions.
+    nonisolated static func domain(of address: String) -> String {
         address.split(separator: "@").last.map { $0.lowercased() } ?? ""
     }
 
-    static func normalize(_ s: String) -> String {
+    nonisolated static func normalize(_ s: String) -> String {
         let punct = CharacterSet(charactersIn: ".,!?:;·•|-–—()[]\"'“”")
         return s.lowercased()
             .trimmingCharacters(in: .whitespacesAndNewlines)

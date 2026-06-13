@@ -42,14 +42,16 @@ final class ListeningProgressStore: ObservableObject {
         self.fileURL = containerURL.appendingPathComponent("listening-progress.json")
         load()
         // Fold in anything iCloud already knows, then keep listening for changes
-        // pushed from the user's other devices.
+        // pushed from the user's other devices. Block-based observer delivered on
+        // the main queue (this is a @MainActor type, not an NSObject).
         mergeFromCloud()
         NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(cloudChangedExternally),
-            name: NSUbiquitousKeyValueStore.didChangeExternallyNotification,
-            object: cloud
-        )
+            forName: NSUbiquitousKeyValueStore.didChangeExternallyNotification,
+            object: cloud,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in self?.mergeFromCloud() }
+        }
         cloud.synchronize()
     }
 
@@ -90,11 +92,6 @@ final class ListeningProgressStore: ObservableObject {
     }
 
     // MARK: - iCloud sync
-
-    @objc private func cloudChangedExternally(_ note: Notification) {
-        // Fires on a background thread; hop to the main actor to touch state.
-        Task { @MainActor in self.mergeFromCloud() }
-    }
 
     /// Merge the iCloud copy into the local one, keeping the most recently
     /// updated record for each id. Writes back to disk if anything changed, but
