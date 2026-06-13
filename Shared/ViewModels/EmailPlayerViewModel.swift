@@ -26,11 +26,6 @@ final class EmailPlayerViewModel: ObservableObject {
     /// one. Nil when a voice is available (or ElevenLabs is in use).
     @Published var missingVoiceLanguage: String?
 
-    /// Set to the name of the voice being used when it's only a "Basic" (robotic)
-    /// quality voice, so the UI can nudge the listener to install a nicer one.
-    /// Nil when the active voice is Enhanced/Premium (or ElevenLabs is in use).
-    @Published var basicVoiceName: String?
-
     // Elapsed playback seconds (advances only while speaking).
     @Published private(set) var elapsed: TimeInterval = 0
 
@@ -305,7 +300,6 @@ final class EmailPlayerViewModel: ObservableObject {
     /// to add one. Skipped when ElevenLabs (multilingual) is active.
     private func checkVoiceAvailability(for parsed: ParsedEmail) {
         missingVoiceLanguage = nil
-        basicVoiceName = nil
         // Sample real spoken sentences (skip image placeholders) for detection.
         let sample = parsed.blocks
             .compactMap { if case .image = $0 { return nil } else { return $0.spokenText } }
@@ -319,9 +313,6 @@ final class EmailPlayerViewModel: ObservableObject {
         let chosen = SystemSpeechEngine.effectiveVoice(forLanguage: code, preferredIdentifier: settings.voiceIdentifier)
         if chosen == nil {
             missingVoiceLanguage = Locale.current.localizedString(forLanguageCode: code) ?? code
-        } else if chosen?.quality == .default {
-            // A voice exists but it's the lightweight, robotic one — nudge to upgrade.
-            basicVoiceName = chosen?.name
         }
     }
 
