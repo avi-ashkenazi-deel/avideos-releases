@@ -83,6 +83,25 @@ struct RunningTimerState: Identifiable {
         return preset.cues().first { abs($0.fireTime - start) < 0.5 }?.displayLabel
     }
 
+    /// (current, total) segment position, 1-based, for an "interval i/N" readout.
+    func intervalPosition(now: Date = Date()) -> (index: Int, total: Int) {
+        let bounds = segmentBoundaries()
+        let total = max(1, bounds.count)
+        let passed = bounds.filter { $0 <= elapsed(now: now) + 0.0001 }.count
+        return (min(passed + 1, total), total)
+    }
+
+    /// For a work/rest plan: which round we're in, whether it's the work phase,
+    /// and the total rounds. A work + rest pair is ONE round (one interval), so
+    /// the running view groups them rather than counting two.
+    func workRestPhase(now: Date = Date()) -> (round: Int, isWork: Bool, rounds: Int)? {
+        guard case .workRest(let work, let rest)? = preset.intervals?.spec else { return nil }
+        let cueTimes = preset.cues().map(\.fireTime).sorted()
+        let passed = cueTimes.filter { $0 <= elapsed(now: now) + 0.0001 }.count
+        let rounds = max(1, Int(preset.duration / max(1, work + rest)))
+        return (passed / 2 + 1, passed % 2 == 0, rounds)
+    }
+
     /// Seconds elapsed in the current run.
     func elapsed(now: Date = Date()) -> TimeInterval {
         let live = isRunning ? now.timeIntervalSince(startDate) : 0
