@@ -44,6 +44,14 @@ final class EmailPlayerViewModel: ObservableObject {
     @Published private(set) var staged: ParsedEmail?
     private var stagedConfig: StagedConfig?
 
+    /// True only when the reader lives in a persistent side pane (iPad split
+    /// view), where opening a new email while one plays should *preview* it next
+    /// to what's playing. On iPhone the reader is a full-screen cover that
+    /// replaces everything, so staging a preview the user can't see beside the
+    /// playing email just looks like "the same email never updates" — there, a
+    /// tap must switch directly to the email it opened.
+    var usesInlineDetail = false
+
     private struct StagedConfig {
         var onMarkedRead: ((String) -> Void)?
         var markReadOverride: ((String) -> Void)?
@@ -162,7 +170,7 @@ final class EmailPlayerViewModel: ObservableObject {
                                   markReadOverride: markReadOverride,
                                   nextUnreadProvider: nextUnreadProvider,
                                   startBlock: startBlock)
-        if isPlaying, parsed?.email.id != email.id {
+        if usesInlineDetail, isPlaying, parsed?.email.id != email.id {
             Task { await stage(email: email, isLocal: isLocal, config: config) }
         } else {
             discardStaged()

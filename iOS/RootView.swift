@@ -91,9 +91,13 @@ struct RootView: View {
     @ViewBuilder
     private var readyLayout: some View {
         if horizontalSizeClass == .regular {
-            SplitLayout()
+            // iPad split view keeps a live detail pane, so previewing a newly
+            // tapped email beside what's playing makes sense.
+            SplitLayout().onAppear { player.usesInlineDetail = true }
         } else {
-            CompactLayout()
+            // iPhone's reader is a full-screen cover — a tap must switch straight
+            // to that email, not stage a preview behind the playing one.
+            CompactLayout().onAppear { player.usesInlineDetail = false }
         }
     }
 }
