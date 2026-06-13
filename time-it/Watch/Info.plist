@@ -24,11 +24,12 @@
     <true/>
     <key>WKCompanionAppBundleIdentifier</key>
     <string>com.aviashkenazi.timeit</string>
-    <!-- audio: speak countdowns; the HKWorkoutSession is what keeps us alive. -->
+    <!-- audio: speak countdowns; the HKWorkoutSession itself is what keeps the
+         app alive (no workout-processing mode needed, and the validator rejects
+         it here). -->
     <key>UIBackgroundModes</key>
     <array>
         <string>audio</string>
-        <string>workout-processing</string>
     </array>
     <key>NSHealthShareUsageDescription</key>
     <string>Time It uses a workout session to keep timers and haptics running accurately while your wrist is down.</string>
