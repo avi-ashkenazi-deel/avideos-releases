@@ -48,7 +48,6 @@ struct RunningTimerScreen: View {
 
             VStack(spacing: 14) {
                 topBar(timer, onColor: onColor)
-                OutputModePicker()
                 Spacer()
 
                 // Phase / interval label.
