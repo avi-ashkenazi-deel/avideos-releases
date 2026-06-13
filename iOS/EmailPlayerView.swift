@@ -484,14 +484,13 @@ private struct ImageBlockView: View {
     let isCurrent: Bool
     let onSkip: () -> Void
 
-    // Flips when the remote image fails to load, so we collapse the block rather
-    // than leave an empty grey box behind.
-    @State private var failed = false
-
     var body: some View {
-        // Only show the card when there's an image we can actually display. No URL
-        // or a failed fetch → render nothing at all (no empty placeholder).
-        if let url = image.remoteURL, !failed {
+        // Show the card whenever there's a URL we can try to load. We intentionally
+        // do NOT keep a "failed" flag: the old code latched failure from inside the
+        // AsyncImage builder (mutating state during a view update), and on iPad the
+        // split-view's extra layout passes cancel the in-flight load — that
+        // cancellation counted as a failure and permanently collapsed *every* image.
+        if let url = image.remoteURL {
             card(url: url)
         }
     }
@@ -518,13 +517,14 @@ private struct ImageBlockView: View {
                 case .success(let img):
                     img.resizable().scaledToFit()
                 case .failure:
-                    // Mark failed → the card collapses so there's no empty box.
-                    // We deliberately don't touch playback here: the player still
-                    // announces this image in audio (core behavior) regardless of
-                    // whether its picture could be fetched.
-                    Color.clear.frame(height: 0).onAppear { failed = true }
-                default:
+                    // Genuine fetch failure (rare — decorative images and tracking
+                    // pixels are filtered out upstream). Show a muted placeholder
+                    // instead of latching state, so a re-render can retry.
+                    failurePlaceholder
+                case .empty:
                     ProgressView().frame(maxWidth: .infinity, minHeight: 120)
+                @unknown default:
+                    failurePlaceholder
                 }
             }
             .clipShape(RoundedRectangle(cornerRadius: 12))
@@ -538,5 +538,16 @@ private struct ImageBlockView: View {
             RoundedRectangle(cornerRadius: 14)
                 .fill(isCurrent ? Color.accentColor.opacity(0.12) : Color.gray.opacity(0.08))
         )
+    }
+
+    private var failurePlaceholder: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "photo")
+            Text((image.altText?.isEmpty == false ? image.altText : nil) ?? "Image unavailable")
+                .lineLimit(2)
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .frame(maxWidth: .infinity, minHeight: 80)
     }
 }
