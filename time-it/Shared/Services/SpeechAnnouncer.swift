@@ -18,6 +18,8 @@ final class SpeechAnnouncer: NSObject, Announcer {
 
     #if canImport(AVFoundation)
     private let synth = AVSpeechSynthesizer()
+    /// Retained so a clip isn't deallocated mid-playback.
+    private var clipPlayer: AVAudioPlayer?
     #endif
 
     override init() {
@@ -36,6 +38,10 @@ final class SpeechAnnouncer: NSObject, Announcer {
         guard voiceEnabled, !text.isEmpty else { return }
         #if canImport(AVFoundation)
         AudioSession.activate()
+        // Prefer a user-recorded clip matching this phrase; fall back to speech.
+        if let clip = VoiceClips.url(forPhrase: text), playClip(clip) {
+            return
+        }
         let utterance = AVSpeechUtterance(string: text)
         utterance.rate = rate
         // AVSpeechSynthesizer already queues utterances internally, so enqueuing
@@ -44,6 +50,21 @@ final class SpeechAnnouncer: NSObject, Announcer {
         synth.speak(utterance)
         #endif
     }
+
+    #if canImport(AVFoundation)
+    /// Play a bundled clip. Returns false if it couldn't load (so we fall back
+    /// to speech).
+    private func playClip(_ url: URL) -> Bool {
+        do {
+            let player = try AVAudioPlayer(contentsOf: url)
+            player.prepareToPlay()
+            clipPlayer = player
+            return player.play()
+        } catch {
+            return false
+        }
+    }
+    #endif
 
     func haptic(_ pattern: HapticPattern) {
         HapticPlayer.play(pattern)
