@@ -72,8 +72,16 @@ struct PresetEditorView: View {
                     Text("Starting this timer can flip the app to Voice, Vibrate, or Both — handy for a silent \"talk\" preset.")
                 }
 
-                Section("Options") {
+                Section {
                     Stepper("Repeat \(draft.repeatCount)×", value: $draft.repeatCount, in: 1...50)
+                    Toggle("Record as Apple Watch workout", isOn: Binding(
+                        get: { draft.recordsWorkout ?? true },
+                        set: { draft.recordsWorkout = $0 }
+                    ))
+                } header: {
+                    Text("Options")
+                } footer: {
+                    Text("Turn off for non-exercise timers (a talk, cooking…) so the watch doesn't log a workout to Fitness.")
                 }
             }
             .navigationTitle(title)

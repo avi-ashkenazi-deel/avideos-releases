@@ -25,7 +25,10 @@ final class WatchModel: ObservableObject {
     let presets = PresetStore()
     let settings = AppSettings()
     let bridge = ConnectivityBridge()
+    /// Records a workout (keeps the app alive) for exercise timers/sessions.
     let keepAlive = WorkoutKeepAlive()
+    /// Silent-audio keep-alive for non-exercise timers (no workout logged).
+    private let audioKeepAlive = BackgroundKeepAlive()
     private let announcer = SpeechAnnouncer()
 
     /// A freestyle "document the session" mode: the workout records as Functional
@@ -44,12 +47,12 @@ final class WatchModel: ObservableObject {
 
         engine.onRunningSetChanged = { [weak self] isEmpty in
             guard let self else { return }
-            // Keep the workout alive while a timer runs OR a session is open.
+            // Stop the keep-alive(s) when nothing's running and no session is
+            // open. Starting the right keep-alive happens in startTimer/Session,
+            // which knows whether the timer is exercise.
             if isEmpty && !self.inSession {
-                self.keepAlive.stop()
-                AudioSession.deactivate()
+                self.stopKeepAlive()
             } else {
-                self.keepAlive.startIfNeeded()
                 AudioSession.activate()
             }
         }
@@ -74,27 +77,46 @@ final class WatchModel: ObservableObject {
     }
 
     /// Start a preset, applying its default output mode (if any) first. One timer
-    /// at a time, so any current one is stopped.
+    /// at a time, so any current one is stopped. Exercise timers record a
+    /// workout; others stay alive with silent audio (nothing logged).
     func startTimer(_ preset: TimerPreset) {
         if let mode = preset.defaultOutputMode { settings.outputMode = mode }
         engine.stopAll()
+        startKeepAlive(recordsWorkout: preset.isWorkout)
         engine.start(preset)
     }
 
-    // MARK: Freestyle session
+    // MARK: Freestyle session (always a workout)
 
     func startSession() {
         sessionStart = Date()
         inSession = true
-        keepAlive.startIfNeeded()
-        AudioSession.activate()
+        startKeepAlive(recordsWorkout: true)
     }
 
     func endSession() {
         engine.stopAll()
         inSession = false
         sessionStart = nil
+        stopKeepAlive()
+    }
+
+    // MARK: Keep-alive selection
+
+    private func startKeepAlive(recordsWorkout: Bool) {
+        AudioSession.activate()
+        if recordsWorkout {
+            audioKeepAlive.stop()
+            keepAlive.startIfNeeded()
+        } else {
+            keepAlive.stop()
+            audioKeepAlive.start()
+        }
+    }
+
+    private func stopKeepAlive() {
         keepAlive.stop()
+        audioKeepAlive.stop()
         AudioSession.deactivate()
     }
 

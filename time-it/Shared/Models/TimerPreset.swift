@@ -32,6 +32,14 @@ struct TimerPreset: Codable, Hashable, Identifiable {
     /// this value — e.g. a "Talk" preset that always goes silent/vibrate. `nil`
     /// leaves the current mode untouched.
     var defaultOutputMode: OutputMode? = nil
+    /// Whether the watch records this as a Functional Strength Training workout.
+    /// Off for non-exercise timers (a talk, cooking…) — the watch then stays
+    /// alive with silent audio instead, so nothing is logged to Fitness.
+    /// Optional for backward-compatible decoding; treat `nil` as "yes".
+    var recordsWorkout: Bool? = true
+
+    /// Resolved flag (defaults to true for presets saved before this existed).
+    var isWorkout: Bool { recordsWorkout ?? true }
 
     /// Name to show in lists / the running view — falls back to the duration.
     var displayName: String {
@@ -133,7 +141,8 @@ struct TimerPreset: Codable, Hashable, Identifiable {
             finalCountdown: FinalCountdown(lastSeconds: 10, haptic: true),
             colorHex: "#0A84FF",
             repeatCount: 1,
-            defaultOutputMode: .vibrationOnly
+            defaultOutputMode: .vibrationOnly,
+            recordsWorkout: false   // a talk isn't exercise
         )
     }
 }
