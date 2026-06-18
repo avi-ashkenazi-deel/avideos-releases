@@ -18,10 +18,10 @@ struct WatchSessionView: View {
     }
 
     private var mainPage: some View {
-        VStack(spacing: 6) {
+        VStack(alignment: .leading, spacing: 4) {
             if let start = model.sessionStart {
-                TimelineView(.periodic(from: .now, by: 0.5)) { context in
-                    Text(formatClock(context.date.timeIntervalSince(start)))
+                TimelineView(.periodic(from: .now, by: 0.03)) { context in
+                    Text(formatClockMillis(context.date.timeIntervalSince(start)))
                         .font(.system(size: 34, weight: .bold, design: .rounded))
                         .monospacedDigit()
                 }
@@ -39,6 +39,7 @@ struct WatchSessionView: View {
             }
             Spacer()
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 6)
     }
 
