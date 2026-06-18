@@ -26,9 +26,13 @@ struct WatchSessionView: View {
                         .monospacedDigit()
                 }
             }
-            Text(sessionName)
-                .font(.callout)
-                .foregroundStyle(.secondary)
+            HStack(spacing: 6) {
+                Image(systemName: "figure.strengthtraining.traditional")
+                    .foregroundStyle(.green)
+                Text(sessionName)
+                    .foregroundStyle(.secondary)
+            }
+            .font(.callout)
 
             Spacer()
 

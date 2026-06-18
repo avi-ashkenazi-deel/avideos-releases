@@ -38,12 +38,20 @@ private struct WatchTimesPage: View {
                         .frame(height: geo.size.height * fraction)
 
                     VStack(spacing: 2) {
-                        if let label = intervalName(now) {
-                            Text(label)
-                                .font(.headline)
-                                .foregroundStyle(.white)
-                                .shadow(radius: 3)
-                                .lineLimit(1)
+                        HStack(spacing: 6) {
+                            if timer.preset.isWorkout {
+                                Image(systemName: "figure.strengthtraining.traditional")
+                                    .font(.headline)
+                                    .foregroundStyle(.green)
+                                    .shadow(radius: 3)
+                            }
+                            if let label = intervalName(now) {
+                                Text(label)
+                                    .font(.headline)
+                                    .foregroundStyle(.white)
+                                    .shadow(radius: 3)
+                                    .lineLimit(1)
+                            }
                         }
                         Spacer()
                         // Interval remaining — the hero, with hundredths.
