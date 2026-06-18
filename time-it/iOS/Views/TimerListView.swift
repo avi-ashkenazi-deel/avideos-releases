@@ -69,13 +69,17 @@ private struct PresetRow: View {
                 Text(subtitle).font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
-            // Output indicators: voice and/or vibrate.
+            // Output indicators: voice and/or vibrate, and whether it logs a workout.
             HStack(spacing: 8) {
                 if preset.usesVoice {
                     Image(systemName: "speaker.wave.2.fill")
                 }
                 if preset.usesHaptic {
                     Image(systemName: "iphone.radiowaves.left.and.right")
+                }
+                if preset.isWorkout {
+                    Image(systemName: "figure.strengthtraining.traditional")
+                        .foregroundStyle(.green)
                 }
             }
             .font(.footnote)
