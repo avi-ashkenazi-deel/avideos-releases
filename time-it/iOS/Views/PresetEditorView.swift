@@ -521,7 +521,9 @@ private struct MilestoneEditorRow: View {
                 Slider(value: percentBinding, in: 0.05...0.95, step: 0.05)
             }
         case .secondsRemaining:
-            Stepper("\(Int(secondsValue)) seconds left",
+            // Show seconds under a minute, then m:ss so e.g. 90s reads "1:30".
+            Stepper(secondsValue < 60 ? "\(Int(secondsValue))s left"
+                                      : "\(formatClock(secondsValue)) left",
                     value: secondsBinding, in: 5...max(5, duration), step: 5)
         }
     }
