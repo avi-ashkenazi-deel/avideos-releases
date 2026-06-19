@@ -26,6 +26,9 @@ struct RSSItem: Identifiable, Codable, Hashable, Sendable {
     let feedID: String
     var title: String
     var link: URL?
+    /// For aggregator feeds (e.g. Techmeme) whose item link is a permalink back to
+    /// the aggregator, this is the real source article pulled from the description.
+    var sourceURL: URL?
     var summary: String?        // plain-ish text for the row
     var contentHTML: String?    // full content when the feed includes it
     var publishedAt: Date

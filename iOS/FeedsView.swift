@@ -132,7 +132,8 @@ struct FeedsList: View {
     /// article page and extract it (falls back to the summary offline). Marks read
     /// when it finishes playing (mirroring emails), not merely on open.
     private func open(_ item: RSSItem) {
-        let feedTitle = store.feed(for: item.feedID)?.title ?? "Feed"
+        let feed = store.feed(for: item.feedID)
+        let feedTitle = feed?.title ?? "Feed"
         // The played email's id is prefixed ("rss-…"), so capture the item id directly.
         let markRead: (String) -> Void = { [weak store] _ in store?.markRead(item.id) }
 
@@ -142,14 +143,22 @@ struct FeedsList: View {
                         markReadOverride: markRead)
             return
         }
-        // Try the full article; fall back to whatever the feed gave us.
-        if let link = item.link {
+        // Aggregator feeds (e.g. Techmeme) link each item to their own permalink,
+        // not the article — fetching it returns the same page every time. When the
+        // item links back to the feed's own site, fetch the real source instead.
+        let feedHost = FeedStore.normHost(feed?.siteURL?.host ?? feed?.url.host)
+        let isSelfLink = FeedStore.normHost(item.link?.host) == feedHost && feedHost != nil
+        let articleURL = isSelfLink ? item.sourceURL : item.link
+
+        if let articleURL {
             Task {
-                let full = try? await ArticleExtractor.fetch(link)
+                let full = try? await ArticleExtractor.fetch(articleURL)
                 player.open(email: item.makeEmail(feedTitle: feedTitle, fullHTML: full?.html),
                             isLocal: true, markReadOverride: markRead)
             }
         } else {
+            // No real article to fetch (e.g. an aggregator self-link with no source
+            // in the description) → read the item's own unique summary.
             player.open(email: item.makeEmail(feedTitle: feedTitle), isLocal: true,
                         markReadOverride: markRead)
         }

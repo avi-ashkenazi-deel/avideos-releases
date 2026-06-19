@@ -219,12 +219,14 @@ final class FeedStore: ObservableObject {
     @discardableResult
     private func merge(_ parsed: [FeedParser.Item], into feed: RSSFeed) -> Int {
         let known = Set(items.filter { $0.feedID == feed.id }.map(\.id))
+        let feedHost = Self.normHost(feed.siteURL?.host ?? feed.url.host)
         var added = 0
         for p in parsed {
             let id = (p.guid ?? p.link?.absoluteString ?? p.title).lowercased()
             guard !id.isEmpty, !known.contains(id) else { continue }
             items.append(RSSItem(
                 id: id, feedID: feed.id, title: p.title, link: p.link,
+                sourceURL: Self.firstExternalLink(in: p.summary ?? p.contentHTML, excludingHost: feedHost),
                 summary: p.summary.map(Self.plainText), contentHTML: p.contentHTML,
                 publishedAt: p.published ?? Date(), isRead: false
             ))
@@ -240,6 +242,30 @@ final class FeedStore: ObservableObject {
             }
         }
         return added
+    }
+
+    /// Host without a leading "www." (so techmeme.com and www.techmeme.com match).
+    nonisolated static func normHost(_ host: String?) -> String? {
+        guard var h = host?.lowercased() else { return nil }
+        if h.hasPrefix("www.") { h = String(h.dropFirst(4)) }
+        return h.isEmpty ? nil : h
+    }
+
+    /// The first http(s) link in some description/content HTML whose host isn't the
+    /// feed's own — i.e. the real article an aggregator item points to.
+    nonisolated static func firstExternalLink(in html: String?, excludingHost feedHost: String?) -> URL? {
+        guard let html, !html.isEmpty,
+              let re = try? NSRegularExpression(pattern: "href\\s*=\\s*[\"']([^\"']+)[\"']",
+                                                options: [.caseInsensitive]) else { return nil }
+        let ns = html as NSString
+        for m in re.matches(in: html, range: NSRange(location: 0, length: ns.length)) {
+            let href = ns.substring(with: m.range(at: 1))
+            guard let url = URL(string: href), let scheme = url.scheme?.lowercased(),
+                  scheme == "http" || scheme == "https", let host = normHost(url.host) else { continue }
+            if let feedHost, host == feedHost { continue }   // skip the aggregator's own links/images
+            return url
+        }
+        return nil
     }
 
     /// Collapse summary HTML to a short plain-text excerpt for the row.
