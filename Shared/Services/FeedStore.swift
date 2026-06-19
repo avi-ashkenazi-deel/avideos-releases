@@ -181,6 +181,15 @@ final class FeedStore: ObservableObject {
         persist()
     }
 
+    /// The next unread item after the given one, in display order (newest first).
+    /// Used to auto-advance playback through the feed.
+    func nextUnread(after itemID: String) -> RSSItem? {
+        guard let idx = items.firstIndex(where: { $0.id == itemID }) else {
+            return items.first { !$0.isRead }
+        }
+        return items[(idx + 1)...].first { !$0.isRead }
+    }
+
     // MARK: - Search
 
     /// Case-insensitive search across every followed feed (title, summary, feed name).

@@ -51,6 +51,7 @@ final class EmailPlayerViewModel: ObservableObject {
         var onMarkedRead: ((String) -> Void)?
         var markReadOverride: ((String) -> Void)?
         var nextUnreadProvider: ((String) -> Email?)?
+        var nextLocalProvider: (@MainActor (String) async -> Email?)?
         var startBlock: Int?
     }
 
@@ -65,6 +66,10 @@ final class EmailPlayerViewModel: ObservableObject {
     /// Supplies the next unread email to auto-advance to after one finishes,
     /// given the id just completed. Set by the inbox; nil disables auto-advance.
     var nextUnreadProvider: ((String) -> Email?)?
+    /// Like `nextUnreadProvider` but for *local* sources (feeds, saved articles):
+    /// returns the next item already built into a fully-loaded `Email` (it may
+    /// fetch article content), which is applied directly without a mail fetch.
+    var nextLocalProvider: (@MainActor (String) async -> Email?)?
 
     private var mailService: MailService
     private let settings: AppSettings
@@ -159,11 +164,13 @@ final class EmailPlayerViewModel: ObservableObject {
               startBlock: Int? = nil,
               onMarkedRead: ((String) -> Void)? = nil,
               markReadOverride: ((String) -> Void)? = nil,
-              nextUnreadProvider: ((String) -> Email?)? = nil) {
+              nextUnreadProvider: ((String) -> Email?)? = nil,
+              nextLocalProvider: (@MainActor (String) async -> Email?)? = nil) {
         isExpanded = true
         let config = StagedConfig(onMarkedRead: onMarkedRead,
                                   markReadOverride: markReadOverride,
                                   nextUnreadProvider: nextUnreadProvider,
+                                  nextLocalProvider: nextLocalProvider,
                                   startBlock: startBlock)
         if usesInlineDetail, isPlaying, parsed?.email.id != email.id {
             Task { await stage(email: email, isLocal: isLocal, config: config) }
@@ -172,6 +179,7 @@ final class EmailPlayerViewModel: ObservableObject {
             self.onMarkedRead = onMarkedRead
             self.markReadOverride = markReadOverride
             self.nextUnreadProvider = nextUnreadProvider
+            self.nextLocalProvider = nextLocalProvider
             Task {
                 if isLocal { await loadLocal(email) } else { await load(email: email) }
                 if let startBlock { seek(toBlock: startBlock) } else { resumeIfAvailable() }
@@ -199,6 +207,7 @@ final class EmailPlayerViewModel: ObservableObject {
         onMarkedRead = config.onMarkedRead
         markReadOverride = config.markReadOverride
         nextUnreadProvider = config.nextUnreadProvider
+        nextLocalProvider = config.nextLocalProvider
         parsed = stagedEmail
         staged = nil
         stagedConfig = nil
@@ -558,19 +567,30 @@ final class EmailPlayerViewModel: ObservableObject {
         )
     }
 
-    /// If auto-advance is on, load the next unread email, announce it, and play.
+    /// If auto-advance is on, move to the next item — announce it, and play.
+    /// Local sources (feeds, saved articles) supply a ready-built email via
+    /// `nextLocalProvider`; the inbox supplies a stub via `nextUnreadProvider`
+    /// that we then fetch from the mail service.
     private func advanceToNextUnread() {
-        guard settings.autoAdvance,
-              let provider = nextUnreadProvider,
-              let currentID = parsed?.email.id,
-              let next = provider(currentID) else { return }
-        Task {
-            await load(email: next, announce: true)
-            guard errorMessage == nil else { return }
-            // Transition chime, then the spoken "From … / subject" announcement.
-            SoundEffects.shared.play(.transition)
-            try? await Task.sleep(nanoseconds: 500_000_000)
-            play()
+        guard settings.autoAdvance, let currentID = parsed?.email.id else { return }
+        if let nextLocalProvider {
+            Task {
+                guard let next = await nextLocalProvider(currentID) else { return }
+                await apply(next, announce: true)   // parses the email's own content
+                guard errorMessage == nil else { return }
+                SoundEffects.shared.play(.transition)
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                play()
+            }
+        } else if let provider = nextUnreadProvider, let next = provider(currentID) {
+            Task {
+                await load(email: next, announce: true)
+                guard errorMessage == nil else { return }
+                // Transition chime, then the spoken "From … / subject" announcement.
+                SoundEffects.shared.play(.transition)
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                play()
+            }
         }
     }
 
