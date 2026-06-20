@@ -732,8 +732,16 @@ final class EmailPlayerViewModel: ObservableObject {
         remote.onPrevious = { [weak self] in self?.previousSentence() }
         remote.onNext = { [weak self] in
             guard let self else { return }
-            // While an image is showing, Next skips it; otherwise next sentence.
-            if self.isOnImage { self.skipImage() } else { self.nextSentence() }
+            // With "Voice notes on highlights" on, a double-press (Next) bookmarks
+            // the moment and offers a hands-free voice note instead of skipping.
+            if self.settings.airPodsHighlightEnabled {
+                self.captureHighlightAndDictate()
+            } else if self.isOnImage {
+                // While an image is showing, Next skips it; otherwise next sentence.
+                self.skipImage()
+            } else {
+                self.nextSentence()
+            }
         }
         remote.onSeek = { [weak self] time in self?.seek(toTime: time) }
         remote.onBookmark = { [weak self] in

@@ -80,8 +80,8 @@ struct AirPodsControlsView: View {
                 Toggle("Voice notes on highlights", isOn: $settings.airPodsHighlightEnabled)
             } footer: {
                 Text(settings.airPodsHighlightEnabled
-                     ? "On: bookmarking a moment asks out loud “Do you want to add a note?” — say yes and dictate it, hands-free (needs the screen unlocked for the mic)."
-                     : "Off: bookmarks are saved silently. Next/Previous always move by sentence.")
+                     ? "On: a double-press (Next) bookmarks the moment and asks out loud “Add a note?” — say yes and dictate it, hands-free (needs the screen unlocked for the mic). Skip-to-next sentence isn’t available via AirPods while this is on."
+                     : "Off: Next moves by sentence. To bookmark, use the Highlight button on the player screen or your Apple Watch.")
             }
 
             Section("Gestures") {
@@ -123,9 +123,15 @@ struct AirPodsControlsView: View {
         }
     }
 
-    /// Next always moves by sentence (and skips an image when one is showing).
+    /// The double-press / Next gesture either skips a sentence or — when voice
+    /// notes on highlights is on — bookmarks the moment.
     private var nextAction: String {
-        "Skip to the next sentence. Skips the image when one is on screen."
+        settings.airPodsHighlightEnabled
+            ? "Bookmark this moment (and dictate a note, hands-free)."
+            : "Skip to the next sentence. Skips the image when one is on screen."
+    }
+    private var nextIcon: String {
+        settings.airPodsHighlightEnabled ? "bookmark.fill" : "forward.end"
     }
 
     private var gestures: [GestureRow] {
@@ -133,13 +139,13 @@ struct AirPodsControlsView: View {
         case .max:
             return [
                 .init(gesture: "Press the Digital Crown", action: "Play or pause", systemImage: "playpause"),
-                .init(gesture: "Press the crown twice", action: nextAction, systemImage: "forward.end"),
+                .init(gesture: "Press the crown twice", action: nextAction, systemImage: nextIcon),
                 .init(gesture: "Press the crown three times", action: "Back to the previous sentence", systemImage: "backward.end")
             ]
         case .otherBluetooth:
             return [
                 .init(gesture: "Play / Pause button", action: "Play or pause", systemImage: "playpause"),
-                .init(gesture: "Next track", action: nextAction, systemImage: "forward.end"),
+                .init(gesture: "Next track", action: nextAction, systemImage: nextIcon),
                 .init(gesture: "Previous track", action: "Back to the previous sentence", systemImage: "backward.end")
             ]
         default:
@@ -147,7 +153,7 @@ struct AirPodsControlsView: View {
             // for other AirPods, which behave the same once mapped.
             return [
                 .init(gesture: "Press the stem once", action: "Play or pause", systemImage: "playpause"),
-                .init(gesture: "Press the stem twice", action: nextAction, systemImage: "forward.end"),
+                .init(gesture: "Press the stem twice", action: nextAction, systemImage: nextIcon),
                 .init(gesture: "Press the stem three times", action: "Back to the previous sentence", systemImage: "backward.end"),
                 .init(gesture: "Press and hold", action: "Switches noise modes — handled by iOS, not the app", systemImage: "hand.point.up.left")
             ]
