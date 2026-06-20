@@ -14,12 +14,23 @@ final class ImageDescriber {
 
     private var cache: [String: String] = [:]
 
+    /// A short-fused session: don't wait for connectivity and give up quickly, so
+    /// going offline mid-email doesn't stall playback on an image download — the
+    /// player just falls back to the spoken placeholder and keeps reading.
+    private let session: URLSession = {
+        let cfg = URLSessionConfiguration.ephemeral
+        cfg.waitsForConnectivity = false
+        cfg.timeoutIntervalForRequest = 4
+        cfg.timeoutIntervalForResource = 5
+        return URLSession(configuration: cfg)
+    }()
+
     func describe(_ image: InlineImage) async -> String? {
         guard let url = image.remoteURL else { return nil }
         let key = url.absoluteString
         if let cached = cache[key] { return cached }
 
-        guard let (data, _) = try? await URLSession.shared.data(from: url),
+        guard let (data, _) = try? await session.data(from: url),
               let cgImage = UIImage(data: data)?.cgImage else {
             return nil
         }
