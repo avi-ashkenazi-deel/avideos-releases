@@ -179,6 +179,13 @@ private struct IntervalsSection: View {
                     .font(.caption).foregroundStyle(.secondary)
 
                 Toggle("Announce interval number", isOn: announceBinding)
+
+                Toggle("Count down into each interval", isOn: countdownEnabledBinding)
+                if (plan.countdown ?? 0) > 0 {
+                    Stepper("Last \(plan.countdown ?? 0)s of each interval",
+                            value: countdownBinding, in: 1...10)
+                }
+
                 HStack {
                     Toggle("Voice", isOn: alertBinding(.voice)).toggleStyle(.button)
                     Toggle("Haptic", isOn: alertBinding(.haptic)).toggleStyle(.button)
@@ -372,6 +379,15 @@ private struct IntervalsSection: View {
 
     private var announceBinding: Binding<Bool> {
         Binding(get: { plan?.announceNumber ?? true }, set: { plan?.announceNumber = $0 })
+    }
+    private var countdownEnabledBinding: Binding<Bool> {
+        Binding(
+            get: { (plan?.countdown ?? 0) > 0 },
+            set: { plan?.countdown = $0 ? 5 : nil }   // default to a 5s countdown
+        )
+    }
+    private var countdownBinding: Binding<Int> {
+        Binding(get: { plan?.countdown ?? 5 }, set: { plan?.countdown = $0 })
     }
     private var hapticBinding: Binding<HapticPattern> {
         Binding(get: { plan?.haptic ?? .notification }, set: { plan?.haptic = $0 })

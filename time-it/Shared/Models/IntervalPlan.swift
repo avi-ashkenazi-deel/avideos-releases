@@ -27,6 +27,13 @@ struct IntervalPlan: Codable, Hashable {
     /// Speak the interval/round number ("Interval 2" / "Round 2") rather than a
     /// bare cue.
     var announceNumber: Bool = true
+    /// Count down the last N seconds before *each* interval boundary (e.g. 5 →
+    /// "5,4,3,2,1" into the next interval). Optional for backward-compatible
+    /// decoding; nil/0 = off.
+    var countdown: Int? = nil
+
+    /// Resolved countdown window (0 = off).
+    var countdownSeconds: Int { countdown ?? 0 }
 
     /// A resolved cue point: when it fires, what to say, what to display, and the
     /// haptic to use (work and rest boundaries feel different in work/rest mode).

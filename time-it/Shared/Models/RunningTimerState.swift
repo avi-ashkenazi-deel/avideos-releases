@@ -20,6 +20,10 @@ struct RunningTimerState: Identifiable {
     var firedCueIDs: Set<String>
     /// The last whole second spoken by the final countdown, to avoid repeats.
     var lastCountdownSecondSpoken: Int?
+    /// Per-interval countdown bookkeeping: the boundary we're counting toward and
+    /// the last second spoken for it (reset when the target boundary changes).
+    var intervalCountdownTarget: TimeInterval?
+    var lastIntervalCountdownSecond: Int?
 
     init(preset: TimerPreset, now: Date = Date()) {
         self.id = UUID()
@@ -30,6 +34,8 @@ struct RunningTimerState: Identifiable {
         self.currentRepeat = 1
         self.firedCueIDs = []
         self.lastCountdownSecondSpoken = nil
+        self.intervalCountdownTarget = nil
+        self.lastIntervalCountdownSecond = nil
     }
 
     /// Absolute wall-clock time at which the current run completes (assuming it

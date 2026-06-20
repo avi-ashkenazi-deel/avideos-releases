@@ -118,6 +118,8 @@ final class TimerEngine: ObservableObject {
             let remaining = s.preset.duration - clamped
             s.lastCountdownSecondSpoken = remaining > Double(cd.lastSeconds) ? nil : Int(remaining.rounded(.up))
         }
+        s.intervalCountdownTarget = nil
+        s.lastIntervalCountdownSecond = nil
     }
     /// preserving how much has already elapsed. Cues that now sit in the past are
     /// marked fired so they don't retroactively announce.
@@ -180,6 +182,7 @@ final class TimerEngine: ObservableObject {
             guard running[i].isRunning else { continue }
             if processCues(&running[i], now: now) { cueFired = true }
             processCountdown(&running[i], now: now)
+            processIntervalCountdown(&running[i], now: now)
 
             if running[i].isComplete(now: now) {
                 if running[i].hasNextRepeat {
@@ -234,6 +237,28 @@ final class TimerEngine: ObservableObject {
         s.lastCountdownSecondSpoken = second
     }
 
+    /// Count down the last N seconds before each interval boundary (e.g. "5,4,3,
+    /// 2,1" into the next interval), if the interval plan has it enabled.
+    private func processIntervalCountdown(_ s: inout RunningTimerState, now: Date) {
+        guard let plan = s.preset.intervals, plan.countdownSeconds > 0 else { return }
+        let elapsed = s.elapsed(now: now)
+        let bounds = plan.boundaries(forDuration: s.preset.duration)
+        guard let next = bounds.first(where: { $0 > elapsed + 0.0001 }) else { return }
+        // Reset the per-second tracker whenever we start counting to a new boundary.
+        if s.intervalCountdownTarget != next {
+            s.intervalCountdownTarget = next
+            s.lastIntervalCountdownSecond = nil
+        }
+        guard let second = MilestoneScheduler.countdownSecond(
+            remaining: next - elapsed, window: plan.countdownSeconds,
+            lastSpoken: s.lastIntervalCountdownSecond
+        ) else { return }
+        let ch = outputMode.countdownChannels(hapticEnabled: true)
+        if ch.speak { announcer?.speak("\(second)") }
+        if ch.buzz { announcer?.haptic(.notification) }
+        s.lastIntervalCountdownSecond = second
+    }
+
     /// Announce a fully-completed timer: spoken "complete" (unless silent) plus
     /// the emphatic "time's up" buzz (unless voice-only).
     private func announceCompletion(name: String) {
@@ -252,6 +277,8 @@ final class TimerEngine: ObservableObject {
         s.bankedElapsed = 0
         s.firedCueIDs = []
         s.lastCountdownSecondSpoken = nil
+        s.intervalCountdownTarget = nil
+        s.lastIntervalCountdownSecond = nil
     }
 
     /// After a backwards time adjustment, drop fired flags for cues that now lie
