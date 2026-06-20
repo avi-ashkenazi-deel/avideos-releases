@@ -46,6 +46,10 @@ struct RootView: View {
                 .onReceive(WatchConnectivityBridge.shared.$isReachable) { reachable in
                     if reachable { pushNowPlaying() }
                 }
+                // Tapping a feed notification opens that article directly.
+                .onReceive(NotificationRouter.shared.$openFeedItemID.compactMap { $0 }) { id in
+                    openFeedItem(id)
+                }
         }
     }
 
@@ -64,6 +68,17 @@ struct RootView: View {
         }
         bridge.onSpeed = { newValue in AppSettings.shared.speed = newValue }
         pushNowPlaying()
+    }
+
+    /// Open the feed item a tapped notification points to, then clear the route.
+    /// Best-effort: if the item isn't in the store yet, a refresh will bring it in
+    /// and the user can tap again.
+    private func openFeedItem(_ id: String) {
+        let store = FeedStore.shared
+        if let item = store.items.first(where: { $0.id == id }) {
+            FeedPlayback.open(item, player: player, store: store)
+        }
+        NotificationRouter.shared.openFeedItemID = nil
     }
 
     /// Send the current player snapshot to the watch remote.

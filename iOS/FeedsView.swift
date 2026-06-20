@@ -146,49 +146,7 @@ struct FeedsList: View {
     /// article page and extract it (falls back to the summary offline). Marks read
     /// when it finishes playing (mirroring emails), not merely on open.
     private func open(_ item: RSSItem) {
-        let store = self.store
-        Task {
-            let email = await Self.playableEmail(for: item, store: store)
-            player.open(
-                email: email,
-                isLocal: true,
-                markReadOverride: { [weak store] emailID in
-                    store?.markRead(Self.itemID(fromEmailID: emailID))
-                },
-                // Auto-advance: when one article finishes, load the next unread item
-                // in the feed (fetching its article) and keep listening.
-                nextLocalProvider: { emailID in
-                    guard let next = store.nextUnread(after: Self.itemID(fromEmailID: emailID))
-                    else { return nil }
-                    return await Self.playableEmail(for: next, store: store)
-                }
-            )
-        }
-    }
-
-    /// Build a fully-loaded `Email` for a feed item: prefer inline content; else
-    /// fetch the real article (resolving aggregator self-links like Techmeme to
-    /// their source); else fall back to the item's own summary.
-    @MainActor
-    private static func playableEmail(for item: RSSItem, store: FeedStore) async -> Email {
-        let feed = store.feed(for: item.feedID)
-        let feedTitle = feed?.title ?? "Feed"
-        if let html = item.contentHTML, html.count > 400 {
-            return item.makeEmail(feedTitle: feedTitle)
-        }
-        let feedHost = FeedStore.normHost(feed?.siteURL?.host ?? feed?.url.host)
-        let isSelfLink = FeedStore.normHost(item.link?.host) == feedHost && feedHost != nil
-        let articleURL = isSelfLink ? item.sourceURL : item.link
-        if let articleURL {
-            let full = try? await ArticleExtractor.fetch(articleURL)
-            return item.makeEmail(feedTitle: feedTitle, fullHTML: full?.html)
-        }
-        return item.makeEmail(feedTitle: feedTitle)
-    }
-
-    /// The feed item id behind a played email id (emails are keyed "rss-<itemID>").
-    private static func itemID(fromEmailID emailID: String) -> String {
-        emailID.hasPrefix("rss-") ? String(emailID.dropFirst(4)) : emailID
+        FeedPlayback.open(item, player: player, store: store)
     }
 }
 

@@ -218,10 +218,17 @@ final class FeedStore: ObservableObject {
                   let parsed = try? FeedParser.parse(data: data) else { continue }
             let newCount = merge(parsed.items, into: feed)
             if notify, newCount > 0, feed.notifyOnNewItems {
-                postNotification(feed: feed, newCount: newCount, latestTitle: parsed.items.first?.title)
+                postNotification(feed: feed, newCount: newCount,
+                                 latestTitle: parsed.items.first?.title,
+                                 latestItemID: parsed.items.first.map(Self.itemID(for:)))
             }
         }
         persist()
+    }
+
+    /// Stable id for a parsed feed item (guid, else link, else title).
+    nonisolated static func itemID(for p: FeedParser.Item) -> String {
+        (p.guid ?? p.link?.absoluteString ?? p.title).lowercased()
     }
 
     /// Merge parsed items into the store; returns how many were genuinely new.
@@ -231,7 +238,7 @@ final class FeedStore: ObservableObject {
         let feedHost = Self.normHost(feed.siteURL?.host ?? feed.url.host)
         var added = 0
         for p in parsed {
-            let id = (p.guid ?? p.link?.absoluteString ?? p.title).lowercased()
+            let id = Self.itemID(for: p)
             guard !id.isEmpty, !known.contains(id) else { continue }
             items.append(RSSItem(
                 id: id, feedID: feed.id, title: p.title, link: p.link,
@@ -286,7 +293,8 @@ final class FeedStore: ObservableObject {
         return String(stripped.prefix(280))
     }
 
-    private func postNotification(feed: RSSFeed, newCount: Int, latestTitle: String?) {
+    private func postNotification(feed: RSSFeed, newCount: Int, latestTitle: String?,
+                                  latestItemID: String?) {
         #if canImport(UserNotifications) && !os(watchOS)
         let content = UNMutableNotificationContent()
         content.title = feed.title
@@ -294,6 +302,10 @@ final class FeedStore: ObservableObject {
             ? (latestTitle ?? "1 new article")
             : "\(newCount) new articles" + (latestTitle.map { " — latest: \($0)" } ?? "")
         content.sound = .default
+        // Carry the newest item so tapping the notification opens it directly.
+        if let latestItemID {
+            content.userInfo = ["feedItemID": latestItemID, "feedID": feed.id]
+        }
         let request = UNNotificationRequest(identifier: "feed-\(feed.id)-\(Date().timeIntervalSince1970)",
                                             content: content, trigger: nil)
         UNUserNotificationCenter.current().add(request)

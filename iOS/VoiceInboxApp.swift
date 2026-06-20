@@ -1,5 +1,26 @@
 import SwiftUI
 import BackgroundTasks
+import UserNotifications
+
+/// Handles taps on notifications. A feed notification carries the newest item's
+/// id; tapping it routes the app to open that item directly.
+final class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
+    static let shared = NotificationDelegate()
+
+    // Show feed notifications even while the app is foregrounded.
+    func userNotificationCenter(_ center: UNUserNotificationCenter,
+                                willPresent notification: UNNotification) async
+    -> UNNotificationPresentationOptions {
+        [.banner, .sound, .list]
+    }
+
+    func userNotificationCenter(_ center: UNUserNotificationCenter,
+                                didReceive response: UNNotificationResponse) async {
+        let info = response.notification.request.content.userInfo
+        guard let id = info["feedItemID"] as? String, !id.isEmpty else { return }
+        await MainActor.run { NotificationRouter.shared.openFeedItemID = id }
+    }
+}
 
 @main
 struct VoiceInboxApp: App {
@@ -11,6 +32,7 @@ struct VoiceInboxApp: App {
 
     init() {
         Self.registerFeedRefreshTask()
+        UNUserNotificationCenter.current().delegate = NotificationDelegate.shared
     }
 
     var body: some Scene {
