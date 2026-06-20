@@ -181,6 +181,10 @@ actor GoogleMailService: MailService {
             let token = try await tokenProvider()
             var request = URLRequest(url: url)
             request.httpMethod = method
+            // Always hit the network: the app's own MailCache handles offline, and
+            // URLSession's shared cache would otherwise serve a stale inbox listing
+            // so pull-to-refresh wouldn't show newly arrived mail.
+            request.cachePolicy = .reloadIgnoringLocalCacheData
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
             if let body {
                 request.httpBody = body
