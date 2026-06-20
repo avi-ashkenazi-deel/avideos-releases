@@ -76,6 +76,13 @@ struct InboxList: View {
                         }
                         .buttonStyle(.plain)
                         .listRowSeparator(.hidden)
+                        // Highlight the email that's currently loaded in the player,
+                        // so it's obvious in the list which one is playing.
+                        .listRowBackground(
+                            email.id == player.parsed?.email.id
+                                ? Color.accentColor.opacity(0.12)
+                                : Color.clear
+                        )
                         .onAppear {
                             // Infinite scroll: pull the next page near the end.
                             if email.id == viewModel.emails.last?.id {

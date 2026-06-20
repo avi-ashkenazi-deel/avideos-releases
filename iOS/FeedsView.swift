@@ -52,6 +52,12 @@ struct FeedsList: View {
                         }
                         .buttonStyle(.plain)
                         .listRowSeparator(.hidden)
+                        // Highlight the article currently loaded in the player.
+                        .listRowBackground(
+                            player.parsed?.email.id == "rss-\(item.id)"
+                                ? Color.accentColor.opacity(0.12)
+                                : Color.clear
+                        )
                         .swipeActions(edge: .leading) {
                             Button {
                                 store.markRead(item.id, read: !item.isRead)

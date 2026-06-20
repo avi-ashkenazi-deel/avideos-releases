@@ -25,6 +25,12 @@ struct SavedArticlesList: View {
                 List {
                     ForEach(store.articles) { article in
                         row(for: article)
+                            // Highlight the article currently loaded in the player.
+                            .listRowBackground(
+                                article.id == player.parsed?.email.id
+                                    ? Color.accentColor.opacity(0.12)
+                                    : Color.clear
+                            )
                     }
                 }
                 .listStyle(.plain)
