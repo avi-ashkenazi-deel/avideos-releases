@@ -62,6 +62,14 @@ struct FeedsList: View {
                             .tint(.blue)
                         }
                         .swipeActions(edge: .trailing) {
+                            Button {
+                                store.markRead(item.id, read: !item.isRead)
+                            } label: {
+                                Label(item.isRead ? "Unread" : "Read",
+                                      systemImage: item.isRead ? "envelope.badge" : "checkmark.circle")
+                            }
+                            .tint(item.isRead ? .orange : .blue)
+
                             if let link = item.link {
                                 Button {
                                     openURL(link)
