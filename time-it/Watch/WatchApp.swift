@@ -88,7 +88,7 @@ final class WatchModel: ObservableObject {
     /// its own per-cue voice/haptic settings.
     func startTimer(_ preset: TimerPreset) {
         engine.stopAll()
-        startKeepAlive(recordsWorkout: preset.isWorkout)
+        startKeepAlive(recordsWorkout: preset.isWorkout, kind: preset.workout)
         engine.start(preset)
     }
 
@@ -113,11 +113,11 @@ final class WatchModel: ObservableObject {
 
     // MARK: Keep-alive selection
 
-    private func startKeepAlive(recordsWorkout: Bool) {
+    private func startKeepAlive(recordsWorkout: Bool, kind: WorkoutKind = .functionalStrength) {
         AudioSession.activate()
         if recordsWorkout {
             audioKeepAlive.stop()
-            keepAlive.startIfNeeded()
+            keepAlive.startIfNeeded(kind: kind)
         } else {
             keepAlive.stop()
             audioKeepAlive.start()

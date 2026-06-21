@@ -37,9 +37,14 @@ struct TimerPreset: Codable, Hashable, Identifiable {
     /// alive with silent audio instead, so nothing is logged to Fitness.
     /// Optional for backward-compatible decoding; treat `nil` as "yes".
     var recordsWorkout: Bool? = true
+    /// Which workout the watch records when `recordsWorkout`. nil → functional
+    /// strength (the previous fixed behavior).
+    var workoutKind: WorkoutKind? = nil
 
     /// Resolved flag (defaults to true for presets saved before this existed).
     var isWorkout: Bool { recordsWorkout ?? true }
+    /// Resolved workout kind.
+    var workout: WorkoutKind { workoutKind ?? .functionalStrength }
 
     /// Name to show in lists / the running view — falls back to the duration.
     var displayName: String {

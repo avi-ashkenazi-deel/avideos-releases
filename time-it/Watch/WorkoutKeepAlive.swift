@@ -32,11 +32,11 @@ final class WorkoutKeepAlive: NSObject {
         #endif
     }
 
-    func startIfNeeded() {
+    func startIfNeeded(kind: WorkoutKind = .functionalStrength) {
         #if os(watchOS)
         guard !isActive, HKHealthStore.isHealthDataAvailable() else { return }
         let config = HKWorkoutConfiguration()
-        config.activityType = .functionalStrengthTraining
+        config.activityType = Self.hkType(kind)
         config.locationType = .indoor
         do {
             let session = try HKWorkoutSession(healthStore: healthStore, configuration: config)
@@ -73,6 +73,22 @@ final class WorkoutKeepAlive: NSObject {
     }
 
     #if os(watchOS)
+    private static func hkType(_ kind: WorkoutKind) -> HKWorkoutActivityType {
+        switch kind {
+        case .functionalStrength: return .functionalStrengthTraining
+        case .traditionalStrength: return .traditionalStrengthTraining
+        case .core: return .coreTraining
+        case .hiit: return .highIntensityIntervalTraining
+        case .cycling: return .cycling
+        case .running: return .running
+        case .walking: return .walking
+        case .elliptical: return .elliptical
+        case .rowing: return .rowing
+        case .yoga: return .yoga
+        case .other: return .other
+        }
+    }
+
     @MainActor
     private func finishWorkout() {
         builder?.finishWorkout { _, _ in }

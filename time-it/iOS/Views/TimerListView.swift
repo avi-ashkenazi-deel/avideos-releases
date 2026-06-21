@@ -89,8 +89,7 @@ private struct PresetRow: View {
                     Image(systemName: "iphone.radiowaves.left.and.right")
                 }
                 if preset.isWorkout {
-                    Image(systemName: "figure.strengthtraining.traditional")
-                        .foregroundStyle(.green)
+                    Image(systemName: "circle.circle")   // "tracked in Fitness"
                 }
             }
             .font(.footnote)

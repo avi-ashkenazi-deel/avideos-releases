@@ -39,8 +39,8 @@ struct WatchSessionView: View {
                 }
             }
             HStack(spacing: 6) {
-                Image(systemName: "figure.strengthtraining.traditional")
-                    .foregroundStyle(.green)
+                Image(systemName: "circle.circle")
+                    .foregroundStyle(.secondary)
                 Text(sessionName)
                     .foregroundStyle(.secondary)
             }

@@ -40,9 +40,9 @@ private struct WatchTimesPage: View {
                     VStack(spacing: 2) {
                         HStack(spacing: 6) {
                             if timer.preset.isWorkout {
-                                Image(systemName: "figure.strengthtraining.traditional")
+                                Image(systemName: "circle.circle")
                                     .font(.headline)
-                                    .foregroundStyle(.green)
+                                    .foregroundStyle(.white.opacity(0.85))
                                     .shadow(radius: 3)
                             }
                             if let label = intervalName(now) {

@@ -36,6 +36,16 @@ struct PresetEditorView: View {
                         get: { draft.recordsWorkout ?? true },
                         set: { draft.recordsWorkout = $0 }
                     ))
+                    if draft.recordsWorkout ?? true {
+                        Picker("Workout type", selection: Binding(
+                            get: { draft.workoutKind ?? .functionalStrength },
+                            set: { draft.workoutKind = $0 }
+                        )) {
+                            ForEach(WorkoutKind.allCases) { kind in
+                                Label(kind.name, systemImage: kind.symbol).tag(kind)
+                            }
+                        }
+                    }
                 } footer: {
                     Text("Turn off for non-exercise timers (a talk, cooking…) so the watch doesn't log a workout to Fitness.")
                 }
