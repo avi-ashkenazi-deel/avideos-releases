@@ -161,8 +161,15 @@ private struct IntervalsSection: View {
 
                 Toggle("Count down into each interval", isOn: countdownEnabledBinding)
                 if (plan.countdown ?? 0) > 0 {
-                    Stepper("Last \(plan.countdown ?? 0)s of each interval",
-                            value: countdownBinding, in: 1...10)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Last \(plan.countdown ?? 0)s of each interval")
+                        Slider(
+                            value: Binding(
+                                get: { Double(plan.countdown ?? 5) },
+                                set: { countdownBinding.wrappedValue = Int($0.rounded()) }
+                            ),
+                            in: 1...10, step: 1)
+                    }
                 }
 
                 HStack {
@@ -543,9 +550,11 @@ private struct MilestoneEditorRow: View {
             }
         case .secondsRemaining:
             // Show seconds under a minute, then m:ss so e.g. 90s reads "1:30".
-            Stepper(secondsValue < 60 ? "\(Int(secondsValue))s left"
-                                      : "\(formatClock(secondsValue)) left",
-                    value: secondsBinding, in: 5...max(5, duration), step: 5)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(secondsValue < 60 ? "\(Int(secondsValue))s left"
+                                       : "\(formatClock(secondsValue)) left")
+                Slider(value: secondsBinding, in: 5...max(10, duration), step: 5)
+            }
         }
     }
 
