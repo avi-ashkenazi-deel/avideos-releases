@@ -6,6 +6,7 @@ import SwiftUI
 /// big red button crowding the main screen).
 struct WatchSessionView: View {
     @EnvironmentObject private var model: WatchModel
+    @EnvironmentObject private var finishDetector: SessionFinishDetector
 
     /// On-screen label for the session (recorded as Functional Strength Training).
     private let sessionName = "Calisthenics"
@@ -14,6 +15,16 @@ struct WatchSessionView: View {
         TabView {
             mainPage
             endPage
+        }
+        // "Looks finished?" nudge from inactivity / low heart rate.
+        .onChange(of: finishDetector.suggestsEnd) { _, suggests in
+            if suggests { HapticPlayer.play(.retry) }
+        }
+        .confirmationDialog("Still working out?", isPresented: $finishDetector.suggestsEnd) {
+            Button("End session", role: .destructive) { model.endSession() }
+            Button("Keep going", role: .cancel) { finishDetector.keepGoing() }
+        } message: {
+            Text("Looks like you might be done.")
         }
     }
 

@@ -11,6 +11,7 @@ struct TimeItWatchApp: App {
                 .environmentObject(model.engine)
                 .environmentObject(model.presets)
                 .environmentObject(model.settings)
+                .environmentObject(model.finishDetector)
                 .task { model.start() }
         }
     }
@@ -29,6 +30,8 @@ final class WatchModel: ObservableObject {
     let keepAlive = WorkoutKeepAlive()
     /// Silent-audio keep-alive for non-exercise timers (no workout logged).
     private let audioKeepAlive = BackgroundKeepAlive()
+    /// Watches a session for "looks finished" signals (idle / low HR).
+    let finishDetector = SessionFinishDetector()
     private let announcer = SpeechAnnouncer()
 
     /// A freestyle "document the session" mode: the workout records as Functional
@@ -92,12 +95,16 @@ final class WatchModel: ObservableObject {
         sessionStart = Date()
         inSession = true
         startKeepAlive(recordsWorkout: true)
+        keepAlive.onHeartRate = { [weak self] bpm in self?.finishDetector.updateHeartRate(bpm) }
+        finishDetector.startMonitoring()
     }
 
     func endSession() {
         engine.stopAll()
         inSession = false
         sessionStart = nil
+        finishDetector.stopMonitoring()
+        keepAlive.onHeartRate = nil
         stopKeepAlive()
     }
 
@@ -124,6 +131,7 @@ final class WatchModel: ObservableObject {
     /// speaks/buzzes the final seconds, and signals "go" at the end to bring you
     /// back. Returns to the session view when it finishes.
     func addRest(_ seconds: TimeInterval) {
+        finishDetector.noteActivity()   // starting a rest means you're still going
         let rest = TimerPreset(
             name: "Rest",
             duration: seconds,

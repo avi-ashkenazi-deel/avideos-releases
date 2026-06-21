@@ -18,12 +18,17 @@ final class WorkoutKeepAlive: NSObject {
 
     private var isActive = false
 
+    /// Latest live heart rate (bpm), forwarded for finish detection.
+    var onHeartRate: ((Double) -> Void)?
+
     /// Request HealthKit authorization up front (call once at launch is fine too).
     func requestAuthorization() {
         #if os(watchOS)
         guard HKHealthStore.isHealthDataAvailable() else { return }
-        let types: Set = [HKObjectType.workoutType()]
-        healthStore.requestAuthorization(toShare: types, read: types) { _, _ in }
+        let share: Set = [HKObjectType.workoutType()]
+        var read: Set<HKObjectType> = [HKObjectType.workoutType()]
+        if let hr = HKObjectType.quantityType(forIdentifier: .heartRate) { read.insert(hr) }
+        healthStore.requestAuthorization(toShare: share, read: read) { _, _ in }
         #endif
     }
 
@@ -37,6 +42,7 @@ final class WorkoutKeepAlive: NSObject {
             let session = try HKWorkoutSession(healthStore: healthStore, configuration: config)
             let builder = session.associatedWorkoutBuilder()
             builder.dataSource = HKLiveWorkoutDataSource(healthStore: healthStore, workoutConfiguration: config)
+            builder.delegate = self
             self.session = session
             self.builder = builder
             let start = Date()
@@ -75,3 +81,19 @@ final class WorkoutKeepAlive: NSObject {
     }
     #endif
 }
+
+#if os(watchOS)
+extension WorkoutKeepAlive: HKLiveWorkoutBuilderDelegate {
+    nonisolated func workoutBuilder(_ workoutBuilder: HKLiveWorkoutBuilder,
+                                    didCollectDataOf collectedTypes: Set<HKSampleType>) {
+        guard let hrType = HKObjectType.quantityType(forIdentifier: .heartRate),
+              collectedTypes.contains(hrType),
+              let bpm = workoutBuilder.statistics(for: hrType)?
+                .mostRecentQuantity()?.doubleValue(for: HKUnit(from: "count/min"))
+        else { return }
+        Task { @MainActor in self.onHeartRate?(bpm) }
+    }
+
+    nonisolated func workoutBuilderDidCollectEvent(_ workoutBuilder: HKLiveWorkoutBuilder) {}
+}
+#endif
