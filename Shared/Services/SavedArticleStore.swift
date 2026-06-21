@@ -19,8 +19,44 @@ final class SavedArticleStore: ObservableObject {
     private var ownerEmail: String?
     private var pushTask: Task<Void, Never>?
 
+    /// iCloud key-value backup of the saved list (metadata only). Independent of
+    /// the CloudKit/email sync, this survives deleting/reinstalling the app even
+    /// when not signed into an account; cached content re-fetches on restore.
+    private let cloud = NSUbiquitousKeyValueStore.default
+    private static let cloudKey = "saved-articles"
+
     private init() {
         reload()
+        mergeFromCloud()
+        NotificationCenter.default.addObserver(
+            forName: NSUbiquitousKeyValueStore.didChangeExternallyNotification,
+            object: cloud, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in self?.mergeFromCloud() }
+        }
+        cloud.synchronize()
+    }
+
+    /// Adopt any saved items from the iCloud backup we don't have locally (restores
+    /// the list after a reinstall). Restored items have no cached content here, so
+    /// they're marked pending to re-extract; then we kick off processing.
+    private func mergeFromCloud() {
+        guard let data = cloud.data(forKey: Self.cloudKey),
+              let remote = try? JSONDecoder.iso.decode([SavedArticle].self, from: data) else { return }
+        let knownIDs = Set(articles.map(\.id))
+        var added = false
+        for var item in remote where !knownIDs.contains(item.id) {
+            if SavedArticleStorage.content(for: item.id) == nil {
+                item.status = .pending
+                item.failureReason = nil
+            }
+            articles.append(item)
+            added = true
+        }
+        guard added else { return }
+        articles.sort { $0.addedAt > $1.addedAt }
+        SavedArticleStorage.save(articles)
+        Task { await processPending() }
     }
 
     // MARK: - iCloud sync
@@ -200,6 +236,9 @@ final class SavedArticleStore: ObservableObject {
 
     private func persist() {
         SavedArticleStorage.save(articles)
+        if let data = try? JSONEncoder.iso.encode(articles) {
+            cloud.set(data, forKey: Self.cloudKey)   // iCloud KVS backup (metadata)
+        }
         pushToCloud()
     }
 }

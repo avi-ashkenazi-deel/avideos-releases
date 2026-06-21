@@ -45,8 +45,21 @@ final class FeedStore: ObservableObject {
     /// Cap stored items per feed so the file stays small.
     private let maxItemsPerFeed = 100
 
+    private let cloud = NSUbiquitousKeyValueStore.default
+    private static let feedsCloudKey = "feeds-subscriptions"
+
     private init() {
         load()
+        // The list of feeds you follow is backed up to iCloud so it survives
+        // deleting/reinstalling the app. Items aren't — they re-fetch on refresh.
+        mergeFeedsFromCloud()
+        NotificationCenter.default.addObserver(
+            forName: NSUbiquitousKeyValueStore.didChangeExternallyNotification,
+            object: cloud, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in self?.mergeFeedsFromCloud() }
+        }
+        cloud.synchronize()
     }
 
     // MARK: - Follow / unfollow / settings
@@ -327,7 +340,28 @@ final class FeedStore: ObservableObject {
 
     private func persist() {
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        if let data = try? JSONEncoder.iso.encode(feeds) { try? data.write(to: feedsURL, options: .atomic) }
+        if let data = try? JSONEncoder.iso.encode(feeds) {
+            try? data.write(to: feedsURL, options: .atomic)
+            cloud.set(data, forKey: Self.feedsCloudKey)   // back up subscriptions to iCloud
+        }
         if let data = try? JSONEncoder.iso.encode(items) { try? data.write(to: itemsURL, options: .atomic) }
+    }
+
+    /// Adopt any followed feeds from the iCloud backup we don't already have —
+    /// restores subscriptions after a reinstall (when local is empty). Their items
+    /// re-fetch on the next refresh.
+    private func mergeFeedsFromCloud() {
+        guard let data = cloud.data(forKey: Self.feedsCloudKey),
+              let remote = try? JSONDecoder.iso.decode([RSSFeed].self, from: data) else { return }
+        let knownIDs = Set(feeds.map(\.id))
+        let missing = remote.filter { !knownIDs.contains($0.id) }
+        guard !missing.isEmpty else { return }
+        feeds.append(contentsOf: missing)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        if let encoded = try? JSONEncoder.iso.encode(feeds) {
+            try? encoded.write(to: feedsURL, options: .atomic)
+        }
+        // Pull in the new feeds' articles.
+        Task { await refreshAll() }
     }
 }
