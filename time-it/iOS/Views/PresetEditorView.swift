@@ -233,12 +233,11 @@ private struct IntervalsSection: View {
         case .even:
             Stepper("\(evenCount) intervals", value: evenCountBinding, in: 2...60)
         case .spacing:
-            Stepper("Every \(Int(spacingSeconds)) seconds",
-                    value: spacingBinding, in: 5...max(5, duration), step: 5)
+            durationSlider("Every \(restLabel(spacingSeconds))", spacingBinding)
         case .custom:
             ForEach(Array(customLengths.enumerated()), id: \.offset) { idx, _ in
-                Stepper("Interval \(idx + 1): \(Int(customLengths[idx]))s",
-                        value: customLengthBinding(idx), in: 5...max(5, duration), step: 5)
+                durationSlider("Interval \(idx + 1): \(restLabel(customLengths[idx]))",
+                               customLengthBinding(idx))
             }
             .onDelete { offsets in
                 var arr = customLengths
@@ -250,10 +249,17 @@ private struct IntervalsSection: View {
             } label: { Label("Add interval", systemImage: "plus") }
             customValidation
         case .workRest:
-            Stepper("Work \(formatClock(workSeconds))",
-                    value: workBinding, in: 5...max(5, duration), step: 5)
-            Stepper("Rest \(formatClock(restSeconds))",
-                    value: restBinding, in: 5...max(5, duration), step: 5)
+            durationSlider("Work \(restLabel(workSeconds))", workBinding)
+            durationSlider("Rest \(restLabel(restSeconds))", restBinding)
+        }
+    }
+
+    /// A labelled slider for picking a duration quickly (5s steps).
+    @ViewBuilder private func durationSlider(_ title: String,
+                                             _ value: Binding<TimeInterval>) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+            Slider(value: value, in: 5...max(10, duration), step: 5)
         }
     }
 
