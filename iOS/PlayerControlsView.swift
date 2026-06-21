@@ -59,6 +59,9 @@ struct PlayerControlsView: View {
                     Image(systemName: "highlighter").font(.title2)
                 }
                 .tint(.primary)
+                // Match the speed chip's width so the play/pause group is centred
+                // on screen (equal margins on both sides).
+                .frame(width: 64, alignment: .trailing)
             }
         }
     }
