@@ -97,15 +97,29 @@ struct RunningTimerState: Identifiable {
         return (min(passed + 1, total), total)
     }
 
-    /// For a work/rest plan: which round we're in, whether it's the work phase,
-    /// and the total rounds. A work + rest pair is ONE round (one interval), so
-    /// the running view groups them rather than counting two.
+    /// For a work/rest plan: which round we're in, whether it's a work phase
+    /// (vs the rest), and the total rounds. One round = all work segments + the
+    /// rest, so the running view groups them.
     func workRestPhase(now: Date = Date()) -> (round: Int, isWork: Bool, rounds: Int)? {
-        guard case .workRest(let work, let rest)? = preset.intervals?.spec else { return nil }
-        let cueTimes = preset.cues().map(\.fireTime).sorted()
-        let passed = cueTimes.filter { $0 <= elapsed(now: now) + 0.0001 }.count
-        let rounds = max(1, Int(preset.duration / max(1, work + rest)))
-        return (passed / 2 + 1, passed % 2 == 0, rounds)
+        guard case .workRest(let rawWorks, let rest)? = preset.intervals?.spec else { return nil }
+        let works = rawWorks.filter { $0 > 0 }
+        guard !works.isEmpty, rest > 0 else { return nil }
+        let roundLen = works.reduce(0, +) + rest
+        guard roundLen > 0 else { return nil }
+
+        let e = elapsed(now: now)
+        let rounds = max(1, Int((preset.duration / roundLen).rounded(.up)))
+        let roundIndex = min(Int(e / roundLen) + 1, rounds)
+
+        // Where are we within the current round? Work segments first, then rest.
+        let within = e.truncatingRemainder(dividingBy: roundLen)
+        var acc: TimeInterval = 0
+        var isWork = false
+        for w in works {
+            if within < acc + w { isWork = true; break }
+            acc += w
+        }
+        return (roundIndex, isWork, rounds)
     }
 
     /// Seconds elapsed in the current run.
