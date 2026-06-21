@@ -83,11 +83,10 @@ final class WatchModel: ObservableObject {
         bridge.syncRests(settings.restDurations)
     }
 
-    /// Start a preset, applying its default output mode (if any) first. One timer
-    /// at a time, so any current one is stopped. Exercise timers record a
-    /// workout; others stay alive with silent audio (nothing logged).
+    /// Start a preset (one timer at a time). Exercise timers record a workout;
+    /// others stay alive with silent audio (nothing logged). Each timer honors
+    /// its own per-cue voice/haptic settings.
     func startTimer(_ preset: TimerPreset) {
-        if let mode = preset.defaultOutputMode { settings.outputMode = mode }
         engine.stopAll()
         startKeepAlive(recordsWorkout: preset.isWorkout)
         engine.start(preset)

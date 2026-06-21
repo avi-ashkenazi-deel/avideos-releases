@@ -59,10 +59,8 @@ struct TimerListView: View {
         }
     }
 
-    /// Start a preset (single timer at a time), applying its default output mode
-    /// (if it carries one) and stopping any current timer first.
+    /// Start a preset (single timer at a time), stopping any current timer first.
     private func start(_ preset: TimerPreset) {
-        if let mode = preset.defaultOutputMode { settings.outputMode = mode }
         engine.stopAll()
         engine.start(preset)
     }

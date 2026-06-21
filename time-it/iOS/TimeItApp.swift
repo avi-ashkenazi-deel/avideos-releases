@@ -109,10 +109,9 @@ final class AppModel: ObservableObject {
         bridge.syncRests(settings.restDurations)
     }
 
-    /// Start a preset, applying its default output mode (if any) first. Only one
-    /// timer runs at a time, so any current timer is stopped first.
+    /// Start a preset. Only one timer runs at a time, so any current one is
+    /// stopped first. Each timer honors its own per-cue voice/haptic settings.
     func startTimer(_ preset: TimerPreset) {
-        if let mode = preset.defaultOutputMode { settings.outputMode = mode }
         engine.stopAll()
         engine.start(preset)
     }

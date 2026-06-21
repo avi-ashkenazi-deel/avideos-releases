@@ -48,17 +48,14 @@ struct TimerPreset: Codable, Hashable, Identifiable {
 
     // MARK: Output indicators (for the list row)
 
-    /// Whether this timer will speak. Uses its default output mode if it carries
-    /// one; otherwise infers from its cues + final countdown.
+    /// Whether this timer will speak — inferred from its cues + final countdown.
     var usesVoice: Bool {
-        if let m = defaultOutputMode { return m != .vibrationOnly }
         if finalCountdown != nil { return true }
         return cues().contains { $0.alert.includesVoice && !$0.spokenText.isEmpty }
     }
 
-    /// Whether this timer will vibrate.
+    /// Whether this timer will vibrate — inferred from its cues + final countdown.
     var usesHaptic: Bool {
-        if let m = defaultOutputMode { return m != .voiceOnly }
         if finalCountdown?.haptic == true { return true }
         return cues().contains { $0.alert.includesHaptic }
     }

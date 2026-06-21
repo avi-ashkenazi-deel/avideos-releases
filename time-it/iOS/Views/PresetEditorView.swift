@@ -68,19 +68,6 @@ struct PresetEditorView: View {
                     Text("One-off markers on top of the intervals — e.g. \"30 seconds left\" or \"halfway\".")
                 }
 
-                Section {
-                    Picker("On start, switch to", selection: defaultModeBinding) {
-                        Text("Leave as-is").tag(DefaultModeChoice.unchanged)
-                        ForEach(OutputMode.allCases) { mode in
-                            Text(mode.displayName).tag(DefaultModeChoice.set(mode))
-                        }
-                    }
-                } header: {
-                    Text("Output mode")
-                } footer: {
-                    Text("Starting this timer can flip the app to Voice, Vibrate, or Both — handy for a silent \"talk\" preset.")
-                }
-
                 Section("Options") {
                     Stepper("Repeat \(draft.repeatCount)×", value: $draft.repeatCount, in: 1...50)
                 }
@@ -106,25 +93,6 @@ struct PresetEditorView: View {
             return lengths.reduce(0, +) - draft.duration > 0.5
         }
         return false
-    }
-
-    // MARK: Default output mode
-
-    private enum DefaultModeChoice: Hashable {
-        case unchanged
-        case set(OutputMode)
-    }
-
-    private var defaultModeBinding: Binding<DefaultModeChoice> {
-        Binding(
-            get: { draft.defaultOutputMode.map(DefaultModeChoice.set) ?? .unchanged },
-            set: { choice in
-                switch choice {
-                case .unchanged: draft.defaultOutputMode = nil
-                case .set(let m): draft.defaultOutputMode = m
-                }
-            }
-        )
     }
 
     // MARK: Bindings into the optional final-countdown
