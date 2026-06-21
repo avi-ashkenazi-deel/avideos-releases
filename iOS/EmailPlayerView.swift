@@ -22,6 +22,9 @@ struct PlayerDetailContent: View {
     @State private var showCompletion = false
     @State private var dismissedVoiceWarning = false
     @State private var showLinks = false
+    /// Measured height of the floating transport panel, used as the transcript's
+    /// bottom inset so the last sentence clears it.
+    @State private var controlsHeight: CGFloat = 140
 
     /// Links from whatever's on screen (a staged preview takes precedence).
     private var currentLinks: [EmailLink] {
@@ -177,8 +180,9 @@ struct PlayerDetailContent: View {
                                blocks: player.blocks,
                                currentIndex: player.currentBlockIndex,
                                isActive: true)
-                    // Room so the last lines clear the floating transport panel.
-                    .padding(.bottom, 96)
+                    // Clear the floating transport panel by its *measured* height
+                    // (+ a margin), so the last sentence is never hidden behind it.
+                    .padding(.bottom, controlsHeight + 24)
             }
             .onChange(of: player.currentBlockIndex) { _, index in
                 withAnimation(.easeInOut) { proxy.scrollTo(index, anchor: .center) }
@@ -195,7 +199,11 @@ struct PlayerDetailContent: View {
             .floatingGlass()
             .padding(.horizontal, 10)
             .padding(.bottom, 8)
+            .background(GeometryReader { geo in
+                Color.clear.preference(key: ControlsHeightKey.self, value: geo.size.height)
+            })
         }
+        .onPreferenceChange(ControlsHeightKey.self) { controlsHeight = max($0, 96) }
     }
 
     // MARK: - Preview (staged) mode
@@ -420,6 +428,13 @@ struct NowPlayingView: View {
                 }
         }
     }
+}
+
+/// Reports the floating transport panel's height up to the transcript so it can
+/// reserve exactly that much bottom space.
+private struct ControlsHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 140
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
 }
 
 // MARK: - Sentence
