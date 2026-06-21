@@ -8,14 +8,21 @@ struct TimerListView: View {
     @EnvironmentObject private var model: AppModel
     @State private var editing: TimerPreset?
     @State private var creatingNew = false
-    @State private var showingSettings = false
+    @State private var editingSession = false
 
     var body: some View {
         NavigationStack {
             List {
                 Section {
+                    // Tap to start; swipe to edit its rest buttons (bespoke settings).
                     Button { model.startSession() } label: {
                         Label("Start session", systemImage: "figure.strengthtraining.traditional")
+                    }
+                    .swipeActions(edge: .trailing) {
+                        Button { editingSession = true } label: {
+                            Label("Edit", systemImage: "pencil")
+                        }
+                        .tint(.blue)
                     }
                 }
 
@@ -37,9 +44,6 @@ struct TimerListView: View {
             }
             .navigationTitle("Time It")
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button { showingSettings = true } label: { Image(systemName: "gearshape") }
-                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { creatingNew = true } label: { Image(systemName: "plus") }
                 }
@@ -56,7 +60,7 @@ struct TimerListView: View {
                     title: "New timer"
                 ) { presets.add($0) }
             }
-            .sheet(isPresented: $showingSettings) { SettingsView() }
+            .sheet(isPresented: $editingSession) { SessionSettingsView() }
         }
     }
 

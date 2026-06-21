@@ -1,8 +1,9 @@
 import SwiftUI
 
-/// App settings. Today: the three quick-rest durations used in a session, shared
+/// The session's bespoke settings — its three quick-rest buttons. Reached by
+/// editing the "Start session" row (like editing a timer). The values are shared
 /// with the Apple Watch.
-struct SettingsView: View {
+struct SessionSettingsView: View {
     @EnvironmentObject private var settings: AppSettings
     @Environment(\.dismiss) private var dismiss
 
@@ -15,12 +16,12 @@ struct SettingsView: View {
                                 value: restBinding(i), in: 5...600, step: 5)
                     }
                 } header: {
-                    Text("Session rest buttons")
+                    Text("Rest buttons")
                 } footer: {
                     Text("The three quick-rest buttons shown during a session — on this iPhone and your Apple Watch.")
                 }
             }
-            .navigationTitle("Settings")
+            .navigationTitle("Session")
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
             }
