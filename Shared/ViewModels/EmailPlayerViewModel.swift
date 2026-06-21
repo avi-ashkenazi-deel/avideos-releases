@@ -92,6 +92,10 @@ final class EmailPlayerViewModel: ObservableObject {
     /// it's stale (the listener moved on / switched email) and not speak.
     private var playToken = 0
     private var estimatedDuration: TimeInterval = 1
+    /// Coalesces rapid Next/Previous presses so we only *speak* the sentence the
+    /// listener lands on, not every one in between (which would hammer the speech
+    /// engine and could wedge it).
+    private var skipDebounce: Task<Void, Never>?
     /// Log of (blockIndex, elapsedAtStart) for the highlight lookback window.
     private var spokenLog: [(index: Int, start: TimeInterval)] = []
     private let remote = RemoteCommandController()
@@ -331,6 +335,7 @@ final class EmailPlayerViewModel: ObservableObject {
 
     func play() {
         guard parsed != nil, !isComplete else { return }
+        cancelPendingSkip()
         if engine.isPaused {
             engine.resume()
             isPlaying = true
@@ -349,6 +354,7 @@ final class EmailPlayerViewModel: ObservableObject {
     }
 
     func pause() {
+        cancelPendingSkip()
         engine.pause()
         isPlaying = false
         stopTimer()
@@ -358,16 +364,48 @@ final class EmailPlayerViewModel: ObservableObject {
 
     func nextSentence() {
         guard parsed != nil, !isComplete else { return }
-        hasStarted = true
-        resetLookback()
-        speakBlock(at: currentBlockIndex + 1)
+        skip(to: currentBlockIndex + 1)
     }
 
     func previousSentence() {
         guard parsed != nil else { return }
+        skip(to: currentBlockIndex - 1)
+    }
+
+    /// Move by sentence, coalescing rapid presses. The position and on-screen
+    /// highlight update immediately and the current audio stops at once, but we
+    /// only *speak* the sentence you land on once you stop pressing — firing a
+    /// stop+speak on every press can wedge AVSpeechSynthesizer (audio dies until
+    /// the app is relaunched).
+    private func skip(to index: Int) {
+        guard !blocks.isEmpty else { return }
         hasStarted = true
         resetLookback()
-        speakBlock(at: max(currentBlockIndex - 1, 0))
+        // Past the end → finish the email (same as reading straight through).
+        if index >= blocks.count {
+            cancelPendingSkip()
+            engine.stop()
+            complete()
+            return
+        }
+        isComplete = false
+        currentBlockIndex = max(index, 0)
+        currentBlockSpoken = false
+        isPlaying = true
+        engine.stop()
+        updateNowPlaying()
+        skipDebounce?.cancel()
+        skipDebounce = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 200_000_000)
+            guard let self, !Task.isCancelled, self.isPlaying else { return }
+            self.skipDebounce = nil
+            self.speakBlock(at: self.currentBlockIndex)
+        }
+    }
+
+    private func cancelPendingSkip() {
+        skipDebounce?.cancel()
+        skipDebounce = nil
     }
 
     /// Skip past the current image to the next block.
@@ -380,6 +418,7 @@ final class EmailPlayerViewModel: ObservableObject {
         guard blocks.indices.contains(index) else { return }
         hasStarted = true
         isComplete = false
+        cancelPendingSkip()
         resetLookback()
         speakBlock(at: index)
     }
@@ -444,6 +483,7 @@ final class EmailPlayerViewModel: ObservableObject {
     }
 
     func stop() {
+        cancelPendingSkip()
         playToken += 1
         engine.stop()
         isPlaying = false
