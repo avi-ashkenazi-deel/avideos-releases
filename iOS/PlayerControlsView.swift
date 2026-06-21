@@ -83,7 +83,7 @@ struct PlayerControlsView: View {
         Menu {
             ForEach(speeds, id: \.self) { speed in
                 Button { viewModel.setSpeed(speed) } label: {
-                    if abs(settings.speed - speed) < 0.001 {
+                    if abs(viewModel.currentSpeed - speed) < 0.001 {
                         Label(speedLabel(speed), systemImage: "checkmark")
                     } else {
                         Text(speedLabel(speed))
@@ -91,7 +91,7 @@ struct PlayerControlsView: View {
                 }
             }
         } label: {
-            Text(speedLabel(settings.speed))
+            Text(speedLabel(viewModel.currentSpeed))
                 .font(.subheadline.monospacedDigit().weight(.bold))
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)

@@ -96,9 +96,45 @@ final class AppSettings: ObservableObject {
     static let shared = AppSettings()
 
     /// AVSpeechUtterance rate is 0.0...1.0 with a "normal" of ~0.5. We expose a
-    /// friendlier 0.5x...2.5x multiplier on top of that.
+    /// friendlier 0.5x...2.5x multiplier on top of that. This is the default used
+    /// for any language without its own override.
     @Published var speed: Double {
         didSet { defaults.set(speed, forKey: Key.speed) }
+    }
+
+    /// Per-language speed overrides (BCP-47 base code, e.g. "es", → multiplier).
+    /// Some voices read certain languages less clearly, so the listener can set a
+    /// slower/faster speed just for those; everything else uses `speed`.
+    @Published var languageSpeeds: [String: Double] {
+        didSet { defaults.set(languageSpeeds, forKey: Key.languageSpeeds) }
+    }
+
+    /// The speed to read a given language at: its override if set, else the default.
+    func effectiveSpeed(forLanguageCode code: String?) -> Double {
+        if let code, let s = languageSpeeds[code] { return Self.clampSpeed(s) }
+        return speed
+    }
+
+    /// Adjust the speed for what's playing: if the current language already has an
+    /// override (added in Settings), update that; otherwise change the default.
+    /// New per-language overrides are created explicitly via `addLanguageSpeed`.
+    func setSpeed(_ value: Double, forLanguageCode code: String?) {
+        let v = Self.clampSpeed(value)
+        if let code, languageSpeeds[code] != nil {
+            languageSpeeds[code] = v
+        } else {
+            speed = v
+        }
+    }
+
+    /// Start tracking a language's speed at the current default (shown in Settings).
+    func addLanguageSpeed(_ code: String) {
+        guard languageSpeeds[code] == nil else { return }
+        languageSpeeds[code] = speed
+    }
+
+    func removeLanguageSpeed(_ code: String) {
+        languageSpeeds[code] = nil
     }
 
     /// When an email finishes, automatically open the next unread one, announce
@@ -182,6 +218,7 @@ final class AppSettings: ObservableObject {
 
     private enum Key {
         static let speed = "settings.speed"
+        static let languageSpeeds = "settings.languageSpeeds"
         static let autoAdvance = "settings.autoAdvance"
         static let mailLabelId = "settings.mailLabelId"
         static let mailLabelName = "settings.mailLabelName"
@@ -200,6 +237,7 @@ final class AppSettings: ObservableObject {
     init(defaults: UserDefaults = .voiceInbox) {
         self.defaults = defaults
         self.speed = defaults.object(forKey: Key.speed) as? Double ?? 1.0
+        self.languageSpeeds = (defaults.dictionary(forKey: Key.languageSpeeds) as? [String: Double]) ?? [:]
         self.autoAdvance = defaults.object(forKey: Key.autoAdvance) as? Bool ?? false
         self.mailLabelId = defaults.string(forKey: Key.mailLabelId) ?? "INBOX"
         self.mailLabelName = defaults.string(forKey: Key.mailLabelName) ?? "Inbox"

@@ -246,12 +246,12 @@ final class EmailPlayerViewModel: ObservableObject {
         currentBlockSpoken = false
         elapsed = 0
         spokenLog = []
-        estimatedDuration = Self.estimateDuration(stagedEmail, speed: settings.speed)
         ReadingTimeStore.shared.record(
             id: stagedEmail.email.id,
             minutes: ReadingTime.minutes(forText: stagedEmail.blocks.map(\.spokenText).joined(separator: " "))
         )
         checkVoiceAvailability(for: stagedEmail)
+        estimatedDuration = Self.estimateDuration(stagedEmail, speed: currentSpeed)
         if let startBlock = config.startBlock {
             currentBlockIndex = startBlock
             hasStarted = true
@@ -319,19 +319,28 @@ final class EmailPlayerViewModel: ObservableObject {
             id: parsed.email.id,
             minutes: ReadingTime.minutes(forText: parsed.blocks.map(\.spokenText).joined(separator: " "))
         )
-        self.estimatedDuration = Self.estimateDuration(parsed, speed: settings.speed)
         self.currentBlockIndex = 0
         self.isComplete = false
         self.hasStarted = false
         self.currentBlockSpoken = false
         self.elapsed = 0
         self.spokenLog = []
+        // Detect the language first so the duration estimate uses the right
+        // (possibly per-language) speed.
         checkVoiceAvailability(for: parsed)
+        self.estimatedDuration = Self.estimateDuration(parsed, speed: currentSpeed)
     }
 
     /// The email's dominant language code (e.g. "he"), detected once from a large
     /// sample so short blocks don't have to detect on their own.
     private var dominantLanguageCode: String?
+
+    /// The detected language of the current content (BCP-47 base), so the UI can
+    /// show/adjust a per-language speed.
+    var currentLanguageCode: String? { dominantLanguageCode }
+
+    /// The speed the current content reads at, honoring any per-language override.
+    var currentSpeed: Double { settings.effectiveSpeed(forLanguageCode: dominantLanguageCode) }
 
     /// Detect the email's dominant language, hand it to the engine as a hint, and
     /// flag when there's no installed on-device voice for it so the UI can prompt
@@ -505,9 +514,12 @@ final class EmailPlayerViewModel: ObservableObject {
 
     /// Apply a new speed; if currently playing, re-speak the current block so
     /// the change takes effect immediately.
+    /// Set the speed for what's playing. If the content has a detected language,
+    /// this sets that language's speed (so e.g. Spanish keeps its own pace); with
+    /// no language detected it sets the default.
     func setSpeed(_ speed: Double) {
-        settings.speed = AppSettings.clampSpeed(speed)
-        estimatedDuration = Self.estimateDuration(parsed, speed: settings.speed)
+        settings.setSpeed(speed, forLanguageCode: dominantLanguageCode)
+        estimatedDuration = Self.estimateDuration(parsed, speed: currentSpeed)
         if isPlaying { speakBlock(at: currentBlockIndex) }
     }
 
@@ -551,10 +563,10 @@ final class EmailPlayerViewModel: ObservableObject {
                 let text = await self?.imageDescriber.describe(image) ?? fallback
                 // Bail if the listener moved on or switched email while we fetched.
                 guard let self, self.playToken == token, self.isPlaying else { return }
-                self.engine.speak(text, speed: self.settings.speed, pauseAfter: 0.2)
+                self.engine.speak(text, speed: self.currentSpeed, pauseAfter: 0.2)
             }
         } else {
-            engine.speak(block.spokenText, speed: settings.speed, pauseAfter: 0.2)
+            engine.speak(block.spokenText, speed: currentSpeed, pauseAfter: 0.2)
         }
     }
 

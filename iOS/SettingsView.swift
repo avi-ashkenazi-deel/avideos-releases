@@ -10,6 +10,27 @@ struct SettingsView: View {
 
     private let speeds: [Double] = [0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.25, 2.5]
 
+    /// Configured per-language speeds, sorted by language name for a stable list.
+    private var sortedLanguageSpeeds: [(key: String, value: Double)] {
+        settings.languageSpeeds
+            .map { (key: $0.key, value: $0.value) }
+            .sorted { languageName($0.key) < languageName($1.key) }
+    }
+
+    /// Languages that have an installed voice and don't yet have a speed override.
+    private var addableLanguages: [(code: String, name: String)] {
+        let configured = Set(settings.languageSpeeds.keys)
+        let codes = Set(AVSpeechSynthesisVoice.speechVoices()
+            .compactMap { $0.language.split(separator: "-").first.map(String.init) })
+        return codes.subtracting(configured)
+            .map { (code: $0, name: languageName($0)) }
+            .sorted { $0.name < $1.name }
+    }
+
+    private func languageName(_ code: String) -> String {
+        Locale.current.localizedString(forLanguageCode: code) ?? code.uppercased()
+    }
+
     @State private var elevenVoices: [ElevenLabsVoice] = []
     @State private var loadingVoices = false
     @State private var voiceError: String?
@@ -30,6 +51,35 @@ struct SettingsView: View {
                 Text("Playback")
             } footer: {
                 Text("When an email finishes, automatically open the next unread one, announce who it's from and its subject, then keep reading.")
+            }
+
+            Section {
+                ForEach(sortedLanguageSpeeds, id: \.key) { entry in
+                    Picker(languageName(entry.key), selection: Binding(
+                        get: { entry.value },
+                        set: { settings.languageSpeeds[entry.key] = $0 }
+                    )) {
+                        ForEach(speeds, id: \.self) { Text("\($0, specifier: "%g")×").tag($0) }
+                    }
+                }
+                .onDelete { offsets in
+                    let keys = sortedLanguageSpeeds.map(\.key)
+                    offsets.map { keys[$0] }.forEach(settings.removeLanguageSpeed)
+                }
+
+                if !addableLanguages.isEmpty {
+                    Menu {
+                        ForEach(addableLanguages, id: \.code) { lang in
+                            Button(lang.name) { settings.addLanguageSpeed(lang.code) }
+                        }
+                    } label: {
+                        Label("Add a language", systemImage: "plus")
+                    }
+                }
+            } header: {
+                Text("Per-language speed")
+            } footer: {
+                Text("Some voices read certain languages less clearly. Set a speed for a language and it's used automatically whenever that language is read; everything else uses the default speed above. Swipe to remove.")
             }
 
             Section {
