@@ -561,7 +561,7 @@ final class EmailPlayerViewModel: ObservableObject {
         recordCompletedAnalytics()
         SoundEffects.shared.play(.success)   // "finished this email" chime
         if let id = parsed?.email.id { markRead(id: id) }
-        advanceToNextUnread()
+        advanceToNext()
     }
 
     /// Count a finished email/article toward the listening analytics.
@@ -607,12 +607,25 @@ final class EmailPlayerViewModel: ObservableObject {
         )
     }
 
-    /// If auto-advance is on, move to the next item — announce it, and play.
-    /// Local sources (feeds, saved articles) supply a ready-built email via
-    /// `nextLocalProvider`; the inbox supplies a stub via `nextUnreadProvider`
+    /// Whether there's a next item to jump to (feed article / unread email).
+    var canSkipToNextItem: Bool { nextLocalProvider != nil || nextUnreadProvider != nil }
+
+    /// Manually jump to the next item: mark the current one read and advance,
+    /// just like finishing it — but works regardless of the auto-advance setting.
+    func skipToNextItem() {
+        guard canSkipToNextItem else { return }
+        cancelPendingSkip()
+        if let id = parsed?.email.id { markRead(id: id) }
+        advanceToNext(force: true)
+    }
+
+    /// Move to the next item — announce it, and play. Driven by auto-advance on
+    /// completion (`force: false`) or by an explicit "next item" tap (`force:
+    /// true`). Local sources (feeds, saved articles) supply a ready-built email
+    /// via `nextLocalProvider`; the inbox supplies a stub via `nextUnreadProvider`
     /// that we then fetch from the mail service.
-    private func advanceToNextUnread() {
-        guard settings.autoAdvance, let currentID = parsed?.email.id else { return }
+    private func advanceToNext(force: Bool = false) {
+        guard force || settings.autoAdvance, let currentID = parsed?.email.id else { return }
         if let nextLocalProvider {
             Task {
                 guard let next = await nextLocalProvider(currentID) else { return }

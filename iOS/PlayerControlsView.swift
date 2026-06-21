@@ -36,7 +36,7 @@ struct PlayerControlsView: View {
 
             HStack {
                 speedChip
-                    .frame(width: 64, alignment: .leading)
+                    .frame(width: 76, alignment: .leading)
 
                 Spacer()
 
@@ -55,13 +55,23 @@ struct PlayerControlsView: View {
 
                 Spacer()
 
-                Button(action: onHighlight) {
-                    Image(systemName: "highlighter").font(.title2)
+                // Right cluster: jump to the next item (mark read + advance) and
+                // capture a highlight. Fixed width matches the speed chip so the
+                // play/pause group stays centred.
+                HStack(spacing: 18) {
+                    if viewModel.canSkipToNextItem {
+                        Button { viewModel.skipToNextItem() } label: {
+                            Image(systemName: "forward.end.fill").font(.title3)
+                        }
+                        .tint(.primary)
+                        .accessibilityLabel("Next item")
+                    }
+                    Button(action: onHighlight) {
+                        Image(systemName: "highlighter").font(.title2)
+                    }
+                    .tint(.primary)
                 }
-                .tint(.primary)
-                // Match the speed chip's width so the play/pause group is centred
-                // on screen (equal margins on both sides).
-                .frame(width: 64, alignment: .trailing)
+                .frame(width: 76, alignment: .trailing)
             }
         }
     }
