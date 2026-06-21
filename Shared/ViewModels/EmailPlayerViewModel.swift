@@ -762,12 +762,18 @@ final class EmailPlayerViewModel: ObservableObject {
 
     private func startTimer() {
         stopTimer()
-        timer = Timer.scheduledTimer(withTimeInterval: 0.2, repeats: true) { [weak self] _ in
+        // 0.5s is plenty for the progress bar; a faster tick just burns wakeups
+        // (and a task hop each time) for no visible benefit. `.common` keeps it
+        // running while the user scrolls the transcript.
+        let t = Timer(timeInterval: 0.5, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 guard let self, self.isPlaying else { return }
-                self.elapsed += 0.2
+                self.elapsed += 0.5
             }
         }
+        t.tolerance = 0.1   // let the OS coalesce the fire for efficiency
+        RunLoop.main.add(t, forMode: .common)
+        timer = t
     }
 
     private func stopTimer() {
