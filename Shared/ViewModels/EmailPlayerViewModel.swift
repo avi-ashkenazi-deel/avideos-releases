@@ -177,10 +177,10 @@ final class EmailPlayerViewModel: ObservableObject {
 
     /// Load already-fetched content (e.g. a cached saved article) without a
     /// network round-trip.
-    func loadLocal(_ email: Email) async {
+    func loadLocal(_ email: Email, announce: Bool = false) async {
         isLoading = true
         defer { isLoading = false }
-        await apply(email)
+        await apply(email, announce: announce)
     }
 
     /// Open an item in the Now Playing view. If a *different* email is currently
@@ -188,6 +188,7 @@ final class EmailPlayerViewModel: ObservableObject {
     /// until the listener taps play; otherwise it loads and is ready immediately.
     func open(email: Email,
               isLocal: Bool,
+              announce: Bool = false,
               startBlock: Int? = nil,
               onMarkedRead: ((String) -> Void)? = nil,
               markReadOverride: ((String) -> Void)? = nil,
@@ -208,7 +209,8 @@ final class EmailPlayerViewModel: ObservableObject {
             self.nextUnreadProvider = nextUnreadProvider
             self.nextLocalProvider = nextLocalProvider
             Task {
-                if isLocal { await loadLocal(email) } else { await load(email: email) }
+                if isLocal { await loadLocal(email, announce: announce) }
+                else { await load(email: email, announce: announce) }
                 if let startBlock { seek(toBlock: startBlock) } else { resumeIfAvailable() }
             }
         }

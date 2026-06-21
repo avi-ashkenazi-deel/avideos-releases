@@ -13,6 +13,9 @@ enum FeedPlayback {
             player.open(
                 email: email,
                 isLocal: true,
+                // Read the feed/title up front — for many items the headline is the
+                // only real information, so it's spoken before the body.
+                announce: true,
                 markReadOverride: { [weak store] emailID in
                     store?.markRead(itemID(fromEmailID: emailID))
                 },
