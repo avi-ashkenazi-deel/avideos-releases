@@ -240,17 +240,21 @@ final class TimerEngine: ObservableObject {
     /// Count down the last N seconds before each interval boundary (e.g. "5,4,3,
     /// 2,1" into the next interval), if the interval plan has it enabled.
     private func processIntervalCountdown(_ s: inout RunningTimerState, now: Date) {
-        guard let plan = s.preset.intervals, plan.countdownSeconds > 0 else { return }
+        guard let plan = s.preset.intervals, plan.countdownEnabled else { return }
         let elapsed = s.elapsed(now: now)
         let bounds = plan.boundaries(forDuration: s.preset.duration)
         guard let next = bounds.first(where: { $0 > elapsed + 0.0001 }) else { return }
+        let prev = bounds.last(where: { $0 <= elapsed + 0.0001 }) ?? 0
         // Reset the per-second tracker whenever we start counting to a new boundary.
         if s.intervalCountdownTarget != next {
             s.intervalCountdownTarget = next
             s.lastIntervalCountdownSecond = nil
         }
-        guard let second = MilestoneScheduler.countdownSecond(
-            remaining: next - elapsed, window: plan.countdownSeconds,
+        // Whole-interval mode counts the entire current segment; otherwise the
+        // configured last-N window.
+        let window = plan.countsWholeInterval ? Int((next - prev).rounded()) : plan.countdownSeconds
+        guard window > 0, let second = MilestoneScheduler.countdownSecond(
+            remaining: next - elapsed, window: window,
             lastSpoken: s.lastIntervalCountdownSecond
         ) else { return }
         let ch = outputMode.countdownChannels(hapticEnabled: true)

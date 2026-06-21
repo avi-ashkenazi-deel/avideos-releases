@@ -160,15 +160,28 @@ private struct IntervalsSection: View {
                 Toggle("Announce interval number", isOn: announceBinding)
 
                 Toggle("Count down into each interval", isOn: countdownEnabledBinding)
-                if (plan.countdown ?? 0) > 0 {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Last \(plan.countdown ?? 0)s of each interval")
-                        Slider(
-                            value: Binding(
-                                get: { Double(plan.countdown ?? 5) },
-                                set: { countdownBinding.wrappedValue = Int($0.rounded()) }
-                            ),
-                            in: 1...10, step: 1)
+                if plan.countdownEnabled {
+                    Picker("Countdown", selection: countdownModeBinding) {
+                        Text("Last seconds").tag(false)
+                        Text("Whole interval").tag(true)
+                    }
+                    .pickerStyle(.segmented)
+                    // Heavier thump when switching into the more intense "whole
+                    // interval" mode; a light tick otherwise.
+                    .sensoryFeedback(trigger: plan.countsWholeInterval) { _, whole in
+                        whole ? .impact(weight: .heavy, intensity: 1.0) : .selection
+                    }
+                    if !plan.countsWholeInterval {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Last \(plan.countdown ?? 5)s of each interval")
+                            Slider(
+                                value: Binding(
+                                    get: { Double(plan.countdown ?? 5) },
+                                    set: { countdownBinding.wrappedValue = Int($0.rounded()) }
+                                ),
+                                in: 1...10, step: 1)
+                            .sensoryFeedback(.selection, trigger: plan.countdown ?? 5)
+                        }
                     }
                 }
 
@@ -283,12 +296,14 @@ private struct IntervalsSection: View {
         }
     }
 
-    /// A labelled slider for picking a duration quickly (5s steps).
+    /// A labelled slider for picking a duration quickly (5s steps), with a light
+    /// haptic tick on each step.
     @ViewBuilder private func durationSlider(_ title: String,
                                              _ value: Binding<TimeInterval>) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(title)
             Slider(value: value, in: 5...max(10, duration), step: 5)
+                .sensoryFeedback(.selection, trigger: value.wrappedValue)
         }
     }
 
@@ -394,8 +409,21 @@ private struct IntervalsSection: View {
     }
     private var countdownEnabledBinding: Binding<Bool> {
         Binding(
-            get: { (plan?.countdown ?? 0) > 0 },
-            set: { plan?.countdown = $0 ? 5 : nil }   // default to a 5s countdown
+            get: { plan?.countdownEnabled ?? false },
+            set: { on in
+                plan?.countdown = on ? 5 : nil       // default to a 5s last-N countdown
+                plan?.countdownWhole = false
+            }
+        )
+    }
+    /// false = last-N seconds, true = whole interval.
+    private var countdownModeBinding: Binding<Bool> {
+        Binding(
+            get: { plan?.countsWholeInterval ?? false },
+            set: { whole in
+                plan?.countdownWhole = whole
+                if !whole, (plan?.countdown ?? 0) == 0 { plan?.countdown = 5 }
+            }
         )
     }
     private var countdownBinding: Binding<Int> {
@@ -547,6 +575,7 @@ private struct MilestoneEditorRow: View {
             VStack(alignment: .leading) {
                 Text("\(Int(percentValue * 100))%").font(.caption).foregroundStyle(.secondary)
                 Slider(value: percentBinding, in: 0.05...0.95, step: 0.05)
+                    .sensoryFeedback(.selection, trigger: percentValue)
             }
         case .secondsRemaining:
             // Show seconds under a minute, then m:ss so e.g. 90s reads "1:30".
@@ -554,6 +583,7 @@ private struct MilestoneEditorRow: View {
                 Text(secondsValue < 60 ? "\(Int(secondsValue))s left"
                                        : "\(formatClock(secondsValue)) left")
                 Slider(value: secondsBinding, in: 5...max(10, duration), step: 5)
+                    .sensoryFeedback(.selection, trigger: secondsValue)
             }
         }
     }

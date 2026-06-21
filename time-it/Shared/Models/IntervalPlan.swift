@@ -30,9 +30,16 @@ struct IntervalPlan: Codable, Hashable {
     /// "5,4,3,2,1" into the next interval). Optional for backward-compatible
     /// decoding; nil/0 = off.
     var countdown: Int? = nil
+    /// When true (and the countdown is enabled), count down the *whole* interval
+    /// out loud rather than just the last N seconds.
+    var countdownWhole: Bool? = nil
 
-    /// Resolved countdown window (0 = off).
+    /// Resolved last-N window (0 = off).
     var countdownSeconds: Int { countdown ?? 0 }
+    /// Whether to narrate the entire interval.
+    var countsWholeInterval: Bool { countdownWhole ?? false }
+    /// Whether any per-interval countdown is active.
+    var countdownEnabled: Bool { countsWholeInterval || countdownSeconds > 0 }
 
     /// A resolved cue point: when it fires, what to say, what to display, and the
     /// haptic to use (work and rest boundaries feel different in work/rest mode).
