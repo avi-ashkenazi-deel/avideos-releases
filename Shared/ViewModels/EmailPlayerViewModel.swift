@@ -387,6 +387,11 @@ final class EmailPlayerViewModel: ObservableObject {
         recordProgress()
     }
 
+    /// Whether there's a later/earlier sentence to skip to (drives the transport
+    /// buttons' enabled state so you can't skip into nothing).
+    var canSkipForwardSentence: Bool { currentBlockIndex < blocks.count - 1 }
+    var canSkipBackwardSentence: Bool { currentBlockIndex > 0 }
+
     func nextSentence() {
         guard parsed != nil, !isComplete else { return }
         skip(to: currentBlockIndex + 1)
@@ -397,24 +402,23 @@ final class EmailPlayerViewModel: ObservableObject {
         skip(to: currentBlockIndex - 1)
     }
 
-    /// Move by sentence, coalescing rapid presses. The position and on-screen
-    /// highlight update immediately and the current audio stops at once, but we
-    /// only *speak* the sentence you land on once you stop pressing — firing a
-    /// stop+speak on every press can wedge AVSpeechSynthesizer (audio dies until
-    /// the app is relaunched).
+    /// Move by sentence, *bounded* to the email's sentences and coalescing rapid
+    /// presses. The position and on-screen highlight update immediately and the
+    /// current audio stops at once, but we only *speak* the sentence you land on
+    /// once you stop pressing — firing a stop+speak on every press can wedge
+    /// AVSpeechSynthesizer (audio dies until relaunch). Skipping never runs past
+    /// the last sentence (which used to leave playback stuck); to move on, use the
+    /// next-item button or let it finish and auto-advance.
     private func skip(to index: Int) {
         guard !blocks.isEmpty else { return }
+        let target = min(max(index, 0), blocks.count - 1)
+        // At the boundary already → nothing to skip to (Next disabled at the end,
+        // Previous at the start). Avoids overshooting into a stuck state.
+        guard target != currentBlockIndex else { return }
         hasStarted = true
-        resetLookback()
-        // Past the end → finish the email (same as reading straight through).
-        if index >= blocks.count {
-            cancelPendingSkip()
-            engine.stop()
-            complete()
-            return
-        }
         isComplete = false
-        currentBlockIndex = max(index, 0)
+        resetLookback()
+        currentBlockIndex = target
         currentBlockSpoken = false
         isPlaying = true
         engine.stop()

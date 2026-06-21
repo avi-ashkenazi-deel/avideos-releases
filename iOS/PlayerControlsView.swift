@@ -43,6 +43,7 @@ struct PlayerControlsView: View {
                 Button { viewModel.previousSentence() } label: {
                     Image(systemName: "backward.fill").font(.title2)
                 }
+                .disabled(!viewModel.canSkipBackwardSentence)
 
                 Button { viewModel.togglePlayPause() } label: {
                     Image(systemName: viewModel.isPlaying ? "pause.circle.fill" : "play.circle.fill")
@@ -52,6 +53,7 @@ struct PlayerControlsView: View {
                 Button { viewModel.nextSentence() } label: {
                     Image(systemName: "forward.fill").font(.title2)
                 }
+                .disabled(!viewModel.canSkipForwardSentence)
 
                 Spacer()
 
