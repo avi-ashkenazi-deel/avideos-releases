@@ -249,8 +249,20 @@ private struct IntervalsSection: View {
             } label: { Label("Add interval", systemImage: "plus") }
             customValidation
         case .workRest:
-            durationSlider("Work \(restLabel(workSeconds))", workBinding)
-            durationSlider("Rest \(restLabel(restSeconds))", restBinding)
+            ForEach(Array(workSegments.enumerated()), id: \.offset) { idx, _ in
+                durationSlider("Work \(idx + 1): \(restLabel(workSegments[idx]))",
+                               workBinding(idx))
+            }
+            .onDelete { offsets in
+                var arr = workSegments
+                arr.remove(atOffsets: offsets)
+                if arr.isEmpty { arr = [30] }   // keep at least one work
+                setSpec(.workRest(works: arr, rest: restSeconds))
+            }
+            Button {
+                setSpec(.workRest(works: workSegments + [30], rest: restSeconds))
+            } label: { Label("Add work", systemImage: "plus") }
+            durationSlider("Rest: \(restLabel(restSeconds))", restBinding)
         }
     }
 
@@ -266,8 +278,9 @@ private struct IntervalsSection: View {
     private func summary(_ plan: IntervalPlan) -> String {
         if case .workRest = plan.spec {
             let cues = plan.boundaries(forDuration: duration).count
-            // Each full round is one work + one rest segment.
-            let rounds = Int((duration / max(1, workSeconds + restSeconds)).rounded(.down))
+            // One round = all work segments + one rest.
+            let roundLen = workSegments.reduce(0, +) + restSeconds
+            let rounds = Int((duration / max(1, roundLen)).rounded(.down))
             return "≈\(rounds) round\(rounds == 1 ? "" : "s") · \(cues) cue\(cues == 1 ? "" : "s")"
         }
         let count = plan.intervalCount(forDuration: duration)
@@ -299,24 +312,31 @@ private struct IntervalsSection: View {
             case .even: setSpec(.even(count: max(2, plan?.intervalCount(forDuration: duration) ?? 4)))
             case .spacing: setSpec(.spacing(seconds: spacingSeconds))
             case .custom: setSpec(.custom(lengths: customLengths))
-            case .workRest: setSpec(.workRest(work: workSeconds, rest: restSeconds))
+            case .workRest: setSpec(.workRest(works: workSegments, rest: restSeconds))
             }
         })
     }
 
-    private var workSeconds: TimeInterval {
-        if case .workRest(let w, _)? = plan?.spec { return w }
-        return min(60, max(5, duration / 3))
+    private var workSegments: [TimeInterval] {
+        if case .workRest(let w, _)? = plan?.spec, !w.isEmpty { return w }
+        return [min(60, max(5, duration / 3))]
     }
     private var restSeconds: TimeInterval {
         if case .workRest(_, let r)? = plan?.spec { return r }
         return min(20, max(5, duration / 6))
     }
-    private var workBinding: Binding<TimeInterval> {
-        Binding(get: { workSeconds }, set: { setSpec(.workRest(work: $0, rest: restSeconds)) })
+    private func workBinding(_ i: Int) -> Binding<TimeInterval> {
+        Binding(
+            get: { i < workSegments.count ? workSegments[i] : 30 },
+            set: { newVal in
+                var arr = workSegments
+                if i < arr.count { arr[i] = newVal }
+                setSpec(.workRest(works: arr, rest: restSeconds))
+            }
+        )
     }
     private var restBinding: Binding<TimeInterval> {
-        Binding(get: { restSeconds }, set: { setSpec(.workRest(work: workSeconds, rest: $0)) })
+        Binding(get: { restSeconds }, set: { setSpec(.workRest(works: workSegments, rest: $0)) })
     }
 
     private var evenCount: Int {

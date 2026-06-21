@@ -1,22 +1,21 @@
 import Foundation
 
 /// How a timer's total time is divided into announced intervals — the primary
-/// way cues are defined in the creation flow. Four ways to express it:
+/// way cues are defined in the creation flow:
 ///
-/// - `.even(count:)`     — split the total into N equal intervals (cue at each
-///                         internal boundary).
-/// - `.spacing(seconds:)`— announce every X seconds (count derived from total).
-/// - `.custom(lengths:)` — set each interval's length individually, one by one.
-/// - `.workRest(work:rest:)` — alternate a work segment and a rest segment
-///                         (e.g. 1:00 on / 0:20 off) repeating until the total
-///                         runs out, for sets with breaks between them.
+/// - `.even(count:)`     — split the total into N equal intervals.
+/// - `.spacing(seconds:)`— announce every X seconds.
+/// - `.custom(lengths:)` — set each interval's length individually.
+/// - `.workRest(works:rest:)` — run a list of work segments, then a rest, and
+///                         repeat (e.g. 4 exercises then a break) until the total
+///                         runs out.
 struct IntervalPlan: Codable, Hashable {
 
-    enum Spec: Codable, Hashable {
+    enum Spec: Hashable {
         case even(count: Int)
         case spacing(seconds: TimeInterval)
         case custom(lengths: [TimeInterval])
-        case workRest(work: TimeInterval, rest: TimeInterval)
+        case workRest(works: [TimeInterval], rest: TimeInterval)
     }
 
     var spec: Spec
@@ -45,8 +44,8 @@ struct IntervalPlan: Codable, Hashable {
     }
 
     /// The interval boundary offsets within `duration`, in increasing order.
-    /// These are the *internal* boundaries only — the final boundary coincides
-    /// with completion (handled separately by the engine), so it's excluded.
+    /// Internal boundaries only — the final boundary coincides with completion
+    /// (handled separately by the engine), so it's excluded.
     func boundaries(forDuration duration: TimeInterval) -> [TimeInterval] {
         guard duration > 0 else { return [] }
         switch spec {
@@ -58,7 +57,7 @@ struct IntervalPlan: Codable, Hashable {
             guard seconds > 0 else { return [] }
             var result: [TimeInterval] = []
             var t = seconds
-            while t < duration - 0.001 {  // drop a boundary sitting on the end
+            while t < duration - 0.001 {
                 result.append(t)
                 t += seconds
             }
@@ -71,41 +70,18 @@ struct IntervalPlan: Codable, Hashable {
                 if acc < duration - 0.001 { result.append(acc) }
             }
             return result
-        case .workRest(let work, let rest):
-            guard work > 0, rest > 0 else { return [] }
-            var result: [TimeInterval] = []
-            var t: TimeInterval = 0
-            var onWork = true
-            while true {
-                t += onWork ? work : rest
-                if t >= duration - 0.001 { break }
-                result.append(t)
-                onWork.toggle()
-            }
-            return result
+        case .workRest:
+            return workRestCuePoints(forDuration: duration).map(\.time)
         }
     }
 
-    /// Resolved, labelled cue points used to build the engine's cues. Carries the
-    /// spoken text, display label and haptic for each boundary.
+    /// Resolved, labelled cue points used to build the engine's cues.
     func cuePoints(forDuration duration: TimeInterval) -> [Boundary] {
-        let times = boundaries(forDuration: duration)
         switch spec {
         case .workRest:
-            // Even index = a work segment just ended → rest begins.
-            // Odd index  = a rest segment ended → the next work round begins.
-            return times.enumerated().map { i, t in
-                if i % 2 == 0 {
-                    return Boundary(time: t, label: "Rest", spokenText: "Rest",
-                                    haptic: .directionDown)
-                } else {
-                    let round = i / 2 + 2
-                    let go = announceNumber ? "Round \(round)" : "Go"
-                    return Boundary(time: t, label: go, spokenText: go, haptic: haptic)
-                }
-            }
+            return workRestCuePoints(forDuration: duration)
         default:
-            return times.enumerated().map { i, t in
+            return boundaries(forDuration: duration).enumerated().map { i, t in
                 let n = i + 1
                 return Boundary(time: t, label: "Interval \(n)",
                                 spokenText: announceNumber ? "Interval \(n)" : "",
@@ -114,9 +90,103 @@ struct IntervalPlan: Codable, Hashable {
         }
     }
 
-    /// How many intervals/segments the plan describes over `duration` (for the
-    /// count UI / summary).
+    /// The repeating [work…, rest] sequence, labelled: work→work boundaries say
+    /// "Exercise k" / "Next", the last work→rest says "Rest", and rest→next round
+    /// says "Round n" / "Go".
+    private func workRestCuePoints(forDuration duration: TimeInterval) -> [Boundary] {
+        guard case .workRest(let rawWorks, let rest) = spec else { return [] }
+        let works = rawWorks.filter { $0 > 0 }
+        guard !works.isEmpty, rest > 0, duration > 0 else { return [] }
+        let sequence = works + [rest]          // one round
+        let restPos = works.count              // index of the rest within a round
+        var result: [Boundary] = []
+        var t: TimeInterval = 0
+        var idx = 0
+        var round = 1
+        while true {
+            let pos = idx % sequence.count
+            t += sequence[pos]
+            if t >= duration - 0.001 { break }
+            let boundary: Boundary
+            if pos == restPos {
+                // rest just ended → next round (work) begins
+                round += 1
+                let s = announceNumber ? "Round \(round)" : "Go"
+                boundary = Boundary(time: t, label: s, spokenText: s, haptic: haptic)
+            } else if pos == restPos - 1 {
+                // last work ended → rest begins
+                boundary = Boundary(time: t, label: "Rest", spokenText: "Rest",
+                                    haptic: .directionDown)
+            } else {
+                // a work ended, another work begins in the same round
+                let ex = pos + 2
+                let s = announceNumber ? "Exercise \(ex)" : "Next"
+                boundary = Boundary(time: t, label: s, spokenText: s, haptic: haptic)
+            }
+            result.append(boundary)
+            idx += 1
+        }
+        return result
+    }
+
+    /// How many intervals/segments the plan describes over `duration`.
     func intervalCount(forDuration duration: TimeInterval) -> Int {
         boundaries(forDuration: duration).count + 1
+    }
+}
+
+// MARK: - Spec Codable (matches the synthesized layout, migrates legacy work/rest)
+
+extension IntervalPlan.Spec: Codable {
+    private enum CaseKey: String, CodingKey { case even, spacing, custom, workRest }
+    private enum EvenKeys: String, CodingKey { case count }
+    private enum SpacingKeys: String, CodingKey { case seconds }
+    private enum CustomKeys: String, CodingKey { case lengths }
+    private enum WorkRestKeys: String, CodingKey { case work, works, rest }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CaseKey.self)
+        if c.contains(.even) {
+            let n = try c.nestedContainer(keyedBy: EvenKeys.self, forKey: .even)
+            self = .even(count: try n.decode(Int.self, forKey: .count))
+        } else if c.contains(.spacing) {
+            let n = try c.nestedContainer(keyedBy: SpacingKeys.self, forKey: .spacing)
+            self = .spacing(seconds: try n.decode(TimeInterval.self, forKey: .seconds))
+        } else if c.contains(.custom) {
+            let n = try c.nestedContainer(keyedBy: CustomKeys.self, forKey: .custom)
+            self = .custom(lengths: try n.decode([TimeInterval].self, forKey: .lengths))
+        } else if c.contains(.workRest) {
+            let n = try c.nestedContainer(keyedBy: WorkRestKeys.self, forKey: .workRest)
+            let rest = try n.decode(TimeInterval.self, forKey: .rest)
+            if let works = try? n.decode([TimeInterval].self, forKey: .works) {
+                self = .workRest(works: works, rest: rest)
+            } else {
+                // Legacy single-work shape → wrap into a one-element list.
+                let work = try n.decode(TimeInterval.self, forKey: .work)
+                self = .workRest(works: [work], rest: rest)
+            }
+        } else {
+            throw DecodingError.dataCorrupted(
+                .init(codingPath: decoder.codingPath, debugDescription: "Unknown IntervalPlan.Spec"))
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CaseKey.self)
+        switch self {
+        case .even(let count):
+            var n = c.nestedContainer(keyedBy: EvenKeys.self, forKey: .even)
+            try n.encode(count, forKey: .count)
+        case .spacing(let seconds):
+            var n = c.nestedContainer(keyedBy: SpacingKeys.self, forKey: .spacing)
+            try n.encode(seconds, forKey: .seconds)
+        case .custom(let lengths):
+            var n = c.nestedContainer(keyedBy: CustomKeys.self, forKey: .custom)
+            try n.encode(lengths, forKey: .lengths)
+        case .workRest(let works, let rest):
+            var n = c.nestedContainer(keyedBy: WorkRestKeys.self, forKey: .workRest)
+            try n.encode(works, forKey: .works)
+            try n.encode(rest, forKey: .rest)
+        }
     }
 }

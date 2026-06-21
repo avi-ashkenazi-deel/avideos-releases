@@ -39,11 +39,19 @@ final class MilestoneSchedulerTests: XCTestCase {
     }
 
     func testWorkRestAlternatesAndLabels() {
-        let plan = IntervalPlan(spec: .workRest(work: 30, rest: 10), announceNumber: true)
+        let plan = IntervalPlan(spec: .workRest(works: [30], rest: 10), announceNumber: true)
         // 30 (rest), 40 (work), 70 (rest), 80 (work); 110 overruns 100 -> stop.
         XCTAssertEqual(plan.boundaries(forDuration: 100), [30, 40, 70, 80])
         let points = plan.cuePoints(forDuration: 100)
         XCTAssertEqual(points.map(\.label), ["Rest", "Round 2", "Rest", "Round 3"])
+    }
+
+    func testWorkRestMultipleWorksBeforeRest() {
+        // Two 20s works, then a 10s rest, repeating over 100s.
+        let plan = IntervalPlan(spec: .workRest(works: [20, 20], rest: 10), announceNumber: true)
+        XCTAssertEqual(plan.boundaries(forDuration: 100), [20, 40, 50, 70, 90])
+        XCTAssertEqual(plan.cuePoints(forDuration: 100).map(\.label),
+                       ["Exercise 2", "Rest", "Round 2", "Exercise 2", "Rest"])
     }
 
     // MARK: TimerPreset.cues (intervals + milestones unified)
