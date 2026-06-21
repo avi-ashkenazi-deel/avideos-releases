@@ -130,7 +130,7 @@ private struct CompactLayout: View {
                     .tabItem { Label("Inbox", systemImage: "tray.full") }
 
                 SavedArticlesView()
-                    .tabItem { Label("Saved", systemImage: "bookmark") }
+                    .tabItem { Label("Saved", systemImage: "safari") }
 
                 FeedsView()
                     .tabItem { Label("Feeds", systemImage: "dot.radiowaves.up.forward") }
@@ -167,7 +167,7 @@ private enum LibrarySection: Hashable, CaseIterable, Identifiable {
     var icon: String {
         switch self {
         case .inbox: "tray.full"
-        case .saved: "bookmark"
+        case .saved: "safari"
         case .feeds: "dot.radiowaves.up.forward"
         }
     }
@@ -204,8 +204,8 @@ private struct SplitLayout: View {
             Group {
                 switch section ?? .inbox {
                 case .inbox: InboxList(showsUtilityToolbar: false)
-                case .saved: SavedArticlesList()
-                case .feeds: FeedsList()
+                case .saved: SavedArticlesList(showsHighlightsButton: false)
+                case .feeds: FeedsList(showsHighlightsButton: false)
                 }
             }
             // Analytics / Highlights / Settings — on the always-visible list column
@@ -213,7 +213,7 @@ private struct SplitLayout: View {
             .toolbar {
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     Button { showAnalytics = true } label: { Image(systemName: "chart.bar") }
-                    Button { showHighlights = true } label: { Image(systemName: "highlighter") }
+                    Button { showHighlights = true } label: { Image(systemName: "bookmark") }
                     Button { showSettings = true } label: { Image(systemName: "gearshape") }
                 }
             }

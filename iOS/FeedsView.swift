@@ -11,6 +11,9 @@ struct FeedsView: View {
 /// every followed feed, with add/manage and per-feed notifications. No
 /// `NavigationStack` of its own so it can also be the iPad content column.
 struct FeedsList: View {
+    /// Hidden on iPad, where the split view's column provides Highlights.
+    var showsHighlightsButton: Bool = true
+
     @EnvironmentObject private var player: EmailPlayerViewModel
     @StateObject private var store = FeedStore.shared
     @StateObject private var progress = ListeningProgressStore.shared
@@ -95,14 +98,13 @@ struct FeedsList: View {
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
                 if store.isRefreshing { ProgressView() }
-                if store.unreadCount > 0 {
-                    Button { store.markAllRead() } label: {
-                        Image(systemName: "checkmark.circle")
-                    }
-                    .accessibilityLabel("Mark all read")
-                }
                 Button { showAddFeed = true } label: { Image(systemName: "plus") }
-                Button { showManage = true } label: { Image(systemName: "slider.horizontal.3") }
+                    .accessibilityLabel("Add a feed")
+                // Feeds are the only thing that notifies, so this screen is really
+                // about notifications (plus mark-all-read and unfollow) — bell icon.
+                Button { showManage = true } label: { Image(systemName: "bell") }
+                    .accessibilityLabel("Feed notifications")
+                if showsHighlightsButton { HighlightsToolbarButton() }
             }
         }
         .searchable(text: $searchText, prompt: "Search across all feeds")
@@ -312,6 +314,13 @@ private struct ManageFeedsView: View {
 
     var body: some View {
         List {
+            if store.unreadCount > 0 {
+                Section {
+                    Button { store.markAllRead() } label: {
+                        Label("Mark all as read", systemImage: "checkmark.circle")
+                    }
+                }
+            }
             ForEach(store.feeds) { feed in
                 VStack(alignment: .leading, spacing: 6) {
                     Text(feed.title).font(.subheadline.weight(.semibold))

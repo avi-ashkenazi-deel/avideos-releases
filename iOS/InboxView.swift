@@ -23,7 +23,6 @@ struct InboxList: View {
     @StateObject private var progress = ListeningProgressStore.shared
     @StateObject private var readingTimes = ReadingTimeStore.shared
     @State private var showSettings = false
-    @State private var showHighlights = false
     @State private var showAnalytics = false
     @State private var searchDebounce: Task<Void, Never>?
 
@@ -157,9 +156,7 @@ struct InboxList: View {
                     Button { showAnalytics = true } label: {
                         Image(systemName: "chart.bar")
                     }
-                    Button { showHighlights = true } label: {
-                        Image(systemName: "highlighter")
-                    }
+                    HighlightsToolbarButton()
                     Button { showSettings = true } label: {
                         Image(systemName: "gearshape")
                     }
@@ -168,11 +165,6 @@ struct InboxList: View {
         }
         .sheet(isPresented: $showSettings) {
             NavigationStack { SettingsView() }
-        }
-        .sheet(isPresented: $showHighlights) {
-            NavigationStack { HighlightsListView() }
-                .environmentObject(player)
-                .environmentObject(appState)
         }
         .sheet(isPresented: $showAnalytics) {
             NavigationStack { AnalyticsView() }

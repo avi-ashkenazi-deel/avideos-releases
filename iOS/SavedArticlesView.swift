@@ -13,6 +13,9 @@ struct SavedArticlesView: View {
 /// own, so it can be the iPhone tab (wrapped by `SavedArticlesView`) or the iPad
 /// split view's content column (where the split view supplies navigation).
 struct SavedArticlesList: View {
+    /// Hidden on iPad, where the split view's column provides Highlights.
+    var showsHighlightsButton: Bool = true
+
     @EnvironmentObject private var player: EmailPlayerViewModel
     @StateObject private var store = SavedArticleStore.shared
     @State private var showPasteText = false
@@ -45,6 +48,7 @@ struct SavedArticlesList: View {
                     Image(systemName: "plus")
                 }
                 .accessibilityLabel("Add text to listen to")
+                if showsHighlightsButton { HighlightsToolbarButton() }
             }
         }
         .sheet(isPresented: $showPasteText) {
