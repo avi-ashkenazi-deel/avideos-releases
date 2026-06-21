@@ -13,7 +13,12 @@ final class EmailPlayerViewModel: ObservableObject {
     @Published private(set) var currentBlockIndex = 0
 
     // Transport state
-    @Published private(set) var isPlaying = false
+    @Published private(set) var isPlaying = false {
+        // Keep the lock screen / Control Center in lockstep with the real state —
+        // any path that flips this (stop, interruption, finish) now updates Now
+        // Playing automatically, so it can't show "playing" while we're paused.
+        didSet { if oldValue != isPlaying { updateNowPlaying() } }
+    }
     @Published private(set) var isComplete = false
     @Published private(set) var isLoading = false
     @Published var errorMessage: String?
@@ -113,6 +118,24 @@ final class EmailPlayerViewModel: ObservableObject {
         self.engine = EmailPlayerViewModel.makeEngine(settings: settings)
         wire(engine)
         engineSignature = currentEngineSignature()
+        observeAudioInterruptions()
+    }
+
+    /// When another app, a call, or Siri interrupts our audio, iOS silences the
+    /// speech but won't tell the view model — leaving us "playing" with no sound
+    /// (and a lock screen that still says playing). Pause cleanly so state stays
+    /// honest; we don't auto-resume (the listener taps play when ready).
+    private func observeAudioInterruptions() {
+        NotificationCenter.default.addObserver(
+            forName: AVAudioSession.interruptionNotification, object: nil, queue: .main
+        ) { [weak self] note in
+            guard let raw = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
+                  AVAudioSession.InterruptionType(rawValue: raw) == .began else { return }
+            Task { @MainActor in
+                guard let self, self.isPlaying else { return }
+                self.pause()
+            }
+        }
     }
 
     /// Rebind to the active backend (demo vs Google) once `AppState` knows it.
