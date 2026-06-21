@@ -50,6 +50,25 @@ struct PresetEditorView: View {
                     Text("Turn off for non-exercise timers (a talk, cooking…) so the watch doesn't log a workout to Fitness.")
                 }
 
+                Section {
+                    Toggle("Countdown to start", isOn: Binding(
+                        get: { (draft.startCountdown ?? 0) > 0 },
+                        set: { draft.startCountdown = $0 ? 3 : nil }
+                    ))
+                    if (draft.startCountdown ?? 0) > 0 {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Start in \(draft.startCountdown ?? 3)s")
+                            Slider(value: Binding(
+                                get: { Double(draft.startCountdown ?? 3) },
+                                set: { draft.startCountdown = Int($0.rounded()) }
+                            ), in: 1...10, step: 1)
+                            .sensoryFeedback(.selection, trigger: draft.startCountdown ?? 3)
+                        }
+                    }
+                } footer: {
+                    Text("Counts \"3, 2, 1\" with a buzz, then \"Let's go\" before the timer starts. Drop a lets-go.mp3 in Sounds to use your own voice.")
+                }
+
                 IntervalsSection(plan: $draft.intervals, duration: draft.duration)
 
                 Section("Final countdown") {

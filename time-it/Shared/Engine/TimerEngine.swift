@@ -43,12 +43,17 @@ final class TimerEngine: ObservableObject {
     // MARK: - Controls
 
     func start(_ preset: TimerPreset, now: Date = Date()) {
-        let state = RunningTimerState(preset: preset, now: now)
+        let leadIn = TimeInterval(preset.startCountdown ?? 0)
+        let state = RunningTimerState(preset: preset, now: now, leadIn: leadIn)
         running.append(state)
-        if outputMode.speaksAnnouncements {
-            announcer?.speak("Starting \(preset.displayName)")
-        } else {
-            announcer?.haptic(.success)
+        // With a lead-in, the "3,2,1… Let's go" is the start cue; otherwise
+        // announce the start now.
+        if leadIn <= 0 {
+            if outputMode.speaksAnnouncements {
+                announcer?.speak("Starting \(preset.displayName)")
+            } else {
+                announcer?.haptic(.success)
+            }
         }
         notifyChange()
         startTickerIfNeeded()
@@ -180,6 +185,7 @@ final class TimerEngine: ObservableObject {
 
         for i in running.indices {
             guard running[i].isRunning else { continue }
+            if processLeadIn(&running[i], now: now) { continue }   // still counting in
             if processCues(&running[i], now: now) { cueFired = true }
             processCountdown(&running[i], now: now)
             processIntervalCountdown(&running[i], now: now)
@@ -204,6 +210,28 @@ final class TimerEngine: ObservableObject {
         if scheduleChanged { notifyChange() }
         else if cueFired { onCueFired?(running) }
         stopTickerIfIdle()
+    }
+
+    /// The "3,2,1… Let's go" lead-in. Returns true while still counting in (so
+    /// the main run is skipped this tick).
+    private func processLeadIn(_ s: inout RunningTimerState, now: Date) -> Bool {
+        guard s.leadIn > 0 else { return false }
+        if now < s.startDate {
+            let second = Int(s.leadInRemaining(now: now).rounded(.up))
+            if second >= 1, second != s.lastLeadInSecondSpoken {
+                if outputMode.speaksAnnouncements { announcer?.speak("\(second)") }
+                announcer?.haptic(.notification)
+                s.lastLeadInSecondSpoken = second
+            }
+            return true
+        }
+        // Lead-in just finished → "Let's go" once, then fall through to run.
+        if !s.leadInDone {
+            s.leadInDone = true
+            if outputMode.speaksAnnouncements { announcer?.speak("Let's go") }
+            announcer?.haptic(.success)
+        }
+        return false
     }
 
     // MARK: - Milestone / countdown side effects

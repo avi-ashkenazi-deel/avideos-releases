@@ -54,28 +54,37 @@ struct RunningTimerScreen: View {
                 topBar(timer, onColor: onColor)
                 Spacer()
 
-                // Phase / interval label.
-                if let phase {
-                    VStack(spacing: 10) {
-                        Text("Round \(phase.round) of \(phase.rounds)")
-                            .font(.headline)
-                        HStack(spacing: 8) {
-                            phaseCapsule("Work", active: phase.isWork, tint: tint, onColor: onColor)
-                            phaseCapsule("Rest", active: !phase.isWork, tint: tint, onColor: onColor)
+                if timer.inLeadIn(now: now) {
+                    // Pre-start: "Get ready" + 3,2,1.
+                    Text("Get ready").font(.title2.bold()).foregroundStyle(onColor)
+                    Text("\(Int(timer.leadInRemaining(now: now).rounded(.up)))")
+                        .font(.system(size: landscape ? 220 : 110, weight: .bold, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundStyle(onColor)
+                } else {
+                    // Phase / interval label.
+                    if let phase {
+                        VStack(spacing: 10) {
+                            Text("Round \(phase.round) of \(phase.rounds)")
+                                .font(.headline)
+                            HStack(spacing: 8) {
+                                phaseCapsule("Work", active: phase.isWork, tint: tint, onColor: onColor)
+                                phaseCapsule("Rest", active: !phase.isWork, tint: tint, onColor: onColor)
+                            }
                         }
+                        .foregroundStyle(onColor)
+                    } else if let label = timer.currentIntervalLabel(now: now) {
+                        Text(label).font(.title2.bold()).foregroundStyle(onColor)
                     }
-                    .foregroundStyle(onColor)
-                } else if let label = timer.currentIntervalLabel(now: now) {
-                    Text(label).font(.title2.bold()).foregroundStyle(onColor)
+
+                    Text(formatClock(intervalRemaining))
+                        .font(.system(size: landscape ? 200 : 96, weight: .bold, design: .rounded))
+                        .monospacedDigit().minimumScaleFactor(0.4).lineLimit(1)
+                        .foregroundStyle(onColor)
+
+                    statsRow(timer, totalRemaining: totalRemaining, pos: pos,
+                             showInterval: phase == nil, onColor: onColor)
                 }
-
-                Text(formatClock(intervalRemaining))
-                    .font(.system(size: landscape ? 200 : 96, weight: .bold, design: .rounded))
-                    .monospacedDigit().minimumScaleFactor(0.4).lineLimit(1)
-                    .foregroundStyle(onColor)
-
-                statsRow(timer, totalRemaining: totalRemaining, pos: pos,
-                         showInterval: phase == nil, onColor: onColor)
 
                 Spacer()
                 controls(timer, onColor: onColor)

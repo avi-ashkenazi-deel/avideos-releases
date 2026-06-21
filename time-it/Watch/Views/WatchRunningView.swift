@@ -37,6 +37,16 @@ private struct WatchTimesPage: View {
                         .fill(tint)
                         .frame(height: geo.size.height * fraction)
 
+                    if timer.inLeadIn(now: now) {
+                        VStack(spacing: 2) {
+                            Text("Get ready").font(.caption).foregroundStyle(.white.opacity(0.85))
+                            Text("\(Int(timer.leadInRemaining(now: now).rounded(.up)))")
+                                .font(.system(size: 48, weight: .bold, design: .rounded))
+                                .monospacedDigit()
+                                .foregroundStyle(.white)
+                                .shadow(radius: 4)
+                        }
+                    } else {
                     VStack(spacing: 2) {
                         HStack(spacing: 6) {
                             if timer.preset.isWorkout {
@@ -77,6 +87,7 @@ private struct WatchTimesPage: View {
                         Spacer()
                     }
                     .padding(.vertical, 6)
+                    }   // else (not in lead-in)
                 }
             }
         }

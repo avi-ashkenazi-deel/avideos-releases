@@ -40,6 +40,9 @@ struct TimerPreset: Codable, Hashable, Identifiable {
     /// Which workout the watch records when `recordsWorkout`. nil → functional
     /// strength (the previous fixed behavior).
     var workoutKind: WorkoutKind? = nil
+    /// Seconds of "3,2,1… Let's go" lead-in before the timer actually starts.
+    /// nil/0 = start immediately.
+    var startCountdown: Int? = nil
 
     /// Resolved flag (defaults to true for presets saved before this existed).
     var isWorkout: Bool { recordsWorkout ?? true }

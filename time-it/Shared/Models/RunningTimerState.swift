@@ -25,10 +25,17 @@ struct RunningTimerState: Identifiable {
     var intervalCountdownTarget: TimeInterval?
     var lastIntervalCountdownSecond: Int?
 
-    init(preset: TimerPreset, now: Date = Date()) {
+    /// Lead-in ("3,2,1… Let's go") before the main run. The main timer begins at
+    /// `startDate`; during the lead-in `startDate` is in the future.
+    let leadIn: TimeInterval
+    var lastLeadInSecondSpoken: Int?
+    var leadInDone: Bool
+
+    init(preset: TimerPreset, now: Date = Date(), leadIn: TimeInterval = 0) {
         self.id = UUID()
         self.preset = preset
-        self.startDate = now
+        self.leadIn = leadIn
+        self.startDate = now.addingTimeInterval(leadIn)   // main starts after lead-in
         self.bankedElapsed = 0
         self.isRunning = true
         self.currentRepeat = 1
@@ -36,7 +43,14 @@ struct RunningTimerState: Identifiable {
         self.lastCountdownSecondSpoken = nil
         self.intervalCountdownTarget = nil
         self.lastIntervalCountdownSecond = nil
+        self.lastLeadInSecondSpoken = nil
+        self.leadInDone = leadIn <= 0
     }
+
+    /// Whether we're still in the pre-start lead-in.
+    func inLeadIn(now: Date = Date()) -> Bool { leadIn > 0 && now < startDate }
+    /// Seconds left in the lead-in (3 → 2 → 1).
+    func leadInRemaining(now: Date = Date()) -> TimeInterval { max(0, startDate.timeIntervalSince(now)) }
 
     /// Absolute wall-clock time at which the current run completes (assuming it
     /// keeps running). Used to drive Live Activity / notification scheduling.
@@ -122,8 +136,10 @@ struct RunningTimerState: Identifiable {
         return (roundIndex, isWork, rounds)
     }
 
-    /// Seconds elapsed in the current run.
+    /// Seconds elapsed in the current run. Stays 0 during the lead-in (before
+    /// `startDate`).
     func elapsed(now: Date = Date()) -> TimeInterval {
+        guard now >= startDate else { return 0 }
         let live = isRunning ? now.timeIntervalSince(startDate) : 0
         return min(bankedElapsed + live, preset.duration)
     }

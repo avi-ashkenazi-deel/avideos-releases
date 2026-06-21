@@ -30,11 +30,14 @@ enum VoiceClips {
         return nil
     }
 
-    /// Lowercase; runs of non-alphanumerics collapse to a single dash.
+    /// Lowercase; apostrophes are dropped (so "Let's go" → "lets-go"), and runs
+    /// of other non-alphanumerics collapse to a single dash.
     static func slug(_ phrase: String) -> String {
         var out = ""
         var pendingDash = false
-        for ch in phrase.lowercased() {
+        let stripped = phrase.lowercased().replacingOccurrences(of: "'", with: "")
+            .replacingOccurrences(of: "\u{2019}", with: "")
+        for ch in stripped {
             if ch.isLetter || ch.isNumber {
                 if pendingDash, !out.isEmpty { out.append("-") }
                 out.append(ch)
