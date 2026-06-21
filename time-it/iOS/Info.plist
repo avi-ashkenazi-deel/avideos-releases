@@ -24,9 +24,14 @@
     <true/>
     <key>UILaunchScreen</key>
     <dict/>
+    <!-- App allows landscape so the running/session "activity" screens can
+         rotate; everything else is locked to portrait at runtime via the app
+         delegate (see OrientationLock). -->
     <key>UISupportedInterfaceOrientations</key>
     <array>
         <string>UIInterfaceOrientationPortrait</string>
+        <string>UIInterfaceOrientationLandscapeLeft</string>
+        <string>UIInterfaceOrientationLandscapeRight</string>
     </array>
     <!-- Keep speaking countdowns / milestones with the screen locked. -->
     <key>UIBackgroundModes</key>

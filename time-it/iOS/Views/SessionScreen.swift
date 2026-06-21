@@ -6,6 +6,9 @@ import SwiftUI
 struct SessionScreen: View {
     @EnvironmentObject private var model: AppModel
     @EnvironmentObject private var settings: AppSettings
+    @Environment(\.verticalSizeClass) private var vSize
+
+    private var landscape: Bool { vSize == .compact }
 
     var body: some View {
         VStack(spacing: 24) {
@@ -14,7 +17,7 @@ struct SessionScreen: View {
             if let start = model.sessionStart {
                 TimelineView(.periodic(from: .now, by: 0.03)) { context in
                     Text(formatClockMillis(context.date.timeIntervalSince(start)))
-                        .font(.system(size: 64, weight: .bold, design: .rounded))
+                        .font(.system(size: landscape ? 130 : 64, weight: .bold, design: .rounded))
                         .monospacedDigit()
                         .minimumScaleFactor(0.5)
                 }

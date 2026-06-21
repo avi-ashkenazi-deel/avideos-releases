@@ -7,7 +7,11 @@ import SwiftUI
 /// it. Re-renders on the engine's ~10×/sec published ticks.
 struct RunningTimerScreen: View {
     @EnvironmentObject private var engine: TimerEngine
+    @Environment(\.verticalSizeClass) private var vSize
     @State private var editing = false
+
+    /// Landscape on iPhone reports a compact height — make the countdown bigger.
+    private var landscape: Bool { vSize == .compact }
 
     var body: some View {
         if let timer = engine.running.first {
@@ -66,7 +70,7 @@ struct RunningTimerScreen: View {
                 }
 
                 Text(formatClock(intervalRemaining))
-                    .font(.system(size: 96, weight: .bold, design: .rounded))
+                    .font(.system(size: landscape ? 200 : 96, weight: .bold, design: .rounded))
                     .monospacedDigit().minimumScaleFactor(0.4).lineLimit(1)
                     .foregroundStyle(onColor)
 

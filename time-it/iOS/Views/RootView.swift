@@ -19,7 +19,14 @@ struct RootView: View {
         }
         .animation(.snappy, value: engine.running.isEmpty)
         .animation(.snappy, value: model.inSession)
+        // Allow landscape only on the activity screens (running timer / session).
+        .onChange(of: isActivity) { _, active in
+            OrientationLock.set(active ? .allButUpsideDown : .portrait)
+        }
+        .onAppear { OrientationLock.set(isActivity ? .allButUpsideDown : .portrait) }
     }
+
+    private var isActivity: Bool { !engine.running.isEmpty || model.inSession }
 }
 
 #Preview {
