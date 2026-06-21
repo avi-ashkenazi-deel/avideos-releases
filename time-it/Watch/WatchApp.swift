@@ -69,6 +69,9 @@ final class WatchModel: ObservableObject {
             self?.engine.outputMode = mode
         }
 
+        settings.onRestsChange = { [weak self] rests in self?.bridge.syncRests(rests) }
+        bridge.onRestsReceived = { [weak self] rests in self?.settings.applyRemoteRests(rests) }
+
         presets.onLocalChange = { [weak self] list in self?.bridge.syncPresets(list) }
         bridge.onPresetsReceived = { [weak self] list in self?.presets.mergeFromRemote(list) }
         bridge.onStartCommand = { [weak self] id in
@@ -77,6 +80,7 @@ final class WatchModel: ObservableObject {
         }
         bridge.syncPresets(presets.presets)
         bridge.syncOutputMode(settings.outputMode)
+        bridge.syncRests(settings.restDurations)
     }
 
     /// Start a preset, applying its default output mode (if any) first. One timer

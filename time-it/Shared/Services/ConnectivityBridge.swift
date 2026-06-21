@@ -21,9 +21,14 @@ final class ConnectivityBridge: NSObject, ObservableObject {
     var onStartCommand: ((UUID) -> Void)?
     /// The other device changed the master output mode.
     var onOutputModeReceived: ((OutputMode) -> Void)?
+    /// The other device changed the rest-button durations.
+    var onRestsReceived: (([TimeInterval]) -> Void)?
 
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
+    /// Merged latest-state we mirror to the other device. `updateApplicationContext`
+    /// replaces the whole dict each call, so we keep one and merge into it.
+    private var context: [String: Any] = [:]
 
     #if canImport(WatchConnectivity)
     private var session: WCSession? {
@@ -42,19 +47,15 @@ final class ConnectivityBridge: NSObject, ObservableObject {
     // MARK: Sending
 
     func syncPresets(_ presets: [TimerPreset]) {
-        #if canImport(WatchConnectivity)
-        guard let session, session.activationState == .activated,
-              let data = try? encoder.encode(presets) else { return }
-        try? session.updateApplicationContext(["presets": data])
-        #endif
+        if let data = try? encoder.encode(presets) { push(["presets": data]) }
     }
 
     func syncOutputMode(_ mode: OutputMode) {
-        #if canImport(WatchConnectivity)
-        guard let session, session.activationState == .activated else { return }
-        // Latest-wins; pairs fine with reachable sendMessage too.
-        try? session.updateApplicationContext(["outputMode": mode.rawValue])
-        #endif
+        push(["outputMode": mode.rawValue])
+    }
+
+    func syncRests(_ rests: [TimeInterval]) {
+        push(["restDurations": rests])
     }
 
     func sendStart(presetID: UUID) {
@@ -64,8 +65,18 @@ final class ConnectivityBridge: NSObject, ObservableObject {
         if session.isReachable {
             session.sendMessage(payload, replyHandler: nil, errorHandler: nil)
         } else {
-            try? session.updateApplicationContext(payload)
+            // Transient command — queued, doesn't disturb the merged context.
+            session.transferUserInfo(payload)
         }
+        #endif
+    }
+
+    /// Merge `updates` into the mirrored context and push the whole thing.
+    private func push(_ updates: [String: Any]) {
+        #if canImport(WatchConnectivity)
+        context.merge(updates) { _, new in new }
+        guard let session, session.activationState == .activated else { return }
+        try? session.updateApplicationContext(context)
         #endif
     }
 
@@ -81,6 +92,9 @@ final class ConnectivityBridge: NSObject, ObservableObject {
         }
         if let raw = dict["outputMode"] as? String, let mode = OutputMode(rawValue: raw) {
             onOutputModeReceived?(mode)
+        }
+        if let rests = dict["restDurations"] as? [TimeInterval], rests.count == 3 {
+            onRestsReceived?(rests)
         }
     }
 }
@@ -104,6 +118,10 @@ extension ConnectivityBridge: WCSessionDelegate {
     nonisolated func session(_ session: WCSession,
                              didReceiveApplicationContext applicationContext: [String: Any]) {
         Task { @MainActor in self.handle(applicationContext) }
+    }
+
+    nonisolated func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any] = [:]) {
+        Task { @MainActor in self.handle(userInfo) }
     }
 
     #if os(iOS)

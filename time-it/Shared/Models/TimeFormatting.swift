@@ -11,6 +11,14 @@ func formatClock(_ seconds: TimeInterval) -> String {
         : String(format: "%d:%02d", m, s)
 }
 
+/// Short label for a rest-button duration: "30s", "1m", "1:30", "2m".
+func restLabel(_ seconds: TimeInterval) -> String {
+    let s = Int(seconds.rounded())
+    if s % 60 == 0 { return "\(s / 60)m" }
+    if s < 60 { return "\(s)s" }
+    return formatClock(seconds)   // m:ss
+}
+
 /// m:ss.cc — adds hundredths of a second for a live, fast-moving readout.
 func formatClockMillis(_ seconds: TimeInterval) -> String {
     let total = max(0, seconds)

@@ -31,6 +31,10 @@ final class AppModel: ObservableObject {
     private let liveActivity = LiveActivityController()
     #endif
 
+    /// Freestyle session (count-up + on-demand rests), same as the watch.
+    @Published var inSession = false
+    private(set) var sessionStart: Date?
+
     init() {
         engine = TimerEngine(announcer: announcer)
     }
@@ -87,6 +91,10 @@ final class AppModel: ObservableObject {
             self?.engine.outputMode = mode
         }
 
+        // Rest-slot durations: local edits → watch; remote → UI.
+        settings.onRestsChange = { [weak self] rests in self?.bridge.syncRests(rests) }
+        bridge.onRestsReceived = { [weak self] rests in self?.settings.applyRemoteRests(rests) }
+
         // Local preset edits → push to the watch.
         presets.onLocalChange = { [weak self] list in self?.bridge.syncPresets(list) }
         // Remote library / start commands from the watch.
@@ -95,9 +103,10 @@ final class AppModel: ObservableObject {
             guard let self, let preset = self.presets.presets.first(where: { $0.id == id }) else { return }
             self.startTimer(preset)
         }
-        // Send the current library + mode so a freshly-installed watch catches up.
+        // Send the current library + mode + rests so a fresh watch catches up.
         bridge.syncPresets(presets.presets)
         bridge.syncOutputMode(settings.outputMode)
+        bridge.syncRests(settings.restDurations)
     }
 
     /// Start a preset, applying its default output mode (if any) first. Only one
@@ -106,5 +115,29 @@ final class AppModel: ObservableObject {
         if let mode = preset.defaultOutputMode { settings.outputMode = mode }
         engine.stopAll()
         engine.start(preset)
+    }
+
+    // MARK: Freestyle session (iPhone — count-up + on-demand rests, no workout)
+
+    func startSession() {
+        sessionStart = Date()
+        inSession = true
+    }
+
+    func endSession() {
+        engine.stopAll()
+        inSession = false
+        sessionStart = nil
+    }
+
+    /// Fire an on-demand rest countdown; returns to the session when it finishes.
+    func addRest(_ seconds: TimeInterval) {
+        let rest = TimerPreset(
+            name: "Rest", duration: seconds, intervals: nil, milestones: [],
+            finalCountdown: FinalCountdown(lastSeconds: 5, haptic: true),
+            colorHex: "#0A84FF"
+        )
+        engine.stopAll()
+        engine.start(rest)
     }
 }

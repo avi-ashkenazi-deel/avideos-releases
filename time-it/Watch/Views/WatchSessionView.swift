@@ -7,6 +7,7 @@ import SwiftUI
 struct WatchSessionView: View {
     @EnvironmentObject private var model: WatchModel
     @EnvironmentObject private var finishDetector: SessionFinishDetector
+    @EnvironmentObject private var settings: AppSettings
 
     /// On-screen label for the session (recorded as Functional Strength Training).
     private let sessionName = "Calisthenics"
@@ -48,9 +49,9 @@ struct WatchSessionView: View {
             Spacer()
 
             HStack(spacing: 10) {
-                restCircle("30s", 30)
-                restCircle("1m", 60)
-                restCircle("2m", 120)
+                ForEach(Array(settings.restDurations.enumerated()), id: \.offset) { _, secs in
+                    restCircle(restLabel(secs), secs)
+                }
             }
             Spacer()
         }

@@ -5,16 +5,20 @@ import SwiftUI
 /// fully takes over and returns to the library when you stop.
 struct RootView: View {
     @EnvironmentObject private var engine: TimerEngine
+    @EnvironmentObject private var model: AppModel
 
     var body: some View {
         Group {
-            if engine.running.isEmpty {
-                TimerListView()
-            } else {
+            if !engine.running.isEmpty {
                 RunningTimerScreen()
+            } else if model.inSession {
+                SessionScreen()
+            } else {
+                TimerListView()
             }
         }
         .animation(.snappy, value: engine.running.isEmpty)
+        .animation(.snappy, value: model.inSession)
     }
 }
 

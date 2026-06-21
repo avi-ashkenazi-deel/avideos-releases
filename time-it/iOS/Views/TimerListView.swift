@@ -5,12 +5,20 @@ struct TimerListView: View {
     @EnvironmentObject private var engine: TimerEngine
     @EnvironmentObject private var presets: PresetStore
     @EnvironmentObject private var settings: AppSettings
+    @EnvironmentObject private var model: AppModel
     @State private var editing: TimerPreset?
     @State private var creatingNew = false
+    @State private var showingSettings = false
 
     var body: some View {
         NavigationStack {
             List {
+                Section {
+                    Button { model.startSession() } label: {
+                        Label("Start session", systemImage: "figure.strengthtraining.traditional")
+                    }
+                }
+
                 ForEach(presets.presets) { preset in
                     // Tapping anywhere on the row starts the timer; swipe still
                     // exposes Edit / Delete.
@@ -29,6 +37,9 @@ struct TimerListView: View {
             }
             .navigationTitle("Time It")
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button { showingSettings = true } label: { Image(systemName: "gearshape") }
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { creatingNew = true } label: { Image(systemName: "plus") }
                 }
@@ -44,6 +55,7 @@ struct TimerListView: View {
                     title: "New timer"
                 ) { presets.add($0) }
             }
+            .sheet(isPresented: $showingSettings) { SettingsView() }
         }
     }
 
