@@ -89,30 +89,25 @@ struct RunningTimerScreen: View {
                                      intervalRemaining: TimeInterval, totalRemaining: TimeInterval,
                                      pos: (index: Int, total: Int),
                                      phase: (round: Int, isWork: Bool, rounds: Int)?) -> some View {
-        VStack(spacing: 6) {
+        VStack(spacing: 8) {
             topBar(timer, now: now, onColor: onColor)
+            // Time and the right column share one centered row, so they line up
+            // on the same vertical center.
             HStack(alignment: .center, spacing: 16) {
-                // LEFT: time centered, controls pinned bottom-left.
-                VStack(spacing: 0) {
-                    Spacer()
-                    heroTime(intervalRemaining, onColor: onColor, big: true)
-                    Spacer()
-                    HStack {
-                        controls(timer, onColor: onColor, size: 54)
-                        Spacer()
-                    }
-                }
-                .frame(maxWidth: .infinity)
-
-                // RIGHT: Work/Rest + Total/Sets vertically centered.
+                heroTime(intervalRemaining, onColor: onColor, big: true)
+                    .frame(maxWidth: .infinity)
                 VStack(alignment: .trailing, spacing: 16) {
-                    Spacer()
                     phaseHeader(timer, now: now, tint: tint, onColor: onColor)
                     statsColumn(timer, totalRemaining: totalRemaining, pos: pos,
                                 showInterval: phase == nil, onColor: onColor)
-                    Spacer()
                 }
                 .frame(width: 230)
+            }
+            .frame(maxHeight: .infinity)
+            // Controls along the bottom-left.
+            HStack {
+                controls(timer, onColor: onColor, size: 54)
+                Spacer()
             }
         }
         .padding()
