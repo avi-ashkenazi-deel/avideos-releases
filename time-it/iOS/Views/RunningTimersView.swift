@@ -105,9 +105,9 @@ struct RunningTimerScreen: View {
                     statsColumn(timer, totalRemaining: totalRemaining, pos: pos,
                                 showInterval: phase == nil, onColor: onColor)
                     Spacer()
-                    controls(timer, onColor: onColor, size: 50)
+                    controls(timer, onColor: onColor, size: 42)
                 }
-                .frame(width: 300)
+                .frame(width: 230)
             }
         }
         .padding()
@@ -159,11 +159,12 @@ struct RunningTimerScreen: View {
         }
     }
 
-    /// The big interval countdown. `big` (landscape) makes it much larger.
+    /// The big interval countdown. `big` (landscape) makes it much larger; it
+    /// scales down only as far as needed to fit on one line.
     private func heroTime(_ remaining: TimeInterval, onColor: Color, big: Bool) -> some View {
         Text(formatClock(remaining))
-            .font(.system(size: big ? 240 : 96, weight: .bold, design: .rounded))
-            .monospacedDigit().minimumScaleFactor(0.4).lineLimit(1)
+            .font(.system(size: big ? 340 : 110, weight: .bold, design: .rounded))
+            .monospacedDigit().minimumScaleFactor(0.3).lineLimit(1)
             .foregroundStyle(onColor)
     }
 
