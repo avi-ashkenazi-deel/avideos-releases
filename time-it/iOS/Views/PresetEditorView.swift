@@ -10,6 +10,7 @@ import SwiftUI
 struct PresetEditorView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var draft: TimerPreset
+    @FocusState private var nameFocused: Bool
     private let title: String
     private let onSave: (TimerPreset) -> Void
 
@@ -24,6 +25,8 @@ struct PresetEditorView: View {
             Form {
                 Section {
                     TextField("Name", text: $draft.name)
+                        .focused($nameFocused)
+                        .submitLabel(.done)
                     ColorPickerRow(selection: $draft.colorHex)
                 }
 
@@ -101,6 +104,9 @@ struct PresetEditorView: View {
                     Stepper("Repeat \(draft.repeatCount)×", value: $draft.repeatCount, in: 1...50)
                 }
             }
+            .scrollDismissesKeyboard(.interactively)
+            // Tap anywhere off the field to dismiss the keyboard.
+            .simultaneousGesture(TapGesture().onEnded { nameFocused = false })
             .navigationTitle(title)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -109,6 +115,10 @@ struct PresetEditorView: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") { onSave(draft); dismiss() }
                         .disabled(draft.duration <= 0 || customIntervalsOverTotal)
+                }
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") { nameFocused = false }
                 }
             }
         }

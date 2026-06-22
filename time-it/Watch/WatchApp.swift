@@ -38,6 +38,8 @@ final class WatchModel: ObservableObject {
     /// Strength Training and you fire on-demand rests between sets.
     @Published var inSession = false
     private(set) var sessionStart: Date?
+    /// Live heart rate during a session (from the workout), for display.
+    @Published var heartRate: Double?
 
     init() {
         engine = TimerEngine(announcer: announcer)
@@ -97,15 +99,21 @@ final class WatchModel: ObservableObject {
     func startSession() {
         sessionStart = Date()
         inSession = true
+        heartRate = nil
         startKeepAlive(recordsWorkout: true)
-        keepAlive.onHeartRate = { [weak self] bpm in self?.finishDetector.updateHeartRate(bpm) }
+        keepAlive.onHeartRate = { [weak self] bpm in
+            self?.finishDetector.updateHeartRate(bpm)
+            self?.heartRate = bpm
+        }
         finishDetector.startMonitoring()
     }
 
     func endSession() {
+        HapticPlayer.play(.timeUp)        // strong buzz to mark the end
         engine.stopAll()
         inSession = false
         sessionStart = nil
+        heartRate = nil
         finishDetector.stopMonitoring()
         keepAlive.onHeartRate = nil
         stopKeepAlive()
@@ -135,11 +143,16 @@ final class WatchModel: ObservableObject {
     /// back. Returns to the session view when it finishes.
     func addRest(_ seconds: TimeInterval) {
         finishDetector.noteActivity()   // starting a rest means you're still going
+        // Rests of a minute or more get a halfway tap (e.g. 1:00 into a 2:00 rest).
+        let milestones: [TimerMilestone] = seconds >= 60
+            ? [TimerMilestone(trigger: .percentElapsed(0.5), alert: .voiceAndHaptic,
+                              haptic: .retry, label: "Halfway")]
+            : []
         let rest = TimerPreset(
             name: "Rest",
             duration: seconds,
             intervals: nil,
-            milestones: [],
+            milestones: milestones,
             finalCountdown: FinalCountdown(lastSeconds: 5, haptic: true),
             colorHex: "#0A84FF"
         )

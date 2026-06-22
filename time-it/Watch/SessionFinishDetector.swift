@@ -14,7 +14,9 @@ final class SessionFinishDetector: ObservableObject {
     var idleTimeout: TimeInterval = 4 * 60        // no interaction
     var lowHRThreshold: Double = 95               // bpm
     var lowHRWindow: TimeInterval = 3 * 60        // sustained below threshold
+    var minSessionDuration: TimeInterval = 10 * 60 // never ask before this
 
+    private var monitorStart = Date()
     private var lastActivity = Date()
     private var lowHRSince: Date?
     private var active = false
@@ -23,6 +25,7 @@ final class SessionFinishDetector: ObservableObject {
     func startMonitoring() {
         active = true
         suggestsEnd = false
+        monitorStart = Date()
         lastActivity = Date()
         lowHRSince = nil
         checkTimer?.invalidate()
@@ -65,6 +68,8 @@ final class SessionFinishDetector: ObservableObject {
     private func evaluate() {
         guard active, !suggestsEnd else { return }
         let now = Date()
+        // Don't nag in the first 10 minutes of a session.
+        guard now.timeIntervalSince(monitorStart) >= minSessionDuration else { return }
         let idle = now.timeIntervalSince(lastActivity) >= idleTimeout
         let lowHR = lowHRSince.map { now.timeIntervalSince($0) >= lowHRWindow } ?? false
         if idle || lowHR { suggestsEnd = true }

@@ -38,11 +38,17 @@ struct WatchSessionView: View {
                         .monospacedDigit()
                 }
             }
-            HStack(spacing: 6) {
-                Image(systemName: "circle.circle")
-                    .foregroundStyle(.secondary)
-                Text(sessionName)
-                    .foregroundStyle(.secondary)
+            HStack(spacing: 8) {
+                HStack(spacing: 6) {
+                    Image(systemName: "circle.circle")
+                    Text(sessionName)
+                }
+                .foregroundStyle(.secondary)
+                Spacer()
+                if let hr = model.heartRate {
+                    Label("\(Int(hr))", systemImage: "heart.fill")
+                        .foregroundStyle(.red)
+                }
             }
             .font(.callout)
 
