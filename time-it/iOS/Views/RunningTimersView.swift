@@ -61,27 +61,21 @@ struct RunningTimerScreen: View {
                         .font(.system(size: landscape ? 220 : 110, weight: .bold, design: .rounded))
                         .monospacedDigit()
                         .foregroundStyle(onColor)
-                } else {
-                    // Phase / interval label.
-                    if let phase {
+                } else if landscape {
+                    // Landscape: big time on the left, Total/stats on the right.
+                    HStack(alignment: .center, spacing: 20) {
                         VStack(spacing: 10) {
-                            Text("Round \(phase.round) of \(phase.rounds)")
-                                .font(.headline)
-                            HStack(spacing: 8) {
-                                phaseCapsule("Work", active: phase.isWork, tint: tint, onColor: onColor)
-                                phaseCapsule("Rest", active: !phase.isWork, tint: tint, onColor: onColor)
-                            }
+                            phaseHeader(timer, now: now, tint: tint, onColor: onColor)
+                            heroTime(intervalRemaining, onColor: onColor, big: true)
                         }
-                        .foregroundStyle(onColor)
-                    } else if let label = timer.currentIntervalLabel(now: now) {
-                        Text(label).font(.title2.bold()).foregroundStyle(onColor)
+                        Spacer()
+                        statsColumn(timer, totalRemaining: totalRemaining, pos: pos,
+                                    showInterval: phase == nil, onColor: onColor)
                     }
-
-                    Text(formatClock(intervalRemaining))
-                        .font(.system(size: landscape ? 200 : 96, weight: .bold, design: .rounded))
-                        .monospacedDigit().minimumScaleFactor(0.4).lineLimit(1)
-                        .foregroundStyle(onColor)
-
+                    .frame(maxWidth: .infinity)
+                } else {
+                    phaseHeader(timer, now: now, tint: tint, onColor: onColor)
+                    heroTime(intervalRemaining, onColor: onColor, big: false)
                     statsRow(timer, totalRemaining: totalRemaining, pos: pos,
                              showInterval: phase == nil, onColor: onColor)
                 }
@@ -102,6 +96,45 @@ struct RunningTimerScreen: View {
             }
         }
         .foregroundStyle(onColor)
+    }
+
+    @ViewBuilder private func phaseHeader(_ timer: RunningTimerState, now: Date,
+                                          tint: Color, onColor: Color) -> some View {
+        if let phase = timer.workRestPhase(now: now) {
+            VStack(spacing: 10) {
+                Text("Round \(phase.round) of \(phase.rounds)").font(.headline)
+                HStack(spacing: 8) {
+                    phaseCapsule("Work", active: phase.isWork, tint: tint, onColor: onColor)
+                    phaseCapsule("Rest", active: !phase.isWork, tint: tint, onColor: onColor)
+                }
+            }
+            .foregroundStyle(onColor)
+        } else if let label = timer.currentIntervalLabel(now: now) {
+            Text(label).font(.title2.bold()).foregroundStyle(onColor)
+        }
+    }
+
+    /// The big interval countdown. `big` (landscape) makes it much larger.
+    private func heroTime(_ remaining: TimeInterval, onColor: Color, big: Bool) -> some View {
+        Text(formatClock(remaining))
+            .font(.system(size: big ? 240 : 96, weight: .bold, design: .rounded))
+            .monospacedDigit().minimumScaleFactor(0.4).lineLimit(1)
+            .foregroundStyle(onColor)
+    }
+
+    /// Total + Sets/Cycle stacked for the right side in landscape.
+    private func statsColumn(_ timer: RunningTimerState, totalRemaining: TimeInterval,
+                             pos: (index: Int, total: Int), showInterval: Bool,
+                             onColor: Color) -> some View {
+        VStack(alignment: .trailing, spacing: 12) {
+            stat("TOTAL", formatClock(totalRemaining), onColor)
+            if timer.preset.repeatCount > 1 {
+                stat("SETS", "\(timer.currentRepeat)/\(timer.preset.repeatCount)", onColor)
+            }
+            if showInterval && pos.total > 1 {
+                stat("INTERVAL", "\(pos.index)/\(pos.total)", onColor)
+            }
+        }
     }
 
     private func phaseCapsule(_ label: String, active: Bool, tint: Color, onColor: Color) -> some View {
