@@ -50,41 +50,82 @@ struct RunningTimerScreen: View {
             .ignoresSafeArea()
             .animation(.linear(duration: 0.12), value: fraction)
 
-            VStack(spacing: 14) {
-                topBar(timer, onColor: onColor)
-                Spacer()
-
-                if timer.inLeadIn(now: now) {
-                    // Pre-start: "Get ready" + 3,2,1.
-                    Text("Get ready").font(.title2.bold()).foregroundStyle(onColor)
-                    Text("\(Int(timer.leadInRemaining(now: now).rounded(.up)))")
-                        .font(.system(size: landscape ? 220 : 110, weight: .bold, design: .rounded))
-                        .monospacedDigit()
-                        .foregroundStyle(onColor)
-                } else if landscape {
-                    // Landscape: big time on the left, Total/stats on the right.
-                    HStack(alignment: .center, spacing: 20) {
-                        VStack(spacing: 10) {
-                            phaseHeader(timer, now: now, tint: tint, onColor: onColor)
-                            heroTime(intervalRemaining, onColor: onColor, big: true)
-                        }
-                        Spacer()
-                        statsColumn(timer, totalRemaining: totalRemaining, pos: pos,
-                                    showInterval: phase == nil, onColor: onColor)
-                    }
-                    .frame(maxWidth: .infinity)
-                } else {
-                    phaseHeader(timer, now: now, tint: tint, onColor: onColor)
-                    heroTime(intervalRemaining, onColor: onColor, big: false)
-                    statsRow(timer, totalRemaining: totalRemaining, pos: pos,
-                             showInterval: phase == nil, onColor: onColor)
-                }
-
-                Spacer()
-                controls(timer, onColor: onColor)
+            if timer.inLeadIn(now: now) {
+                leadInForeground(timer, now: now, onColor: onColor)
+            } else if landscape {
+                landscapeForeground(timer, now: now, tint: tint, onColor: onColor,
+                                    intervalRemaining: intervalRemaining,
+                                    totalRemaining: totalRemaining, pos: pos, phase: phase)
+            } else {
+                portraitForeground(timer, now: now, tint: tint, onColor: onColor,
+                                   intervalRemaining: intervalRemaining,
+                                   totalRemaining: totalRemaining, pos: pos, phase: phase)
             }
-            .padding()
         }
+    }
+
+    // MARK: Foreground layouts
+
+    private func portraitForeground(_ timer: RunningTimerState, now: Date, tint: Color, onColor: Color,
+                                    intervalRemaining: TimeInterval, totalRemaining: TimeInterval,
+                                    pos: (index: Int, total: Int),
+                                    phase: (round: Int, isWork: Bool, rounds: Int)?) -> some View {
+        VStack(spacing: 14) {
+            topBar(timer, onColor: onColor)
+            Spacer()
+            phaseHeader(timer, now: now, tint: tint, onColor: onColor)
+            heroTime(intervalRemaining, onColor: onColor, big: false)
+            statsRow(timer, totalRemaining: totalRemaining, pos: pos,
+                     showInterval: phase == nil, onColor: onColor)
+            Spacer()
+            controls(timer, onColor: onColor)
+        }
+        .padding()
+    }
+
+    /// Landscape: big time on the left half; Work/Rest top-right, Total/Sets
+    /// mid-right, controls bottom-right.
+    private func landscapeForeground(_ timer: RunningTimerState, now: Date, tint: Color, onColor: Color,
+                                     intervalRemaining: TimeInterval, totalRemaining: TimeInterval,
+                                     pos: (index: Int, total: Int),
+                                     phase: (round: Int, isWork: Bool, rounds: Int)?) -> some View {
+        VStack(spacing: 6) {
+            topBar(timer, onColor: onColor)
+            HStack(alignment: .top, spacing: 16) {
+                VStack {
+                    Spacer()
+                    heroTime(intervalRemaining, onColor: onColor, big: true)
+                    Spacer()
+                }
+                .frame(maxWidth: .infinity)
+
+                VStack(alignment: .trailing, spacing: 0) {
+                    phaseHeader(timer, now: now, tint: tint, onColor: onColor)
+                    Spacer()
+                    statsColumn(timer, totalRemaining: totalRemaining, pos: pos,
+                                showInterval: phase == nil, onColor: onColor)
+                    Spacer()
+                    controls(timer, onColor: onColor, size: 50)
+                }
+                .frame(width: 300)
+            }
+        }
+        .padding()
+    }
+
+    private func leadInForeground(_ timer: RunningTimerState, now: Date, onColor: Color) -> some View {
+        VStack(spacing: 14) {
+            topBar(timer, onColor: onColor)
+            Spacer()
+            Text("Get ready").font(.title2.bold()).foregroundStyle(onColor)
+            Text("\(Int(timer.leadInRemaining(now: now).rounded(.up)))")
+                .font(.system(size: landscape ? 220 : 110, weight: .bold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(onColor)
+            Spacer()
+            controls(timer, onColor: onColor)
+        }
+        .padding()
     }
 
     private func topBar(_ timer: RunningTimerState, onColor: Color) -> some View {
@@ -168,26 +209,26 @@ struct RunningTimerScreen: View {
         .foregroundStyle(onColor)
     }
 
-    private func controls(_ timer: RunningTimerState, onColor: Color) -> some View {
-        HStack(spacing: 20) {
-            roundButton("backward.end.fill", onColor) { engine.skipToPreviousInterval(id: timer.id) }
+    private func controls(_ timer: RunningTimerState, onColor: Color, size: CGFloat = 60) -> some View {
+        HStack(spacing: size * 0.33) {
+            roundButton("backward.end.fill", onColor, size: size) { engine.skipToPreviousInterval(id: timer.id) }
             if timer.isRunning {
-                roundButton("pause.fill", onColor) { engine.pause(id: timer.id) }
+                roundButton("pause.fill", onColor, size: size) { engine.pause(id: timer.id) }
             } else {
-                roundButton("play.fill", onColor) { engine.resume(id: timer.id) }
+                roundButton("play.fill", onColor, size: size) { engine.resume(id: timer.id) }
             }
-            roundButton("forward.end.fill", onColor) { engine.skipToNextInterval(id: timer.id) }
-            roundButton("stop.fill", onColor) { engine.stop(id: timer.id) }
+            roundButton("forward.end.fill", onColor, size: size) { engine.skipToNextInterval(id: timer.id) }
+            roundButton("stop.fill", onColor, size: size) { engine.stop(id: timer.id) }
         }
     }
 
-    private func roundButton(_ system: String, _ onColor: Color,
+    private func roundButton(_ system: String, _ onColor: Color, size: CGFloat = 60,
                              action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: system)
-                .font(.title2)
+                .font(.system(size: size * 0.34))
                 .foregroundStyle(onColor)
-                .frame(width: 60, height: 60)
+                .frame(width: size, height: size)
                 .background(.ultraThinMaterial, in: Circle())
         }
     }
