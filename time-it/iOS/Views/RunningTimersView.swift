@@ -71,7 +71,7 @@ struct RunningTimerScreen: View {
                                     pos: (index: Int, total: Int),
                                     phase: (round: Int, isWork: Bool, rounds: Int)?) -> some View {
         VStack(spacing: 14) {
-            topBar(timer, onColor: onColor)
+            topBar(timer, now: now, onColor: onColor)
             Spacer()
             phaseHeader(timer, now: now, tint: tint, onColor: onColor)
             heroTime(intervalRemaining, onColor: onColor, big: false)
@@ -90,7 +90,7 @@ struct RunningTimerScreen: View {
                                      pos: (index: Int, total: Int),
                                      phase: (round: Int, isWork: Bool, rounds: Int)?) -> some View {
         VStack(spacing: 6) {
-            topBar(timer, onColor: onColor)
+            topBar(timer, now: now, onColor: onColor)
             HStack(alignment: .top, spacing: 16) {
                 VStack {
                     Spacer()
@@ -115,7 +115,7 @@ struct RunningTimerScreen: View {
 
     private func leadInForeground(_ timer: RunningTimerState, now: Date, onColor: Color) -> some View {
         VStack(spacing: 14) {
-            topBar(timer, onColor: onColor)
+            topBar(timer, now: now, onColor: onColor)
             Spacer()
             Text("Get ready").font(.title2.bold()).foregroundStyle(onColor)
             Text("\(Int(timer.leadInRemaining(now: now).rounded(.up)))")
@@ -128,9 +128,15 @@ struct RunningTimerScreen: View {
         .padding()
     }
 
-    private func topBar(_ timer: RunningTimerState, onColor: Color) -> some View {
-        HStack {
-            Text(timer.preset.displayName).font(.title3.bold())
+    private func topBar(_ timer: RunningTimerState, now: Date, onColor: Color) -> some View {
+        HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(timer.preset.displayName).font(.title3.bold())
+                if let phase = timer.workRestPhase(now: now) {
+                    Text("Round \(phase.round) of \(phase.rounds)")
+                        .font(.subheadline).opacity(0.8)
+                }
+            }
             Spacer()
             Button { editing = true } label: {
                 Image(systemName: "slider.horizontal.3").font(.title3)
@@ -142,12 +148,10 @@ struct RunningTimerScreen: View {
     @ViewBuilder private func phaseHeader(_ timer: RunningTimerState, now: Date,
                                           tint: Color, onColor: Color) -> some View {
         if let phase = timer.workRestPhase(now: now) {
-            VStack(spacing: 10) {
-                Text("Round \(phase.round) of \(phase.rounds)").font(.headline)
-                HStack(spacing: 8) {
-                    phaseCapsule("Work", active: phase.isWork, tint: tint, onColor: onColor)
-                    phaseCapsule("Rest", active: !phase.isWork, tint: tint, onColor: onColor)
-                }
+            // Round X of Y now lives under the name; here just the Work/Rest pills.
+            HStack(spacing: 8) {
+                phaseCapsule("Work", active: phase.isWork, tint: tint, onColor: onColor)
+                phaseCapsule("Rest", active: !phase.isWork, tint: tint, onColor: onColor)
             }
             .foregroundStyle(onColor)
         } else if let label = timer.currentIntervalLabel(now: now) {
