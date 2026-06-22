@@ -91,21 +91,26 @@ struct RunningTimerScreen: View {
                                      phase: (round: Int, isWork: Bool, rounds: Int)?) -> some View {
         VStack(spacing: 6) {
             topBar(timer, now: now, onColor: onColor)
-            HStack(alignment: .top, spacing: 16) {
-                VStack {
+            HStack(alignment: .center, spacing: 16) {
+                // LEFT: time centered, controls pinned bottom-left.
+                VStack(spacing: 0) {
                     Spacer()
                     heroTime(intervalRemaining, onColor: onColor, big: true)
                     Spacer()
+                    HStack {
+                        controls(timer, onColor: onColor, size: 54)
+                        Spacer()
+                    }
                 }
                 .frame(maxWidth: .infinity)
 
-                VStack(alignment: .trailing, spacing: 0) {
-                    phaseHeader(timer, now: now, tint: tint, onColor: onColor)
+                // RIGHT: Work/Rest + Total/Sets vertically centered.
+                VStack(alignment: .trailing, spacing: 16) {
                     Spacer()
+                    phaseHeader(timer, now: now, tint: tint, onColor: onColor)
                     statsColumn(timer, totalRemaining: totalRemaining, pos: pos,
                                 showInterval: phase == nil, onColor: onColor)
                     Spacer()
-                    controls(timer, onColor: onColor, size: 42)
                 }
                 .frame(width: 230)
             }
