@@ -20,6 +20,19 @@ struct TimerActivityAttributes: ActivityAttributes {
         var pausedRemaining: TimeInterval
         var colorHex: String
         var nextCueLabel: String?
+
+        // MARK: Current interval (the segment in progress)
+        /// Whether this timer has more than one interval — when true the hero is
+        /// the interval countdown and the total is shown secondary.
+        var hasIntervals: Bool = false
+        /// Start / end of the interval currently in progress (drives its own
+        /// `Text(timerInterval:)` and `ProgressView(timerInterval:)`).
+        var intervalStartDate: Date = .distantPast
+        var intervalEndDate: Date = .distantFuture
+        /// Frozen interval remaining, for the paused display.
+        var intervalPausedRemaining: TimeInterval = 0
+        /// Label for the interval in progress ("Work", "Rest", "Interval 2/8").
+        var intervalLabel: String?
     }
 
     /// Stable per running timer so the app can find the right activity to update.

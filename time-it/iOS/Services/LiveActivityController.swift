@@ -63,15 +63,37 @@ final class LiveActivityController {
     private func contentState(for timer: RunningTimerState,
                               now: Date) -> TimerActivityAttributes.ContentState {
         let remaining = timer.remaining(now: now)
+        let elapsed = timer.elapsed(now: now)
+        let seg = timer.currentSegment(now: now)
+        let pos = timer.intervalPosition(now: now)
+        let hasIntervals = pos.total > 1
+
         return .init(
             name: timer.preset.displayName,
-            startDate: now.addingTimeInterval(-timer.elapsed(now: now)),
+            startDate: now.addingTimeInterval(-elapsed),
             endDate: now.addingTimeInterval(remaining),
             isRunning: timer.isRunning,
             pausedRemaining: remaining,
             colorHex: timer.preset.colorHex,
-            nextCueLabel: timer.nextCueLabel(now: now)
+            nextCueLabel: timer.nextCueLabel(now: now),
+            hasIntervals: hasIntervals,
+            // Anchor the interval window to wall-clock so the widget can tick it.
+            intervalStartDate: now.addingTimeInterval(-(elapsed - seg.start)),
+            intervalEndDate: now.addingTimeInterval(seg.end - elapsed),
+            intervalPausedRemaining: timer.intervalRemaining(now: now),
+            intervalLabel: intervalLabel(for: timer, now: now, pos: pos)
         )
+    }
+
+    /// A short label for the interval in progress: Work/Rest for work-rest plans,
+    /// otherwise the cue's own label, falling back to "Interval i/N".
+    private func intervalLabel(for timer: RunningTimerState, now: Date,
+                               pos: (index: Int, total: Int)) -> String? {
+        if let phase = timer.workRestPhase(now: now) {
+            return phase.isWork ? "Work" : "Rest"
+        }
+        if let label = timer.currentIntervalLabel(now: now) { return label }
+        return pos.total > 1 ? "Interval \(pos.index)/\(pos.total)" : nil
     }
 }
 #endif
