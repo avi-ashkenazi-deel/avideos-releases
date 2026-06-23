@@ -111,6 +111,58 @@ struct TimerPreset: Codable, Hashable, Identifiable {
         cues().first { $0.fireTime > elapsed + 0.001 }
     }
 
+    // MARK: Feedback preview
+
+    /// One feedback moment in a run: the elapsed second it happens and whether
+    /// it's spoken, felt, or both.
+    struct FeedbackEvent: Identifiable, Hashable {
+        var id: Int { Int(time.rounded()) &* 31 &+ title.hashValue }
+        /// Elapsed seconds from the start of the run.
+        let time: TimeInterval
+        let title: String
+        let voice: Bool
+        let haptic: Bool
+    }
+
+    /// A flat, second-by-second preview of everything the user will hear or feel
+    /// in one run and when — the lead-in, each interval/milestone cue, the final
+    /// spoken countdown (expanded per second), and the finish. Used by the editor
+    /// preview for non-workout timers so a speaker can see their whole cue plan.
+    func feedbackTimeline() -> [FeedbackEvent] {
+        guard duration > 0 else { return [] }
+        var events: [FeedbackEvent] = []
+
+        // Lead-in: "3, 2, 1… Let's go" just before the clock starts.
+        if let lead = startCountdown, lead > 0 {
+            events.append(.init(time: 0, title: "“3, 2, 1… Let's go”", voice: true, haptic: true))
+        }
+
+        // Interval boundaries + one-off milestones.
+        let cueList = cues()
+        for cue in cueList {
+            let title = cue.spokenText.isEmpty ? cue.displayLabel : "“\(cue.spokenText)”"
+            events.append(.init(time: cue.fireTime, title: title,
+                                voice: cue.alert.includesVoice && !cue.spokenText.isEmpty,
+                                haptic: cue.alert.includesHaptic))
+        }
+
+        // Final spoken countdown, expanded "N … 1" — skipping any second already
+        // occupied by a cue above.
+        if let fc = finalCountdown, fc.lastSeconds > 0 {
+            let taken = Set(cueList.map { Int($0.fireTime.rounded()) })
+            for s in stride(from: fc.lastSeconds, through: 1, by: -1) {
+                let t = duration - Double(s)
+                guard t >= 0, !taken.contains(Int(t.rounded())) else { continue }
+                events.append(.init(time: t, title: "“\(s)”", voice: true, haptic: fc.haptic))
+            }
+        }
+
+        // The finish itself.
+        events.append(.init(time: duration, title: "Time's up", voice: false, haptic: true))
+
+        return events.sorted { $0.time < $1.time }
+    }
+
     // MARK: Sample content
 
     /// Two ready-made presets covering the two driving use cases.

@@ -103,6 +103,12 @@ struct PresetEditorView: View {
                 Section("Options") {
                     Stepper("Repeat \(draft.repeatCount)×", value: $draft.repeatCount, in: 1...50)
                 }
+
+                // Cue preview — only for non-sport timers (talks, cooking…), where
+                // a precise second-by-second plan of what you'll hear/feel matters.
+                if !(draft.recordsWorkout ?? true) {
+                    FeedbackPreviewSection(preset: draft)
+                }
             }
             .scrollDismissesKeyboard(.interactively)
             // Tap anywhere off the field to dismiss the keyboard.
@@ -473,6 +479,62 @@ private struct IntervalsSection: View {
 
     private func setSpec(_ spec: IntervalPlan.Spec) {
         if plan == nil { plan = IntervalPlan(spec: spec) } else { plan?.spec = spec }
+    }
+}
+
+// MARK: - Feedback preview (non-sport timers)
+
+/// A time-ordered list of every cue in one run — what you'll hear/feel and when —
+/// so a speaker can sanity-check the whole plan before saving.
+private struct FeedbackPreviewSection: View {
+    let preset: TimerPreset
+
+    var body: some View {
+        let events = preset.feedbackTimeline()
+        Section {
+            if events.isEmpty {
+                Text("No cues yet — add intervals, a final countdown, or one-off cues above.")
+                    .font(.caption).foregroundStyle(.secondary)
+            } else {
+                ForEach(events) { event in
+                    HStack(spacing: 12) {
+                        // Elapsed mark, with time-remaining underneath.
+                        VStack(alignment: .trailing, spacing: 1) {
+                            Text(formatClock(event.time)).monospacedDigit()
+                            Text("\(formatClock(max(0, preset.duration - event.time))) left")
+                                .font(.caption2).foregroundStyle(.secondary)
+                        }
+                        .frame(width: 70, alignment: .trailing)
+
+                        Text(event.title).lineLimit(1)
+                        Spacer()
+
+                        if event.voice {
+                            Image(systemName: "speaker.wave.2.fill").foregroundStyle(.blue)
+                        }
+                        if event.haptic {
+                            Image(systemName: "iphone.radiowaves.left.and.right").foregroundStyle(.purple)
+                        }
+                    }
+                    .font(.subheadline)
+                }
+            }
+        } header: {
+            Text("Cue preview")
+        } footer: {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Everything you'll hear or feel in one run, in order. ")
+                    + Text(Image(systemName: "speaker.wave.2.fill")) + Text(" spoken · ")
+                    + Text(Image(systemName: "iphone.radiowaves.left.and.right")) + Text(" vibration.")
+                if preset.intervals?.countdownEnabled == true {
+                    Text("Plus a spoken countdown into each interval (not expanded here).")
+                }
+                if preset.repeatCount > 1 {
+                    Text("This whole sequence repeats \(preset.repeatCount)×.")
+                }
+            }
+            .font(.caption)
+        }
     }
 }
 
