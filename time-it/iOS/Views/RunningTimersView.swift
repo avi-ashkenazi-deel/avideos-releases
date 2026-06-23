@@ -14,16 +14,27 @@ struct RunningTimerScreen: View {
     private var landscape: Bool { vSize == .compact }
 
     var body: some View {
-        if let timer = engine.running.first {
-            content(for: timer)
-                .sheet(isPresented: $editing) {
-                    PresetEditorView(preset: timer.preset, title: "Edit running") { updated in
-                        engine.editRunning(id: timer.id, to: updated)
+        Group {
+            if let timer = engine.running.first {
+                content(for: timer)
+                    .sheet(isPresented: $editing) {
+                        PresetEditorView(preset: timer.preset, title: "Edit running") { updated in
+                            engine.editRunning(id: timer.id, to: updated)
+                        }
                     }
-                }
-        } else {
-            Color.clear
+            } else {
+                Color.clear
+            }
         }
+        // Keep the screen awake while a timer is on screen so the countdown stays
+        // visible mid-exercise; restore normal sleep when it ends or we leave.
+        .onAppear { setKeepAwake(!engine.running.isEmpty) }
+        .onChange(of: engine.running.isEmpty) { _, empty in setKeepAwake(!empty) }
+        .onDisappear { setKeepAwake(false) }
+    }
+
+    private func setKeepAwake(_ on: Bool) {
+        UIApplication.shared.isIdleTimerDisabled = on
     }
 
     private func content(for timer: RunningTimerState) -> some View {
