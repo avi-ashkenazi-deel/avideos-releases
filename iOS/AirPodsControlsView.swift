@@ -50,7 +50,6 @@ private struct GestureRow: Identifiable {
 /// gestures that control playback, tailored to the model and to whether the
 /// AirPods-highlight option is on.
 struct AirPodsControlsView: View {
-    @ObservedObject private var settings = AppSettings.shared
     @State private var detection = AirPodsControls.current()
 
     private var model: AirPodsControls.Model { detection.model }
@@ -76,14 +75,6 @@ struct AirPodsControlsView: View {
                 Text("Detection is based on the connected device's name and may be off if you've renamed your AirPods. The gestures below are what VoiceInbox does with the standard transport controls.")
             }
 
-            Section {
-                Toggle("Voice notes on highlights", isOn: $settings.airPodsHighlightEnabled)
-            } footer: {
-                Text(settings.airPodsHighlightEnabled
-                     ? "On: a double-press (Next) bookmarks the moment and asks out loud “Add a note?” — say yes and dictate it, hands-free (needs the screen unlocked for the mic). Skip-to-next sentence isn’t available via AirPods while this is on."
-                     : "Off: Next moves by sentence. To bookmark, use the Highlight button on the player screen or your Apple Watch.")
-            }
-
             Section("Gestures") {
                 ForEach(gestures) { row in
                     Label {
@@ -98,12 +89,10 @@ struct AirPodsControlsView: View {
                 }
             }
 
-            if model == .airPods || model == .otherBluetooth {
-                Section {
-                    Text("Older AirPods and other headphones let you change which gesture sends each control in iOS Settings → Bluetooth → (your device). Map a gesture to “Next Track” to use the highlight/skip action.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
+            Section {
+                Text("To bookmark a highlight, tap the Highlight button on the player screen or use your Apple Watch — bookmarking isn't tied to an AirPods gesture (those only send play/pause, next, and previous).")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
         }
         .navigationTitle("AirPods controls")
@@ -123,16 +112,11 @@ struct AirPodsControlsView: View {
         }
     }
 
-    /// The double-press / Next gesture either skips a sentence or — when voice
-    /// notes on highlights is on — bookmarks the moment.
+    /// Next always moves by sentence (and skips an image when one is showing).
     private var nextAction: String {
-        settings.airPodsHighlightEnabled
-            ? "Bookmark this moment (and dictate a note, hands-free)."
-            : "Skip to the next sentence. Skips the image when one is on screen."
+        "Skip to the next sentence. Skips the image when one is on screen."
     }
-    private var nextIcon: String {
-        settings.airPodsHighlightEnabled ? "bookmark.fill" : "forward.end"
-    }
+    private var nextIcon: String { "forward.end" }
 
     private var gestures: [GestureRow] {
         switch model {

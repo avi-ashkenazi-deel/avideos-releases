@@ -832,27 +832,21 @@ final class EmailPlayerViewModel: ObservableObject {
         remote.onPrevious = { [weak self] in self?.previousSentence() }
         remote.onNext = { [weak self] in
             guard let self else { return }
-            // With "Voice notes on highlights" on, a double-press (Next) bookmarks
-            // the moment and offers a hands-free voice note instead of skipping.
-            if self.settings.airPodsHighlightEnabled {
-                self.captureHighlightAndDictate()
-            } else if self.isOnImage {
-                // While an image is showing, Next skips it; otherwise next sentence.
-                self.skipImage()
-            } else {
-                self.nextSentence()
-            }
+            // Next always moves by sentence (skips the image when one is showing).
+            // It must never bookmark: this command is also the lock-screen/Control
+            // Center Next button, and there's no way to tell it apart from an
+            // AirPods press.
+            if self.isOnImage { self.skipImage() } else { self.nextSentence() }
         }
         remote.onSeek = { [weak self] time in self?.seek(toTime: time) }
         remote.onBookmark = { [weak self] in
+            // Capture a highlight silently — never start the voice-note recorder
+            // here. From the lock screen the mic is unavailable and switching the
+            // audio session to record tears down playback (the player vanishes and
+            // Now Playing reverts to whatever played last).
             guard let self else { return }
-            // Capture a highlight; if voice notes are on, offer to dictate one.
-            if self.settings.airPodsHighlightEnabled {
-                self.captureHighlightAndDictate()
-            } else {
-                _ = self.captureHighlight(presentComposer: false)
-                Haptics.success()
-            }
+            _ = self.captureHighlight(presentComposer: false)
+            Haptics.success()
         }
         remote.start()
 

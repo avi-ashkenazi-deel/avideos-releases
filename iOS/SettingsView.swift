@@ -176,7 +176,6 @@ struct SettingsView: View {
             elevenLabsSection
 
             Section {
-                Toggle("Voice notes on highlights", isOn: $settings.airPodsHighlightEnabled)
                 NavigationLink {
                     AirPodsControlsView()
                 } label: {
@@ -185,7 +184,7 @@ struct SettingsView: View {
             } header: {
                 Text("AirPods")
             } footer: {
-                Text("Next/Previous always move by sentence (and skip an image when one is showing). With this on, bookmarking a moment offers to dictate a note out loud, hands-free (needs the screen unlocked for the mic). Tap “AirPods controls & gestures” to see the exact presses for your AirPods.")
+                Text("Next/Previous move by sentence (and skip an image when one is showing). Tap “AirPods controls & gestures” to see the exact presses for your AirPods.")
             }
 
             Section {
