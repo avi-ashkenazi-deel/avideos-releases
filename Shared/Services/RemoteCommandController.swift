@@ -107,8 +107,9 @@ final class RemoteCommandController {
         loadArtwork(candidates: imageCandidates)
     }
 
-    /// The app logo (asset named "AppLogo" if present) or a headphones glyph,
-    /// shown when there's no sender/email image.
+    /// The app icon (the "AppLogo" image set), shown on the lock screen / Control
+    /// Center when the email or article has no image of its own. Falls back to a
+    /// headphones glyph only if that asset is somehow unavailable.
     private static let defaultArtwork: MPMediaItemArtwork? = {
         let image = UIImage(named: "AppLogo")
             ?? UIImage(systemName: "headphones",
