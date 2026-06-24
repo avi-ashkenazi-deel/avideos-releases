@@ -22,35 +22,26 @@ struct TimerLiveActivity: Widget {
             let tint = Color(hex: context.state.colorHex)
             let s = context.state
             return DynamicIsland {
+                // Expanded (on long-press): just the essentials — what phase,
+                // the countdown, and a thin progress bar.
                 DynamicIslandExpandedRegion(.leading) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Label(s.name, systemImage: "timer")
-                            .font(.caption).foregroundStyle(tint).lineLimit(1)
-                        if let label = s.intervalLabel {
-                            Text(label).font(.caption2.bold()).foregroundStyle(.secondary)
-                        }
-                    }
+                    Label(s.intervalLabel ?? s.name, systemImage: "timer")
+                        .font(.caption.bold()).foregroundStyle(tint).lineLimit(1)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
-                    VStack(alignment: .trailing, spacing: 0) {
-                        heroTime(s).font(.title3.monospacedDigit().bold()).foregroundStyle(tint)
-                        if s.hasIntervals {
-                            totalText(s).font(.caption2.monospacedDigit()).foregroundStyle(.secondary)
-                        }
-                    }
+                    heroTime(s).font(.title3.monospacedDigit().bold())
+                        .foregroundStyle(tint).lineLimit(1)
                 }
                 DynamicIslandExpandedRegion(.bottom) {
-                    VStack(spacing: 4) {
-                        heroProgress(s, tint: tint)
-                        if let next = s.nextCueLabel {
-                            Text("Next: \(next)").font(.caption2).foregroundStyle(.secondary)
-                        }
-                    }
+                    heroProgress(s, tint: tint)
                 }
             } compactLeading: {
                 Image(systemName: "timer").foregroundStyle(tint)
             } compactTrailing: {
+                // Cap the width so the live countdown doesn't reserve a wide,
+                // jittery frame — the island stays as narrow as the time needs.
                 heroTime(s).monospacedDigit().foregroundStyle(tint)
+                    .frame(maxWidth: 54)
             } minimal: {
                 Image(systemName: "timer").foregroundStyle(tint)
             }

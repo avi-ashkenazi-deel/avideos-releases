@@ -498,13 +498,10 @@ private struct FeedbackPreviewSection: View {
             } else {
                 ForEach(events) { event in
                     HStack(spacing: 12) {
-                        // Elapsed mark, with time-remaining underneath.
-                        VStack(alignment: .trailing, spacing: 1) {
-                            Text(formatClock(event.time)).monospacedDigit()
-                            Text("\(formatClock(max(0, preset.duration - event.time))) left")
-                                .font(.caption2).foregroundStyle(.secondary)
-                        }
-                        .frame(width: 70, alignment: .trailing)
+                        // Time remaining when this cue fires.
+                        Text("\(formatClock(max(0, preset.duration - event.time))) left")
+                            .monospacedDigit().foregroundStyle(.secondary)
+                            .frame(width: 86, alignment: .trailing)
 
                         Text(event.title).lineLimit(1)
                         Spacer()
@@ -523,7 +520,7 @@ private struct FeedbackPreviewSection: View {
             Text("Cue preview")
         } footer: {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Everything you'll hear or feel in one run, in order. ")
+                Text("Everything you'll hear or feel in one run, by time remaining. ")
                     + Text(Image(systemName: "speaker.wave.2.fill")) + Text(" spoken · ")
                     + Text(Image(systemName: "iphone.radiowaves.left.and.right")) + Text(" vibration.")
                 if preset.intervals?.countdownEnabled == true {

@@ -146,15 +146,12 @@ struct TimerPreset: Codable, Hashable, Identifiable {
                                 haptic: cue.alert.includesHaptic))
         }
 
-        // Final spoken countdown, expanded "N … 1" — skipping any second already
-        // occupied by a cue above.
+        // Final spoken countdown — shown as one summary row ("10-second
+        // countdown") rather than a row per second.
         if let fc = finalCountdown, fc.lastSeconds > 0 {
-            let taken = Set(cueList.map { Int($0.fireTime.rounded()) })
-            for s in stride(from: fc.lastSeconds, through: 1, by: -1) {
-                let t = duration - Double(s)
-                guard t >= 0, !taken.contains(Int(t.rounded())) else { continue }
-                events.append(.init(time: t, title: "“\(s)”", voice: true, haptic: fc.haptic))
-            }
+            let t = max(0, duration - Double(fc.lastSeconds))
+            events.append(.init(time: t, title: "\(fc.lastSeconds)-second countdown",
+                                voice: true, haptic: fc.haptic))
         }
 
         // The finish itself.
