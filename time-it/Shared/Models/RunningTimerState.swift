@@ -65,10 +65,12 @@ struct RunningTimerState: Identifiable {
 
     // MARK: Intervals (the segment currently in progress)
 
-    /// Segment boundaries — cue fire times plus the final end — ascending, >0.
-    /// These delimit the "intervals" the running view counts down within.
+    /// Segment boundaries — the interval-plan boundaries plus the final end,
+    /// ascending, >0. These delimit the "intervals" the running view counts down
+    /// within. One-off milestones (e.g. a rest's halfway buzz) are deliberately
+    /// excluded: they fire their alert but must not chop the countdown in two.
     func segmentBoundaries() -> [TimeInterval] {
-        var b = Set(preset.cues().map(\.fireTime))
+        var b = Set(preset.intervals?.boundaries(forDuration: preset.duration) ?? [])
         b.insert(preset.duration)
         return b.filter { $0 > 0.0001 }.sorted()
     }
