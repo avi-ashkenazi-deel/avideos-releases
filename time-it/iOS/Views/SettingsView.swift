@@ -11,6 +11,18 @@ struct SessionSettingsView: View {
         NavigationStack {
             Form {
                 Section {
+                    Picker("Activity type", selection: $settings.sessionWorkoutKind) {
+                        ForEach(WorkoutKind.allCases) { kind in
+                            Label(kind.name, systemImage: kind.symbol).tag(kind)
+                        }
+                    }
+                } header: {
+                    Text("Workout")
+                } footer: {
+                    Text("How the Apple Watch logs a free workout to Fitness, and the icon shown for it.")
+                }
+
+                Section {
                     ForEach(settings.restDurations.indices, id: \.self) { i in
                         Stepper("Rest \(i + 1): \(restLabel(settings.restDurations[i]))",
                                 value: restBinding(i), in: 5...600, step: 5)
@@ -21,7 +33,7 @@ struct SessionSettingsView: View {
                     Text("The three quick-rest buttons shown during a session — on this iPhone and your Apple Watch.")
                 }
             }
-            .navigationTitle("Session")
+            .navigationTitle("Free workout")
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
             }

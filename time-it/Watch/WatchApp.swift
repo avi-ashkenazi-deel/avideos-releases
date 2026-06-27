@@ -74,6 +74,9 @@ final class WatchModel: ObservableObject {
         settings.onRestsChange = { [weak self] rests in self?.bridge.syncRests(rests) }
         bridge.onRestsReceived = { [weak self] rests in self?.settings.applyRemoteRests(rests) }
 
+        settings.onWorkoutKindChange = { [weak self] kind in self?.bridge.syncWorkoutKind(kind) }
+        bridge.onWorkoutKindReceived = { [weak self] kind in self?.settings.applyRemoteWorkoutKind(kind) }
+
         presets.onLocalChange = { [weak self] list in self?.bridge.syncPresets(list) }
         bridge.onPresetsReceived = { [weak self] list in self?.presets.mergeFromRemote(list) }
         bridge.onStartCommand = { [weak self] id in
@@ -83,6 +86,7 @@ final class WatchModel: ObservableObject {
         bridge.syncPresets(presets.presets)
         bridge.syncOutputMode(settings.outputMode)
         bridge.syncRests(settings.restDurations)
+        bridge.syncWorkoutKind(settings.sessionWorkoutKind)
     }
 
     /// Start a preset (one timer at a time). Exercise timers record a workout;
@@ -100,7 +104,7 @@ final class WatchModel: ObservableObject {
         sessionStart = Date()
         inSession = true
         heartRate = nil
-        startKeepAlive(recordsWorkout: true)
+        startKeepAlive(recordsWorkout: true, kind: settings.sessionWorkoutKind)
         keepAlive.onHeartRate = { [weak self] bpm in
             self?.finishDetector.updateHeartRate(bpm)
             self?.heartRate = bpm

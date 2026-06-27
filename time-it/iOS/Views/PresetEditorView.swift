@@ -72,7 +72,8 @@ struct PresetEditorView: View {
                     Text("Counts \"3, 2, 1\" with a buzz, then \"Let's go\" before the timer starts. Drop a lets-go.mp3 in Sounds to use your own voice.")
                 }
 
-                IntervalsSection(plan: $draft.intervals, duration: draft.duration)
+                IntervalsSection(plan: $draft.intervals, duration: draft.duration,
+                                 isWorkout: draft.recordsWorkout ?? true)
 
                 Section("Final countdown") {
                     Toggle("Speak the last seconds", isOn: finalCountdownEnabled)
@@ -167,6 +168,9 @@ struct PresetEditorView: View {
 private struct IntervalsSection: View {
     @Binding var plan: IntervalPlan?
     let duration: TimeInterval
+    /// Workout timers default to a per-interval 5s countdown when intervals are
+    /// switched on.
+    var isWorkout: Bool = true
 
     private enum Mode: String, CaseIterable, Identifiable {
         case even = "Even"
@@ -360,7 +364,8 @@ private struct IntervalsSection: View {
     private var enabledBinding: Binding<Bool> {
         Binding(
             get: { plan != nil },
-            set: { plan = $0 ? IntervalPlan(spec: .even(count: 4)) : nil }
+            set: { plan = $0 ? IntervalPlan(spec: .even(count: 4),
+                                            countdown: isWorkout ? 5 : nil) : nil }
         )
     }
 

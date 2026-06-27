@@ -96,6 +96,10 @@ final class AppModel: ObservableObject {
         settings.onRestsChange = { [weak self] rests in self?.bridge.syncRests(rests) }
         bridge.onRestsReceived = { [weak self] rests in self?.settings.applyRemoteRests(rests) }
 
+        // Free-workout activity type: local edits → watch; remote → UI.
+        settings.onWorkoutKindChange = { [weak self] kind in self?.bridge.syncWorkoutKind(kind) }
+        bridge.onWorkoutKindReceived = { [weak self] kind in self?.settings.applyRemoteWorkoutKind(kind) }
+
         // Local preset edits → push to the watch.
         presets.onLocalChange = { [weak self] list in self?.bridge.syncPresets(list) }
         // Remote library / start commands from the watch.
@@ -108,6 +112,7 @@ final class AppModel: ObservableObject {
         bridge.syncPresets(presets.presets)
         bridge.syncOutputMode(settings.outputMode)
         bridge.syncRests(settings.restDurations)
+        bridge.syncWorkoutKind(settings.sessionWorkoutKind)
     }
 
     /// Start a preset. Only one timer runs at a time, so any current one is

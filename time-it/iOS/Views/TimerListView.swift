@@ -15,18 +15,12 @@ struct TimerListView: View {
             List {
                 Section {
                     // The open-ended workout: counts up, tap a rest between sets.
-                    // Swipe to edit its rest buttons (bespoke settings).
+                    // Styled like a preset row (not a tinted button); swipe to edit
+                    // its activity type + rest buttons.
                     Button { model.startSession() } label: {
-                        Label {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Free workout").font(.headline)
-                                Text("Count up, rest when you need it")
-                                    .font(.caption).foregroundStyle(.secondary)
-                            }
-                        } icon: {
-                            Image(systemName: "figure.strengthtraining.traditional")
-                        }
+                        FreeWorkoutRow(kind: settings.sessionWorkoutKind)
                     }
+                    .buttonStyle(.plain)
                     .swipeActions(edge: .trailing) {
                         Button { editingSession = true } label: {
                             Label("Edit", systemImage: "pencil")
@@ -84,6 +78,32 @@ struct TimerListView: View {
     private func start(_ preset: TimerPreset) {
         engine.stopAll()
         engine.start(preset)
+    }
+}
+
+/// The "Free workout" row — matches the look of a preset row, showing the
+/// chosen activity's icon and a play button instead of accent-tinted text.
+private struct FreeWorkoutRow: View {
+    let kind: WorkoutKind
+
+    var body: some View {
+        HStack(spacing: 14) {
+            Image(systemName: kind.symbol)
+                .font(.title3)
+                .foregroundStyle(.orange)
+                .frame(width: 16)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Free workout").font(.headline)
+                Text("Count up, rest when you need it")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer()
+            Image(systemName: "play.circle.fill")
+                .font(.title)
+                .foregroundStyle(.orange)
+        }
+        .padding(.vertical, 4)
+        .foregroundStyle(.primary)
     }
 }
 

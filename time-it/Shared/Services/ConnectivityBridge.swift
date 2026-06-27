@@ -23,6 +23,8 @@ final class ConnectivityBridge: NSObject, ObservableObject {
     var onOutputModeReceived: ((OutputMode) -> Void)?
     /// The other device changed the rest-button durations.
     var onRestsReceived: (([TimeInterval]) -> Void)?
+    /// The other device changed the free-workout activity type.
+    var onWorkoutKindReceived: ((WorkoutKind) -> Void)?
 
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
@@ -56,6 +58,10 @@ final class ConnectivityBridge: NSObject, ObservableObject {
 
     func syncRests(_ rests: [TimeInterval]) {
         push(["restDurations": rests])
+    }
+
+    func syncWorkoutKind(_ kind: WorkoutKind) {
+        push(["sessionWorkoutKind": kind.rawValue])
     }
 
     func sendStart(presetID: UUID) {
@@ -95,6 +101,9 @@ final class ConnectivityBridge: NSObject, ObservableObject {
         }
         if let rests = dict["restDurations"] as? [TimeInterval], rests.count == 3 {
             onRestsReceived?(rests)
+        }
+        if let raw = dict["sessionWorkoutKind"] as? String, let kind = WorkoutKind(rawValue: raw) {
+            onWorkoutKindReceived?(kind)
         }
     }
 }

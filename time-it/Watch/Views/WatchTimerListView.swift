@@ -5,13 +5,14 @@ import SwiftUI
 struct WatchTimerListView: View {
     @EnvironmentObject private var model: WatchModel
     @EnvironmentObject private var presets: PresetStore
+    @EnvironmentObject private var settings: AppSettings
 
     var body: some View {
         List {
             Button {
                 model.startSession()
             } label: {
-                Label("Free workout", systemImage: "figure.strengthtraining.traditional")
+                Label("Free workout", systemImage: settings.sessionWorkoutKind.symbol)
             }
 
             if presets.presets.isEmpty {
