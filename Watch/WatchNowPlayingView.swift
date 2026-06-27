@@ -72,10 +72,15 @@ struct WatchNowPlayingView: View {
             }
             .padding(.vertical, 2)
 
-            // 4 — highlight the current sentence
-            transportButton("highlighter", tint: .primary, font: .title2) {
-                bridge.send(command: .highlight)
-                flashHighlight()
+            // 4 — highlight the current sentence, and jump to the next item
+            HStack(spacing: 24) {
+                transportButton("highlighter", tint: .primary, font: .title2) {
+                    bridge.send(command: .highlight)
+                    flashHighlight()
+                }
+                transportButton("forward.end.fill", tint: .primary, font: .title2) {
+                    bridge.send(command: .nextItem)
+                }
             }
         }
         .padding(.horizontal, 6)

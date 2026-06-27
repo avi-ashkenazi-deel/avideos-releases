@@ -64,6 +64,7 @@ struct RootView: View {
             case .nextSentence:     player.nextSentence()
             case .previousSentence: player.previousSentence()
             case .highlight:        _ = player.captureHighlight()
+            case .nextItem:         player.skipToNextItem()
             }
         }
         bridge.onSpeed = { newValue in AppSettings.shared.speed = newValue }

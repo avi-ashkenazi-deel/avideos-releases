@@ -17,7 +17,7 @@ final class WatchConnectivityBridge: NSObject, ObservableObject {
     }
 
     enum PlayerCommand: String, Codable {
-        case play, pause, nextSentence, previousSentence, highlight
+        case play, pause, nextSentence, previousSentence, highlight, nextItem
     }
 
     /// Set by whichever side wants to react to incoming messages.

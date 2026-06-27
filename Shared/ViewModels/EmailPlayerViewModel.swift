@@ -858,6 +858,7 @@ final class EmailPlayerViewModel: ObservableObject {
             case .nextSentence: self.nextSentence()
             case .previousSentence: self.previousSentence()
             case .highlight: _ = self.captureHighlight()
+            case .nextItem: self.skipToNextItem()
             }
         }
         #endif
