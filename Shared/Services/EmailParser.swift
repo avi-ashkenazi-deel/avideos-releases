@@ -527,14 +527,28 @@ enum EmailParser {
     }
 
     /// Tokenize already-cleaned text into sentence strings, falling back to the
-    /// whole string when there's no terminal punctuation to split on.
+    /// whole string when there's no terminal punctuation to split on. Drops
+    /// "sentences" with no real words (e.g. "0 0 ." / "0 . . . ." from leaked CSS
+    /// or numeric noise on JS-heavy pages) so the player never reads them aloud.
     private static func splitSentences(_ text: String) -> [String] {
         var parts: [String] = []
         text.enumerateSubstrings(in: text.startIndex..<text.endIndex, options: .bySentences) { substring, _, _, _ in
             let trimmed = substring?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            if !trimmed.isEmpty { parts.append(trimmed) }
+            if hasReadableText(trimmed) { parts.append(trimmed) }
         }
-        if parts.isEmpty { parts.append(text) }
+        if parts.isEmpty, hasReadableText(text) { parts.append(text) }
         return parts
+    }
+
+    /// True when the string has at least two letters — i.e. actual words, not just
+    /// digits, punctuation, or symbols. Counts letters in any script (so Hebrew,
+    /// Arabic, CJK, … all qualify).
+    private static func hasReadableText(_ s: String) -> Bool {
+        var letters = 0
+        for ch in s where ch.isLetter {
+            letters += 1
+            if letters >= 2 { return true }
+        }
+        return false
     }
 }
