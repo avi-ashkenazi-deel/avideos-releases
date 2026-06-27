@@ -11,7 +11,7 @@ struct WatchTimerListView: View {
             Button {
                 model.startSession()
             } label: {
-                Label("Start session", systemImage: "figure.strengthtraining.traditional")
+                Label("Free workout", systemImage: "figure.strengthtraining.traditional")
             }
 
             if presets.presets.isEmpty {

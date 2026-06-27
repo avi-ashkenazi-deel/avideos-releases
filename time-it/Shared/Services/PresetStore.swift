@@ -50,6 +50,12 @@ final class PresetStore: ObservableObject {
         persistAndBroadcast()
     }
 
+    /// Reorder the library (drag-and-drop on the list).
+    func move(from offsets: IndexSet, to destination: Int) {
+        presets.move(fromOffsets: offsets, toOffset: destination)
+        persistAndBroadcast()
+    }
+
     /// Replace the whole library from a remote sync (does NOT re-broadcast).
     func mergeFromRemote(_ remote: [TimerPreset]) {
         presets = remote

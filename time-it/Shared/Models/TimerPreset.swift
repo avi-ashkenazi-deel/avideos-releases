@@ -162,29 +162,59 @@ struct TimerPreset: Codable, Hashable, Identifiable {
 
     // MARK: Sample content
 
-    /// Two ready-made presets covering the two driving use cases.
-    static let samples: [TimerPreset] = [gymInterval, conferenceTalk]
+    /// The starter library seeded on first launch — a spread that shows off what
+    /// the app does (work/rest sets, every-minute cues, vibration-only talks,
+    /// a silent focus timer) and covers the most common real uses.
+    static let samples: [TimerPreset] = [tabata, hiit4020, emom10, conferenceTalk, focus25]
 
-    /// Gym: a 60s timer split into 10-second intervals, voice cues + final 10s.
-    static var gymInterval: TimerPreset {
+    /// Tabata: 8 rounds of 20s work / 10s rest (4 min), spoken + buzz, logged as HIIT.
+    static var tabata: TimerPreset {
         TimerPreset(
-            name: "Gym interval",
-            duration: 60,
-            intervals: IntervalPlan(spec: .spacing(seconds: 10), alert: .voice,
-                                    haptic: .notification, announceNumber: true),
-            milestones: [],
-            finalCountdown: FinalCountdown(lastSeconds: 10, haptic: true),
-            colorHex: "#FF9500",
-            repeatCount: 1,
-            defaultOutputMode: .voiceOnly
+            name: "Tabata",
+            duration: 4 * 60,
+            intervals: IntervalPlan(spec: .workRest(works: [20], rest: 10),
+                                    alert: .voiceAndHaptic, haptic: .notification,
+                                    announceNumber: true),
+            finalCountdown: FinalCountdown(lastSeconds: 5, haptic: true),
+            colorHex: "#FF375F",
+            workoutKind: .hiit,
+            startCountdown: 3
         )
     }
 
-    /// Conference talk: 20 minutes split into 4 equal blocks, haptic-only, plus a
-    /// one-minute "wrap up" warning.
+    /// HIIT 40/20: 8 rounds of 40s work / 20s rest (8 min), spoken + buzz.
+    static var hiit4020: TimerPreset {
+        TimerPreset(
+            name: "HIIT 40/20",
+            duration: 8 * 60,
+            intervals: IntervalPlan(spec: .workRest(works: [40], rest: 20),
+                                    alert: .voiceAndHaptic, haptic: .notification,
+                                    announceNumber: true),
+            finalCountdown: FinalCountdown(lastSeconds: 5, haptic: true),
+            colorHex: "#FF9500",
+            workoutKind: .hiit,
+            startCountdown: 3
+        )
+    }
+
+    /// EMOM: a cue every minute on the minute for 10 minutes, spoken + buzz.
+    static var emom10: TimerPreset {
+        TimerPreset(
+            name: "EMOM 10",
+            duration: 10 * 60,
+            intervals: IntervalPlan(spec: .spacing(seconds: 60), alert: .voiceAndHaptic,
+                                    haptic: .notification, announceNumber: true),
+            colorHex: "#30D158",
+            workoutKind: .functionalStrength,
+            startCountdown: 3
+        )
+    }
+
+    /// Conference talk: 20 minutes split into 4 equal blocks, vibration-only, plus
+    /// a one-minute "wrap up" buzz. Not logged as exercise.
     static var conferenceTalk: TimerPreset {
         TimerPreset(
-            name: "20 min talk",
+            name: "20-min talk",
             duration: 20 * 60,
             intervals: IntervalPlan(spec: .even(count: 4), alert: .haptic,
                                     haptic: .directionUp, announceNumber: false),
@@ -194,9 +224,24 @@ struct TimerPreset: Codable, Hashable, Identifiable {
             ],
             finalCountdown: FinalCountdown(lastSeconds: 10, haptic: true),
             colorHex: "#0A84FF",
-            repeatCount: 1,
-            defaultOutputMode: .vibrationOnly,
             recordsWorkout: false   // a talk isn't exercise
+        )
+    }
+
+    /// Focus 25 (Pomodoro): a silent 25-minute block with a vibration at 5 minutes
+    /// left and at the end. Not logged as exercise.
+    static var focus25: TimerPreset {
+        TimerPreset(
+            name: "Focus 25",
+            duration: 25 * 60,
+            intervals: nil,
+            milestones: [
+                TimerMilestone(trigger: .secondsRemaining(5 * 60), alert: .haptic,
+                               haptic: .directionDown, label: "5 minutes left"),
+            ],
+            finalCountdown: FinalCountdown(lastSeconds: 5, haptic: true),
+            colorHex: "#BF5AF2",
+            recordsWorkout: false
         )
     }
 }

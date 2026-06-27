@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// The session's bespoke settings — its three quick-rest buttons. Reached by
-/// editing the "Start session" row (like editing a timer). The values are shared
+/// editing the "Free workout" row (like editing a timer). The values are shared
 /// with the Apple Watch.
 struct SessionSettingsView: View {
     @EnvironmentObject private var settings: AppSettings

@@ -14,9 +14,18 @@ struct TimerListView: View {
         NavigationStack {
             List {
                 Section {
-                    // Tap to start; swipe to edit its rest buttons (bespoke settings).
+                    // The open-ended workout: counts up, tap a rest between sets.
+                    // Swipe to edit its rest buttons (bespoke settings).
                     Button { model.startSession() } label: {
-                        Label("Start session", systemImage: "figure.strengthtraining.traditional")
+                        Label {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Free workout").font(.headline)
+                                Text("Count up, rest when you need it")
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
+                        } icon: {
+                            Image(systemName: "figure.strengthtraining.traditional")
+                        }
                     }
                     .swipeActions(edge: .trailing) {
                         Button { editingSession = true } label: {
@@ -26,24 +35,31 @@ struct TimerListView: View {
                     }
                 }
 
-                ForEach(presets.presets) { preset in
-                    // Tapping anywhere on the row starts the timer; swipe still
-                    // exposes Edit / Delete.
-                    Button { start(preset) } label: { PresetRow(preset: preset) }
-                        .buttonStyle(.plain)
-                        .swipeActions(edge: .trailing) {
-                            Button(role: .destructive) {
-                                presets.delete(id: preset.id)
-                            } label: { Label("Delete", systemImage: "trash") }
-                            Button {
-                                editing = preset
-                            } label: { Label("Edit", systemImage: "pencil") }
-                            .tint(.blue)
-                        }
+                Section {
+                    ForEach(presets.presets) { preset in
+                        // Tapping anywhere on the row starts the timer; swipe still
+                        // exposes Edit / Delete; drag (in Edit mode) reorders.
+                        Button { start(preset) } label: { PresetRow(preset: preset) }
+                            .buttonStyle(.plain)
+                            .swipeActions(edge: .trailing) {
+                                Button(role: .destructive) {
+                                    presets.delete(id: preset.id)
+                                } label: { Label("Delete", systemImage: "trash") }
+                                Button {
+                                    editing = preset
+                                } label: { Label("Edit", systemImage: "pencil") }
+                                .tint(.blue)
+                            }
+                    }
+                    .onMove(perform: presets.move)
+                    .onDelete { presets.delete(at: $0) }
                 }
             }
             .navigationTitle("Time It")
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    EditButton()
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { creatingNew = true } label: { Image(systemName: "plus") }
                 }
