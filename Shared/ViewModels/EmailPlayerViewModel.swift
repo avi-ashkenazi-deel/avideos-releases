@@ -8,9 +8,16 @@ import AVFoundation
 @MainActor
 final class EmailPlayerViewModel: ObservableObject {
 
+    /// The live player, so App Intents (Siri / Shortcuts) can act on what's
+    /// currently playing. There's only ever one; set on init.
+    static weak var active: EmailPlayerViewModel?
+
     // Content
     @Published private(set) var parsed: ParsedEmail?
     @Published private(set) var currentBlockIndex = 0
+
+    /// Whether there's an email/article loaded (something to act on / note).
+    var hasCurrentItem: Bool { parsed != nil }
 
     // Transport state
     @Published private(set) var isPlaying = false {
@@ -119,6 +126,7 @@ final class EmailPlayerViewModel: ObservableObject {
         wire(engine)
         engineSignature = currentEngineSignature()
         observeAudioInterruptions()
+        EmailPlayerViewModel.active = self
     }
 
     /// When another app, a call, or Siri interrupts our audio, iOS silences the
