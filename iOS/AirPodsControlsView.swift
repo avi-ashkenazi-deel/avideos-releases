@@ -90,7 +90,7 @@ struct AirPodsControlsView: View {
             }
 
             Section {
-                Text("To bookmark a highlight, tap the Highlight button on the player screen or use your Apple Watch — bookmarking isn't tied to an AirPods gesture (those only send play/pause, next, and previous).")
+                Text("The three-press note prompt is spoken by the app and records on-device — it needs the screen unlocked for the microphone. The same three commands also drive the lock-screen Next/Previous buttons.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -112,33 +112,30 @@ struct AirPodsControlsView: View {
         }
     }
 
-    /// Next always moves by sentence (and skips an image when one is showing).
-    private var nextAction: String {
-        "Skip to the next sentence. Skips the image when one is on screen."
-    }
-    private var nextIcon: String { "forward.end" }
+    private let nextAction = "Next article — marks the current one read and moves on."
+    private let prevAction = "Add a note — captures a highlight, then asks (out loud) for a spoken note."
 
     private var gestures: [GestureRow] {
         switch model {
         case .max:
             return [
                 .init(gesture: "Press the Digital Crown", action: "Play or pause", systemImage: "playpause"),
-                .init(gesture: "Press the crown twice", action: nextAction, systemImage: nextIcon),
-                .init(gesture: "Press the crown three times", action: "Back to the previous sentence", systemImage: "backward.end")
+                .init(gesture: "Press the crown twice", action: nextAction, systemImage: "forward.end"),
+                .init(gesture: "Press the crown three times", action: prevAction, systemImage: "bookmark")
             ]
         case .otherBluetooth:
             return [
                 .init(gesture: "Play / Pause button", action: "Play or pause", systemImage: "playpause"),
-                .init(gesture: "Next track", action: nextAction, systemImage: nextIcon),
-                .init(gesture: "Previous track", action: "Back to the previous sentence", systemImage: "backward.end")
+                .init(gesture: "Next track", action: nextAction, systemImage: "forward.end"),
+                .init(gesture: "Previous track", action: prevAction, systemImage: "bookmark")
             ]
         default:
             // AirPods Pro / AirPods 4 (stem force sensor) — and the closest guidance
             // for other AirPods, which behave the same once mapped.
             return [
                 .init(gesture: "Press the stem once", action: "Play or pause", systemImage: "playpause"),
-                .init(gesture: "Press the stem twice", action: nextAction, systemImage: nextIcon),
-                .init(gesture: "Press the stem three times", action: "Back to the previous sentence", systemImage: "backward.end"),
+                .init(gesture: "Press the stem twice", action: nextAction, systemImage: "forward.end"),
+                .init(gesture: "Press the stem three times", action: prevAction, systemImage: "bookmark"),
                 .init(gesture: "Press and hold", action: "Switches noise modes — handled by iOS, not the app", systemImage: "hand.point.up.left")
             ]
         }

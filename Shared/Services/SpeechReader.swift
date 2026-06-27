@@ -53,6 +53,15 @@ enum SpeechAudioSession {
         // Cheap and safe to call repeatedly; also recovers after an interruption.
         try? session.setActive(true)
     }
+
+    /// Force the playback category back after something (e.g. the voice-note
+    /// recorder) switched the session to record/duck. Without this, the category
+    /// stays `.playAndRecord` and we never reclaim the "Now Playing" slot, so the
+    /// player appears to vanish and audio reverts to whatever played before.
+    static func reclaim() {
+        configured = false
+        activate()
+    }
 }
 
 /// On-device speech via `AVSpeechSynthesizer`. Reports the live word range so

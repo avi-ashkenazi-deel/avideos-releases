@@ -792,9 +792,10 @@ final class EmailPlayerViewModel: ObservableObject {
             if case .note(let text) = outcome {
                 self.highlights.updateNote(for: highlight.id, note: text)
             }
-            // Restore the playback session the recorder reconfigured, then
-            // re-speak the current sentence so we pick up cleanly.
-            SpeechAudioSession.activate()
+            // Reclaim the playback category the recorder switched to record (so we
+            // get the Now Playing slot back), refresh the lock screen, then resume.
+            SpeechAudioSession.reclaim()
+            self.updateNowPlaying()
             if wasPlaying { self.speakBlock(at: self.currentBlockIndex) }
         }
     }
@@ -829,15 +830,12 @@ final class EmailPlayerViewModel: ObservableObject {
         remote.onTogglePlayPause = { [weak self] in self?.togglePlayPause() }
         remote.onPlay = { [weak self] in self?.play() }
         remote.onPause = { [weak self] in self?.pause() }
-        remote.onPrevious = { [weak self] in self?.previousSentence() }
-        remote.onNext = { [weak self] in
-            guard let self else { return }
-            // Next always moves by sentence (skips the image when one is showing).
-            // It must never bookmark: this command is also the lock-screen/Control
-            // Center Next button, and there's no way to tell it apart from an
-            // AirPods press.
-            if self.isOnImage { self.skipImage() } else { self.nextSentence() }
-        }
+        // AirPods/lock-screen mapping (these are the only three commands AirPods
+        // send): 1 press = play/pause, 2 presses = Next = next *item* (mark read +
+        // advance), 3 presses = Previous = capture a highlight and offer a spoken
+        // note. (The same commands drive the lock-screen Next/Previous buttons.)
+        remote.onNext = { [weak self] in self?.skipToNextItem() }
+        remote.onPrevious = { [weak self] in self?.captureHighlightAndDictate() }
         remote.onSeek = { [weak self] time in self?.seek(toTime: time) }
         remote.onBookmark = { [weak self] in
             // Capture a highlight silently — never start the voice-note recorder
