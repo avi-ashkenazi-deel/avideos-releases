@@ -675,6 +675,10 @@ final class EmailPlayerViewModel: ObservableObject {
     /// that we then fetch from the mail service.
     private func advanceToNext(force: Bool = false) {
         guard force || settings.autoAdvance, let currentID = parsed?.email.id else { return }
+        // Halt the current item immediately. Otherwise it keeps reading sentence
+        // by sentence while we fetch/parse the next one over the network — which
+        // looks like "Next item just skips a few sentences."
+        stop()
         if let nextLocalProvider {
             Task {
                 guard let next = await nextLocalProvider(currentID) else { return }
