@@ -300,7 +300,10 @@ private struct IntervalsSection: View {
     @ViewBuilder private func modeControls(_ plan: IntervalPlan) -> some View {
         switch currentMode {
         case .even:
-            Stepper("\(evenCount) intervals", value: evenCountBinding, in: 2...60)
+            // Show the resulting per-interval length so it visibly updates when
+            // the total time changes (e.g. 8 min ÷ 4 → "2:00 each").
+            Stepper("\(evenCount) intervals · \(restLabel(duration / Double(max(1, evenCount)))) each",
+                    value: evenCountBinding, in: 2...60)
         case .spacing:
             durationSlider("Every \(restLabel(spacingSeconds))", spacingBinding)
         case .custom:
@@ -540,37 +543,54 @@ private struct FeedbackPreviewSection: View {
     }
 }
 
-// MARK: - Duration picker (h / m / s wheels)
+// MARK: - Duration picker (minutes + seconds)
 
+/// Minutes + seconds wheels. The minutes column reads 0–59 and keeps going —
+/// after 59 it rolls back to 0 (the next minute), so you can spin straight past
+/// the hour. Each row's tag is its absolute minute count, so the caption shows
+/// the real total (e.g. "90 min") even though the column repeats 0–59.
 private struct DurationPicker: View {
     @Binding var seconds: TimeInterval
 
-    private var hours: Int { Int(seconds) / 3600 }
-    private var minutes: Int { (Int(seconds) % 3600) / 60 }
+    /// Upper bound on the minutes wheel (5 hours — plenty for any timer here).
+    private let maxMinutes = 300
+
+    private var minutes: Int { Int(seconds) / 60 }
     private var secs: Int { Int(seconds) % 60 }
 
     var body: some View {
-        HStack {
-            wheel("h", value: hours, range: 0...5) { setComponents(h: $0, m: minutes, s: secs) }
-            wheel("m", value: minutes, range: 0...59) { setComponents(h: hours, m: $0, s: secs) }
-            wheel("s", value: secs, range: 0...59) { setComponents(h: hours, m: minutes, s: $0) }
+        HStack(spacing: 4) {
+            VStack {
+                Picker("min", selection: Binding(
+                    get: { minutes },
+                    set: { set(min: $0, sec: secs) }
+                )) {
+                    ForEach(0...maxMinutes, id: \.self) { m in
+                        Text("\(m % 60)").tag(m)
+                    }
+                }
+                .pickerStyle(.wheel)
+                Text("\(minutes) min").font(.caption).foregroundStyle(.secondary)
+            }
+            Text(":").font(.title2.bold()).foregroundStyle(.secondary)
+            VStack {
+                Picker("sec", selection: Binding(
+                    get: { secs },
+                    set: { set(min: minutes, sec: $0) }
+                )) {
+                    ForEach(0..<60, id: \.self) { s in
+                        Text(String(format: "%02d", s)).tag(s)
+                    }
+                }
+                .pickerStyle(.wheel)
+                Text("sec").font(.caption).foregroundStyle(.secondary)
+            }
         }
         .frame(height: 120)
     }
 
-    private func wheel(_ label: String, value: Int, range: ClosedRange<Int>,
-                       set: @escaping (Int) -> Void) -> some View {
-        VStack {
-            Picker(label, selection: Binding(get: { value }, set: set)) {
-                ForEach(range, id: \.self) { Text("\($0)").tag($0) }
-            }
-            .pickerStyle(.wheel)
-            Text(label).font(.caption).foregroundStyle(.secondary)
-        }
-    }
-
-    private func setComponents(h: Int, m: Int, s: Int) {
-        seconds = TimeInterval(h * 3600 + m * 60 + s)
+    private func set(min: Int, sec: Int) {
+        seconds = TimeInterval(min * 60 + sec)
     }
 }
 
