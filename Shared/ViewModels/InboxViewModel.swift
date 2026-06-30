@@ -117,7 +117,12 @@ final class InboxViewModel: ObservableObject {
     /// it's a one-time cost per message (and skips ones already known).
     func prefetchReadingTimes() async {
         let store = ReadingTimeStore.shared
-        let missing = emails.map(\.id).filter { store.minutes(for: $0) == nil }
+        // Cap how many full bodies we pull per load. This backfill fetches an
+        // entire email body just to estimate minutes; doing it for a whole inbox
+        // burns Gmail quota and can trigger 429s that make the *foreground* sync
+        // fail. The visible top of the list is what matters; the rest fill in as
+        // they're opened or on later loads.
+        let missing = Array(emails.map(\.id).filter { store.minutes(for: $0) == nil }.prefix(20))
         guard !missing.isEmpty else { return }
         for start in stride(from: 0, to: missing.count, by: 4) {
             let batch = Array(missing[start..<min(start + 4, missing.count)])

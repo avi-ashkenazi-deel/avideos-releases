@@ -51,10 +51,14 @@ actor GoogleMailService: MailService {
         let list: MessageList = try await get(comps.url!)
         let ids = (list.messages ?? []).map(\.id)
         // Fetch metadata with bounded concurrency so we don't burst past Gmail's
-        // per-second quota (which returns 429) on a cold inbox load.
-        let emails = try await mapConcurrently(ids, maxConcurrent: 6) { id in
-            try await self.fetchMessage(id: id, full: false)
+        // per-second quota (which returns 429) on a cold inbox load. Tolerate a
+        // single message failing (e.g. a transient 429 that outlasts its retries):
+        // skip it rather than failing the *whole* sync — otherwise one bad fetch
+        // makes pull-to-refresh keep serving stale cache ("stops syncing").
+        let fetched = try await mapConcurrently(ids, maxConcurrent: 6) { id -> Email? in
+            try? await self.fetchMessage(id: id, full: false)
         }
+        let emails = fetched.compactMap { $0 }
         return EmailPage(emails: emails.sorted { $0.receivedAt > $1.receivedAt },
                          nextPageToken: list.nextPageToken)
     }
