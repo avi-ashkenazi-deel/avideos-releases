@@ -7,6 +7,7 @@ import SwiftUI
 /// it. Re-renders on the engine's ~10×/sec published ticks.
 struct RunningTimerScreen: View {
     @EnvironmentObject private var engine: TimerEngine
+    @EnvironmentObject private var model: AppModel
     @Environment(\.verticalSizeClass) private var vSize
     @State private var editing = false
 
@@ -42,7 +43,14 @@ struct RunningTimerScreen: View {
         let tint = Color(hex: timer.preset.colorHex)
         let onColor = contrastingTextColor(forHex: timer.preset.colorHex)
         let intervalRemaining = timer.intervalRemaining(now: now)
-        let totalRemaining = timer.remaining(now: now)
+        // During a free workout (e.g. a rest), keep "TOTAL" as the session's
+        // running total (count-up) rather than this rest's own time left.
+        let totalRemaining: TimeInterval = {
+            if model.inSession, let start = model.sessionStart {
+                return now.timeIntervalSince(start)
+            }
+            return timer.remaining(now: now)
+        }()
         let fraction = timer.intervalFraction(now: now)
         let phase = timer.workRestPhase(now: now)
         let pos = timer.intervalPosition(now: now)

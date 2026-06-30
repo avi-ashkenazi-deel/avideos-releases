@@ -95,6 +95,11 @@ final class WatchModel: ObservableObject {
     func startTimer(_ preset: TimerPreset) {
         engine.stopAll()
         startKeepAlive(recordsWorkout: preset.isWorkout, kind: preset.workout)
+        // Workout timers show live heart rate from the workout session, too.
+        if preset.isWorkout {
+            heartRate = nil
+            keepAlive.onHeartRate = { [weak self] bpm in self?.heartRate = bpm }
+        }
         engine.start(preset)
     }
 
@@ -137,6 +142,8 @@ final class WatchModel: ObservableObject {
     }
 
     private func stopKeepAlive() {
+        keepAlive.onHeartRate = nil
+        heartRate = nil
         keepAlive.stop()
         audioKeepAlive.stop()
         AudioSession.deactivate()

@@ -21,6 +21,7 @@ struct WatchRunningView: View {
 }
 
 private struct WatchTimesPage: View {
+    @EnvironmentObject private var model: WatchModel
     let timer: RunningTimerState
 
     var body: some View {
@@ -70,14 +71,31 @@ private struct WatchTimesPage: View {
                             .monospacedDigit()
                             .foregroundStyle(.white)
                             .shadow(radius: 4)
-                        // Total time left, smaller.
-                        Text("total \(formatClock(timer.remaining(now: now)))")
-                            .font(.caption)
-                            .foregroundStyle(.white.opacity(0.85))
-                            .shadow(radius: 2)
+                        // Secondary line: during a free workout keep showing the
+                        // session's running total (count-up); otherwise the timer's
+                        // total time left.
+                        if model.inSession, let start = model.sessionStart {
+                            Text("total \(formatClock(now.timeIntervalSince(start)))")
+                                .font(.caption)
+                                .foregroundStyle(.white.opacity(0.85))
+                                .shadow(radius: 2)
+                        } else {
+                            Text("total \(formatClock(timer.remaining(now: now)))")
+                                .font(.caption)
+                                .foregroundStyle(.white.opacity(0.85))
+                                .shadow(radius: 2)
+                        }
 
-                        // Sets (position through the cycle) + Cycle (repeat).
+                        // Live heart rate (workouts + sessions) and the position
+                        // through the cycle / repeats.
                         HStack(spacing: 12) {
+                            if let hr = model.heartRate {
+                                HStack(spacing: 3) {
+                                    Image(systemName: "heart.fill").foregroundStyle(.red)
+                                    Text("\(Int(hr))").bold().foregroundStyle(.white)
+                                }
+                                .font(.caption).shadow(radius: 2)
+                            }
                             if pos.total > 1 { stat("\(pos.index)/\(pos.total)", "Sets") }
                             if timer.preset.repeatCount > 1 {
                                 stat("\(timer.currentRepeat)/\(timer.preset.repeatCount)", "Cycle")
