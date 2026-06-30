@@ -49,6 +49,14 @@ private struct WatchTimesPage: View {
                         }
                     } else {
                     VStack(spacing: 2) {
+                        // Heart rate pinned to the very top (workouts + sessions).
+                        if let hr = model.heartRate {
+                            HStack(spacing: 3) {
+                                Image(systemName: "heart.fill").foregroundStyle(.red)
+                                Text("\(Int(hr))").bold().foregroundStyle(.white)
+                            }
+                            .font(.caption).shadow(radius: 2)
+                        }
                         HStack(spacing: 6) {
                             if timer.preset.isWorkout {
                                 Image(systemName: "circle.circle")
@@ -86,16 +94,8 @@ private struct WatchTimesPage: View {
                                 .shadow(radius: 2)
                         }
 
-                        // Live heart rate (workouts + sessions) and the position
-                        // through the cycle / repeats.
+                        // Position through the cycle / repeats.
                         HStack(spacing: 12) {
-                            if let hr = model.heartRate {
-                                HStack(spacing: 3) {
-                                    Image(systemName: "heart.fill").foregroundStyle(.red)
-                                    Text("\(Int(hr))").bold().foregroundStyle(.white)
-                                }
-                                .font(.caption).shadow(radius: 2)
-                            }
                             if pos.total > 1 { stat("\(pos.index)/\(pos.total)", "Sets") }
                             if timer.preset.repeatCount > 1 {
                                 stat("\(timer.currentRepeat)/\(timer.preset.repeatCount)", "Cycle")
