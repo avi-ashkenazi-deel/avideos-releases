@@ -14,6 +14,9 @@ final class WorkoutKeepAlive: NSObject {
     private let healthStore = HKHealthStore()
     private var session: HKWorkoutSession?
     private var builder: HKLiveWorkoutBuilder?
+    /// A direct live heart-rate stream — more reliable than reading the workout
+    /// builder's statistics, and independent of when the builder collects.
+    private var hrQuery: HKAnchoredObjectQuery?
     #endif
 
     private var isActive = false
@@ -35,6 +38,8 @@ final class WorkoutKeepAlive: NSObject {
     func startIfNeeded(kind: WorkoutKind = .functionalStrength) {
         #if os(watchOS)
         guard !isActive, HKHealthStore.isHealthDataAvailable() else { return }
+        // Make sure we've asked for permission (harmless if already determined).
+        requestAuthorization()
         let config = HKWorkoutConfiguration()
         config.activityType = Self.hkType(kind)
         config.locationType = .indoor
@@ -49,6 +54,7 @@ final class WorkoutKeepAlive: NSObject {
             session.startActivity(with: start)
             builder.beginCollection(withStart: start) { _, _ in }
             isActive = true
+            startHeartRateStream()
         } catch {
             #if DEBUG
             print("WorkoutKeepAlive start failed: \(error)")
@@ -61,6 +67,7 @@ final class WorkoutKeepAlive: NSObject {
         #if os(watchOS)
         guard isActive else { return }
         isActive = false
+        if let hrQuery { healthStore.stop(hrQuery); self.hrQuery = nil }
         session?.end()
         builder?.endCollection(withEnd: Date()) { [weak self] _, _ in
             // The completion runs off the main actor; hop back before touching
@@ -94,6 +101,24 @@ final class WorkoutKeepAlive: NSObject {
         builder?.finishWorkout { _, _ in }
         builder = nil
         session = nil
+    }
+
+    /// Stream live heart-rate samples straight from HealthKit and forward the
+    /// latest bpm. Runs for the life of the session.
+    private func startHeartRateStream() {
+        guard let hrType = HKObjectType.quantityType(forIdentifier: .heartRate) else { return }
+        let unit = HKUnit(from: "count/min")
+        let handler: (HKAnchoredObjectQuery, [HKSample]?, [HKDeletedObject]?, HKQueryAnchor?, Error?) -> Void
+            = { [weak self] _, samples, _, _, _ in
+                guard let sample = (samples as? [HKQuantitySample])?.last else { return }
+                let bpm = sample.quantity.doubleValue(for: unit)
+                Task { @MainActor in self?.onHeartRate?(bpm) }
+            }
+        let query = HKAnchoredObjectQuery(type: hrType, predicate: nil, anchor: nil,
+                                          limit: HKObjectQueryNoLimit, resultsHandler: handler)
+        query.updateHandler = handler
+        healthStore.execute(query)
+        hrQuery = query
     }
     #endif
 }
