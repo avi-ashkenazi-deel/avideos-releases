@@ -47,6 +47,13 @@ struct TimerListView: View {
                     }
                     .onMove(perform: presets.move)
                     .onDelete { presets.delete(at: $0) }
+                } footer: {
+                    // So you can confirm on-device / in TestFlight exactly which
+                    // build is installed.
+                    Text(Self.versionString)
+                        .font(.footnote)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding(.top, 8)
                 }
             }
             .navigationTitle("Time It")
@@ -78,6 +85,14 @@ struct TimerListView: View {
     private func start(_ preset: TimerPreset) {
         engine.stopAll()
         engine.start(preset)
+    }
+
+    /// "Time It 0.2.0 (1)" — the version + build actually compiled into this copy.
+    static var versionString: String {
+        let info = Bundle.main.infoDictionary
+        let v = info?["CFBundleShortVersionString"] as? String ?? "?"
+        let b = info?["CFBundleVersion"] as? String ?? "?"
+        return "Time It \(v) (\(b))"
     }
 }
 
