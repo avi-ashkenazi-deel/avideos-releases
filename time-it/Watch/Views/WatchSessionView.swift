@@ -31,6 +31,13 @@ struct WatchSessionView: View {
 
     private var mainPage: some View {
         VStack(alignment: .leading, spacing: 4) {
+            // Heart rate pinned to the top-right, shown throughout the session
+            // ("–" until the first reading arrives).
+            HStack {
+                Spacer()
+                Label(model.heartRate.map { "\(Int($0))" } ?? "–", systemImage: "heart.fill")
+                    .font(.callout).foregroundStyle(.red)
+            }
             if let start = model.sessionStart {
                 TimelineView(.periodic(from: .now, by: 0.03)) { context in
                     Text(formatClockMillis(context.date.timeIntervalSince(start)))
@@ -38,18 +45,11 @@ struct WatchSessionView: View {
                         .monospacedDigit()
                 }
             }
-            HStack(spacing: 8) {
-                HStack(spacing: 6) {
-                    Image(systemName: "circle.circle")
-                    Text(sessionName)
-                }
-                .foregroundStyle(.secondary)
-                Spacer()
-                if let hr = model.heartRate {
-                    Label("\(Int(hr))", systemImage: "heart.fill")
-                        .foregroundStyle(.red)
-                }
+            HStack(spacing: 6) {
+                Image(systemName: "circle.circle")
+                Text(sessionName)
             }
+            .foregroundStyle(.secondary)
             .font(.callout)
 
             Spacer()
