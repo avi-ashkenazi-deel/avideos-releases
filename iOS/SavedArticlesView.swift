@@ -43,12 +43,13 @@ struct SavedArticlesList: View {
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
                 if store.isProcessing { ProgressView() }
+                // Highlights (bookmark) leftmost — shared across every screen.
+                if showsHighlightsButton { HighlightsToolbarButton() }
                 // Paste any text (a doc, a message, notes) and listen to it.
                 Button { showPasteText = true } label: {
                     Image(systemName: "plus")
                 }
                 .accessibilityLabel("Add text to listen to")
-                if showsHighlightsButton { HighlightsToolbarButton() }
             }
         }
         .sheet(isPresented: $showPasteText) {

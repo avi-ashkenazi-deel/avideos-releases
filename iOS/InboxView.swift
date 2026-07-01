@@ -23,7 +23,6 @@ struct InboxList: View {
     @StateObject private var progress = ListeningProgressStore.shared
     @StateObject private var readingTimes = ReadingTimeStore.shared
     @State private var showSettings = false
-    @State private var showAnalytics = false
     @State private var searchDebounce: Task<Void, Never>?
 
     init(showsUtilityToolbar: Bool = true) {
@@ -153,9 +152,7 @@ struct InboxList: View {
             }
             if showsUtilityToolbar {
                 ToolbarItemGroup(placement: .topBarTrailing) {
-                    Button { showAnalytics = true } label: {
-                        Image(systemName: "chart.bar")
-                    }
+                    // Highlights (bookmark) leftmost — the control every screen shares.
                     HighlightsToolbarButton()
                     Button { showSettings = true } label: {
                         Image(systemName: "gearshape")
@@ -165,9 +162,6 @@ struct InboxList: View {
         }
         .sheet(isPresented: $showSettings) {
             NavigationStack { SettingsView() }
-        }
-        .sheet(isPresented: $showAnalytics) {
-            NavigationStack { AnalyticsView() }
         }
         .searchable(text: $viewModel.searchText, prompt: "Search by sender or subject")
         .onChange(of: viewModel.searchText) { _, _ in

@@ -83,6 +83,21 @@ struct SettingsView: View {
             }
 
             Section {
+                NavigationLink {
+                    AnalyticsView()
+                } label: {
+                    Label("Listening analytics", systemImage: "chart.bar")
+                }
+                NavigationLink {
+                    ManageFeedsView()
+                } label: {
+                    Label("Feed notifications", systemImage: "bell")
+                }
+            } footer: {
+                Text("Your listening stats, and which feeds notify you about new articles (and mark-all-read).")
+            }
+
+            Section {
                 Picker("When there's an image", selection: $settings.imageBehavior) {
                     ForEach(ImageBehavior.allCases) { behavior in
                         Text(behavior.title).tag(behavior)

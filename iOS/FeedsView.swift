@@ -20,10 +20,18 @@ struct FeedsList: View {
     @Environment(\.openURL) private var openURL
     @State private var searchText = ""
     @State private var showAddFeed = false
-    @State private var showManage = false
+    /// nil = all feeds; otherwise filter to one feed (tap the title to switch).
+    @State private var selectedFeedID: String?
 
     private var shownItems: [RSSItem] {
-        store.search(searchText)
+        let base = store.search(searchText)
+        guard let id = selectedFeedID, store.feeds.contains(where: { $0.id == id }) else { return base }
+        return base.filter { $0.feedID == id }
+    }
+
+    private var currentFilterName: String {
+        guard let id = selectedFeedID else { return "Feeds" }
+        return store.feed(for: id)?.title ?? "Feeds"
     }
 
     var body: some View {
@@ -93,27 +101,43 @@ struct FeedsList: View {
                 .listStyle(.plain)
             }
         }
-        .navigationTitle("Feeds")
+        .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            // Left-aligned title that doubles as a feed filter when you follow
+            // more than one — tap to jump between All Feeds and a single feed.
+            ToolbarItem(placement: .topBarLeading) {
+                if store.feeds.count > 1 {
+                    Menu {
+                        Button { selectedFeedID = nil } label: { filterLabel("All Feeds", selected: selectedFeedID == nil) }
+                        ForEach(store.feeds) { feed in
+                            Button { selectedFeedID = feed.id } label: {
+                                filterLabel(feed.title, selected: selectedFeedID == feed.id)
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text(currentFilterName).font(.headline)
+                            Image(systemName: "chevron.down").font(.caption2.weight(.bold))
+                        }
+                        .foregroundStyle(.primary)
+                    }
+                } else {
+                    Text("Feeds").font(.headline)
+                }
+            }
             ToolbarItemGroup(placement: .topBarTrailing) {
                 if store.isRefreshing { ProgressView() }
+                // Highlights (bookmark) leftmost — shared across every screen.
+                if showsHighlightsButton { HighlightsToolbarButton() }
                 Button { showAddFeed = true } label: { Image(systemName: "plus") }
                     .accessibilityLabel("Add a feed")
-                // Feeds are the only thing that notifies, so this screen is really
-                // about notifications (plus mark-all-read and unfollow) — bell icon.
-                Button { showManage = true } label: { Image(systemName: "bell") }
-                    .accessibilityLabel("Feed notifications")
-                if showsHighlightsButton { HighlightsToolbarButton() }
             }
         }
         .searchable(text: $searchText, prompt: "Search across all feeds")
         .refreshable { await store.refreshAll() }
         .sheet(isPresented: $showAddFeed) {
             NavigationStack { AddFeedView() }
-        }
-        .sheet(isPresented: $showManage) {
-            NavigationStack { ManageFeedsView() }
         }
         .task {
             // Refresh on first show; cheap if there are no feeds.
@@ -142,6 +166,11 @@ struct FeedsList: View {
             .buttonStyle(.borderedProminent)
         }
         .padding(40)
+    }
+
+    @ViewBuilder
+    private func filterLabel(_ name: String, selected: Bool) -> some View {
+        if selected { Label(name, systemImage: "checkmark") } else { Text(name) }
     }
 
     /// Read the item: prefer the feed-supplied full content; otherwise fetch the
@@ -308,7 +337,7 @@ private struct AddFeedView: View {
 
 // MARK: - Manage feeds (per-feed notifications, unfollow)
 
-private struct ManageFeedsView: View {
+struct ManageFeedsView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var store = FeedStore.shared
 

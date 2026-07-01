@@ -130,11 +130,11 @@ private struct CompactLayout: View {
                 InboxView()
                     .tabItem { Label("Inbox", systemImage: "tray.full") }
 
-                SavedArticlesView()
-                    .tabItem { Label("Saved", systemImage: "safari") }
-
                 FeedsView()
                     .tabItem { Label("Feeds", systemImage: "dot.radiowaves.up.forward") }
+
+                SavedArticlesView()
+                    .tabItem { Label("Saved", systemImage: "safari") }
             }
 
             if player.parsed != nil {
@@ -154,7 +154,7 @@ private struct CompactLayout: View {
 
 /// The libraries the iPad source sidebar switches between.
 private enum LibrarySection: Hashable, CaseIterable, Identifiable {
-    case inbox, saved, feeds
+    case inbox, feeds, saved
     var id: Self { self }
 
     var title: String {
@@ -185,7 +185,6 @@ private struct SplitLayout: View {
     @State private var section: LibrarySection? = .inbox
     @State private var showSettings = false
     @State private var showHighlights = false
-    @State private var showAnalytics = false
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
@@ -209,11 +208,10 @@ private struct SplitLayout: View {
                 case .feeds: FeedsList(showsHighlightsButton: false)
                 }
             }
-            // Analytics / Highlights / Settings — on the always-visible list column
-            // so they're reachable in portrait too (the sidebar hides there).
+            // Highlights (bookmark) sits leftmost — it's the one control every
+            // screen shares. Analytics now lives inside Settings.
             .toolbar {
                 ToolbarItemGroup(placement: .topBarTrailing) {
-                    Button { showAnalytics = true } label: { Image(systemName: "chart.bar") }
                     Button { showHighlights = true } label: { Image(systemName: "bookmark") }
                     Button { showSettings = true } label: { Image(systemName: "gearshape") }
                 }
@@ -239,9 +237,6 @@ private struct SplitLayout: View {
             NavigationStack { HighlightsListView() }
                 .environmentObject(player)
                 .environmentObject(appState)
-        }
-        .sheet(isPresented: $showAnalytics) {
-            NavigationStack { AnalyticsView() }
         }
     }
 }
