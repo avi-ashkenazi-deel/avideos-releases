@@ -68,7 +68,7 @@ struct SavedArticlesList: View {
             } label: {
                 SavedArticleRow(article: article)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(RowPressStyle())
             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                 Button(role: .destructive) { store.delete(article.id) } label: {
                     Label("Delete", systemImage: "trash")

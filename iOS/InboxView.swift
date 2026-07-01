@@ -72,7 +72,7 @@ struct InboxList: View {
                                 progress: progress.progress(for: email.id)
                             )
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(RowPressStyle())
                         .listRowSeparator(.hidden)
                         // Highlight the email that's currently loaded in the player,
                         // so it's obvious in the list which one is playing.

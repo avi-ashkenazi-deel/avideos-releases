@@ -61,7 +61,7 @@ struct FeedsList: View {
                                         feedTitle: store.feed(for: item.feedID)?.title ?? "",
                                         progress: progress.progress(for: "rss-\(item.id)"))
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(RowPressStyle())
                         .listRowSeparator(.hidden)
                         // Highlight the article currently loaded in the player.
                         .listRowBackground(
@@ -187,9 +187,11 @@ private struct FeedItemRow: View {
     var progress: ListeningProgress?
 
     var body: some View {
-        HStack(alignment: .top, spacing: 11) {
-            progressRing
-            VStack(alignment: .leading, spacing: 3) {
+        HStack(spacing: 12) {
+            // Same avatar + progress ring as the inbox so the two lists match in
+            // size and style; the avatar resolves the source site's icon.
+            SenderAvatar(email: item.makeEmail(feedTitle: feedTitle), progress: progress)
+            VStack(alignment: .leading, spacing: 2) {
                 HStack {
                     Text(feedTitle.uppercased())
                         .font(.caption2.weight(.bold))
@@ -209,31 +211,6 @@ private struct FeedItemRow: View {
         .padding(.vertical, 4)
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
-    }
-
-    /// Listening-progress ring, mirroring the inbox: fills as you listen, turns
-    /// green when finished. Space is reserved even when there's no progress so
-    /// titles stay aligned.
-    private var progressRing: some View {
-        let fraction = progress?.fraction ?? 0
-        let isComplete = progress?.isComplete ?? false
-        return ZStack {
-            Circle().stroke(Color.secondary.opacity(0.2), lineWidth: 2.5)
-            if fraction > 0 {
-                Circle()
-                    .trim(from: 0, to: fraction)
-                    .stroke(isComplete ? Color.green : Color.accentColor,
-                            style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
-                    .rotationEffect(.degrees(-90))
-            }
-            if isComplete {
-                Image(systemName: "checkmark")
-                    .font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(.green)
-            }
-        }
-        .frame(width: 20, height: 20)
-        .padding(.top, 2)
     }
 }
 
