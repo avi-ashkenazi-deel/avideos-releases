@@ -4,13 +4,13 @@ import Foundation
 /// Returns the feed's title/site link and its items.
 final class FeedParser: NSObject, XMLParserDelegate {
 
-    struct Result {
+    struct Result: Sendable {
         var title: String?
         var siteURL: URL?
         var items: [Item] = []
     }
 
-    struct Item {
+    struct Item: Sendable {
         var guid: String?
         var title = ""
         var link: URL?

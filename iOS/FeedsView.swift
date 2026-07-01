@@ -135,7 +135,7 @@ struct FeedsList: View {
             }
         }
         .searchable(text: $searchText, prompt: "Search across all feeds")
-        .refreshable { await store.refreshAll() }
+        .refreshable { await store.refreshAll(force: true) }
         .sheet(isPresented: $showAddFeed) {
             NavigationStack { AddFeedView() }
         }

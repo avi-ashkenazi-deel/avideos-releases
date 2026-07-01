@@ -187,6 +187,12 @@ final class CachingMailService: MailService {
         }
     }
 
+    /// The last-synced listing for a folder, for painting the list instantly on
+    /// launch/folder-switch while the live fetch runs (empty if never cached).
+    func cachedInbox(labelId: String) async -> [Email] {
+        await cache.listing(label: labelId)
+    }
+
     func fetchInbox(labelId: String, query: String?, pageToken: String?, limit: Int) async throws -> EmailPage {
         // Search needs the server; only cache plain folder browsing.
         let cacheable = query == nil

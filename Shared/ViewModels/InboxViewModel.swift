@@ -18,6 +18,9 @@ final class InboxViewModel: ObservableObject {
     private let settings: AppSettings
     private var nextPageToken: String?
     private let pageSize = 50
+    /// The folder the last `load()` targeted — used to tell a folder switch
+    /// (paint from cache first) apart from a same-folder refresh (don't).
+    private var lastLoadedLabelId: String?
 
     private var searchQuery: String? {
         let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -70,6 +73,21 @@ final class InboxViewModel: ObservableObject {
         errorMessage = nil
         nextPageToken = nil
         defer { isLoading = false }
+        // Cache-first: paint the folder's last-synced listing immediately (cold
+        // launch and folder switches showed a spinner while Gmail round-tripped
+        // ~50 metadata fetches). The live result replaces it when it lands; if
+        // the network fails, the cached list simply stays on screen. Skipped on
+        // pull-to-refresh of the same folder (the shown list is already newer
+        // than or equal to the cache — repainting would just flicker).
+        let requestedLabel = settings.mailLabelId
+        if searchQuery == nil, emails.isEmpty || lastLoadedLabelId != requestedLabel,
+           let caching = mailService as? CachingMailService {
+            let cached = await caching.cachedInbox(labelId: requestedLabel)
+            if !cached.isEmpty, settings.mailLabelId == requestedLabel {
+                emails = cached
+            }
+        }
+        lastLoadedLabelId = requestedLabel
         do {
             let page = try await mailService.fetchInbox(
                 labelId: settings.mailLabelId, query: searchQuery, pageToken: nil, limit: pageSize)

@@ -33,6 +33,17 @@ enum ArticleExtractor {
         }
     }
 
+    /// Short-fused session: a slow/hung site caps out at 15s instead of the
+    /// shared session's 60s, so opening an article never hangs long — callers
+    /// fall back to the item's summary.
+    private static let session: URLSession = {
+        let cfg = URLSessionConfiguration.ephemeral
+        cfg.waitsForConnectivity = false
+        cfg.timeoutIntervalForRequest = 15
+        cfg.timeoutIntervalForResource = 25
+        return URLSession(configuration: cfg)
+    }()
+
     static func fetch(_ url: URL) async throws -> Result {
         var request = URLRequest(url: url)
         // A browser-like UA; some sites serve a stripped page to unknown clients.
@@ -42,7 +53,7 @@ enum ArticleExtractor {
         )
         request.setValue("text/html,application/xhtml+xml", forHTTPHeaderField: "Accept")
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await session.data(for: request)
         if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
             throw ExtractError.badStatus(http.statusCode)
         }

@@ -79,7 +79,7 @@ struct VoiceInboxApp: App {
         BGTaskScheduler.shared.register(forTaskWithIdentifier: feedRefreshTaskID, using: nil) { task in
             scheduleFeedRefresh()   // keep the chain going for next time
             let work = Task { @MainActor in
-                await FeedStore.shared.refreshAll(notify: true)
+                await FeedStore.shared.refreshAll(notify: true, force: true)
                 task.setTaskCompleted(success: true)
             }
             task.expirationHandler = { work.cancel() }

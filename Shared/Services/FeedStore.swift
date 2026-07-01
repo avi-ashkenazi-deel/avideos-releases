@@ -219,16 +219,51 @@ final class FeedStore: ObservableObject {
 
     // MARK: - Refresh
 
-    /// Refresh every feed. When `notify` is true, feeds with notifications on
-    /// post a local notification for newly arrived items.
-    func refreshAll(notify: Bool = false) async {
+    /// Short-fused session for feed fetches: don't wait for connectivity and cap
+    /// each request, so one slow/dead feed can't stall the whole refresh (the
+    /// shared session's 60s default did exactly that).
+    private nonisolated static let refreshSession: URLSession = {
+        let cfg = URLSessionConfiguration.ephemeral
+        cfg.waitsForConnectivity = false
+        cfg.timeoutIntervalForRequest = 10
+        cfg.timeoutIntervalForResource = 20
+        return URLSession(configuration: cfg)
+    }()
+
+    private var lastRefreshAt: Date?
+
+    /// Refresh every feed — all fetched *concurrently* (fetch + parse off the
+    /// main actor), then merged in order. When `notify` is true, feeds with
+    /// notifications on post a local notification for newly arrived items.
+    /// Passive callers (tab appearing) are throttled to once a minute; explicit
+    /// ones (pull-to-refresh, background task) pass `force: true`.
+    func refreshAll(notify: Bool = false, force: Bool = false) async {
         guard !isRefreshing, !feeds.isEmpty else { return }
+        if !force, let last = lastRefreshAt, Date().timeIntervalSince(last) < 60 { return }
         isRefreshing = true
         defer { isRefreshing = false }
+        lastRefreshAt = Date()
 
-        for feed in feeds {
-            guard let (data, _) = try? await URLSession.shared.data(from: feed.url),
-                  let parsed = try? FeedParser.parse(data: data) else { continue }
+        // Fetch + parse everything concurrently; wall-clock = slowest feed
+        // (capped at the session timeout), not the sum of all of them.
+        let snapshot = feeds
+        let results: [String: FeedParser.Result] = await withTaskGroup(
+            of: (String, FeedParser.Result?).self
+        ) { group in
+            for feed in snapshot {
+                group.addTask {
+                    guard let (data, _) = try? await Self.refreshSession.data(from: feed.url),
+                          let parsed = try? FeedParser.parse(data: data) else { return (feed.id, nil) }
+                    return (feed.id, parsed)
+                }
+            }
+            var out: [String: FeedParser.Result] = [:]
+            for await (id, parsed) in group where parsed != nil { out[id] = parsed }
+            return out
+        }
+
+        for feed in snapshot {
+            guard let parsed = results[feed.id] else { continue }
             let newCount = merge(parsed.items, into: feed)
             if notify, newCount > 0, feed.notifyOnNewItems {
                 postNotification(feed: feed, newCount: newCount,
@@ -362,6 +397,6 @@ final class FeedStore: ObservableObject {
             try? encoded.write(to: feedsURL, options: .atomic)
         }
         // Pull in the new feeds' articles.
-        Task { await refreshAll() }
+        Task { await refreshAll(force: true) }
     }
 }
