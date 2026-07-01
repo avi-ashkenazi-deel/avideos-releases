@@ -46,6 +46,7 @@ final class WatchModel: ObservableObject {
     }
 
     func start() {
+        SpeechAnnouncer.warmUp()   // load the voice catalog before the first cue
         AudioSession.configureForAnnouncements()
         bridge.activate()
         engine.outputMode = settings.outputMode
@@ -83,10 +84,9 @@ final class WatchModel: ObservableObject {
             guard let self, let preset = self.presets.presets.first(where: { $0.id == id }) else { return }
             self.startTimer(preset)
         }
-        bridge.syncPresets(presets.presets)
-        bridge.syncOutputMode(settings.outputMode)
-        bridge.syncRests(settings.restDurations)
-        bridge.syncWorkoutKind(settings.sessionWorkoutKind)
+        bridge.syncAll(presets: presets.presets, mode: settings.outputMode,
+                       rests: settings.restDurations,
+                       workoutKind: settings.sessionWorkoutKind)
     }
 
     /// Start a preset (one timer at a time). Exercise timers record a workout;

@@ -15,7 +15,9 @@ struct SessionScreen: View {
             Spacer()
 
             if let start = model.sessionStart {
-                TimelineView(.periodic(from: .now, by: 0.03)) { context in
+                // 20fps: visually identical for a spinning hundredths digit,
+                // ~40% fewer renders over an hour-long session.
+                TimelineView(.periodic(from: .now, by: 0.05)) { context in
                     Text(formatClockMillis(context.date.timeIntervalSince(start)))
                         .font(.system(size: landscape ? 130 : 64, weight: .bold, design: .rounded))
                         .monospacedDigit()

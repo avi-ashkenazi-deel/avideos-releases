@@ -34,6 +34,17 @@ final class SpeechAnnouncer: NSObject, Announcer {
         #endif
     }
 
+    /// Preload the system voice catalog off the main thread so the first spoken
+    /// cue isn't late by the catalog-load time (0.5–2s cold). No audio-session
+    /// side effects — nothing is played and nothing ducks.
+    static func warmUp() {
+        #if canImport(AVFoundation)
+        Task.detached(priority: .utility) {
+            _ = AVSpeechSynthesisVoice.speechVoices()
+        }
+        #endif
+    }
+
     func speak(_ text: String) {
         guard voiceEnabled, !text.isEmpty else { return }
         #if canImport(AVFoundation)

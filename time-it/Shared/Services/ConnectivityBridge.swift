@@ -26,7 +26,13 @@ final class ConnectivityBridge: NSObject, ObservableObject {
     /// The other device changed the free-workout activity type.
     var onWorkoutKindReceived: ((WorkoutKind) -> Void)?
 
-    private let encoder = JSONEncoder()
+    private let encoder: JSONEncoder = {
+        let e = JSONEncoder()
+        // Deterministic output so identical libraries encode to identical Data,
+        // letting push() skip redundant radio transmissions.
+        e.outputFormatting = [.sortedKeys]
+        return e
+    }()
     private let decoder = JSONDecoder()
     /// Merged latest-state we mirror to the other device. `updateApplicationContext`
     /// replaces the whole dict each call, so we keep one and merge into it.
@@ -64,6 +70,19 @@ final class ConnectivityBridge: NSObject, ObservableObject {
         push(["sessionWorkoutKind": kind.rawValue])
     }
 
+    /// Push the full state in ONE transmission — used at launch so a fresh
+    /// device catches up without four back-to-back context updates.
+    func syncAll(presets: [TimerPreset], mode: OutputMode,
+                 rests: [TimeInterval], workoutKind: WorkoutKind) {
+        var updates: [String: Any] = [
+            "outputMode": mode.rawValue,
+            "restDurations": rests,
+            "sessionWorkoutKind": workoutKind.rawValue,
+        ]
+        if let data = try? encoder.encode(presets) { updates["presets"] = data }
+        push(updates)
+    }
+
     func sendStart(presetID: UUID) {
         #if canImport(WatchConnectivity)
         guard let session, session.activationState == .activated else { return }
@@ -77,9 +96,15 @@ final class ConnectivityBridge: NSObject, ObservableObject {
         #endif
     }
 
-    /// Merge `updates` into the mirrored context and push the whole thing.
+    /// Merge `updates` into the mirrored context and push the whole thing —
+    /// unless nothing actually changed (each push re-transmits the entire
+    /// context over Bluetooth, so redundant calls are pure radio/battery waste).
     private func push(_ updates: [String: Any]) {
         #if canImport(WatchConnectivity)
+        let changed = updates.contains { key, new in
+            !((context[key] as? NSObject)?.isEqual(new) ?? false)
+        }
+        guard changed else { return }
         context.merge(updates) { _, new in new }
         guard let session, session.activationState == .activated else { return }
         try? session.updateApplicationContext(context)

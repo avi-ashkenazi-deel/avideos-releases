@@ -44,21 +44,27 @@ final class NotificationScheduler: NSObject, UNUserNotificationCenterDelegate {
 
     // MARK: Scheduling
 
+    /// iOS keeps only the ~64 soonest pending notifications per app and silently
+    /// drops the rest — which, on a long interval timer with hundreds of cues,
+    /// would drop the *end* notification first (it's the furthest out). So:
+    /// schedule the end unconditionally and only the nearest cues up to a cap.
+    private static let maxCues = 60
+
     private func schedule(_ timer: RunningTimerState, now: Date) {
         let id = timer.id.uuidString
         let elapsed = timer.elapsed(now: now)
         let name = timer.preset.displayName
 
-        for cue in timer.preset.cues() where cue.fireTime > elapsed {
-            let after = cue.fireTime - elapsed
-            add(identifier: "\(Self.prefix)\(id).\(cue.id)",
-                title: name, body: cue.displayLabel, after: after)
-        }
-
         let remaining = timer.remaining(now: now)
         if remaining > 0.5 {
             add(identifier: "\(Self.prefix)\(id).end",
                 title: name, body: "Time's up", after: remaining)
+        }
+
+        for cue in timer.cues.filter({ $0.fireTime > elapsed }).prefix(Self.maxCues) {
+            let after = cue.fireTime - elapsed
+            add(identifier: "\(Self.prefix)\(id).\(cue.id)",
+                title: name, body: cue.displayLabel, after: after)
         }
     }
 

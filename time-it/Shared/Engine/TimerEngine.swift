@@ -118,7 +118,7 @@ final class TimerEngine: ObservableObject {
         let clamped = max(0, min(newElapsed, s.preset.duration))
         s.bankedElapsed = clamped
         s.startDate = now
-        s.firedCueIDs = Set(s.preset.cues().filter { $0.fireTime < clamped - 0.05 }.map(\.id))
+        s.firedCueIDs = Set(s.cues.filter { $0.fireTime < clamped - 0.05 }.map(\.id))
         if let cd = s.preset.finalCountdown {
             let remaining = s.preset.duration - clamped
             s.lastCountdownSecondSpoken = remaining > Double(cd.lastSeconds) ? nil : Int(remaining.rounded(.up))
@@ -137,7 +137,7 @@ final class TimerEngine: ObservableObject {
         running[i].startDate = now
         // Any cue already in the past on the new schedule is considered fired.
         running[i].firedCueIDs = Set(
-            newPreset.cues().filter { $0.fireTime <= elapsed }.map(\.id)
+            running[i].cues.filter { $0.fireTime <= elapsed }.map(\.id)
         )
         if let cd = newPreset.finalCountdown {
             let remaining = running[i].remaining(now: now)
@@ -164,9 +164,15 @@ final class TimerEngine: ObservableObject {
         guard ticker == nil, !running.isEmpty else { return }
         // 0.1s is fine enough to land each integer second for the spoken
         // countdown while staying cheap (one shared timer for all runs).
-        ticker = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+        let t = Timer(timeInterval: 0.1, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.tick() }
         }
+        // A little tolerance lets the OS coalesce wakeups (battery); .common
+        // keeps the tick firing during scroll/sheet tracking, where the default
+        // runloop mode would stall it and delay cues.
+        t.tolerance = 0.02
+        RunLoop.main.add(t, forMode: .common)
+        ticker = t
     }
 
     private func stopTickerIfIdle() {
@@ -240,7 +246,7 @@ final class TimerEngine: ObservableObject {
     private func processCues(_ s: inout RunningTimerState, now: Date) -> Bool {
         let elapsed = s.elapsed(now: now)
         let due = MilestoneScheduler.dueCues(
-            s.preset.cues(), elapsed: elapsed, alreadyFired: s.firedCueIDs
+            s.cues, elapsed: elapsed, alreadyFired: s.firedCueIDs
         )
         for cue in due {
             // The OutputMode decides the channel(s); the cue supplies the words
@@ -317,7 +323,7 @@ final class TimerEngine: ObservableObject {
     /// in the future again so they can re-announce.
     private func reconcileFired(_ s: inout RunningTimerState, now: Date) {
         let elapsed = s.elapsed(now: now)
-        let cuesByID = Dictionary(uniqueKeysWithValues: s.preset.cues().map { ($0.id, $0) })
+        let cuesByID = Dictionary(uniqueKeysWithValues: s.cues.map { ($0.id, $0) })
         s.firedCueIDs = s.firedCueIDs.filter { id in
             guard let cue = cuesByID[id] else { return false }
             return cue.fireTime <= elapsed
@@ -328,12 +334,21 @@ final class TimerEngine: ObservableObject {
         }
     }
 
+    /// Tracks the last emptiness we told the host about, so keep-alive resources
+    /// (audio session, silent player, workout session) only get poked on real
+    /// empty <-> non-empty transitions — not on every pause/skip/edit.
+    private var lastNotifiedEmpty: Bool?
+
     /// Lightweight refresh used on every tick: keep `hasActiveTimer` accurate and
     /// notify hosts of empty/non-empty transitions (no per-tick reschedule).
     private func refreshActivity() {
         let active = running.contains { $0.isRunning }
         if active != hasActiveTimer { hasActiveTimer = active }
-        onRunningSetChanged?(running.isEmpty)
+        let empty = running.isEmpty
+        if empty != lastNotifiedEmpty {
+            lastNotifiedEmpty = empty
+            onRunningSetChanged?(empty)
+        }
     }
 
     /// Full notify on discrete schedule changes: refresh + reschedule hook.

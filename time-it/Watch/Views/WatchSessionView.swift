@@ -39,7 +39,9 @@ struct WatchSessionView: View {
                     .font(.callout).foregroundStyle(.red)
             }
             if let start = model.sessionStart {
-                TimelineView(.periodic(from: .now, by: 0.03)) { context in
+                // 20fps: visually identical for the hundredths, meaningfully
+                // less CPU/battery over a long session on the watch.
+                TimelineView(.periodic(from: .now, by: 0.05)) { context in
                     Text(formatClockMillis(context.date.timeIntervalSince(start)))
                         .font(.system(size: 34, weight: .bold, design: .rounded))
                         .monospacedDigit()

@@ -5,8 +5,15 @@ import Foundation
 /// a tick is delayed or the app is briefly suspended.
 struct RunningTimerState: Identifiable {
     let id: UUID
-    /// Mutable so a running timer can be edited live (time + cues).
-    var preset: TimerPreset
+    /// Mutable so a running timer can be edited live (time + cues). The derived
+    /// cue list / segment bounds are re-cached whenever it changes.
+    var preset: TimerPreset { didSet { recomputeDerived() } }
+
+    /// Resolved cues and segment boundaries, cached because the engine reads
+    /// them every 0.1s tick and the UI ~10×/sec — recomputing (flatten + sort,
+    /// hundreds of entries on a long interval timer) each time is wasted CPU.
+    private(set) var cues: [TimerCue] = []
+    private(set) var segmentBounds: [TimeInterval] = []
 
     /// When the *current* run started counting (advances across repeats).
     var startDate: Date
@@ -45,6 +52,15 @@ struct RunningTimerState: Identifiable {
         self.lastIntervalCountdownSecond = nil
         self.lastLeadInSecondSpoken = nil
         self.leadInDone = leadIn <= 0
+        recomputeDerived()
+    }
+
+    /// Re-derive the cached cue list and segment boundaries from the preset.
+    private mutating func recomputeDerived() {
+        cues = preset.cues()
+        var b = Set(preset.intervals?.boundaries(forDuration: preset.duration) ?? [])
+        b.insert(preset.duration)
+        segmentBounds = b.filter { $0 > 0.0001 }.sorted()
     }
 
     /// Whether we're still in the pre-start lead-in.
@@ -60,7 +76,8 @@ struct RunningTimerState: Identifiable {
 
     /// The next upcoming cue label after the current elapsed, if any.
     func nextCueLabel(now: Date = Date()) -> String? {
-        preset.nextCue(afterElapsed: elapsed(now: now))?.displayLabel
+        let e = elapsed(now: now)
+        return cues.first { $0.fireTime > e + 0.001 }?.displayLabel
     }
 
     // MARK: Intervals (the segment currently in progress)
@@ -69,10 +86,9 @@ struct RunningTimerState: Identifiable {
     /// ascending, >0. These delimit the "intervals" the running view counts down
     /// within. One-off milestones (e.g. a rest's halfway buzz) are deliberately
     /// excluded: they fire their alert but must not chop the countdown in two.
+    /// Cached (see `recomputeDerived`) — this is on the render path.
     func segmentBoundaries() -> [TimeInterval] {
-        var b = Set(preset.intervals?.boundaries(forDuration: preset.duration) ?? [])
-        b.insert(preset.duration)
-        return b.filter { $0 > 0.0001 }.sorted()
+        segmentBounds
     }
 
     /// Start / end (elapsed offsets) of the interval currently in progress.
@@ -102,7 +118,7 @@ struct RunningTimerState: Identifiable {
     func currentIntervalLabel(now: Date = Date()) -> String? {
         let start = currentSegment(now: now).start
         guard start > 0.0001 else { return nil }
-        return preset.cues().first { abs($0.fireTime - start) < 0.5 }?.displayLabel
+        return cues.first { abs($0.fireTime - start) < 0.5 }?.displayLabel
     }
 
     /// (current, total) segment position, 1-based, for an "interval i/N" readout.

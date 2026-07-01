@@ -41,6 +41,7 @@ final class AppModel: ObservableObject {
     }
 
     func start() {
+        SpeechAnnouncer.warmUp()   // load the voice catalog before the first cue
         AudioSession.configureForAnnouncements()
         bridge.activate()
         engine.outputMode = settings.outputMode
@@ -108,11 +109,11 @@ final class AppModel: ObservableObject {
             guard let self, let preset = self.presets.presets.first(where: { $0.id == id }) else { return }
             self.startTimer(preset)
         }
-        // Send the current library + mode + rests so a fresh watch catches up.
-        bridge.syncPresets(presets.presets)
-        bridge.syncOutputMode(settings.outputMode)
-        bridge.syncRests(settings.restDurations)
-        bridge.syncWorkoutKind(settings.sessionWorkoutKind)
+        // Send the current library + settings so a fresh watch catches up —
+        // one batched transmission, not four.
+        bridge.syncAll(presets: presets.presets, mode: settings.outputMode,
+                       rests: settings.restDurations,
+                       workoutKind: settings.sessionWorkoutKind)
     }
 
     /// Start a preset. Only one timer runs at a time, so any current one is

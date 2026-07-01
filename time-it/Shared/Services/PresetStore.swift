@@ -57,7 +57,10 @@ final class PresetStore: ObservableObject {
     }
 
     /// Replace the whole library from a remote sync (does NOT re-broadcast).
+    /// No-op when identical — the other device re-pushes its context on every
+    /// launch, and an unchanged library shouldn't re-render lists or hit disk.
     func mergeFromRemote(_ remote: [TimerPreset]) {
+        guard remote != presets else { return }
         presets = remote
         persist()
     }

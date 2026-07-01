@@ -27,8 +27,9 @@ private struct WatchTimesPage: View {
     var body: some View {
         let tint = Color(hex: timer.preset.colorHex)
         GeometryReader { geo in
-            // Fast timeline so the hundredths actually move.
-            TimelineView(.periodic(from: .now, by: 0.03)) { context in
+            // Fast enough that the hundredths visibly spin (20fps), without the
+            // battery cost of rendering at 33fps for a whole workout.
+            TimelineView(.periodic(from: .now, by: 0.05)) { context in
                 let now = context.date
                 let fraction = timer.intervalFraction(now: now)
                 let pos = timer.intervalPosition(now: now)
