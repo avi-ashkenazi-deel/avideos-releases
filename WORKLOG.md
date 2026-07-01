@@ -2,6 +2,13 @@
 
 A running log of what we've built and shipped.
 
+## Conventions
+
+- **No emojis in TestFlight notes, release notes, or any App Store Connect text.**
+  Write "What to Test" and release notes in plain text only — those store-facing
+  fields don't accept emojis. (Chat replies may still use them; this rule is
+  specifically about text pasted into TestFlight / App Store Connect.)
+
 ## 2026-06-08 — Paste-to-listen + RSS feeds tab
 
 - **Paste text → listen** (Saved): clipboard button in Saved opens a composer
