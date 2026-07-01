@@ -153,6 +153,19 @@ final class AppSettings: ObservableObject {
         didSet { defaults.set(mailLabelName, forKey: Key.mailLabelName) }
     }
 
+    /// The folder to open to on launch (chosen in Settings), and the account it
+    /// belongs to — label ids are account-specific, so it only applies when that
+    /// account is active; otherwise launch falls back to the inbox.
+    @Published var defaultMailLabelId: String {
+        didSet { defaults.set(defaultMailLabelId, forKey: Key.defaultMailLabelId) }
+    }
+    @Published var defaultMailLabelName: String {
+        didSet { defaults.set(defaultMailLabelName, forKey: Key.defaultMailLabelName) }
+    }
+    @Published var defaultMailLabelAccountID: String {
+        didSet { defaults.set(defaultMailLabelAccountID, forKey: Key.defaultMailLabelAccountID) }
+    }
+
     @Published var imageBehavior: ImageBehavior {
         didSet { defaults.set(imageBehavior.rawValue, forKey: Key.imageBehavior) }
     }
@@ -222,6 +235,9 @@ final class AppSettings: ObservableObject {
         static let autoAdvance = "settings.autoAdvance"
         static let mailLabelId = "settings.mailLabelId"
         static let mailLabelName = "settings.mailLabelName"
+        static let defaultMailLabelId = "settings.defaultMailLabelId"
+        static let defaultMailLabelName = "settings.defaultMailLabelName"
+        static let defaultMailLabelAccountID = "settings.defaultMailLabelAccountID"
         static let imageBehavior = "settings.imageBehavior"
         static let readingTextSize = "settings.readingTextSize"
         static let appearance = "settings.appearance"
@@ -241,6 +257,9 @@ final class AppSettings: ObservableObject {
         self.autoAdvance = defaults.object(forKey: Key.autoAdvance) as? Bool ?? false
         self.mailLabelId = defaults.string(forKey: Key.mailLabelId) ?? "INBOX"
         self.mailLabelName = defaults.string(forKey: Key.mailLabelName) ?? "Inbox"
+        self.defaultMailLabelId = defaults.string(forKey: Key.defaultMailLabelId) ?? "INBOX"
+        self.defaultMailLabelName = defaults.string(forKey: Key.defaultMailLabelName) ?? "Inbox"
+        self.defaultMailLabelAccountID = defaults.string(forKey: Key.defaultMailLabelAccountID) ?? ""
         self.imageBehavior = ImageBehavior(rawValue: defaults.string(forKey: Key.imageBehavior) ?? "")
             ?? .pauseAndDigest
         self.readingTextSize = ReadingTextSize(rawValue: defaults.string(forKey: Key.readingTextSize) ?? "")

@@ -53,6 +53,35 @@ struct SettingsView: View {
                 Text("When an email finishes, automatically open the next unread one, announce who it's from and its subject, then keep reading.")
             }
 
+            if !appState.mailLabels.isEmpty {
+                Section {
+                    Picker("Open to", selection: Binding(
+                        get: {
+                            settings.defaultMailLabelAccountID == appState.activeAccountID
+                                ? settings.defaultMailLabelId
+                                : (appState.mailLabels.first?.id ?? "INBOX")
+                        },
+                        set: { newID in
+                            guard let label = appState.mailLabels.first(where: { $0.id == newID }) else { return }
+                            settings.defaultMailLabelId = label.id
+                            settings.defaultMailLabelName = label.displayName
+                            settings.defaultMailLabelAccountID = appState.activeAccountID ?? ""
+                            // Apply now, not just next launch.
+                            settings.mailLabelId = label.id
+                            settings.mailLabelName = label.displayName
+                        }
+                    )) {
+                        ForEach(appState.mailLabels) { label in
+                            Text(label.displayName).tag(label.id)
+                        }
+                    }
+                } header: {
+                    Text("Mail")
+                } footer: {
+                    Text("The folder the Inbox tab opens to. Applies to \(appState.account?.emailAddress ?? "this account").")
+                }
+            }
+
             Section {
                 ForEach(sortedLanguageSpeeds, id: \.key) { entry in
                     Picker(languageName(entry.key), selection: Binding(

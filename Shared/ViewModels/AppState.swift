@@ -22,6 +22,9 @@ final class AppState: ObservableObject {
     @Published private(set) var connectedAccounts: [ConnectedAccount] = []
     @Published private(set) var activeAccountID: String?
     @Published var errorMessage: String?
+    /// Listenable folders for the active account, so Settings can offer a
+    /// "default folder" picker without its own fetch.
+    @Published private(set) var mailLabels: [MailLabel] = []
 
     let settings = AppSettings.shared
     let highlights = HighlightStore.shared
@@ -153,9 +156,16 @@ final class AppState: ObservableObject {
         }
         activeAccountID = account.id
         persistAccounts()
-        // Label ids differ per account/provider, so reset to the inbox on switch.
-        settings.mailLabelId = "INBOX"
-        settings.mailLabelName = "Inbox"
+        // Open to the chosen default folder if it belongs to this account (label
+        // ids are account-specific); otherwise the inbox. This is what makes
+        // "land on Newsletters" stick across launches instead of always resetting.
+        if settings.defaultMailLabelAccountID == account.id, !settings.defaultMailLabelId.isEmpty {
+            settings.mailLabelId = settings.defaultMailLabelId
+            settings.mailLabelName = settings.defaultMailLabelName
+        } else {
+            settings.mailLabelId = "INBOX"
+            settings.mailLabelName = "Inbox"
+        }
         // Use the stored identity immediately so launch is instant and never blocks
         // on the network. Fetching the live profile offline can hang until timeout —
         // that delay is what made a cold offline launch look like it logged you out.
@@ -163,13 +173,24 @@ final class AppState: ObservableObject {
                                    emailAddress: account.email,
                                    displayName: account.displayName)
         phase = .ready
-        // Best-effort: refresh the live profile in the background (ignore offline).
+        mailLabels = []
+        // Best-effort: refresh the live profile + folder list in the background.
         let service = mailService
         Task { @MainActor [weak self] in
             if let live = await service.account, !live.emailAddress.isEmpty {
                 self?.account = live
             }
+            await self?.loadMailLabels()
         }
+    }
+
+    /// Fetch the active account's listenable folders (for the Settings default-
+    /// folder picker). Best-effort; leaves the list empty on failure.
+    func loadMailLabels() async {
+        guard let fetched = try? await mailService.fetchLabels() else { return }
+        mailLabels = fetched
+            .filter { $0.isListenable }
+            .sorted { ($0.sortRank, $0.displayName) < ($1.sortRank, $1.displayName) }
     }
 
     #if os(iOS)
