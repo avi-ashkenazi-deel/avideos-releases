@@ -32,8 +32,8 @@
         <string>audio</string>
     </array>
     <key>NSHealthShareUsageDescription</key>
-    <string>Time It uses a workout session to keep timers and haptics running accurately while your wrist is down.</string>
+    <string>Time It reads your heart rate to display it live during workout timers and sessions, and to keep cues running accurately while your wrist is down.</string>
     <key>NSHealthUpdateUsageDescription</key>
-    <string>Time It uses a workout session to keep timers and haptics running accurately while your wrist is down.</string>
+    <string>Time It records your workout timers and sessions to the Fitness app.</string>
 </dict>
 </plist>

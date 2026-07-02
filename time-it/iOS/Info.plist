@@ -41,6 +41,13 @@
     <!-- Live Activity on the Lock Screen + Dynamic Island. -->
     <key>NSSupportsLiveActivities</key>
     <true/>
+    <!-- Required here too (not just the watch app): App Store validation
+         (ITMS-90683) demands HealthKit usage strings on the companion iOS app
+         because the embedded watch app carries the HealthKit entitlement. -->
+    <key>NSHealthShareUsageDescription</key>
+    <string>Time It reads your heart rate on Apple Watch to display it live during workout timers and sessions.</string>
+    <key>NSHealthUpdateUsageDescription</key>
+    <string>Time It records your workout timers and sessions to the Fitness app on Apple Watch.</string>
     <!-- No proprietary/non-exempt encryption — skips the export-compliance
          question on every TestFlight upload so builds go live immediately. -->
     <key>ITSAppUsesNonExemptEncryption</key>
