@@ -83,6 +83,12 @@ final class EmailPlayerViewModel: ObservableObject {
     /// fetch article content), which is applied directly without a mail fetch.
     var nextLocalProvider: (@MainActor (String) async -> Email?)?
 
+    /// Whether auto-advancing to the next *local* item should speak the "From …"
+    /// header. Mirrors the `announce` the current item was opened with — feeds in
+    /// titles-only mode open with it off (the body already is the title), so the
+    /// next headline shouldn't get a duplicate spoken intro either.
+    private var announceOnAdvance = true
+
     private var mailService: MailService
     private let settings: AppSettings
     private let highlights: HighlightStore
@@ -203,6 +209,7 @@ final class EmailPlayerViewModel: ObservableObject {
               nextUnreadProvider: ((String) -> Email?)? = nil,
               nextLocalProvider: (@MainActor (String) async -> Email?)? = nil) {
         isExpanded = true
+        announceOnAdvance = announce
         let config = StagedConfig(onMarkedRead: onMarkedRead,
                                   markReadOverride: markReadOverride,
                                   nextUnreadProvider: nextUnreadProvider,
@@ -682,7 +689,7 @@ final class EmailPlayerViewModel: ObservableObject {
         if let nextLocalProvider {
             Task {
                 guard let next = await nextLocalProvider(currentID) else { return }
-                await apply(next, announce: true)   // parses the email's own content
+                await apply(next, announce: announceOnAdvance)   // parses the email's own content
                 guard errorMessage == nil else { return }
                 SoundEffects.shared.play(.transition)
                 try? await Task.sleep(nanoseconds: 500_000_000)

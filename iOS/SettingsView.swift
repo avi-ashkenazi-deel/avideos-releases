@@ -53,6 +53,14 @@ struct SettingsView: View {
                 Text("When an email finishes, automatically open the next unread one, announce who it's from and its subject, then keep reading.")
             }
 
+            Section {
+                Toggle("Read titles only", isOn: $settings.feedsTitlesOnly)
+            } header: {
+                Text("Feeds")
+            } footer: {
+                Text("In feeds, read just each item's headline and move on — skip fetching and reading the article body. Best paired with auto-play to skim headlines hands-free.")
+            }
+
             if !appState.mailLabels.isEmpty {
                 Section {
                     Picker("Open to", selection: Binding(

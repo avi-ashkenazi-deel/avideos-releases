@@ -143,6 +143,12 @@ final class AppSettings: ObservableObject {
         didSet { defaults.set(autoAdvance, forKey: Key.autoAdvance) }
     }
 
+    /// Feeds only: read just each item's title (skip fetching/reading the body),
+    /// so you can skim headlines. Best paired with auto-play.
+    @Published var feedsTitlesOnly: Bool {
+        didSet { defaults.set(feedsTitlesOnly, forKey: Key.feedsTitlesOnly) }
+    }
+
     /// Which Gmail label/folder to listen to (default the whole inbox).
     @Published var mailLabelId: String {
         didSet { defaults.set(mailLabelId, forKey: Key.mailLabelId) }
@@ -233,6 +239,7 @@ final class AppSettings: ObservableObject {
         static let speed = "settings.speed"
         static let languageSpeeds = "settings.languageSpeeds"
         static let autoAdvance = "settings.autoAdvance"
+        static let feedsTitlesOnly = "settings.feedsTitlesOnly"
         static let mailLabelId = "settings.mailLabelId"
         static let mailLabelName = "settings.mailLabelName"
         static let defaultMailLabelId = "settings.defaultMailLabelId"
@@ -255,6 +262,7 @@ final class AppSettings: ObservableObject {
         self.speed = defaults.object(forKey: Key.speed) as? Double ?? 1.0
         self.languageSpeeds = (defaults.dictionary(forKey: Key.languageSpeeds) as? [String: Double]) ?? [:]
         self.autoAdvance = defaults.object(forKey: Key.autoAdvance) as? Bool ?? false
+        self.feedsTitlesOnly = defaults.object(forKey: Key.feedsTitlesOnly) as? Bool ?? false
         self.mailLabelId = defaults.string(forKey: Key.mailLabelId) ?? "INBOX"
         self.mailLabelName = defaults.string(forKey: Key.mailLabelName) ?? "Inbox"
         self.defaultMailLabelId = defaults.string(forKey: Key.defaultMailLabelId) ?? "INBOX"
