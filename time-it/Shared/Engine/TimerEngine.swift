@@ -164,14 +164,19 @@ final class TimerEngine: ObservableObject {
         guard ticker == nil, !running.isEmpty else { return }
         // 0.1s is fine enough to land each integer second for the spoken
         // countdown while staying cheap (one shared timer for all runs).
-        let t = Timer(timeInterval: 0.1, repeats: true) { [weak self] _ in
+        //
+        // Deliberately the DEFAULT runloop mode, not .common: menus/pickers hold
+        // the runloop in tracking mode while open, and a .common-mode tick keeps
+        // publishing at 10Hz underneath them — the re-renders slam every open
+        // dropdown shut (all menus "stopped working" whenever a timer ran).
+        // Pausing the tick during that brief tracking is harmless: elapsed time
+        // is derived from wall-clock dates, so nothing drifts; a due cue fires
+        // on the first tick after the menu closes.
+        let t = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.tick() }
         }
-        // A little tolerance lets the OS coalesce wakeups (battery); .common
-        // keeps the tick firing during scroll/sheet tracking, where the default
-        // runloop mode would stall it and delay cues.
+        // A little tolerance lets the OS coalesce wakeups (battery).
         t.tolerance = 0.02
-        RunLoop.main.add(t, forMode: .common)
         ticker = t
     }
 
