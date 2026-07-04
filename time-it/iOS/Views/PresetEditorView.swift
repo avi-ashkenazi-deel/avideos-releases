@@ -111,9 +111,10 @@ struct PresetEditorView: View {
                     FeedbackPreviewSection(preset: draft)
                 }
             }
+            // Keyboard dismisses by dragging the form or via the "Done" toolbar
+            // button below. (A form-wide tap gesture would swallow taps meant for
+            // the menu-style pickers — Workout type, Buzz — and stop them opening.)
             .scrollDismissesKeyboard(.interactively)
-            // Tap anywhere off the field to dismiss the keyboard.
-            .simultaneousGesture(TapGesture().onEnded { nameFocused = false })
             .navigationTitle(title)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
