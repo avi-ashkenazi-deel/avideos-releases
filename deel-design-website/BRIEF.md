@@ -148,7 +148,7 @@ Rule of thumb: **if a format would require someone to produce content on a sched
 
 1. **Domain & platform** — confirm `deel.design`; static site vs. CMS vs. existing web stack? (Affects how cheap Tier 2 capture can be.)
 2. **First stories** — which 3–5 designers/stories anchor the launch? Who owns capturing them?
-3. **Roles source** — do targeted postings link to the ATS/apply flow, or is application handled on-site?
+3. ~~**Roles source** — do targeted postings link to the ATS/apply flow, or is application handled on-site?~~ **Decided:** No ATS integration. Rich role narratives live on deel.design; **Apply** redirects to the Deel careers page filtered to design. *(Open sub-item: confirm the exact design-filtered careers URL.)*
 4. **Design-system readiness gate** — what has to be true before Phase 2 (the system) ships?
 5. **Ownership** — who owns editorial (the high-bar Tier 1) vs. lightweight story capture (Tier 2)?
 6. **Legal/brand review** — what approval, if any, do public principles statements need?

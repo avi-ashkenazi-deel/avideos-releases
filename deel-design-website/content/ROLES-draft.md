@@ -18,7 +18,15 @@ Every role uses the same five beats:
 
 Then a link to a relevant **Story** (so the problem has a human face) and the **apply** action.
 
-> ⚠️ The two examples below are **illustrative** — plausible Deel domains, not confirmed open reqs. I can pull the *real* current design openings from the ATS and rewrite those instead — just say the word.
+## How applying works
+
+The rich, domain-specific narrative lives **on deel.design** — that's the recruiting value. The **Apply** button redirects out to the **Deel careers page, pre-filtered to design roles**. No ATS integration to build or maintain; the site stays a narrative layer on top of the real openings.
+
+- If a specific req is open, "Apply" deep-links to that filtered listing.
+- If not, "Apply" lands on the design-filtered careers page so interested designers still convert.
+- Role narratives here are evergreen (framed around the *domain and problem*), so they don't go stale every time a req opens or closes.
+
+> ⚠️ The two examples below are **illustrative** — plausible Deel domains, written to show the format and voice, not confirmed open reqs.
 
 ---
 
@@ -34,7 +42,7 @@ Then a link to a relevant **Story** (so the problem has a human face) and the **
 
 **What we're looking for.** You get energized, not scared, by genuine complexity. You've designed for expert users doing high-stakes work. You have opinions about defaults. You can move fast without shipping sloppy.
 
-*Read: [Story — "The payroll edge case that taught me to design for fear"] · [Apply]*
+*Read: [Story — "The payroll edge case that taught me to design for fear"] · [Apply → Deel careers, design roles]*
 
 ---
 
@@ -50,8 +58,8 @@ Then a link to a relevant **Story** (so the problem has a human face) and the **
 
 **What we're looking for.** You care about the anxious, non-expert user. You've untangled money/timing/status flows before. You can hold "make it feel simple" and "the reality is complicated" in your head at once.
 
-*Read: [Story — "Designing for the 'where's my money' moment"] · [Apply]*
+*Read: [Story — "Designing for the 'where's my money' moment"] · [Apply → Deel careers, design roles]*
 
 ---
 
-*Next: replace illustrative examples with real openings, and pair each with a real designer story.*
+*Next: swap illustrative examples for real domains, pair each with a real designer story, and confirm the design-filtered careers URL for the Apply redirect.*
