@@ -17,6 +17,7 @@ struct PlayerDetailContent: View {
     @EnvironmentObject private var player: EmailPlayerViewModel
     @ObservedObject private var settings = AppSettings.shared
     @ObservedObject private var highlightStore = HighlightStore.shared
+    @Environment(\.openURL) private var openURL
 
     @State private var highlightToAnnotate: Highlight?
     @State private var showCompletion = false
@@ -29,6 +30,17 @@ struct PlayerDetailContent: View {
     /// Links from whatever's on screen (a staged preview takes precedence).
     private var currentLinks: [EmailLink] {
         player.staged?.links ?? player.parsed?.links ?? []
+    }
+
+    /// The feed item's own web page, so the reader can offer "open the full
+    /// article in the browser". Feed emails stash the item's link in the sender
+    /// address; nil for regular mail (no web page to open).
+    private var articleURL: URL? {
+        guard let email = player.staged?.email ?? player.parsed?.email,
+              email.id.hasPrefix("rss-"),
+              let url = URL(string: email.from.address),
+              url.scheme?.hasPrefix("http") == true else { return nil }
+        return url
     }
 
     // The iPad reading pane is much wider than an iPhone, so the same point size
@@ -53,6 +65,14 @@ struct PlayerDetailContent: View {
                          ?? player.parsed?.email.from.displayName ?? "")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            if let articleURL {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { openURL(articleURL) } label: {
+                        Image(systemName: "safari")
+                    }
+                    .accessibilityLabel("Open the full article in the browser")
+                }
+            }
             if !currentLinks.isEmpty {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { showLinks = true } label: {
