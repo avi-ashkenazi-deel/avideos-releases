@@ -2,19 +2,27 @@ import Foundation
 import Combine
 
 /// A phrase the listener never wants read aloud — optionally scoped to one
-/// sender's domain. Built for the recurring chrome newsletters repeat in every
-/// issue (Substack's "Read in app", "Like / Comment / Restack", …).
+/// sender. Built for the recurring chrome newsletters repeat in every issue
+/// (Substack's "Read in app", "Like / Comment / Restack", …).
 struct SkipRule: Identifiable, Codable, Hashable, Sendable {
     var id: String = UUID().uuidString
     /// The text to match (the sentence the listener chose to skip).
     var phrase: String
-    /// Lowercased sender domain this applies to; empty = every sender.
-    var senderDomain: String
+    /// Lowercased *full* sender address this applies to; empty = every sender.
+    /// (Previously the domain — too broad for Substack, where every author sends
+    /// from `…@substack.com`; the full address scopes per author/publication.)
+    var sender: String
     /// Sender display name, just so the rules list reads nicely.
     var label: String
 
+    // Keep the original on-disk key so existing rules still decode.
+    enum CodingKeys: String, CodingKey {
+        case id, phrase, label
+        case sender = "senderDomain"
+    }
+
     func matches(_ text: String, fromAddress: String) -> Bool {
-        if !senderDomain.isEmpty, senderDomain != SkipRuleStore.domain(of: fromAddress) {
+        if !sender.isEmpty, sender != fromAddress.lowercased() {
             return false
         }
         let needle = SkipRuleStore.normalize(phrase)
@@ -23,7 +31,8 @@ struct SkipRule: Identifiable, Codable, Hashable, Sendable {
     }
 
     var scopeDescription: String {
-        senderDomain.isEmpty ? "All senders" : senderDomain
+        if sender.isEmpty { return "All senders" }
+        return label.isEmpty ? sender : label
     }
 }
 
@@ -45,17 +54,18 @@ final class SkipRuleStore: ObservableObject {
 
     // MARK: - Mutations
 
-    /// Add a rule (deduped by phrase + scope). Returns false if it already exists.
+    /// Add a rule (deduped by phrase + scope). `sender` is the full sender address
+    /// to scope to, or "" for every sender. Returns false if it already exists.
     @discardableResult
-    func add(phrase: String, senderDomain: String, label: String) -> Bool {
+    func add(phrase: String, sender: String, label: String) -> Bool {
         let trimmed = phrase.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.count >= 3 else { return false }
-        let domain = senderDomain.lowercased()
+        let addr = sender.lowercased()
         let exists = rules.contains {
-            $0.senderDomain == domain && Self.normalize($0.phrase) == Self.normalize(trimmed)
+            $0.sender == addr && Self.normalize($0.phrase) == Self.normalize(trimmed)
         }
         guard !exists else { return false }
-        rules.insert(SkipRule(phrase: trimmed, senderDomain: domain, label: label), at: 0)
+        rules.insert(SkipRule(phrase: trimmed, sender: addr, label: label), at: 0)
         save()
         return true
     }

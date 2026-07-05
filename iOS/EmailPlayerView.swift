@@ -52,6 +52,10 @@ struct PlayerDetailContent: View {
     /// of sliding away under the menu). Auto-resumes shortly after.
     @State private var holdAutoScroll = false
     @State private var holdScrollTask: Task<Void, Never>?
+
+    /// Direction of the last item swipe, so the new transcript slides in from the
+    /// matching edge (left swipe → next slides in from the right).
+    @State private var lastSwipeForward = true
     private static let collapseAnimation: Animation = .spring(response: 0.38, dampingFraction: 0.85)
 
     /// Links from whatever's on screen (a staged preview takes precedence).
@@ -288,8 +292,18 @@ struct PlayerDetailContent: View {
                 let dx = value.translation.width
                 let dy = value.translation.height
                 guard abs(dx) > 70, abs(dx) > abs(dy) * 1.5 else { return }
+                lastSwipeForward = dx < 0
                 player.moveToSibling(dx < 0 ? 1 : -1)   // swipe left → next
             }
+    }
+
+    /// A page-turn slide for the transcript when the item changes: the new one
+    /// slides in from the swipe direction while the old slides out the other way.
+    private var pageTransition: AnyTransition {
+        .asymmetric(
+            insertion: .move(edge: lastSwipeForward ? .trailing : .leading).combined(with: .opacity),
+            removal: .move(edge: lastSwipeForward ? .leading : .trailing).combined(with: .opacity)
+        )
     }
 
     /// Freeze the follow-along scroll while the listener decides on a line, with a
@@ -322,7 +336,12 @@ struct PlayerDetailContent: View {
                     // Clear the floating transport panel by its *measured* height
                     // (+ a margin), so the last sentence is never hidden behind it.
                     .padding(.bottom, controlsHeight + 24)
+                    // New identity per item + a page-turn transition, so moving
+                    // between emails/feeds slides instead of blinking.
+                    .id(email?.id ?? "")
+                    .transition(pageTransition)
             }
+            .animation(.easeInOut(duration: 0.3), value: email?.id)
             .onChange(of: player.currentBlockIndex) { _, index in
                 // Held while a long-press decision menu is up, so the text doesn't
                 // scroll out from under the menu.
@@ -617,16 +636,18 @@ struct PlayerDetailContent: View {
                     Label("Read again", systemImage: "speaker.wave.2")
                 }
             } else {
-                let domain = SkipRuleStore.domain(of: from.address)
                 Button {
                     endScrollHold()
-                    SkipRuleStore.shared.add(phrase: sentence.text, senderDomain: domain, label: from.displayName)
+                    // Scope to this exact sender address, so muting "Read in app"
+                    // for one Substack author doesn't mute it for other authors
+                    // (who all share the substack.com domain).
+                    SkipRuleStore.shared.add(phrase: sentence.text, sender: from.address, label: from.displayName)
                 } label: {
                     Label("Skip from this sender", systemImage: "speaker.slash")
                 }
                 Button {
                     endScrollHold()
-                    SkipRuleStore.shared.add(phrase: sentence.text, senderDomain: "", label: from.displayName)
+                    SkipRuleStore.shared.add(phrase: sentence.text, sender: "", label: from.displayName)
                 } label: {
                     Label("Skip from everyone", systemImage: "speaker.slash.fill")
                 }

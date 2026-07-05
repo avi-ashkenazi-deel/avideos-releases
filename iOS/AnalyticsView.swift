@@ -116,7 +116,7 @@ struct AnalyticsView: View {
         } header: {
             Text("Listening over time")
         } footer: {
-            Text("Minutes listened per \(range.title.lowercased()). Tap a bar to see that \(range.title.lowercased())'s total.")
+            Text("Minutes listened per \(range.title.lowercased()); tap a bar for its total. The chart builds up from this update on — earlier listening still counts in your all-time Totals below.")
         }
         .onChange(of: range) { _, _ in selectedLabel = nil }
     }
