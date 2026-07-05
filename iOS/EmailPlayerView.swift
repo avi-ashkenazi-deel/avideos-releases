@@ -538,7 +538,8 @@ private struct SentenceText: View {
 
     /// A noted run renders as one continuous yellow shape: only the run's ends are
     /// rounded, and every sentence but the last reaches down into the inter-sentence
-    /// gap to meet the next one. A plain current sentence gets the accent wash.
+    /// gap to meet the next one. The sentence being read gets no background wash —
+    /// the recolored spoken word marks the reading position instead.
     @ViewBuilder
     private var highlightBackground: some View {
         if isNoted {
@@ -550,9 +551,6 @@ private struct SentenceText: View {
             )
             .fill(Color.yellow.opacity(0.30))
             .padding(.bottom, bridgesToNext ? -Self.blockSpacing : 0)
-        } else if isCurrent {
-            RoundedRectangle(cornerRadius: Self.cornerRadius)
-                .fill(Color.accentColor.opacity(0.15))
         }
     }
 
@@ -563,7 +561,8 @@ private struct SentenceText: View {
               let attrRange = Range(swiftRange, in: string) else {
             return string
         }
-        string[attrRange].inlinePresentationIntent = .stronglyEmphasized
+        // Just recolor the word being read — no bold (which would nudge the layout
+        // as each word thickens and thins).
         string[attrRange].foregroundColor = .accentColor
         return string
     }
