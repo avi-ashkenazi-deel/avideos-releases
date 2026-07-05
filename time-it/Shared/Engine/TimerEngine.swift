@@ -93,7 +93,7 @@ final class TimerEngine: ObservableObject {
         guard let i = running.firstIndex(where: { $0.id == id }) else { return }
         let e = running[i].elapsed(now: now)
         let bounds = running[i].segmentBoundaries()
-        let target = bounds.first { $0 > e + 0.05 } ?? running[i].preset.duration
+        let target = bounds.first { $0 > e + 0.05 } ?? running[i].preset.runDuration
         setElapsed(&running[i], to: target, now: now)
         notifyChange()
     }
@@ -115,12 +115,12 @@ final class TimerEngine: ObservableObject {
     /// they don't replay); a cue landing exactly on the new point still fires
     /// (so skipping *to* an interval announces it).
     private func setElapsed(_ s: inout RunningTimerState, to newElapsed: TimeInterval, now: Date) {
-        let clamped = max(0, min(newElapsed, s.preset.duration))
+        let clamped = max(0, min(newElapsed, s.preset.runDuration))
         s.bankedElapsed = clamped
         s.startDate = now
         s.firedCueIDs = Set(s.cues.filter { $0.fireTime < clamped - 0.05 }.map(\.id))
         if let cd = s.preset.finalCountdown {
-            let remaining = s.preset.duration - clamped
+            let remaining = s.preset.runDuration - clamped
             s.lastCountdownSecondSpoken = remaining > Double(cd.lastSeconds) ? nil : Int(remaining.rounded(.up))
         }
         s.intervalCountdownTarget = nil
@@ -133,7 +133,7 @@ final class TimerEngine: ObservableObject {
         let elapsed = running[i].elapsed(now: now)
         running[i].preset = newPreset
         // Re-baseline so the elapsed amount is preserved against the new duration.
-        running[i].bankedElapsed = min(elapsed, newPreset.duration)
+        running[i].bankedElapsed = min(elapsed, newPreset.runDuration)
         running[i].startDate = now
         // Any cue already in the past on the new schedule is considered fired.
         running[i].firedCueIDs = Set(
@@ -280,10 +280,14 @@ final class TimerEngine: ObservableObject {
     /// 2,1" into the next interval), if the interval plan has it enabled.
     private func processIntervalCountdown(_ s: inout RunningTimerState, now: Date) {
         guard let plan = s.preset.intervals, plan.countdownEnabled else { return }
+        let w = s.preset.warmupTime
         let elapsed = s.elapsed(now: now)
-        let bounds = plan.boundaries(forDuration: s.preset.duration)
+        // Only during the work portion (not warm-up / cool-down).
+        guard elapsed >= w, elapsed < w + s.preset.duration else { return }
+        var bounds = plan.boundaries(forDuration: s.preset.duration).map { $0 + w }
+        bounds.append(w + s.preset.duration)   // count into the end of the last work interval
         guard let next = bounds.first(where: { $0 > elapsed + 0.0001 }) else { return }
-        let prev = bounds.last(where: { $0 <= elapsed + 0.0001 }) ?? 0
+        let prev = bounds.last(where: { $0 <= elapsed + 0.0001 }) ?? w
         // Reset the per-second tracker whenever we start counting to a new boundary.
         if s.intervalCountdownTarget != next {
             s.intervalCountdownTarget = next

@@ -27,7 +27,7 @@ struct WatchTimerListView: View {
                         Circle().fill(Color(hex: preset.colorHex)).frame(width: 10, height: 10)
                         VStack(alignment: .leading) {
                             Text(preset.displayName).font(.headline)
-                            Text(formatClock(preset.duration))
+                            Text(formatClock(preset.runDuration))
                                 .font(.caption2).foregroundStyle(.secondary)
                         }
                         Spacer()

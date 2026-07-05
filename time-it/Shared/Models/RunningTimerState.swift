@@ -56,10 +56,18 @@ struct RunningTimerState: Identifiable {
     }
 
     /// Re-derive the cached cue list and segment boundaries from the preset.
+    /// Segments: the warm-up, each work interval (shifted past the warm-up), and
+    /// the cool-down — so the running view counts each down as its own block.
     private mutating func recomputeDerived() {
         cues = preset.cues()
-        var b = Set(preset.intervals?.boundaries(forDuration: preset.duration) ?? [])
-        b.insert(preset.duration)
+        let w = preset.warmupTime
+        var b = Set<TimeInterval>()
+        if w > 0 { b.insert(w) }                                   // warm-up ends
+        for x in (preset.intervals?.boundaries(forDuration: preset.duration) ?? []) {
+            b.insert(x + w)                                        // work boundaries
+        }
+        if preset.cooldownTime > 0 { b.insert(w + preset.duration) } // cool-down starts
+        b.insert(preset.runDuration)
         segmentBounds = b.filter { $0 > 0.0001 }.sorted()
     }
 
@@ -95,7 +103,7 @@ struct RunningTimerState: Identifiable {
     func currentSegment(now: Date = Date()) -> (start: TimeInterval, end: TimeInterval) {
         let e = elapsed(now: now)
         let bounds = segmentBoundaries()
-        let end = bounds.first { $0 > e + 0.0001 } ?? preset.duration
+        let end = bounds.first { $0 > e + 0.0001 } ?? preset.runDuration
         let start = bounds.last { $0 <= e + 0.0001 } ?? 0
         return (start, end)
     }
@@ -117,7 +125,7 @@ struct RunningTimerState: Identifiable {
     /// taken from the cue that *starts* it; nil for the opening segment.
     func currentIntervalLabel(now: Date = Date()) -> String? {
         let start = currentSegment(now: now).start
-        guard start > 0.0001 else { return nil }
+        guard start > 0.0001 else { return preset.warmupTime > 0 ? "Warm up" : nil }
         return cues.first { abs($0.fireTime - start) < 0.5 }?.displayLabel
     }
 
@@ -139,12 +147,17 @@ struct RunningTimerState: Identifiable {
         let roundLen = works.reduce(0, +) + rest
         guard roundLen > 0 else { return nil }
 
+        // Work/rest only applies during the work portion (after any warm-up,
+        // before any cool-down); elsewhere there's no phase.
+        let w = preset.warmupTime
         let e = elapsed(now: now)
+        guard e >= w, e < w + preset.duration else { return nil }
+        let workE = e - w
         let rounds = max(1, Int((preset.duration / roundLen).rounded(.up)))
-        let roundIndex = min(Int(e / roundLen) + 1, rounds)
+        let roundIndex = min(Int(workE / roundLen) + 1, rounds)
 
         // Where are we within the current round? Work segments first, then rest.
-        let within = e.truncatingRemainder(dividingBy: roundLen)
+        let within = workE.truncatingRemainder(dividingBy: roundLen)
         var acc: TimeInterval = 0
         var isWork = false
         for w in works {
@@ -159,23 +172,23 @@ struct RunningTimerState: Identifiable {
     func elapsed(now: Date = Date()) -> TimeInterval {
         guard now >= startDate else { return 0 }
         let live = isRunning ? now.timeIntervalSince(startDate) : 0
-        return min(bankedElapsed + live, preset.duration)
+        return min(bankedElapsed + live, preset.runDuration)
     }
 
-    /// Seconds left in the current run.
+    /// Seconds left in the current run (includes warm-up + cool-down).
     func remaining(now: Date = Date()) -> TimeInterval {
-        max(0, preset.duration - elapsed(now: now))
+        max(0, preset.runDuration - elapsed(now: now))
     }
 
     /// 0...1 progress through the current run.
     func progress(now: Date = Date()) -> Double {
-        guard preset.duration > 0 else { return 1 }
-        return min(1, elapsed(now: now) / preset.duration)
+        guard preset.runDuration > 0 else { return 1 }
+        return min(1, elapsed(now: now) / preset.runDuration)
     }
 
     /// True when the current run has reached its full duration.
     func isComplete(now: Date = Date()) -> Bool {
-        elapsed(now: now) >= preset.duration
+        elapsed(now: now) >= preset.runDuration
     }
 
     /// Whether there's another repeat to run after the current one.

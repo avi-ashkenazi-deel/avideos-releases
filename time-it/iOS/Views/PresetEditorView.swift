@@ -72,6 +72,33 @@ struct PresetEditorView: View {
                     Text("Counts \"3, 2, 1\" with a buzz, then \"Let's go\" before the timer starts. Drop a lets-go.mp3 in Sounds to use your own voice.")
                 }
 
+                Section {
+                    Toggle("Warm-up", isOn: warmupEnabled)
+                    if (draft.warmup ?? 0) > 0 {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Warm-up: \(restLabel(draft.warmup ?? 60))")
+                            Slider(value: Binding(get: { draft.warmup ?? 60 },
+                                                  set: { draft.warmup = $0 }),
+                                   in: 5...600, step: 5)
+                            .sensoryFeedback(.selection, trigger: draft.warmup ?? 60)
+                        }
+                    }
+                    Toggle("Cool-down", isOn: cooldownEnabled)
+                    if (draft.cooldown ?? 0) > 0 {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Cool-down: \(restLabel(draft.cooldown ?? 60))")
+                            Slider(value: Binding(get: { draft.cooldown ?? 60 },
+                                                  set: { draft.cooldown = $0 }),
+                                   in: 5...600, step: 5)
+                            .sensoryFeedback(.selection, trigger: draft.cooldown ?? 60)
+                        }
+                    }
+                } header: {
+                    Text("Warm-up & cool-down")
+                } footer: {
+                    Text("Optional eased-in start and wind-down, added around the total time. \"Warm up\" then \"Go\" at the start; \"Cool down\" at the end.")
+                }
+
                 IntervalsSection(plan: $draft.intervals, duration: draft.duration,
                                  isWorkout: draft.recordsWorkout ?? true)
 
@@ -143,6 +170,13 @@ struct PresetEditorView: View {
     }
 
     // MARK: Bindings into the optional final-countdown
+
+    private var warmupEnabled: Binding<Bool> {
+        Binding(get: { (draft.warmup ?? 0) > 0 }, set: { draft.warmup = $0 ? 60 : nil })
+    }
+    private var cooldownEnabled: Binding<Bool> {
+        Binding(get: { (draft.cooldown ?? 0) > 0 }, set: { draft.cooldown = $0 ? 60 : nil })
+    }
 
     private var finalCountdownEnabled: Binding<Bool> {
         Binding(
@@ -553,7 +587,7 @@ private struct FeedbackPreviewSection: View {
                 ForEach(events) { event in
                     HStack(spacing: 12) {
                         // Time remaining when this cue fires.
-                        Text("\(formatClock(max(0, preset.duration - event.time))) left")
+                        Text("\(formatClock(max(0, preset.runDuration - event.time))) left")
                             .monospacedDigit().foregroundStyle(.secondary)
                             .frame(width: 86, alignment: .trailing)
 

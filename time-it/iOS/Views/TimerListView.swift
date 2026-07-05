@@ -157,7 +157,7 @@ private struct PresetRow: View {
     }
 
     private var subtitle: String {
-        var parts = [formatClock(preset.duration)]
+        var parts = [formatClock(preset.runDuration)]
         let cueCount = preset.cues().count
         if cueCount > 0 {
             parts.append("\(cueCount) cue\(cueCount == 1 ? "" : "s")")

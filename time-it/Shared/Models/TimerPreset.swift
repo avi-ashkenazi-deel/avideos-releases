@@ -43,6 +43,16 @@ struct TimerPreset: Codable, Hashable, Identifiable {
     /// Seconds of "3,2,1… Let's go" lead-in before the timer actually starts.
     /// nil/0 = start immediately.
     var startCountdown: Int? = nil
+    /// Optional warm-up before the intervals and cool-down after them (seconds).
+    /// The interval plan still splits `duration`; warm-up/cool-down bracket it, so
+    /// the whole run is `runDuration`. Decode-safe optionals; nil/0 = none.
+    var warmup: TimeInterval? = nil
+    var cooldown: TimeInterval? = nil
+
+    var warmupTime: TimeInterval { max(0, warmup ?? 0) }
+    var cooldownTime: TimeInterval { max(0, cooldown ?? 0) }
+    /// The full run length: warm-up + work (`duration`) + cool-down.
+    var runDuration: TimeInterval { warmupTime + duration + cooldownTime }
 
     /// Resolved flag (defaults to true for presets saved before this existed).
     var isWorkout: Bool { recordsWorkout ?? true }
@@ -54,10 +64,11 @@ struct TimerPreset: Codable, Hashable, Identifiable {
         name.isEmpty ? "\(formatClock(duration)) timer" : name
     }
 
-    /// Spoken at the very start: the first interval's custom name if one is set,
-    /// otherwise "Starting <name>".
+    /// Spoken at the very start: "Warm up" when there's a warm-up, else the first
+    /// interval's custom name if set, else "Starting <name>".
     var startAnnouncement: String {
-        intervals?.stepName(forSegment: 0) ?? "Starting \(displayName)"
+        if warmupTime > 0 { return "Warm up" }
+        return intervals?.stepName(forSegment: 0) ?? "Starting \(displayName)"
     }
 
     // MARK: Output indicators (for the list row)
@@ -81,12 +92,22 @@ struct TimerPreset: Codable, Hashable, Identifiable {
     /// boundary (the interval cue wins).
     func cues() -> [TimerCue] {
         var result: [TimerCue] = []
+        let w = warmupTime
 
+        // Warm-up → work transition ("Go" / first step name).
+        if w > 0 {
+            let label = intervals?.stepName(forSegment: 0) ?? "Go"
+            result.append(TimerCue(id: "work-start", fireTime: w,
+                                   alert: intervals?.alert ?? .voiceAndHaptic,
+                                   haptic: .success, spokenText: label, displayLabel: label))
+        }
+
+        // Interval boundaries, shifted past the warm-up.
         if let plan = intervals {
             for (idx, b) in plan.cuePoints(forDuration: duration).enumerated() {
                 result.append(TimerCue(
                     id: "interval-\(idx + 1)",
-                    fireTime: b.time,
+                    fireTime: b.time + w,
                     alert: plan.alert,
                     haptic: b.haptic,
                     spokenText: b.spokenText,
@@ -95,8 +116,16 @@ struct TimerPreset: Codable, Hashable, Identifiable {
             }
         }
 
+        // Work → cool-down transition.
+        if cooldownTime > 0 {
+            result.append(TimerCue(id: "cooldown-start", fireTime: w + duration,
+                                   alert: .voiceAndHaptic, haptic: .directionDown,
+                                   spokenText: "Cool down", displayLabel: "Cool down"))
+        }
+
+        // One-off milestones are relative to the whole run.
         for m in milestones {
-            let t = m.trigger.fireTime(forDuration: duration)
+            let t = m.trigger.fireTime(forDuration: runDuration)
             // Skip if an interval boundary already sits on this second.
             if result.contains(where: { abs($0.fireTime - t) < 0.5 }) { continue }
             result.append(TimerCue(
@@ -104,8 +133,8 @@ struct TimerPreset: Codable, Hashable, Identifiable {
                 fireTime: t,
                 alert: m.alert,
                 haptic: m.haptic,
-                spokenText: m.spokenText(forDuration: duration),
-                displayLabel: m.displayLabel(forDuration: duration)
+                spokenText: m.spokenText(forDuration: runDuration),
+                displayLabel: m.displayLabel(forDuration: runDuration)
             ))
         }
 
@@ -155,13 +184,13 @@ struct TimerPreset: Codable, Hashable, Identifiable {
         // Final spoken countdown — shown as one summary row ("10-second
         // countdown") rather than a row per second.
         if let fc = finalCountdown, fc.lastSeconds > 0 {
-            let t = max(0, duration - Double(fc.lastSeconds))
+            let t = max(0, runDuration - Double(fc.lastSeconds))
             events.append(.init(time: t, title: "\(fc.lastSeconds)-second countdown",
                                 voice: true, haptic: fc.haptic))
         }
 
         // The finish itself.
-        events.append(.init(time: duration, title: "Time's up", voice: false, haptic: true))
+        events.append(.init(time: runDuration, title: "Time's up", voice: false, haptic: true))
 
         return events.sorted { $0.time < $1.time }
     }
