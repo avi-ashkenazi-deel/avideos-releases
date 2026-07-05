@@ -72,117 +72,137 @@ struct PlayerDetailContent: View {
     private var bodyFontSize: CGFloat { settings.readingTextSize.bodyPointSize * readingScale }
     private var titleFontSize: CGFloat { settings.readingTextSize.titlePointSize * readingScale }
 
+    // Split into a base view plus two generic modifier helpers: one big modifier
+    // chain overwhelmed the SwiftUI type-checker ("unable to type-check in
+    // reasonable time"), so each piece is type-checked independently.
     var body: some View {
+        withLifecycle(withPresentations(baseContent))
+    }
+
+    private var baseContent: some View {
         VStack(spacing: 0) {
             voiceBanner
             modeContent
         }
         .background(PiPHostView().frame(width: 2, height: 2).opacity(0.02).allowsHitTesting(false))
-        .onChange(of: player.parsed?.email.id) { _, _ in
-            dismissedVoiceWarning = false
-            renderPiP()
-            // A new item: open the full controls, then let them settle back down.
-            expandControls()
-        }
         .navigationTitle(player.staged?.email.from.displayName
                          ?? player.parsed?.email.from.displayName ?? "")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            if let articleURL {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button { browserLink = BrowserLink(url: articleURL) } label: {
-                        Image(systemName: "safari")
-                    }
-                    .accessibilityLabel("Open the full article in the browser")
+        .toolbar { readerToolbar }
+    }
+
+    @ToolbarContentBuilder
+    private var readerToolbar: some ToolbarContent {
+        if let articleURL {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button { browserLink = BrowserLink(url: articleURL) } label: {
+                    Image(systemName: "safari")
+                }
+                .accessibilityLabel("Open the full article in the browser")
+            }
+        }
+        if !currentLinks.isEmpty {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button { showLinks = true } label: {
+                    Image(systemName: "link")
+                }
+                .accessibilityLabel("Links in this email")
+            }
+        }
+        if settings.pictureInPicture && ReaderPiPController.shared.isSupported {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button { ReaderPiPController.shared.start() } label: {
+                    Image(systemName: "pip.enter")
                 }
             }
-            if !currentLinks.isEmpty {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button { showLinks = true } label: {
-                        Image(systemName: "link")
-                    }
-                    .accessibilityLabel("Links in this email")
+        }
+    }
+
+    /// Sheets, dialogs, and the error alert.
+    private func withPresentations<Content: View>(_ content: Content) -> some View {
+        content
+            .sheet(isPresented: $showLinks) {
+                NavigationStack { LinksListView(links: currentLinks) }
+            }
+            .sheet(item: $browserLink) { link in
+                // X-style in-app browser: full-bleed page with a floating bottom
+                // toolbar. Slides up from the bottom; drag down to the half-height
+                // detent to keep it around, swipe further to close.
+                InAppBrowserView(url: link.url)
+                    .presentationDetents([.large, .medium])
+                    .presentationDragIndicator(.visible)
+            }
+            .sheet(item: $highlightToAnnotate) { highlight in
+                NavigationStack { HighlightComposerView(highlight: highlight) }
+            }
+            .confirmationDialog(
+                "Read this line again?",
+                isPresented: Binding(get: { unskipText != nil }, set: { if !$0 { unskipText = nil } }),
+                titleVisibility: .visible,
+                presenting: unskipText
+            ) { text in
+                Button("Read it again") { unskipMatching(text) }
+                Button("Cancel", role: .cancel) {}
+            } message: { _ in
+                Text("This line is currently muted, so it isn't read aloud. Reading it again applies to every email it was muted in.")
+            }
+            .alert("Playback problem", isPresented: .constant(player.errorMessage != nil)) {
+                Button("OK") { player.errorMessage = nil }
+            } message: {
+                Text(player.errorMessage ?? "")
+            }
+    }
+
+    /// Lifecycle hooks and the completion / celebration overlays.
+    private func withLifecycle<Content: View>(_ content: Content) -> some View {
+        content
+            .onChange(of: player.parsed?.email.id) { _, _ in
+                dismissedVoiceWarning = false
+                renderPiP()
+                // A new item: open the full controls, then let them settle back down.
+                expandControls()
+            }
+            .onAppear {
+                player.onHighlightCaptured = { highlight in highlightToAnnotate = highlight }
+                updateIdleTimer()
+                configurePiP()
+                if player.isPlaying { scheduleCollapse() }
+            }
+            .onDisappear {
+                UIApplication.shared.isIdleTimerDisabled = false
+                ReaderPiPController.shared.teardown()
+                collapseTask?.cancel()
+            }
+            .onChange(of: player.isPlaying) { _, playing in
+                updateIdleTimer()
+                ReaderPiPController.shared.playbackStateChanged()
+                // Collapse only while playing; pausing brings the full controls back.
+                if playing { scheduleCollapse() } else { expandControls() }
+            }
+            .onChange(of: player.currentBlockIndex) { _, _ in renderPiP() }
+            .onChange(of: settings.keepScreenAwake) { _, _ in updateIdleTimer() }
+            .onChange(of: settings.pictureInPicture) { _, _ in updatePiPEnabled() }
+            .onChange(of: player.isComplete) { _, complete in
+                if complete { showCompletion = true }
+            }
+            .onChange(of: player.celebrateFeedFinish) { _, celebrating in
+                guard celebrating else { return }
+                // The per-item "Finished" banner would double up with the celebration.
+                showCompletion = false
+                Task {
+                    try? await Task.sleep(nanoseconds: 2_800_000_000)
+                    player.celebrateFeedFinish = false
+                    // Drop back to the feed list (collapses the reader on iPhone;
+                    // clears the iPad detail pane) so all items are in view again.
+                    player.clear()
                 }
             }
-            if settings.pictureInPicture && ReaderPiPController.shared.isSupported {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button { ReaderPiPController.shared.start() } label: {
-                        Image(systemName: "pip.enter")
-                    }
-                }
+            .overlay(alignment: .top) {
+                if showCompletion && !player.celebrateFeedFinish { completionBanner }
             }
-        }
-        .sheet(isPresented: $showLinks) {
-            NavigationStack { LinksListView(links: currentLinks) }
-        }
-        .sheet(item: $browserLink) { link in
-            // X-style in-app browser: full-bleed page with a floating bottom
-            // toolbar. Slides up from the bottom; drag down to the half-height
-            // detent to keep it around, swipe further to close.
-            InAppBrowserView(url: link.url)
-                .presentationDetents([.large, .medium])
-                .presentationDragIndicator(.visible)
-        }
-        .confirmationDialog(
-            "Read this line again?",
-            isPresented: Binding(get: { unskipText != nil }, set: { if !$0 { unskipText = nil } }),
-            titleVisibility: .visible,
-            presenting: unskipText
-        ) { text in
-            Button("Read it again") { unskipMatching(text) }
-            Button("Cancel", role: .cancel) {}
-        } message: { _ in
-            Text("This line is currently muted, so it isn't read aloud. Reading it again applies to every email it was muted in.")
-        }
-        .onAppear {
-            player.onHighlightCaptured = { highlight in highlightToAnnotate = highlight }
-            updateIdleTimer()
-            configurePiP()
-            if player.isPlaying { scheduleCollapse() }
-        }
-        .onDisappear {
-            UIApplication.shared.isIdleTimerDisabled = false
-            ReaderPiPController.shared.teardown()
-            collapseTask?.cancel()
-        }
-        .onChange(of: player.isPlaying) { _, playing in
-            updateIdleTimer()
-            ReaderPiPController.shared.playbackStateChanged()
-            // Collapse only while playing; pausing brings the full controls back.
-            if playing { scheduleCollapse() } else { expandControls() }
-        }
-        .onChange(of: player.currentBlockIndex) { _, _ in renderPiP() }
-        .onChange(of: settings.keepScreenAwake) { _, _ in updateIdleTimer() }
-        .onChange(of: settings.pictureInPicture) { _, _ in updatePiPEnabled() }
-        .onChange(of: player.isComplete) { _, complete in
-            if complete { showCompletion = true }
-        }
-        .sheet(item: $highlightToAnnotate) { highlight in
-            NavigationStack { HighlightComposerView(highlight: highlight) }
-        }
-        .overlay(alignment: .top) {
-            if showCompletion && !player.celebrateFeedFinish { completionBanner }
-        }
-        .overlay {
-            if player.celebrateFeedFinish { feedFinishedCelebration }
-        }
-        .onChange(of: player.celebrateFeedFinish) { _, celebrating in
-            guard celebrating else { return }
-            // The per-item "Finished" banner would double up with the celebration.
-            showCompletion = false
-            Task {
-                try? await Task.sleep(nanoseconds: 2_800_000_000)
-                player.celebrateFeedFinish = false
-                // Drop back to the feed list (collapses the reader on iPhone;
-                // clears the iPad detail pane) so all items are in view again.
-                player.clear()
+            .overlay {
+                if player.celebrateFeedFinish { feedFinishedCelebration }
             }
-        }
-        .alert("Playback problem", isPresented: .constant(player.errorMessage != nil)) {
-            Button("OK") { player.errorMessage = nil }
-        } message: {
-            Text(player.errorMessage ?? "")
-        }
     }
 
     /// The dismissible voice-quality banners, kept out of `body` so the
