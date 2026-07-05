@@ -124,18 +124,23 @@ struct RootView: View {
 private struct CompactLayout: View {
     @EnvironmentObject private var appState: AppState
     @EnvironmentObject private var player: EmailPlayerViewModel
+    @State private var section: LibrarySection = .inbox
+    @State private var didChooseInitialTab = false
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            TabView {
+            TabView(selection: $section) {
                 InboxView()
                     .tabItem { Label("Inbox", systemImage: "tray.full") }
+                    .tag(LibrarySection.inbox)
 
                 FeedsView()
                     .tabItem { Label("Feeds", systemImage: "dot.radiowaves.up.forward") }
+                    .tag(LibrarySection.feeds)
 
                 SavedArticlesView()
                     .tabItem { Label("Saved", systemImage: "safari") }
+                    .tag(LibrarySection.saved)
             }
 
             if player.parsed != nil {
@@ -144,11 +149,24 @@ private struct CompactLayout: View {
                     .padding(.bottom, 53)
             }
         }
+        .onAppear(perform: chooseInitialTab)
         .animation(.easeInOut(duration: 0.2), value: player.parsed != nil)
         .fullScreenCover(isPresented: $player.isExpanded) {
             NowPlayingView()
                 .environmentObject(player)
                 .environmentObject(appState)
+        }
+    }
+
+    /// Pick the tab to open on first launch. With no mailbox connected, the Inbox
+    /// is just a "connect email" prompt — so if the user already follows feeds,
+    /// start on Feeds where there's something to listen to right away. Runs once;
+    /// after that the user's tab choice stands.
+    private func chooseInitialTab() {
+        guard !didChooseInitialTab else { return }
+        didChooseInitialTab = true
+        if appState.account == nil, !FeedStore.shared.feeds.isEmpty {
+            section = .feeds
         }
     }
 }
@@ -184,6 +202,7 @@ private struct SplitLayout: View {
     @EnvironmentObject private var player: EmailPlayerViewModel
     @State private var columnVisibility = NavigationSplitViewVisibility.all
     @State private var section: LibrarySection? = .inbox
+    @State private var didChooseInitialTab = false
     @State private var showSettings = false
     @State private var showHighlights = false
 
@@ -231,6 +250,15 @@ private struct SplitLayout: View {
             }
         }
         .navigationSplitViewStyle(.balanced)
+        .onAppear {
+            // See CompactLayout.chooseInitialTab: start on Feeds when there's no
+            // mailbox but feeds to listen to. Runs once.
+            guard !didChooseInitialTab else { return }
+            didChooseInitialTab = true
+            if appState.account == nil, !FeedStore.shared.feeds.isEmpty {
+                section = .feeds
+            }
+        }
         .sheet(isPresented: $showSettings) {
             NavigationStack { SettingsView() }
         }
