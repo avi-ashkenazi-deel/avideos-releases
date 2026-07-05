@@ -18,5 +18,5 @@ export const photography: GalleryImage[] = [
   { id: 'peep-hole', src: '/images/portfolio/peep-hole.jpg', width: 176, height: 88, title: 'Peep-Hole', description: 'Interaction Project' },
   { id: 'beater', src: '/images/portfolio/beater.jpg', width: 176, height: 88, title: 'Beater', description: 'An Alternative Pace Maker' },
   { id: '3s', src: '/images/portfolio/3s.jpg', width: 176, height: 88, title: '3S', description: '3D sound objects' },
-  { id: 'hit-camp', src: '/images/portfolio/hit-camp.jpg', width: 176, height: 88, title: 'Jump In Campain', description: 'HIT design faculty open days' },
+  { id: 'hit-camp', src: '/images/portfolio/hit-camp.jpg', width: 176, height: 88, title: 'Jump In Campaign', description: 'HIT design faculty open days' },
 ];

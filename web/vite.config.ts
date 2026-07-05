@@ -11,41 +11,10 @@ export default defineConfig({
   plugins: [
     react(),
     glsl(),
-    VitePWA({
-      registerType: 'autoUpdate',
-      includeAssets: ['fonts/*.woff2'],
-      manifest: {
-        name: 'Avi Ashkenazi — superavi',
-        short_name: 'superavi',
-        description: 'Designer and technologist. Writing, talks, tools and work.',
-        theme_color: '#ffffff',
-        background_color: '#ffffff',
-        display: 'standalone',
-        start_url: '/',
-        icons: [
-          {
-            src: '/favicon.svg',
-            sizes: 'any',
-            type: 'image/svg+xml',
-            purpose: 'any',
-          },
-        ],
-      },
-      workbox: {
-        globPatterns: ['**/*.{js,css,html,woff2,svg}'],
-        // Images are large; cache them at runtime rather than precaching.
-        runtimeCaching: [
-          {
-            urlPattern: ({ request }) => request.destination === 'image',
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'images',
-              expiration: { maxEntries: 120, maxAgeSeconds: 60 * 60 * 24 * 30 },
-            },
-          },
-        ],
-      },
-    }),
+    // While the site is changing rapidly, ship a self-destroying service
+    // worker: it unregisters any previously-installed SW and clears its caches
+    // so visitors always get the latest build instead of a stale one.
+    VitePWA({ selfDestroying: true }),
   ],
   resolve: {
     alias: {

@@ -78,12 +78,12 @@ export const books: InspirationItem[] = [
 ];
 
 export const people: InspirationItem[] = [
-  { title: 'Ryan Singer', meta: 'Ryan Singer from basecamp on product management', url: 'https://world.hey.com/rjs' },
-  { title: 'Marty Cagan', meta: 'Silicon Valley Product Group || Silicon Valley Product Group', url: 'https://svpg.com/' },
+  { title: 'Ryan Singer', meta: 'Basecamp', url: 'https://world.hey.com/rjs' },
+  { title: 'Marty Cagan', meta: 'Silicon Valley Product Group', url: 'https://svpg.com/' },
   { title: 'Scott Galloway', meta: 'No Mercy / No Malice', url: 'https://www.profgalloway.com/' },
-  { title: 'Simor Taylor', meta: 'Fintech Brain Food', url: 'https://sytaylor.substack.com/people/1160026-simon-taylor' },
-  { title: 'Marc Rubinstein', meta: 'Marc Rubinstein - Net Interest', url: 'https://www.netinterest.co/people/2295875-marc-rubinstein' },
-  { title: 'Lenny Rechitsky', meta: 'Lenny\'s Newsletter', url: 'https://www.lennysnewsletter.com/people/1849774-lenny-rachitsky' },
-  { title: 'NFX', meta: 'NFX', url: 'https://www.nfx.com/' },
-  { title: 'Dry Reily', meta: 'Trends.vc - Discover new markets and ideas', url: 'https://join.trends.vc/' },
+  { title: 'Simon Taylor', meta: 'Fintech Brain Food', url: 'https://sytaylor.substack.com/people/1160026-simon-taylor' },
+  { title: 'Marc Rubinstein', meta: 'Net Interest', url: 'https://www.netinterest.co/people/2295875-marc-rubinstein' },
+  { title: 'Lenny Rachitsky', meta: "Lenny's Newsletter", url: 'https://www.lennysnewsletter.com/people/1849774-lenny-rachitsky' },
+  { title: 'NFX', meta: 'Startups & founders', url: 'https://www.nfx.com/' },
+  { title: 'Dru Riley', meta: 'Trends.vc', url: 'https://join.trends.vc/' },
 ];
