@@ -54,6 +54,12 @@ struct TimerPreset: Codable, Hashable, Identifiable {
         name.isEmpty ? "\(formatClock(duration)) timer" : name
     }
 
+    /// Spoken at the very start: the first interval's custom name if one is set,
+    /// otherwise "Starting <name>".
+    var startAnnouncement: String {
+        intervals?.stepName(forSegment: 0) ?? "Starting \(displayName)"
+    }
+
     // MARK: Output indicators (for the list row)
 
     /// Whether this timer will speak — inferred from its cues + final countdown.

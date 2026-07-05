@@ -50,7 +50,7 @@ final class TimerEngine: ObservableObject {
         // announce the start now.
         if leadIn <= 0 {
             if outputMode.speaksAnnouncements {
-                announcer?.speak("Starting \(preset.displayName)")
+                announcer?.speak(preset.startAnnouncement)
             } else {
                 announcer?.haptic(.success)
             }

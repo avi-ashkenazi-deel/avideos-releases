@@ -33,6 +33,20 @@ struct IntervalPlan: Codable, Hashable {
     /// When true (and the countdown is enabled), count down the *whole* interval
     /// out loud rather than just the last N seconds.
     var countdownWhole: Bool? = nil
+    /// Optional spoken name per interval, in order ("Push-ups", "Squats", …).
+    /// When set for a segment, it replaces the "Interval N" announcement. Applies
+    /// to even / every / custom plans (work/rest keeps its Exercise/Round labels).
+    /// Optional for backward-compatible decoding.
+    var stepNames: [String]? = nil
+
+    /// The trimmed name for segment `index` (0-based), or nil if none/blank.
+    func stepName(forSegment index: Int) -> String? {
+        guard let names = stepNames, index >= 0, index < names.count else { return nil }
+        let n = names[index].trimmingCharacters(in: .whitespaces)
+        return n.isEmpty ? nil : n
+    }
+    /// Whether any step names are set (drives the editor toggle + start cue).
+    var namesEnabled: Bool { stepNames?.contains { !$0.trimmingCharacters(in: .whitespaces).isEmpty } ?? false }
 
     /// Resolved last-N window (0 = off).
     var countdownSeconds: Int { countdown ?? 0 }
@@ -89,6 +103,11 @@ struct IntervalPlan: Codable, Hashable {
             return workRestCuePoints(forDuration: duration)
         default:
             return boundaries(forDuration: duration).enumerated().map { i, t in
+                // Boundary i is entering segment i+1 (0-based). Prefer its custom
+                // name; otherwise the numbered fallback.
+                if let name = stepName(forSegment: i + 1) {
+                    return Boundary(time: t, label: name, spokenText: name, haptic: haptic)
+                }
                 let n = i + 1
                 return Boundary(time: t, label: "Interval \(n)",
                                 spokenText: announceNumber ? "Interval \(n)" : "",

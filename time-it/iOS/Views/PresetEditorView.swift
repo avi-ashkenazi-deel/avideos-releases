@@ -197,6 +197,18 @@ private struct IntervalsSection: View {
                 Text(summary(plan))
                     .font(.caption).foregroundStyle(.secondary)
 
+                // Named steps — spoken instead of "Interval N". Off by default;
+                // not offered for Work/Rest (it has its own Exercise/Round labels).
+                if currentMode != .workRest {
+                    Toggle("Name each interval", isOn: namesEnabledBinding)
+                    if plan.stepNames != nil {
+                        ForEach(0..<intervalNameCount, id: \.self) { i in
+                            TextField("Interval \(i + 1)", text: stepNameBinding(i))
+                                .font(.subheadline)
+                        }
+                    }
+                }
+
                 Toggle("Announce interval number", isOn: announceBinding)
 
                 Toggle("Count down into each interval", isOn: countdownEnabledBinding)
@@ -444,6 +456,39 @@ private struct IntervalsSection: View {
                 var arr = customLengths
                 if idx < arr.count { arr[idx] = newVal }
                 setSpec(.custom(lengths: arr))
+            }
+        )
+    }
+
+    // MARK: Named steps
+
+    /// How many name fields to show — one per interval/segment.
+    private var intervalNameCount: Int {
+        max(1, plan?.intervalCount(forDuration: duration) ?? 0)
+    }
+    private var namesEnabledBinding: Binding<Bool> {
+        Binding(
+            get: { plan?.stepNames != nil },
+            set: { on in
+                plan?.stepNames = on ? Array(repeating: "", count: intervalNameCount) : nil
+            }
+        )
+    }
+    private func stepNameBinding(_ i: Int) -> Binding<String> {
+        Binding(
+            get: {
+                guard let names = plan?.stepNames, i < names.count else { return "" }
+                return names[i]
+            },
+            set: { newVal in
+                guard plan != nil else { return }
+                var names = plan?.stepNames ?? []
+                // Grow to fit if the interval count changed since enabling.
+                if names.count < intervalNameCount {
+                    names.append(contentsOf: Array(repeating: "", count: intervalNameCount - names.count))
+                }
+                if i < names.count { names[i] = newVal }
+                plan?.stepNames = names
             }
         )
     }
