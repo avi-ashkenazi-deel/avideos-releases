@@ -46,6 +46,12 @@ struct PlayerDetailContent: View {
     /// new item opens, then collapses again after a few idle seconds.
     @State private var controlsCollapsed = false
     @State private var collapseTask: Task<Void, Never>?
+
+    /// While you long-press a line to decide whether to mute it, freeze the
+    /// follow-along auto-scroll so the text you're deciding on stays put (instead
+    /// of sliding away under the menu). Auto-resumes shortly after.
+    @State private var holdAutoScroll = false
+    @State private var holdScrollTask: Task<Void, Never>?
     private static let collapseAnimation: Animation = .spring(response: 0.38, dampingFraction: 0.85)
 
     /// Links from whatever's on screen (a staged preview takes precedence).
@@ -144,7 +150,7 @@ struct PlayerDetailContent: View {
                 Button("Read it again") { unskipMatching(text) }
                 Button("Cancel", role: .cancel) {}
             } message: { _ in
-                Text("This line is currently muted, so it isn't read aloud. Reading it again applies to every email it was muted in.")
+                Text("Un-mutes it everywhere it was muted.")
             }
             .alert("Playback problem", isPresented: .constant(player.errorMessage != nil)) {
                 Button("OK") { player.errorMessage = nil }
@@ -286,6 +292,23 @@ struct PlayerDetailContent: View {
             }
     }
 
+    /// Freeze the follow-along scroll while the listener decides on a line, with a
+    /// safety timeout so it always resumes even if the menu is dismissed silently.
+    private func beginScrollHold() {
+        holdAutoScroll = true
+        holdScrollTask?.cancel()
+        holdScrollTask = Task {
+            try? await Task.sleep(nanoseconds: 12_000_000_000)
+            guard !Task.isCancelled else { return }
+            holdAutoScroll = false
+        }
+    }
+
+    private func endScrollHold() {
+        holdScrollTask?.cancel()
+        holdAutoScroll = false
+    }
+
     private var activeMode: some View {
         let email = player.parsed?.email
         return ScrollViewReader { proxy in
@@ -301,12 +324,20 @@ struct PlayerDetailContent: View {
                     .padding(.bottom, controlsHeight + 24)
             }
             .onChange(of: player.currentBlockIndex) { _, index in
+                // Held while a long-press decision menu is up, so the text doesn't
+                // scroll out from under the menu.
+                guard !holdAutoScroll else { return }
                 withAnimation(.easeInOut) { proxy.scrollTo(index, anchor: .center) }
             }
             // Swipe left → next item, right → previous — pure navigation that
             // doesn't mark anything read. Simultaneous so vertical scrolling still
             // works; we only act on clearly-horizontal swipes.
             .simultaneousGesture(swipeBetweenItems)
+            // A long-press means the mute menu is about to appear — freeze the
+            // auto-scroll until the decision is made (or a timeout).
+            .simultaneousGesture(
+                LongPressGesture(minimumDuration: 0.35).onEnded { _ in beginScrollHold() }
+            )
         }
         // The transport floats over the transcript as a Liquid Glass panel rather
         // than a bar pinned to the bottom edge. It shrinks to a compact pill after
@@ -443,9 +474,12 @@ struct PlayerDetailContent: View {
             guard emailID.hasPrefix("rss-"), let date else { return nil }
             return date.formatted(date: .abbreviated, time: .shortened)
         }()
+        // In titles-only mode the headline *is* what's read, so highlight the
+        // spoken word right in the header (the body block is hidden).
+        let headerIsReading = hideBody && currentIndex == 0
         return VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: isRTLHeader ? .trailing : .leading, spacing: 4) {
-                Text(subject)
+                headerText(subject, highlightingWordWhen: headerIsReading)
                     .font(.system(size: titleFontSize, weight: .bold))
                     .multilineTextAlignment(isRTLHeader ? .trailing : .leading)
                 if let dateLine {
@@ -467,6 +501,21 @@ struct PlayerDetailContent: View {
         }
         .padding()
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// The header, optionally colouring the word currently being spoken (used in
+    /// titles-only mode, where the headline is the thing being read).
+    private func headerText(_ subject: String, highlightingWordWhen reading: Bool) -> Text {
+        guard reading,
+              let range = player.spokenWordRange,
+              let swiftRange = Range(range, in: subject) else {
+            return Text(subject)
+        }
+        var attributed = AttributedString(subject)
+        if let attrRange = Range(swiftRange, in: attributed) {
+            attributed[attrRange].foregroundColor = .accentColor
+        }
+        return Text(attributed)
     }
 
     /// Maps each sentence block to how it should render its saved-highlight state.
@@ -541,6 +590,7 @@ struct PlayerDetailContent: View {
                 .onTapGesture {
                     // A struck-through line: tap to offer reading it again.
                     // Otherwise tap jumps playback here.
+                    endScrollHold()
                     if skipped { unskipText = sentence.text }
                     else if isActive { player.jump(toBlock: index) }
                 }
@@ -561,21 +611,24 @@ struct PlayerDetailContent: View {
         if let from = player.parsed?.email.from ?? player.staged?.email.from {
             if isSkipped {
                 Button {
+                    endScrollHold()
                     unskipMatching(sentence.text)
                 } label: {
-                    Label("Read this again", systemImage: "speaker.wave.2")
+                    Label("Read again", systemImage: "speaker.wave.2")
                 }
             } else {
                 let domain = SkipRuleStore.domain(of: from.address)
                 Button {
+                    endScrollHold()
                     SkipRuleStore.shared.add(phrase: sentence.text, senderDomain: domain, label: from.displayName)
                 } label: {
-                    Label("Don't read this from \(from.displayName)", systemImage: "speaker.slash")
+                    Label("Skip from this sender", systemImage: "speaker.slash")
                 }
                 Button {
+                    endScrollHold()
                     SkipRuleStore.shared.add(phrase: sentence.text, senderDomain: "", label: from.displayName)
                 } label: {
-                    Label("Don't read this from anyone", systemImage: "speaker.slash.fill")
+                    Label("Skip from everyone", systemImage: "speaker.slash.fill")
                 }
             }
         }

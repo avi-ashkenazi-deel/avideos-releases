@@ -201,7 +201,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Skipped lines")
                 } footer: {
-                    Text("Lines you've chosen to never read aloud. Long-press any sentence while reading to add one (for that sender or everyone). Swipe to remove.")
+                    Text("Lines you muted while reading. Swipe to remove.")
                 }
             }
 
