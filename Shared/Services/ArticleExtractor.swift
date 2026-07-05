@@ -68,13 +68,30 @@ enum ArticleExtractor {
         let siteName = metaContent(property: "og:site_name", in: fullHTML) ?? url.host
         let excerpt = metaContent(name: "description", in: fullHTML)
             ?? metaContent(property: "og:description", in: fullHTML)
+            ?? metaContent(name: "twitter:description", in: fullHTML)
 
-        let content = extractContentHTML(from: fullHTML)
-        guard !content.replacingOccurrences(of: " ", with: "").isEmpty else {
-            throw ExtractError.empty
+        var content = extractContentHTML(from: fullHTML)
+        if content.replacingOccurrences(of: " ", with: "").isEmpty {
+            // No article region we could extract. Common for JS-only apps (X /
+            // Twitter, many SPAs), paywalls, and bare link-preview shells: the real
+            // text is rendered by JavaScript we don't run. Rather than fail the save
+            // outright, fall back to the page's own summary (og/twitter description)
+            // so there's at least something readable — e.g. a tweet's text.
+            if let summary = excerpt?.trimmingCharacters(in: .whitespacesAndNewlines), !summary.isEmpty {
+                content = "<p>\(escapeText(summary))</p>"
+            } else {
+                throw ExtractError.empty
+            }
         }
 
         return Result(title: title, siteName: siteName, excerpt: excerpt, html: content)
+    }
+
+    /// Minimal HTML escaping for text we inject into a fallback `<p>`.
+    private static func escapeText(_ s: String) -> String {
+        s.replacingOccurrences(of: "&", with: "&amp;")
+            .replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;")
     }
 
     // MARK: - Decoding
