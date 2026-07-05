@@ -245,6 +245,13 @@ struct PlayerDetailContent: View {
     private func transcriptBody(subject: String, emailID: String, blocks: [ContentBlock],
                                 currentIndex: Int?, isActive: Bool) -> some View {
         let layout = notedLayout(emailID: emailID, blocks: blocks)
+        // Titles-only feed items carry a single body sentence that *is* the
+        // headline (so it can be spoken). The subject heading already shows it,
+        // so don't render it twice — just show the heading.
+        let hideBody = blocks.count == 1
+            && !blocks[0].isImage
+            && blocks[0].spokenText.trimmingCharacters(in: .whitespacesAndNewlines)
+                .caseInsensitiveCompare(subject.trimmingCharacters(in: .whitespacesAndNewlines)) == .orderedSame
         return VStack(alignment: .leading, spacing: 16) {
             Text(subject)
                 .font(.system(size: titleFontSize, weight: .bold))
@@ -253,10 +260,12 @@ struct PlayerDetailContent: View {
                        alignment: LanguageTools.isRightToLeft(subject) ? .trailing : .leading)
                 .padding(.bottom, 4)
 
-            ForEach(Array(blocks.enumerated()), id: \.element.id) { index, block in
-                blockView(block, index: index, currentIndex: currentIndex, isActive: isActive,
-                          noted: layout[index] ?? NotedInfo())
-                    .id(index)
+            if !hideBody {
+                ForEach(Array(blocks.enumerated()), id: \.element.id) { index, block in
+                    blockView(block, index: index, currentIndex: currentIndex, isActive: isActive,
+                              noted: layout[index] ?? NotedInfo())
+                        .id(index)
+                }
             }
         }
         .padding()
