@@ -9,14 +9,12 @@ export function WritingBody() {
       {items.map((item) => (
         <li key={item.id}>
           <a className={styles.row} href={item.url} target="_blank" rel="noreferrer">
+            <span className={styles.rowDate}>{formatMonthYear(item.date)}</span>
             <div className={styles.rowMain}>
               <div className={styles.rowTitle}>{item.title}</div>
               {item.excerpt && <p className={styles.rowExcerpt}>{item.excerpt}</p>}
             </div>
-            <div className={styles.rowMeta}>
-              <span className={styles.tag}>{item.source}</span>
-              <span className={styles.date}>{formatMonthYear(item.date)}</span>
-            </div>
+            <span className={styles.rowCat}>{item.source}</span>
           </a>
         </li>
       ))}

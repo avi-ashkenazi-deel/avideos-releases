@@ -1,12 +1,18 @@
 .body {
-  max-width: 38ch;
-  font-size: clamp(1.35rem, 2.6vw, 2.3rem);
+  max-width: 30ch;
+  font-size: var(--fs-1);
   font-weight: 400;
-  letter-spacing: var(--tracking-h2);
-  line-height: 1.22;
+  letter-spacing: var(--tracking-tight);
+  line-height: 1.28;
   color: var(--c-fg);
 }
 
 .body p + p {
-  margin-top: var(--s-5);
+  margin-top: var(--s-4);
+}
+
+@media (max-width: 768px) {
+  .body {
+    max-width: none;
+  }
 }

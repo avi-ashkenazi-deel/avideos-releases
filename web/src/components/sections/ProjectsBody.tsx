@@ -1,19 +1,30 @@
-import { Link } from 'react-router-dom';
 import { projects } from '@/data/projects';
-import { Thumb } from '@/components/lists/Thumb';
 import styles from '@/components/lists/Lists.module.css';
 
 export function ProjectsBody() {
   return (
-    <div className={styles.grid}>
-      {projects.map((p) => (
-        <Link key={p.id} className={styles.card} to={`/projects/${p.id}`}>
-          <div className={styles.thumb}>
-            <Thumb src={p.cover} label={p.name} />
+    <div className={styles.projects}>
+      {projects.map((p, i) => (
+        <article key={p.id} className={styles.project}>
+          <span className={styles.projectIndex}>
+            {String(i + 1).padStart(2, '0')}
+          </span>
+          <h3 className={styles.projectName}>{p.name}</h3>
+          <div className={styles.projectBody}>
+            <p className={styles.projectTagline}>{p.tagline}</p>
+            <p className={styles.projectDesc}>{p.description}</p>
+            {p.links?.[0] && p.links[0].url !== '#' && (
+              <a
+                className={styles.projectLink}
+                href={p.links[0].url}
+                target="_blank"
+                rel="noreferrer"
+              >
+                {p.links[0].label} ↗
+              </a>
+            )}
           </div>
-          <div className={styles.cardName}>{p.name}</div>
-          <div className={styles.cardBlurb}>{p.tagline}</div>
-        </Link>
+        </article>
       ))}
     </div>
   );

@@ -1,0 +1,17 @@
+.site {
+  min-height: 100dvh;
+}
+
+/* Space for the fixed nav on the scrolling page. Gallery routes manage their
+ * own full-screen layout below the nav. */
+.main {
+  padding-top: var(--nav-h);
+}
+
+.gallery {
+  position: fixed;
+  top: var(--nav-h);
+  left: 0;
+  right: 0;
+  bottom: 0;
+}

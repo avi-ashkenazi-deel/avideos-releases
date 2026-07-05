@@ -1,27 +1,46 @@
 import { NavLink } from 'react-router-dom';
-import { sections } from '@/sections';
 import styles from './Nav.module.css';
 
-export function Nav() {
+const sectionLinks: [string, string][] = [
+  ['Writing', 'writing'],
+  ['Talks', 'talks'],
+  ['Projects', 'projects'],
+  ['Tools', 'tools'],
+  ['About', 'about'],
+];
+
+interface NavProps {
+  onSection: (id: string) => void;
+}
+
+export function Nav({ onSection }: NavProps) {
   return (
     <nav className={styles.nav} aria-label="Primary">
-      <NavLink to="/" className={styles.wordmark}>
+      <button className={styles.wordmark} onClick={() => onSection('top')}>
         Avi Ashkenazi
-      </NavLink>
+      </button>
       <div className={styles.links}>
-        {sections
-          .filter((s) => s.path !== '/')
-          .map((s) => (
-            <NavLink
-              key={s.path}
-              to={s.path}
-              className={({ isActive }) =>
-                isActive ? `${styles.link} ${styles.active}` : styles.link
-              }
-            >
-              {s.label}
-            </NavLink>
-          ))}
+        {sectionLinks.map(([label, id]) => (
+          <button key={id} className={styles.link} onClick={() => onSection(id)}>
+            {label}
+          </button>
+        ))}
+        <NavLink
+          to="/gallery"
+          className={({ isActive }) =>
+            isActive ? `${styles.link} ${styles.linkActive}` : styles.link
+          }
+        >
+          Gallery
+        </NavLink>
+        <NavLink
+          to="/photography"
+          className={({ isActive }) =>
+            isActive ? `${styles.link} ${styles.linkActive}` : styles.link
+          }
+        >
+          Photography
+        </NavLink>
       </div>
     </nav>
   );

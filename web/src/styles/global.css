@@ -6,7 +6,6 @@
   isolation: isolate;
 }
 
-/* Shared container */
 .container {
   width: 100%;
   max-width: var(--max-w);
@@ -14,7 +13,13 @@
   padding-inline: var(--gutter);
 }
 
-/* Visually hidden but accessible (for non-WebGL fallbacks, skip links) */
+/* Swiss 12-column grid */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(var(--grid-cols), 1fr);
+  gap: var(--grid-gap);
+}
+
 .visually-hidden {
   position: absolute;
   width: 1px;

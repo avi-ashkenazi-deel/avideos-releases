@@ -9,14 +9,12 @@ export function TalksBody() {
       {items.map((talk) => (
         <li key={talk.id}>
           <a className={styles.row} href={talk.youtubeUrl} target="_blank" rel="noreferrer">
+            <span className={styles.rowDate}>{formatFullDate(talk.date)}</span>
             <div className={styles.rowMain}>
               <div className={styles.rowTitle}>{talk.title}</div>
               {talk.event && <p className={styles.rowExcerpt}>{talk.event}</p>}
             </div>
-            <div className={styles.rowMeta}>
-              <span className={styles.tag}>Watch ↗</span>
-              <span className={styles.date}>{formatFullDate(talk.date)}</span>
-            </div>
+            <span className={styles.rowCat}>Watch ↗</span>
           </a>
         </li>
       ))}
