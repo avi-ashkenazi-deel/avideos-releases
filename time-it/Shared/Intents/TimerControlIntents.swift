@@ -1,6 +1,10 @@
 import AppIntents
 import Foundation
 
+// Live Activities (and LiveActivityIntent) are iOS-only. This file is in Shared/
+// but the watch target compiles it too, so gate the whole thing to iOS.
+#if os(iOS)
+
 /// Routes Live Activity button taps to the running engine. The app sets these
 /// handlers at launch; the widget only references the intent types. This works
 /// while a timer is showing because the audio keep-alive keeps the app process
@@ -76,3 +80,5 @@ struct StopTimerIntent: LiveActivityIntent {
         return .result()
     }
 }
+
+#endif
