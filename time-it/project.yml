@@ -127,7 +127,7 @@ targets:
       - path: WatchWidget
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.aviashkenazi.timeit.watchkitapp.complication
+        PRODUCT_BUNDLE_IDENTIFIER: com.aviashkenazi.timeit.watchkitapp.watchwidget
         INFOPLIST_FILE: WatchWidget/Info.plist
         CODE_SIGN_ENTITLEMENTS: WatchWidget/TimeItWatchWidget.entitlements
         GENERATE_INFOPLIST_FILE: NO
