@@ -137,27 +137,28 @@ private struct WatchControlsPage: View {
     var body: some View {
         VStack(spacing: 10) {
             HStack(spacing: 10) {
-                button("backward.end.fill") { engine.skipToPreviousInterval(id: timer.id) }
+                button("backward.end.fill", "Previous interval") { engine.skipToPreviousInterval(id: timer.id) }
                 if timer.isRunning {
-                    button("pause.fill") { engine.pause(id: timer.id) }
+                    button("pause.fill", "Pause") { engine.pause(id: timer.id) }
                 } else {
-                    button("play.fill") { engine.resume(id: timer.id) }
+                    button("play.fill", "Resume") { engine.resume(id: timer.id) }
                 }
             }
             HStack(spacing: 10) {
-                button("forward.end.fill") { engine.skipToNextInterval(id: timer.id) }
-                button("stop.fill", tint: .red) { engine.stop(id: timer.id) }
+                button("forward.end.fill", "Next interval") { engine.skipToNextInterval(id: timer.id) }
+                button("stop.fill", "Stop", tint: .red) { engine.stop(id: timer.id) }
             }
         }
         .padding(.horizontal, 6)
     }
 
-    private func button(_ system: String, tint: Color = .accentColor,
+    private func button(_ system: String, _ label: String, tint: Color = .accentColor,
                         action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: system).font(.title3).frame(maxWidth: .infinity, minHeight: 44)
         }
         .buttonStyle(.bordered)
         .tint(tint)
+        .accessibilityLabel(label)
     }
 }

@@ -9,6 +9,7 @@ struct RunningTimerScreen: View {
     @EnvironmentObject private var engine: TimerEngine
     @EnvironmentObject private var model: AppModel
     @Environment(\.verticalSizeClass) private var vSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var editing = false
 
     /// Landscape on iPhone reports a compact height — make the countdown bigger.
@@ -67,7 +68,8 @@ struct RunningTimerScreen: View {
                 }
             }
             .ignoresSafeArea()
-            .animation(.linear(duration: 0.12), value: fraction)
+            // Honor Reduce Motion — don't animate the draining fill.
+            .animation(reduceMotion ? nil : .linear(duration: 0.12), value: fraction)
 
             if timer.inLeadIn(now: now) {
                 leadInForeground(timer, now: now, onColor: onColor)
@@ -185,6 +187,15 @@ struct RunningTimerScreen: View {
             .font(.system(size: big ? 340 : 110, weight: .bold, design: .rounded))
             .monospacedDigit().minimumScaleFactor(0.3).lineLimit(1)
             .foregroundStyle(onColor)
+            .accessibilityLabel(spokenDuration(remaining) + " remaining")
+    }
+
+    /// A VoiceOver-friendly spelling of a countdown, e.g. "2 minutes 30 seconds".
+    private func spokenDuration(_ seconds: TimeInterval) -> String {
+        let f = DateComponentsFormatter()
+        f.allowedUnits = [.hour, .minute, .second]
+        f.unitsStyle = .full
+        return f.string(from: max(0, seconds.rounded())) ?? "\(Int(seconds)) seconds"
     }
 
     /// Total + Sets/Cycle stacked for the right side in landscape.
@@ -235,18 +246,18 @@ struct RunningTimerScreen: View {
 
     private func controls(_ timer: RunningTimerState, onColor: Color, size: CGFloat = 60) -> some View {
         HStack(spacing: size * 0.33) {
-            roundButton("backward.end.fill", onColor, size: size) { engine.skipToPreviousInterval(id: timer.id) }
+            roundButton("backward.end.fill", "Previous interval", onColor, size: size) { engine.skipToPreviousInterval(id: timer.id) }
             if timer.isRunning {
-                roundButton("pause.fill", onColor, size: size) { engine.pause(id: timer.id) }
+                roundButton("pause.fill", "Pause", onColor, size: size) { engine.pause(id: timer.id) }
             } else {
-                roundButton("play.fill", onColor, size: size) { engine.resume(id: timer.id) }
+                roundButton("play.fill", "Resume", onColor, size: size) { engine.resume(id: timer.id) }
             }
-            roundButton("forward.end.fill", onColor, size: size) { engine.skipToNextInterval(id: timer.id) }
-            roundButton("stop.fill", onColor, size: size) { engine.stop(id: timer.id) }
+            roundButton("forward.end.fill", "Next interval", onColor, size: size) { engine.skipToNextInterval(id: timer.id) }
+            roundButton("stop.fill", "Stop", onColor, size: size) { engine.stop(id: timer.id) }
         }
     }
 
-    private func roundButton(_ system: String, _ onColor: Color, size: CGFloat = 60,
+    private func roundButton(_ system: String, _ label: String, _ onColor: Color, size: CGFloat = 60,
                              action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: system)
@@ -255,5 +266,6 @@ struct RunningTimerScreen: View {
                 .frame(width: size, height: size)
                 .background(.ultraThinMaterial, in: Circle())
         }
+        .accessibilityLabel(label)
     }
 }
