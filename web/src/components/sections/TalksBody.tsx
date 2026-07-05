@@ -14,7 +14,7 @@ export function TalksBody() {
               <div className={styles.rowTitle}>{talk.title}</div>
               {talk.event && <p className={styles.rowExcerpt}>{talk.event}</p>}
             </div>
-            <span className={styles.rowCat}>Watch ↗</span>
+            <span className={styles.rowCat}>Watch</span>
           </a>
         </li>
       ))}

@@ -8,7 +8,7 @@ export function Footer() {
       <nav className={styles.links} aria-label="Social links">
         {socials.map((s) => (
           <a key={s.id} className={styles.link} href={s.url} target="_blank" rel="noreferrer">
-            {s.label} ↗
+            {s.label}
           </a>
         ))}
       </nav>

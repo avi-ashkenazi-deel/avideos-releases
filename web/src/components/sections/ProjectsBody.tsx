@@ -1,4 +1,5 @@
 import { projects } from '@/data/projects';
+import { Thumb } from '@/components/lists/Thumb';
 import styles from '@/components/lists/Lists.module.css';
 
 export function ProjectsBody() {
@@ -20,9 +21,12 @@ export function ProjectsBody() {
                 target="_blank"
                 rel="noreferrer"
               >
-                {p.links[0].label} ↗
+                {p.links[0].label}
               </a>
             )}
+          </div>
+          <div className={styles.projectThumb}>
+            <Thumb src={p.cover} label={p.name} />
           </div>
         </article>
       ))}

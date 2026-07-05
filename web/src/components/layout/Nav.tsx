@@ -5,7 +5,6 @@ const sectionLinks: [string, string][] = [
   ['Writing', 'writing'],
   ['Talks', 'talks'],
   ['Projects', 'projects'],
-  ['Tools', 'tools'],
   ['About', 'about'],
 ];
 

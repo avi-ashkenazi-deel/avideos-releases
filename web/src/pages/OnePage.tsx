@@ -1,7 +1,6 @@
 import { WritingBody } from '@/components/sections/WritingBody';
 import { TalksBody } from '@/components/sections/TalksBody';
 import { ProjectsBody } from '@/components/sections/ProjectsBody';
-import { ToolsBody } from '@/components/sections/ToolsBody';
 import { AboutBody } from '@/components/sections/AboutBody';
 import { Footer } from '@/components/layout/Footer';
 import { about } from '@/data/about';
@@ -45,15 +44,11 @@ export default function OnePage() {
         <TalksBody />
       </Section>
 
-      <Section id="projects" index="03" title="Projects" intro="Things I'm building.">
+      <Section id="projects" index="03" title="Projects" intro="Things I've designed and built.">
         <ProjectsBody />
       </Section>
 
-      <Section id="tools" index="04" title="Tools" intro="Apps I've built.">
-        <ToolsBody />
-      </Section>
-
-      <Section id="about" index="05" title="About">
+      <Section id="about" index="04" title="About">
         <AboutBody />
       </Section>
 

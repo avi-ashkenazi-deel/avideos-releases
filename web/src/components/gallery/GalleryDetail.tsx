@@ -16,7 +16,7 @@ export function GalleryDetail({ item, onClose, onPrev, onNext }: GalleryDetailPr
         <>
           <div className={styles.controls}>
             <button className={styles.ctrl} onClick={onClose}>
-              Close ✕
+              Close
             </button>
           </div>
 
@@ -37,10 +37,10 @@ export function GalleryDetail({ item, onClose, onPrev, onNext }: GalleryDetailPr
 
           <div className={styles.nav}>
             <button className={styles.ctrl} onClick={onPrev} aria-label="Previous">
-              ← Prev
+              Prev
             </button>
             <button className={styles.ctrl} onClick={onNext} aria-label="Next">
-              Next →
+              Next
             </button>
           </div>
         </>
