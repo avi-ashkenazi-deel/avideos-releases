@@ -5,14 +5,13 @@ import styles from './Site.module.css';
 
 const OnePage = lazy(() => import('@/pages/OnePage'));
 const Inspiration = lazy(() => import('@/pages/Inspiration'));
-const Gallery = lazy(() => import('@/pages/Gallery'));
-const Photography = lazy(() => import('@/pages/Photography'));
+const Snapshots = lazy(() => import('@/pages/Snapshots'));
 
 export function Site() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Start non-home routes (Inspiration, galleries) at the top.
+  // Start non-home routes at the top.
   useEffect(() => {
     if (location.pathname !== '/') window.scrollTo(0, 0);
   }, [location.pathname]);
@@ -39,34 +38,14 @@ export function Site() {
       <Nav onSection={onSection} />
       <Suspense fallback={null}>
         <Routes>
-          <Route
-            path="/"
-            element={
-              <main className={styles.main}>
-                <OnePage />
-              </main>
-            }
-          />
+          <Route path="/" element={<main className={styles.main}><OnePage /></main>} />
           <Route
             path="/inspiration"
-            element={
-              <main className={styles.main}>
-                <Inspiration />
-              </main>
-            }
+            element={<main className={styles.main}><Inspiration /></main>}
           />
-          <Route path="/gallery" element={<div className={styles.gallery}><Gallery /></div>} />
-          <Route path="/gallery/:id" element={<div className={styles.gallery}><Gallery /></div>} />
-          <Route path="/photography" element={<div className={styles.gallery}><Photography /></div>} />
-          <Route path="/photography/:id" element={<div className={styles.gallery}><Photography /></div>} />
-          <Route
-            path="*"
-            element={
-              <main className={styles.main}>
-                <OnePage />
-              </main>
-            }
-          />
+          <Route path="/snapshots" element={<div className={styles.gallery}><Snapshots /></div>} />
+          <Route path="/snapshots/:id" element={<div className={styles.gallery}><Snapshots /></div>} />
+          <Route path="*" element={<main className={styles.main}><OnePage /></main>} />
         </Routes>
       </Suspense>
     </div>

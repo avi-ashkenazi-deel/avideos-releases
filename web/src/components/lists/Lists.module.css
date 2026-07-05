@@ -66,15 +66,8 @@
   border-bottom: 1px solid var(--c-grey-4);
 }
 
-.projectIndex {
-  grid-column: 1 / 2;
-  font-size: var(--fs-micro);
-  letter-spacing: var(--tracking-label);
-  color: var(--c-grey-3);
-}
-
 .projectName {
-  grid-column: 2 / 6;
+  grid-column: 1 / 6;
   font-size: clamp(1.6rem, 4vw, 2.618rem);
   font-weight: 500;
   letter-spacing: var(--tracking-tight);
@@ -232,7 +225,6 @@
     grid-template-columns: 1fr;
     gap: var(--s-2);
   }
-  .projectIndex,
   .projectName,
   .projectBody,
   .projectThumb {

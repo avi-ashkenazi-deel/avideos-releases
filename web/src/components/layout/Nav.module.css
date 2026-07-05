@@ -5,14 +5,15 @@
   right: 0;
   z-index: 100;
   height: var(--nav-h);
+  /* same max width and gutters as the content, centered */
+  max-width: var(--max-w);
+  margin-inline: auto;
+  padding-inline: var(--gutter);
   display: flex;
   align-items: center;
   gap: var(--s-4);
-  padding-inline: var(--gutter);
-  background: rgba(255, 255, 255, 0.9);
-  -webkit-backdrop-filter: saturate(180%) blur(16px);
-  backdrop-filter: saturate(180%) blur(16px);
-  border-bottom: 1px solid var(--c-grey-4);
+  /* solid white, no divider — occludes text scrolling underneath */
+  background: var(--c-bg);
 }
 
 .wordmark {

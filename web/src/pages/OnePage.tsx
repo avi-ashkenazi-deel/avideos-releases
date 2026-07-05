@@ -8,17 +8,15 @@ import styles from './OnePage.module.css';
 
 interface SectionProps {
   id: string;
-  index: string;
   title: string;
   intro?: string;
   children: React.ReactNode;
 }
 
-function Section({ id, index, title, intro, children }: SectionProps) {
+function Section({ id, title, intro, children }: SectionProps) {
   return (
     <section id={id} className={styles.section}>
       <div className={`grid ${styles.sectionHead}`}>
-        <span className={styles.sectionIndex}>{index}</span>
         <h2 className={styles.sectionTitle}>{title}</h2>
         {intro && <p className={styles.sectionIntro}>{intro}</p>}
       </div>
@@ -36,19 +34,19 @@ export default function OnePage() {
         <p className={styles.bio}>{about.bio}</p>
       </header>
 
-      <Section id="writing" index="01" title="Writing" intro="Posts, essays and conversations — from the blog, LinkedIn and Substack.">
+      <Section id="writing" title="Writing" intro="Posts, essays and conversations — from the blog, LinkedIn and Substack.">
         <WritingBody />
       </Section>
 
-      <Section id="talks" index="02" title="Talks" intro="Conferences, podcasts and panels — with links to watch.">
+      <Section id="talks" title="Talks" intro="Conferences, podcasts and panels — with links to watch.">
         <TalksBody />
       </Section>
 
-      <Section id="projects" index="03" title="Projects" intro="Things I've designed and built.">
+      <Section id="projects" title="Projects" intro="Things I've designed and built.">
         <ProjectsBody />
       </Section>
 
-      <Section id="about" index="04" title="About">
+      <Section id="about" title="About">
         <AboutBody />
       </Section>
 

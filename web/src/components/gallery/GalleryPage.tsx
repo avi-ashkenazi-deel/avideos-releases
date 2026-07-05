@@ -4,20 +4,18 @@ import { GalleryCanvas } from './GalleryCanvas';
 import styles from './GalleryPage.module.css';
 
 interface GalleryPageProps {
-  index: string;
   title: string;
   items: GalleryImage[];
-  basePath: string; // e.g. '/photography'
+  basePath: string; // e.g. '/snapshots'
 }
 
-export function GalleryPage({ index, title, items, basePath }: GalleryPageProps) {
+export function GalleryPage({ title, items, basePath }: GalleryPageProps) {
   const { id } = useParams();
   const navigate = useNavigate();
 
   return (
     <div className={styles.screen}>
       <div className={styles.header}>
-        <span className={styles.index}>{index}</span>
         <h1 className={styles.title}>{title}</h1>
       </div>
       <GalleryCanvas

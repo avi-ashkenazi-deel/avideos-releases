@@ -40,15 +40,8 @@
   margin-bottom: clamp(1.5rem, 4vh, 3rem);
 }
 
-.sectionIndex {
-  grid-column: 1 / 2;
-  font-size: var(--fs-micro);
-  letter-spacing: var(--tracking-label);
-  color: var(--c-grey-3);
-}
-
 .sectionTitle {
-  grid-column: 2 / -1;
+  grid-column: 1 / -1;
   font-size: var(--fs-3);
   font-weight: 500;
   letter-spacing: var(--tracking-tight);
@@ -57,7 +50,7 @@
 }
 
 .sectionIntro {
-  grid-column: 2 / 8;
+  grid-column: 1 / 8;
   margin-top: var(--s-2);
   font-size: var(--fs-small);
   color: var(--c-grey-2);
@@ -71,9 +64,5 @@
   .sectionTitle,
   .sectionIntro {
     grid-column: 1 / -1;
-  }
-  .sectionIndex {
-    grid-column: 1 / -1;
-    margin-bottom: var(--s-1);
   }
 }

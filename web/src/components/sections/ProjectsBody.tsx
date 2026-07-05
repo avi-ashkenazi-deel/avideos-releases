@@ -5,11 +5,8 @@ import styles from '@/components/lists/Lists.module.css';
 export function ProjectsBody() {
   return (
     <div className={styles.projects}>
-      {projects.map((p, i) => (
+      {projects.map((p) => (
         <article key={p.id} className={styles.project}>
-          <span className={styles.projectIndex}>
-            {String(i + 1).padStart(2, '0')}
-          </span>
           <h3 className={styles.projectName}>{p.name}</h3>
           <div className={styles.projectBody}>
             <p className={styles.projectTagline}>{p.tagline}</p>

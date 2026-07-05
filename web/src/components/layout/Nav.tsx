@@ -33,20 +33,12 @@ export function Nav({ onSection }: NavProps) {
           Inspiration
         </NavLink>
         <NavLink
-          to="/gallery"
+          to="/snapshots"
           className={({ isActive }) =>
             isActive ? `${styles.link} ${styles.linkActive}` : styles.link
           }
         >
-          Gallery
-        </NavLink>
-        <NavLink
-          to="/photography"
-          className={({ isActive }) =>
-            isActive ? `${styles.link} ${styles.linkActive}` : styles.link
-          }
-        >
-          Photography
+          Snapshots
         </NavLink>
       </div>
     </nav>

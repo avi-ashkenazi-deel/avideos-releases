@@ -5,13 +5,11 @@ import page from './OnePage.module.css';
 
 function Section({
   id,
-  index,
   title,
   intro,
   children,
 }: {
   id: string;
-  index: string;
   title: string;
   intro?: string;
   children: React.ReactNode;
@@ -19,7 +17,6 @@ function Section({
   return (
     <section id={id} className={page.section}>
       <div className={`grid ${page.sectionHead}`}>
-        <span className={page.sectionIndex}>{index}</span>
         <h2 className={page.sectionTitle}>{title}</h2>
         {intro && <p className={page.sectionIntro}>{intro}</p>}
       </div>
@@ -37,15 +34,15 @@ export default function Inspiration() {
         <p className={page.bio}>Podcasts, books and people I learn from — a brain dump of what shapes my thinking.</p>
       </header>
 
-      <Section id="podcasts" index="01" title="Podcasts" intro="Shows I keep coming back to.">
+      <Section id="podcasts" title="Podcasts" intro="Shows I keep coming back to.">
         <InspirationList items={podcasts} />
       </Section>
 
-      <Section id="books" index="02" title="Books" intro="Writing I recommend.">
+      <Section id="books" title="Books" intro="Writing I recommend.">
         <InspirationList items={books} />
       </Section>
 
-      <Section id="people" index="03" title="People" intro="Voices I follow.">
+      <Section id="people" title="People" intro="Voices I follow.">
         <InspirationList items={people} />
       </Section>
 
