@@ -40,6 +40,14 @@ struct PlayerDetailContent: View {
     /// bottom inset so the last sentence clears it.
     @State private var controlsHeight: CGFloat = 140
 
+    /// The transport panel shrinks to a compact pill (highlight + play/pause with
+    /// a progress ring) when you leave it alone while listening, freeing the screen
+    /// for text — like Safari's toolbar. It re-expands on tap, on pause, and when a
+    /// new item opens, then collapses again after a few idle seconds.
+    @State private var controlsCollapsed = false
+    @State private var collapseTask: Task<Void, Never>?
+    private static let collapseAnimation: Animation = .spring(response: 0.38, dampingFraction: 0.85)
+
     /// Links from whatever's on screen (a staged preview takes precedence).
     private var currentLinks: [EmailLink] {
         player.staged?.links ?? player.parsed?.links ?? []
@@ -73,6 +81,8 @@ struct PlayerDetailContent: View {
         .onChange(of: player.parsed?.email.id) { _, _ in
             dismissedVoiceWarning = false
             renderPiP()
+            // A new item: open the full controls, then let them settle back down.
+            expandControls()
         }
         .navigationTitle(player.staged?.email.from.displayName
                          ?? player.parsed?.email.from.displayName ?? "")
@@ -128,14 +138,18 @@ struct PlayerDetailContent: View {
             player.onHighlightCaptured = { highlight in highlightToAnnotate = highlight }
             updateIdleTimer()
             configurePiP()
+            if player.isPlaying { scheduleCollapse() }
         }
         .onDisappear {
             UIApplication.shared.isIdleTimerDisabled = false
             ReaderPiPController.shared.teardown()
+            collapseTask?.cancel()
         }
-        .onChange(of: player.isPlaying) { _, _ in
+        .onChange(of: player.isPlaying) { _, playing in
             updateIdleTimer()
             ReaderPiPController.shared.playbackStateChanged()
+            // Collapse only while playing; pausing brings the full controls back.
+            if playing { scheduleCollapse() } else { expandControls() }
         }
         .onChange(of: player.currentBlockIndex) { _, _ in renderPiP() }
         .onChange(of: settings.keepScreenAwake) { _, _ in updateIdleTimer() }
@@ -275,21 +289,84 @@ struct PlayerDetailContent: View {
             .simultaneousGesture(swipeBetweenItems)
         }
         // The transport floats over the transcript as a Liquid Glass panel rather
-        // than a bar pinned to the bottom edge.
+        // than a bar pinned to the bottom edge. It shrinks to a compact pill after
+        // a few idle seconds of listening (tap it to bring the full controls back).
         .overlay(alignment: .bottom) {
-            PlayerControlsView(viewModel: player) {
-                _ = player.captureHighlight()
+            Group {
+                if controlsCollapsed {
+                    collapsedControls
+                        .transition(.opacity)
+                } else {
+                    PlayerControlsView(viewModel: player) {
+                        _ = player.captureHighlight()
+                    }
+                    .transition(.opacity)
+                }
             }
             .padding(.horizontal)
             .padding(.vertical, 12)
             .floatingGlass()
-            .padding(.horizontal, 10)
+            .padding(.horizontal, controlsCollapsed ? 90 : 10)
             .padding(.bottom, 8)
             .background(GeometryReader { geo in
                 Color.clear.preference(key: ControlsHeightKey.self, value: geo.size.height)
             })
         }
-        .onPreferenceChange(ControlsHeightKey.self) { controlsHeight = max($0, 96) }
+        .onPreferenceChange(ControlsHeightKey.self) { controlsHeight = max($0, 64) }
+    }
+
+    /// The shrunken transport: just Highlight and Play/Pause (the pause ringed by a
+    /// progress stroke showing how far to the end). Tapping the pill itself brings
+    /// the full controls back.
+    private var collapsedControls: some View {
+        HStack(spacing: 24) {
+            Button {
+                _ = player.captureHighlight()
+                scheduleCollapse()
+            } label: {
+                Image(systemName: "highlighter").font(.title3)
+            }
+            .tint(.primary)
+
+            ZStack {
+                Circle().stroke(Color.secondary.opacity(0.25), lineWidth: 3)
+                Circle()
+                    .trim(from: 0, to: max(0, min(1, player.progress)))
+                    .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+                Button {
+                    player.togglePlayPause()   // pausing re-expands via onChange
+                } label: {
+                    Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
+                        .font(.headline)
+                }
+                .tint(.primary)
+            }
+            .frame(width: 38, height: 38)
+        }
+        // Tap anywhere on the pill (outside the two buttons) to expand.
+        .frame(maxWidth: .infinity)
+        .contentShape(Rectangle())
+        .onTapGesture { expandControls() }
+    }
+
+    /// Collapse to the pill after a short idle period — but only while playing, so
+    /// paused controls stay fully available.
+    private func scheduleCollapse() {
+        collapseTask?.cancel()
+        collapseTask = Task {
+            try? await Task.sleep(nanoseconds: 4_000_000_000)
+            guard !Task.isCancelled, player.isPlaying else { return }
+            withAnimation(Self.collapseAnimation) { controlsCollapsed = true }
+        }
+    }
+
+    /// Bring the full controls back, then (if still playing) queue the next
+    /// idle-collapse.
+    private func expandControls() {
+        collapseTask?.cancel()
+        withAnimation(Self.collapseAnimation) { controlsCollapsed = false }
+        if player.isPlaying { scheduleCollapse() }
     }
 
     // MARK: - Preview (staged) mode
