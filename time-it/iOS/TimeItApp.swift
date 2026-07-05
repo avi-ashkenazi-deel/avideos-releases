@@ -4,6 +4,7 @@ import SwiftUI
 struct TimeItApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var model = AppModel()
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
         WindowGroup {
@@ -13,6 +14,11 @@ struct TimeItApp: App {
                 .environmentObject(model.presets)
                 .environmentObject(model.settings)
                 .task { model.start() }
+                // Siri ("start my … in Time It") opens the app; start the
+                // requested timer once we're active.
+                .onChange(of: scenePhase) { _, phase in
+                    if phase == .active { model.startPendingIfNeeded() }
+                }
         }
     }
 }
@@ -114,6 +120,25 @@ final class AppModel: ObservableObject {
         bridge.syncAll(presets: presets.presets, mode: settings.outputMode,
                        rests: settings.restDurations,
                        workoutKind: settings.sessionWorkoutKind)
+
+        // Keep Siri's timer names current after any library change (local or
+        // synced from the watch), and once now.
+        let refreshSiri: () -> Void = { if #available(iOS 16.0, *) { TimeItShortcuts.updateAppShortcutParameters() } }
+        let priorLocal = presets.onLocalChange
+        presets.onLocalChange = { list in priorLocal?(list); refreshSiri() }
+        let priorRemote = bridge.onPresetsReceived
+        bridge.onPresetsReceived = { list in priorRemote?(list); refreshSiri() }
+        refreshSiri()
+
+        // A timer requested by Siri before launch: start it now.
+        startPendingIfNeeded()
+    }
+
+    /// If Siri (or a Shortcut) asked to start a timer, start it once.
+    func startPendingIfNeeded() {
+        guard let id = PendingStart.take(),
+              let preset = presets.presets.first(where: { $0.id == id }) else { return }
+        startTimer(preset)
     }
 
     /// Start a preset. Only one timer runs at a time, so any current one is

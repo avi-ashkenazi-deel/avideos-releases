@@ -87,4 +87,12 @@ final class PresetStore: ObservableObject {
         guard let data = try? Data(contentsOf: url) else { return nil }
         return try? decoder.decode([TimerPreset].self, from: data)
     }
+
+    /// Read the saved library straight from the App Group without a store
+    /// instance — used by App Intents / Siri, which may run outside the app's
+    /// process (and before any UI exists).
+    static func loadShared() -> [TimerPreset] {
+        let url = AppGroup.containerURL.appendingPathComponent("presets.json")
+        return load(from: url, decoder: JSONDecoder()) ?? TimerPreset.samples
+    }
 }
