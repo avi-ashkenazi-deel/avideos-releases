@@ -46,11 +46,14 @@ enum ArticleExtractor {
 
     static func fetch(_ url: URL) async throws -> Result {
         var request = URLRequest(url: url)
-        // A browser-like UA; some sites serve a stripped page to unknown clients.
-        request.setValue(
-            "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) VoiceInbox/1.0",
-            forHTTPHeaderField: "User-Agent"
-        )
+        // X / Twitter redirect normal browser fetches to a bogus deep-link scheme
+        // (so we get nothing), but they still serve a link-preview card — with the
+        // tweet text in og:description — to crawler user-agents. Use one for those
+        // hosts; a normal browser UA everywhere else.
+        let userAgent = isSocialCardHost(url.host)
+            ? "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)"
+            : "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) VoiceInbox/1.0"
+        request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
         request.setValue("text/html,application/xhtml+xml", forHTTPHeaderField: "Accept")
 
         let (data, response) = try await session.data(for: request)
@@ -85,6 +88,14 @@ enum ArticleExtractor {
         }
 
         return Result(title: title, siteName: siteName, excerpt: excerpt, html: content)
+    }
+
+    /// Hosts that hide their content from browser fetches but serve an
+    /// og:description card to crawlers (so we fetch them as a crawler).
+    private static func isSocialCardHost(_ host: String?) -> Bool {
+        guard let host = host?.lowercased() else { return false }
+        return host == "x.com" || host == "twitter.com" || host == "mobile.twitter.com"
+            || host.hasSuffix(".x.com") || host.hasSuffix(".twitter.com")
     }
 
     /// Minimal HTML escaping for text we inject into a fallback `<p>`.
