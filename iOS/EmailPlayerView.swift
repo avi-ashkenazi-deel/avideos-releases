@@ -24,8 +24,14 @@ struct PlayerDetailContent: View {
     /// A struck-through line the listener tapped, offering to read it again.
     @State private var unskipText: String?
 
-    /// The article opened in the in-app browser sheet (nil = closed).
+    /// The article being opened in the in-app browser (nil = closed). It loads
+    /// *behind* the reader; `browserOpen` then slides the reader down to reveal it.
     @State private var browserLink: BrowserLink?
+    /// True once the reader has dropped away and the browser is showing.
+    @State private var browserOpen = false
+    @State private var browserCountdown: Task<Void, Never>?
+    /// Measured reader height, so we know how far to slide it down.
+    @State private var readerHeight: CGFloat = 800
 
     private struct BrowserLink: Identifiable {
         let id = UUID()
@@ -86,7 +92,74 @@ struct PlayerDetailContent: View {
     // chain overwhelmed the SwiftUI type-checker ("unable to type-check in
     // reasonable time"), so each piece is type-checked independently.
     var body: some View {
+        ZStack {
+            // The web page loads behind the reader. It's kept hidden during the
+            // count-in so a still-loading page is never seen blank; then the reader
+            // slides down (X-style) to reveal it.
+            if let link = browserLink {
+                InAppBrowserView(url: link.url, onClose: closeBrowser)
+                    .opacity(browserOpen ? 1 : 0)
+                    .allowsHitTesting(browserOpen)
+                    .animation(.easeInOut(duration: 0.25), value: browserOpen)
+            }
+            readerLayer
+        }
+    }
+
+    /// The reader itself — slides down and shrinks into a peeking card when the
+    /// browser is revealed behind it.
+    private var readerLayer: some View {
         withLifecycle(withPresentations(baseContent))
+            .background(GeometryReader { geo in
+                Color.clear.preference(key: ReaderHeightKey.self, value: geo.size.height)
+            })
+            .clipShape(RoundedRectangle(cornerRadius: browserOpen ? 28 : 0, style: .continuous))
+            .shadow(color: .black.opacity(browserOpen ? 0.28 : 0), radius: 18, y: -6)
+            .scaleEffect(browserOpen ? 0.92 : 1, anchor: .top)
+            .offset(y: browserOpen ? readerHeight * 0.82 : 0)
+            .overlay { if browserOpen { readerDismissCatcher } }
+            .animation(.spring(response: 0.5, dampingFraction: 0.82), value: browserOpen)
+            .onPreferenceChange(ReaderHeightKey.self) { readerHeight = $0 }
+    }
+
+    /// While the browser is open the reader is just a "tap or drag up to come
+    /// back" card, so intercept its touches.
+    private var readerDismissCatcher: some View {
+        Color.black.opacity(0.001)
+            .contentShape(Rectangle())
+            .onTapGesture { closeBrowser() }
+            .gesture(
+                DragGesture(minimumDistance: 20).onEnded { value in
+                    if value.translation.height < -40 { closeBrowser() }
+                }
+            )
+    }
+
+    /// Open the article: start loading behind the reader, give a three-beat haptic
+    /// count-in (so it's not a blank flash), then drop the reader to reveal it.
+    private func startBrowser(_ url: URL) {
+        browserCountdown?.cancel()
+        browserOpen = false
+        browserLink = BrowserLink(url: url)
+        let haptic = UIImpactFeedbackGenerator(style: .medium)
+        browserCountdown = Task { @MainActor in
+            for _ in 0..<3 {
+                haptic.impactOccurred()
+                try? await Task.sleep(nanoseconds: 800_000_000)   // a beat per "count"
+            }
+            guard !Task.isCancelled, browserLink != nil else { return }
+            browserOpen = true          // reveal (spring is on readerLayer)
+        }
+    }
+
+    private func closeBrowser() {
+        browserCountdown?.cancel()
+        browserOpen = false
+        // Tear the web view down after it slides back up.
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 520_000_000)
+            if !browserOpen { browserLink = nil }
+        }
     }
 
     private var baseContent: some View {
@@ -99,13 +172,16 @@ struct PlayerDetailContent: View {
                          ?? player.parsed?.email.from.displayName ?? "")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { readerToolbar }
+        // While the browser is revealed the reader slides down; hide the nav bar
+        // so its chrome doesn't stay stuck at the top over the web page.
+        .toolbar(browserOpen ? .hidden : .visible, for: .navigationBar)
     }
 
     @ToolbarContentBuilder
     private var readerToolbar: some ToolbarContent {
         if let articleURL {
             ToolbarItem(placement: .topBarTrailing) {
-                Button { browserLink = BrowserLink(url: articleURL) } label: {
+                Button { startBrowser(articleURL) } label: {
                     Image(systemName: "safari")
                 }
                 .accessibilityLabel("Open the full article in the browser")
@@ -133,14 +209,6 @@ struct PlayerDetailContent: View {
         content
             .sheet(isPresented: $showLinks) {
                 NavigationStack { LinksListView(links: currentLinks) }
-            }
-            .sheet(item: $browserLink) { link in
-                // X-style in-app browser: full-bleed page with a floating bottom
-                // toolbar. Slides up from the bottom; drag down to the half-height
-                // detent to keep it around, swipe further to close.
-                InAppBrowserView(url: link.url)
-                    .presentationDetents([.large, .medium])
-                    .presentationDragIndicator(.visible)
             }
             .sheet(item: $highlightToAnnotate) { highlight in
                 NavigationStack { HighlightComposerView(highlight: highlight) }
@@ -774,6 +842,13 @@ struct NowPlayingView: View {
 private struct ControlsHeightKey: PreferenceKey {
     static var defaultValue: CGFloat = 140
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
+}
+
+/// Reports the reader's full height so the X-style browser reveal knows how far
+/// to slide it down.
+private struct ReaderHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 800
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
 }
 
 // MARK: - Sentence

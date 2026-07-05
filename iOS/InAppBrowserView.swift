@@ -8,12 +8,19 @@ import WebKit
 /// to the half-height detent to keep it around while you glance at the reader).
 struct InAppBrowserView: View {
     @StateObject private var model: BrowserModel
-    @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
     private let startURL: URL
+    /// Called when the close button is tapped (the host owns dismissal, since this
+    /// is revealed behind the reader rather than presented as a sheet).
+    var onClose: () -> Void = {}
 
-    init(url: URL) {
+    /// True once the page has finished its first load — the host waits for this
+    /// (up to a cap) before revealing, so it never opens to a blank page.
+    var isReady: Bool { model.progress >= 1 || !model.isLoading }
+
+    init(url: URL, onClose: @escaping () -> Void = {}) {
         self.startURL = url
+        self.onClose = onClose
         _model = StateObject(wrappedValue: BrowserModel(url: url))
     }
 
@@ -43,7 +50,7 @@ struct InAppBrowserView: View {
 
     private var toolbar: some View {
         HStack(spacing: 12) {
-            circleButton("xmark") { dismiss() }
+            circleButton("xmark") { onClose() }
             circleButton("chevron.left") { model.goBack() }
                 .disabled(!model.canGoBack)
                 .opacity(model.canGoBack ? 1 : 0.35)
