@@ -1,15 +1,21 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { Nav } from './Nav';
 import styles from './Site.module.css';
 
 const OnePage = lazy(() => import('@/pages/OnePage'));
+const Inspiration = lazy(() => import('@/pages/Inspiration'));
 const Gallery = lazy(() => import('@/pages/Gallery'));
 const Photography = lazy(() => import('@/pages/Photography'));
 
 export function Site() {
   const navigate = useNavigate();
   const location = useLocation();
+
+  // Start non-home routes (Inspiration, galleries) at the top.
+  useEffect(() => {
+    if (location.pathname !== '/') window.scrollTo(0, 0);
+  }, [location.pathname]);
 
   const scrollToId = (id: string) => {
     if (id === 'top') {
@@ -38,6 +44,14 @@ export function Site() {
             element={
               <main className={styles.main}>
                 <OnePage />
+              </main>
+            }
+          />
+          <Route
+            path="/inspiration"
+            element={
+              <main className={styles.main}>
+                <Inspiration />
               </main>
             }
           />

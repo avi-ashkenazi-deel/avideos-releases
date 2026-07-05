@@ -25,6 +25,14 @@ export function Nav({ onSection }: NavProps) {
           </button>
         ))}
         <NavLink
+          to="/inspiration"
+          className={({ isActive }) =>
+            isActive ? `${styles.link} ${styles.linkActive}` : styles.link
+          }
+        >
+          Inspiration
+        </NavLink>
+        <NavLink
           to="/gallery"
           className={({ isActive }) =>
             isActive ? `${styles.link} ${styles.linkActive}` : styles.link

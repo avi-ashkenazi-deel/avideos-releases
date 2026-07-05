@@ -125,6 +125,54 @@
   padding-bottom: 3px;
 }
 
+/* ---- Inspiration lists (title + meta) ---- */
+.iList {
+  border-top: 1px solid var(--c-fg);
+}
+
+.iRow {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: var(--grid-gap);
+  align-items: baseline;
+  padding: clamp(0.7rem, 1.8vh, 1.2rem) 0;
+  border-bottom: 1px solid var(--c-grey-4);
+}
+
+.iTitle {
+  grid-column: 1 / 9;
+  font-size: clamp(1.05rem, 2.2vw, 1.9rem);
+  font-weight: 500;
+  letter-spacing: var(--tracking-tight);
+  line-height: var(--lh-snug);
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+.iRow:hover .iTitle {
+  opacity: 0.4;
+}
+
+.iMeta {
+  grid-column: 9 / 13;
+  text-align: right;
+  font-size: var(--fs-micro);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--c-grey-2);
+  align-self: baseline;
+}
+
+@media (max-width: 768px) {
+  .iRow {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+  .iTitle,
+  .iMeta {
+    grid-column: 1 / -1;
+    text-align: left;
+  }
+}
+
 /* ---- Tools: grid of thumbnails ---- */
 .tools {
   display: grid;

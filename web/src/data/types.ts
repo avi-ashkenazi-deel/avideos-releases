@@ -62,6 +62,12 @@ export interface Social {
   url: string;
 }
 
+export interface InspirationItem {
+  title: string;
+  meta?: string; // author / host / handle
+  url?: string;
+}
+
 export interface About {
   name: string;
   bio: string; // one-sentence, used on the home page
