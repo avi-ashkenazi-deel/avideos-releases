@@ -48,4 +48,4 @@ ships.
 
 ## Contact
 
-Questions about this policy: **[YOUR CONTACT EMAIL]**
+Questions about this policy: **avi@superavi.com**
