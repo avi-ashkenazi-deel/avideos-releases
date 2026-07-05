@@ -17,6 +17,12 @@ struct PlayerDetailContent: View {
     @EnvironmentObject private var player: EmailPlayerViewModel
     @ObservedObject private var settings = AppSettings.shared
     @ObservedObject private var highlightStore = HighlightStore.shared
+    // Observed so a line struck-through/un-struck (skip rule added/removed) updates
+    // the transcript live.
+    @ObservedObject private var skipRules = SkipRuleStore.shared
+
+    /// A struck-through line the listener tapped, offering to read it again.
+    @State private var unskipText: String?
 
     /// The article opened in the in-app browser sheet (nil = closed).
     @State private var browserLink: BrowserLink?
@@ -106,6 +112,17 @@ struct PlayerDetailContent: View {
                 .ignoresSafeArea()
                 .presentationDetents([.large, .medium])
                 .presentationDragIndicator(.visible)
+        }
+        .confirmationDialog(
+            "Read this line again?",
+            isPresented: Binding(get: { unskipText != nil }, set: { if !$0 { unskipText = nil } }),
+            titleVisibility: .visible,
+            presenting: unskipText
+        ) { text in
+            Button("Read it again") { unskipMatching(text) }
+            Button("Cancel", role: .cancel) {}
+        } message: { _ in
+            Text("This line is currently muted, so it isn't read aloud. Reading it again applies to every email it was muted in.")
         }
         .onAppear {
             player.onHighlightCaptured = { highlight in highlightToAnnotate = highlight }
@@ -412,18 +429,25 @@ struct PlayerDetailContent: View {
         let isCurrent = currentIndex == index
         switch block {
         case .sentence(let sentence):
+            let skipped = isSkipped(sentence.text)
             SentenceText(text: sentence.text,
                          isCurrent: isCurrent,
                          notedPosition: noted.position,
                          showMarker: noted.showMarker,
                          markerIsNote: noted.markerIsNote,
-                         wordRange: isCurrent ? player.spokenWordRange : nil,
+                         wordRange: (isCurrent && !skipped) ? player.spokenWordRange : nil,
                          fontSize: bodyFontSize,
                          listDepth: sentence.listDepth,
-                         bulletMarker: sentence.bulletMarker)
+                         bulletMarker: sentence.bulletMarker,
+                         isSkipped: skipped)
                 .contentShape(Rectangle())
-                .onTapGesture { if isActive { player.jump(toBlock: index) } }
-                .contextMenu { skipMenu(for: sentence) }
+                .onTapGesture {
+                    // A struck-through line: tap to offer reading it again.
+                    // Otherwise tap jumps playback here.
+                    if skipped { unskipText = sentence.text }
+                    else if isActive { player.jump(toBlock: index) }
+                }
+                .contextMenu { skipMenu(for: sentence, isSkipped: skipped) }
         case .image(let image):
             ImageBlockView(image: image, isCurrent: isCurrent) {
                 player.skipImage()
@@ -432,24 +456,51 @@ struct PlayerDetailContent: View {
         }
     }
 
-    /// Long-press menu on a sentence: teach the app to always skip this recurring
+    /// Long-press menu on a sentence: teach the app to never read this recurring
     /// line — for this sender (e.g. Substack's "Read in app") or for everyone.
+    /// On an already-skipped line, it offers to read it again instead.
     @ViewBuilder
-    private func skipMenu(for sentence: Sentence) -> some View {
+    private func skipMenu(for sentence: Sentence, isSkipped: Bool) -> some View {
         if let from = player.parsed?.email.from ?? player.staged?.email.from {
-            let domain = SkipRuleStore.domain(of: from.address)
-            Button {
-                SkipRuleStore.shared.add(phrase: sentence.text, senderDomain: domain, label: from.displayName)
-                player.reapplySkipRules()
-            } label: {
-                Label("Always skip this from \(from.displayName)", systemImage: "speaker.slash")
+            if isSkipped {
+                Button {
+                    unskipMatching(sentence.text)
+                } label: {
+                    Label("Read this again", systemImage: "speaker.wave.2")
+                }
+            } else {
+                let domain = SkipRuleStore.domain(of: from.address)
+                Button {
+                    SkipRuleStore.shared.add(phrase: sentence.text, senderDomain: domain, label: from.displayName)
+                } label: {
+                    Label("Don't read this from \(from.displayName)", systemImage: "speaker.slash")
+                }
+                Button {
+                    SkipRuleStore.shared.add(phrase: sentence.text, senderDomain: "", label: from.displayName)
+                } label: {
+                    Label("Don't read this from anyone", systemImage: "speaker.slash.fill")
+                }
             }
-            Button {
-                SkipRuleStore.shared.add(phrase: sentence.text, senderDomain: "", label: from.displayName)
-                player.reapplySkipRules()
-            } label: {
-                Label("Always skip this from anyone", systemImage: "speaker.slash.fill")
-            }
+        }
+    }
+
+    /// The sender address of what's on screen, for matching skip rules.
+    private var currentFromAddress: String? {
+        (player.parsed ?? player.staged)?.email.from.address
+    }
+
+    /// Whether a line is currently muted by a skip rule for this sender.
+    private func isSkipped(_ text: String) -> Bool {
+        guard let addr = currentFromAddress else { return false }
+        return skipRules.shouldSkip(text, fromAddress: addr)
+    }
+
+    /// Un-skip: remove every rule that was muting this line (for this sender or
+    /// for everyone), so it reads again from now on.
+    private func unskipMatching(_ text: String) {
+        guard let addr = currentFromAddress else { return }
+        for rule in skipRules.rules where rule.matches(text, fromAddress: addr) {
+            skipRules.remove(rule.id)
         }
     }
 
@@ -577,6 +628,9 @@ private struct SentenceText: View {
     var fontSize: CGFloat = 22
     var listDepth: Int = 0
     var bulletMarker: String = ""
+    /// A line the listener muted with a skip rule: shown struck-through and dimmed
+    /// so it's clearly not read, but still visible and tappable to un-skip.
+    var isSkipped: Bool = false
 
     /// Must match the transcript's `VStack` spacing so a run's fill bridges the
     /// gap to the next sentence exactly, with no seam and no overlap.
@@ -619,7 +673,8 @@ private struct SentenceText: View {
                         .padding(5)
                 }
             }
-            .foregroundStyle(isCurrent || isNoted ? .primary : .secondary)
+            .foregroundStyle(isSkipped ? .secondary : (isCurrent || isNoted ? .primary : .secondary))
+            .opacity(isSkipped ? 0.55 : 1)
     }
 
     /// The sentence text, with a bullet/number in front when it's the start of a
@@ -630,6 +685,7 @@ private struct SentenceText: View {
         if bulletMarker.isEmpty {
             Text(attributed)
                 .font(.system(size: fontSize))
+                .strikethrough(isSkipped, color: .secondary)
                 .multilineTextAlignment(isRTL ? .trailing : .leading)
         } else {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
@@ -638,6 +694,7 @@ private struct SentenceText: View {
                     .foregroundStyle(.secondary)
                 Text(attributed)
                     .font(.system(size: fontSize))
+                    .strikethrough(isSkipped, color: .secondary)
                     .multilineTextAlignment(isRTL ? .trailing : .leading)
                     .frame(maxWidth: .infinity, alignment: isRTL ? .trailing : .leading)
             }

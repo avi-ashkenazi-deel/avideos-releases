@@ -341,12 +341,10 @@ final class EmailPlayerViewModel: ObservableObject {
         var parsed = await Task.detached(priority: .userInitiated) {
             EmailParser.parse(email)
         }.value
-        // Drop any lines the listener marked "always skip from this sender" (the
-        // recurring newsletter chrome like Substack's "Read in app").
-        let filtered = SkipRuleStore.shared.filter(parsed.blocks, fromAddress: parsed.email.from.address)
-        if filtered.count != parsed.blocks.count {
-            parsed = ParsedEmail(email: parsed.email, blocks: filtered, links: parsed.links)
-        }
+        // Lines the listener marked "don't read this" (recurring newsletter chrome
+        // like Substack's "Read in app") are *kept* in the transcript — shown
+        // struck-through and dimmed, and skipped during playback (see speakBlock) —
+        // so they're clearly not read but can be tapped to un-skip.
         // On auto-advance, lead with a spoken header so the listener knows who
         // it's from and what it is before the body starts.
         if announce {
@@ -505,23 +503,6 @@ final class EmailPlayerViewModel: ObservableObject {
         speakBlock(at: index)
     }
 
-    /// Re-filter the email on screen after a skip rule is added, so the line the
-    /// listener just chose to skip disappears right away — not only next time.
-    /// Only runs while paused/idle, so it never disrupts active playback.
-    func reapplySkipRules() {
-        guard !isPlaying, let parsed else { return }
-        let anchorID = currentBlock?.id
-        let filtered = SkipRuleStore.shared.filter(parsed.blocks, fromAddress: parsed.email.from.address)
-        guard filtered.count != parsed.blocks.count else { return }
-        self.parsed = ParsedEmail(email: parsed.email, blocks: filtered, links: parsed.links)
-        if let anchorID, let idx = filtered.firstIndex(where: { $0.id == anchorID }) {
-            currentBlockIndex = idx
-        } else {
-            currentBlockIndex = min(currentBlockIndex, max(filtered.count - 1, 0))
-        }
-        currentBlockSpoken = false
-    }
-
     /// Forget the spoken-block history that feeds the highlight lookback window.
     /// Called whenever the listener *manually* repositions (tap a sentence, skip,
     /// go back). Without this, highlighting after going back grabbed both the
@@ -584,6 +565,13 @@ final class EmailPlayerViewModel: ObservableObject {
         }
         // Skip-silently: read straight past images without announcing them.
         if blocks[index].isImage, settings.imageBehavior == .skipSilently {
+            speakBlock(at: index + 1)
+            return
+        }
+        // Skip lines the listener chose never to hear (still shown, struck-through).
+        if case .sentence(let s) = blocks[index],
+           let from = parsed?.email.from.address,
+           SkipRuleStore.shared.shouldSkip(s.text, fromAddress: from) {
             speakBlock(at: index + 1)
             return
         }
