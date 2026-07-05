@@ -29,7 +29,9 @@ enum FeedPlayback {
                     guard let next = store.nextUnread(after: itemID(fromEmailID: emailID))
                     else { return nil }
                     return await playableEmail(for: next, store: store)
-                }
+                },
+                // Reached the end with nothing left unread — celebrate + exit.
+                onQueueFinished: { [weak player] in player?.celebrateFeedFinish = true }
             )
         }
     }

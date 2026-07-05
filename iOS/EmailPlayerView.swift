@@ -115,7 +115,22 @@ struct PlayerDetailContent: View {
             NavigationStack { HighlightComposerView(highlight: highlight) }
         }
         .overlay(alignment: .top) {
-            if showCompletion { completionBanner }
+            if showCompletion && !player.celebrateFeedFinish { completionBanner }
+        }
+        .overlay {
+            if player.celebrateFeedFinish { feedFinishedCelebration }
+        }
+        .onChange(of: player.celebrateFeedFinish) { _, celebrating in
+            guard celebrating else { return }
+            // The per-item "Finished" banner would double up with the celebration.
+            showCompletion = false
+            Task {
+                try? await Task.sleep(nanoseconds: 2_800_000_000)
+                player.celebrateFeedFinish = false
+                // Drop back to the feed list (collapses the reader on iPhone;
+                // clears the iPad detail pane) so all items are in view again.
+                player.clear()
+            }
         }
         .alert("Playback problem", isPresented: .constant(player.errorMessage != nil)) {
             Button("OK") { player.errorMessage = nil }
@@ -431,6 +446,31 @@ struct PlayerDetailContent: View {
         }
         .padding(12)
         .background(Color.orange.opacity(0.12))
+    }
+
+    /// Full-screen celebration when the listener finishes every unread feed item:
+    /// confetti over a "caught up" card, shown briefly before dropping back to the
+    /// feed list.
+    private var feedFinishedCelebration: some View {
+        ZStack {
+            Color(.systemBackground).opacity(0.75).ignoresSafeArea()
+            VStack(spacing: 12) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 60))
+                    .foregroundStyle(.green)
+                Text("You're all caught up")
+                    .font(.title2.bold())
+                Text("You've listened to everything in your feeds.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+            .padding(28)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 20))
+            .padding(40)
+            ConfettiView()
+        }
+        .transition(.opacity)
     }
 
     private var completionBanner: some View {

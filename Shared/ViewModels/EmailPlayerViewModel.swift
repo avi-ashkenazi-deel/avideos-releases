@@ -45,6 +45,10 @@ final class EmailPlayerViewModel: ObservableObject {
     /// stays visible whenever `parsed != nil`.
     @Published var isExpanded = false
 
+    /// Set when an auto-advancing feed session finishes every remaining item, so
+    /// the reader can throw confetti and drop back to the feed list.
+    @Published var celebrateFeedFinish = false
+
     /// An email opened for viewing while a *different* one is still playing. The
     /// listener sees it and can choose to play it (which makes it active) without
     /// interrupting current playback.
@@ -64,6 +68,7 @@ final class EmailPlayerViewModel: ObservableObject {
         var markReadOverride: ((String) -> Void)?
         var nextUnreadProvider: ((String) -> Email?)?
         var nextLocalProvider: (@MainActor (String) async -> Email?)?
+        var onQueueFinished: (() -> Void)?
         var startBlock: Int?
     }
 
@@ -82,6 +87,12 @@ final class EmailPlayerViewModel: ObservableObject {
     /// returns the next item already built into a fully-loaded `Email` (it may
     /// fetch article content), which is applied directly without a mail fetch.
     var nextLocalProvider: (@MainActor (String) async -> Email?)?
+
+    /// Called when an auto-advancing local queue (feeds) runs out of items — the
+    /// listener has heard everything. Set by the feed session so it can celebrate
+    /// and return to the feed list. Reset on every `open` so a later non-feed
+    /// session (an email, a saved article) never fires it.
+    var onQueueFinished: (() -> Void)?
 
     /// Whether auto-advancing to the next *local* item should speak the "From …"
     /// header. Mirrors the `announce` the current item was opened with — feeds in
@@ -207,13 +218,15 @@ final class EmailPlayerViewModel: ObservableObject {
               onMarkedRead: ((String) -> Void)? = nil,
               markReadOverride: ((String) -> Void)? = nil,
               nextUnreadProvider: ((String) -> Email?)? = nil,
-              nextLocalProvider: (@MainActor (String) async -> Email?)? = nil) {
+              nextLocalProvider: (@MainActor (String) async -> Email?)? = nil,
+              onQueueFinished: (() -> Void)? = nil) {
         isExpanded = true
         announceOnAdvance = announce
         let config = StagedConfig(onMarkedRead: onMarkedRead,
                                   markReadOverride: markReadOverride,
                                   nextUnreadProvider: nextUnreadProvider,
                                   nextLocalProvider: nextLocalProvider,
+                                  onQueueFinished: onQueueFinished,
                                   startBlock: startBlock)
         if usesInlineDetail, isPlaying, parsed?.email.id != email.id {
             Task { await stage(email: email, isLocal: isLocal, config: config) }
@@ -223,6 +236,7 @@ final class EmailPlayerViewModel: ObservableObject {
             self.markReadOverride = markReadOverride
             self.nextUnreadProvider = nextUnreadProvider
             self.nextLocalProvider = nextLocalProvider
+            self.onQueueFinished = onQueueFinished
             Task {
                 if isLocal { await loadLocal(email, announce: announce) }
                 else { await load(email: email, announce: announce) }
@@ -252,6 +266,7 @@ final class EmailPlayerViewModel: ObservableObject {
         markReadOverride = config.markReadOverride
         nextUnreadProvider = config.nextUnreadProvider
         nextLocalProvider = config.nextLocalProvider
+        onQueueFinished = config.onQueueFinished
         parsed = stagedEmail
         staged = nil
         stagedConfig = nil
@@ -303,6 +318,7 @@ final class EmailPlayerViewModel: ObservableObject {
         elapsed = 0
         hasStarted = false
         isComplete = false
+        celebrateFeedFinish = false
     }
 
     private func apply(_ email: Email, announce: Bool = false) async {
@@ -340,6 +356,7 @@ final class EmailPlayerViewModel: ObservableObject {
         self.currentBlockSpoken = false
         self.elapsed = 0
         self.spokenLog = []
+        self.celebrateFeedFinish = false
         // Detect the language first so the duration estimate uses the right
         // (possibly per-language) speed.
         checkVoiceAvailability(for: parsed)
@@ -688,7 +705,12 @@ final class EmailPlayerViewModel: ObservableObject {
         stop()
         if let nextLocalProvider {
             Task {
-                guard let next = await nextLocalProvider(currentID) else { return }
+                guard let next = await nextLocalProvider(currentID) else {
+                    // Nothing left in the local queue — the listener finished the
+                    // feed. Let the reader celebrate and return to the list.
+                    onQueueFinished?()
+                    return
+                }
                 await apply(next, announce: announceOnAdvance)   // parses the email's own content
                 guard errorMessage == nil else { return }
                 SoundEffects.shared.play(.transition)
