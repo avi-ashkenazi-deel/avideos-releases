@@ -1,6 +1,7 @@
 import WidgetKit
 import SwiftUI
 import ActivityKit
+import AppIntents
 
 /// Renders the running timer on the Lock Screen and across the Dynamic Island
 /// presentations. When the timer has intervals, the hero is the *interval*
@@ -14,7 +15,7 @@ struct TimerLiveActivity: Widget {
         ActivityConfiguration(for: TimerActivityAttributes.self) { context in
             let tint = Color(hex: context.state.colorHex)
             // Lock Screen / banner presentation.
-            LockScreenView(state: context.state)
+            LockScreenView(state: context.state, timerID: context.attributes.timerID)
                 .padding()
                 .activityBackgroundTint(tint.opacity(0.18))
                 .activitySystemActionForegroundColor(tint)
@@ -33,7 +34,10 @@ struct TimerLiveActivity: Widget {
                         .foregroundStyle(tint).lineLimit(1)
                 }
                 DynamicIslandExpandedRegion(.bottom) {
-                    heroProgress(s, tint: tint)
+                    VStack(spacing: 8) {
+                        heroProgress(s, tint: tint)
+                        controls(context.attributes.timerID, isRunning: s.isRunning, tint: tint)
+                    }
                 }
             } compactLeading: {
                 Image(systemName: "timer").foregroundStyle(tint)
@@ -53,36 +57,63 @@ struct TimerLiveActivity: Widget {
 @available(iOS 16.2, *)
 private struct LockScreenView: View {
     let state: TimerActivityAttributes.ContentState
+    let timerID: String
 
     var body: some View {
         let tint = Color(hex: state.colorHex)
-        HStack(spacing: 14) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(state.name).font(.headline).lineLimit(1)
-                if let label = state.intervalLabel {
-                    Text(label).font(.subheadline.bold()).foregroundStyle(tint).lineLimit(1)
-                } else if let next = state.nextCueLabel {
-                    Text("Next: \(next)").font(.caption).foregroundStyle(.secondary)
-                }
-                heroProgress(state, tint: tint)
-            }
-            Spacer()
-            VStack(alignment: .trailing, spacing: 0) {
-                heroTime(state).font(.system(size: 34, weight: .semibold, design: .rounded))
-                    .monospacedDigit().foregroundStyle(tint)
-                if state.hasIntervals {
-                    HStack(spacing: 3) {
-                        totalText(state).monospacedDigit()
-                        Text("left").opacity(0.8)
+        VStack(spacing: 10) {
+            HStack(spacing: 14) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(state.name).font(.headline).lineLimit(1)
+                    if let label = state.intervalLabel {
+                        Text(label).font(.subheadline.bold()).foregroundStyle(tint).lineLimit(1)
+                    } else if let next = state.nextCueLabel {
+                        Text("Next: \(next)").font(.caption).foregroundStyle(.secondary)
                     }
-                    .font(.caption2).foregroundStyle(.secondary)
+                    heroProgress(state, tint: tint)
+                }
+                Spacer()
+                VStack(alignment: .trailing, spacing: 0) {
+                    heroTime(state).font(.system(size: 34, weight: .semibold, design: .rounded))
+                        .monospacedDigit().foregroundStyle(tint)
+                    if state.hasIntervals {
+                        HStack(spacing: 3) {
+                            totalText(state).monospacedDigit()
+                            Text("left").opacity(0.8)
+                        }
+                        .font(.caption2).foregroundStyle(.secondary)
+                    }
                 }
             }
+            controls(timerID, isRunning: state.isRunning, tint: tint)
         }
     }
 }
 
 // MARK: - Shared bits
+
+/// Tappable transport controls (iOS 17+ interactive Live Activity buttons):
+/// pause/resume, skip to next interval, and stop — all without opening the app.
+@available(iOS 16.2, *)
+@ViewBuilder
+private func controls(_ timerID: String, isRunning: Bool, tint: Color) -> some View {
+    if #available(iOS 17.0, *) {
+        HStack(spacing: 28) {
+            Button(intent: PauseResumeTimerIntent(timerID: timerID)) {
+                Image(systemName: isRunning ? "pause.fill" : "play.fill")
+            }
+            Button(intent: SkipIntervalIntent(timerID: timerID)) {
+                Image(systemName: "forward.end.fill")
+            }
+            Button(intent: StopTimerIntent(timerID: timerID)) {
+                Image(systemName: "stop.fill")
+            }
+        }
+        .font(.title3)
+        .foregroundStyle(tint)
+        .buttonStyle(.plain)
+    }
+}
 
 /// The hero countdown: the interval range when the timer has intervals,
 /// otherwise the total run range.

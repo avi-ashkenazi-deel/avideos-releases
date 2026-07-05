@@ -130,6 +130,16 @@ final class AppModel: ObservableObject {
         bridge.onPresetsReceived = { list in priorRemote?(list); refreshSiri() }
         refreshSiri()
 
+        // Live Activity buttons (Lock Screen / Dynamic Island) drive the engine
+        // directly — the app is alive in the background via the audio keep-alive
+        // whenever a timer (hence a Live Activity) is showing.
+        TimerControlCenter.shared.onPauseResume = { [weak self] id in
+            guard let self, let t = self.engine.running.first(where: { $0.id == id }) else { return }
+            if t.isRunning { self.engine.pause(id: id) } else { self.engine.resume(id: id) }
+        }
+        TimerControlCenter.shared.onSkip = { [weak self] id in self?.engine.skipToNextInterval(id: id) }
+        TimerControlCenter.shared.onStop = { [weak self] id in self?.engine.stop(id: id) }
+
         // A timer requested by Siri before launch: start it now.
         startPendingIfNeeded()
     }

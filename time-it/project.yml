@@ -65,10 +65,12 @@ targets:
     sources:
       - path: Widget
       # The Live Activity attributes are shared with the app; the widget also
-      # needs the color + clock helpers. Compile just those, not all of Shared.
+      # needs the color + clock helpers and the control-button intents. Compile
+      # just those, not all of Shared.
       - path: Shared/LiveActivity/TimerActivityAttributes.swift
       - path: Shared/Services/Color+Hex.swift
       - path: Shared/Models/TimeFormatting.swift
+      - path: Shared/Intents/TimerControlIntents.swift
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.aviashkenazi.timeit.widget
