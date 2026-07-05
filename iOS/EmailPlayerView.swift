@@ -17,7 +17,14 @@ struct PlayerDetailContent: View {
     @EnvironmentObject private var player: EmailPlayerViewModel
     @ObservedObject private var settings = AppSettings.shared
     @ObservedObject private var highlightStore = HighlightStore.shared
-    @Environment(\.openURL) private var openURL
+
+    /// The article opened in the in-app browser sheet (nil = closed).
+    @State private var browserLink: BrowserLink?
+
+    private struct BrowserLink: Identifiable {
+        let id = UUID()
+        let url: URL
+    }
 
     @State private var highlightToAnnotate: Highlight?
     @State private var showCompletion = false
@@ -67,7 +74,7 @@ struct PlayerDetailContent: View {
         .toolbar {
             if let articleURL {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button { openURL(articleURL) } label: {
+                    Button { browserLink = BrowserLink(url: articleURL) } label: {
                         Image(systemName: "safari")
                     }
                     .accessibilityLabel("Open the full article in the browser")
@@ -91,6 +98,14 @@ struct PlayerDetailContent: View {
         }
         .sheet(isPresented: $showLinks) {
             NavigationStack { LinksListView(links: currentLinks) }
+        }
+        .sheet(item: $browserLink) { link in
+            // In-app browser sliding up from the bottom. Large by default, but
+            // draggable down to a half-height card (and swipe-down to close).
+            SafariView(url: link.url)
+                .ignoresSafeArea()
+                .presentationDetents([.large, .medium])
+                .presentationDragIndicator(.visible)
         }
         .onAppear {
             player.onHighlightCaptured = { highlight in highlightToAnnotate = highlight }
