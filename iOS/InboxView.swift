@@ -216,7 +216,13 @@ struct InboxList: View {
             email: email,
             isLocal: false,
             onMarkedRead: { [weak viewModel] id in viewModel?.markReadLocally(id) },
-            nextUnreadProvider: { [weak viewModel] id in viewModel?.nextUnread(after: id) }
+            nextUnreadProvider: { [weak viewModel] id in viewModel?.nextUnread(after: id) },
+            // Swipe left/right in the reader → move between messages without
+            // marking them read (fetched fresh via the mail service).
+            siblingProvider: { [weak viewModel] id, direction in
+                guard let sib = viewModel?.sibling(of: id, direction: direction) else { return nil }
+                return (sib, false)
+            }
         )
     }
 }

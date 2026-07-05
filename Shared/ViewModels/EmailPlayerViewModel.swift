@@ -69,6 +69,7 @@ final class EmailPlayerViewModel: ObservableObject {
         var nextUnreadProvider: ((String) -> Email?)?
         var nextLocalProvider: (@MainActor (String) async -> Email?)?
         var onQueueFinished: (() -> Void)?
+        var siblingProvider: (@MainActor (String, Int) async -> (Email, Bool)?)?
         var startBlock: Int?
     }
 
@@ -93,6 +94,13 @@ final class EmailPlayerViewModel: ObservableObject {
     /// and return to the feed list. Reset on every `open` so a later non-feed
     /// session (an email, a saved article) never fires it.
     var onQueueFinished: (() -> Void)?
+
+    /// Given the current item id and a direction (`-1` previous, `+1` next),
+    /// returns the adjacent item in the source list for **swipe navigation** —
+    /// regardless of read state, in both directions. The `Bool` says whether it's
+    /// a local prebuilt item (feeds) vs a mail stub to fetch. Swiping never marks
+    /// anything read; the item you leave keeps its saved progress.
+    var siblingProvider: (@MainActor (String, Int) async -> (Email, Bool)?)?
 
     /// Whether auto-advancing to the next *local* item should speak the "From …"
     /// header. Mirrors the `announce` the current item was opened with — feeds in
@@ -219,7 +227,8 @@ final class EmailPlayerViewModel: ObservableObject {
               markReadOverride: ((String) -> Void)? = nil,
               nextUnreadProvider: ((String) -> Email?)? = nil,
               nextLocalProvider: (@MainActor (String) async -> Email?)? = nil,
-              onQueueFinished: (() -> Void)? = nil) {
+              onQueueFinished: (() -> Void)? = nil,
+              siblingProvider: (@MainActor (String, Int) async -> (Email, Bool)?)? = nil) {
         isExpanded = true
         announceOnAdvance = announce
         let config = StagedConfig(onMarkedRead: onMarkedRead,
@@ -227,6 +236,7 @@ final class EmailPlayerViewModel: ObservableObject {
                                   nextUnreadProvider: nextUnreadProvider,
                                   nextLocalProvider: nextLocalProvider,
                                   onQueueFinished: onQueueFinished,
+                                  siblingProvider: siblingProvider,
                                   startBlock: startBlock)
         if usesInlineDetail, isPlaying, parsed?.email.id != email.id {
             Task { await stage(email: email, isLocal: isLocal, config: config) }
@@ -237,6 +247,7 @@ final class EmailPlayerViewModel: ObservableObject {
             self.nextUnreadProvider = nextUnreadProvider
             self.nextLocalProvider = nextLocalProvider
             self.onQueueFinished = onQueueFinished
+            self.siblingProvider = siblingProvider
             Task {
                 if isLocal { await loadLocal(email, announce: announce) }
                 else { await load(email: email, announce: announce) }
@@ -267,6 +278,7 @@ final class EmailPlayerViewModel: ObservableObject {
         nextUnreadProvider = config.nextUnreadProvider
         nextLocalProvider = config.nextLocalProvider
         onQueueFinished = config.onQueueFinished
+        siblingProvider = config.siblingProvider
         parsed = stagedEmail
         staged = nil
         stagedConfig = nil
@@ -682,6 +694,29 @@ final class EmailPlayerViewModel: ObservableObject {
 
     /// Whether there's a next item to jump to (feed article / unread email).
     var canSkipToNextItem: Bool { nextLocalProvider != nil || nextUnreadProvider != nil }
+
+    /// Whether swipe navigation between items is available (a sibling provider is
+    /// wired — feeds and the inbox set one).
+    var canMoveBetweenItems: Bool { siblingProvider != nil }
+
+    /// Swipe to the previous (`-1`) or next (`+1`) item in the source list. Unlike
+    /// `skipToNextItem`, this is pure navigation: it does **not** mark the current
+    /// item read — it just records where you are (so reopening resumes there) and
+    /// loads the neighbor, resuming *its* saved spot. Keeps playing if you were.
+    func moveToSibling(_ direction: Int) {
+        guard let currentID = parsed?.email.id, let siblingProvider else { return }
+        cancelPendingSkip()
+        recordProgress()               // preserve position; never mark read
+        let wasPlaying = isPlaying
+        Task {
+            guard let (next, isLocal) = await siblingProvider(currentID, direction) else { return }
+            if isLocal { await apply(next, announce: false) }
+            else { await load(email: next, announce: false) }
+            guard errorMessage == nil else { return }
+            resumeIfAvailable()        // pick up where you last left this one
+            if wasPlaying { play() }
+        }
+    }
 
     /// Manually jump to the next item: mark the current one read and advance,
     /// just like finishing it — but works regardless of the auto-advance setting.

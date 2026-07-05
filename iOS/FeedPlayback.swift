@@ -31,7 +31,14 @@ enum FeedPlayback {
                     return await playableEmail(for: next, store: store)
                 },
                 // Reached the end with nothing left unread — celebrate + exit.
-                onQueueFinished: { [weak player] in player?.celebrateFeedFinish = true }
+                onQueueFinished: { [weak player] in player?.celebrateFeedFinish = true },
+                // Swipe left/right in the reader → move between feed items without
+                // marking anything read (built like any feed item).
+                siblingProvider: { emailID, direction in
+                    guard let sib = store.sibling(of: itemID(fromEmailID: emailID), direction: direction)
+                    else { return nil }
+                    return (await playableEmail(for: sib, store: store), true)
+                }
             )
         }
     }

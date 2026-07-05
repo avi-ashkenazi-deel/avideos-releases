@@ -203,6 +203,16 @@ final class FeedStore: ObservableObject {
         return items[(idx + 1)...].first { !$0.isRead }
     }
 
+    /// The item `direction` positions from `itemID` in display order (newest
+    /// first), ignoring read state — for swipe navigation in the reader. `+1` is
+    /// the next (older) item, `-1` the previous. Nil at the ends of the list.
+    func sibling(of itemID: String, direction: Int) -> RSSItem? {
+        guard let idx = items.firstIndex(where: { $0.id == itemID }) else { return nil }
+        let target = idx + direction
+        guard items.indices.contains(target) else { return nil }
+        return items[target]
+    }
+
     // MARK: - Search
 
     /// Case-insensitive search across every followed feed (title, summary, feed name).

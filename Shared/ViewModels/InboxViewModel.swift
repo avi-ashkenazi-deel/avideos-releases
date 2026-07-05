@@ -72,6 +72,16 @@ final class InboxViewModel: ObservableObject {
         return emails.first { !$0.isRead && $0.id != id }
     }
 
+    /// The message `direction` positions away (`-1` previous, `+1` next) in the
+    /// list, ignoring read state — for swipe navigation in the reader. Nil at the
+    /// ends (and it loads more pages as you scroll, so the list keeps growing).
+    func sibling(of id: String, direction: Int) -> Email? {
+        guard let idx = emails.firstIndex(where: { $0.id == id }) else { return nil }
+        let target = idx + direction
+        guard emails.indices.contains(target) else { return nil }
+        return emails[target]
+    }
+
     func load() async {
         isLoading = true
         errorMessage = nil

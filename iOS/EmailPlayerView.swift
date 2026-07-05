@@ -221,6 +221,20 @@ struct PlayerDetailContent: View {
 
     // MARK: - Active (playing) mode
 
+    /// Horizontal swipe across the transcript to move between items. Ignored
+    /// unless the swipe is clearly horizontal (so it doesn't fight vertical
+    /// scrolling) and a sibling provider is wired (feeds / inbox).
+    private var swipeBetweenItems: some Gesture {
+        DragGesture(minimumDistance: 30)
+            .onEnded { value in
+                guard player.canMoveBetweenItems else { return }
+                let dx = value.translation.width
+                let dy = value.translation.height
+                guard abs(dx) > 70, abs(dx) > abs(dy) * 1.5 else { return }
+                player.moveToSibling(dx < 0 ? 1 : -1)   // swipe left → next
+            }
+    }
+
     private var activeMode: some View {
         let email = player.parsed?.email
         return ScrollViewReader { proxy in
@@ -238,6 +252,10 @@ struct PlayerDetailContent: View {
             .onChange(of: player.currentBlockIndex) { _, index in
                 withAnimation(.easeInOut) { proxy.scrollTo(index, anchor: .center) }
             }
+            // Swipe left → next item, right → previous — pure navigation that
+            // doesn't mark anything read. Simultaneous so vertical scrolling still
+            // works; we only act on clearly-horizontal swipes.
+            .simultaneousGesture(swipeBetweenItems)
         }
         // The transport floats over the transcript as a Liquid Glass panel rather
         // than a bar pinned to the bottom edge.
