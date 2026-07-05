@@ -42,6 +42,18 @@ struct InboxList: View {
         Group {
             if viewModel.isLoading && viewModel.emails.isEmpty {
                 ProgressView("Loading inbox…")
+            } else if viewModel.needsReauth {
+                InboxStateView(
+                    systemImage: "person.crop.circle.badge.exclamationmark",
+                    title: "Reconnect your account",
+                    message: "Your \(appState.account?.emailAddress ?? "email") sign-in expired. Reconnect to keep syncing — your notes, saved links, and progress are safe and won't be touched.",
+                    actionTitle: "Reconnect"
+                ) {
+                    Task {
+                        await appState.reconnectActiveAccount()
+                        await viewModel.load()
+                    }
+                }
             } else if let errorMessage = viewModel.errorMessage, viewModel.emails.isEmpty {
                 InboxStateView(
                     systemImage: "exclamationmark.triangle",

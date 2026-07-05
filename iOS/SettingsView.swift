@@ -6,7 +6,15 @@ struct SettingsView: View {
     @EnvironmentObject private var appState: AppState
     @ObservedObject private var settings = AppSettings.shared
     @ObservedObject private var skipRules = SkipRuleStore.shared
+    @ObservedObject private var highlights = HighlightStore.shared
+    @ObservedObject private var savedArticles = SavedArticleStore.shared
     @Environment(\.dismiss) private var dismiss
+
+    /// Whether this device is signed into iCloud — the precondition for notes and
+    /// saved links to back up and restore. A present ubiquity token is the honest,
+    /// checkable signal (it doesn't guarantee a sync completed, but its absence
+    /// guarantees nothing is being backed up).
+    private var iCloudSignedIn: Bool { FileManager.default.ubiquityIdentityToken != nil }
 
     private let speeds: [Double] = [0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.25, 2.5]
 
@@ -278,6 +286,25 @@ struct SettingsView: View {
                 if appState.connectedAccounts.count > 1 {
                     Text("Tap an account to switch its inbox. Settings, saved links, and highlights are shared across all accounts.")
                 }
+            }
+
+            Section {
+                HStack(alignment: .top, spacing: 12) {
+                    Image(systemName: iCloudSignedIn ? "checkmark.icloud.fill" : "exclamationmark.icloud")
+                        .font(.title3)
+                        .foregroundStyle(iCloudSignedIn ? .green : .orange)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(iCloudSignedIn ? "Backed up to iCloud" : "Not backed up")
+                            .font(.subheadline.weight(.semibold))
+                        Text(iCloudSignedIn
+                             ? "\(highlights.highlights.count) \(highlights.highlights.count == 1 ? "note" : "notes") and \(savedArticles.articles.count) saved \(savedArticles.articles.count == 1 ? "link" : "links") sync to your private iCloud and restore automatically if you reinstall."
+                             : "Your notes and saved links are only on this device. Turn on iCloud (in the iOS Settings app, under your name) so they're backed up and survive reinstalling.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            } header: {
+                Text("Backup")
             }
 
             Section {

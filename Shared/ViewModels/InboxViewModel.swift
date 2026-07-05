@@ -9,6 +9,10 @@ final class InboxViewModel: ObservableObject {
     @Published private(set) var isLoading = false
     @Published private(set) var isLoadingMore = false
     @Published var errorMessage: String?
+    /// The mail server rejected our credentials (expired/revoked sign-in). Drives
+    /// a one-tap "Reconnect" instead of a dead-end error — so the fix is to
+    /// re-authenticate, never to delete the app (which is what stranded users did).
+    @Published var needsReauth = false
     /// Folders/labels available to listen to, for the picker.
     @Published private(set) var labels: [MailLabel] = []
     /// Current search text ("" = browsing the selected folder).
@@ -71,6 +75,7 @@ final class InboxViewModel: ObservableObject {
     func load() async {
         isLoading = true
         errorMessage = nil
+        needsReauth = false
         nextPageToken = nil
         defer { isLoading = false }
         // Cache-first: paint the folder's last-synced listing immediately (cold
@@ -93,6 +98,9 @@ final class InboxViewModel: ObservableObject {
                 labelId: settings.mailLabelId, query: searchQuery, pageToken: nil, limit: pageSize)
             emails = page.emails
             nextPageToken = page.nextPageToken
+        } catch MailServiceError.notAuthenticated {
+            // Expired/revoked sign-in — offer to reconnect rather than a plain error.
+            needsReauth = true
         } catch {
             errorMessage = error.localizedDescription
         }

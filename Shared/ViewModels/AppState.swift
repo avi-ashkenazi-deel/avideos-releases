@@ -200,6 +200,21 @@ final class AppState: ObservableObject {
     func signInWithGoogle() async { await addAccount(provider: .google) }
     func signInWithMicrosoft() async { await addAccount(provider: .microsoft) }
 
+    /// The provider of the currently active account (nil for demo / none).
+    var activeProvider: MailAccount.Provider? {
+        connectedAccounts.first(where: { $0.id == activeAccountID })?.provider
+    }
+
+    /// Re-run OAuth for the active account when its sign-in expired or was revoked.
+    /// Because the account id is derived from provider+email, this replaces the
+    /// dead tokens in place and reactivates the same account — highlights, notes,
+    /// saved links, and progress are untouched. This is the supported recovery
+    /// from "it stopped syncing": reconnect, never delete the app.
+    func reconnectActiveAccount() async {
+        guard let provider = activeProvider else { return }
+        await addAccount(provider: provider)
+    }
+
     /// Run the OAuth flow for `provider`, resolve the email, store its tokens, and
     /// make it the active account. Adding a second mailbox switches to it.
     func addAccount(provider: MailAccount.Provider) async {
