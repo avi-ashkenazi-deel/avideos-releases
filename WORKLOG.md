@@ -257,3 +257,43 @@ regenerating was essential (otherwise it archives a stale project).
 - Optional: **merged "all inboxes"** view; per-account settings; CloudKit schema
   deploy to Production before TestFlight relies on saved-link sync.
 - Re-add the Apple Watch app (with its own icon) in a later build.
+
+## 2026-07-05 — Feeds titles-only, reader polish, auth recovery, backup visibility
+
+### Feeds
+- **Read titles only** preference (Settings → Feeds): reads just each item's
+  headline and moves on, skipping the article fetch/body. Opens with the spoken
+  "From <feed>" intro off (the body already is the title) and carries that
+  through auto-advance. Reader suppresses the duplicate body sentence so the
+  headline isn't shown twice.
+- **Feed reader**: shows the item **date/time** under the headline (display
+  only — never spoken) and a **Safari button** (top-right) to open the full
+  article on the web.
+
+### Reader
+- **Lighter read-along cue**: dropped the full accent-color paragraph wash on the
+  sentence being read; the spoken word just changes color (no bold, so text
+  doesn't reflow word to word).
+
+### Auth / sync reliability
+- **Root cause of "it stops syncing, I delete the app to fix it"**: the Google
+  OAuth consent screen was **External + Testing**, where refresh tokens expire
+  after 7 days. **Decision: publish to Production (unverified)** — kills the
+  7-day expiry and supports up to 100 users. Full verification (needed for >100
+  users / no warning screen) requires a paid annual **CASA** assessment because
+  Gmail scopes are *restricted*; read-only wouldn't avoid it (still restricted).
+  Revisit CASA only when crossing ~100 users. **Keep the app Published — do not
+  revert to Testing.**
+- **In-app recovery**: on a 401 the inbox now shows a one-tap **Reconnect**
+  (re-runs OAuth for the active account in place — notes, saves, progress
+  untouched) instead of a dead error. Deleting the app is never required.
+
+### Backup visibility
+- Settings **Backup** row shows whether the device is signed into iCloud and how
+  many notes / saved links are backed up (with guidance to turn iCloud on if
+  off). Highlights/notes + saves already back up to iCloud (KVS + CloudKit) and
+  restore on reinstall; this makes it verifiable.
+
+### Follow-ups
+- Host `docs/privacy.html` + a simple homepage on `superavi.com` (needed for the
+  consent screen); fill the `[YOUR CONTACT EMAIL]` placeholder.
