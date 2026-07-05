@@ -113,6 +113,25 @@ targets:
         ENABLE_PREVIEWS: YES
         WATCHOS_DEPLOYMENT_TARGET: "10.0"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+    dependencies:
+      - target: TimeItWatchWidget
+        embed: true
+
+  # ---------------------------------------------------------------------------
+  # watchOS complication (WidgetKit) — a launcher on the watch face.
+  # ---------------------------------------------------------------------------
+  TimeItWatchWidget:
+    type: app-extension
+    platform: watchOS
+    sources:
+      - path: WatchWidget
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.aviashkenazi.timeit.watchkitapp.complication
+        INFOPLIST_FILE: WatchWidget/Info.plist
+        CODE_SIGN_ENTITLEMENTS: WatchWidget/TimeItWatchWidget.entitlements
+        GENERATE_INFOPLIST_FILE: NO
+        WATCHOS_DEPLOYMENT_TARGET: "10.0"
 
 # Declare schemes explicitly so regenerating the project always keeps a
 # runnable scheme for the app (and the watch) — Xcode's auto-created schemes
