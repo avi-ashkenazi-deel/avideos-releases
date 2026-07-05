@@ -79,6 +79,8 @@ final class AppModel: ObservableObject {
             self.liveActivity.sync(running)
             #endif
             self.notifications.reschedule(for: running)
+            // Persist so a run survives the app being killed mid-timer.
+            RunningStateStore.save(running)
         }
 
         // Each interval/milestone cue: refresh the Live Activity so the Dynamic
@@ -150,6 +152,9 @@ final class AppModel: ObservableObject {
         }
         TimerControlCenter.shared.onStopAll = { [weak self] in self?.engine.stopAll() }
         TimerControlCenter.shared.onStartRest = { [weak self] secs in self?.addRest(secs) }
+
+        // Resume a timer that was still running when the app was last killed.
+        engine.restore(RunningStateStore.loadRestorable())
 
         // A timer/rest requested by Siri before launch: start it now.
         startPendingIfNeeded()

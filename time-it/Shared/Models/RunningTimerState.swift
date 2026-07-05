@@ -55,6 +55,42 @@ struct RunningTimerState: Identifiable {
         recomputeDerived()
     }
 
+    /// Rebuild a running timer from a persisted snapshot (crash/kill recovery).
+    init(restoring s: RunningTimerSnapshot) {
+        self.id = s.id
+        self.preset = s.preset
+        self.startDate = s.startDate
+        self.bankedElapsed = s.bankedElapsed
+        self.isRunning = s.isRunning
+        self.currentRepeat = s.currentRepeat
+        self.firedCueIDs = s.firedCueIDs
+        self.lastCountdownSecondSpoken = s.lastCountdownSecondSpoken
+        self.intervalCountdownTarget = s.intervalCountdownTarget
+        self.lastIntervalCountdownSecond = s.lastIntervalCountdownSecond
+        self.leadIn = s.leadIn
+        self.lastLeadInSecondSpoken = s.lastLeadInSecondSpoken
+        self.leadInDone = s.leadInDone
+        recomputeDerived()
+    }
+
+    /// A persistable snapshot of the live state.
+    var snapshot: RunningTimerSnapshot {
+        RunningTimerSnapshot(
+            id: id, preset: preset, startDate: startDate, bankedElapsed: bankedElapsed,
+            isRunning: isRunning, currentRepeat: currentRepeat, firedCueIDs: firedCueIDs,
+            lastCountdownSecondSpoken: lastCountdownSecondSpoken,
+            intervalCountdownTarget: intervalCountdownTarget,
+            lastIntervalCountdownSecond: lastIntervalCountdownSecond,
+            leadIn: leadIn, lastLeadInSecondSpoken: lastLeadInSecondSpoken, leadInDone: leadInDone)
+    }
+
+    /// After restoring, treat every cue already in the past as fired so we don't
+    /// replay a burst of cues that came due while the app was gone.
+    mutating func markElapsedCuesFired(now: Date = Date()) {
+        let e = elapsed(now: now)
+        firedCueIDs.formUnion(cues.filter { $0.fireTime <= e }.map(\.id))
+    }
+
     /// Re-derive the cached cue list and segment boundaries from the preset.
     /// Segments: the warm-up, each work interval (shifted past the warm-up), and
     /// the cool-down — so the running view counts each down as its own block.
@@ -193,4 +229,23 @@ struct RunningTimerState: Identifiable {
 
     /// Whether there's another repeat to run after the current one.
     var hasNextRepeat: Bool { currentRepeat < preset.repeatCount }
+}
+
+/// Codable capture of a running timer, persisted so a run survives the app being
+/// killed mid-timer. Derived caches (cues/segment bounds) are not stored — they're
+/// rebuilt on restore.
+struct RunningTimerSnapshot: Codable {
+    var id: UUID
+    var preset: TimerPreset
+    var startDate: Date
+    var bankedElapsed: TimeInterval
+    var isRunning: Bool
+    var currentRepeat: Int
+    var firedCueIDs: Set<String>
+    var lastCountdownSecondSpoken: Int?
+    var intervalCountdownTarget: TimeInterval?
+    var lastIntervalCountdownSecond: Int?
+    var leadIn: TimeInterval
+    var lastLeadInSecondSpoken: Int?
+    var leadInDone: Bool
 }

@@ -40,6 +40,15 @@ final class TimerEngine: ObservableObject {
 
     func setAnnouncer(_ announcer: Announcer) { self.announcer = announcer }
 
+    /// Re-seed the engine with timers restored after the app was killed. No start
+    /// announcement (we're rejoining mid-run), but the tick + hosts resume.
+    func restore(_ states: [RunningTimerState]) {
+        guard running.isEmpty, !states.isEmpty else { return }
+        running = states
+        notifyChange()
+        startTickerIfNeeded()
+    }
+
     // MARK: - Controls
 
     func start(_ preset: TimerPreset, now: Date = Date()) {
