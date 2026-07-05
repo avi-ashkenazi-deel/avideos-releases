@@ -116,10 +116,10 @@ struct PlayerDetailContent: View {
             NavigationStack { LinksListView(links: currentLinks) }
         }
         .sheet(item: $browserLink) { link in
-            // In-app browser sliding up from the bottom. Large by default, but
-            // draggable down to a half-height card (and swipe-down to close).
-            SafariView(url: link.url)
-                .ignoresSafeArea()
+            // X-style in-app browser: full-bleed page with a floating bottom
+            // toolbar. Slides up from the bottom; drag down to the half-height
+            // detent to keep it around, swipe further to close.
+            InAppBrowserView(url: link.url)
                 .presentationDetents([.large, .medium])
                 .presentationDragIndicator(.visible)
         }
