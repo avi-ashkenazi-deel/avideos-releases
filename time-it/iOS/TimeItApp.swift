@@ -139,16 +139,30 @@ final class AppModel: ObservableObject {
         }
         TimerControlCenter.shared.onSkip = { [weak self] id in self?.engine.skipToNextInterval(id: id) }
         TimerControlCenter.shared.onStop = { [weak self] id in self?.engine.stop(id: id) }
+        // "The current timer" controls (Siri / Action Button).
+        TimerControlCenter.shared.onPauseCurrent = { [weak self] in
+            guard let self, let t = self.engine.running.first(where: { $0.isRunning }) else { return }
+            self.engine.pause(id: t.id)
+        }
+        TimerControlCenter.shared.onResumeCurrent = { [weak self] in
+            guard let self, let t = self.engine.running.first(where: { !$0.isRunning }) else { return }
+            self.engine.resume(id: t.id)
+        }
+        TimerControlCenter.shared.onStopAll = { [weak self] in self?.engine.stopAll() }
+        TimerControlCenter.shared.onStartRest = { [weak self] secs in self?.addRest(secs) }
 
-        // A timer requested by Siri before launch: start it now.
+        // A timer/rest requested by Siri before launch: start it now.
         startPendingIfNeeded()
     }
 
-    /// If Siri (or a Shortcut) asked to start a timer, start it once.
+    /// If Siri (or a Shortcut) asked to start a timer or a rest, do it once.
     func startPendingIfNeeded() {
-        guard let id = PendingStart.take(),
-              let preset = presets.presets.first(where: { $0.id == id }) else { return }
-        startTimer(preset)
+        if let id = PendingStart.take(),
+           let preset = presets.presets.first(where: { $0.id == id }) {
+            startTimer(preset)
+        } else if let seconds = PendingStart.takeRest() {
+            addRest(TimeInterval(seconds))
+        }
     }
 
     /// Start a preset. Only one timer runs at a time, so any current one is

@@ -9,14 +9,23 @@ import Foundation
 final class TimerControlCenter {
     static let shared = TimerControlCenter()
 
+    // Per-id (Live Activity buttons, which know which timer they belong to).
     var onPauseResume: ((UUID) -> Void)?
     var onSkip: ((UUID) -> Void)?
     var onStop: ((UUID) -> Void)?
+    // "The current timer" (Siri / Action Button, no id in hand).
+    var onPauseCurrent: (() -> Void)?
+    var onResumeCurrent: (() -> Void)?
+    var onStopAll: (() -> Void)?
+    var onStartRest: ((TimeInterval) -> Void)?
 
     private func id(_ s: String) -> UUID? { UUID(uuidString: s) }
     func pauseResume(_ s: String) { if let u = id(s) { onPauseResume?(u) } }
     func skip(_ s: String) { if let u = id(s) { onSkip?(u) } }
     func stop(_ s: String) { if let u = id(s) { onStop?(u) } }
+    func pauseCurrent() { onPauseCurrent?() }
+    func resumeCurrent() { onResumeCurrent?() }
+    func stopAll() { onStopAll?() }
 }
 
 /// Pause a running timer, or resume a paused one — from the Lock Screen /

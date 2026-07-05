@@ -32,6 +32,8 @@ struct StartTimerIntent: AppIntent {
 enum PendingStart {
     private static let idKey = "pendingStartPresetID"
     private static let stampKey = "pendingStartStamp"
+    private static let restKey = "pendingStartRestSeconds"
+    private static let restStampKey = "pendingStartRestStamp"
     /// Ignore requests older than this (stale — app opened later for other reasons).
     private static let maxAge: TimeInterval = 30
 
@@ -39,6 +41,12 @@ enum PendingStart {
         let d = AppGroup.sharedDefaults
         d.set(presetID, forKey: idKey)
         d.set(Date().timeIntervalSince1970, forKey: stampKey)
+    }
+
+    static func setRest(seconds: Int) {
+        let d = AppGroup.sharedDefaults
+        d.set(seconds, forKey: restKey)
+        d.set(Date().timeIntervalSince1970, forKey: restStampKey)
     }
 
     /// Consume a fresh pending id, if any (also clears it). Returns nil when
@@ -51,5 +59,17 @@ enum PendingStart {
         d.removeObject(forKey: stampKey)
         guard now.timeIntervalSince1970 - stamp < maxAge else { return nil }
         return UUID(uuidString: idString)
+    }
+
+    /// Consume a fresh pending rest request (seconds), if any.
+    static func takeRest(now: Date = Date()) -> Int? {
+        let d = AppGroup.sharedDefaults
+        guard d.object(forKey: restKey) != nil else { return nil }
+        let seconds = d.integer(forKey: restKey)
+        let stamp = d.double(forKey: restStampKey)
+        d.removeObject(forKey: restKey)
+        d.removeObject(forKey: restStampKey)
+        guard now.timeIntervalSince1970 - stamp < maxAge, seconds > 0 else { return nil }
+        return seconds
     }
 }

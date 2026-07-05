@@ -18,5 +18,29 @@ struct TimeItShortcuts: AppShortcutsProvider {
             shortTitle: "Start Timer",
             systemImageName: "timer"
         )
+        AppShortcut(
+            intent: PauseTimerIntent(),
+            phrases: ["Pause \(.applicationName)", "Pause my timer in \(.applicationName)"],
+            shortTitle: "Pause Timer",
+            systemImageName: "pause.fill"
+        )
+        AppShortcut(
+            intent: ResumeTimerIntent(),
+            phrases: ["Resume \(.applicationName)", "Resume my timer in \(.applicationName)"],
+            shortTitle: "Resume Timer",
+            systemImageName: "play.fill"
+        )
+        AppShortcut(
+            intent: StopCurrentTimerIntent(),
+            phrases: ["Stop \(.applicationName)", "Stop my timer in \(.applicationName)"],
+            shortTitle: "Stop Timer",
+            systemImageName: "stop.fill"
+        )
+        AppShortcut(
+            intent: StartRestIntent(),
+            phrases: ["Start a rest in \(.applicationName)", "Rest in \(.applicationName)"],
+            shortTitle: "Start a Rest",
+            systemImageName: "pause.circle"
+        )
     }
 }
