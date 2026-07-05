@@ -435,7 +435,8 @@ struct SettingsView: View {
 
 /// Compact sheet for choosing which provider to connect. Dismisses before the
 /// OAuth web flow presents, so the sign-in sheet isn't fighting this one.
-private struct AddAccountSheet: View {
+/// Shared: used by Settings and by the Inbox "connect your email" empty state.
+struct AddAccountSheet: View {
     @EnvironmentObject private var appState: AppState
     @Environment(\.dismiss) private var dismiss
 

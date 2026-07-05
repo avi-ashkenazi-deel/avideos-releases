@@ -23,6 +23,7 @@ struct InboxList: View {
     @StateObject private var progress = ListeningProgressStore.shared
     @StateObject private var readingTimes = ReadingTimeStore.shared
     @State private var showSettings = false
+    @State private var showAddAccount = false
     @State private var searchDebounce: Task<Void, Never>?
 
     init(showsUtilityToolbar: Bool = true) {
@@ -40,7 +41,18 @@ struct InboxList: View {
 
     var body: some View {
         Group {
-            if viewModel.isLoading && viewModel.emails.isEmpty {
+            if appState.account == nil {
+                // No mailbox connected — the app runs fine on Feeds + Saved alone,
+                // so offer to add mail here rather than gating the app behind sign-in.
+                InboxStateView(
+                    systemImage: "envelope.badge",
+                    title: "Connect your email",
+                    message: "Add a Gmail or Outlook account to listen to your inbox. Feeds and Saved articles work without one.",
+                    actionTitle: "Add mail account"
+                ) {
+                    showAddAccount = true
+                }
+            } else if viewModel.isLoading && viewModel.emails.isEmpty {
                 ProgressView("Loading inbox…")
             } else if viewModel.needsReauth {
                 InboxStateView(
@@ -174,6 +186,9 @@ struct InboxList: View {
         }
         .sheet(isPresented: $showSettings) {
             NavigationStack { SettingsView() }
+        }
+        .sheet(isPresented: $showAddAccount) {
+            AddAccountSheet()
         }
         .searchable(text: $viewModel.searchText, prompt: "Search by sender or subject")
         .onChange(of: viewModel.searchText) { _, _ in

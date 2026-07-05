@@ -96,8 +96,14 @@ final class AppState: ObservableObject {
             await activate(active)
             return
         }
-        // Nothing connected yet → first-run onboarding (don't auto-enter the demo).
-        phase = .onboarding
+        // Nothing connected. First run shows the welcome tour; after that (and on
+        // every later launch) drop straight into the app with no mailbox — RSS and
+        // Saved work, and the Inbox tab offers to connect email. No sign-in wall.
+        if UserDefaults.standard.bool(forKey: "hasCompletedWelcome") {
+            enterWithoutMail()
+        } else {
+            phase = .onboarding
+        }
     }
 
     // MARK: - Demo
@@ -108,6 +114,18 @@ final class AppState: ObservableObject {
         activeAccountID = Self.demoID
         persistAccounts()
         account = await mailService.account
+        phase = .ready
+    }
+
+    /// Enter the app with no mailbox connected. Feeds and Saved work as usual;
+    /// the Inbox tab shows a "connect your email" state. Used after signing out
+    /// and on launch once the welcome tour is done — so nothing gates the app
+    /// behind a sign-in wall.
+    func enterWithoutMail() {
+        mailService = NoMailService()
+        activeAccountID = nil
+        persistAccounts()
+        account = nil
         phase = .ready
     }
 
@@ -273,15 +291,16 @@ final class AppState: ObservableObject {
         if let next = connectedAccounts.first {
             await activate(next)
         } else {
-            signOutToOnboarding()
+            enterWithoutMail()
         }
     }
 
-    /// Sign out of every account and return to onboarding.
+    /// Sign out of every account. Stays in the app with no mailbox (Feeds + Saved
+    /// still work); the Inbox tab offers to reconnect — no forced onboarding.
     func signOut() {
         for account in connectedAccounts { clearTokens(for: account) }
         connectedAccounts = []
-        signOutToOnboarding()
+        enterWithoutMail()
     }
 
     private func clearTokens(for account: ConnectedAccount) {
@@ -290,14 +309,6 @@ final class AppState: ObservableObject {
         case .microsoft: MicrosoftAuthSession.store(nil, key: account.tokenKey)
         default: break
         }
-    }
-
-    private func signOutToOnboarding() {
-        activeAccountID = nil
-        persistAccounts()
-        mailService = MockMailService()
-        account = nil
-        phase = .onboarding
     }
 
     /// One-time migration from the old single-account token keys to the new

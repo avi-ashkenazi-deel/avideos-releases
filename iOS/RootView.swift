@@ -23,10 +23,11 @@ struct RootView: View {
         case .launching:
             SplashView()
         case .onboarding:
-            if hasCompletedWelcome {
-                OnboardingView()
-            } else {
-                WelcomeView { hasCompletedWelcome = true }
+            // First-run tour only. Finishing (or skipping) drops into the app with
+            // no mailbox — no sign-in wall; the Inbox tab offers to connect email.
+            WelcomeView {
+                hasCompletedWelcome = true
+                appState.enterWithoutMail()
             }
         case .ready:
             readyLayout
