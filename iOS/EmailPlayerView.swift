@@ -176,6 +176,7 @@ struct PlayerDetailContent: View {
         return ScrollViewReader { proxy in
             ScrollView {
                 transcriptBody(subject: email?.subjectOrFallback ?? "",
+                               date: email?.receivedAt,
                                emailID: email?.id ?? "",
                                blocks: player.blocks,
                                currentIndex: player.currentBlockIndex,
@@ -212,6 +213,7 @@ struct PlayerDetailContent: View {
         VStack(spacing: 0) {
             ScrollView {
                 transcriptBody(subject: staged.email.subjectOrFallback,
+                               date: staged.email.receivedAt,
                                emailID: staged.email.id,
                                blocks: staged.blocks,
                                currentIndex: nil,
@@ -242,7 +244,7 @@ struct PlayerDetailContent: View {
 
     // MARK: - Transcript
 
-    private func transcriptBody(subject: String, emailID: String, blocks: [ContentBlock],
+    private func transcriptBody(subject: String, date: Date?, emailID: String, blocks: [ContentBlock],
                                 currentIndex: Int?, isActive: Bool) -> some View {
         let layout = notedLayout(emailID: emailID, blocks: blocks)
         // Titles-only feed items carry a single body sentence that *is* the
@@ -252,13 +254,26 @@ struct PlayerDetailContent: View {
             && !blocks[0].isImage
             && blocks[0].spokenText.trimmingCharacters(in: .whitespacesAndNewlines)
                 .caseInsensitiveCompare(subject.trimmingCharacters(in: .whitespacesAndNewlines)) == .orderedSame
+        let isRTLHeader = LanguageTools.isRightToLeft(subject)
+        // Feed items show when they're from, under the headline — display only,
+        // never spoken (it isn't part of the body blocks the engine reads).
+        let dateLine: String? = {
+            guard emailID.hasPrefix("rss-"), let date else { return nil }
+            return date.formatted(date: .abbreviated, time: .shortened)
+        }()
         return VStack(alignment: .leading, spacing: 16) {
-            Text(subject)
-                .font(.system(size: titleFontSize, weight: .bold))
-                .multilineTextAlignment(LanguageTools.isRightToLeft(subject) ? .trailing : .leading)
-                .frame(maxWidth: .infinity,
-                       alignment: LanguageTools.isRightToLeft(subject) ? .trailing : .leading)
-                .padding(.bottom, 4)
+            VStack(alignment: isRTLHeader ? .trailing : .leading, spacing: 4) {
+                Text(subject)
+                    .font(.system(size: titleFontSize, weight: .bold))
+                    .multilineTextAlignment(isRTLHeader ? .trailing : .leading)
+                if let dateLine {
+                    Text(dateLine)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: isRTLHeader ? .trailing : .leading)
+            .padding(.bottom, 4)
 
             if !hideBody {
                 ForEach(Array(blocks.enumerated()), id: \.element.id) { index, block in
