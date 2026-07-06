@@ -12,7 +12,7 @@
 # Then set your Apple Developer team and a unique bundle id prefix in
 # Xcode's signing settings (or in Secrets.xcconfig) before running on device.
 
-name: VoiceInbox
+name: HearIt
 
 options:
   bundleIdPrefix: com.aviashkenazi
@@ -34,7 +34,7 @@ targets:
   # ---------------------------------------------------------------------------
   # iPhone / iPad app
   # ---------------------------------------------------------------------------
-  VoiceInbox:
+  HearIt:
     type: application
     platform: iOS
     sources:
@@ -111,10 +111,10 @@ targets:
 # runnable scheme for the app (and the watch) — Xcode's auto-created schemes
 # don't survive `xcodegen generate`.
 schemes:
-  VoiceInbox:
+  HearIt:
     build:
       targets:
-        VoiceInbox: all
+        HearIt: all
     run:
       config: Debug
     profile:

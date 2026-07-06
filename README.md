@@ -20,13 +20,13 @@ fragile to hand-edit). On a Mac:
 
 ```bash
 brew install xcodegen      # one time
-xcodegen generate          # creates VoiceInbox.xcodeproj from project.yml
-open VoiceInbox.xcodeproj
+xcodegen generate          # creates HearIt.xcodeproj from project.yml
+open HearIt.xcodeproj
 ```
 
 Then in Xcode:
 
-1. Select the `VoiceInbox` target → **Signing & Capabilities** → choose your team.
+1. Select the `HearIt` target → **Signing & Capabilities** → choose your team.
 2. Do the same for the `VoiceInboxWatch` target.
 3. Run on a device or simulator. Choose **"Try the demo inbox"** on the first screen.
 
@@ -58,7 +58,7 @@ to hand the link from the extension to the app, which **requires a paid Apple
 Developer account**:
 
 1. In the Apple Developer portal, register the App Group id for your team.
-2. In Xcode, add the **App Groups** capability to both the `VoiceInbox` and
+2. In Xcode, add the **App Groups** capability to both the `HearIt` and
    `ShareExtension` targets and tick that group (the entitlement files already
    declare it).
 3. Build & run. The extension appears in the system share sheet.

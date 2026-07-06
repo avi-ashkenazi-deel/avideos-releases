@@ -11,6 +11,7 @@ xcuserdata/
 .DS_Store
 
 # XcodeGen generates the project; keep it out of source control.
+HearIt.xcodeproj/
 VoiceInbox.xcodeproj/
 
 # Swift Package Manager

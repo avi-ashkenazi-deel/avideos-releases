@@ -7,7 +7,7 @@
 	<key>CFBundleName</key>
 	<string>HearIt</string>
 	<key>CFBundleExecutable</key>
-	<string>VoiceInbox</string>
+	<string>HearIt</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleInfoDictionaryVersion</key>
