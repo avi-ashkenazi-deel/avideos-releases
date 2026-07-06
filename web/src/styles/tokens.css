@@ -24,10 +24,10 @@
   --lh-snug: 1.05;
   --lh-body: 1.5;
 
-  --tracking-display: -0.045em;
-  --tracking-tight: -0.03em;
-  --tracking-normal: -0.01em;
-  --tracking-label: 0.08em;
+  --tracking-display: -0.03em;
+  --tracking-tight: -0.02em;
+  --tracking-normal: -0.005em;
+  --tracking-label: 0.02em;
 
   /* ---- Swiss grid ---- */
   --grid-cols: 12;

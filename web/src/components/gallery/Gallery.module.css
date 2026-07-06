@@ -16,7 +16,6 @@
   transform: translateX(-50%);
   font-size: var(--fs-meta);
   letter-spacing: var(--tracking-meta);
-  text-transform: uppercase;
   color: var(--c-grey-3);
   pointer-events: none;
   z-index: 2;
@@ -44,7 +43,6 @@
   font-weight: 500;
   letter-spacing: var(--tracking-h2);
   line-height: var(--lh-tight);
-  text-transform: uppercase;
 }
 
 .detailDesc {
@@ -67,7 +65,6 @@
   pointer-events: auto;
   font-size: var(--fs-meta);
   letter-spacing: var(--tracking-meta);
-  text-transform: uppercase;
   color: var(--c-grey-2);
   background: var(--c-bg);
   padding: 6px 10px;

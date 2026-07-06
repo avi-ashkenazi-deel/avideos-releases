@@ -6,7 +6,6 @@
 .back {
   font-size: var(--fs-micro);
   letter-spacing: var(--tracking-label);
-  text-transform: uppercase;
   color: var(--c-grey-2);
   transition: color var(--dur-fast) var(--ease-out);
 }
@@ -21,7 +20,6 @@
 .meta {
   font-size: var(--fs-micro);
   letter-spacing: var(--tracking-label);
-  text-transform: uppercase;
   color: var(--c-grey-2);
   margin-bottom: var(--s-3);
 }
@@ -31,7 +29,6 @@
   font-weight: 500;
   letter-spacing: var(--tracking-tight);
   line-height: var(--lh-tight);
-  text-transform: uppercase;
   max-width: 18ch;
 }
 
@@ -102,7 +99,6 @@
 .prose :global(figcaption) {
   font-size: var(--fs-micro);
   letter-spacing: var(--tracking-label);
-  text-transform: uppercase;
   color: var(--c-grey-2);
   margin-top: var(--s-1);
 }
@@ -135,7 +131,6 @@
   max-width: 68ch;
   font-size: var(--fs-micro);
   letter-spacing: var(--tracking-label);
-  text-transform: uppercase;
 }
 .source a {
   color: var(--c-grey-2);

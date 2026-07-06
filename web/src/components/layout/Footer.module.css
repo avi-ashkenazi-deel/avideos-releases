@@ -12,7 +12,6 @@
 .label {
   font-size: var(--fs-meta);
   letter-spacing: var(--tracking-meta);
-  text-transform: uppercase;
   color: var(--c-grey-3);
 }
 
@@ -25,7 +24,6 @@
 .link {
   font-size: var(--fs-meta);
   letter-spacing: var(--tracking-meta);
-  text-transform: uppercase;
   color: var(--c-grey-2);
   transition: color var(--dur-fast) var(--ease-out);
 }
@@ -38,6 +36,5 @@
   margin-top: var(--s-3);
   font-size: var(--fs-meta);
   letter-spacing: var(--tracking-meta);
-  text-transform: uppercase;
   color: var(--c-grey-4);
 }

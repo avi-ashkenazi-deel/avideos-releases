@@ -17,6 +17,5 @@
   font-size: var(--fs-meta);
   font-weight: 400;
   letter-spacing: var(--tracking-meta);
-  text-transform: uppercase;
   color: var(--c-grey-2);
 }

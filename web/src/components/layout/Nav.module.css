@@ -20,7 +20,6 @@
   font-size: 0.9375rem;
   font-weight: 500;
   letter-spacing: var(--tracking-tight);
-  text-transform: uppercase;
   margin-right: auto;
 }
 
@@ -39,7 +38,6 @@
 .link {
   font-size: var(--fs-micro);
   letter-spacing: var(--tracking-label);
-  text-transform: uppercase;
   color: var(--c-grey-3);
   white-space: nowrap;
   transition: color var(--dur-fast) var(--ease-out);

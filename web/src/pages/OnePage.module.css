@@ -7,7 +7,6 @@
   grid-column: 1 / -1;
   font-size: var(--fs-micro);
   letter-spacing: var(--tracking-label);
-  text-transform: uppercase;
   color: var(--c-grey-2);
   margin-bottom: clamp(2rem, 12vh, 8rem);
 }
@@ -18,7 +17,6 @@
   font-weight: 500;
   line-height: var(--lh-tight);
   letter-spacing: var(--tracking-display);
-  text-transform: uppercase;
 }
 
 .bio {
@@ -46,7 +44,6 @@
   font-weight: 500;
   letter-spacing: var(--tracking-tight);
   line-height: var(--lh-snug);
-  text-transform: uppercase;
 }
 
 .sectionIntro {
