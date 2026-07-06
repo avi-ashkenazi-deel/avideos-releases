@@ -4,6 +4,7 @@ import { Nav } from './Nav';
 import styles from './Site.module.css';
 
 const OnePage = lazy(() => import('@/pages/OnePage'));
+const Article = lazy(() => import('@/pages/Article'));
 const Inspiration = lazy(() => import('@/pages/Inspiration'));
 const Snapshots = lazy(() => import('@/pages/Snapshots'));
 
@@ -39,6 +40,10 @@ export function Site() {
       <Suspense fallback={null}>
         <Routes>
           <Route path="/" element={<main className={styles.main}><OnePage /></main>} />
+          <Route
+            path="/writing/:slug"
+            element={<main className={styles.main}><Article /></main>}
+          />
           <Route
             path="/inspiration"
             element={<main className={styles.main}><Inspiration /></main>}
