@@ -40,6 +40,10 @@ export function Nav({ onSection }: NavProps) {
         >
           Snapshots
         </NavLink>
+        {/* Full page-load out of the SPA into the resurrected 2010 portfolio */}
+        <a className={styles.link} href={`${import.meta.env.BASE_URL}old/`}>
+          Archive
+        </a>
       </div>
     </nav>
   );
