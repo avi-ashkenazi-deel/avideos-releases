@@ -11,7 +11,11 @@ export default function Article() {
   const { slug } = useParams();
   const navigate = useNavigate();
   const item = writing.find((w) => w.id === slug);
-  const html = slug ? articleMap[slug] : undefined;
+  const raw = slug ? articleMap[slug] : undefined;
+  // Article HTML uses absolute /images/ paths; prefix Vite's base so they
+  // resolve under a project subpath (GitHub Pages) as well as the root.
+  const base = import.meta.env.BASE_URL;
+  const html = raw ? raw.replaceAll('src="/images/', `src="${base}images/`) : undefined;
 
   const backToWriting = () => {
     navigate('/');
