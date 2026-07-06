@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// The "Saved" tab: web pages shared into VoiceInbox from Safari, Feedly, etc.
+/// The "Saved" tab: web pages shared into HearIt from Safari, Feedly, etc.
 /// Each ready article plays through the same listening UI as email, fully
 /// offline once its content has been cached.
 struct SavedArticlesView: View {
@@ -171,7 +171,7 @@ private struct SavedEmptyState: View {
                 .foregroundStyle(.secondary)
             Text("Nothing saved yet")
                 .font(.headline)
-            Text("Share a web page from Safari, Feedly, or any app using the Share button and pick VoiceInbox. It'll be cached here to listen offline.")
+            Text("Share a web page from Safari, Feedly, or any app using the Share button and pick HearIt. It'll be cached here to listen offline.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)

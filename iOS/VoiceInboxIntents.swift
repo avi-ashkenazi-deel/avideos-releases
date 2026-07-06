@@ -13,7 +13,7 @@ import AppIntents
 struct AddNoteIntent: AppIntent {
     static var title: LocalizedStringResource = "Add a Note"
     static var description = IntentDescription(
-        "Capture a highlight of what VoiceInbox is reading and attach a spoken note.")
+        "Capture a highlight of what HearIt is reading and attach a spoken note.")
     // Run in the background so Siri can take the note without leaving the lock screen.
     static var openAppWhenRun: Bool = false
 
@@ -23,7 +23,7 @@ struct AddNoteIntent: AppIntent {
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog {
         guard let player = EmailPlayerViewModel.active, player.hasCurrentItem else {
-            return .result(dialog: "Nothing's playing in VoiceInbox right now, so there's nothing to note.")
+            return .result(dialog: "Nothing's playing in HearIt right now, so there's nothing to note.")
         }
         let trimmed = note.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let highlight = player.captureHighlight(presentComposer: false) else {
@@ -40,7 +40,7 @@ struct AddNoteIntent: AppIntent {
 
 struct CaptureHighlightIntent: AppIntent {
     static var title: LocalizedStringResource = "Highlight This"
-    static var description = IntentDescription("Bookmark the moment VoiceInbox is reading.")
+    static var description = IntentDescription("Bookmark the moment HearIt is reading.")
     static var openAppWhenRun: Bool = false
 
     @MainActor
@@ -72,7 +72,7 @@ struct NextItemIntent: AppIntent {
 
 struct TogglePlaybackIntent: AppIntent {
     static var title: LocalizedStringResource = "Play or Pause"
-    static var description = IntentDescription("Play or pause VoiceInbox.")
+    static var description = IntentDescription("Play or pause HearIt.")
     static var openAppWhenRun: Bool = false
 
     @MainActor

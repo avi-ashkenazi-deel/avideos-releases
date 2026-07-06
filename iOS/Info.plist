@@ -3,9 +3,9 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleDisplayName</key>
-	<string>VoiceInbox</string>
+	<string>HearIt</string>
 	<key>CFBundleName</key>
-	<string>VoiceInbox</string>
+	<string>HearIt</string>
 	<key>CFBundleExecutable</key>
 	<string>VoiceInbox</string>
 	<key>CFBundlePackageType</key>
@@ -24,9 +24,9 @@
 	<string>$(ASSETCATALOG_COMPILER_APPICON_NAME)</string>
 	<!-- Hands-free voice notes on highlights (AirPods press). -->
 	<key>NSMicrophoneUsageDescription</key>
-	<string>VoiceInbox uses the microphone so you can dictate a note on a highlight, hands-free with your AirPods.</string>
+	<string>HearIt uses the microphone so you can dictate a note on a highlight, hands-free with your AirPods.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>VoiceInbox transcribes your spoken note into text for the highlight.</string>
+	<string>HearIt transcribes your spoken note into text for the highlight.</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<!-- The app uses only standard HTTPS encryption, which is exempt — declaring

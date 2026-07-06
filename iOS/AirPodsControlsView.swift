@@ -72,7 +72,7 @@ struct AirPodsControlsView: View {
                     }
                 }
             } footer: {
-                Text("Detection is based on the connected device's name and may be off if you've renamed your AirPods. The gestures below are what VoiceInbox does with the standard transport controls.")
+                Text("Detection is based on the connected device's name and may be off if you've renamed your AirPods. The gestures below are what HearIt does with the standard transport controls.")
             }
 
             Section("Gestures") {

@@ -3,9 +3,9 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleDisplayName</key>
-	<string>VoiceInbox</string>
+	<string>HearIt</string>
 	<key>CFBundleName</key>
-	<string>VoiceInbox</string>
+	<string>HearIt</string>
 	<key>CFBundleExecutable</key>
 	<string>ShareExtension</string>
 	<key>CFBundlePackageType</key>

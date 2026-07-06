@@ -1,4 +1,4 @@
-# VoiceInbox — Work Log
+# HearIt — Work Log
 
 A running log of what we've built and shipped.
 
@@ -111,7 +111,7 @@ Reworked the watch app from a disconnected, demo-inbox local player into a
 
 ## 2026-06-06 — 🚀 First TestFlight build uploaded to Apple
 
-Got VoiceInbox from a working app to a **build accepted by App Store Connect**,
+Got HearIt from a working app to a **build accepted by App Store Connect**,
 ready for TestFlight. Major features built and shipped along the way:
 
 ### Listening experience

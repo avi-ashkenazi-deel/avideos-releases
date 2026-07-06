@@ -13,7 +13,7 @@ struct OnboardingView: View {
                 Image(systemName: "headphones")
                     .font(.system(size: 64, weight: .semibold))
                     .foregroundStyle(.tint)
-                Text("VoiceInbox")
+                Text("HearIt")
                     .font(.largeTitle.bold())
                 Text("Listen to your email. Tap any message and press play — handle your inbox with your ears, your AirPods, or your watch.")
                     .font(.body)

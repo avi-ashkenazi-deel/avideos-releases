@@ -52,7 +52,7 @@ enum ArticleExtractor {
         // hosts; a normal browser UA everywhere else.
         let userAgent = isSocialCardHost(url.host)
             ? "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)"
-            : "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) VoiceInbox/1.0"
+            : "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) HearIt/1.0"
         request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
         request.setValue("text/html,application/xhtml+xml", forHTTPHeaderField: "Accept")
 

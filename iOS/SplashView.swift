@@ -26,7 +26,7 @@ struct SplashView: View {
                         .scaleEffect(animate ? 1.0 : 0.9)
                 }
 
-                Text("VoiceInbox")
+                Text("HearIt")
                     .font(.title2.weight(.bold))
                     .foregroundStyle(.white)
 

@@ -218,7 +218,7 @@ private struct SplitLayout: View {
                     Label(sec.title, systemImage: sec.icon).tag(sec)
                 }
             }
-            .navigationTitle("VoiceInbox")
+            .navigationTitle("HearIt")
             .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 300)
         } content: {
             Group {

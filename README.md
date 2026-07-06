@@ -1,6 +1,6 @@
-# VoiceInbox
+# HearIt
 
-Listen to your email. VoiceInbox is an iPhone / iPad app (with an Apple Watch
+Listen to your email. HearIt is an iPhone / iPad app (with an Apple Watch
 companion) that reads your inbox aloud. Tap any message, press play, and listen
 — with full transport controls, image handling, and the ability to highlight
 and annotate what you hear using the screen, your AirPods, or your watch.
@@ -49,7 +49,7 @@ secret is stored on device, and the OAuth tokens are kept in the **Keychain**.
 ### Saving web pages to listen offline (Share Extension)
 
 The app ships a **Share Extension** so you can send articles from Safari,
-Feedly, or any app: tap **Share → VoiceInbox**, and the link is saved to the
+Feedly, or any app: tap **Share → HearIt**, and the link is saved to the
 **Saved** tab. The app then fetches the page, extracts the readable text, and
 **caches it for offline listening** — like Pocket, but read aloud.
 

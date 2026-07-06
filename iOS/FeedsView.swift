@@ -291,7 +291,7 @@ private struct AddFeedView: View {
             }
             Button("Not now", role: .cancel) {}
         } message: {
-            Text("You followed this feed with the bell on, but notifications are turned off for VoiceInbox. Enable them in Settings to get new-article alerts.")
+            Text("You followed this feed with the bell on, but notifications are turned off for HearIt. Enable them in Settings to get new-article alerts.")
         }
     }
 
@@ -365,7 +365,7 @@ struct ManageFeedsView: View {
             }
             Button("Not now", role: .cancel) {}
         } message: {
-            Text("Notifications are turned off for VoiceInbox. Enable them in Settings to get new-article alerts.")
+            Text("Notifications are turned off for HearIt. Enable them in Settings to get new-article alerts.")
         }
     }
 }

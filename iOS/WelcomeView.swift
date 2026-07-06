@@ -23,7 +23,7 @@ struct WelcomeView: View {
                 tint: .purple),
         Feature(icon: "square.and.arrow.down.on.square.fill",
                 title: "Save anything to listen later",
-                subtitle: "Share a web page from your browser and VoiceInbox reads it to you — even offline.",
+                subtitle: "Share a web page from your browser and HearIt reads it to you — even offline.",
                 tint: .orange)
     ]
 
@@ -103,7 +103,7 @@ private struct SplashPage: View {
             VStack(spacing: 24) {
                 AnimatedLogo()
                 VStack(spacing: 8) {
-                    Text("VoiceInbox")
+                    Text("HearIt")
                         .font(.system(size: 40, weight: .bold))
                         .foregroundStyle(.white)
                     Text("Your inbox, read aloud.")

@@ -1,12 +1,12 @@
-# VoiceInbox — TestFlight tester guide
+# HearIt — TestFlight tester guide
 
-Thanks for testing VoiceInbox! It reads your email (and saved web articles)
+Thanks for testing HearIt! It reads your email (and saved web articles)
 aloud, like a podcast. Please try the things below and note anything that
 feels broken, confusing, or slow.
 
 > **Heads-up on sign-in:** the app is in beta, so when you connect Google you'll
 > see a *"Google hasn't verified this app"* screen. Tap **Advanced → Go to
-> VoiceInbox (unsafe)** to continue — this is normal for a test build. You must
+> HearIt (unsafe)** to continue — this is normal for a test build. You must
 > use a **Google account** (Gmail or Workspace), and your address has to have
 > been added to the tester list first.
 
@@ -49,7 +49,7 @@ feels broken, confusing, or slow.
       **announce the sender and subject**, and keep reading.
 
 ## 7. Saved web articles
-- [ ] In **Safari** (or Feedly), open an article → **Share → VoiceInbox**.
+- [ ] In **Safari** (or Feedly), open an article → **Share → HearIt**.
 - [ ] Open the app's **Saved** tab — the article should appear, then become
       playable. Try playing it (works offline once saved).
 

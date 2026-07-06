@@ -9,7 +9,7 @@ final class ShareViewController: UIViewController {
 
     private let backdrop = UIView()
     private let card = UIView()          // the "screenshot" that flies into the folder
-    private let folder = UIImageView()   // the VoiceInbox tray it lands in
+    private let folder = UIImageView()   // the HearIt tray it lands in
     private let check = UIImageView()    // success badge over the folder
     private let label = UILabel()
     private let tint = UIColor.systemBlue
@@ -138,7 +138,7 @@ final class ShareViewController: UIViewController {
 
         // Phase 2: folder bounce + success check + "Saved".
         UINotificationFeedbackGenerator().notificationOccurred(.success)
-        label.text = "Saved to VoiceInbox"
+        label.text = "Saved to HearIt"
 
         UIView.animate(withDuration: 0.18, animations: {
             self.folder.transform = CGAffineTransform(scaleX: 1.28, y: 1.28)

@@ -41,7 +41,7 @@ enum SpeechAudioSession {
             #if os(watchOS)
             try? session.setCategory(.playback, mode: .spokenAudio)
             #else
-            // Plain `.playback` (no mixing): VoiceInbox must interrupt other audio to
+            // Plain `.playback` (no mixing): HearIt must interrupt other audio to
             // become the system "Now Playing" app — that's what puts it on the lock
             // screen / Control Center and routes the transport controls here. With a
             // mixing option like `.duckOthers`, iOS treats us as secondary audio and
