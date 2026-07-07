@@ -27,11 +27,9 @@ struct PlayerDetailContent: View {
     /// The article being opened in the in-app browser (nil = closed). It loads
     /// *behind* the reader; `browserOpen` then slides the reader down to reveal it.
     @State private var browserLink: BrowserLink?
-    /// True once the reader has dropped away and the browser is showing.
+    /// True once the browser has come forward over the reader.
     @State private var browserOpen = false
     @State private var browserCountdown: Task<Void, Never>?
-    /// Measured reader height, so we know how far to slide it down.
-    @State private var readerHeight: CGFloat = 800
 
     private struct BrowserLink: Identifiable {
         let id = UUID()
@@ -93,73 +91,64 @@ struct PlayerDetailContent: View {
     // reasonable time"), so each piece is type-checked independently.
     var body: some View {
         ZStack {
-            // The web page loads behind the reader. It's kept hidden during the
-            // count-in so a still-loading page is never seen blank; then the reader
-            // slides down (X-style) to reveal it.
+            // The reader recedes (scales back + dims) as the browser comes forward
+            // over it. The reader goes inert so the web page is fully interactive.
+            readerLayer
+                .scaleEffect(browserOpen ? 0.92 : 1)
+                .opacity(browserOpen ? 0.5 : 1)
+                .allowsHitTesting(!browserOpen)
+                .animation(.spring(response: 0.5, dampingFraction: 0.86), value: browserOpen)
+
+            // The web page loads behind (hidden) during the count-in so it's never
+            // seen blank, then comes forward, full-screen and opaque. Kept mounted
+            // while closed (opacity 0) so reopening the same page is instant.
             if let link = browserLink {
                 InAppBrowserView(url: link.url, onClose: closeBrowser)
+                    .id(link.id)
+                    .background(Color(.systemBackground))
                     .opacity(browserOpen ? 1 : 0)
+                    .scaleEffect(browserOpen ? 1 : 1.05)
                     .allowsHitTesting(browserOpen)
-                    .animation(.easeInOut(duration: 0.25), value: browserOpen)
+                    .animation(.spring(response: 0.5, dampingFraction: 0.86), value: browserOpen)
             }
-            readerLayer
         }
     }
 
-    /// The reader itself — slides down and shrinks into a peeking card when the
-    /// browser is revealed behind it.
     private var readerLayer: some View {
         withLifecycle(withPresentations(baseContent))
-            .background(GeometryReader { geo in
-                Color.clear.preference(key: ReaderHeightKey.self, value: geo.size.height)
-            })
-            .clipShape(RoundedRectangle(cornerRadius: browserOpen ? 28 : 0, style: .continuous))
-            .shadow(color: .black.opacity(browserOpen ? 0.28 : 0), radius: 18, y: -6)
-            .scaleEffect(browserOpen ? 0.92 : 1, anchor: .top)
-            .offset(y: browserOpen ? readerHeight * 0.82 : 0)
-            .overlay { if browserOpen { readerDismissCatcher } }
-            .animation(.spring(response: 0.5, dampingFraction: 0.82), value: browserOpen)
-            .onPreferenceChange(ReaderHeightKey.self) { readerHeight = $0 }
     }
 
-    /// While the browser is open the reader is just a "tap or drag up to come
-    /// back" card, so intercept its touches.
-    private var readerDismissCatcher: some View {
-        Color.black.opacity(0.001)
-            .contentShape(Rectangle())
-            .onTapGesture { closeBrowser() }
-            .gesture(
-                DragGesture(minimumDistance: 20).onEnded { value in
-                    if value.translation.height < -40 { closeBrowser() }
-                }
-            )
-    }
-
-    /// Open the article: start loading behind the reader, give a three-beat haptic
-    /// count-in (so it's not a blank flash), then drop the reader to reveal it.
+    /// Open the article. First time for a URL: load it behind the reader, play a
+    /// two-double-tap ("boo-boom, boo-boom") haptic count-in so it's not a blank
+    /// flash, then bring it forward. Reopening the same page is instant (the loaded
+    /// web view is cached).
     private func startBrowser(_ url: URL) {
+        if let existing = browserLink, existing.url == url {
+            browserOpen = true   // same page already loaded — just show it
+            return
+        }
         browserCountdown?.cancel()
         browserOpen = false
         browserLink = BrowserLink(url: url)
-        let haptic = UIImpactFeedbackGenerator(style: .medium)
         browserCountdown = Task { @MainActor in
-            for _ in 0..<3 {
+            let haptic = UIImpactFeedbackGenerator(style: .medium)
+            haptic.prepare()
+            for _ in 0..<2 {                                  // two double-taps
                 haptic.impactOccurred()
-                try? await Task.sleep(nanoseconds: 800_000_000)   // a beat per "count"
+                try? await Task.sleep(nanoseconds: 80_000_000)
+                haptic.impactOccurred()
+                try? await Task.sleep(nanoseconds: 360_000_000)
             }
             guard !Task.isCancelled, browserLink != nil else { return }
-            browserOpen = true          // reveal (spring is on readerLayer)
+            browserOpen = true
         }
     }
 
     private func closeBrowser() {
         browserCountdown?.cancel()
         browserOpen = false
-        // Tear the web view down after it slides back up.
-        Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 520_000_000)
-            if !browserOpen { browserLink = nil }
-        }
+        // Keep `browserLink` (the web view stays mounted, hidden) so reopening the
+        // same article is instant. It's cleared when the reader moves to a new item.
     }
 
     private var baseContent: some View {
@@ -239,6 +228,10 @@ struct PlayerDetailContent: View {
                 renderPiP()
                 // A new item: open the full controls, then let them settle back down.
                 expandControls()
+                // Drop the cached browser — it belonged to the previous article.
+                browserCountdown?.cancel()
+                browserOpen = false
+                browserLink = nil
             }
             .onAppear {
                 player.onHighlightCaptured = { highlight in highlightToAnnotate = highlight }
@@ -275,8 +268,11 @@ struct PlayerDetailContent: View {
                     player.clear()
                 }
             }
-            .overlay(alignment: .top) {
-                if showCompletion && !player.celebrateFeedFinish { completionBanner }
+            .overlay(alignment: .bottom) {
+                // Above the player, so it never covers the last lines you're reading.
+                if showCompletion && !player.celebrateFeedFinish {
+                    completionBanner.padding(.bottom, controlsHeight + 16)
+                }
             }
             .overlay {
                 if player.celebrateFeedFinish { feedFinishedCelebration }
@@ -392,6 +388,22 @@ struct PlayerDetailContent: View {
     }
 
     private var activeMode: some View {
+        // Transcript and controls are siblings: the transcript pane carries the
+        // per-item identity + slide transition (so it moves like a carousel), while
+        // the transport panel stays put on top.
+        ZStack(alignment: .bottom) {
+            transcriptPane
+            controlsOverlay
+        }
+        .onPreferenceChange(ControlsHeightKey.self) { controlsHeight = max($0, 64) }
+        // Drives the carousel slide when the item changes (swipe / auto-advance).
+        .animation(.easeInOut(duration: 0.32), value: player.parsed?.email.id)
+    }
+
+    /// The scrolling transcript for the current item. Given a fresh identity +
+    /// page-turn transition per item so it slides horizontally between items
+    /// instead of cross-fading.
+    private var transcriptPane: some View {
         let email = player.parsed?.email
         return ScrollViewReader { proxy in
             ScrollView {
@@ -404,12 +416,7 @@ struct PlayerDetailContent: View {
                     // Clear the floating transport panel by its *measured* height
                     // (+ a margin), so the last sentence is never hidden behind it.
                     .padding(.bottom, controlsHeight + 24)
-                    // New identity per item + a page-turn transition, so moving
-                    // between emails/feeds slides instead of blinking.
-                    .id(email?.id ?? "")
-                    .transition(pageTransition)
             }
-            .animation(.easeInOut(duration: 0.3), value: email?.id)
             .onChange(of: player.currentBlockIndex) { _, index in
                 // Held while a long-press decision menu is up, so the text doesn't
                 // scroll out from under the menu.
@@ -426,31 +433,31 @@ struct PlayerDetailContent: View {
                 LongPressGesture(minimumDuration: 0.35).onEnded { _ in beginScrollHold() }
             )
         }
-        // The transport floats over the transcript as a Liquid Glass panel rather
-        // than a bar pinned to the bottom edge. It shrinks to a compact pill after
-        // a few idle seconds of listening (tap it to bring the full controls back).
-        .overlay(alignment: .bottom) {
-            Group {
-                if controlsCollapsed {
-                    collapsedControls
-                        .transition(.opacity)
-                } else {
-                    PlayerControlsView(viewModel: player) {
-                        _ = player.captureHighlight()
-                    }
+        .id(email?.id ?? "")
+        .transition(pageTransition)
+    }
+
+    /// The floating transport panel (full controls or the collapsed pill).
+    private var controlsOverlay: some View {
+        Group {
+            if controlsCollapsed {
+                collapsedControls
                     .transition(.opacity)
+            } else {
+                PlayerControlsView(viewModel: player) {
+                    _ = player.captureHighlight()
                 }
+                .transition(.opacity)
             }
-            .padding(.horizontal)
-            .padding(.vertical, 12)
-            .floatingGlass()
-            .padding(.horizontal, controlsCollapsed ? 90 : 10)
-            .padding(.bottom, 8)
-            .background(GeometryReader { geo in
-                Color.clear.preference(key: ControlsHeightKey.self, value: geo.size.height)
-            })
         }
-        .onPreferenceChange(ControlsHeightKey.self) { controlsHeight = max($0, 64) }
+        .padding(.horizontal)
+        .padding(.vertical, 12)
+        .floatingGlass()
+        .padding(.horizontal, controlsCollapsed ? 90 : 10)
+        .padding(.bottom, 8)
+        .background(GeometryReader { geo in
+            Color.clear.preference(key: ControlsHeightKey.self, value: geo.size.height)
+        })
     }
 
     /// The shrunken transport: just Highlight and Play/Pause (the pause ringed by a
@@ -771,27 +778,28 @@ struct PlayerDetailContent: View {
         .background(Color.orange.opacity(0.12))
     }
 
-    /// Full-screen celebration when the listener finishes every unread feed item:
-    /// confetti over a "caught up" card, shown briefly before dropping back to the
-    /// feed list.
+    /// Celebration when the listener finishes every unread feed item: confetti
+    /// plus a compact "caught up" card at the bottom (above the player), so it
+    /// never covers the text you were reading. Shown briefly before dropping back.
     private var feedFinishedCelebration: some View {
-        ZStack {
-            Color(.systemBackground).opacity(0.75).ignoresSafeArea()
-            VStack(spacing: 12) {
+        ZStack(alignment: .bottom) {
+            ConfettiView()   // transient particles; doesn't block reading
+            HStack(spacing: 12) {
                 Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 60))
+                    .font(.title)
                     .foregroundStyle(.green)
-                Text("You're all caught up")
-                    .font(.title2.bold())
-                Text("You've listened to everything in your feeds.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("You're all caught up").font(.headline)
+                    Text("You've heard everything in your feeds.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
             }
-            .padding(28)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 20))
-            .padding(40)
-            ConfettiView()
+            .padding(.horizontal, 18).padding(.vertical, 14)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .shadow(color: .black.opacity(0.15), radius: 10, y: 4)
+            .padding(.horizontal, 20)
+            .padding(.bottom, controlsHeight + 16)
         }
         .transition(.opacity)
     }
@@ -802,8 +810,7 @@ struct PlayerDetailContent: View {
             .padding(.horizontal, 16).padding(.vertical, 10)
             .background(.green.opacity(0.9), in: Capsule())
             .foregroundStyle(.white)
-            .padding(.top, 8)
-            .transition(.move(edge: .top).combined(with: .opacity))
+            .transition(.move(edge: .bottom).combined(with: .opacity))
             .task {
                 try? await Task.sleep(nanoseconds: 2_500_000_000)
                 withAnimation { showCompletion = false }
@@ -842,13 +849,6 @@ struct NowPlayingView: View {
 private struct ControlsHeightKey: PreferenceKey {
     static var defaultValue: CGFloat = 140
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
-}
-
-/// Reports the reader's full height so the X-style browser reveal knows how far
-/// to slide it down.
-private struct ReaderHeightKey: PreferenceKey {
-    static var defaultValue: CGFloat = 800
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
 }
 
 // MARK: - Sentence
