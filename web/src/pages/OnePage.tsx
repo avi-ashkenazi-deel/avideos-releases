@@ -7,7 +7,7 @@ import { about } from '@/data/about';
 import { useScrollSpy } from '@/hooks/useScrollSpy';
 import styles from './OnePage.module.css';
 
-const SECTION_IDS = ['top', 'writing', 'talks', 'projects', 'about'];
+const SECTION_IDS = ['top', 'talks', 'projects', 'writing', 'about'];
 
 interface SectionProps {
   id: string;
@@ -38,16 +38,16 @@ export default function OnePage() {
         <p className={styles.bio}>{about.bio}</p>
       </header>
 
-      <Section id="writing" title="Writing" intro="Posts, essays and conversations — from the blog, LinkedIn and Substack.">
-        <WritingBody />
-      </Section>
-
       <Section id="talks" title="Talks" intro="Conferences, podcasts and panels — with links to watch.">
         <TalksBody />
       </Section>
 
       <Section id="projects" title="Projects" intro="Things I've designed and built.">
         <ProjectsBody />
+      </Section>
+
+      <Section id="writing" title="Writing" intro="Posts, essays and conversations — from the blog, LinkedIn and Substack.">
+        <WritingBody />
       </Section>
 
       <Section id="about" title="About">

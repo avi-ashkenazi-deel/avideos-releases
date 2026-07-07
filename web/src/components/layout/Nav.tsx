@@ -5,9 +5,9 @@ import styles from './Nav.module.css';
 const THEME_LABEL: Record<string, string> = { auto: 'Auto', light: 'Light', dark: 'Dark' };
 
 const sectionLinks: [string, string][] = [
-  ['Writing', 'writing'],
   ['Talks', 'talks'],
   ['Projects', 'projects'],
+  ['Writing', 'writing'],
   ['About', 'about'],
 ];
 
