@@ -1,15 +1,15 @@
 import { useNavigate, useParams } from 'react-router-dom';
-import type { GalleryImage } from '@/data/types';
+import type { GalleryProject } from '@/data/snapshots';
 import { GalleryCanvas } from './GalleryCanvas';
 import styles from './GalleryPage.module.css';
 
 interface GalleryPageProps {
   title: string;
-  items: GalleryImage[];
+  projects: GalleryProject[];
   basePath: string; // e.g. '/snapshots'
 }
 
-export function GalleryPage({ title, items, basePath }: GalleryPageProps) {
+export function GalleryPage({ title, projects, basePath }: GalleryPageProps) {
   const { id } = useParams();
   const navigate = useNavigate();
 
@@ -19,9 +19,9 @@ export function GalleryPage({ title, items, basePath }: GalleryPageProps) {
         <h1 className={styles.title}>{title}</h1>
       </div>
       <GalleryCanvas
-        items={items}
+        projects={projects}
         activeId={id}
-        onOpen={(item) => navigate(`${basePath}/${item.id}`)}
+        onOpen={(p) => navigate(`${basePath}/${p.id}`)}
         onClose={() => navigate(basePath)}
       />
     </div>

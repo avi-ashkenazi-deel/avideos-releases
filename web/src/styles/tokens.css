@@ -1,5 +1,5 @@
 :root {
-  /* ---- Color: strictly monochrome, white ---- */
+  /* ---- Color: strictly monochrome. Light by default. ---- */
   --c-bg: #ffffff;
   --c-fg: #000000;
   --c-grey-1: #111111;
@@ -7,6 +7,31 @@
   --c-grey-3: #999999;
   --c-grey-4: #cccccc;
   --c-grey-5: #f2f2f2;
+}
+
+/* Dark palette (inverted monochrome) */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --c-bg: #000000;
+    --c-fg: #ffffff;
+    --c-grey-1: #ededed;
+    --c-grey-2: #9a9a9a;
+    --c-grey-3: #6f6f6f;
+    --c-grey-4: #333333;
+    --c-grey-5: #111111;
+  }
+}
+:root[data-theme='dark'] {
+  --c-bg: #000000;
+  --c-fg: #ffffff;
+  --c-grey-1: #ededed;
+  --c-grey-2: #9a9a9a;
+  --c-grey-3: #6f6f6f;
+  --c-grey-4: #333333;
+  --c-grey-5: #111111;
+}
+
+:root {
 
   /* ---- Type: Helvetica Neue, golden-ratio modular scale (φ = 1.618) ---- */
   --font-sans: 'Helvetica Neue', 'Inter', Helvetica, Arial, sans-serif;

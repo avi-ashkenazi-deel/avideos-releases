@@ -1,11 +1,19 @@
 import type { Talk } from './types';
 
-// Talks with a date and a link to watch (YouTube where available).
+// Talks, podcasts and conference appearances — things to watch or listen to.
 export const talks: Talk[] = [
   {
-    id: 'designing-up-2025',
+    id: 'design-meets-business',
+    title: 'Taste, craft and design in the age of AI',
+    event: 'Design Meets Business — podcast with Christian Vasile',
+    date: '2025-11-15',
+    youtubeUrl:
+      'https://designmeetsbusiness.co/episodes/taste-craft-and-design-in-the-age-of-ai-with-avi-ashkenazi-ex-samsung-shopify-now-at-deel',
+  },
+  {
+    id: 'designing-up',
     title: 'Shaping the future of design, AI, culture & leadership',
-    event: 'Designing Up Podcast',
+    event: 'Designing Up — podcast',
     date: '2025-11-15',
     youtubeUrl: 'https://www.youtube.com/watch?v=QPO0FGCM_IM',
   },
@@ -14,13 +22,13 @@ export const talks: Talk[] = [
     title: 'Editing commerce',
     event: "ECOM Design Conference '23",
     date: '2023-02-04',
-    youtubeUrl: 'https://superavi.com',
+    youtubeUrl: 'https://superavi.com/ecom-design-conference-23-editing-commerce/',
   },
   {
     id: 'uxlive-2022',
     title: 'Connecting to others',
     event: "UX Live '22",
     date: '2022-12-07',
-    youtubeUrl: 'https://superavi.com',
+    youtubeUrl: 'https://superavi.com/ux-live-22-connecting-to-others/',
   },
 ];

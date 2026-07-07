@@ -1,5 +1,8 @@
 import { NavLink } from 'react-router-dom';
+import { useTheme } from '@/hooks/useTheme';
 import styles from './Nav.module.css';
+
+const THEME_LABEL: Record<string, string> = { auto: 'Auto', light: 'Light', dark: 'Dark' };
 
 const sectionLinks: [string, string][] = [
   ['Writing', 'writing'],
@@ -13,6 +16,7 @@ interface NavProps {
 }
 
 export function Nav({ onSection }: NavProps) {
+  const { theme, cycle } = useTheme();
   return (
     <nav className={styles.nav} aria-label="Primary">
       <button className={styles.wordmark} onClick={() => onSection('top')}>
@@ -44,6 +48,14 @@ export function Nav({ onSection }: NavProps) {
         <a className={styles.link} href={`${import.meta.env.BASE_URL}old/`}>
           Archive
         </a>
+        <button
+          className={styles.link}
+          onClick={cycle}
+          aria-label={`Theme: ${THEME_LABEL[theme]}`}
+          title="Toggle theme"
+        >
+          {THEME_LABEL[theme]}
+        </button>
       </div>
     </nav>
   );

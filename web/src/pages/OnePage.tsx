@@ -4,7 +4,10 @@ import { ProjectsBody } from '@/components/sections/ProjectsBody';
 import { AboutBody } from '@/components/sections/AboutBody';
 import { Footer } from '@/components/layout/Footer';
 import { about } from '@/data/about';
+import { useScrollSpy } from '@/hooks/useScrollSpy';
 import styles from './OnePage.module.css';
+
+const SECTION_IDS = ['top', 'writing', 'talks', 'projects', 'about'];
 
 interface SectionProps {
   id: string;
@@ -26,6 +29,7 @@ function Section({ id, title, intro, children }: SectionProps) {
 }
 
 export default function OnePage() {
+  useScrollSpy(SECTION_IDS);
   return (
     <div className="container">
       <header id="top" className={`grid ${styles.hero}`}>
