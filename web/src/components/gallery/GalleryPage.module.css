@@ -28,4 +28,7 @@
   font-weight: 500;
   letter-spacing: var(--tracking-h2);
   line-height: var(--lh-tight);
+  /* invert against images behind it so it's legible on any background */
+  color: #fff;
+  mix-blend-mode: difference;
 }

@@ -9,6 +9,8 @@
   cursor: grabbing;
 }
 
+/* Floating chrome over the image field: invert against whatever is behind it
+ * (via mix-blend-mode) so it stays legible on light, dark and busy images. */
 .hint {
   position: absolute;
   left: 50%;
@@ -16,7 +18,8 @@
   transform: translateX(-50%);
   font-size: var(--fs-meta);
   letter-spacing: var(--tracking-meta);
-  color: var(--c-grey-3);
+  color: #fff;
+  mix-blend-mode: difference;
   pointer-events: none;
   z-index: 2;
 }
@@ -31,28 +34,29 @@
   gap: var(--s-2);
   font-size: var(--fs-micro);
   letter-spacing: var(--tracking-label);
-  color: var(--c-grey-3);
+  color: #fff;
+  mix-blend-mode: difference;
 }
 .density input {
   width: clamp(90px, 14vw, 160px);
   -webkit-appearance: none;
   appearance: none;
   height: 1px;
-  background: var(--c-grey-4);
+  background: #fff;
   outline: none;
 }
 .density input::-webkit-slider-thumb {
   -webkit-appearance: none;
   width: 12px;
   height: 12px;
-  background: var(--c-fg);
+  background: #fff;
   cursor: pointer;
   border-radius: 0;
 }
 .density input::-moz-range-thumb {
   width: 12px;
   height: 12px;
-  background: var(--c-fg);
+  background: #fff;
   border: 0;
   cursor: pointer;
   border-radius: 0;
