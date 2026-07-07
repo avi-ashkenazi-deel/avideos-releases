@@ -22,13 +22,13 @@ export const talks: Talk[] = [
     title: 'Editing commerce',
     event: "ECOM Design Conference '23",
     date: '2023-02-04',
-    youtubeUrl: 'https://superavi.com/ecom-design-conference-23-editing-commerce/',
+    youtubeUrl: 'https://www.youtube.com/watch?v=Tbl3pu1vEgY',
   },
   {
     id: 'uxlive-2022',
     title: 'Connecting to others',
     event: "UX Live '22",
     date: '2022-12-07',
-    youtubeUrl: 'https://superavi.com/ux-live-22-connecting-to-others/',
+    youtubeUrl: 'https://www.youtube.com/watch?v=0wNBF4Rqx9M',
   },
 ];

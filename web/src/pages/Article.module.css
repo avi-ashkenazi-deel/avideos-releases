@@ -133,58 +133,20 @@
   letter-spacing: var(--tracking-label);
 }
 
-/* Continue / pull-to-next */
-.continue {
-  display: block;
-  width: 100%;
-  text-align: left;
+/* Continuous feed: stacked article blocks */
+.block + .block {
   margin-top: var(--s-7);
-  padding: var(--s-5) 0 var(--s-6);
-  border-top: 1px solid var(--c-fg);
-  cursor: pointer;
-}
-.contLabel,
-.jump {
-  display: block;
-  font-size: var(--fs-micro);
-  letter-spacing: var(--tracking-label);
-  color: var(--c-grey-3);
-  margin-bottom: var(--s-2);
-}
-.jump {
-  color: var(--c-fg);
-  font-size: var(--fs-2);
-  letter-spacing: var(--tracking-tight);
-  margin-bottom: var(--s-3);
-}
-.nextTitle {
-  display: block;
-  font-size: clamp(1.6rem, 4vw, 3rem);
-  font-weight: 500;
-  letter-spacing: var(--tracking-tight);
-  line-height: var(--lh-tight);
-  transition: opacity var(--dur-fast) var(--ease-out);
-}
-.continue:hover .nextTitle {
-  opacity: 0.4;
-}
-.pullHint {
-  display: block;
-  margin-top: var(--s-3);
-  font-size: var(--fs-micro);
-  letter-spacing: var(--tracking-label);
-  color: var(--c-grey-3);
+  padding-top: var(--s-6);
+  border-top: 1px solid var(--c-grey-4);
 }
 
-.pullBar {
-  position: fixed;
-  left: 0;
-  bottom: 0;
-  height: 2px;
-  width: 100%;
-  transform-origin: left;
-  background: var(--c-fg);
-  z-index: 200;
+/* Category divider shown when the feed crosses into a new section */
+.sectionLabel {
+  font-size: var(--fs-2);
+  font-weight: 500;
+  letter-spacing: var(--tracking-tight);
+  color: var(--c-fg);
+  margin-bottom: var(--s-5);
 }
 .source a {
   color: var(--c-grey-2);

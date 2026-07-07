@@ -2,7 +2,7 @@ import type { Social } from './types';
 
 // Replace `url` values with the real profiles when ready.
 export const socials: Social[] = [
-  { id: 'linkedin', label: 'LinkedIn', handle: 'aviashkenazi', url: '#' },
+  { id: 'linkedin', label: 'LinkedIn', handle: 'aviashkenazi', url: 'https://www.linkedin.com/in/aviashkenazi/' },
   {
     id: 'substack',
     label: 'Substack',
@@ -13,9 +13,8 @@ export const socials: Social[] = [
     id: 'youtube',
     label: 'YouTube',
     handle: 'superavi',
-    url: 'https://www.youtube.com/watch?v=QPO0FGCM_IM',
+    url: 'https://www.youtube.com/@superavi5640',
   },
   { id: 'instagram', label: 'Instagram', handle: 'superavi', url: '#' },
-  { id: 'twitter', label: 'Twitter / X', handle: 'superavi', url: '#' },
-  { id: 'blog', label: 'Blog', handle: 'superavi.com', url: 'https://superavi.com' },
+  { id: 'x', label: 'X', handle: 'superavi', url: '#' },
 ];
