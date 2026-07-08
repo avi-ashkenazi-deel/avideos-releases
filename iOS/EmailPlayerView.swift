@@ -57,9 +57,19 @@ struct PlayerDetailContent: View {
     @State private var holdAutoScroll = false
     @State private var holdScrollTask: Task<Void, Never>?
 
-    /// Direction of the last item swipe, so the new transcript slides in from the
-    /// matching edge (left swipe → next slides in from the right).
-    @State private var lastSwipeForward = true
+    /// Live carousel drag: the transcript pane's current horizontal offset. Driven
+    /// 1:1 by the finger while dragging, then eased to 0/±paneWidth to complete or
+    /// cancel a swipe, and to 0 whenever a new item lands (see the item-change
+    /// carousel reveal below).
+    @State private var dragTranslation: CGFloat = 0
+    /// True for as long as a finger is down on the transcript.
+    @State private var isDragging = false
+    /// True once a swipe is committed and we're waiting for the real content to
+    /// finish loading before snapping the offset back to 0.
+    @State private var isSettling = false
+    /// +1 = moving to the next item (dragging left), -1 = previous.
+    @State private var swipeDirection = 1
+    @State private var paneWidth: CGFloat = UIScreen.main.bounds.width
     private static let collapseAnimation: Animation = .spring(response: 0.38, dampingFraction: 0.85)
 
     /// Links from whatever's on screen (a staged preview takes precedence).
@@ -86,32 +96,77 @@ struct PlayerDetailContent: View {
     private var bodyFontSize: CGFloat { settings.readingTextSize.bodyPointSize * readingScale }
     private var titleFontSize: CGFloat { settings.readingTextSize.titlePointSize * readingScale }
 
+    /// Height of the little "peek" strip showing the article's header underneath
+    /// the browser card, like X/Twitter — tap it to come back.
+    private static let browserPeekHeight: CGFloat = 74
+
     // Split into a base view plus two generic modifier helpers: one big modifier
     // chain overwhelmed the SwiftUI type-checker ("unable to type-check in
     // reasonable time"), so each piece is type-checked independently.
     var body: some View {
-        ZStack {
-            // The reader recedes (scales back + dims) as the browser comes forward
-            // over it. The reader goes inert so the web page is fully interactive.
+        ZStack(alignment: .bottom) {
+            // A small peek of the article's header, revealed only in the strip the
+            // browser card leaves uncovered at the bottom. Purely a visual "you can
+            // still see what you were reading" cue; tap it to come back.
+            if browserLink != nil { peekHeaderBar }
+
+            // Fully hidden (not just dimmed) while the browser is up, so there's no
+            // transparency bleed through the browser, and it can't intercept touches.
             readerLayer
-                .scaleEffect(browserOpen ? 0.92 : 1)
-                .opacity(browserOpen ? 0.5 : 1)
+                .opacity(browserOpen ? 0 : 1)
                 .allowsHitTesting(!browserOpen)
-                .animation(.spring(response: 0.5, dampingFraction: 0.86), value: browserOpen)
 
             // The web page loads behind (hidden) during the count-in so it's never
-            // seen blank, then comes forward, full-screen and opaque. Kept mounted
-            // while closed (opacity 0) so reopening the same page is instant.
+            // seen blank, then comes forward as a card leaving the peek strip
+            // showing beneath it. Kept mounted while closed (opacity 0) so
+            // reopening the same page is instant.
             if let link = browserLink {
                 InAppBrowserView(url: link.url, onClose: closeBrowser)
                     .id(link.id)
                     .background(Color(.systemBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: browserOpen ? 22 : 0, style: .continuous))
+                    .shadow(color: .black.opacity(browserOpen ? 0.25 : 0), radius: 16, y: -4)
+                    .padding(.bottom, browserOpen ? Self.browserPeekHeight : 0)
                     .opacity(browserOpen ? 1 : 0)
-                    .scaleEffect(browserOpen ? 1 : 1.05)
+                    .scaleEffect(browserOpen ? 1 : 1.04, anchor: .top)
                     .allowsHitTesting(browserOpen)
-                    .animation(.spring(response: 0.5, dampingFraction: 0.86), value: browserOpen)
             }
         }
+        .animation(.spring(response: 0.5, dampingFraction: 0.86), value: browserOpen)
+    }
+
+    /// A compact card showing who it's from and the subject — the "glimpse of the
+    /// header" peeking below the browser card. Tap (or swipe up) to close the
+    /// browser and return to the full reader.
+    private var peekHeaderBar: some View {
+        Button(action: closeBrowser) {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(player.parsed?.email.from.displayName ?? "")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    Text(player.parsed?.email.subjectOrFallback ?? "")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 8)
+                Image(systemName: "chevron.up")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 20)
+            .frame(maxWidth: .infinity)
+            .frame(height: Self.browserPeekHeight)
+            .background(Color(.secondarySystemBackground))
+        }
+        .buttonStyle(.plain)
+        .opacity(browserOpen ? 1 : 0)
+        .gesture(
+            DragGesture(minimumDistance: 15).onEnded { value in
+                if value.translation.height < -20 { closeBrowser() }
+            }
+        )
     }
 
     private var readerLayer: some View {
@@ -346,28 +401,69 @@ struct PlayerDetailContent: View {
 
     // MARK: - Active (playing) mode
 
-    /// Horizontal swipe across the transcript to move between items. Ignored
-    /// unless the swipe is clearly horizontal (so it doesn't fight vertical
-    /// scrolling) and a sibling provider is wired (feeds / inbox).
-    private var swipeBetweenItems: some Gesture {
-        DragGesture(minimumDistance: 30)
-            .onEnded { value in
-                guard player.canMoveBetweenItems else { return }
+    /// Live, finger-tracking drag between items: the transcript follows your
+    /// finger 1:1 (like a real carousel/pager) and a lightweight preview of the
+    /// neighbor's header slides in from the edge as you go — released past the
+    /// threshold commits the swipe, otherwise it springs back. Pure navigation:
+    /// it never marks anything read.
+    private var itemDragGesture: some Gesture {
+        DragGesture(minimumDistance: 12)
+            .onChanged { value in
+                guard player.canMoveBetweenItems, !isSettling else { return }
                 let dx = value.translation.width
                 let dy = value.translation.height
-                guard abs(dx) > 70, abs(dx) > abs(dy) * 1.5 else { return }
-                lastSwipeForward = dx < 0
-                player.moveToSibling(dx < 0 ? 1 : -1)   // swipe left → next
+                // Only capture once it's clearly horizontal, so vertical scrolling
+                // of the transcript still works; once captured, stay captured for
+                // the rest of this gesture even if the ratio changes.
+                guard isDragging || abs(dx) > abs(dy) * 1.2 else { return }
+                isDragging = true
+                swipeDirection = dx < 0 ? 1 : -1
+                dragTranslation = dx
+            }
+            .onEnded { value in
+                guard isDragging else { return }
+                let dx = value.translation.width
+                let direction = dx < 0 ? 1 : -1
+                let flungFast = abs(value.predictedEndTranslation.width) > paneWidth * 0.6
+                let wantsCommit = abs(dx) > paneWidth * 0.22 || flungFast
+                // Don't commit into a direction with nothing there (list boundary)
+                // — that would fling the content off-screen waiting on a fetch that
+                // can never land. If there's no preview provider at all, trust the
+                // async siblingProvider to sort it out, same as before.
+                let hasSibling = player.siblingPreviewProvider == nil
+                    || player.parsed.flatMap { player.siblingPreviewProvider?($0.email.id, direction) } != nil
+                guard wantsCommit, hasSibling else {
+                    withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) { dragTranslation = 0 }
+                    isDragging = false
+                    return
+                }
+                commitSwipe(direction: direction)
             }
     }
 
-    /// A page-turn slide for the transcript when the item changes: the new one
-    /// slides in from the swipe direction while the old slides out the other way.
-    private var pageTransition: AnyTransition {
-        .asymmetric(
-            insertion: .move(edge: lastSwipeForward ? .trailing : .leading).combined(with: .opacity),
-            removal: .move(edge: lastSwipeForward ? .leading : .trailing).combined(with: .opacity)
-        )
+    /// Finish an in-progress swipe: ease the current pane the rest of the way off
+    /// screen (the preview pane is already tracking into place behind it), kick
+    /// off the real content load, and wait for it to land — see the item-change
+    /// handler on `activeMode`, which snaps the offset back to 0 the instant the
+    /// new content is ready (so there's no held blank/mismatched frame).
+    private func commitSwipe(direction: Int) {
+        swipeDirection = direction
+        isSettling = true
+        endScrollHold()
+        withAnimation(.easeOut(duration: 0.22)) {
+            dragTranslation = direction == 1 ? -paneWidth : paneWidth
+        }
+        player.moveToSibling(direction)
+        let expectedID = player.parsed?.email.id
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 4_000_000_000)
+            // Safety valve: the sibling fetch failed or is hung — settle back
+            // rather than leaving the transcript stuck off-screen forever.
+            guard isSettling, player.parsed?.email.id == expectedID else { return }
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.86)) { dragTranslation = 0 }
+            isDragging = false
+            isSettling = false
+        }
     }
 
     /// Freeze the follow-along scroll while the listener decides on a line, with a
@@ -388,21 +484,81 @@ struct PlayerDetailContent: View {
     }
 
     private var activeMode: some View {
-        // Transcript and controls are siblings: the transcript pane carries the
-        // per-item identity + slide transition (so it moves like a carousel), while
-        // the transport panel stays put on top.
+        // Transcript and controls are siblings: the transcript carousel carries
+        // the live drag / slide, while the transport panel stays put on top.
         ZStack(alignment: .bottom) {
-            transcriptPane
+            transcriptCarousel
             controlsOverlay
         }
         .onPreferenceChange(ControlsHeightKey.self) { controlsHeight = max($0, 64) }
-        // Drives the carousel slide when the item changes (swipe / auto-advance).
-        .animation(.easeInOut(duration: 0.32), value: player.parsed?.email.id)
+        .onChange(of: player.parsed?.email.id) { oldValue, _ in
+            guard oldValue != nil else { return }   // skip the very first appearance
+            if isDragging || isSettling {
+                // Our own swipe already eased the old content off-screen; the new
+                // content just landed already positioned — swap with no animation
+                // so there's no double-motion.
+                var t = Transaction()
+                t.disablesAnimations = true
+                withTransaction(t) {
+                    dragTranslation = 0
+                    isDragging = false
+                    isSettling = false
+                }
+            } else {
+                // A programmatic advance (Next Item button, auto-advance) — slide
+                // it in from the same edge a forward swipe would use.
+                dragTranslation = paneWidth
+                withAnimation(.easeOut(duration: 0.32)) { dragTranslation = 0 }
+            }
+        }
     }
 
-    /// The scrolling transcript for the current item. Given a fresh identity +
-    /// page-turn transition per item so it slides horizontally between items
-    /// instead of cross-fading.
+    /// A lightweight, no-fetch preview of the item you're dragging toward — just
+    /// its title and sender/feed name — shown while a finger is down or a swipe
+    /// is settling, before the real content has finished loading.
+    private var livePreviewText: (title: String, subtitle: String)? {
+        guard isDragging || isSettling, let id = player.parsed?.email.id else { return nil }
+        return player.siblingPreviewProvider?(id, swipeDirection)
+    }
+
+    private func siblingPreviewPane(_ preview: (title: String, subtitle: String)) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(preview.subtitle)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.secondary)
+            Text(preview.title)
+                .font(.system(size: titleFontSize, weight: .bold))
+                .foregroundStyle(.primary)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+        .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(Color(.systemBackground))
+    }
+
+    /// The transcript plus (while dragging/settling) a preview of the neighbor,
+    /// both riding the same live `dragTranslation` so they move together as one
+    /// real-time carousel instead of a swap-then-animate.
+    private var transcriptCarousel: some View {
+        ZStack {
+            if let preview = livePreviewText {
+                siblingPreviewPane(preview)
+                    .allowsHitTesting(false)
+                    .offset(x: dragTranslation + CGFloat(swipeDirection) * paneWidth)
+            }
+            transcriptPane
+                .offset(x: dragTranslation)
+        }
+        .clipped()
+        .background(GeometryReader { geo in
+            Color.clear
+                .onAppear { if geo.size.width > 0 { paneWidth = geo.size.width } }
+                .onChange(of: geo.size.width) { _, w in if w > 0 { paneWidth = w } }
+        })
+    }
+
+    /// The scrolling transcript for the current item.
     private var transcriptPane: some View {
         let email = player.parsed?.email
         return ScrollViewReader { proxy in
@@ -425,16 +581,14 @@ struct PlayerDetailContent: View {
             }
             // Swipe left → next item, right → previous — pure navigation that
             // doesn't mark anything read. Simultaneous so vertical scrolling still
-            // works; we only act on clearly-horizontal swipes.
-            .simultaneousGesture(swipeBetweenItems)
+            // works; we only act on clearly-horizontal drags.
+            .simultaneousGesture(itemDragGesture)
             // A long-press means the mute menu is about to appear — freeze the
             // auto-scroll until the decision is made (or a timeout).
             .simultaneousGesture(
                 LongPressGesture(minimumDuration: 0.35).onEnded { _ in beginScrollHold() }
             )
         }
-        .id(email?.id ?? "")
-        .transition(pageTransition)
     }
 
     /// The floating transport panel (full controls or the collapsed pill).

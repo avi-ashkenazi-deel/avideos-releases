@@ -222,6 +222,12 @@ struct InboxList: View {
             siblingProvider: { [weak viewModel] id, direction in
                 guard let sib = viewModel?.sibling(of: id, direction: direction) else { return nil }
                 return (sib, false)
+            },
+            // Instant, no-fetch preview of the neighbor's header — the message is
+            // already in memory, so this needs no network round-trip.
+            siblingPreviewProvider: { [weak viewModel] id, direction in
+                guard let sib = viewModel?.sibling(of: id, direction: direction) else { return nil }
+                return (title: sib.subjectOrFallback, subtitle: sib.from.displayName)
             }
         )
     }

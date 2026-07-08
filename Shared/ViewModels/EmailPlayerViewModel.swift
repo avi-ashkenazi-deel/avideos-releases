@@ -70,6 +70,7 @@ final class EmailPlayerViewModel: ObservableObject {
         var nextLocalProvider: (@MainActor (String) async -> Email?)?
         var onQueueFinished: (() -> Void)?
         var siblingProvider: (@MainActor (String, Int) async -> (Email, Bool)?)?
+        var siblingPreviewProvider: ((String, Int) -> (title: String, subtitle: String)?)?
         var startBlock: Int?
     }
 
@@ -101,6 +102,12 @@ final class EmailPlayerViewModel: ObservableObject {
     /// a local prebuilt item (feeds) vs a mail stub to fetch. Swiping never marks
     /// anything read; the item you leave keeps its saved progress.
     var siblingProvider: (@MainActor (String, Int) async -> (Email, Bool)?)?
+
+    /// Lightweight, synchronous counterpart to `siblingProvider`: just the title
+    /// and a subtitle (sender/feed name) for the adjacent item, with no fetch —
+    /// used to show a live preview of what you're swiping to *while your finger is
+    /// still dragging*, before the real content is loaded.
+    var siblingPreviewProvider: ((String, Int) -> (title: String, subtitle: String)?)?
 
     /// Whether auto-advancing to the next *local* item should speak the "From …"
     /// header. Mirrors the `announce` the current item was opened with — feeds in
@@ -228,7 +235,8 @@ final class EmailPlayerViewModel: ObservableObject {
               nextUnreadProvider: ((String) -> Email?)? = nil,
               nextLocalProvider: (@MainActor (String) async -> Email?)? = nil,
               onQueueFinished: (() -> Void)? = nil,
-              siblingProvider: (@MainActor (String, Int) async -> (Email, Bool)?)? = nil) {
+              siblingProvider: (@MainActor (String, Int) async -> (Email, Bool)?)? = nil,
+              siblingPreviewProvider: ((String, Int) -> (title: String, subtitle: String)?)? = nil) {
         isExpanded = true
         announceOnAdvance = announce
         let config = StagedConfig(onMarkedRead: onMarkedRead,
@@ -237,6 +245,7 @@ final class EmailPlayerViewModel: ObservableObject {
                                   nextLocalProvider: nextLocalProvider,
                                   onQueueFinished: onQueueFinished,
                                   siblingProvider: siblingProvider,
+                                  siblingPreviewProvider: siblingPreviewProvider,
                                   startBlock: startBlock)
         if usesInlineDetail, isPlaying, parsed?.email.id != email.id {
             Task { await stage(email: email, isLocal: isLocal, config: config) }
@@ -248,6 +257,7 @@ final class EmailPlayerViewModel: ObservableObject {
             self.nextLocalProvider = nextLocalProvider
             self.onQueueFinished = onQueueFinished
             self.siblingProvider = siblingProvider
+            self.siblingPreviewProvider = siblingPreviewProvider
             Task {
                 if isLocal { await loadLocal(email, announce: announce) }
                 else { await load(email: email, announce: announce) }
@@ -279,6 +289,7 @@ final class EmailPlayerViewModel: ObservableObject {
         nextLocalProvider = config.nextLocalProvider
         onQueueFinished = config.onQueueFinished
         siblingProvider = config.siblingProvider
+        siblingPreviewProvider = config.siblingPreviewProvider
         parsed = stagedEmail
         staged = nil
         stagedConfig = nil

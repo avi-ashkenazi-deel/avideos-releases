@@ -48,6 +48,10 @@ struct InAppBrowserView: View {
 
     // MARK: - Toolbar
 
+    /// Dark, semi-transparent chrome (like X's) rather than a light material —
+    /// reads clearly over any page, light or dark.
+    private static let chromeColor = Color.black.opacity(0.68)
+
     private var toolbar: some View {
         HStack(spacing: 12) {
             circleButton("xmark") { onClose() }
@@ -75,10 +79,10 @@ struct InAppBrowserView: View {
                     Image(systemName: "ellipsis")
                         .font(.caption.weight(.bold))
                 }
-                .foregroundStyle(.primary)
+                .foregroundStyle(.white)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
-                .background(Capsule().fill(.regularMaterial))
+                .background(Capsule().fill(Self.chromeColor))
             }
 
             Spacer(minLength: 8)
@@ -93,9 +97,9 @@ struct InAppBrowserView: View {
         Button(action: action) {
             Image(systemName: systemName)
                 .font(.body.weight(.semibold))
-                .foregroundStyle(.primary)
+                .foregroundStyle(.white)
                 .frame(width: 44, height: 44)
-                .background(Circle().fill(.regularMaterial))
+                .background(Circle().fill(Self.chromeColor))
         }
     }
 }

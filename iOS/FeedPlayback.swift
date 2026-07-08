@@ -38,6 +38,14 @@ enum FeedPlayback {
                     guard let sib = store.sibling(of: itemID(fromEmailID: emailID), direction: direction)
                     else { return nil }
                     return (await playableEmail(for: sib, store: store), true)
+                },
+                // Instant, no-fetch preview of the neighbor's title — shown while
+                // the finger is still dragging, before the real content loads.
+                siblingPreviewProvider: { emailID, direction in
+                    guard let sib = store.sibling(of: itemID(fromEmailID: emailID), direction: direction)
+                    else { return nil }
+                    let feedTitle = store.feed(for: sib.feedID)?.title ?? "Feed"
+                    return (title: sib.title, subtitle: feedTitle)
                 }
             )
         }
