@@ -30,6 +30,9 @@ struct PlayerDetailContent: View {
     /// True once the browser has come forward over the reader.
     @State private var browserOpen = false
     @State private var browserCountdown: Task<Void, Never>?
+    /// Whether playback was running when the browser opened, so closing it can
+    /// resume — the item is held (paused) while you're reading in-app.
+    @State private var wasPlayingBeforeBrowser = false
 
     private struct BrowserLink: Identifiable {
         let id = UUID()
@@ -178,6 +181,13 @@ struct PlayerDetailContent: View {
     /// flash, then bring it forward. Reopening the same page is instant (the loaded
     /// web view is cached).
     private func startBrowser(_ url: URL) {
+        // Hold on this item while you're reading in-app — otherwise playback
+        // could finish and auto-advance to another article underneath you while
+        // you're still looking at this one's page.
+        if player.isPlaying {
+            wasPlayingBeforeBrowser = true
+            player.pause()
+        }
         if let existing = browserLink, existing.url == url {
             browserOpen = true   // same page already loaded — just show it
             return
@@ -204,6 +214,10 @@ struct PlayerDetailContent: View {
         browserOpen = false
         // Keep `browserLink` (the web view stays mounted, hidden) so reopening the
         // same article is instant. It's cleared when the reader moves to a new item.
+        if wasPlayingBeforeBrowser {
+            player.play()
+            wasPlayingBeforeBrowser = false
+        }
     }
 
     private var baseContent: some View {
@@ -287,6 +301,7 @@ struct PlayerDetailContent: View {
                 browserCountdown?.cancel()
                 browserOpen = false
                 browserLink = nil
+                wasPlayingBeforeBrowser = false
             }
             .onAppear {
                 player.onHighlightCaptured = { highlight in highlightToAnnotate = highlight }
@@ -734,6 +749,17 @@ struct PlayerDetailContent: View {
                     Text(dateLine)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
+                }
+                // Titles-only shows just the headline — offer to pull in the rest
+                // of the article (and read it) for this one item, on demand.
+                if isActive && hideBody && player.expandProvider != nil {
+                    Button {
+                        player.expandCurrentItem()
+                    } label: {
+                        Label("Read full article", systemImage: "text.append")
+                            .font(.subheadline.weight(.medium))
+                    }
+                    .padding(.top, 4)
                 }
             }
             .frame(maxWidth: .infinity, alignment: isRTLHeader ? .trailing : .leading)

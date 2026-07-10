@@ -46,6 +46,13 @@ enum FeedPlayback {
                     else { return nil }
                     let feedTitle = store.feed(for: sib.feedID)?.title ?? "Feed"
                     return (title: sib.title, subtitle: feedTitle)
+                },
+                // "Read full article": pulls in the real content for the CURRENT
+                // item on demand, overriding titles-only just for this one.
+                expandProvider: { emailID in
+                    guard let current = store.items.first(where: { $0.id == itemID(fromEmailID: emailID) })
+                    else { return nil }
+                    return await playableEmail(for: current, store: store, forceFull: true)
                 }
             )
         }
@@ -53,14 +60,15 @@ enum FeedPlayback {
 
     /// Build a fully-loaded `Email` for a feed item: prefer inline content; else
     /// fetch the real article (resolving aggregator self-links to their source);
-    /// else fall back to the item's own summary.
+    /// else fall back to the item's own summary. `forceFull` overrides the
+    /// titles-only setting for this one call — used by "Read full article".
     @MainActor
-    static func playableEmail(for item: RSSItem, store: FeedStore) async -> Email {
+    static func playableEmail(for item: RSSItem, store: FeedStore, forceFull: Bool = false) async -> Email {
         let feed = store.feed(for: item.feedID)
         let feedTitle = feed?.title ?? "Feed"
         // Titles-only: don't fetch or read the body — build an item whose whole
         // content is its headline, so playback reads the title and stops.
-        if AppSettings.shared.feedsTitlesOnly {
+        if AppSettings.shared.feedsTitlesOnly && !forceFull {
             return item.makeEmail(feedTitle: feedTitle, fullHTML: "<p>\(escapeHTML(item.title))</p>")
         }
         if let html = item.contentHTML, html.count > 400 {

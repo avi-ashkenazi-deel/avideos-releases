@@ -71,6 +71,7 @@ final class EmailPlayerViewModel: ObservableObject {
         var onQueueFinished: (() -> Void)?
         var siblingProvider: (@MainActor (String, Int) async -> (Email, Bool)?)?
         var siblingPreviewProvider: ((String, Int) -> (title: String, subtitle: String)?)?
+        var expandProvider: (@MainActor (String) async -> Email?)?
         var startBlock: Int?
     }
 
@@ -108,6 +109,12 @@ final class EmailPlayerViewModel: ObservableObject {
     /// used to show a live preview of what you're swiping to *while your finger is
     /// still dragging*, before the real content is loaded.
     var siblingPreviewProvider: ((String, Int) -> (title: String, subtitle: String)?)?
+
+    /// Given the current item's id, fetches its full content on demand — used by
+    /// "Read full article" in titles-only feed mode, where the item normally
+    /// carries just its headline. Set by feed sessions; nil (no button shown)
+    /// otherwise. Returning nil (e.g. titles-only is now off) is a no-op.
+    var expandProvider: (@MainActor (String) async -> Email?)?
 
     /// Whether auto-advancing to the next *local* item should speak the "From …"
     /// header. Mirrors the `announce` the current item was opened with — feeds in
@@ -223,6 +230,19 @@ final class EmailPlayerViewModel: ObservableObject {
         await apply(email, announce: announce)
     }
 
+    /// "Read full article": pulls in the current item's full content on demand
+    /// (titles-only feeds normally carry just the headline). Keeps playing if it
+    /// was playing — the same item, now with the rest of the article to read.
+    func expandCurrentItem() {
+        guard let id = parsed?.email.id, let expandProvider else { return }
+        let wasPlaying = isPlaying
+        Task {
+            guard let full = await expandProvider(id) else { return }
+            await loadLocal(full, announce: false)
+            if wasPlaying { play() }
+        }
+    }
+
     /// Open an item in the Now Playing view. If a *different* email is currently
     /// playing, the new one is shown as a preview (staged) and playback continues
     /// until the listener taps play; otherwise it loads and is ready immediately.
@@ -236,7 +256,8 @@ final class EmailPlayerViewModel: ObservableObject {
               nextLocalProvider: (@MainActor (String) async -> Email?)? = nil,
               onQueueFinished: (() -> Void)? = nil,
               siblingProvider: (@MainActor (String, Int) async -> (Email, Bool)?)? = nil,
-              siblingPreviewProvider: ((String, Int) -> (title: String, subtitle: String)?)? = nil) {
+              siblingPreviewProvider: ((String, Int) -> (title: String, subtitle: String)?)? = nil,
+              expandProvider: (@MainActor (String) async -> Email?)? = nil) {
         isExpanded = true
         announceOnAdvance = announce
         let config = StagedConfig(onMarkedRead: onMarkedRead,
@@ -246,6 +267,7 @@ final class EmailPlayerViewModel: ObservableObject {
                                   onQueueFinished: onQueueFinished,
                                   siblingProvider: siblingProvider,
                                   siblingPreviewProvider: siblingPreviewProvider,
+                                  expandProvider: expandProvider,
                                   startBlock: startBlock)
         if usesInlineDetail, isPlaying, parsed?.email.id != email.id {
             Task { await stage(email: email, isLocal: isLocal, config: config) }
@@ -258,6 +280,7 @@ final class EmailPlayerViewModel: ObservableObject {
             self.onQueueFinished = onQueueFinished
             self.siblingProvider = siblingProvider
             self.siblingPreviewProvider = siblingPreviewProvider
+            self.expandProvider = expandProvider
             Task {
                 if isLocal { await loadLocal(email, announce: announce) }
                 else { await load(email: email, announce: announce) }
@@ -290,6 +313,7 @@ final class EmailPlayerViewModel: ObservableObject {
         onQueueFinished = config.onQueueFinished
         siblingProvider = config.siblingProvider
         siblingPreviewProvider = config.siblingPreviewProvider
+        expandProvider = config.expandProvider
         parsed = stagedEmail
         staged = nil
         stagedConfig = nil
