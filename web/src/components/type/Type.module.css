@@ -1,0 +1,21 @@
+.heading {
+  font-size: var(--fs-h1);
+  font-weight: 500;
+  line-height: var(--lh-snug);
+  letter-spacing: var(--tracking-tight);
+}
+
+.lead {
+  font-size: var(--fs-lead);
+  font-weight: 400;
+  line-height: 1.35;
+  color: var(--c-grey-1);
+  max-width: 46ch;
+}
+
+.meta {
+  font-size: var(--fs-meta);
+  font-weight: 400;
+  letter-spacing: var(--tracking-meta);
+  color: var(--c-grey-2);
+}

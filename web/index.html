@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no"
+    />
+    <meta name="theme-color" content="#ffffff" />
+    <script>
+      // apply saved theme before paint (avoid flash)
+      (function () {
+        try {
+          var t = localStorage.getItem('theme');
+          if (t === 'dark' || t === 'light') document.documentElement.setAttribute('data-theme', t);
+        } catch (e) {}
+      })();
+    </script>
+    <title>Avi Ashkenazi — superavi</title>
+    <meta
+      name="description"
+      content="Avi Ashkenazi is a designer and technologist. Writing, talks, tools, projects and photography."
+    />
+    <meta property="og:title" content="Avi Ashkenazi — superavi" />
+    <meta
+      property="og:description"
+      content="Designer and technologist. Writing, talks, tools and work."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://superavi.com" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/favicon.svg" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

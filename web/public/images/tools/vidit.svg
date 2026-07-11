@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600">
+  <rect width="800" height="600" fill="#f2f2f2"/>
+  <rect x="0.5" y="0.5" width="799" height="599" fill="none" stroke="#cccccc"/>
+  <text x="48" y="540" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-weight="500" font-size="120" letter-spacing="-3" fill="#111111">Vidit</text>
+  <text x="48" y="80" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="22" letter-spacing="3" fill="#999999">VIDEO EDITOR</text>
+</svg>

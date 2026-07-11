@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" width="1600" height="900">
+  <rect width="1600" height="900" fill="#f2f2f2"/>
+  <rect x="0.5" y="0.5" width="1599" height="899" fill="none" stroke="#cccccc"/>
+  <text x="80" y="500" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-weight="500" font-size="150" letter-spacing="-4" fill="#111111">Product Shots</text>
+  <text x="80" y="130" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="30" letter-spacing="4" fill="#999999">COMING SOON</text>
+</svg>
