@@ -751,13 +751,30 @@ struct PlayerDetailContent: View {
                         .foregroundStyle(.secondary)
                 }
                 // Titles-only shows just the headline — offer to pull in the rest
-                // of the article (and read it) for this one item, on demand.
-                if isActive && hideBody && player.expandProvider != nil {
-                    Button {
-                        player.expandCurrentItem()
-                    } label: {
-                        Label("Read full article", systemImage: "text.append")
-                            .font(.subheadline.weight(.medium))
+                // of the article (and read it) for this one item, on demand, plus a
+                // quick way to copy its link to share.
+                if isActive && hideBody {
+                    HStack(spacing: 10) {
+                        if player.expandProvider != nil {
+                            Button {
+                                player.expandCurrentItem()
+                            } label: {
+                                Label("Read full article", systemImage: "text.append")
+                                    .font(.subheadline.weight(.medium))
+                            }
+                        }
+                        if let articleURL {
+                            Button {
+                                UIPasteboard.general.url = articleURL
+                                UINotificationFeedbackGenerator().notificationOccurred(.success)
+                            } label: {
+                                Label("Copy Link", systemImage: "doc.on.doc")
+                                    .font(.caption)
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                            .tint(.secondary)
+                        }
                     }
                     .padding(.top, 4)
                 }
