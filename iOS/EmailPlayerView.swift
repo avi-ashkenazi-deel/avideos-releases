@@ -91,6 +91,14 @@ struct PlayerDetailContent: View {
         return url
     }
 
+    /// This email's own "read it on the web" link (e.g. a Substack post whose
+    /// headline links to the web version) — only meaningful for regular mail;
+    /// feed items already have their own dedicated button via `articleURL`.
+    private var emailCanonicalURL: URL? {
+        guard articleURL == nil else { return nil }
+        return player.staged?.canonicalURL ?? player.parsed?.canonicalURL
+    }
+
     // The iPad reading pane is much wider than an iPhone, so the same point size
     // looks small there. Scale the reading text up on iPad (every size, including
     // Extra Large) while leaving the iPhone sizes untouched.
@@ -245,7 +253,26 @@ struct PlayerDetailContent: View {
                 .accessibilityLabel("Open the full article in the browser")
             }
         }
-        if !currentLinks.isEmpty {
+        if let emailCanonicalURL {
+            // This email's headline links to the post itself (Substack-style) —
+            // open that directly rather than making the listener dig through
+            // every link in the body for the one that's actually the article.
+            ToolbarItem(placement: .topBarTrailing) {
+                Button { startBrowser(emailCanonicalURL) } label: {
+                    Image(systemName: "link")
+                }
+                .accessibilityLabel("Open this email's post in the browser")
+                .contextMenu {
+                    if !currentLinks.isEmpty {
+                        Button {
+                            showLinks = true
+                        } label: {
+                            Label("See all links in this email", systemImage: "list.bullet")
+                        }
+                    }
+                }
+            }
+        } else if !currentLinks.isEmpty {
             ToolbarItem(placement: .topBarTrailing) {
                 Button { showLinks = true } label: {
                     Image(systemName: "link")
@@ -893,10 +920,17 @@ struct PlayerDetailContent: View {
                 // appear — freeze auto-scroll until the decision is made (or a
                 // timeout). Scoped to just this row (not the whole transcript)
                 // so every other paragraph's plain tap has nothing extra to
-                // arbitrate against. Timed to land at roughly the same moment as
-                // the system's own long-press recognition, not before it.
+                // arbitrate against. Must win the race against the system's own
+                // long-press-to-menu recognition (which takes ~0.4-0.5s) with
+                // real margin — landing at the same time (as a prior version of
+                // this did, at 0.5s) was still too late: one more auto-scroll
+                // could land in that gap, animating the transcript to a new
+                // position while the menu's frozen preview still showed the old
+                // one — exactly the double-exposed text this fixes. 0.15s is
+                // comfortably past a quick tap (which releases well under that)
+                // but well ahead of the menu.
                 .simultaneousGesture(
-                    LongPressGesture(minimumDuration: 0.5).onEnded { _ in beginScrollHold() }
+                    LongPressGesture(minimumDuration: 0.15).onEnded { _ in beginScrollHold() }
                 )
         case .image(let image):
             ImageBlockView(image: image, isCurrent: isCurrent) {

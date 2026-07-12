@@ -112,11 +112,18 @@ struct ParsedEmail: Identifiable, Sendable {
     let blocks: [ContentBlock]
     /// Links discovered in the body, in order of appearance, deduped by URL.
     let links: [EmailLink]
+    /// This email's own "read it on the web" link — the one in `links` whose
+    /// visible text matches the subject line (nearly every newsletter, Substack
+    /// included, makes its headline a link to the web version of the post).
+    /// Nil for plain emails with no such link. Lets the reader's link button
+    /// jump straight to *this* post instead of listing every link in the body.
+    let canonicalURL: URL?
 
-    init(email: Email, blocks: [ContentBlock], links: [EmailLink] = []) {
+    init(email: Email, blocks: [ContentBlock], links: [EmailLink] = [], canonicalURL: URL? = nil) {
         self.email = email
         self.blocks = blocks
         self.links = links
+        self.canonicalURL = canonicalURL
     }
 
     var sentenceCount: Int {

@@ -28,7 +28,27 @@ enum EmailParser {
         let finalBlocks = kept.isEmpty
             ? sentences(from: email.snippet, startIndex: 0)
             : kept
-        return ParsedEmail(email: email, blocks: finalBlocks, links: links)
+        let canonicalURL = findCanonicalLink(links: links, subject: email.subject)
+        return ParsedEmail(email: email, blocks: finalBlocks, links: links, canonicalURL: canonicalURL)
+    }
+
+    /// The link whose visible text matches the subject line — virtually every
+    /// newsletter (Substack included) makes its headline a link to the post's
+    /// own web page, so this reliably finds "this email's own link" without
+    /// guessing at domains or URL shapes. Exact match first, then a loose
+    /// contains-either-way match (an aggregator/reader can trim or requote the
+    /// subject slightly); nil when nothing lines up closely enough.
+    private static func findCanonicalLink(links: [EmailLink], subject: String) -> URL? {
+        let normalizedSubject = normalized(subject)
+        guard normalizedSubject.count >= 6 else { return nil }
+        if let exact = links.first(where: { normalized($0.text) == normalizedSubject }) {
+            return exact.url
+        }
+        return links.first {
+            let t = normalized($0.text)
+            guard t.count >= 6 else { return false }
+            return t.contains(normalizedSubject) || normalizedSubject.contains(t)
+        }?.url
     }
 
     // MARK: - Links
