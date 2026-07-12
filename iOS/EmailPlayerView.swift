@@ -422,7 +422,11 @@ struct PlayerDetailContent: View {
     /// threshold commits the swipe, otherwise it springs back. Pure navigation:
     /// it never marks anything read.
     private var itemDragGesture: some Gesture {
-        DragGesture(minimumDistance: 12)
+        // 24pt, not the ~12pt used while first building this: a smaller threshold
+        // let the natural tremor of holding a finger still for a long-press (to
+        // mute a line) get misread as the start of a swipe, which fought with —
+        // and could suppress — the system's long-press-to-context-menu gesture.
+        DragGesture(minimumDistance: 24)
             .onChanged { value in
                 guard player.canMoveBetweenItems, !isSettling else { return }
                 let dx = value.translation.width
@@ -599,9 +603,12 @@ struct PlayerDetailContent: View {
             // works; we only act on clearly-horizontal drags.
             .simultaneousGesture(itemDragGesture)
             // A long-press means the mute menu is about to appear — freeze the
-            // auto-scroll until the decision is made (or a timeout).
+            // auto-scroll until the decision is made (or a timeout). Timed to
+            // land at roughly the same moment as the system's own long-press
+            // recognition (not before it), so this never competes with — or
+            // pre-empts — the per-sentence context menu actually appearing.
             .simultaneousGesture(
-                LongPressGesture(minimumDuration: 0.35).onEnded { _ in beginScrollHold() }
+                LongPressGesture(minimumDuration: 0.5).onEnded { _ in beginScrollHold() }
             )
         }
     }
