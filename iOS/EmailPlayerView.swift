@@ -600,16 +600,12 @@ struct PlayerDetailContent: View {
             }
             // Swipe left → next item, right → previous — pure navigation that
             // doesn't mark anything read. Simultaneous so vertical scrolling still
-            // works; we only act on clearly-horizontal drags.
+            // works; we only act on clearly-horizontal drags. This is the only
+            // extra gesture recognizer on the whole scroll surface — the
+            // scroll-hold long-press below is scoped to individual sentences
+            // instead of the whole view, so a plain tap on any untouched
+            // paragraph doesn't have to arbitrate against it.
             .simultaneousGesture(itemDragGesture)
-            // A long-press means the mute menu is about to appear — freeze the
-            // auto-scroll until the decision is made (or a timeout). Timed to
-            // land at roughly the same moment as the system's own long-press
-            // recognition (not before it), so this never competes with — or
-            // pre-empts — the per-sentence context menu actually appearing.
-            .simultaneousGesture(
-                LongPressGesture(minimumDuration: 0.5).onEnded { _ in beginScrollHold() }
-            )
         }
     }
 
@@ -893,6 +889,15 @@ struct PlayerDetailContent: View {
                     else if isActive { player.jump(toBlock: index) }
                 }
                 .contextMenu { skipMenu(for: sentence, isSkipped: skipped) }
+                // A long-press on THIS sentence means its mute menu is about to
+                // appear — freeze auto-scroll until the decision is made (or a
+                // timeout). Scoped to just this row (not the whole transcript)
+                // so every other paragraph's plain tap has nothing extra to
+                // arbitrate against. Timed to land at roughly the same moment as
+                // the system's own long-press recognition, not before it.
+                .simultaneousGesture(
+                    LongPressGesture(minimumDuration: 0.5).onEnded { _ in beginScrollHold() }
+                )
         case .image(let image):
             ImageBlockView(image: image, isCurrent: isCurrent) {
                 player.skipImage()
