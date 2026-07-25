@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Deliberately NOT sandboxed: the app installs the CoreAudio driver with
+	     an admin prompt, hosts third-party Audio Units, and writes recordings
+	     anywhere the user chooses. Distribution is Developer ID + notarization
+	     (hardened runtime is enabled in build settings). -->
+	<key>com.apple.developer.system-extension.install</key>
+	<true/>
+	<!-- Hardened-runtime relaxations required to host third-party Audio Unit
+	     plug-ins (they are separately signed executables loaded in-process). -->
+	<key>com.apple.security.cs.disable-library-validation</key>
+	<true/>
+	<key>com.apple.security.device.audio-input</key>
+	<true/>
+	<key>com.apple.security.device.camera</key>
+	<true/>
+</dict>
+</plist>
