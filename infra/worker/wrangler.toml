@@ -1,0 +1,26 @@
+name = "avideos-worker"
+main = "src/index.ts"
+compatibility_date = "2025-05-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Non-secret configuration. Override per environment as needed.
+[vars]
+# LiveKit signalling URL handed to clients (wss://...).
+LIVEKIT_URL = "wss://your-project.livekit.cloud"
+# Origin of the Cloudflare Pages guest site, used to build invite URLs.
+PAGES_ORIGIN = "https://avideos-guest.pages.dev"
+# Cloudflare account id (for the R2 S3-compatible endpoint used in presigning).
+R2_ACCOUNT_ID = "YOUR_CLOUDFLARE_ACCOUNT_ID"
+# Must match the bucket bound below.
+R2_BUCKET_NAME = "avideos-recordings"
+
+# Secrets — set with `wrangler secret put <NAME>` (never in this file):
+#   LIVEKIT_API_KEY
+#   LIVEKIT_API_SECRET
+#   HOST_KEY
+#   R2_ACCESS_KEY_ID
+#   R2_SECRET_ACCESS_KEY
+
+[[r2_buckets]]
+binding = "RECORDINGS"
+bucket_name = "avideos-recordings"

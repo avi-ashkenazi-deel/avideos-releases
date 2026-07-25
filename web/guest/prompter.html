@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="dark" />
+  <title>AVideos Studio — Prompter Remote</title>
+  <link rel="stylesheet" href="./guest.css" />
+  <script type="importmap">
+    {
+      "imports": {
+        "livekit-client": "https://esm.sh/livekit-client@2.21.0?bundle"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div id="error-banner" class="error-banner hidden" role="alert">
+    <span id="error-text"></span>
+    <button id="error-dismiss" class="ghost" aria-label="Dismiss">✕</button>
+  </div>
+
+  <main class="screen">
+    <div class="prompter-layout">
+      <div class="card">
+        <h1>Prompter Remote</h1>
+        <div class="status-line">
+          <span id="conn-state" data-state="">connecting…</span>
+          <span id="section-state">no script loaded</span>
+        </div>
+      </div>
+
+      <button id="play-btn" class="big-btn" disabled>▶ Play</button>
+
+      <div class="speed-row">
+        <button id="speed-down" disabled>− slower</button>
+        <span id="speed-value" class="speed-value">1.0×</span>
+        <button id="speed-up" disabled>+ faster</button>
+      </div>
+
+      <div class="card">
+        <label for="section-select">Jump to section</label>
+        <select id="section-select" disabled>
+          <option value="">Waiting for host…</option>
+        </select>
+      </div>
+    </div>
+  </main>
+
+  <script type="module" src="./prompter.js"></script>
+</body>
+</html>

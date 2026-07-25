@@ -1,0 +1,21 @@
+{
+  "name": "avideos-worker",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AVideos Studio backend: sessions, LiveKit tokens, R2 presigning, manifest store.",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "aws4fetch": "^1.0.20",
+    "livekit-server-sdk": "^2.13.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260722.1",
+    "typescript": "^5.8.3",
+    "wrangler": "^4.24.0"
+  }
+}

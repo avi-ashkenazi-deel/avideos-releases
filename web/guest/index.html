@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="dark" />
+  <title>AVideos Studio — Guest</title>
+  <link rel="stylesheet" href="./guest.css" />
+  <script type="importmap">
+    {
+      "imports": {
+        "livekit-client": "https://esm.sh/livekit-client@2.21.0?bundle"
+      }
+    }
+  </script>
+</head>
+<body>
+  <!-- Global error banner -->
+  <div id="error-banner" class="error-banner hidden" role="alert">
+    <span id="error-text"></span>
+    <button id="error-dismiss" class="ghost" aria-label="Dismiss">✕</button>
+  </div>
+
+  <!-- Browser gate: shown on non-Chromium browsers -->
+  <main id="gate" class="screen hidden">
+    <div class="card">
+      <h1>AVideos Studio</h1>
+      <h2>This browser can't record here</h2>
+      <p>
+        Recording sessions capture your camera in full quality on your machine while you talk,
+        which relies on recording features only Chromium-based browsers provide reliably
+        (WebM/VP9 chunked recording).
+      </p>
+      <p>
+        Please reopen this link in <strong>Google Chrome</strong>, <strong>Microsoft Edge</strong>,
+        <strong>Brave</strong> or <strong>Arc</strong>. Safari and Firefox are not supported.
+      </p>
+    </div>
+  </main>
+
+  <!-- Pre-join screen -->
+  <main id="prejoin" class="screen hidden">
+    <div class="card">
+      <h1>AVideos Studio</h1>
+      <p class="sub">You've been invited to a recorded session. Check your camera and mic, then join.</p>
+
+      <div class="preview-wrap">
+        <video id="preview" autoplay playsinline muted></video>
+        <span id="preview-hint" class="preview-hint">Starting camera…</span>
+      </div>
+
+      <label for="name">Your name</label>
+      <input id="name" type="text" maxlength="64" placeholder="e.g. Dana" autocomplete="name" />
+
+      <div class="row">
+        <div class="field">
+          <label for="mic-select">Microphone</label>
+          <select id="mic-select"></select>
+        </div>
+        <div class="field">
+          <label for="cam-select">Camera</label>
+          <select id="cam-select"></select>
+        </div>
+      </div>
+
+      <button id="join-btn" class="primary" disabled>Join session</button>
+      <p class="fineprint">
+        Your video and audio are recorded locally in high quality and uploaded securely while you talk.
+        Keep this tab open until uploads finish.
+      </p>
+    </div>
+  </main>
+
+  <!-- In-call screen -->
+  <main id="call" class="screen hidden">
+    <div class="call-layout">
+      <header class="call-header">
+        <span id="rec-indicator" class="rec-indicator">standby</span>
+        <span id="conn-state" class="conn-state" data-state="">connecting</span>
+        <button id="enable-audio" class="primary small hidden">Enable host audio</button>
+      </header>
+
+      <div class="stage">
+        <div class="stage-message">
+          <p>You're live in the session.</p>
+          <p class="dim">The host controls recording. Keep this tab open and in the foreground.</p>
+        </div>
+        <video id="local-video" autoplay playsinline muted></video>
+      </div>
+
+      <audio id="host-audio" autoplay></audio>
+
+      <div id="disk-warning" class="disk-warning hidden"></div>
+
+      <div class="upload-strip">
+        <div class="upload-track"><div id="upload-bar" class="upload-fill"></div></div>
+        <span id="upload-label" class="upload-label">No uploads yet</span>
+      </div>
+
+      <footer class="controls">
+        <button id="mic-btn">Mute mic</button>
+        <button id="cam-btn">Stop camera</button>
+        <button id="leave-btn" class="danger">Leave</button>
+      </footer>
+    </div>
+  </main>
+
+  <!-- Post-leave / upload-drain overlay -->
+  <main id="drain" class="screen hidden">
+    <div class="card">
+      <h2>Finishing your uploads</h2>
+      <div class="upload-track big"><div id="drain-bar" class="upload-fill"></div></div>
+      <p id="drain-label" class="sub">Uploading remaining chunks…</p>
+      <p class="fineprint">Everything is saved locally first — even if your network drops, nothing is lost.</p>
+    </div>
+  </main>
+
+  <script type="module" src="./guest.js"></script>
+</body>
+</html>
