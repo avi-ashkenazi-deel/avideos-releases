@@ -183,7 +183,9 @@ export class LocalRecorder extends EventTarget {
         state.chunkTimeline.push({ chunkIndex, sessionTimeMs: this.clock.now() });
       }
       try {
-        this.onChunk(this.takeId, kind, `${pad6(chunkIndex)}.webm`, event.data);
+        // Use the closed-over takeId: stop() nulls this.takeId before the
+        // recorder's final dataavailable fires.
+        this.onChunk(takeId, kind, `${pad6(chunkIndex)}.webm`, event.data);
       } catch (err) {
         this.dispatchEvent(
           new CustomEvent("error", { detail: { kind, message: `chunk handoff failed: ${err.message}` } }),
