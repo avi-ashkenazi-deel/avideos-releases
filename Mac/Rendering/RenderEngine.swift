@@ -119,7 +119,7 @@ final class RenderEngine {
         }
         planLock.unlock()
 
-        guard let (buffer, texture) = bufferPool.acquire() else {
+        guard let (buffer, texture, textureRef) = bufferPool.acquire() else {
             // Pool exhausted — a consumer is holding buffers. Drop, count, move on.
             droppedFrames += 1
             return
@@ -130,6 +130,9 @@ final class RenderEngine {
         // recycles when everyone releases. The handler must be registered by
         // the compositor before it commits the command buffer.
         let handOff: (MTLCommandBuffer) -> Void = { [weak self] _ in
+            // The CVMetalTexture wrapper must outlive the GPU's writes into
+            // the program texture (CVMetalTextureCache contract).
+            withExtendedLifetime(textureRef) {}
             guard let self else { return }
             self.consumerLock.lock()
             let targets = self.consumers

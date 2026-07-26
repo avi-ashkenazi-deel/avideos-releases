@@ -50,7 +50,9 @@ final class PixelBufferPool {
 
     /// A program buffer plus its Metal texture view, or nil when the pool is
     /// exhausted (consumers holding too many buffers) — callers drop the frame.
-    func acquire() -> (buffer: CVPixelBuffer, texture: MTLTexture)? {
+    /// `textureRef` is the CVMetalTexture wrapper backing `texture`; hold it
+    /// until the GPU finishes writing the frame (CVMetalTextureCache contract).
+    func acquire() -> (buffer: CVPixelBuffer, texture: MTLTexture, textureRef: CVMetalTexture)? {
         guard let pool else { return nil }
         var pb: CVPixelBuffer?
         // Enforce an allocation ceiling so a stuck consumer surfaces as
@@ -68,7 +70,7 @@ final class PixelBufferPool {
             nil, textureCache, buffer, nil, .bgra8Unorm,
             CVPixelBufferGetWidth(buffer), CVPixelBufferGetHeight(buffer), 0, &cvTexture)
         guard let cvTexture, let texture = CVMetalTextureGetTexture(cvTexture) else { return nil }
-        return (buffer, texture)
+        return (buffer, texture, cvTexture)
     }
 
     /// Flushes the Metal texture cache (call on canvas-size changes).

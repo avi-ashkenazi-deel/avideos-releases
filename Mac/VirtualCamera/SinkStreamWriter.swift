@@ -27,7 +27,8 @@ final class SinkStreamWriter {
         }
     }
 
-    /// Must match CameraConfig.legacyDeviceUID in the extension.
+    /// Must match CameraConfig.legacyDeviceID in the extension
+    /// (CameraExtension/ExtensionDeviceSource.swift).
     static let deviceUID = "com.aviashkenazi.avideos.cameraextension.device"
 
     private var deviceID: CMIODeviceID = 0
@@ -188,6 +189,12 @@ final class SinkStreamWriter {
     }
 
     private static func findSinkStream(device: CMIODeviceID) -> CMIOStreamID? {
+        // verify on Mac: the scope used to enumerate streams. Input scope may
+        // list only capture (device->host) streams on some macOS versions, in
+        // which case the sink stream would never be found. If connect() fails
+        // with sinkStreamNotFound while the extension is installed, switch to
+        // kCMIOObjectPropertyScopeWildcard here — the direction==1 filter
+        // below still picks the sink correctly from the full list.
         var address = CMIOObjectPropertyAddress(
             mSelector: CMIOObjectPropertySelector(kCMIODevicePropertyStreams),
             mScope: CMIOObjectPropertyScope(kCMIODevicePropertyScopeInput),

@@ -9,6 +9,10 @@ struct SourceFrame {
     let pixelBuffer: CVPixelBuffer?
     let texture: MTLTexture
     let presentationTime: CMTime
+    /// The CVMetalTexture wrapper backing `texture` when it came through a
+    /// CVMetalTextureCache — retained for as long as this frame is current
+    /// (CVMetalTextureCache contract). Nil for plain MTLTexture content.
+    var textureRef: CVMetalTexture? = nil
 }
 
 enum FrameSourceState: Equatable {
@@ -67,15 +71,18 @@ final class PixelBufferTextureConverter {
         CVMetalTextureCacheCreate(nil, nil, device, nil, &cache)
     }
 
-    func texture(from pixelBuffer: CVPixelBuffer) -> MTLTexture? {
+    /// Returns the texture plus its CVMetalTexture wrapper; keep the wrapper
+    /// alive (e.g. in the `SourceFrame`) while the texture is in use.
+    func texture(from pixelBuffer: CVPixelBuffer) -> (texture: MTLTexture, textureRef: CVMetalTexture)? {
         guard let cache else { return nil }
         var cvTexture: CVMetalTexture?
         let width = CVPixelBufferGetWidth(pixelBuffer)
         let height = CVPixelBufferGetHeight(pixelBuffer)
         let status = CVMetalTextureCacheCreateTextureFromImage(
             nil, cache, pixelBuffer, nil, .bgra8Unorm, width, height, 0, &cvTexture)
-        guard status == kCVReturnSuccess, let cvTexture else { return nil }
-        return CVMetalTextureGetTexture(cvTexture)
+        guard status == kCVReturnSuccess, let cvTexture,
+              let texture = CVMetalTextureGetTexture(cvTexture) else { return nil }
+        return (texture, cvTexture)
     }
 
     func flush() {

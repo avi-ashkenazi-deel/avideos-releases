@@ -73,11 +73,15 @@ final class SidechainDucker {
 
     private var currentGain: Float = 1
     private var timer: DispatchSourceTimer?
-    private let queue = DispatchQueue(label: "com.aviashkenazi.avideos.ducker", qos: .utility)
 
     func start() {
         stop()
-        let t = DispatchSource.makeTimerSource(queue: queue)
+        // Tick on the main queue: triggerLevel/applyGain are assigned by the
+        // @MainActor AudioEngineController and touch its MainActor-isolated
+        // state (graph strips, mic levels, config), so invoking them from a
+        // background queue would be a data race (and a strict-concurrency
+        // error). 60 Hz of envelope math is negligible on main.
+        let t = DispatchSource.makeTimerSource(queue: .main)
         t.schedule(deadline: .now(), repeating: 1.0 / 60.0)
         t.setEventHandler { [weak self] in
             self?.tick()

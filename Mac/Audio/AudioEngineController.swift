@@ -383,14 +383,15 @@ final class AudioEngineController {
 
     // MARK: - Devices
 
-    var outputDevices: [(uid: String, name: String)] {
-        deviceManager.outputDevices().map { ($0.uid, $0.name) }
+    // DeviceInfo (not tuples): the UI does `ForEach(..., id: \.uid)` and key
+    // paths can't refer to tuple elements — real properties are required.
+    var outputDevices: [AudioDeviceManager.DeviceInfo] {
+        deviceManager.outputDevices()
     }
 
-    var inputDevices: [(uid: String, name: String)] {
+    var inputDevices: [AudioDeviceManager.DeviceInfo] {
         deviceManager.inputDevices()
             .filter { $0.uid != DriverInstaller.microphoneUID && $0.uid != DriverInstaller.guestSendUID }
-            .map { ($0.uid, $0.name) }
     }
 
     func setMonitorDevice(uid: String?) {

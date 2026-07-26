@@ -2,6 +2,7 @@ import Foundation
 import AVFoundation
 import CoreMedia
 import Metal
+import QuartzCore   // CACurrentMediaTime for AVPlayerItemVideoOutput host-time mapping
 import os
 
 /// Video-file playback as a frame source. AVPlayerItemVideoOutput is a pull
@@ -90,10 +91,13 @@ final class MovieSource: FrameSource {
         let itemTime = output.itemTime(forHostTime: CACurrentMediaTime())
         guard output.hasNewPixelBuffer(forItemTime: itemTime),
               let pixelBuffer = output.copyPixelBuffer(forItemTime: itemTime, itemTimeForDisplay: nil),
-              let texture = converter.texture(from: pixelBuffer) else {
+              let converted = converter.texture(from: pixelBuffer) else {
             return lastFrame
         }
-        let frame = SourceFrame(pixelBuffer: pixelBuffer, texture: texture, presentationTime: time)
+        let frame = SourceFrame(pixelBuffer: pixelBuffer,
+                                texture: converted.texture,
+                                presentationTime: time,
+                                textureRef: converted.textureRef)
         lastFrame = frame
         return frame
     }

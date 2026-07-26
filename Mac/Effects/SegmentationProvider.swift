@@ -16,6 +16,10 @@ final class SegmentationProvider {
     private var textureCache: CVMetalTextureCache?
     private let maskLock = NSLock()
     private var latestMask: MTLTexture?
+    /// Keeps the CVMetalTexture wrapper — and through it the Vision mask's
+    /// pixel buffer — alive for as long as `latestMask` is sampled
+    /// (CVMetalTextureCache contract; nothing else retains the mask buffer).
+    private var latestMaskRef: CVMetalTexture?
     private var inFlight = false
 
     init(device: MTLDevice) {
@@ -57,9 +61,10 @@ final class SegmentationProvider {
                 try handler.perform([request])
                 guard let observation = request.results?.first else { return }
                 let maskBuffer = observation.pixelBuffer
-                if let texture = self.makeTexture(from: maskBuffer) {
+                if let (texture, textureRef) = self.makeTexture(from: maskBuffer) {
                     self.maskLock.lock()
                     self.latestMask = texture
+                    self.latestMaskRef = textureRef
                     self.maskLock.unlock()
                 }
             } catch {
@@ -68,14 +73,14 @@ final class SegmentationProvider {
         }
     }
 
-    private func makeTexture(from pixelBuffer: CVPixelBuffer) -> MTLTexture? {
+    private func makeTexture(from pixelBuffer: CVPixelBuffer) -> (MTLTexture, CVMetalTexture)? {
         guard let cache = textureCache else { return nil }
         var cvTexture: CVMetalTexture?
         let width = CVPixelBufferGetWidth(pixelBuffer)
         let height = CVPixelBufferGetHeight(pixelBuffer)
         CVMetalTextureCacheCreateTextureFromImage(
             nil, cache, pixelBuffer, nil, .r8Unorm, width, height, 0, &cvTexture)
-        guard let cvTexture else { return nil }
-        return CVMetalTextureGetTexture(cvTexture)
+        guard let cvTexture, let texture = CVMetalTextureGetTexture(cvTexture) else { return nil }
+        return (texture, cvTexture)
     }
 }

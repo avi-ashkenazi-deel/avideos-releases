@@ -145,6 +145,11 @@ fragment float4 composite_fragment(VSOut in [[stage_in]],
         case 100:
         case 200:
             color = contentTex.sample(s, in.uv);
+            // Content textures arrive premultiplied (chroma key, segmentation,
+            // Core Image outputs, web/text rasters; opaque camera/screen/movie
+            // frames have a == 1 and are unaffected). Un-premultiply here so
+            // the final premultiply below doesn't double-darken soft edges.
+            if (color.a > 1e-5) { color.rgb /= color.a; }
             color.rgb *= u.fillColorA.rgb;   // white unless deliberately tinted
             color.a *= u.fillColorA.a;
             break;

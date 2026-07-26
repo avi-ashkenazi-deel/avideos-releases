@@ -107,10 +107,11 @@ final class ScreenSource: NSObject, FrameSource, SCStreamOutput, SCStreamDelegat
         guard type == .screen,
               sampleBuffer.isValid,
               let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer),
-              let texture = converter.texture(from: pixelBuffer) else { return }
+              let converted = converter.texture(from: pixelBuffer) else { return }
         mailbox.put(SourceFrame(pixelBuffer: pixelBuffer,
-                                texture: texture,
-                                presentationTime: CMSampleBufferGetPresentationTimeStamp(sampleBuffer)))
+                                texture: converted.texture,
+                                presentationTime: CMSampleBufferGetPresentationTimeStamp(sampleBuffer),
+                                textureRef: converted.textureRef))
     }
 
     func stream(_ stream: SCStream, didStopWithError error: Error) {
