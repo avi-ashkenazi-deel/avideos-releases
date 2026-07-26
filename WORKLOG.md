@@ -9,6 +9,57 @@ A running log of what we've built and shipped.
   fields don't accept emojis. (Chat replies may still use them; this rule is
   specifically about text pasted into TestFlight / App Store Connect.)
 
+## 2026-07-26 — AVideos Studio: full v1 codebase (macOS live-streaming studio)
+
+New product in this repo (HearIt untouched): a macOS 14+ studio app in the
+StreamYard/Riverside/Ecamm class, authored end-to-end in one pass (~25k
+lines across Swift, Metal, C++, TypeScript, and JS). Not yet compiled on a
+Mac — first build pass should start from docs/DEV_SETUP.md and grep for
+"verify on Mac" comments marking API assumptions.
+
+- **Live core**: timer-driven render loop (keeps feeding Zoom while
+  occluded), Metal compositor with AE-style blend modes via ping-pong
+  passes, unit-coordinate document model, entry/exit animations (exit =
+  reversed entry), magic-move scene transitions matching the same
+  camera/guest/screen across layouts.
+- **Sources**: camera, ScreenCaptureKit, movie playback, offscreen
+  WKWebView overlays, LiveKit guest frames (NV12→BGRA kernel), images.
+- **Effects**: parametric chroma key, Vision virtual background, beautify,
+  contrast/sharpen — texture-in/texture-out, composable with blends.
+- **Virtual devices**: CMIO camera extension (sink-stream transport,
+  branded splash when idle) + our own libASPL loopback driver publishing
+  "AVideos Microphone" and "AVideos Guest Send" (mix-minus), installed
+  with one admin prompt.
+- **Audio**: three-engine graph (capture / mix hub / device feeders) over
+  lock-free rings; per-strip insert chains (Apple AUs with one-knob
+  macros + third-party AU hosting with their own UIs); soundboard with
+  hotkeys; gapless music; configurable sidechain ducking.
+- **Guests**: LiveKit room wiring with structural mix-minus (guest strips
+  never feed the guest bus), invite links + QR, data-channel mux for
+  recording control, upload health, and the teleprompter phone remote.
+- **Podcast mode**: dual MediaRecorders in the guest's browser (audio
+  always, video up to the camera's max ≤4K), IndexedDB-durable chunked
+  uploads to R2 through one Cloudflare Worker (also the LiveKit token
+  service), NTP-style session clock, host ProRes local recording,
+  least-squares drift-fit alignment applied in the ffmpeg import pass.
+- **Teleprompter**: floating sharingType-none panel (structurally can't
+  reach the program), WPM scroll engine, per-scene script binding,
+  phone/producer remote page.
+- **AI editor**: WhisperKit transcription, silence-snapped text-based
+  cutting, script alignment + take detection + Claude best-take assembly
+  (word-index contract, review-then-apply, everything recoverable),
+  filler/silence cleanup with micro-fades, word-by-word caption styles,
+  clip suggestions with virality ranking, moment search, auto-chapters,
+  exports (audio master, stems, video to 4K, vertical 9:16 with burned
+  captions + SRT/VTT).
+- **Clip studio + publish**: per-track scene analysis, smart reframe with
+  deadband/spring subject tracking and hard cuts on speaker change, brand
+  kit, B-roll suggestions, YouTube/TikTok upload with local scheduling.
+- **Build note**: five build subagents were killed mid-write by an org
+  spend limit partway through; all their modules were finished by hand in
+  the same session and contract-reconciled (ring-buffer API, mixer facade,
+  manifest patch shapes).
+
 ## 2026-06-08 — Paste-to-listen + RSS feeds tab
 
 - **Paste text → listen** (Saved): clipboard button in Saved opens a composer

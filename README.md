@@ -1,3 +1,41 @@
+# This repo: HearIt (iOS) + AVideos Studio (macOS)
+
+Two products share this repository and one XcodeGen `project.yml`:
+
+- **HearIt** — the shipped iPhone/iPad/Watch app that reads your inbox aloud
+  (everything below this section).
+- **AVideos Studio** — a macOS live-streaming studio (StreamYard/Riverside/
+  Ecamm class): scenes with overlays/effects/blend modes, a virtual camera +
+  virtual microphone for Zoom/Meet/Teams, an audio mixer with per-strip
+  effect inserts and sidechain ducking, browser guests over LiveKit,
+  Riverside-style local 4K recording with progressive upload, a teleprompter,
+  and a Descript-style AI editor (transcription, best-take assembly, filler/
+  silence cleanup, captions, clip suggestions, chapters, smart reframe,
+  publishing). Sources in `Mac/`, `CameraExtension/`, `driver/`, `web/`,
+  `infra/`; start at **[docs/DEV_SETUP.md](docs/DEV_SETUP.md)**.
+
+## AVideos Studio — feature → code map
+
+| Feature | Where |
+| --- | --- |
+| Scenes (camera / screen / movie / interview) + document model | `Mac/Model/`, `Mac/App/StudioController.swift` |
+| Metal compositor, blend modes, entry/exit animations, magic-move transitions | `Mac/Rendering/` |
+| Camera effects (chroma key, virtual background, beautify, contrast, sharpen) | `Mac/Effects/` |
+| Frame sources (camera, screen, movie, web overlays, guests, images) | `Mac/Sources/` |
+| Virtual camera (CMIO extension + sink-stream writer) | `CameraExtension/`, `Mac/VirtualCamera/` |
+| Virtual microphone + Guest Send loopback driver | `driver/`, `Mac/Audio/DriverInstaller.swift` |
+| Audio mixer, insert effects, AU hosting, soundboard, music, ducking | `Mac/Audio/` |
+| Remote guests (LiveKit) + invite links | `Mac/Guests/`, `web/guest/`, `infra/worker/` |
+| Program recording | `Mac/Recording/` |
+| Podcast mode (local 4K recording, chunked upload, drift-aligned import) | `Mac/Podcast/`, `web/guest/recorder.js`, `infra/worker/` |
+| Teleprompter (+ phone remote) | `Mac/Teleprompter/`, `web/guest/prompter.html` |
+| AI editor (transcribe, take selection, cleanup, captions, clips, chapters) | `Mac/PostEdit/` |
+| Smart reframe, scene analysis, brand kit, B-roll | `Mac/ClipStudio/` |
+| Publishing (YouTube/TikTok, scheduling) | `Mac/Publish/` |
+| Studio UI | `Mac/UI/` |
+
+---
+
 # HearIt
 
 Listen to your email. HearIt is an iPhone / iPad app (with an Apple Watch

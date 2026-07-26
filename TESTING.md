@@ -84,3 +84,43 @@ and anything **slow** or **draining battery**.
 - A few senders may show a generic globe instead of a logo.
 - The Apple Watch app isn't in this build yet.
 - Article text extraction is heuristic — odd pages may include some clutter.
+
+---
+
+# AVideos Studio (macOS) — tester guide
+
+Each phase's exit demo, as checkboxes. Requires a Mac (see docs/DEV_SETUP.md).
+
+## Live studio
+- [ ] Launch: camera scene shows your camera in the preview at 30fps (fps HUD top-left).
+- [ ] Install the camera extension (Setup tab) → "AVideos Camera" appears in Photo Booth, Zoom, and Google Meet; splash card shows when the app is closed.
+- [ ] Add a text element → drag/resize/rotate on canvas; toggle Hide/Show and watch the slide-in/out animation reverse itself.
+- [ ] Give a shape an animated fill + a video stroke; set blend mode to Multiply over the camera.
+- [ ] Effects tab: chroma key removes a green screen; virtual background blurs/replaces without one; beautify smooths only the face.
+- [ ] Switch Camera → Screen Share → Interview: magic move glides shared tiles, others animate in/out.
+
+## Audio
+- [ ] Music plays to headphones with a working fader; talking ducks the music (−12dB default) and it recovers smoothly.
+- [ ] Sound pads fire instantly (⌥1…⌥9), retrigger steals oldest voice.
+- [ ] Add a Compressor insert on the mic; macro knob audibly changes it; a third-party AU opens its own UI.
+- [ ] Install the virtual mic (Setup) → Zoom hears mic+music+pads through "AVideos Microphone".
+- [ ] Record while live → .mov in ~/Movies/AVideos plays with A/V in sync (clap test).
+
+## Guests & podcast mode
+- [ ] Start a guest session → invite link/QR joins from a Chromium browser; guest appears in the Interview grid and the mixer.
+- [ ] With headphones off on both ends: no echo (guest never hears themselves — mix-minus).
+- [ ] Record Take → guest's tab shows REC + upload %; kill the guest tab mid-take, reopen → recording resumes, at most ~5s lost.
+- [ ] Sessions library: Download & Import All → aligned .movs; two-device clap within ~30ms at minute 0 and minute 30.
+
+## Teleprompter
+- [ ] Toggle prompter (⇧⌘T): floats above everything, scrolls at set WPM, mirrors, click-through works.
+- [ ] Share your screen in Zoom: the prompter is NOT visible in the share, and never in the program.
+- [ ] Open prompter.html on a phone → play/pause/speed/jump control the panel.
+
+## Edit mode
+- [ ] Open a session in the editor → tracks left, transcript center, preview right, timeline bottom.
+- [ ] Transcribe → click a word seeks; select words + Delete cuts them cleanly (snapped to silence); click struck text recovers.
+- [ ] Clean Up removes fillers and tightens pauses; cuts are inaudible (micro-fades).
+- [ ] Record 3 takes of a scripted intro with flubs → AI Edit proposes the best take; Apply, then recover a rejected take.
+- [ ] Suggest Clips → ranked list; Export Vertical produces 9:16 with word-by-word captions.
+- [ ] Chapters → YouTube-format list lands on the clipboard and exports as a sidecar.
