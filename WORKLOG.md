@@ -9,6 +9,39 @@ A running log of what we've built and shipped.
   fields don't accept emojis. (Chat replies may still use them; this rule is
   specifically about text pasted into TestFlight / App Store Connect.)
 
+## 2026-07-26 — AVideos Studio: six-cluster review & consistency pass
+
+Parallel reviewer agents swept the uncompiled codebase, one per seam-heavy
+cluster (rendering/sources/effects, audio, guests/podcast/backend,
+post-edit, app/UI wiring, extension/driver/web). Clear-cut defects were
+fixed; platform-dependent assumptions got "verify on Mac" comments. The
+worker passes `tsc --noEmit`; all guest JS passes `node --check`.
+
+Highlights of what was caught before ever reaching a compiler:
+
+- **Manifest contract**: the Mac decoder expected takes' tracks as a map;
+  the worker writes an array — every session decode would have failed.
+  Several fields made optional to match what guests actually send.
+- **GPU lifetimes**: CVMetalTexture wrappers were dropped while the GPU
+  still read their textures (pixel-buffer pool, segmentation mask, all
+  converter-based sources) — now retained per the texture-cache contract.
+- **Compositor**: content textures arrive premultiplied; the fragment
+  shader premultiplied again, darkening every soft edge. Un-premultiply
+  added. Reserved MSL word `half` used as a local; renamed.
+- **Concurrency**: sidechain ducker's envelope timer ran off-main while
+  mutating MainActor state; device-list facade returned tuples that
+  `ForEach(id:)` can't key-path. Ten files used `@Observable` without
+  importing Observation.
+- **Layout cues**: model treated `atTime` as edited-timeline seconds while
+  every writer and the timeline UI used source seconds — cues are now
+  canonically source-anchored and mapped through the EDL at composition
+  time (cues inside cuts snap forward to the next enabled clip).
+- **Podcast recording**: the browser recorder nulled its take id before
+  the final chunk flushed, orphaning the last ~5s of every take.
+
+Known deploy note: the R2 bucket needs a CORS policy allowing PUTs from
+the guest-page origin (Cloudflare dashboard, not in-repo).
+
 ## 2026-07-26 — AVideos Studio: full v1 codebase (macOS live-streaming studio)
 
 New product in this repo (HearIt untouched): a macOS 14+ studio app in the

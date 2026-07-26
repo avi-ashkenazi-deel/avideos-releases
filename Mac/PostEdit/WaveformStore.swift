@@ -1,6 +1,7 @@
 import Foundation
 import AVFoundation
 import Accelerate
+import Observation
 import os
 
 /// Downsampled peak arrays for timeline drawing, generated once per track

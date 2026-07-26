@@ -58,7 +58,10 @@ final class CompositionBuilder {
     }
 
     static func defaultRenderSize(for project: EditProject) -> CGSize {
-        if case .verticalStacked = project.layoutCues.layout(at: 0) {
+        // Cues are source-time; edited t=0 may start mid-source (e.g. a
+        // clip sub-project trimmed to a suggestion's range).
+        let sourceStart = project.edl.mapTimelineToSource(0)
+        if case .verticalStacked = project.layoutCues.layout(at: sourceStart) {
             return CGSize(width: 1080, height: 1920)
         }
         return CGSize(width: 1920, height: 1080)
@@ -190,9 +193,25 @@ final class CompositionBuilder {
         videoComposition.frameDuration = CMTime(value: 1, timescale: 30)
 
         let duration = project.editedDuration
+        // Cues are source-time; the composition runs on the edited
+        // timeline. Map each cue through the EDL; a cue that falls inside
+        // a cut takes effect at the start of the next enabled clip.
+        let mappedCues: [LayoutCue] = project.layoutCues.compactMap { cue in
+            if let t = project.edl.mapSourceToTimeline(cue.atTime) {
+                return LayoutCue(id: cue.id, atTime: t, layout: cue.layout)
+            }
+            var acc = 0.0
+            for clip in project.edl.clips where clip.enabled {
+                if clip.sourceRange.lowerBound >= cue.atTime {
+                    return LayoutCue(id: cue.id, atTime: acc, layout: cue.layout)
+                }
+                acc += clip.duration
+            }
+            return nil   // no enabled content after the cue
+        }
         // Layout segments: boundaries at each cue time within (0, duration).
         var boundaries: [Double] = [0]
-        for cue in project.layoutCues.sorted(by: { $0.atTime < $1.atTime })
+        for cue in mappedCues.sorted(by: { $0.atTime < $1.atTime })
         where cue.atTime > 0 && cue.atTime < duration {
             boundaries.append(cue.atTime)
         }
@@ -223,7 +242,7 @@ final class CompositionBuilder {
                 timeRange: CMTimeRange(
                     start: CMTime(seconds: start, preferredTimescale: timescale),
                     end: CMTime(seconds: end, preferredTimescale: timescale)),
-                layout: project.layoutCues.layout(at: start, fallback: .grid),
+                layout: mappedCues.layout(at: start, fallback: .grid),
                 participantByTrackID: videoTrackParticipants,
                 participantOrder: orderedParticipants,
                 speakerTimeline: speakerTimeline,

@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 
 /// UI-facing state for one connected remote guest.
 @Observable

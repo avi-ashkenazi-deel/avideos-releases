@@ -1,5 +1,6 @@
 import Foundation
 import AuthenticationServices
+import Observation
 import os
 
 /// Direct publishing to social platforms. Each platform needs an app

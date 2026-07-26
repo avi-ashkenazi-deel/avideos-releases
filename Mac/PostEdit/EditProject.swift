@@ -338,11 +338,14 @@ extension ProgramLayout: Codable {
     }
 }
 
-/// A layout change on the *edited* timeline. The layout applies from
-/// `atTime` until the next cue (or program end).
+/// A layout change anchored to the *source* timeline, so cuts elsewhere in
+/// the program never detach a layout from the content it was set on. The
+/// layout applies from `atTime` until the next cue (or program end).
+/// Consumers working in edited time (CompositionBuilder) map cues through
+/// the EDL first.
 struct LayoutCue: Codable, Sendable, Identifiable, Equatable {
     var id: UUID
-    /// Edited-timeline seconds.
+    /// Source-timeline seconds.
     var atTime: Double
     var layout: ProgramLayout
 
@@ -354,12 +357,15 @@ struct LayoutCue: Codable, Sendable, Identifiable, Equatable {
 }
 
 extension Array where Element == LayoutCue {
-    /// The layout in effect at a given edited-timeline time.
-    func layout(at timelineTime: Double, fallback: ProgramLayout = .grid) -> ProgramLayout {
+    /// The layout in effect at a given time. Ordered lookup in whatever
+    /// timebase the cues in this array carry — pass a source time for
+    /// project cues, or an edited time for cues already mapped through
+    /// the EDL.
+    func layout(at time: Double, fallback: ProgramLayout = .grid) -> ProgramLayout {
         let sorted = self.sorted { $0.atTime < $1.atTime }
         var current = fallback
         for cue in sorted {
-            if cue.atTime <= timelineTime { current = cue.layout } else { break }
+            if cue.atTime <= time { current = cue.layout } else { break }
         }
         return current
     }

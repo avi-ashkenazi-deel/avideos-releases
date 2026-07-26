@@ -1,6 +1,7 @@
 import Foundation
 import AVFoundation
 import Combine
+import Observation
 import os
 
 /// The editor's preview transport: rebuilds the AVPlayer item from the
