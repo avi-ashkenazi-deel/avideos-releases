@@ -19,6 +19,7 @@ struct AVideosApp: App {
         Window("AVideos Studio", id: "studio") {
             MainWindow()
                 .environment(studio)
+                .environment(studio.audio)   // MixerPanelView reads AudioEngineController directly
                 .onAppear { appDelegate.studio = studio }
         }
         .windowResizability(.contentSize)
@@ -29,6 +30,7 @@ struct AVideosApp: App {
         Settings {
             SettingsView()
                 .environment(studio)
+                .environment(studio.audio)   // DriverStatusView subtree may resolve it too
         }
     }
 }

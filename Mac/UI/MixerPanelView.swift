@@ -225,7 +225,7 @@ private struct InsertChainView: View {
             if !thirdPartyEffects.isEmpty {
                 Menu("Audio Units…") {
                     ForEach(thirdPartyEffects) { component in
-                        Button("\(component.name) — \(component.manufacturer)") {
+                        Button("\(component.name) — \(component.manufacturerName)") {
                             audio.addThirdPartyInsert(component: component, to: strip)
                         }
                     }

@@ -6,8 +6,8 @@ import os
 /// Extracts a movie-scene AVPlayer's audio into the mixer via an
 /// MTAudioProcessingTap on the player item's audio mix: the tap's process
 /// callback receives PCM as the player renders it; we interleave it into the
-/// movie ring and MUTE the tap's output contribution is irrelevant because
-/// the player itself is muted — the mixer strip is the only audible path.
+/// movie ring, then zero-fill the tap's output buffers so the player's own
+/// device path stays silent — the mixer strip is the only audible path.
 final class MovieAudioTap {
     private let ring: RingBuffer
     private var currentPlayer: AVPlayer?
@@ -34,6 +34,11 @@ final class MovieAudioTap {
     /// Attaches to the player's current item. The player should stay muted
     /// (`player.isMuted = true`); the movie strip carries the audio.
     func attach(to player: AVPlayer) {
+        // verify on Mac: `asset.tracks(withMediaType:)` is the synchronous
+        // API, deprecated since macOS 13 (deprecation warning, not an error)
+        // and it returns [] if the asset's tracks aren't loaded yet — switch
+        // to `try await item.asset.loadTracks(withMediaType: .audio)` if
+        // attach races item readiness.
         guard let item = player.currentItem,
               let assetTrack = item.asset.tracks(withMediaType: .audio).first else {
             log.info("Movie has no audio track")

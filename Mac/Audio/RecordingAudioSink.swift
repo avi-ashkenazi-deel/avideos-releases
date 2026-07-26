@@ -95,6 +95,14 @@ final class RecordingAudioSink {
                                    sampleBufferOut: &sampleBuffer) == noErr,
               let sampleBuffer else { return nil }
 
+        // The ABL is canonical non-interleaved Float32 stereo (two buffers),
+        // matching the format description created from the buffer's own ASBD
+        // (kAudioFormatFlagIsNonInterleaved set), as this API requires.
+        // verify on Mac: AVAssetWriterInput accepts non-interleaved float
+        // LPCM input for AAC encode (it should — the writer converts);
+        // if appendAudio ever fails with -12780, pass
+        // kCMSampleBufferFlag_AudioBufferList_Assure16ByteAlignment in
+        // `flags` or interleave before appending.
         let status = CMSampleBufferSetDataBufferFromAudioBufferList(
             sampleBuffer,
             blockBufferAllocator: nil,

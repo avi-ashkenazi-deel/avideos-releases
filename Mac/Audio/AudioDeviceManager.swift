@@ -135,10 +135,17 @@ final class AudioDeviceManager {
         guard let uid else { return true }
         guard var deviceID = deviceID(forUID: uid) else { return false }
         guard let unit = engine.inputNode.audioUnit else { return false }
+        // kAudioOutputUnitProperty_CurrentDevice is a Global-scope property on
+        // element 0 of the AUHAL/voice-processing output unit, for BOTH input
+        // and output device selection (element 1 is only used with
+        // kAudioOutputUnitProperty_EnableIO; passing 1 here returns
+        // kAudioUnitErr_InvalidElement).
+        // verify on Mac: AVAudioEngine.inputNode device pinning takes effect
+        // before engine.start().
         let status = AudioUnitSetProperty(unit,
                                           kAudioOutputUnitProperty_CurrentDevice,
                                           kAudioUnitScope_Global,
-                                          1,
+                                          0,
                                           &deviceID,
                                           UInt32(MemoryLayout<AudioDeviceID>.size))
         if status != noErr {

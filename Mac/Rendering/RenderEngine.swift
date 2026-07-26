@@ -125,18 +125,11 @@ final class RenderEngine {
             return
         }
 
-        guard let commandBuffer = compositor.render(plan: plan,
-                                                    at: time,
-                                                    into: texture,
-                                                    sourceTextures: sourceTextureProvider) else {
-            droppedFrames += 1
-            return
-        }
-
         // Hand off to consumers once the GPU finishes the frame. Consumers
         // retain the CVPixelBuffer for as long as they need it; the pool
-        // recycles when everyone releases.
-        commandBuffer.addCompletedHandler { [weak self] _ in
+        // recycles when everyone releases. The handler must be registered by
+        // the compositor before it commits the command buffer.
+        let handOff: (MTLCommandBuffer) -> Void = { [weak self] _ in
             guard let self else { return }
             self.consumerLock.lock()
             let targets = self.consumers
@@ -144,6 +137,15 @@ final class RenderEngine {
             for consumer in targets {
                 consumer.consumeProgramFrame(buffer, texture: texture, at: time)
             }
+        }
+
+        guard compositor.render(plan: plan,
+                                at: time,
+                                into: texture,
+                                sourceTextures: sourceTextureProvider,
+                                onComplete: handOff) != nil else {
+            droppedFrames += 1
+            return
         }
 
         renderedFrames += 1

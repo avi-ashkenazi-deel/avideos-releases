@@ -123,15 +123,21 @@ final class Compositor {
                                                   texturePool: texturePool)
     }
 
-    /// Renders `plan` into `target` (the program texture). Returns the
-    /// command buffer (already committed) so the caller can add completion
-    /// handlers for buffer hand-off.
+    /// Renders `plan` into `target` (the program texture) and commits the
+    /// command buffer. `onComplete` is registered as a completion handler
+    /// *before* the commit — Metal forbids adding handlers to an already
+    /// committed buffer — so use it for buffer hand-off once the GPU
+    /// finishes the frame.
     @discardableResult
     func render(plan: RenderPlan,
                 at time: CMTime,
                 into target: MTLTexture,
-                sourceTextures: SourceTextureProvider) -> MTLCommandBuffer? {
+                sourceTextures: SourceTextureProvider,
+                onComplete: ((MTLCommandBuffer) -> Void)? = nil) -> MTLCommandBuffer? {
         guard let commandBuffer = commandQueue.makeCommandBuffer() else { return nil }
+        // Recycling before the GPU finishes is safe: pooled textures are only
+        // ever written/read by command buffers on this queue, which execute
+        // in commit order — next frame's reuse is ordered after this frame.
         defer { texturePool.recycleAll() }
 
         let now = time.seconds
@@ -231,6 +237,9 @@ final class Compositor {
             blit.endEncoding()
         }
 
+        if let onComplete {
+            commandBuffer.addCompletedHandler { onComplete($0) }
+        }
         commandBuffer.commit()
         return commandBuffer
     }

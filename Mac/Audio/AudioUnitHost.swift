@@ -26,7 +26,7 @@ final class AudioUnitHost {
     /// All installed third-party (and Apple) effect AUs, excluding the four
     /// we surface as built-ins.
     func availableThirdPartyEffects() -> [ComponentInfo] {
-        var description = AudioComponentDescription(
+        let description = AudioComponentDescription(
             componentType: kAudioUnitType_Effect,
             componentSubType: 0,
             componentManufacturer: 0,

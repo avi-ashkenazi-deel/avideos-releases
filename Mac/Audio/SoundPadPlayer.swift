@@ -100,7 +100,7 @@ final class SoundPadPlayer {
                           userInfo: [NSLocalizedDescriptionKey: "Sample too large"])
         }
         var fed = false
-        converter.convert(to: converted, error: nil) { _, outStatus in
+        converter.convert(to: converted, error: nil, withInputFrom: { _, outStatus in
             if fed {
                 outStatus.pointee = .endOfStream
                 return nil
@@ -108,7 +108,7 @@ final class SoundPadPlayer {
             fed = true
             outStatus.pointee = .haveData
             return fileBuffer
-        }
+        })
         buffers[pad.id] = converted
     }
 

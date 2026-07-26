@@ -3,6 +3,7 @@ import AppKit
 import CoreMedia
 import CoreVideo
 import Metal
+import Observation
 import os
 
 /// The app's live-mode hub: owns every subsystem, compiles render plans from

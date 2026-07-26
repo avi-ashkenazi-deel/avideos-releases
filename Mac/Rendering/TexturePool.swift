@@ -40,8 +40,12 @@ final class TexturePool {
     }
 
     /// Returns every checked-out texture to the free lists. Call once per
-    /// frame after the command buffer is committed — GPU work retains the
-    /// textures it references, so immediate recycling on the CPU is safe.
+    /// frame after the frame's commands are encoded. Immediate CPU-side
+    /// recycling is safe even while the GPU is still in flight, but ONLY
+    /// because every reader/writer of pooled textures encodes into command
+    /// buffers on the compositor's single queue, which execute in commit
+    /// order — a re-acquired texture is next touched by a later buffer.
+    /// Encoding pooled textures on any other queue would break this.
     func recycleAll() {
         lock.lock()
         defer { lock.unlock() }

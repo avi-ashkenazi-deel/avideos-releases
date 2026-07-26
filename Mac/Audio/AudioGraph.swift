@@ -90,6 +90,11 @@ final class AudioGraph {
         // Bus wiring.
         engine.connect(programMixer, to: engine.mainMixerNode, format: format)
         engine.connect(mixMinusMixer, to: engine.mainMixerNode, format: format)
+        // Deliberately `.volume` (AVAudioMixing — scales this node's
+        // contribution at the DESTINATION mixer's input bus), NOT
+        // `.outputVolume` (scales the node's own output, which the tap sees):
+        // the tap on mixMinusMixer must keep receiving full signal while the
+        // monitor path stays silent.
         mixMinusMixer.volume = 0   // pulled by the engine, silent on monitor
 
         // Static strips.
@@ -178,6 +183,12 @@ final class AudioGraph {
 
     /// AVAudioSourceNode that pulls interleaved frames from a ring and emits
     /// them non-interleaved (canonical). Ring zero-fills on underrun.
+    ///
+    /// `scratch` is a local `var` captured by the render closure: Swift boxes
+    /// it once at closure creation (heap-allocated then, kept alive by the
+    /// closure), so the render path itself never allocates — it only mutates
+    /// the pre-sized array in place. One box per source node, so concurrent
+    /// render callbacks of different nodes never share scratch.
     private func makeRingSource(ring: RingBuffer) -> AVAudioSourceNode {
         var scratch = [Float](repeating: 0, count: 8192 * 2)
         return AVAudioSourceNode(format: CanonicalAudio.format) { _, _, frameCount, audioBufferList -> OSStatus in
