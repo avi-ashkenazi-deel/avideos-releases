@@ -55,7 +55,7 @@ final class GuestAudioReceiver: AudioRenderer {
         }
         scratch.withUnsafeBufferPointer { buf in
             guard let base = buf.baseAddress else { return }
-            ring.write(frames: base, frameCount: frameCount)
+            _ = ring.write(interleaved: base, frameCount: frameCount)
         }
     }
 }
