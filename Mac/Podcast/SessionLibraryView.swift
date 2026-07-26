@@ -95,7 +95,8 @@ struct SessionLibraryView: View {
     }
 
     private func trackRow(_ track: TrackRecord, take: TakeRecord, session: RecordingSession) -> some View {
-        let key = SessionLibraryStore.TrackKey(takeId: take.id,
+        let key = SessionLibraryStore.TrackKey(sessionId: session.id,
+                                               takeId: take.id,
                                                participantId: track.participantId,
                                                kind: track.kind)
         let status = library.trackStatus[key]

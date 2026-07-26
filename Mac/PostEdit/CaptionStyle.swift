@@ -1,5 +1,6 @@
 import Foundation
 import CoreGraphics
+import CoreImage
 import CoreText
 import AppKit
 
@@ -87,6 +88,23 @@ extension CaptionStyle {
         let b = CGFloat(value & 0xFF) / 255
         return CGColor(srgbRed: r, green: g, blue: b, alpha: 1)
     }
+}
+
+/// Caption data handed to `LayoutVideoCompositor`: word timings already
+/// mapped to the *edited* timeline (the compositor's time base) plus the
+/// style. A plain value type so it is safe to share with the compositor's
+/// render queue.
+struct CaptionRenderContext: Sendable {
+    struct TimedWord: Sendable {
+        var text: String
+        /// Edited-timeline seconds.
+        var start: Double
+        var end: Double
+        var trackId: String
+    }
+
+    let words: [TimedWord]
+    let style: CaptionStyle
 }
 
 /// Draws captions for one moment in time into a CGContext (used by the
@@ -194,6 +212,42 @@ enum CaptionRenderer {
 
         ctx.textPosition = CGPoint(x: x, y: y)
         CTLineDraw(ctLine, ctx)
+    }
+
+    /// Compositor entry point: renders the caption visible at `time`
+    /// (edited-timeline seconds, matching the TimedWords) into a CIImage the
+    /// size of the canvas. Returns nil when no caption is on screen.
+    ///
+    /// Lines are regrouped per call; at 30fps with typical transcripts this
+    /// is cheap relative to the CoreImage compositing around it.
+    static func image(at time: Double,
+                      words: [CaptionRenderContext.TimedWord],
+                      style: CaptionStyle,
+                      canvasSize: CGSize) -> CIImage? {
+        let mapped = words.map {
+            Word(text: $0.text, start: $0.start, end: $0.end, confidence: 1, trackId: $0.trackId)
+        }
+        let captionLines = lines(from: mapped)
+        guard captionLines.contains(where: { time >= $0.start && time <= $0.end + 0.15 }) else {
+            return nil
+        }
+
+        let width = Int(canvasSize.width.rounded())
+        let height = Int(canvasSize.height.rounded())
+        guard width > 0, height > 0,
+              let colorSpace = CGColorSpace(name: CGColorSpace.sRGB),
+              let ctx = CGContext(data: nil,
+                                  width: width,
+                                  height: height,
+                                  bitsPerComponent: 8,
+                                  bytesPerRow: 0,
+                                  space: colorSpace,
+                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else {
+            return nil
+        }
+        draw(at: time, lines: captionLines, style: style, in: ctx, size: canvasSize)
+        guard let cgImage = ctx.makeImage() else { return nil }
+        return CIImage(cgImage: cgImage)
     }
 
     // MARK: - Sidecar export

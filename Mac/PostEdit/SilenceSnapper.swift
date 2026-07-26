@@ -40,6 +40,11 @@ final class SilenceSnapper {
         }
 
         let reader = try AVAssetReader(asset: asset)
+        // verify on Mac: (a) AVAssetReaderTrackOutput accepts AVSampleRateKey /
+        // AVNumberOfChannelsKey conversion for LPCM here (WaveformStore uses
+        // the same settings); (b) reader-vended LPCM block buffers are
+        // contiguous, which the offset-0 dataPointer + totalLength read below
+        // assumes — otherwise wrap in CMBlockBufferCreateContiguous first.
         let output = AVAssetReaderTrackOutput(track: track, outputSettings: [
             AVFormatIDKey: kAudioFormatLinearPCM,
             AVSampleRateKey: 48_000,

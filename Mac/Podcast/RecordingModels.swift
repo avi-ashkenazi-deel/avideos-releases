@@ -59,12 +59,17 @@ struct ClockAnchor: Codable, Sendable {
     var mediaTimeMs: Double
     var sessionTimeMs: Double
     /// Estimated ± error of the clock-sync offset when anchored.
-    var uncertaintyMs: Double
+    /// Optional: guest anchors (web/guest/recorder.js) carry only
+    /// {mediaTimeMs, sessionTimeMs}; the host recorder sets this.
+    var uncertaintyMs: Double?
 }
 
 struct ChunkStamp: Codable, Sendable {
     var chunkIndex: Int
-    var mediaTimeMs: Double
+    /// Optional: guest timeline entries (web/guest/recorder.js, worker
+    /// manifest.ts TimelineEntry) are {chunkIndex, sessionTimeMs} only; the
+    /// host recorder stamps mediaTimeMs too, enabling the drift fit.
+    var mediaTimeMs: Double?
     var sessionTimeMs: Double
 }
 

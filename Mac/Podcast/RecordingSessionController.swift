@@ -69,12 +69,24 @@ final class RecordingSessionController {
     }
 
     func endSession() {
+        // Tearing down before stopTake() completes would no-op the stop
+        // (stopTake guards on takeState) — guests would keep recording and
+        // the host writers would never finalize. Stop first, then clean up.
         if isTakeRunning {
-            Task { await stopTake() }
+            Task {
+                await stopTake()
+                finishEndSession()
+            }
+        } else {
+            finishEndSession()
         }
+    }
+
+    private func finishEndSession() {
         session = nil
         hostRecorder = nil
         api = nil
+        clockSync?.stop()
         clockSync = nil
         takeState = .idle
     }
@@ -171,12 +183,34 @@ final class RecordingSessionController {
     // MARK: - Post-session
 
     /// Refreshes the session from the remote manifest (guest tracks appear
-    /// as they finalize/upload).
+    /// as they finalize/upload). Local-only state — host track `localURL`s
+    /// and the host participant row (which never joins via the worker) — is
+    /// preserved across the replace, or downloads would be attempted for
+    /// host tracks that were never uploaded.
     func refreshFromManifest() async {
-        guard let api, let sessionId = session?.id else { return }
+        guard let api, let sessionId = session?.id, let current = session else { return }
         do {
             let remote = try await api.manifest(sessionId: sessionId)
-            session = remote.toRecordingSession()
+            var refreshed = remote.toRecordingSession()
+
+            for participant in current.participants
+            where !refreshed.participants.contains(where: { $0.id == participant.id }) {
+                refreshed.participants.append(participant)
+            }
+
+            for (takeIndex, take) in refreshed.takes.enumerated() {
+                guard let localTake = current.takes.first(where: { $0.id == take.id }) else { continue }
+                for (trackIndex, track) in take.tracks.enumerated() {
+                    if track.localURL == nil,
+                       let localURL = localTake.tracks.first(where: {
+                           $0.participantId == track.participantId && $0.kind == track.kind
+                       })?.localURL {
+                        refreshed.takes[takeIndex].tracks[trackIndex].localURL = localURL
+                    }
+                }
+            }
+
+            session = refreshed
         } catch {
             log.error("Manifest refresh failed: \(error.localizedDescription)")
         }

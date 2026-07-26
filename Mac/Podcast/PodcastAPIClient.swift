@@ -184,8 +184,9 @@ struct ManifestPatchResponse: Decodable, Sendable {
     var manifest: RemoteManifest
 }
 
-/// The worker's manifest document. Shape mirrors `RecordingSession`, except
-/// tracks are nested under takes keyed by (participantId, kind).
+/// The worker's manifest document (infra/worker/src/manifest.ts). Tracks are
+/// a flat ARRAY under each take; each track carries its own participantId +
+/// kind (the worker upserts on that pair, it does not key a map by it).
 struct RemoteManifest: Decodable, Sendable {
     var id: String?
     var sessionId: String?
@@ -198,8 +199,10 @@ struct RemoteManifest: Decodable, Sendable {
 
     struct RemoteTake: Decodable, Sendable {
         var id: String
-        var startedAtSession: Double
-        var tracks: [String: RemoteTrack]?
+        /// Absent when the take row was created implicitly by a track patch
+        /// arriving before the host's take patch (manifest.ts findOrCreateTake).
+        var startedAtSession: Double?
+        var tracks: [RemoteTrack]?
     }
 
     struct RemoteTrack: Decodable, Sendable {
@@ -214,16 +217,15 @@ struct RemoteManifest: Decodable, Sendable {
         var height: Int?
     }
 
-    /// Converts the wire manifest into the app model. Track identity prefers
-    /// the track object's own fields and falls back to parsing the map key.
+    /// Converts the wire manifest into the app model. Tracks missing their
+    /// identity pair (never produced by the worker) are dropped.
     func toRecordingSession() -> RecordingSession {
         let mappedTakes: [TakeRecord] = (takes ?? []).map { take in
-            let tracks: [TrackRecord] = (take.tracks ?? []).compactMap { key, remote in
-                let identity = Self.identity(fromKey: key, track: remote)
-                guard let identity else { return nil }
+            let tracks: [TrackRecord] = (take.tracks ?? []).compactMap { remote in
+                guard let participantId = remote.participantId, let kind = remote.kind else { return nil }
                 return TrackRecord(
-                    participantId: identity.participantId,
-                    kind: identity.kind,
+                    participantId: participantId,
+                    kind: kind,
                     anchor: remote.anchor,
                     chunkCount: remote.chunkCount ?? 0,
                     chunkTimeline: remote.chunkTimeline ?? [],
@@ -235,7 +237,7 @@ struct RemoteManifest: Decodable, Sendable {
                 )
             }
             .sorted { ($0.participantId, $0.kind.rawValue) < ($1.participantId, $1.kind.rawValue) }
-            return TakeRecord(id: take.id, startedAtSession: take.startedAtSession, tracks: tracks)
+            return TakeRecord(id: take.id, startedAtSession: take.startedAtSession ?? 0, tracks: tracks)
         }
         return RecordingSession(
             id: resolvedId,
@@ -244,23 +246,6 @@ struct RemoteManifest: Decodable, Sendable {
             participants: participants ?? [],
             takes: mappedTakes.sorted { $0.startedAtSession < $1.startedAtSession }
         )
-    }
-
-    // verify on Mac: exact track-map key format the worker emits. We accept
-    // "{participantId}:{kind}" and "{participantId}/{kind}" here.
-    private static func identity(fromKey key: String, track: RemoteTrack) -> (participantId: String, kind: TrackKind)? {
-        if let pid = track.participantId, let kind = track.kind {
-            return (pid, kind)
-        }
-        for separator: Character in [":", "/"] {
-            guard let splitIndex = key.lastIndex(of: separator) else { continue }
-            let pid = String(key[key.startIndex..<splitIndex])
-            let kindRaw = String(key[key.index(after: splitIndex)...])
-            if let kind = TrackKind(rawValue: kindRaw), !pid.isEmpty {
-                return (pid, kind)
-            }
-        }
-        return nil
     }
 }
 
@@ -440,8 +425,9 @@ struct PodcastAPIClient: Sendable {
 
     static let decoder: JSONDecoder = {
         let decoder = JSONDecoder()
-        // verify on Mac: worker date encoding. We accept epoch ms, epoch s,
-        // and ISO-8601 strings.
+        // The worker writes ISO-8601 strings with fractional seconds
+        // (manifest.ts: new Date().toISOString() for createdAt/joinedAt).
+        // Keep the lenient decode (epoch ms/s as well) for forward compat.
         decoder.dateDecodingStrategy = .custom { decoder in
             let container = try decoder.singleValueContainer()
             if let number = try? container.decode(Double.self) {

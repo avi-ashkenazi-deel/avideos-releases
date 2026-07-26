@@ -242,6 +242,10 @@ final class ExportService {
             }
         }
         defer { progressTask.cancel() }
+        // verify on Mac: `await session.export()` is the async import of
+        // exportAsynchronously(completionHandler:) and is available on
+        // macOS 14 (the states-based export(to:as:) replacement is 15+).
+        // session.progress/.error polling above is fine on 14, deprecated 15.
         await session.export()
         if let error = session.error {
             throw error

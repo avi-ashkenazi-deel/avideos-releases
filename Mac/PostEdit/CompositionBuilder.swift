@@ -384,11 +384,12 @@ final class LayoutVideoCompositor: NSObject, AVVideoCompositing {
             image = Self.aspectFill(frame, into: rect).composited(over: image)
         }
 
-        if let captions = instruction.captionContext {
-            let renderer = CaptionRenderer(style: captions.style)
-            if let overlay = renderer.image(at: time, words: captions.words, canvasSize: size) {
-                image = overlay.composited(over: image)
-            }
+        if let captions = instruction.captionContext,
+           let overlay = CaptionRenderer.image(at: time,
+                                               words: captions.words,
+                                               style: captions.style,
+                                               canvasSize: size) {
+            image = overlay.composited(over: image)
         }
 
         ciContext.render(image, to: output, bounds: canvas, colorSpace: CGColorSpaceCreateDeviceRGB())

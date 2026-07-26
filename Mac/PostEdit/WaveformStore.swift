@@ -32,7 +32,10 @@ final class WaveformStore {
         }
     }
 
-    private static func computePeaks(url: URL) async throws -> [Float] {
+    // nonisolated: a static member of a @MainActor class inherits MainActor
+    // isolation, which would hop this whole PCM decode back onto the main
+    // actor despite the detached task. It touches no shared state.
+    private nonisolated static func computePeaks(url: URL) async throws -> [Float] {
         let sidecar = url.deletingPathExtension().appendingPathExtension("peaks")
         if let cached = try? Data(contentsOf: sidecar), !cached.isEmpty {
             return cached.withUnsafeBytes { Array($0.bindMemory(to: Float.self)) }

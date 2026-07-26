@@ -33,6 +33,12 @@ final class PreviewPlayer {
     }
 
     deinit {
+        // deinit is nonisolated even in a @MainActor class. Swift 5.9 permits
+        // reading stored properties here (exclusive access during teardown),
+        // and removeTimeObserver is safe off the main thread.
+        // verify on Mac: if a future compiler mode rejects touching the
+        // MainActor-isolated `timeObserver` var from deinit, move observer
+        // ownership into a small nonisolated holder object.
         if let observer = timeObserver {
             player.removeTimeObserver(observer)
         }

@@ -34,8 +34,13 @@ struct LinearDriftAligner: TrackAligning {
 
         let baseOffset = (anchor.sessionTimeMs - anchor.mediaTimeMs) - takeStartSessionMs
 
-        // Need ≥3 stamps for a fit that beats the anchor alone.
-        let stamps = track.chunkTimeline
+        // Guest stamps (web/guest/recorder.js) carry no mediaTimeMs — only
+        // host stamps do. The fit needs (mediaTime, sessionTime) pairs and
+        // ≥3 stamps to beat the anchor alone; otherwise anchor-only.
+        let stamps: [(mediaTimeMs: Double, sessionTimeMs: Double)] = track.chunkTimeline.compactMap {
+            guard let mediaTimeMs = $0.mediaTimeMs else { return nil }
+            return (mediaTimeMs, $0.sessionTimeMs)
+        }
         guard stamps.count >= 3 else {
             return TrackAlignment(offsetMs: baseOffset, rateFactor: 1)
         }

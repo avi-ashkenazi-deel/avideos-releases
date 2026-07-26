@@ -87,7 +87,11 @@ final class MicCapture {
     }
 
     func stop() {
-        guard isRunning || engine.isRunning else { return }
+        // Always remove the tap, not just when running: start() installs the
+        // tap before engine.start(), so a failed start leaves a tap behind
+        // with isRunning == false — an early-out here would make the next
+        // start() install a second tap on the same bus (runtime exception).
+        // removeTap(onBus:) is a safe no-op when no tap is installed.
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
         ring.reset()
@@ -113,7 +117,7 @@ final class MicCapture {
         guard let converter, let converted = convertedBuffer else { return }
 
         var consumed = false
-        converter.convert(to: converted, error: nil) { _, outStatus in
+        converter.convert(to: converted, error: nil, withInputFrom: { _, outStatus in
             if consumed {
                 outStatus.pointee = .noDataNow
                 return nil
@@ -121,7 +125,7 @@ final class MicCapture {
             consumed = true
             outStatus.pointee = .haveData
             return buffer
-        }
+        })
 
         let frames = Int(converted.frameLength)
         guard frames > 0, let channels = converted.floatChannelData else { return }

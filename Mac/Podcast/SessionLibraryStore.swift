@@ -30,6 +30,7 @@ final class SessionLibraryStore {
     }
 
     struct TrackKey: Hashable {
+        let sessionId: String
         let takeId: String
         let participantId: String
         let kind: TrackKind
@@ -116,7 +117,8 @@ final class SessionLibraryStore {
 
         for take in session.takes {
             for track in take.tracks {
-                let key = TrackKey(takeId: take.id, participantId: track.participantId, kind: track.kind)
+                let key = TrackKey(sessionId: session.id, takeId: take.id,
+                                   participantId: track.participantId, kind: track.kind)
                 let name = session.participants.first { $0.id == track.participantId }?.displayName
                     ?? track.participantId
 
@@ -159,7 +161,8 @@ final class SessionLibraryStore {
 
     /// EditTracks already imported for a session (for "Open in Editor").
     func importedTracks(sessionId: String) -> [EditTrack] {
-        trackStatus.compactMap { _, status in
+        trackStatus.compactMap { key, status in
+            guard key.sessionId == sessionId else { return nil }
             if case .imported(let track) = status { return track }
             return nil
         }

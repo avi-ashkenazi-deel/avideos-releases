@@ -99,6 +99,18 @@ final class InsertChain {
         nodes[id]
     }
 
+    /// Strip teardown: detach every insert node from the engine (call before
+    /// detaching the strip's mixer/entry, e.g. when a guest leaves).
+    func detachAllNodes() {
+        if let engine {
+            for node in nodes.values where node.engine != nil {
+                engine.detach(node)
+            }
+        }
+        nodes.removeAll()
+        effects.removeAll()
+    }
+
     /// Snapshot each AU's fullState into the model for persistence.
     func capturedEffects() -> [InsertEffect] {
         effects.map { effect in

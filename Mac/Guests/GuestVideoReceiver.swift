@@ -1,4 +1,5 @@
 import Foundation
+import AVFoundation
 import CoreMedia
 import CoreVideo
 import LiveKit

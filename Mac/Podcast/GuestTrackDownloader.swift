@@ -31,8 +31,9 @@ final class GuestTrackDownloader {
                   onProgress: @escaping (Progress) -> Void) async throws -> URL {
         let prefix = "sessions/\(sessionId)/\(track.participantId)/\(takeId)/\(track.kind.rawValue)/"
         let listing = try await api.listDownloadKeys(sessionId: sessionId, prefix: prefix)
-        // Chunk keys are zero-padded (chunk-000042.webm) so a lexicographic
-        // sort IS index order; meta.json sorts after "chunk-" and is excluded.
+        // Chunk names are 6-digit zero-padded ("000042.webm", pad6 in
+        // web/guest/recorder.js) so a lexicographic sort IS index order;
+        // the sibling meta.json is excluded by the .webm filter.
         let chunkKeys = listing.keys
             .filter { $0.hasSuffix(".webm") }
             .sorted()

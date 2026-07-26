@@ -74,7 +74,6 @@ final class AudioGraph {
     let padsBus = AVAudioMixerNode()
     let musicBus = AVAudioMixerNode()
 
-    private var tapScratch = [Float](repeating: 0, count: 16384)
     private let log = Logger(subsystem: "com.aviashkenazi.avideos", category: "audiograph")
 
     // MARK: - Build
@@ -165,7 +164,8 @@ final class AudioGraph {
 
     func removeGuestStrip(identity: String) {
         guard let strip = strips.removeValue(forKey: .guest(identity)) else { return }
-        strip.mixer.removeTap(onBus: 0)
+        strip.mixer.removeTap(onBus: 0)          // taps off before detach
+        strip.inserts?.detachAllNodes()          // any insert AUs on the strip
         engine.detach(strip.mixer)
         engine.detach(strip.entry)
     }
@@ -209,10 +209,15 @@ final class AudioGraph {
     private func installBusTaps() {
         let format = CanonicalAudio.format
 
-        // ONE tap per node — multiplex inside it.
+        // ONE tap per node — multiplex inside it. Each tap owns its own
+        // interleave scratch (captured `var`, closure boxes it by reference,
+        // pre-sized so the steady-state render path never allocates): the two
+        // taps can fire concurrently on independent tap threads, so a single
+        // shared scratch array would be a data race.
+        var programScratch = [Float](repeating: 0, count: 16384)
         programMixer.installTap(onBus: 0, bufferSize: 512, format: format) { [weak self] buffer, time in
             guard let self else { return }
-            self.writeInterleaved(buffer, into: self.programRing)
+            Self.writeInterleaved(buffer, into: self.programRing, scratch: &programScratch)
             if self.recordingSink.isAttached {
                 self.recordingSink.ingest(buffer: buffer, time: time)
             }
@@ -228,29 +233,32 @@ final class AudioGraph {
             }
         }
 
+        var mixMinusScratch = [Float](repeating: 0, count: 16384)
         mixMinusMixer.installTap(onBus: 0, bufferSize: 512, format: format) { [weak self] buffer, _ in
             guard let self else { return }
-            self.writeInterleaved(buffer, into: self.mixMinusRing)
+            Self.writeInterleaved(buffer, into: self.mixMinusRing, scratch: &mixMinusScratch)
         }
     }
 
-    private func writeInterleaved(_ buffer: AVAudioPCMBuffer, into ring: RingBuffer) {
+    private static func writeInterleaved(_ buffer: AVAudioPCMBuffer,
+                                         into ring: RingBuffer,
+                                         scratch: inout [Float]) {
         guard let data = buffer.floatChannelData else { return }
         let frames = Int(buffer.frameLength)
         let needed = frames * 2
-        if tapScratch.count < needed {
-            tapScratch = [Float](repeating: 0, count: needed)
+        if scratch.count < needed {
+            scratch = [Float](repeating: 0, count: needed)
         }
         let left = data[0]
         let right = buffer.format.channelCount >= 2 ? data[1] : data[0]
-        tapScratch.withUnsafeMutableBufferPointer { out in
+        scratch.withUnsafeMutableBufferPointer { out in
             guard let base = out.baseAddress else { return }
             for i in 0..<frames {
                 base[i * 2] = left[i]
                 base[i * 2 + 1] = right[i]
             }
         }
-        tapScratch.withUnsafeBufferPointer { buf in
+        scratch.withUnsafeBufferPointer { buf in
             guard let base = buf.baseAddress else { return }
             _ = ring.write(interleaved: base, frameCount: frames)
         }

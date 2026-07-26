@@ -57,7 +57,9 @@ final class TranscriptEditModel {
             }
 
             let text = word.text + " "
-            let range = NSRange(location: result.length, length: text.count)
+            // NSRange is UTF-16 based (like NSAttributedString.length);
+            // `text.count` counts Characters and drifts on emoji/accents.
+            let range = NSRange(location: result.length, length: (text as NSString).length)
             result.append(NSAttributedString(string: text, attributes: attributes))
             newDisplays.append(WordDisplay(word: word, index: index, isCut: isCut,
                                            clipID: clip?.id, characterRange: range))

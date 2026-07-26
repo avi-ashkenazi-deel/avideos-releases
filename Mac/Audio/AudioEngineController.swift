@@ -12,6 +12,10 @@ final class AudioEngineController {
     // Names the UI references as nested types.
     typealias StripID = MixerStripID
     typealias AudioUnitComponentInfo = AudioUnitHost.ComponentInfo
+    // Module-qualified: a bare `typealias InsertEffect = InsertEffect` would
+    // be a circular reference inside this scope. (Module name = target name
+    // in project.yml.)
+    typealias InsertEffect = AVideosStudio.InsertEffect
 
     // MARK: - Subcomponents
 

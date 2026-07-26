@@ -396,11 +396,14 @@ struct EditProject: Codable, Sendable, Identifiable, Equatable {
     var chapters: [Chapter]
     var schemaVersion: Int
 
+    /// `edl` defaults to a fresh full-length EDL derived from the tracks, so
+    /// callers (e.g. StudioController.openEditor) can write
+    /// `EditProject(sessionId:name:tracks:)` without building one by hand.
     init(id: UUID = UUID(),
          sessionId: String,
          name: String,
          tracks: [EditTrack],
-         edl: EditDecisionList,
+         edl: EditDecisionList? = nil,
          layoutCues: [LayoutCue] = [],
          captions: CaptionStyle? = nil,
          transcript: Transcript? = nil,
@@ -410,7 +413,7 @@ struct EditProject: Codable, Sendable, Identifiable, Equatable {
         self.sessionId = sessionId
         self.name = name
         self.tracks = tracks
-        self.edl = edl
+        self.edl = edl ?? .initial(sourceDuration: tracks.map(\.duration).max() ?? 0)
         self.layoutCues = layoutCues
         self.captions = captions
         self.transcript = transcript

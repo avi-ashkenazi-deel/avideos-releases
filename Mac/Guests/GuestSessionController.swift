@@ -227,12 +227,15 @@ extension GuestSessionController: RoomDelegate {
                           didUnsubscribeTrack publication: RemoteTrackPublication) {
         Task { @MainActor in
             let identity = participant.identity?.stringValue ?? ""
-            if publication.track is RemoteVideoTrack {
+            // Key off publication.kind, not publication.track — the track
+            // reference may already be cleared by the time the unsubscribe
+            // callback fires, which would leak receivers/sources.
+            if publication.kind == .video {
                 self.videoReceivers.removeValue(forKey: identity)
                 self.unregisterSource?(.guest(identity: identity))
                 self.guests.first(where: { $0.identity == identity })?.hasVideo = false
             }
-            if publication.track is RemoteAudioTrack {
+            if publication.kind == .audio {
                 self.audioReceivers.removeValue(forKey: identity)
                 self.detachGuestAudio?(identity)
                 self.guests.first(where: { $0.identity == identity })?.hasAudio = false
