@@ -59,8 +59,11 @@ final class GuestSource: FrameSource {
         let format = CVPixelBufferGetPixelFormatType(pixelBuffer)
         switch format {
         case kCVPixelFormatType_32BGRA:
-            guard let texture = converter.texture(from: pixelBuffer) else { return }
-            mailbox.put(SourceFrame(pixelBuffer: pixelBuffer, texture: texture, presentationTime: time))
+            guard let converted = converter.texture(from: pixelBuffer) else { return }
+            mailbox.put(SourceFrame(pixelBuffer: pixelBuffer,
+                                    texture: converted.texture,
+                                    presentationTime: time,
+                                    textureRef: converted.textureRef))
         case kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,
              kCVPixelFormatType_420YpCbCr8BiPlanarFullRange:
             let fullRange = format == kCVPixelFormatType_420YpCbCr8BiPlanarFullRange
