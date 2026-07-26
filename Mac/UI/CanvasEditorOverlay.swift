@@ -87,7 +87,7 @@ private struct SelectionChrome: View {
                 .gesture(moveGesture)
 
             // Resize handles.
-            ForEach(Array(Handle.allCases.enumerated()), id: \.offset) { _, handle in
+            ForEach(Handle.allCases, id: \.self) { handle in
                 Circle()
                     .fill(Color.white)
                     .overlay(Circle().stroke(Color.accentColor, lineWidth: 1.5))

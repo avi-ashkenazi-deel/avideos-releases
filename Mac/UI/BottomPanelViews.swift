@@ -1,5 +1,6 @@
 import SwiftUI
 import UniformTypeIdentifiers
+import KeyboardShortcuts
 
 /// Soundboard grid: colored pads with hotkey badges + progress rings,
 /// drag-drop audio files to add.
@@ -63,6 +64,14 @@ private struct PadButton: View {
     @State private var renameText = ""
     @State private var isRenaming = false
 
+    /// The global hotkey currently bound to this pad's slot, e.g. "⌥3".
+    private var assignedShortcutBadge: String? {
+        guard let index = pad.hotkeyIndex,
+              let name = KeyboardShortcuts.Name.padSlot(hotkeyIndex: index),
+              let shortcut = KeyboardShortcuts.getShortcut(for: name) else { return nil }
+        return shortcut.description
+    }
+
     var body: some View {
         Button(action: play) {
             ZStack {
@@ -73,8 +82,11 @@ private struct PadButton: View {
                         .font(.caption.bold())
                         .lineLimit(2)
                         .multilineTextAlignment(.center)
-                    if let hotkey = pad.hotkeyIndex {
-                        Text("⌥\(hotkey)")
+                    // The real assigned combo, not an assumed one: the host can
+                    // rebind these in Settings → Shortcuts, and an unbound pad
+                    // must not advertise a key that does nothing.
+                    if let badge = assignedShortcutBadge {
+                        Text(badge)
                             .font(.system(size: 9, design: .monospaced))
                             .padding(.horizontal, 4)
                             .background(.black.opacity(0.3), in: Capsule())

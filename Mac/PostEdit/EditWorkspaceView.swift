@@ -24,6 +24,8 @@ struct EditWorkspaceView: View {
     @State private var showingClipStudio = false
     @State private var showingPublish = false
     @State private var publishQueue = PublishQueue()
+    @State private var undoStack: [EditSnapshot] = []
+    @State private var redoStack: [EditSnapshot] = []
     @State private var errorMessage: String?
 
 
@@ -67,11 +69,12 @@ struct EditWorkspaceView: View {
                                      }
                                  }
                              },
-                             onDeleteSelection: {},
+                             onDeleteSelection: { deleteTimelineSelection() },
                              onAddLayoutCue: { time, layout in
-                                 project.layoutCues.append(LayoutCue(atTime: time, layout: layout))
-                                 project.layoutCues.sort { $0.atTime < $1.atTime }
-                                 projectChanged()
+                                 performEdit {
+                                     project.layoutCues.append(LayoutCue(atTime: time, layout: layout))
+                                     project.layoutCues.sort { $0.atTime < $1.atTime }
+                                 }
                              })
                 .frame(minHeight: 150, idealHeight: 210)
         }
@@ -179,11 +182,16 @@ struct EditWorkspaceView: View {
 
             HStack {
                 Button { preview.stepFrame(forward: false) } label: { Image(systemName: "backward.frame") }
+                    .keyboardShortcut(.leftArrow, modifiers: [])
+                    .help("Step one frame back (←)")
                 Button { preview.playPause() } label: {
                     Image(systemName: preview.isPlaying ? "pause.fill" : "play.fill")
                 }
                 .keyboardShortcut(.space, modifiers: [])
+                .help("Play / pause (Space)")
                 Button { preview.stepFrame(forward: true) } label: { Image(systemName: "forward.frame") }
+                    .keyboardShortcut(.rightArrow, modifiers: [])
+                    .help("Step one frame forward (→)")
 
                 Text(timeString(preview.playheadSeconds) + " / " + timeString(project.editedDuration))
                     .font(.caption.monospacedDigit())
@@ -220,6 +228,24 @@ struct EditWorkspaceView: View {
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
         ToolbarItemGroup {
+            Button {
+                undo()
+            } label: {
+                Label("Undo", systemImage: "arrow.uturn.backward")
+            }
+            .keyboardShortcut("z", modifiers: [.command])
+            .disabled(undoStack.isEmpty)
+            .help("Undo the last edit (⌘Z)")
+
+            Button {
+                redo()
+            } label: {
+                Label("Redo", systemImage: "arrow.uturn.forward")
+            }
+            .keyboardShortcut("z", modifiers: [.command, .shift])
+            .disabled(redoStack.isEmpty)
+            .help("Redo (⇧⌘Z)")
+
             Menu {
                 Button("Remove Filler Words") { Task { await cleanup(fillers: true, silences: false) } }
                 Button("Tighten Silences") { Task { await cleanup(fillers: false, silences: true) } }
@@ -502,9 +528,61 @@ struct EditWorkspaceView: View {
 
     // MARK: - EDL mutation plumbing
 
-    private func mutateEDL(_ mutate: (inout EditDecisionList) -> Void) {
-        mutate(&project.edl)
+    /// The undoable slice of the project. Tracks and transcript are imported
+    /// or derived data, so they are deliberately not part of a snapshot.
+    struct EditSnapshot {
+        var edl: EditDecisionList
+        var layoutCues: [LayoutCue]
+        var chapters: [Chapter]
+        var captions: CaptionStyle?
+    }
+
+    private var currentSnapshot: EditSnapshot {
+        EditSnapshot(edl: project.edl,
+                     layoutCues: project.layoutCues,
+                     chapters: project.chapters,
+                     captions: project.captions)
+    }
+
+    /// Every timeline/transcript/cleanup gesture goes through here, so one ⌘Z
+    /// reverts one gesture — or one applied AI change-set — atomically.
+    private func performEdit(_ mutate: () -> Void) {
+        undoStack.append(currentSnapshot)
+        if undoStack.count > 50 { undoStack.removeFirst() }
+        redoStack.removeAll()
+        mutate()
         projectChanged()
+    }
+
+    private func apply(_ snapshot: EditSnapshot) {
+        project.edl = snapshot.edl
+        project.layoutCues = snapshot.layoutCues
+        project.chapters = snapshot.chapters
+        project.captions = snapshot.captions
+        projectChanged()
+    }
+
+    private func undo() {
+        guard let previous = undoStack.popLast() else { return }
+        redoStack.append(currentSnapshot)
+        apply(previous)
+    }
+
+    private func redo() {
+        guard let next = redoStack.popLast() else { return }
+        undoStack.append(currentSnapshot)
+        apply(next)
+    }
+
+    /// Disables the clip currently selected in the timeline (⌫).
+    private func deleteTimelineSelection() {
+        guard let id = timelineVM.selectedClipID,
+              let clip = project.edl.clip(withID: id), clip.enabled else { return }
+        performEdit { _ = project.edl.setEnabled(false, id: id, label: .cutManual) }
+    }
+
+    private func mutateEDL(_ mutate: (inout EditDecisionList) -> Void) {
+        performEdit { mutate(&project.edl) }
     }
 
     /// Most recent finished export, used to seed the publish panel.

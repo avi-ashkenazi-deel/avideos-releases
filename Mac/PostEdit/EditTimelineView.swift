@@ -69,9 +69,9 @@ struct EditTimelineView: View {
         .gesture(scrubGesture)
         .contextMenu {
             Button("Split at Playhead") { onSplitAt(playheadSource) }
-                .keyboardShortcut("s", modifiers: [])
             if let selected = viewModel.selectedClipID {
                 Button("Toggle Enabled") { onToggleClip(selected) }
+                Button("Cut Selected Clip") { onDeleteSelection() }
             }
             Menu("Add Layout Cue at Playhead") {
                 Button("Grid") { onAddLayoutCue(playheadSource, .grid) }
@@ -83,10 +83,31 @@ struct EditTimelineView: View {
         }
     }
 
+    /// Zoom plus the two editing gestures that need to be reachable from the
+    /// keyboard. These live here rather than in the context menu because a
+    /// `keyboardShortcut` on a context-menu button only fires while that menu
+    /// is open — which is no use mid-edit.
     private var zoomControls: some View {
         HStack(spacing: 4) {
+            Button { onSplitAt(playheadSource) } label: { Image(systemName: "scissors") }
+                .keyboardShortcut("s", modifiers: [])
+                .help("Split at playhead (S)")
+
+            Button {
+                onDeleteSelection()
+            } label: {
+                Image(systemName: "delete.left")
+            }
+            .keyboardShortcut(.delete, modifiers: [])
+            .disabled(viewModel.selectedClipID == nil)
+            .help("Cut the selected clip (Delete)")
+
+            Divider().frame(height: 14)
+
             Button { viewModel.zoom(by: 0.7) } label: { Image(systemName: "minus.magnifyingglass") }
+                .help("Zoom out")
             Button { viewModel.zoom(by: 1.4) } label: { Image(systemName: "plus.magnifyingglass") }
+                .help("Zoom in")
         }
         .buttonStyle(.borderless)
         .padding(4)

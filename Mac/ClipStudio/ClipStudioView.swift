@@ -183,8 +183,8 @@ struct ClipStudioView: View {
                 Button("Export \(options.aspect.rawValue)") { exportClip(clip) }
                 if clip.titleOptions.count > 1 {
                     Menu("Titles") {
-                        ForEach(Array(clip.titleOptions.enumerated()), id: \.offset) { pair in
-                            Text(pair.element)
+                        ForEach(clip.titleOptions.indices, id: \.self) { index in
+                            Text(clip.titleOptions[index])
                         }
                     }
                 }

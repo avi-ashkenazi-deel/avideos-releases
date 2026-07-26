@@ -1,6 +1,6 @@
 # AVideos Studio — full feature checklist
 
-Every user-facing feature in the app, with a stable ID so you can report
+All 273 user-facing features, each with a stable ID so you can report
 back precisely ("F-42 fails"). Ordered so you can work top to bottom: each
 section only depends on the ones above it.
 
@@ -157,7 +157,7 @@ first.
 - [ ] **F-101** Gapless transition between consecutive tracks. **[offline]**
 - [ ] **F-102** Loop modes (off / one / all). **[offline]**
 - [ ] **F-103** Seek within a track. **[offline]**
-- [ ] ~~**F-104** Global soundboard hotkeys (⌥1…⌥9) firing while another app is focused.~~ **NOT IMPLEMENTED — see Known gaps.**
+- [ ] **F-104** Global soundboard hotkeys: ⌥1…⌥9 fire pads **while another app is frontmost** (test with Zoom focused). **[offline]**
 
 ## L. Virtual microphone (driver)
 
@@ -337,28 +337,70 @@ first.
 
 ---
 
+## X. Keyboard shortcuts
+
+Two layers, deliberately on different combos so a keypress can never fire
+both and toggle twice: **menu** shortcuts (⇧⌘/⌘-based) need the studio
+focused; **global** hotkeys (⌥ and ⌃⌥-based) work from any app.
+
+### Global — test these with another app frontmost
+
+- [ ] **F-245** ⌥1…⌥9 fire sound pads. **[offline]**
+- [ ] **F-246** ⌃⌥R starts/stops recording. **[offline]**
+- [ ] **F-247** ⌃⌥M mutes/unmutes the microphone. **[offline]**
+- [ ] **F-248** ⌃⌥→ / ⌃⌥← step to the next/previous scene (wrapping at both ends). **[offline]**
+- [ ] **F-249** ⌃⌥T shows/hides the teleprompter. **[offline]**
+- [ ] **F-250** ⌃⌥Space plays/pauses the prompter scroll. **[offline]**
+- [ ] **F-251** ⌃⌥P plays/pauses music. **[offline]**
+- [ ] **F-252** No macOS accessibility-permission prompt is needed for any of these. **[offline]**
+
+### Menu — studio focused, and visible in the Studio menu
+
+- [ ] **F-253** The Studio menu lists every command with its key combo. **[offline]**
+- [ ] **F-254** ⇧⌘R record, ⇧⌘M mute, ⇧⌘T prompter. **[offline]**
+- [ ] **F-255** ⌘] / ⌘[ next/previous scene. **[offline]**
+- [ ] **F-256** ⌘1…⌘9 jump to a scene by sidebar position; the submenu lists real scene names. **[offline]**
+- [ ] **F-257** ⌥⌘T prompter play/pause; ⇧⌘P music play/pause; ⇧⌘] / ⇧⌘[ next/previous track. **[offline]**
+- [ ] **F-258** Pressing a menu combo while the studio is frontmost toggles **once**, not twice (the global/menu split is doing its job). **[offline]**
+
+### Rebinding & discoverability
+
+- [ ] **F-259** Settings → Shortcuts lists every global hotkey with a recorder. **[offline]**
+- [ ] **F-260** Rebind a pad (say to ⌘⌥7); the new combo fires the pad and the old one stops. **[offline]**
+- [ ] **F-261** The pad's on-screen badge updates to the newly assigned combo. **[offline]**
+- [ ] **F-262** An unassigned pad slot shows **no** badge (rather than advertising a dead key). **[offline]**
+- [ ] **F-263** Rebindings survive relaunch. **[offline]**
+- [ ] **F-264** Settings → Shortcuts also lists the fixed menu and editor shortcuts for reference. **[offline]**
+
+### Editor shortcuts
+
+- [ ] **F-265** Space plays/pauses the preview. **[offline]**
+- [ ] **F-266** ← / → step one frame back/forward. **Also check they don't fight the transcript caret** when the transcript has focus (the transcript is an NSTextView; this interaction is the one I'd expect to need a tweak). **[offline]**
+- [ ] **F-267** `S` splits at the playhead — from the timeline itself, not only while a context menu is open. **[offline]**
+- [ ] **F-268** Delete cuts the selected timeline clip; the button is disabled with nothing selected. **[offline]**
+- [ ] **F-269** Delete with words selected in the transcript cuts those words (transcript wins while it has focus). **[offline]**
+- [ ] **F-270** ⌘Z undoes the last edit; ⇧⌘Z redoes it. **[offline]**
+- [ ] **F-271** One ⌘Z reverts one *gesture* — including a whole Clean Up or applied AI edit — not one clip at a time. **[offline]**
+- [ ] **F-272** Undo/redo buttons disable correctly at the ends of the stack. **[offline]**
+- [ ] **F-273** Undo covers layout-cue additions and chapter changes, not just cuts. **[offline]**
+
 ## Known gaps (don't waste time testing these)
 
-1. **Global soundboard hotkeys are not implemented.** Pads render a `⌥N`
-   badge and `SoundPad` carries a `hotkeyIndex`, but the `KeyboardShortcuts`
-   package — though declared in `project.yml` — is never imported, so no key
-   handler exists. Pads fire on click only. The badge is currently
-   misleading; either wire the package up or hide the badge. **(F-104)**
-2. **Watermark and intro/outro stingers are stored but never rendered.** The
+1. **Watermark and intro/outro stingers are stored but never rendered.** The
    brand kit persists them and the Clip Studio panel says so, but
    `ExportService`/`CompositionBuilder` don't composite them yet.
-3. **Instagram publishing cannot work end-to-end** by design in v1 — the
+2. **Instagram publishing cannot work end-to-end** by design in v1 — the
    Graph API pulls from a public URL the app doesn't host. It deliberately
    reveals the file in Finder instead.
-4. **Waveform cross-correlation alignment** is the designed v1.1 refinement;
+3. **Waveform cross-correlation alignment** is the designed v1.1 refinement;
    v1 aligns on clock anchors + drift fit only (the `TrackAligner` protocol
    is the seam).
-5. **Speech-follow prompter scrolling** was assessed and deferred to v1.1;
+4. **Speech-follow prompter scrolling** was assessed and deferred to v1.1;
    v1 ships timed scrolling.
-6. **Source aspect for smart reframe is assumed 16:9.** A per-track probe is
+5. **Source aspect for smart reframe is assumed 16:9.** A per-track probe is
    the refinement; 4:3 or portrait masters will reframe with slightly wrong
    crop geometry.
-7. **29 `verify on Mac:` markers** across 22 files flag API assumptions made
+6. **29 `verify on Mac:` markers** across 22 files flag API assumptions made
    without a compiler. `grep -rn "verify on Mac" Mac/ CameraExtension/ driver/`
 
 ## Suggested testing order
@@ -370,3 +412,5 @@ first.
 5. **Q–U** (editor, AI editing, Clip Studio) — needs the API key; use any recording, guests not required.
 6. **N–O** (guests, podcast mode) — needs the backend deployed and a second device.
 7. **V** (publishing) — needs platform app registrations; do last.
+
+Section **X** (keyboard shortcuts) is offline and can be tested any time after the app builds — do the global hotkeys with Zoom frontmost.

@@ -202,6 +202,12 @@ final class AudioEngineController {
         persist()
     }
 
+    /// Flips a strip's mute. Drives the mute hotkey and menu item, where the
+    /// caller doesn't want to read the current state first.
+    func toggleMute(for strip: StripID) {
+        setMuted(!isMuted(strip), for: strip)
+    }
+
     func levels(for strip: StripID) -> AudioLevels {
         if strip == .mic {
             return micCapture.levels

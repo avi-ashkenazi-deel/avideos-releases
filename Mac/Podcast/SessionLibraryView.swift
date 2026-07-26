@@ -84,8 +84,11 @@ struct SessionLibraryView: View {
             List {
                 ForEach(session.takes) { take in
                     Section("Take \(take.id)") {
-                        ForEach(Array(take.tracks.enumerated()), id: \.offset) { _, track in
-                            trackRow(track, take: take, session: session)
+                        // Indexed: `id:` key paths cannot address tuple elements
+                        // (TrackRecord is not Identifiable — it is keyed by
+                        // participant + kind, not an id).
+                        ForEach(take.tracks.indices, id: \.self) { index in
+                            trackRow(take.tracks[index], take: take, session: session)
                         }
                     }
                 }

@@ -198,6 +198,27 @@ final class StudioController {
         }
     }
 
+    /// Switches to the scene `offset` positions from the current one, wrapping
+    /// at both ends. Drives the next/previous-scene global hotkeys, so a host
+    /// can walk the rundown without leaving Zoom.
+    func advanceScene(by offset: Int) {
+        guard !project.scenes.isEmpty else { return }
+        let currentIndex = project.activeSceneID
+            .flatMap { id in project.scenes.firstIndex { $0.id == id } } ?? 0
+        let count = project.scenes.count
+        // Positive modulo: -1 from index 0 must land on the last scene.
+        let nextIndex = ((currentIndex + offset) % count + count) % count
+        guard nextIndex != currentIndex else { return }
+        switchScene(to: project.scenes[nextIndex].id)
+    }
+
+    /// Switches to the Nth scene in the sidebar (1-based) — the ⌘1…⌘9 menu
+    /// commands. No-op when there is no such scene.
+    func switchToScene(number: Int) {
+        guard number >= 1, number <= project.scenes.count else { return }
+        switchScene(to: project.scenes[number - 1].id)
+    }
+
     /// Movie scenes and picker-based screen scenes need concrete sources the
     /// registry can't fabricate from a key alone.
     private func ensureScenePrimarySources(for scene: SceneModel) {

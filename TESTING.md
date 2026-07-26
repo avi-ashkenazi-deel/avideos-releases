@@ -145,5 +145,15 @@ Each phase's exit demo, as checkboxes. Requires a Mac (see docs/DEV_SETUP.md).
 - [ ] A failed upload shows the error and Retry re-runs it; Remove clears the row.
 - [ ] Instagram: publishing reveals the file in Finder and explains the public-URL limitation.
 
+## Keyboard shortcuts
+- [ ] With Zoom frontmost (studio behind it): ⌥1…⌥9 fire sound pads, ⌃⌥M mutes the mic, ⌃⌥→/⌃⌥← change scene, ⌃⌥R records.
+- [ ] No accessibility-permission prompt was required for the global hotkeys.
+- [ ] Studio menu lists every command with its combo; pressing one while focused toggles once, not twice.
+- [ ] ⌘1…⌘9 jump to scenes by sidebar position.
+- [ ] Settings → Shortcuts: rebind a pad; the new key works, the old one stops, and the pad badge updates.
+- [ ] An empty pad slot shows no hotkey badge.
+- [ ] Editor: Space plays, ←/→ step frames, S splits, Delete cuts the selected clip, ⌘Z / ⇧⌘Z undo and redo.
+- [ ] One ⌘Z reverts a whole Clean Up or applied AI edit, not one clip at a time.
+
 ## Unit tests (no hardware needed)
 - [ ] `xcodegen generate`, then Cmd-U (or `xcodebuild test -scheme AVideosStudio`) → all tests in `Tests/AVideosStudioTests/` pass.

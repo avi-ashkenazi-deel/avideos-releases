@@ -35,9 +35,13 @@ Two products share this repository and one XcodeGen `project.yml`:
 | Studio UI | `Mac/UI/` |
 | Unit tests (EDL, drift fit, ring buffer, alignment, Codable/manifest) | `Tests/AVideosStudioTests/` |
 
-Testing: `docs/FEATURE_CHECKLIST.md` is the full 244-item feature inventory
+Testing: `docs/FEATURE_CHECKLIST.md` is the full 273-item feature inventory
 (with prerequisites per item and known gaps); `TESTING.md` has the shorter
 per-phase exit demos.
+
+Keyboard shortcuts: global hotkeys (work from any app) live in
+`Mac/App/GlobalShortcuts.swift` and are rebindable in Settings → Shortcuts;
+menu shortcuts are in `StudioCommands` (`Mac/App/AVideosApp.swift`).
 
 ---
 

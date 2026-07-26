@@ -76,7 +76,9 @@ struct ScriptEditorView: View {
                 .padding()
 
                 List {
-                    ForEach(Array(script.sections.enumerated()), id: \.element.id) { index, _ in
+                    // Indexed rather than enumerated: `id:` key paths cannot
+                    // address tuple elements.
+                    ForEach(script.sections.indices, id: \.self) { index in
                         sectionEditor(index: index)
                     }
                     .onMove { from, to in

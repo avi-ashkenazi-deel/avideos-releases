@@ -132,6 +132,18 @@ private struct StudioLayout: View {
 
 /// App settings: session server, AI key, devices.
 struct SettingsView: View {
+    var body: some View {
+        TabView {
+            GeneralSettingsView()
+                .tabItem { Label("General", systemImage: "gearshape") }
+            ShortcutsSettingsView()
+                .tabItem { Label("Shortcuts", systemImage: "keyboard") }
+        }
+        .frame(width: 560)
+    }
+}
+
+private struct GeneralSettingsView: View {
     @Environment(StudioController.self) private var studio
     @State private var workerURLText = ""
     @State private var claudeKey = ""
