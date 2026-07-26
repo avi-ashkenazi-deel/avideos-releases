@@ -19,7 +19,7 @@ Two products share this repository and one XcodeGen `project.yml`:
 | Feature | Where |
 | --- | --- |
 | Scenes (camera / screen / movie / interview) + document model | `Mac/Model/`, `Mac/App/StudioController.swift` |
-| Metal compositor, blend modes, entry/exit animations, magic-move transitions | `Mac/Rendering/` |
+| Metal compositor, source framing (fit/fill/blurred backdrop), blend modes, animations, magic move | `Mac/Rendering/` |
 | Camera effects (chroma key, virtual background, beautify, contrast, sharpen) | `Mac/Effects/` |
 | Frame sources (camera, screen, movie, web overlays, guests, images) | `Mac/Sources/` |
 | Virtual camera (CMIO extension + sink-stream writer) | `CameraExtension/`, `Mac/VirtualCamera/` |
@@ -35,7 +35,7 @@ Two products share this repository and one XcodeGen `project.yml`:
 | Studio UI | `Mac/UI/` |
 | Unit tests (EDL, drift fit, ring buffer, alignment, Codable/manifest) | `Tests/AVideosStudioTests/` |
 
-Testing: `docs/FEATURE_CHECKLIST.md` is the full 273-item feature inventory
+Testing: `docs/FEATURE_CHECKLIST.md` is the full 287-item feature inventory
 (with prerequisites per item and known gaps); `TESTING.md` has the shorter
 per-phase exit demos.
 

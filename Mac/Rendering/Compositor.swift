@@ -11,6 +11,11 @@ import simd
 final class Compositor {
     /// Mirrors `ItemUniforms` in Composite.metal — field order and alignment
     /// must match MSL layout (float3x3 = 48B, float4 aligns to 16B).
+    /// Mirrors `ItemUniforms` in Composite.metal — field order and types must
+    /// match exactly. MSL offsets: transform 0, opacity 48, cornerRadius 52,
+    /// itemSizePx 56, strokeWidthPx 64, time 68, fillColorA 80 (float4 aligns
+    /// to 16), fillColorB 96, params 112/116, fillKind 120, fitMode 124,
+    /// contentAspect 128, zoom 132, pan 136, blurStrength 144 → size 160.
     struct ItemUniforms {
         var transform: simd_float3x3
         var opacity: Float
@@ -23,6 +28,28 @@ final class Compositor {
         var fillParam0: Float
         var fillParam1: Float
         var fillKind: Int32
+        var fitMode: Int32 = FitModeIndex.stretch
+        var contentAspect: Float = 0
+        var zoom: Float = 1
+        var pan: SIMD2<Float> = .zero
+        var blurStrength: Float = 0
+    }
+
+    /// Shader-side values for `SourceFit`. Contain and cover are the only two
+    /// the shader distinguishes; `.blurredBackdrop` is expressed at plan level
+    /// as a cover backdrop plus a contain foreground.
+    enum FitModeIndex {
+        static let contain: Int32 = 0
+        static let cover: Int32 = 1
+        static let stretch: Int32 = 2
+
+        static func value(for fit: SourceFit) -> Int32 {
+            switch fit {
+            case .fit, .blurredBackdrop: contain
+            case .fill: cover
+            case .stretch: stretch
+            }
+        }
     }
 
     struct BlendUniforms {
@@ -173,13 +200,14 @@ final class Compositor {
             }
 
             // 3. Composite the content quad.
-            let uniforms = makeUniforms(item: item,
+            var uniforms = makeUniforms(item: item,
                                         transform: transform,
                                         fillKind: resolved.fillKind,
                                         paint: resolved.paint,
                                         canvasW: canvasW, canvasH: canvasH,
                                         strokeWidthPx: 0,
                                         time: Float(now.truncatingRemainder(dividingBy: 3600)))
+            applyFraming(&uniforms, item: item, texture: contentTexture)
 
             if item.blendMode.needsDestinationSample {
                 // Render the item alone onto a cleared layer, then blend pass.
@@ -344,6 +372,25 @@ final class Compositor {
             fillParam1: paint.param1,
             fillKind: fillKind
         )
+    }
+
+    /// Fills in the framing fields for textured content, using the *actual*
+    /// source texture dimensions — the shader can't know a shared window is 4:3
+    /// any other way. Non-source content (solid/procedural paint, text glyphs)
+    /// keeps `stretch`, which samples the quad directly as before.
+    private func applyFraming(_ uniforms: inout ItemUniforms,
+                              item: RenderItem,
+                              texture: MTLTexture?) {
+        guard case .source = item.content, let texture, texture.height > 0 else { return }
+        // A 1×1 placeholder carries no usable aspect.
+        guard texture.width > 1 || texture.height > 1 else { return }
+
+        let presentation = item.presentation.sanitized
+        uniforms.fitMode = FitModeIndex.value(for: presentation.fit)
+        uniforms.contentAspect = Float(texture.width) / Float(texture.height)
+        uniforms.zoom = Float(presentation.zoom)
+        uniforms.pan = SIMD2(Float(presentation.pan.x), Float(presentation.pan.y))
+        uniforms.blurStrength = item.isBackdrop ? Float(presentation.backdropBlur) : 0
     }
 
     /// Unit quad (0…1, y-down) → NDC, with rotation performed in pixel space

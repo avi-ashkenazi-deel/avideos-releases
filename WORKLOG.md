@@ -9,6 +9,35 @@ A running log of what we've built and shipped.
   fields don't accept emojis. (Chat replies may still use them; this rule is
   specifically about text pasted into TestFlight / App Store Connect.)
 
+## 2026-07-26 — AVideos Studio: source framing (fit / fill / blurred backdrop)
+
+The program canvas is 16:9 (or 9:16), but a shared window rarely is. Found
+that the compositor did **no** aspect handling at all: source textures were
+mapped straight onto the item quad, so a 4:3 window or a portrait capture was
+silently *stretched* — distorted faces and wide text, which is worse than the
+black bars you'd expect.
+
+- `SourceFit`: **fit** (contain, centred — now the default), **fill** (cover,
+  crop), **blurredBackdrop** (contained sharp copy over a blurred over-zoomed
+  copy, so no bars), **stretch** (the old behaviour, kept as an escape hatch).
+- `SourcePresentation` adds manual **zoom** and **pan** on top of the fit rule,
+  so a small shared window can be pushed in to fill more of the frame.
+  Per scene, in the inspector when nothing is selected.
+- Shader: `framedUV` computes the sampling window from the source's real
+  texture dimensions vs the quad's aspect; contain mode discards fragments
+  outside the content so the background shows through instead of a smeared
+  edge. `blurredSample` gives the backdrop a 16-tap wash (cheap — the backdrop
+  is out of focus by design, so sparse taps read as smooth).
+- Blurred backdrop is expressed at *plan* level as an extra cover-fitted item
+  behind the sharp one, so the compositor needs no special case. The backdrop
+  gets a derived stable id, carries no effects (a chroma key must not punch
+  holes in it) and ignores the foreground's pan.
+- ItemUniforms grew five fields; Swift and MSL layouts documented offset by
+  offset (both 160 bytes) since that ABI is where this pipeline breaks.
+- `SourceFramingTests` pins the window arithmetic as the specification (MSL
+  can't be unit-tested) plus the plan expansion; `SceneModel` gained a
+  tolerant decoder so pre-framing projects still load.
+
 ## 2026-07-26 — AVideos Studio: gap closure (Clip Studio + Publish UI, tests)
 
 Audited the tree against the plan and closed what was genuinely missing.

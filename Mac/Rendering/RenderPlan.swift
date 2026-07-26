@@ -38,6 +38,12 @@ struct RenderItem: Sendable, Identifiable {
     var entryAnimation: EntryAnimation
     /// Where this item is in its show/hide lifecycle at plan-compile time.
     var animation: AnimationState
+    /// How source content is fitted into this item's quad. Only meaningful for
+    /// `.source` content; `.default` (fit) for everything else.
+    var presentation: SourcePresentation = .default
+    /// Set on the blurred backdrop item that sits behind a
+    /// `.blurredBackdrop` primary, so the compositor knows to blur it.
+    var isBackdrop: Bool = false
 }
 
 /// What fills the item's quad.
@@ -186,9 +192,8 @@ enum RenderPlanCompiler {
                                      guests: [GuestDescriptor]) -> [RenderItem] {
         switch scene.kind {
         case .camera(let config):
-            return [primaryItem(scene: scene,
-                                key: .camera(deviceUniqueID: config.deviceUniqueID),
-                                transform: .fullCanvas)]
+            return framedPrimary(scene: scene,
+                                 key: .camera(deviceUniqueID: config.deviceUniqueID))
         case .screenShare(let config):
             let key: SourceKey
             switch config.target {
@@ -196,14 +201,62 @@ enum RenderPlanCompiler {
             case .window(let id, _): key = .window(windowID: id)
             case .askEachTime: key = .scenePrimary(sceneID: scene.id)
             }
-            return [primaryItem(scene: scene, key: key, transform: .fullCanvas)]
+            return framedPrimary(scene: scene, key: key)
         case .movie:
-            return [primaryItem(scene: scene,
-                                key: .scenePrimary(sceneID: scene.id),
-                                transform: .fullCanvas)]
+            return framedPrimary(scene: scene, key: .scenePrimary(sceneID: scene.id))
         case .interview(let config):
             return interviewItems(scene: scene, config: config, guests: guests)
         }
+    }
+
+    /// One full-canvas primary item — or two, when the scene asks for a
+    /// blurred backdrop: a cover-fitted blurred copy underneath, then the
+    /// contained sharp copy on top. Expressing it as an extra item keeps the
+    /// compositor free of special cases.
+    private static func framedPrimary(scene: SceneModel, key: SourceKey) -> [RenderItem] {
+        let presentation = scene.primaryPresentation.sanitized
+
+        guard presentation.fit == .blurredBackdrop else {
+            var item = primaryItem(scene: scene, key: key, transform: .fullCanvas)
+            item.presentation = presentation
+            return [item]
+        }
+
+        var backdrop = primaryItem(scene: scene,
+                                   key: key,
+                                   transform: .fullCanvas,
+                                   transitionKeySuffix: ":backdrop")
+        // A distinct id so the two items never collide in transition matching
+        // or in the effects cache.
+        backdrop.id = Self.backdropID(for: scene.id)
+        backdrop.isBackdrop = true
+        // The backdrop covers, zoomed a little past the edges, and ignores the
+        // foreground's manual zoom/pan so it stays a calm background.
+        var backdropPresentation = presentation
+        backdropPresentation.fit = .fill
+        backdropPresentation.zoom = presentation.backdropZoom
+        backdropPresentation.pan = .zero
+        backdrop.presentation = backdropPresentation
+        // Effects are applied once, on the sharp copy; the backdrop is a plain
+        // blurred frame so a chroma key doesn't punch holes in it.
+        backdrop.effects = EffectChain()
+
+        var foreground = primaryItem(scene: scene, key: key, transform: .fullCanvas)
+        var foregroundPresentation = presentation
+        foregroundPresentation.fit = .fit
+        foreground.presentation = foregroundPresentation
+
+        return [backdrop, foreground]
+    }
+
+    /// Deterministic id for a scene's backdrop item, derived from the scene id
+    /// so it is stable across recompiles (animation state is keyed by item id).
+    static func backdropID(for sceneID: UUID) -> UUID {
+        var bytes = sceneID.uuid
+        // Flip the last byte; UUID equality is byte equality, and a scene can
+        // never legitimately own this value as its own id.
+        bytes.15 = bytes.15 ^ 0xFF
+        return UUID(uuid: bytes)
     }
 
     private static func primaryItem(scene: SceneModel,

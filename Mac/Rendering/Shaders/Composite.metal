@@ -14,6 +14,12 @@ struct ItemUniforms {
     float    fillParam0;    // shader fill speed
     float    fillParam1;    // shader fill scale
     int      fillKind;      // 0 solid, 1..4 = ShaderFill.Kind order, 100 = textured
+    // ---- source framing (SourceFit); only read for textured content
+    int      fitMode;       // 0 fit(contain), 1 fill(cover), 2 stretch
+    float    contentAspect; // source width/height; <=0 => unknown, treat as stretch
+    float    zoom;          // 1 = the fit rule as-is; >1 zooms in
+    float2   pan;           // pan within the sampled window
+    float    blurStrength;  // >0 => blur the sample (the backdrop copy)
 };
 
 struct VSOut {
@@ -122,6 +128,73 @@ static float4 proceduralFill(float2 uv, constant ItemUniforms &u) {
     }
 }
 
+// ---- source framing ---------------------------------------------------------
+
+// Maps the quad's uv into the source texture, honouring the fit rule plus the
+// manual zoom/pan. Returns false when the sample lands outside the source,
+// which only happens in `fit` (contain) mode — that is the empty region beside
+// the content, and the fragment is dropped so whatever is behind shows through.
+static bool framedUV(float2 uv, constant ItemUniforms &u, thread float2 &outUV) {
+    // Unknown aspect (a 1x1 placeholder, or a paint rather than a frame) or an
+    // explicit stretch: sample the quad directly, which is the old behaviour.
+    if (u.contentAspect <= 0.0 || u.fitMode == 2) {
+        outUV = uv;
+        return true;
+    }
+
+    float itemAspect = u.itemSizePx.x / max(u.itemSizePx.y, 1.0);
+    float contentAspect = u.contentAspect;
+
+    // The window we sample out of the source, in source-uv units.
+    float2 window = float2(1.0, 1.0);
+    if (u.fitMode == 1) {
+        // Cover: shrink the window on the axis with material to spare.
+        if (contentAspect > itemAspect) {
+            window.x = itemAspect / contentAspect;
+        } else {
+            window.y = contentAspect / itemAspect;
+        }
+    } else {
+        // Contain: grow the window past the source on the axis that runs out,
+        // so the source lands centred with space beside it.
+        if (contentAspect > itemAspect) {
+            window.y = contentAspect / itemAspect;
+        } else {
+            window.x = itemAspect / contentAspect;
+        }
+    }
+
+    float zoom = max(u.zoom, 0.05);
+    float2 sampled = (uv - 0.5) * window / zoom + 0.5 + u.pan;
+    outUV = sampled;
+
+    // Contain mode leaves genuine empty space; cover/stretch never do.
+    if (u.fitMode == 0 || zoom < 1.0) {
+        if (any(sampled < float2(0.0)) || any(sampled > float2(1.0))) return false;
+    }
+    return true;
+}
+
+// Cheap wide blur for the backdrop copy: a 4x4 grid of bilinear taps. The
+// backdrop is heavily out of focus by design, so sparse taps read as a smooth
+// wash rather than a box — and 16 taps over the canvas is nothing on an Apple
+// GPU, unlike a true separable Gaussian with its extra pass and pool texture.
+static float4 blurredSample(texture2d<float> tex, sampler s, float2 uv, float strength) {
+    float radius = 0.02 * strength;          // in source-uv units
+    float4 sum = float4(0.0);
+    float weightTotal = 0.0;
+    for (int y = -2; y <= 1; ++y) {
+        for (int x = -2; x <= 1; ++x) {
+            float2 offset = (float2(x, y) + 0.5) * radius;
+            // Falls off toward the edges of the kernel so it doesn't look boxy.
+            float weight = 1.0 - 0.35 * length(float2(x, y)) / 2.83;
+            sum += tex.sample(s, clamp(uv + offset, 0.0, 1.0)) * weight;
+            weightTotal += weight;
+        }
+    }
+    return sum / max(weightTotal, 0.0001);
+}
+
 // Content pass: one fragment for every item kind. `contentTex` carries the
 // (already effect-chained) source frame, the video paint, or nothing;
 // `glyphTex` carries the text raster's alpha (a 1×1 white texture when the
@@ -143,8 +216,16 @@ fragment float4 composite_fragment(VSOut in [[stage_in]],
     float4 color;
     switch (u.fillKind) {
         case 100:
-        case 200:
-            color = contentTex.sample(s, in.uv);
+        case 200: {
+            // Fit the source into the quad. `framedUV` returns false only in
+            // contain mode outside the content, which is the empty region
+            // beside it — drop those fragments so the scene background (or a
+            // blurred backdrop item) shows through instead of a stretched edge.
+            float2 sampleUV;
+            if (!framedUV(in.uv, u, sampleUV)) discard_fragment();
+            color = (u.blurStrength > 0.0)
+                  ? blurredSample(contentTex, s, sampleUV, u.blurStrength)
+                  : contentTex.sample(s, sampleUV);
             // Content textures arrive premultiplied (chroma key, segmentation,
             // Core Image outputs, web/text rasters; opaque camera/screen/movie
             // frames have a == 1 and are unaffected). Un-premultiply here so
@@ -153,6 +234,7 @@ fragment float4 composite_fragment(VSOut in [[stage_in]],
             color.rgb *= u.fillColorA.rgb;   // white unless deliberately tinted
             color.a *= u.fillColorA.a;
             break;
+        }
         case 0:
             color = u.fillColorA;
             break;

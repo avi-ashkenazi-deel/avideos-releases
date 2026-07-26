@@ -90,11 +90,88 @@ struct InspectorView: View {
                 }
             }
             .padding(12)
+        } else if let scene = studio.activeScene {
+            // Nothing selected: this is the place for scene-level settings, and
+            // framing is the one people reach for constantly — a shared window
+            // is rarely the same shape as the program canvas.
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Scene — \(scene.name)").font(.headline)
+                framingEditor(scene)
+                Divider()
+                ContentUnavailableView("No element selected",
+                                       systemImage: "square.dashed",
+                                       description: Text("Click an element on the canvas, or add one below."))
+            }
+            .padding(12)
         } else {
             ContentUnavailableView("No element selected",
                                    systemImage: "square.dashed",
                                    description: Text("Click an element on the canvas, or add one below."))
                 .padding(.top, 30)
+        }
+    }
+
+    // MARK: - Framing (scene primary source)
+
+    private func framingEditor(_ scene: SceneModel) -> some View {
+        let presentation = Binding<SourcePresentation>(
+            get: { scene.primaryPresentation },
+            set: { new in
+                guard let index = studio.project.scenes.firstIndex(where: { $0.id == scene.id })
+                else { return }
+                studio.project.scenes[index].primaryPresentation = new
+            }
+        )
+
+        return VStack(alignment: .leading, spacing: 8) {
+            Text("Framing")
+                .font(.subheadline.bold())
+                .foregroundStyle(.secondary)
+
+            Picker("Fit", selection: presentation.fit) {
+                ForEach(SourceFit.allCases, id: \.self) { fit in
+                    Text(fit.displayName).tag(fit)
+                }
+            }
+            .pickerStyle(.radioGroup)
+
+            Text(presentation.wrappedValue.fit.help)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            LabeledSlider(label: "Zoom", value: presentation.zoom, range: 0.5...4)
+
+            // Panning only does something once content is cropped.
+            let canPan = presentation.wrappedValue.fit != .fit
+                || presentation.wrappedValue.zoom > 1
+            // CGPoint components are CGFloat; LabeledSlider works in Double.
+            LabeledSlider(label: "Pan X",
+                          value: Binding(get: { Double(presentation.wrappedValue.pan.x) },
+                                         set: { presentation.wrappedValue.pan.x = CGFloat($0) }),
+                          range: -0.5...0.5)
+                .disabled(!canPan)
+            LabeledSlider(label: "Pan Y",
+                          value: Binding(get: { Double(presentation.wrappedValue.pan.y) },
+                                         set: { presentation.wrappedValue.pan.y = CGFloat($0) }),
+                          range: -0.5...0.5)
+                .disabled(!canPan)
+            if !canPan {
+                Text("Pan applies once the picture is cropped — zoom in, or choose Fill.")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+
+            if presentation.wrappedValue.fit == .blurredBackdrop {
+                LabeledSlider(label: "Blur", value: presentation.backdropBlur, range: 0...1)
+                LabeledSlider(label: "BG Zoom", value: presentation.backdropZoom, range: 1...2)
+            }
+
+            Button("Reset Framing") {
+                presentation.wrappedValue = .default
+            }
+            .font(.caption)
+            .buttonStyle(.link)
         }
     }
 

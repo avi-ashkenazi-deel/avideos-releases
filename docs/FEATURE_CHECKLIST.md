@@ -1,6 +1,6 @@
 # AVideos Studio — full feature checklist
 
-All 273 user-facing features, each with a stable ID so you can report
+All 287 user-facing features, each with a stable ID so you can report
 back precisely ("F-42 fails"). Ordered so you can work top to bottom: each
 section only depends on the ones above it.
 
@@ -25,7 +25,7 @@ first.
 ## A. Build & foundations
 
 - [ ] **F-1** `xcodegen generate` produces a project with 3 new targets (AVideosStudio, CameraExtension, AVideosAudioDriver) + AVideosStudioTests, HearIt targets untouched. **[offline]**
-- [ ] **F-2** Unit tests pass: Cmd-U or `xcodebuild test -scheme AVideosStudio` (94 cases, no hardware needed). **[offline]**
+- [ ] **F-2** Unit tests pass: Cmd-U or `xcodebuild test -scheme AVideosStudio` (no hardware needed). **[offline]**
 - [ ] **F-3** App launches to the main window; app icon appears in Dock/Finder. **[offline]**
 - [ ] **F-4** Window layout: scene list left, preview centre, inspector right, tabbed panel bottom. **[offline]**
 - [ ] **F-5** fps HUD visible on the preview and reads ~30. **[offline]**
@@ -54,6 +54,27 @@ first.
 - [ ] **F-22** Image source displays a still (PNG/JPEG). **[offline]**
 - [ ] **F-23** Web overlay source renders a live page (~10–15fps; no page audio — documented limit). **[offline]**
 - [ ] **F-24** Unplug/replug the camera mid-session: the app recovers rather than freezing. **[offline]**
+
+### Framing a mismatched source (inspector → Scene → Framing)
+
+The program canvas is 16:9 or 9:16, but shared windows rarely are. Test with a
+deliberately awkward source: a 4:3 window, a portrait phone mirror, or a tall
+code editor.
+
+- [ ] **F-274** **Fit** (default): the whole source is visible, centred, undistorted, with empty space on the short axis. Nothing is stretched — check circles stay round and text isn't wide. **[offline]**
+- [ ] **F-275** **Fill**: the source covers the frame with the overflow cropped, still undistorted. **[offline]**
+- [ ] **F-276** **Fit + blurred background**: centred sharp copy with a blurred, slightly over-zoomed copy behind filling the sides — no hard bars. **[offline]**
+- [ ] **F-277** Blur strength slider changes the backdrop; BG Zoom pushes its edges further out of frame. **[offline]**
+- [ ] **F-278** **Stretch** distorts to fill (the escape hatch) — confirms the other modes really are aspect-correct. **[offline]**
+- [ ] **F-279** **Zoom** slider pushes into the picture; zooming a Fit source far enough removes the empty space entirely. **[offline]**
+- [ ] **F-280** **Pan X/Y** move the visible region once cropped; they're disabled (with an explanation) when nothing is cropped. **[offline]**
+- [ ] **F-281** Framing applies to camera and movie scenes too, not just screen share. **[offline]**
+- [ ] **F-282** Effects (chroma key, virtual background) apply to the sharp copy; the blurred backdrop is a plain frame and is not keyed into holes. **[offline]**
+- [ ] **F-283** Framing is per scene: two screen scenes can frame the same display differently. **[offline]**
+- [ ] **F-284** Framing survives save/reload, and a project saved before this feature still opens (defaults to Fit). **[offline]**
+- [ ] **F-285** Magic-move between two scenes using blurred backdrop doesn't cross-match the backdrop to the sharp copy (no weird double-glide). **[offline]**
+- [ ] **F-286** fps holds with blurred backdrop active — it adds a second full-canvas pass with 16 taps per pixel. **[offline]**
+- [ ] **F-287** The framed result is what reaches the virtual camera and the recording, not just the preview. **[cert]**
 
 ## D. Elements & canvas
 

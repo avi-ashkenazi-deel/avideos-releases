@@ -14,19 +14,45 @@ struct SceneModel: Codable, Hashable, Sendable, Identifiable {
     var elements: [Element]
     /// How switching *to* this scene animates.
     var transitionStyle: SceneTransitionStyle
+    /// How the primary source is framed when its shape doesn't match the
+    /// canvas — the common case for shared windows and portrait captures.
+    var primaryPresentation: SourcePresentation
 
     init(id: UUID = UUID(),
          name: String,
          kind: SceneKind,
          primaryEffects: EffectChain = EffectChain(),
          elements: [Element] = [],
-         transitionStyle: SceneTransitionStyle = .magicMove) {
+         transitionStyle: SceneTransitionStyle = .magicMove,
+         primaryPresentation: SourcePresentation = .default) {
         self.id = id
         self.name = name
         self.kind = kind
         self.primaryEffects = primaryEffects
         self.elements = elements
         self.transitionStyle = transitionStyle
+        self.primaryPresentation = primaryPresentation
+    }
+
+    /// Older documents predate framing, so a missing key decodes as the
+    /// default fit rather than failing the whole project load.
+    enum CodingKeys: String, CodingKey {
+        case id, name, kind, primaryEffects, elements, transitionStyle, primaryPresentation
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try container.decode(UUID.self, forKey: .id)
+        self.name = try container.decode(String.self, forKey: .name)
+        self.kind = try container.decode(SceneKind.self, forKey: .kind)
+        self.primaryEffects = try container.decodeIfPresent(EffectChain.self, forKey: .primaryEffects)
+            ?? EffectChain()
+        self.elements = try container.decodeIfPresent([Element].self, forKey: .elements) ?? []
+        self.transitionStyle = try container.decodeIfPresent(SceneTransitionStyle.self,
+                                                            forKey: .transitionStyle) ?? .magicMove
+        self.primaryPresentation = try container.decodeIfPresent(SourcePresentation.self,
+                                                                 forKey: .primaryPresentation)
+            ?? .default
     }
 }
 
