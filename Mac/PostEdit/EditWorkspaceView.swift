@@ -22,6 +22,8 @@ struct EditWorkspaceView: View {
     @State private var clipSuggestions: [ClipSuggestion] = []
     @State private var showingClips = false
     @State private var showingClipStudio = false
+    @State private var showingPublish = false
+    @State private var publishQueue = PublishQueue()
     @State private var errorMessage: String?
 
 
@@ -86,6 +88,14 @@ struct EditWorkspaceView: View {
                                exporter.export(project: exportProject, target: target)
                            },
                            onClose: { showingClipStudio = false; projectChanged() })
+        }
+        .sheet(isPresented: $showingPublish) {
+            PublishPanelView(queue: publishQueue,
+                             initialFileURL: lastExportURL,
+                             chaptersText: project.chapters.isEmpty
+                                ? nil
+                                : ChapterGenerator.youtubeText(project.chapters),
+                             onClose: { showingPublish = false })
         }
         .alert("Something went wrong", isPresented: Binding(
             get: { errorMessage != nil },
@@ -251,6 +261,12 @@ struct EditWorkspaceView: View {
                 showingClipStudio = true
             } label: {
                 Label("Clip Studio", systemImage: "sparkles.rectangle.stack")
+            }
+
+            Button {
+                showingPublish = true
+            } label: {
+                Label("Publish", systemImage: "paperplane")
             }
 
             Menu {
@@ -489,6 +505,11 @@ struct EditWorkspaceView: View {
     private func mutateEDL(_ mutate: (inout EditDecisionList) -> Void) {
         mutate(&project.edl)
         projectChanged()
+    }
+
+    /// Most recent finished export, used to seed the publish panel.
+    private var lastExportURL: URL? {
+        exporter.jobs.last { $0.finishedURL != nil }?.finishedURL
     }
 
     private func projectChanged() {
