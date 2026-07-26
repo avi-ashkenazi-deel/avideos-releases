@@ -9,6 +9,43 @@ A running log of what we've built and shipped.
   fields don't accept emojis. (Chat replies may still use them; this rule is
   specifically about text pasted into TestFlight / App Store Connect.)
 
+## 2026-07-26 — AVideos Studio: gap closure (Clip Studio + Publish UI, tests)
+
+Audited the tree against the plan and closed what was genuinely missing.
+The finding that mattered: the ClipStudio and Publish *engines* were all
+written but **unreachable from any UI** — `MomentSearch`, `BRollSuggester`,
+`SmartReframer`, `SceneAnalyzer`, `BrandKit`, `CaptionStyle.presets`,
+`PublishQueue` and the three publishers had no call sites outside their own
+files. Dead code, not missing code.
+
+- **Clip Studio panel** (`Mac/ClipStudio/ClipStudioView.swift`), opened from
+  the editor toolbar: ranked clip suggestions, plain-language moment search
+  that seeks the preview, B-roll cutaway suggestions, per-clip
+  aspect/layout/caption/reframe export settings, and a brand-kit editor.
+- **Caption template gallery**: the built-in presets plus user-saved
+  templates (persisted beside the brand kit), with live swatches.
+- **Smart reframe now reaches output.** `SmartReframer` computed crop paths
+  that nothing consumed; `EditProject` carries them,
+  `LayoutCompositionInstruction` passes them through, and the compositor's
+  new `focusFill()` narrows each tile to the subject window before
+  aspect-filling — so a 9:16 export keeps the speaker framed instead of
+  center-cropping their forehead.
+- **Publish panel**: queue with progress/retry/remove, per-platform metadata
+  form, Keychain-backed connection status. Scoped strictly to what the
+  publishers actually send (YouTube title/description/tags, TikTok title
+  only, Instagram documented as manual) rather than showing controls that
+  do nothing.
+- **First tests in the Mac target**: 94 cases over the EDL, drift fit, ring
+  buffer, script alignment, and Codable/manifest contracts, plus an
+  `AVideosStudioTests` target and a test action on the scheme. Run these
+  first on the Mac — no hardware needed, and they cover the layers
+  everything else sits on.
+- App icon asset catalog (placeholder mark), README/TESTING/DEV_SETUP
+  updates including a Mac-day bring-up runbook.
+
+Layout-cue timebase note: `LayoutCue.atTime` is now documented and tested as
+*source* time throughout.
+
 ## 2026-07-26 — AVideos Studio: six-cluster review & consistency pass
 
 Parallel reviewer agents swept the uncompiled codebase, one per seam-heavy

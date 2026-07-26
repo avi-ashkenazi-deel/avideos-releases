@@ -30,9 +30,10 @@ Two products share this repository and one XcodeGen `project.yml`:
 | Podcast mode (local 4K recording, chunked upload, drift-aligned import) | `Mac/Podcast/`, `web/guest/recorder.js`, `infra/worker/` |
 | Teleprompter (+ phone remote) | `Mac/Teleprompter/`, `web/guest/prompter.html` |
 | AI editor (transcribe, take selection, cleanup, captions, clips, chapters) | `Mac/PostEdit/` |
-| Smart reframe, scene analysis, brand kit, B-roll | `Mac/ClipStudio/` |
+| Clip Studio (clip suggestions, moment search, smart reframe, brand kit, B-roll, caption templates) | `Mac/ClipStudio/` |
 | Publishing (YouTube/TikTok, scheduling) | `Mac/Publish/` |
 | Studio UI | `Mac/UI/` |
+| Unit tests (EDL, drift fit, ring buffer, alignment, Codable/manifest) | `Tests/AVideosStudioTests/` |
 
 ---
 

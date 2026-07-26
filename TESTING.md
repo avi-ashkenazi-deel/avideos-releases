@@ -124,3 +124,26 @@ Each phase's exit demo, as checkboxes. Requires a Mac (see docs/DEV_SETUP.md).
 - [ ] Record 3 takes of a scripted intro with flubs → AI Edit proposes the best take; Apply, then recover a rejected take.
 - [ ] Suggest Clips → ranked list; Export Vertical produces 9:16 with word-by-word captions.
 - [ ] Chapters → YouTube-format list lands on the clipboard and exports as a sidecar.
+
+## Clip Studio
+- [ ] Clip Studio opens from the editor toolbar; without a transcript the AI buttons are disabled and the footer says why.
+- [ ] Find Clips → ranked suggestions with score badges; Preview seeks the program preview to that moment.
+- [ ] Search "the part about <topic>" → results jump the preview to each match.
+- [ ] B-Roll → suggestions list cutaway windows and match the session's own video files by name.
+- [ ] Look tab: pick a caption template, tweak size/position, Save as a new template → it reappears after relaunch.
+- [ ] Apply Brand Colors → caption swatches change; Save Brand Kit persists across relaunch.
+- [ ] Reframe tab: Analyze Session reports speaker segments and per-track face counts.
+- [ ] Compute Crop Paths, then export a 9:16 clip → the speaker stays framed (no center-cropped foreheads), and the crop cuts rather than pans when the speaker changes.
+- [ ] Turn Smart reframe off and export the same clip → visibly center-cropped, confirming the path is doing the work.
+
+## Publishing
+- [ ] Publish opens from the editor toolbar and pre-fills the most recent export.
+- [ ] With nothing connected, each platform row says how to connect; publishing a YouTube item fails with a clear "sign in" message rather than silently.
+- [ ] YouTube form: Append Chapters drops the generated chapter list into the description.
+- [ ] Queue an item → row shows progress, then Published with an Open link (upload lands as private on YouTube).
+- [ ] Schedule for 2 minutes out → row shows the time, fires while the app is running.
+- [ ] A failed upload shows the error and Retry re-runs it; Remove clears the row.
+- [ ] Instagram: publishing reveals the file in Finder and explains the public-URL limitation.
+
+## Unit tests (no hardware needed)
+- [ ] `xcodegen generate`, then Cmd-U (or `xcodebuild test -scheme AVideosStudio`) → all tests in `Tests/AVideosStudioTests/` pass.

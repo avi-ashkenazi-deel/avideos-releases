@@ -34,6 +34,32 @@ packaging fights XcodeGen, vendor it as a submodule under
    toggles. Grep for them on the first compile pass:
    `grep -rn "verify on Mac" Mac/ CameraExtension/ driver/`
 
+## Mac-day runbook (recommended order)
+
+The codebase was authored without a compiler, so the first Mac session is a
+bring-up session. Cheapest-first:
+
+1. `brew install xcodegen && xcodegen generate`.
+2. **Run the unit tests before anything else** (Cmd-U, or
+   `xcodebuild test -scheme AVideosStudio`). They need no hardware,
+   entitlements, or network, so they are the fastest way to shake out
+   compile errors in the model, EDL, alignment, ring buffer, and manifest
+   decoding — the layers everything else sits on.
+3. Build the app target and work through the compiler diagnostics; expect
+   most of them where `// verify on Mac:` comments already flag an
+   assumption (step 3 of the checklist above).
+4. Run the app with no extension and no driver: scenes, elements, effects,
+   preview, recording, editor, Clip Studio and Publish panels all work
+   without either. This isolates plain app bugs from device bring-up.
+5. Only then do the two spikes that need real certs — camera extension,
+   then audio driver (sections below). Keep them frozen once they work.
+6. Deploy the Worker + Pages and create the R2 bucket **with a CORS policy
+   allowing PUT from the Pages origin** — browser uploads go straight to
+   R2, so without it guest recording uploads fail while everything else
+   looks healthy.
+7. Add the ffmpeg helper before testing podcast import; add the Anthropic
+   API key (Settings) before testing anything AI-driven.
+
 ## Camera extension dev loop
 
 - Activation requires the app in `/Applications` **unless** developer mode:
