@@ -6,9 +6,12 @@ import Foundation
 /// - **Source time**: seconds on the common recording timeline shared by all
 ///   tracks (all `EditTrack` files start at t = 0, pre-aligned by import).
 /// - **Timeline (edited) time**: seconds in the edited program, i.e. source
-///   time with disabled clips removed. `LayoutCue.atTime` and
-///   `Chapter.startTime` are expressed in *timeline* time, because they are
-///   authored against the edited preview.
+///   time with disabled clips removed. `Chapter.startTime` is expressed in
+///   *timeline* time, because chapters are authored against the edited
+///   program. `LayoutCue.atTime` is *source* time instead, so a cut made
+///   elsewhere never detaches a layout from the content it was set on;
+///   CompositionBuilder maps cues through the EDL when it builds
+///   instructions.
 ///
 /// Everything in this file is a pure value type; the mutating helpers on
 /// `EditDecisionList` are deterministic functions of their inputs and are the
