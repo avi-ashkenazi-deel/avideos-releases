@@ -1,6 +1,6 @@
 # AVideos Studio — full feature checklist
 
-All 287 user-facing features, each with a stable ID so you can report
+All 308 user-facing features, each with a stable ID so you can report
 back precisely ("F-42 fails"). Ordered so you can work top to bottom: each
 section only depends on the ones above it.
 
@@ -110,10 +110,34 @@ code editor.
 
 ## F. Entry / exit animations
 
-- [ ] **F-51** Entry styles, one each: None, Fade, Slide from Left, Slide from Right, Slide from Top, Slide from Bottom, Scale Up, Pop (8 total). **[offline]**
-- [ ] **F-52** Exit is the reverse of entry (hide an element and watch it leave the way it came). **[offline]**
+20 styles in 7 families, grouped in the Animate tab's picker. **Play Entry**
+replays just the entrance, which is the quick way to compare them.
+
+- [ ] **F-51** **Fade** — opacity only. **[offline]**
+- [ ] **F-288** **Slide from Left / Right / Top / Bottom** — starts fully off-canvas and glides in (4). **[offline]**
+- [ ] **F-289** **Drift from Left / Right** — a short offset plus a fade, never leaving the frame (2). **[offline]**
+- [ ] **F-290** **Rise Up** — starts slightly low and rises to rest. The tasteful default for text over a face. **[offline]**
+- [ ] **F-291** **Settle Down** — starts slightly high and settles. **[offline]**
+- [ ] **F-292** **Scale Up** — grows from 60% with a fade. **[offline]**
+- [ ] **F-293** **Scale Down** — arrives from 140%, reading as coming to rest. **[offline]**
+- [ ] **F-294** **Pop** — small overshoot past 100% and settles. **[offline]**
+- [ ] **F-295** **Spring Up** — rises, passes its mark, springs back. **[offline]**
+- [ ] **F-296** **Bounce In** — visibly bounces more than once, then rests. **[offline]**
+- [ ] **F-297** **Wipe Horizontal / Vertical** — one axis grows from zero at full opacity; made for lower-third bars (2). **[offline]**
+- [ ] **F-298** **Flip Horizontal / Vertical** — one axis 0→1 with a slight overshoot, like a card turning (2). **[offline]**
+- [ ] **F-299** **Rotate In** — a small tilt straightens out with scale and fade. **[offline]**
+- [ ] **F-300** **Swing In** — the tilt oscillates and settles. **[offline]**
+- [ ] **F-301** Every style ends **exactly** at the element's resting position — nothing is left nudged off-place after it plays. **[offline]**
+- [ ] **F-302** Nothing flashes at full opacity on the first frame of any entry. **[offline]**
+- [ ] **F-52** Exit is the reverse of entry, for all 20 (hide an element and watch it leave the way it came). **[offline]**
+- [ ] **F-303** **Play Entry** replays the entrance without hiding the element first. **[offline]**
+- [ ] **F-304** Picking a style adopts a duration that suits it (a Bounce is slower than a Fade) and the duration slider still overrides it. **[offline]**
+- [ ] **F-305** The picker is grouped by family (Fade / Slide / Drift / Scale / Spring / Reveal / Rotate), not one flat list of 21. **[offline]**
 - [ ] **F-53** Curves change the feel: Linear, Ease In, Ease Out, Ease In-Out. **[offline]**
+- [ ] **F-306** Spring Up, Bounce In and Swing In ignore the curve (they *are* timing functions) and the inspector says so; every other style responds to it. **[offline]**
 - [ ] **F-54** Duration and delay controls behave. **[offline]**
+- [ ] **F-307** Animations run correctly on text, shapes, images, video and web overlays alike — including several layered over a screen share. **[offline]**
+- [ ] **F-308** Overlay animations reach the virtual camera and the recording, not just the preview. **[cert]**
 
 ## G. Camera effects
 

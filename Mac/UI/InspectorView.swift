@@ -251,16 +251,29 @@ struct InspectorView: View {
     private var animateTab: some View {
         if let element = selectedElement {
             VStack(alignment: .leading, spacing: 10) {
+                // Grouped by family: 21 styles in one flat list is a wall of
+                // names. Picking a style also adopts the duration that suits
+                // it, so a bounce doesn't inherit a fade's 0.35s.
                 Picker("Entry", selection: Binding(
                     get: { element.entryAnimation.style },
                     set: { newStyle in
                         var updated = element
                         updated.entryAnimation.style = newStyle
+                        updated.entryAnimation.duration = newStyle.suggestedDuration
                         studio.updateElement(updated)
                     }
                 )) {
-                    ForEach(EntryAnimation.Style.allCases, id: \.self) { style in
-                        Text(style.displayName).tag(style)
+                    ForEach(EntryAnimation.Style.Category.allCases, id: \.self) { category in
+                        let styles = EntryAnimation.Style.styles(in: category)
+                        if styles.count == 1, let only = styles.first {
+                            Text(only.displayName).tag(only)
+                        } else {
+                            Section(category.rawValue) {
+                                ForEach(styles, id: \.self) { style in
+                                    Text(style.displayName).tag(style)
+                                }
+                            }
+                        }
                     }
                 }
 
@@ -272,6 +285,13 @@ struct InspectorView: View {
                         studio.updateElement(updated)
                     }
                 ), range: 0.1...2)
+
+                if element.entryAnimation.style.definesOwnTiming {
+                    Text("This style carries its own timing, so the curve below has no effect on it.")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
 
                 Picker("Curve", selection: Binding(
                     get: { element.entryAnimation.curve },
@@ -290,11 +310,17 @@ struct InspectorView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
-                Button("Preview In/Out") {
-                    studio.toggleElementVisibility(id: element.id)
-                    Task {
-                        try? await Task.sleep(for: .seconds(element.entryAnimation.duration + 0.8))
+                HStack {
+                    // Replays the entry alone — the fast way to compare styles.
+                    Button("Play Entry") {
+                        studio.replayEntryAnimation(id: element.id)
+                    }
+                    Button("Preview In/Out") {
                         studio.toggleElementVisibility(id: element.id)
+                        Task {
+                            try? await Task.sleep(for: .seconds(element.entryAnimation.duration + 0.8))
+                            studio.toggleElementVisibility(id: element.id)
+                        }
                     }
                 }
             }
@@ -331,7 +357,7 @@ struct InspectorView: View {
                                   transform: ElementTransform(center: CGPoint(x: 0.5, y: 0.8),
                                                               size: CGSize(width: 0.5, height: 0.12)),
                                   fill: .solid(.white),
-                                  entryAnimation: EntryAnimation(style: .slideFromBottom)))
+                                  entryAnimation: .styled(.slideFromBottom)))
     }
 
     private func addShape() {
@@ -340,7 +366,7 @@ struct InspectorView: View {
                                   transform: ElementTransform(center: CGPoint(x: 0.5, y: 0.82),
                                                               size: CGSize(width: 0.55, height: 0.16)),
                                   fill: .shader(ShaderFill()),
-                                  entryAnimation: EntryAnimation(style: .slideFromLeft)))
+                                  entryAnimation: .styled(.slideFromLeft)))
     }
 
     private func addMedia(images: Bool) {
@@ -350,11 +376,11 @@ struct InspectorView: View {
         if images {
             studio.addElement(Element(name: url.lastPathComponent,
                                       kind: .image(MediaReference(url: url)),
-                                      entryAnimation: EntryAnimation(style: .fade)))
+                                      entryAnimation: .styled(.fade)))
         } else {
             studio.addElement(Element(name: url.lastPathComponent,
                                       kind: .video(VideoContent(media: MediaReference(url: url))),
-                                      entryAnimation: EntryAnimation(style: .fade)))
+                                      entryAnimation: .styled(.fade)))
         }
     }
 
@@ -362,7 +388,7 @@ struct InspectorView: View {
         studio.addElement(Element(name: "Web Overlay",
                                   kind: .web(WebContent(urlString: "https://example.com")),
                                   transform: .fullCanvas,
-                                  entryAnimation: EntryAnimation(style: .fade)))
+                                  entryAnimation: .styled(.fade)))
     }
 
     // MARK: - Binding helpers

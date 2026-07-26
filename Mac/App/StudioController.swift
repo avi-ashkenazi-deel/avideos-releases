@@ -295,6 +295,24 @@ final class StudioController {
     }
 
     /// Show/hide with entry/exit animation (exit = reversed entry).
+    /// Replays an element's entry animation from the start without hiding it
+    /// first — the way to actually judge one of the twenty styles while
+    /// choosing. A no-op for hidden elements (there is nothing to show).
+    func replayEntryAnimation(id: UUID) {
+        guard let element = findElement(id: id), element.isVisible else { return }
+        let now = CMClockGetTime(CMClockGetHostTimeClock()).seconds
+        elementAnimations[id] = .entering(startSeconds: now)
+        recompileAndPublish()
+        // Settle back to resting once it finishes, so the plan stops animating.
+        let duration = element.entryAnimation.duration
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(duration + 0.1))
+            guard let self else { return }
+            self.elementAnimations[id] = .resting
+            self.recompileAndPublish()
+        }
+    }
+
     func toggleElementVisibility(id: UUID) {
         guard var element = findElement(id: id) else { return }
         let now = CMClockGetTime(CMClockGetHostTimeClock()).seconds

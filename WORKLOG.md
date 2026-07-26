@@ -9,6 +9,41 @@ A running log of what we've built and shipped.
   fields don't accept emojis. (Chat replies may still use them; this rule is
   specifically about text pasted into TestFlight / App Store Connect.)
 
+## 2026-07-26 — AVideos Studio: 20 entry animations for overlay layers
+
+Overlay text/shape/image layers had 7 entry animations. Expanded to 20,
+chosen to cover the *feels* broadcast overlays need rather than 20 variants
+of one idea, and grouped into families in the inspector (a flat list of 21
+is a wall):
+
+- Fade; Slide from Left/Right/Top/Bottom (fully off-canvas).
+- **Drift** from Left/Right, Rise Up, Settle Down — a short offset plus a
+  fade, never leaving the frame. The restrained family, and the one to use
+  for text over a face.
+- Scale Up, Scale Down (arrives from 140%), Pop (small overshoot).
+- Spring Up (soft overshoot on position), Bounce In (decaying bounce).
+- **Reveal**: Wipe Horizontal/Vertical grow one axis from zero at full
+  opacity — made for lower-third bars; Flip Horizontal/Vertical add a slight
+  overshoot for a card-turn read.
+- Rotate In (small tilt straightens), Swing In (tilt oscillates and settles).
+
+Deliberately excluded: multi-turn spins, elastic rubber-banding, diagonal
+fly-ins. Also excluded because they need shader/text work rather than a
+curve, and faking them would be worse than not having them: blur reveals,
+mask wipes, per-glyph typewriter.
+
+Contract enforced by tests, since a violation is subtle on screen and
+permanent in the document: every style lands **exactly** on the resting
+transform at progress 1, draws nothing at 0, never dips in opacity mid-entry,
+and never produces negative or non-finite geometry. Exit stays "entry
+reversed", which is why those two endpoints are the whole contract.
+
+Springs/bounces/oscillations now declare `definesOwnTiming` and run on linear
+progress — easing a bounce muddies it — and the inspector says so. Picking a
+style adopts a duration that flatters it (a bounce is slower than a fade).
+Added `replayEntryAnimation` behind a **Play Entry** button, since comparing
+twenty styles by hiding and showing an element is unusable.
+
 ## 2026-07-26 — AVideos Studio: source framing (fit / fill / blurred backdrop)
 
 The program canvas is 16:9 (or 9:16), but a shared window rarely is. Found
