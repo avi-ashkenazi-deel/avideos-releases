@@ -126,11 +126,11 @@ export class LocalRecorder extends EventTarget {
 
     this.takeId = takeId;
     this._state = {
-      audio: this._makeKindState("audio", new MediaRecorder(new MediaStream([this.audioTrack]), {
+      audio: this._makeKindState("audio", takeId, new MediaRecorder(new MediaStream([this.audioTrack]), {
         mimeType: AUDIO_MIME,
         audioBitsPerSecond: AUDIO_BPS,
       }), { mimeType: AUDIO_MIME }),
-      video: this._makeKindState("video", new MediaRecorder(new MediaStream([this.videoTrack]), {
+      video: this._makeKindState("video", takeId, new MediaRecorder(new MediaStream([this.videoTrack]), {
         mimeType: videoMime,
         videoBitsPerSecond: videoBps,
       }), { mimeType: videoMime, width, height, videoBitsPerSecond: videoBps }),
@@ -155,7 +155,7 @@ export class LocalRecorder extends EventTarget {
   }
 
   /** Build per-kind runtime state and wire recorder events. */
-  _makeKindState(kind, recorder, extra) {
+  _makeKindState(kind, takeId, recorder, extra) {
     const state = {
       kind,
       recorder,

@@ -109,6 +109,10 @@ final class AudioEngineController {
         } catch {
             log.error("Mix engine failed to start: \(error.localizedDescription)")
         }
+        // verify on Mac: device pinning after engine.start() — if the HAL
+        // rejects switching a running output unit, move this before
+        // graph.start() (setMonitorDevice(uid:) mid-session may also need a
+        // stop/start cycle).
         _ = deviceManager.setOutputDevice(uid: settings.monitorDeviceUID, on: graph.engine)
         micCapture.start(deviceUID: settings.micDeviceUID,
                          voiceProcessing: settings.voiceProcessingEnabled)

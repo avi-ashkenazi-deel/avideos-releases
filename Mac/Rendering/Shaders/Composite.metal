@@ -37,9 +37,9 @@ vertex VSOut composite_vertex(uint vid [[vertex_id]],
 // Signed distance to a rounded-rectangle edge in pixel space; positive inside.
 static float roundedRectMask(float2 uv, float2 sizePx, float radiusPx) {
     float2 p = (uv - 0.5) * sizePx;               // centered pixel coords
-    float2 half = sizePx * 0.5;
-    float r = clamp(radiusPx, 0.0, min(half.x, half.y));
-    float2 q = abs(p) - (half - r);
+    float2 halfSize = sizePx * 0.5;               // ("half" is an MSL type)
+    float r = clamp(radiusPx, 0.0, min(halfSize.x, halfSize.y));
+    float2 q = abs(p) - (halfSize - r);
     float dist = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;
     // 1px anti-aliased edge.
     return saturate(0.5 - dist);

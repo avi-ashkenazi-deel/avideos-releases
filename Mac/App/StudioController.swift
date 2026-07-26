@@ -375,9 +375,11 @@ final class StudioController {
     // MARK: - Edit mode
 
     func openEditor(tracks: [EditTrack], sessionId: String) {
-        let editProject = EditProject(sessionId: sessionId,
-                                      name: "Session \(sessionId)",
-                                      tracks: tracks)
+        // EditProject's memberwise init requires an `edl:`; `make` builds the
+        // initial EDL + layout cues from the imported tracks.
+        let editProject = EditProject.make(sessionId: sessionId,
+                                           name: "Session \(sessionId)",
+                                           tracks: tracks)
         mode = .edit(editProject)
     }
 
