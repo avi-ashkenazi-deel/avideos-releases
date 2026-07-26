@@ -23,7 +23,6 @@ struct EditWorkspaceView: View {
     @State private var showingClips = false
     @State private var errorMessage: String?
 
-    private let store = EditProjectStore()
 
     init(project: EditProject, onClose: @escaping () -> Void) {
         self._project = State(initialValue: project)
@@ -489,7 +488,7 @@ struct EditWorkspaceView: View {
     }
 
     private func persist() {
-        try? store.save(project)
+        try? EditProjectStore.write(project)
     }
 
     private func snapRange(_ range: ClosedRange<Double>) -> ClosedRange<Double> {
