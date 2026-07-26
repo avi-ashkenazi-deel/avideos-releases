@@ -194,6 +194,14 @@ final class EffectChainRenderer {
 
     // MARK: - Core Image effects
 
+    // Orientation: CIImage(mtlTexture:) and render(_:to:commandBuffer:) use
+    // the same texel addressing, so the texture → CIImage → texture round
+    // trip preserves orientation without an .oriented(.downMirrored) fix (the
+    // flip only appears when CI output meets a bottom-left-origin consumer).
+    // Every filter used here is per-pixel or symmetric, and the segmentation
+    // mask goes through the same wrap, so inputs stay consistent either way.
+    // verify on Mac: if effect-chained layers render vertically flipped,
+    // apply .oriented(.downMirrored) after the wrap and before the render.
     private func coreImage(input: MTLTexture,
                            commandBuffer: MTLCommandBuffer,
                            transform: (CIImage) -> CIImage) -> MTLTexture {

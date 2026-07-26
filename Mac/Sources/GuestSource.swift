@@ -106,6 +106,14 @@ final class GuestSource: FrameSource {
             MTLSize(width: (width + w - 1) / w, height: (height + h - 1) / h, depth: 1),
             threadsPerThreadgroup: MTLSize(width: w, height: h, depth: 1))
         encoder.endEncoding()
+        // Keep the CVMetalTexture wrappers (and the LiveKit pixel buffer they
+        // view) alive until the GPU has read them — the caller may recycle
+        // the buffer as soon as ingest returns.
+        commandBuffer.addCompletedHandler { _ in
+            _ = yRef
+            _ = cbcrRef
+            _ = pixelBuffer
+        }
         commandBuffer.commit()
         // No waitUntilCompleted: the mailbox swap happens now, and by the time
         // the render pass samples this texture the tiny conversion has long
