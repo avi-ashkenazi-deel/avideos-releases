@@ -121,6 +121,10 @@ final class GuestSource: FrameSource {
         // No waitUntilCompleted: the mailbox swap happens now, and by the time
         // the render pass samples this texture the tiny conversion has long
         // finished; Metal hazard tracking orders access within the device.
+        // verify on Mac: automatic hazard tracking across *different* command
+        // queues is not contractually guaranteed. If guest tiles ever show
+        // shearing/flicker, signal an MTLSharedEvent after this commit and
+        // wait on it from the compositor's queue (or convert there directly).
         return output
     }
 
