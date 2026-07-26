@@ -157,6 +157,21 @@ targets:
         ENABLE_PREVIEWS: YES
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
 
+  # Unit tests for AVideos Studio's pure logic (EDL arithmetic, transcript
+  # alignment, drift fitting, ring buffer, Codable round-trips). No hardware,
+  # no network — runnable with Cmd-U or `xcodebuild test -scheme AVideosStudio`.
+  AVideosStudioTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: Tests/AVideosStudioTests
+    dependencies:
+      - target: AVideosStudio
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.aviashkenazi.avideos.tests
+        GENERATE_INFOPLIST_FILE: YES
+
   # CoreMediaIO camera extension — publishes the "AVideos Camera" that Zoom /
   # Meet / Teams list. Sandboxed (mandatory for CMIO extensions).
   CameraExtension:
@@ -224,6 +239,10 @@ schemes:
         AVideosStudio: all
     run:
       config: Debug
+    test:
+      config: Debug
+      targets:
+        - AVideosStudioTests
     profile:
       config: Release
     analyze:

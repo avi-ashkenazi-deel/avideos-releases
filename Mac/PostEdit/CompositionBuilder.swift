@@ -246,7 +246,8 @@ final class CompositionBuilder {
                 participantByTrackID: videoTrackParticipants,
                 participantOrder: orderedParticipants,
                 speakerTimeline: speakerTimeline,
-                captionContext: captionContext)
+                captionContext: captionContext,
+                cropPaths: project.cropPaths ?? [:])
             instructions.append(instruction)
         }
         videoComposition.instructions = instructions
@@ -288,19 +289,25 @@ final class LayoutCompositionInstruction: NSObject, AVVideoCompositionInstructio
     let participantOrder: [String]
     let speakerTimeline: [(time: Double, participantId: String)]
     let captionContext: CaptionRenderContext?
+    /// Smart-reframe crop paths per participant (normalized, y-down source
+    /// space). Empty means center-crop, which is what every tile did before
+    /// Clip Studio could compute paths.
+    let cropPaths: [String: [CropKeyframe]]
 
     init(timeRange: CMTimeRange,
          layout: ProgramLayout,
          participantByTrackID: [CMPersistentTrackID: String],
          participantOrder: [String],
          speakerTimeline: [(time: Double, participantId: String)],
-         captionContext: CaptionRenderContext?) {
+         captionContext: CaptionRenderContext?,
+         cropPaths: [String: [CropKeyframe]] = [:]) {
         self.timeRange = timeRange
         self.layout = layout
         self.participantByTrackID = participantByTrackID
         self.participantOrder = participantOrder
         self.speakerTimeline = speakerTimeline
         self.captionContext = captionContext
+        self.cropPaths = cropPaths
         self.requiredSourceTrackIDs = participantByTrackID.keys.map { NSNumber(value: $0) }
         super.init()
     }
@@ -400,7 +407,10 @@ final class LayoutVideoCompositor: NSObject, AVVideoCompositing {
         let tiles = Self.tiles(for: instruction, at: time, participants: instruction.participantOrder.filter { frames[$0] != nil }, canvas: canvas)
         for (participantId, rect) in tiles {
             guard let frame = frames[participantId] else { continue }
-            image = Self.aspectFill(frame, into: rect).composited(over: image)
+            let crop = instruction.cropPaths[participantId].map {
+                SmartReframer.rect(at: time, in: $0)
+            }
+            image = Self.focusFill(frame, into: rect, normalizedCrop: crop).composited(over: image)
         }
 
         if let captions = instruction.captionContext,
@@ -469,6 +479,26 @@ final class LayoutVideoCompositor: NSObject, AVVideoCompositing {
     }
 
     /// Scale-to-fill with center crop, clamped to the destination rect.
+    /// Aspect-fill, but first narrow the source to a smart-reframe crop
+    /// window when one exists for this participant. `normalizedCrop` is
+    /// y-DOWN (SceneAnalyzer flips Vision's boxes), while CoreImage's extent
+    /// is y-up, hence the vertical flip.
+    static func focusFill(_ image: CIImage, into rect: CGRect, normalizedCrop: CGRect?) -> CIImage {
+        guard let crop = normalizedCrop else { return aspectFill(image, into: rect) }
+        let extent = image.extent
+        guard extent.width > 0, extent.height > 0,
+              crop.width > 0, crop.height > 0 else {
+            return aspectFill(image, into: rect)
+        }
+        let window = CGRect(x: extent.minX + crop.minX * extent.width,
+                            y: extent.minY + (1 - crop.maxY) * extent.height,
+                            width: crop.width * extent.width,
+                            height: crop.height * extent.height)
+        let cropped = image.cropped(to: window.intersection(extent))
+        guard !cropped.extent.isEmpty else { return aspectFill(image, into: rect) }
+        return aspectFill(cropped, into: rect)
+    }
+
     static func aspectFill(_ image: CIImage, into rect: CGRect) -> CIImage {
         let extent = image.extent
         guard extent.width > 0, extent.height > 0, rect.width > 0, rect.height > 0 else {

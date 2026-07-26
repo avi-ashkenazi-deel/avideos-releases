@@ -400,6 +400,10 @@ struct EditProject: Codable, Sendable, Identifiable, Equatable {
     var captions: CaptionStyle?
     var transcript: Transcript?
     var chapters: [Chapter]
+    /// Smart-reframe crop paths keyed by participant id, produced by Clip
+    /// Studio (SceneAnalyzer → SmartReframer) and consumed by
+    /// CompositionBuilder. Absent means every tile center-crops as before.
+    var cropPaths: [String: [CropKeyframe]]?
     var schemaVersion: Int
 
     /// `edl` defaults to a fresh full-length EDL derived from the tracks, so
@@ -414,6 +418,7 @@ struct EditProject: Codable, Sendable, Identifiable, Equatable {
          captions: CaptionStyle? = nil,
          transcript: Transcript? = nil,
          chapters: [Chapter] = [],
+         cropPaths: [String: [CropKeyframe]]? = nil,
          schemaVersion: Int = EditProject.currentSchemaVersion) {
         self.id = id
         self.sessionId = sessionId
@@ -424,6 +429,7 @@ struct EditProject: Codable, Sendable, Identifiable, Equatable {
         self.captions = captions
         self.transcript = transcript
         self.chapters = chapters
+        self.cropPaths = cropPaths
         self.schemaVersion = schemaVersion
     }
 

@@ -60,7 +60,7 @@ struct PublishItem: Identifiable, Codable {
 final class PublishQueue {
     private(set) var items: [PublishItem] = []
     private var timer: Timer?
-    private let auth = PlatformAuth()
+    let auth = PlatformAuth()
     private let log = Logger(subsystem: "com.aviashkenazi.avideos", category: "publish")
 
     init() {
@@ -162,6 +162,20 @@ final class PlatformAuth: NSObject {
             throw AuthError.notAuthorized(platform)
         }
         return token
+    }
+
+    /// Whether a token is stored for `platform`. Keychain-backed, so this
+    /// reflects exactly what `accessToken(for:)` will find.
+    func isAuthorized(_ platform: PublishPlatform) -> Bool {
+        (try? accessToken(for: platform)) != nil
+    }
+
+    func removeToken(for platform: PublishPlatform) {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: keychainKey(platform),
+        ]
+        SecItemDelete(query as CFDictionary)
     }
 
     func storeToken(_ token: String, for platform: PublishPlatform) {

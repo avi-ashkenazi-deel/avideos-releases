@@ -21,6 +21,7 @@ struct EditWorkspaceView: View {
     @State private var showingProposals = false
     @State private var clipSuggestions: [ClipSuggestion] = []
     @State private var showingClips = false
+    @State private var showingClipStudio = false
     @State private var errorMessage: String?
 
 
@@ -77,6 +78,15 @@ struct EditWorkspaceView: View {
         .task { await initialLoad() }
         .sheet(isPresented: $showingProposals) { proposalSheet }
         .sheet(isPresented: $showingClips) { clipsSheet }
+        .sheet(isPresented: $showingClipStudio) {
+            ClipStudioView(project: $project,
+                           snapper: snapper,
+                           seek: { preview.seek(to: $0) },
+                           export: { exportProject, target in
+                               exporter.export(project: exportProject, target: target)
+                           },
+                           onClose: { showingClipStudio = false; projectChanged() })
+        }
         .alert("Something went wrong", isPresented: Binding(
             get: { errorMessage != nil },
             set: { if !$0 { errorMessage = nil } }
@@ -236,6 +246,12 @@ struct EditWorkspaceView: View {
                 Label("Chapters", systemImage: "list.number")
             }
             .disabled(project.transcript == nil)
+
+            Button {
+                showingClipStudio = true
+            } label: {
+                Label("Clip Studio", systemImage: "sparkles.rectangle.stack")
+            }
 
             Menu {
                 Button("Audio Master (WAV)") { exporter.export(project: project, target: .audioMaster(aac: false)) }
