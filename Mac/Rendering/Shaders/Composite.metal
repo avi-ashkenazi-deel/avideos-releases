@@ -160,3 +160,37 @@ fragment float4 composite_fragment(VSOut in [[stage_in]],
     float alpha = color.a * glyphAlpha * u.opacity * mask;
     return float4(color.rgb * alpha, alpha);   // premultiply
 }
+
+// ---- preview blit -----------------------------------------------------------
+
+// Aspect-fit display of the program texture in the preview MTKView.
+// Reuses blend_vertex's fullscreen triangle from Blend.metal.
+struct PreviewUniforms {
+    float2 scale;    // uv scale for letterboxing (>=1 on the padded axis)
+    float2 _pad;
+};
+
+struct PreviewVSOut {
+    float4 position [[position]];
+    float2 uv;
+};
+
+vertex PreviewVSOut preview_vertex(uint vid [[vertex_id]]) {
+    const float2 pos[3] = { float2(-1, -1), float2(3, -1), float2(-1, 3) };
+    PreviewVSOut out;
+    out.position = float4(pos[vid], 0, 1);
+    out.uv = float2((pos[vid].x + 1.0) * 0.5, 1.0 - (pos[vid].y + 1.0) * 0.5);
+    return out;
+}
+
+fragment float4 preview_fragment(PreviewVSOut in [[stage_in]],
+                                 constant PreviewUniforms &u [[buffer(0)]],
+                                 texture2d<float> programTex [[texture(0)]],
+                                 sampler s [[sampler(0)]]) {
+    float2 uv = (in.uv - 0.5) * u.scale + 0.5;
+    if (any(uv < float2(0.0)) || any(uv > float2(1.0))) {
+        return float4(0.06, 0.06, 0.07, 1.0);   // letterbox bars
+    }
+    float4 c = programTex.sample(s, uv);
+    return float4(c.rgb, 1.0);
+}
