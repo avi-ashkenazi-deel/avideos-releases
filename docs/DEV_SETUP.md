@@ -48,8 +48,15 @@ bring-up session. Cheapest-first:
    regenerates for you). That excludes the camera extension and the audio
    driver from the app's dependencies — both are *embedded* deps, so without
    this the app cannot build until you have Developer ID certs and a vendored
-   libASPL. `--restore` puts them back for a release build; `--status` says
-   which mode you are in. It edits `project.yml`, so don't commit it.
+   libASPL. It also swaps in `AVideosStudio-dev.entitlements`, which omits
+   `com.apple.developer.system-extension.install` — that entitlement is
+   *restricted*, so only a provisioning profile can grant it, and its presence
+   makes even a local test run demand development signing. `--restore` puts
+   both back for a release build; `--status` says which mode you are in. It
+   edits `project.yml`, so don't commit it.
+
+   To skip signing entirely for a one-off test run:
+   `xcodebuild test -scheme AVideosStudio CODE_SIGNING_ALLOWED=NO`
 2. **Run the unit tests before anything else** (Cmd-U, or
    `xcodebuild test -scheme AVideosStudio`). They need no hardware,
    entitlements, or network, so they are the fastest way to shake out

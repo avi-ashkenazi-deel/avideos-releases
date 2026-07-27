@@ -20,6 +20,8 @@ cd "$(dirname "$0")/.."
 SPEC="project.yml"
 BEGIN="# dev-app-only:begin"
 END="# dev-app-only:end"
+REAL_ENT="CODE_SIGN_ENTITLEMENTS: Mac/Resources/AVideosStudio.entitlements"
+DEV_ENT="CODE_SIGN_ENTITLEMENTS: Mac/Resources/AVideosStudio-dev.entitlements"
 
 if ! grep -qF "$BEGIN" "$SPEC" || ! grep -qF "$END" "$SPEC"; then
     echo "error: markers missing from $SPEC — was the dependencies block edited by hand?" >&2
@@ -53,7 +55,8 @@ case "${1:-}" in
     fi
     # Strip one leading '#' from each body line, preserving indentation.
     sed -i '' "${body_start},${body_end}s/^\([[:space:]]*\)#/\1/" "$SPEC"
-    echo "Restored the extension and driver to the app's dependencies."
+    sed -i '' "s|$DEV_ENT|$REAL_ENT|" "$SPEC"
+    echo "Restored the extension and driver, and the shipping entitlements."
     ;;
 "")
     if is_disabled; then
@@ -61,7 +64,13 @@ case "${1:-}" in
         exit 0
     fi
     sed -i '' "${body_start},${body_end}s/^/#/" "$SPEC"
-    echo "Excluded the camera extension and audio driver from the app build."
+    # Swap in entitlements without com.apple.developer.system-extension.install.
+    # That one is restricted — only a provisioning profile can grant it — so
+    # leaving it in makes even a local test run demand development signing,
+    # and it is meaningless here since the extension is excluded.
+    sed -i '' "s|$REAL_ENT|$DEV_ENT|" "$SPEC"
+    echo "Excluded the camera extension and audio driver from the app build,"
+    echo "and switched to entitlements that sign ad-hoc."
     echo "The virtual camera and virtual microphone will be unavailable."
     ;;
 *)

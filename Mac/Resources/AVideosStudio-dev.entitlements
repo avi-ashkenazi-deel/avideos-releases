@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Development-only entitlements, selected by scripts/dev-app-only.sh.
+
+	     Identical to AVideosStudio.entitlements except that
+	     com.apple.developer.system-extension.install is absent. That one is a
+	     RESTRICTED entitlement: only a provisioning profile can grant it, so
+	     including it makes the build demand development signing even for a
+	     local test run — and it is useless in an app-only build anyway, because
+	     the camera extension target has been excluded.
+
+	     With this file the app signs ad-hoc and runs locally. The virtual
+	     camera is unavailable, which is expected: there is no extension to
+	     install. Use AVideosStudio.entitlements (--restore) for anything you
+	     intend to ship. -->
+	<key>com.apple.security.cs.disable-library-validation</key>
+	<true/>
+	<key>com.apple.security.device.audio-input</key>
+	<true/>
+	<key>com.apple.security.device.camera</key>
+	<true/>
+</dict>
+</plist>
