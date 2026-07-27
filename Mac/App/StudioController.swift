@@ -425,6 +425,20 @@ final class StudioController {
         mode = .edit(editProject)
     }
 
+    /// Opens the editor over a single file, with no session behind it.
+    ///
+    /// Probing is async, so this reports failure rather than opening an editor
+    /// on something that can't be read.
+    @discardableResult
+    func openEditor(fileURL: URL) async -> Bool {
+        let importer = ExternalMediaImporter()
+        guard case .ready(let probe) = await importer.probe(fileURL), probe.duration > 0 else {
+            return false
+        }
+        mode = .edit(EditProject.makeStandalone(media: MediaReference(url: fileURL), probe: probe))
+        return true
+    }
+
     func closeEditor() {
         mode = .live
     }

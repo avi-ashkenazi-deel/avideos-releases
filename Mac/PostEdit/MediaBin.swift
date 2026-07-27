@@ -68,6 +68,47 @@ struct ExternalTrackSettings: Codable, Sendable, Equatable {
 extension EditProject {
     var binItems: [MediaBinItem] { mediaBin ?? [] }
 
+    /// A project over one imported file, with no podcast session behind it —
+    /// for trimming and captioning a clip you were handed.
+    ///
+    /// The file becomes two tracks, video and audio, sharing a URL. That is
+    /// what keeps the waveform store, the thumbnail store, the mixer, the
+    /// timeline columns and the composition loop working with no special
+    /// cases: they all iterate `tracks`, and this is a project whose tracks
+    /// happen to come from one place.
+    static func makeStandalone(media: MediaReference,
+                               probe: MediaProbe) -> EditProject {
+        // A sentinel rather than an optional: `sessionId` is never parsed
+        // anywhere outside this type, so no schema change and no migration.
+        var project = EditProject(sessionId: "file:\(UUID().uuidString)",
+                                  name: media.displayName,
+                                  tracks: [],
+                                  edl: .initial(sourceDuration: probe.duration))
+        let added = project.addExternalTrack(media: media,
+                                             label: media.displayName,
+                                             duration: probe.duration,
+                                             hasVideo: probe.hasVideo,
+                                             hasAudio: probe.hasAudio)
+        // Its own audio is the point here, unlike an extra angle.
+        for trackID in added {
+            guard var settings = project.externalSettings(for: trackID) else { continue }
+            settings.audio = ExternalAudio(isEnabled: true, gainDB: 0, ducking: nil)
+            project.setExternalSettings(settings, for: trackID)
+        }
+        if let video = project.tracks.first(where: { $0.kind == .video }) {
+            project.layoutCues = [LayoutCue(atTime: 0,
+                                            layout: .fullScreen(participantId: video.participantId))]
+        }
+        project.addToBin(MediaBinItem(media: media,
+                                      duration: probe.duration,
+                                      hasVideo: probe.hasVideo,
+                                      hasAudio: probe.hasAudio))
+        return project
+    }
+
+    /// False for a standalone project, which several AI features need to know.
+    var hasSession: Bool { !sessionId.hasPrefix("file:") && !sessionId.isEmpty }
+
     // MARK: External tracks
 
     func externalSettings(for trackID: String) -> ExternalTrackSettings? {

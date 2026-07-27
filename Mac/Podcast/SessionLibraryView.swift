@@ -1,9 +1,12 @@
 import SwiftUI
+import AppKit
+import UniformTypeIdentifiers
 
 /// The session library: recorded podcast sessions → takes → per-participant
 /// tracks with live status, download/import pipeline, and "Open in Editor".
 struct SessionLibraryView: View {
     @Environment(StudioController.self) private var studio
+    @State private var standaloneError: String?
     @State private var selectedSessionID: String?
     @State private var isProcessing = false
 
@@ -15,6 +18,17 @@ struct SessionLibraryView: View {
                 .frame(minWidth: 220, maxWidth: 300)
             detail
                 .frame(minWidth: 420, maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .toolbar {
+            Button("New Project from a File…") { openStandalone() }
+        }
+        .alert("Couldn't open that file", isPresented: Binding(
+            get: { standaloneError != nil },
+            set: { if !$0 { standaloneError = nil } }
+        )) {
+            Button("OK") { standaloneError = nil }
+        } message: {
+            Text(standaloneError ?? "")
         }
     }
 
@@ -40,14 +54,32 @@ struct SessionLibraryView: View {
         }
     }
 
+    /// Opens the editor over one file, no session required.
+    private func openStandalone() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.movie, .mpeg4Movie, .quickTimeMovie, .audio]
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        Task {
+            if await studio.openEditor(fileURL: url) == false {
+                standaloneError = "\(url.lastPathComponent) couldn't be opened for editing."
+            }
+        }
+    }
+
     @ViewBuilder
     private var detail: some View {
         if let session = library.sessions.first(where: { $0.id == selectedSessionID }) {
             sessionDetail(session)
         } else {
-            ContentUnavailableView("Select a session",
-                                   systemImage: "waveform",
-                                   description: Text("Podcast-mode recordings appear here after a show."))
+            ContentUnavailableView {
+                Label("Select a session", systemImage: "waveform")
+            } description: {
+                Text("Podcast-mode recordings appear here after a show.")
+            } actions: {
+                // Exactly where someone with no sessions is standing, so this
+                // is where the "just edit a file" door belongs.
+                Button("New Project from a File…") { openStandalone() }
+            }
         }
     }
 

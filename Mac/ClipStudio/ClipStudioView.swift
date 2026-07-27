@@ -104,9 +104,8 @@ struct ClipStudioView: View {
 
     private var footer: some View {
         HStack {
-            if project.transcript == nil {
-                Label("Transcribe the session first to enable AI suggestions",
-                      systemImage: "exclamationmark.triangle")
+            if let reason = disabledReason {
+                Label(reason, systemImage: "exclamationmark.triangle")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -118,6 +117,21 @@ struct ClipStudioView: View {
             .keyboardShortcut(.defaultAction)
         }
         .padding(10)
+    }
+
+    /// The single most relevant thing blocking the AI features, or nil.
+    ///
+    /// One computed reason rather than a hard-coded string, so a standalone
+    /// project says something true — transcription works fine on one file, and
+    /// telling the user to "transcribe the session" when there isn't one is
+    /// just wrong.
+    private var disabledReason: String? {
+        if project.transcript == nil {
+            return project.hasSession
+                ? "Transcribe the session first to enable AI suggestions"
+                : "Transcribe this clip first to enable AI suggestions"
+        }
+        return nil
     }
 
     @ViewBuilder
