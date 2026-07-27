@@ -144,6 +144,8 @@ struct SettingsView: View {
                 .tabItem { Label("General", systemImage: "gearshape") }
             ShortcutsSettingsView()
                 .tabItem { Label("Shortcuts", systemImage: "keyboard") }
+            MIDISettingsView()
+                .tabItem { Label("MIDI", systemImage: "pianokeys") }
         }
         .frame(width: 560)
     }

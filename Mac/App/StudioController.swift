@@ -26,6 +26,7 @@ final class StudioController {
     let virtualCamera = VirtualCameraController()
     let recorder = ProgramRecorder()
     let audio = AudioEngineController()
+    let midi = MIDIController()
     let teleprompter: TeleprompterController
     let podcast: RecordingSessionController
     let guests: GuestSessionController?
@@ -76,6 +77,8 @@ final class StudioController {
         renderEngine?.start(canvasSize: project.canvasSize, fps: project.frameRate)
         recompileAndPublish()
         audio.start()
+        // After audio, since every MIDI action lands on the audio facade.
+        midi.start(audio: audio)
         virtualCamera.connectSinkIfNeeded()
     }
 
