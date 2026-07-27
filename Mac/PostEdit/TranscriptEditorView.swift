@@ -37,32 +37,44 @@ final class TranscriptEditModel {
         var newDisplays: [WordDisplay] = []
         let font = NSFont.systemFont(ofSize: 15)
 
-        for (index, word) in transcript.words.enumerated() {
-            let midTime = (word.start + word.end) / 2
-            let clip = edl.clips.first { $0.sourceRange.contains(midTime) }
-            let isCut = !(clip?.enabled ?? true)
+        // Walk the EDL **in program order**, including disabled segments at
+        // their sequence position. Three consequences, all intended:
+        //   - the transcript reads in the order the episode plays, so moving a
+        //     segment moves its text;
+        //   - cut words stay inline, struck through, where they were cut —
+        //     which is what makes them clickable to recover;
+        //   - a duplicated moment appears twice, because it is spoken twice.
+        // Words covered by no segment at all (hard-removed) simply don't
+        // appear: that material is no longer part of the project.
+        for clip in edl.clips {
+            let isCut = !clip.enabled
 
-            let hue = trackHues[word.trackId] ?? 0
-            let speakerColor = NSColor(hue: hue, saturation: 0.55, brightness: 0.9, alpha: 1)
+            for index in transcript.wordIndices(inSourceRange: clip.sourceRange) {
+                let word = transcript.words[index]
+                let midTime = (word.start + word.end) / 2
 
-            var attributes: [NSAttributedString.Key: Any] = [.font: font]
-            if isCut {
-                attributes[.foregroundColor] = NSColor.tertiaryLabelColor
-                attributes[.strikethroughStyle] = NSUnderlineStyle.single.rawValue
-            } else {
-                attributes[.foregroundColor] = speakerColor
+                let hue = trackHues[word.trackId] ?? 0
+                let speakerColor = NSColor(hue: hue, saturation: 0.55, brightness: 0.9, alpha: 1)
+
+                var attributes: [NSAttributedString.Key: Any] = [.font: font]
+                if isCut {
+                    attributes[.foregroundColor] = NSColor.tertiaryLabelColor
+                    attributes[.strikethroughStyle] = NSUnderlineStyle.single.rawValue
+                } else {
+                    attributes[.foregroundColor] = speakerColor
+                }
+                if let playheadSource, midTime >= playheadSource - 0.25, midTime <= playheadSource + 0.25 {
+                    attributes[.backgroundColor] = NSColor.selectedTextBackgroundColor
+                }
+
+                let text = word.text + " "
+                // NSRange is UTF-16 based (like NSAttributedString.length);
+                // `text.count` counts Characters and drifts on emoji/accents.
+                let range = NSRange(location: result.length, length: (text as NSString).length)
+                result.append(NSAttributedString(string: text, attributes: attributes))
+                newDisplays.append(WordDisplay(word: word, index: index, isCut: isCut,
+                                               clipID: clip.id, characterRange: range))
             }
-            if let playheadSource, midTime >= playheadSource - 0.25, midTime <= playheadSource + 0.25 {
-                attributes[.backgroundColor] = NSColor.selectedTextBackgroundColor
-            }
-
-            let text = word.text + " "
-            // NSRange is UTF-16 based (like NSAttributedString.length);
-            // `text.count` counts Characters and drifts on emoji/accents.
-            let range = NSRange(location: result.length, length: (text as NSString).length)
-            result.append(NSAttributedString(string: text, attributes: attributes))
-            newDisplays.append(WordDisplay(word: word, index: index, isCut: isCut,
-                                           clipID: clip?.id, characterRange: range))
         }
 
         displays = newDisplays

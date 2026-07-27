@@ -193,26 +193,27 @@ final class CompositionBuilder {
         videoComposition.frameDuration = CMTime(value: 1, timescale: 30)
 
         let duration = project.editedDuration
-        // Cues are source-time; the composition runs on the edited
-        // timeline. Map each cue through the EDL; a cue that falls inside
-        // a cut takes effect at the start of the next enabled clip.
-        let mappedCues: [LayoutCue] = project.layoutCues.compactMap { cue in
-            if let t = project.edl.mapSourceToTimeline(cue.atTime) {
-                return LayoutCue(id: cue.id, atTime: t, layout: cue.layout)
+        // Cues are source-anchored; the composition runs on the edited
+        // timeline. Rather than mapping each cue forward — which is ambiguous
+        // once a moment can play more than once — ask each *segment* which
+        // layout was in force at its source position. Every segment then
+        // carries the right layout at every occurrence, and a cue sitting
+        // inside a cut simply never wins.
+        let segments = project.edl.enabledSegments()
+        var mappedCues: [LayoutCue] = []
+        var previousLayout: ProgramLayout?
+        for (clip, timelineStart) in segments {
+            let layout = project.layoutCues.layout(at: clip.sourceRange.lowerBound, fallback: .grid)
+            if layout != previousLayout {
+                mappedCues.append(LayoutCue(atTime: timelineStart, layout: layout))
+                previousLayout = layout
             }
-            var acc = 0.0
-            for clip in project.edl.clips where clip.enabled {
-                if clip.sourceRange.lowerBound >= cue.atTime {
-                    return LayoutCue(id: cue.id, atTime: acc, layout: cue.layout)
-                }
-                acc += clip.duration
-            }
-            return nil   // no enabled content after the cue
         }
-        // Layout segments: boundaries at each cue time within (0, duration).
+
+        // Layout boundaries, in edited time. A segment boundary only matters
+        // here when the layout actually changes across it.
         var boundaries: [Double] = [0]
-        for cue in mappedCues.sorted(by: { $0.atTime < $1.atTime })
-        where cue.atTime > 0 && cue.atTime < duration {
+        for cue in mappedCues where cue.atTime > 0 && cue.atTime < duration {
             boundaries.append(cue.atTime)
         }
         boundaries.append(max(duration, 1.0 / 30.0))

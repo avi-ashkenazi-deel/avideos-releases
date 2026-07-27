@@ -110,18 +110,71 @@ struct Transcript: Codable, Sendable, Equatable {
 
     // MARK: Edit-aware views
 
-    /// Words whose midpoint lies in an enabled clip, together with their
-    /// *edited-timeline* start time. This is the input for chapter generation
-    /// and caption rendering on the edited program.
+    /// Words as they are actually spoken in the edited program, each with its
+    /// *edited-timeline* start time. The input for chapter generation, caption
+    /// rendering and the speaker timeline.
+    ///
+    /// Driven by the EDL's **segments**, not by the word list: it walks the
+    /// program in order and emits the words inside each enabled segment. Three
+    /// things follow from that, all of which the old word-first version got
+    /// wrong once clips could be reordered:
+    ///
+    /// - A duplicated moment yields its words **twice**, at both positions.
+    /// - The result is monotonic in timeline time by construction, which
+    ///   `speakerTimeline` and caption rendering both rely on.
+    /// - It costs one pass over the words per segment instead of a full EDL
+    ///   scan per word.
+    ///
+    /// `index` is the word's position in the source transcript, so it still
+    /// identifies the word uniquely — it just may appear more than once.
     func enabledWords(edl: EditDecisionList) -> [(index: Int, word: Word, timelineStart: Double)] {
+        guard !words.isEmpty else { return [] }
         var out: [(Int, Word, Double)] = []
-        for (i, w) in words.enumerated() {
-            let mid = (w.start + w.end) / 2
-            if let t = edl.mapSourceToTimeline(mid) {
-                // Shift so the returned time is the word *start* on the timeline.
-                out.append((i, w, max(0, t - (mid - w.start))))
+        var timelineStart = 0.0
+
+        for clip in edl.clips {
+            guard clip.enabled else { continue }
+            let lower = clip.sourceRange.lowerBound
+
+            for index in wordIndices(inSourceRange: clip.sourceRange) {
+                let word = words[index]
+                let mid = (word.start + word.end) / 2
+                // Offset so the reported time is the word's *start*, which can
+                // sit slightly before the segment when the cut fell mid-word.
+                out.append((index, word, max(0, timelineStart + (mid - lower) - (mid - word.start))))
             }
+            timelineStart += clip.duration
         }
         return out
+    }
+
+    /// Indices of the words whose midpoint falls inside a source range, in
+    /// source order. Words are sorted by time, so this is a contiguous run —
+    /// found by binary search rather than scanning the whole transcript.
+    ///
+    /// Shared by `enabledWords` and the transcript editor so both agree on
+    /// exactly which words belong to a segment.
+    func wordIndices(inSourceRange range: ClosedRange<Double>) -> Range<Int> {
+        guard !words.isEmpty else { return 0..<0 }
+        let start = firstWordIndex(withMidpointAtOrAfter: range.lowerBound)
+        var end = start
+        while end < words.count {
+            let word = words[end]
+            if (word.start + word.end) / 2 > range.upperBound { break }
+            end += 1
+        }
+        return start..<end
+    }
+
+    /// Binary search for the first word whose midpoint is >= `time`.
+    private func firstWordIndex(withMidpointAtOrAfter time: Double) -> Int {
+        var low = 0
+        var high = words.count
+        while low < high {
+            let mid = (low + high) / 2
+            let midpoint = (words[mid].start + words[mid].end) / 2
+            if midpoint < time { low = mid + 1 } else { high = mid }
+        }
+        return low
     }
 }

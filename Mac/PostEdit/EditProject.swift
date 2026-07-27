@@ -70,34 +70,62 @@ struct Clip: Codable, Sendable, Identifiable, Equatable {
 
 // MARK: - Edit Decision List
 
-/// Non-destructive EDL over the common source timeline.
+/// Non-destructive EDL: an ordered **sequence** of segments taken from the
+/// common source timeline.
 ///
 /// Invariants (maintained by every mutating helper):
-/// 1. `clips` is sorted by `sourceRange.lowerBound`.
-/// 2. Clips tile the source domain exactly: `clips[i].sourceRange.upperBound
-///    == clips[i+1].sourceRange.lowerBound`, first starts at 0, last ends at
-///    the source duration the EDL was created with.
+/// 1. **Array order is timeline order.** `clips[0]` plays first. This is the
+///    only ordering rule — source ranges may appear in any order, may repeat,
+///    and need not cover the source.
+/// 2. Every `sourceRange` lies within `0...sourceDuration`.
 /// 3. No clip is shorter than `EditDecisionList.minimumClipDuration`.
 ///
 /// Cutting never removes clips — it disables them, so they stay recoverable.
+/// (`remove(clipID:)` is the one hard delete, and only for duplicates.)
+///
+/// **A source time can now map to zero, one, or many timeline positions.**
+/// A straight recording maps 1:1; duplicate a moment and it has two. Callers
+/// that need a single answer use `mapSourceToTimeline` (first occurrence);
+/// callers that need them all use `timelinePositions(ofSource:)`.
+///
+/// An EDL produced before reordering existed — clips sorted and tiling the
+/// source exactly — is a valid sequence under these rules and behaves
+/// identically, so old projects need no migration.
 struct EditDecisionList: Codable, Sendable, Equatable {
     var clips: [Clip]
+
+    /// The length of the underlying recording. Stored rather than derived:
+    /// once clips can be reordered or trimmed, `clips.last.upperBound` is no
+    /// longer the end of the source.
+    private var storedSourceDuration: Double?
 
     /// Degenerate splits below this are refused (seconds).
     static let minimumClipDuration: Double = 0.001
 
-    init(clips: [Clip]) {
+    init(clips: [Clip], sourceDuration: Double? = nil) {
         self.clips = clips
+        self.storedSourceDuration = sourceDuration
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case clips
+        case storedSourceDuration
     }
 
     /// A fresh EDL: one enabled clip covering the whole source duration.
     static func initial(sourceDuration: Double) -> EditDecisionList {
-        EditDecisionList(clips: [Clip(sourceRange: 0...max(sourceDuration, Self.minimumClipDuration))])
+        let duration = max(sourceDuration, Self.minimumClipDuration)
+        return EditDecisionList(clips: [Clip(sourceRange: 0...duration)],
+                                sourceDuration: duration)
     }
 
     // MARK: Derived values
 
-    var sourceDuration: Double { clips.last?.sourceRange.upperBound ?? 0 }
+    /// Falls back to the furthest source point any clip reaches, which is what
+    /// pre-sequence documents (and hand-built EDLs) imply.
+    var sourceDuration: Double {
+        storedSourceDuration ?? clips.map(\.sourceRange.upperBound).max() ?? 0
+    }
 
     var editedDuration: Double {
         clips.reduce(0) { $0 + ($1.enabled ? $1.duration : 0) }
@@ -120,39 +148,51 @@ struct EditDecisionList: Codable, Sendable, Equatable {
         clips.first { $0.id == id }
     }
 
+    /// Index of the first clip whose source range contains `sourceTime`.
+    ///
+    /// A linear scan now: clips are ordered by timeline position, not source
+    /// position, so a binary search over lower bounds is no longer valid. With
+    /// duplicates there may be several matches and this returns the earliest
+    /// in the program.
     func clipIndex(containing sourceTime: Double) -> Int? {
-        // Boundary values belong to the earlier clip except at 0.
         guard sourceTime >= 0, sourceTime <= sourceDuration else { return nil }
-        // Binary search over lower bounds.
-        var lo = 0, hi = clips.count - 1
-        while lo < hi {
-            let mid = (lo + hi + 1) / 2
-            if clips[mid].sourceRange.lowerBound <= sourceTime { lo = mid } else { hi = mid - 1 }
+        if let exact = clips.firstIndex(where: { $0.sourceRange.contains(sourceTime) }) {
+            return exact
         }
-        guard !clips.isEmpty else { return nil }
-        // `lo` is the last clip starting at or before sourceTime.
-        // A boundary time (== lowerBound of clip lo, lo > 0) maps to the
-        // earlier clip when it equals that clip's upperBound; we prefer the
-        // clip that *starts* here for editing intuition, except the exact
-        // source end which belongs to the last clip.
-        return lo
+        // The exact source end sits on a clip's closed upper bound; tolerate
+        // floating-point drift at boundaries rather than reporting "nowhere".
+        return clips.firstIndex {
+            sourceTime >= $0.sourceRange.lowerBound - Self.minimumClipDuration
+                && sourceTime <= $0.sourceRange.upperBound + Self.minimumClipDuration
+        }
     }
 
     // MARK: Time mapping
 
-    /// Source → edited timeline. Returns nil when the source time falls in a
-    /// disabled (cut) region.
+    /// Source → edited timeline, **first occurrence**. Returns nil when the
+    /// source time is cut, or is not in the program at all.
+    ///
+    /// Since a moment can appear more than once, "first" means earliest in the
+    /// program — the right answer for seeking to a word or placing a chapter.
+    /// Use `timelinePositions(ofSource:)` when every occurrence matters.
     func mapSourceToTimeline(_ sourceTime: Double) -> Double? {
+        timelinePositions(ofSource: sourceTime).first
+    }
+
+    /// Every timeline position at which `sourceTime` plays, in program order.
+    /// Empty when the moment is entirely cut.
+    func timelinePositions(ofSource sourceTime: Double) -> [Double] {
+        var out: [Double] = []
         var acc = 0.0
         for clip in clips {
-            if sourceTime < clip.sourceRange.upperBound || clip.id == clips.last?.id {
-                guard sourceTime >= clip.sourceRange.lowerBound else { return nil }
-                guard clip.enabled else { return nil }
-                return acc + (sourceTime - clip.sourceRange.lowerBound)
+            guard clip.enabled else { continue }
+            if sourceTime >= clip.sourceRange.lowerBound,
+               sourceTime <= clip.sourceRange.upperBound {
+                out.append(acc + (sourceTime - clip.sourceRange.lowerBound))
             }
-            if clip.enabled { acc += clip.duration }
+            acc += clip.duration
         }
-        return nil
+        return out
     }
 
     /// Edited timeline → source. Total function: values are clamped into
@@ -197,7 +237,33 @@ struct EditDecisionList: Codable, Sendable, Equatable {
     @discardableResult
     mutating func splitClip(at sourceTime: Double) -> (left: UUID, right: UUID)? {
         guard let idx = clipIndex(containing: sourceTime) else { return nil }
-        let clip = clips[idx]
+        return splitClip(atIndex: idx, sourceTime: sourceTime)
+    }
+
+    /// Splits whichever segment is playing at `timelineTime`. Unambiguous even
+    /// when a moment appears more than once, which is why the playhead-driven
+    /// "Split" command uses this rather than the source-time version.
+    @discardableResult
+    mutating func splitClip(atTimelineTime timelineTime: Double) -> (left: UUID, right: UUID)? {
+        var acc = 0.0
+        for (index, clip) in clips.enumerated() {
+            guard clip.enabled else { continue }
+            if timelineTime < acc + clip.duration {
+                return splitClip(atIndex: index,
+                                 sourceTime: clip.sourceRange.lowerBound + (timelineTime - acc))
+            }
+            acc += clip.duration
+        }
+        return nil
+    }
+
+    /// Splits the clip at `index`, keeping both halves adjacent in the
+    /// sequence so the program order is unchanged.
+    @discardableResult
+    private mutating func splitClip(atIndex index: Int,
+                                    sourceTime: Double) -> (left: UUID, right: UUID)? {
+        guard clips.indices.contains(index) else { return nil }
+        let clip = clips[index]
         let lower = clip.sourceRange.lowerBound
         let upper = clip.sourceRange.upperBound
         guard sourceTime - lower >= Self.minimumClipDuration,
@@ -205,34 +271,115 @@ struct EditDecisionList: Codable, Sendable, Equatable {
         var left = clip
         left.sourceRange = lower...sourceTime
         let right = Clip(sourceRange: sourceTime...upper, enabled: clip.enabled, label: clip.label)
-        clips.replaceSubrange(idx...idx, with: [left, right])
+        clips.replaceSubrange(index...index, with: [left, right])
         return (left.id, right.id)
     }
 
     /// Core cut primitive: carve `range` out of the program by splitting at
-    /// its boundaries and disabling every clip inside it. Returns the ids of
-    /// the clips that were disabled (for undo/preview change-sets).
+    /// its boundaries and disabling every segment inside it. Returns the ids
+    /// of the clips that were disabled (for undo/preview change-sets).
     ///
     /// Already-disabled clips inside the range are left untouched (their
-    /// original cut label is preserved).
+    /// original cut label is preserved). If the moment appears several times
+    /// in the program, **every** occurrence is cut — cutting a word in the
+    /// transcript should not leave a copy of it playing elsewhere.
     @discardableResult
     mutating func insertCut(_ range: ClosedRange<Double>, label: ClipLabel) -> [UUID] {
         let lower = max(0, min(range.lowerBound, sourceDuration))
         let upper = max(0, min(range.upperBound, sourceDuration))
         guard upper - lower >= Self.minimumClipDuration else { return [] }
-        splitClip(at: lower)
-        splitClip(at: upper)
+
+        let tolerance = Self.minimumClipDuration / 2
         var changed: [UUID] = []
-        for i in clips.indices {
-            let c = clips[i]
-            guard c.enabled,
-                  c.sourceRange.lowerBound >= lower - Self.minimumClipDuration / 2,
-                  c.sourceRange.upperBound <= upper + Self.minimumClipDuration / 2 else { continue }
-            clips[i].enabled = false
-            clips[i].label = label
-            changed.append(c.id)
+        var index = 0
+        // Walk the sequence, splitting any segment that straddles a boundary
+        // and disabling the ones that end up wholly inside. Splitting mutates
+        // the array, so this walks by index rather than iterating a snapshot.
+        while index < clips.count {
+            let clip = clips[index]
+            let clipLower = clip.sourceRange.lowerBound
+            let clipUpper = clip.sourceRange.upperBound
+
+            // No overlap with the cut, or already cut: leave it alone.
+            guard clip.enabled,
+                  clipUpper > lower + tolerance,
+                  clipLower < upper - tolerance else {
+                index += 1
+                continue
+            }
+
+            if clipLower < lower - tolerance {
+                // Straddles the start: keep the head, re-examine the tail.
+                if splitClip(atIndex: index, sourceTime: lower) != nil {
+                    index += 1
+                    continue
+                }
+            } else if clipUpper > upper + tolerance {
+                // Straddles the end: split and re-examine the head, which is
+                // now wholly inside the cut.
+                if splitClip(atIndex: index, sourceTime: upper) != nil {
+                    continue
+                }
+            }
+
+            clips[index].enabled = false
+            clips[index].label = label
+            changed.append(clips[index].id)
+            index += 1
         }
         return changed
+    }
+
+    // MARK: Sequence edits
+
+    /// Drag-to-extend. Sets a segment's source range, clamped to the recording
+    /// and to the minimum duration. A clip can grow back into material a
+    /// neighbouring cut had taken — extending is not limited to what the clip
+    /// covered when it was created.
+    @discardableResult
+    mutating func trim(clipID: UUID, to newRange: ClosedRange<Double>) -> Bool {
+        guard let index = clips.firstIndex(where: { $0.id == clipID }) else { return false }
+        let lower = max(0, min(newRange.lowerBound, sourceDuration))
+        let upper = max(0, min(newRange.upperBound, sourceDuration))
+        guard upper - lower >= Self.minimumClipDuration else { return false }
+        clips[index].sourceRange = lower...upper
+        return true
+    }
+
+    /// Moves a segment to a new position in the program. `destinationIndex` is
+    /// interpreted against the sequence *after* the clip is lifted out, which
+    /// is what a drag-and-drop reorder means.
+    @discardableResult
+    mutating func move(clipID: UUID, toIndex destinationIndex: Int) -> Bool {
+        guard let index = clips.firstIndex(where: { $0.id == clipID }) else { return false }
+        let clip = clips.remove(at: index)
+        let target = min(max(destinationIndex, 0), clips.count)
+        clips.insert(clip, at: target)
+        return index != target
+    }
+
+    /// Copies a segment and places the copy directly after the original, so a
+    /// moment can play twice. The copy is a new identity but the same source.
+    @discardableResult
+    mutating func duplicate(clipID: UUID) -> UUID? {
+        guard let index = clips.firstIndex(where: { $0.id == clipID }) else { return nil }
+        let original = clips[index]
+        let copy = Clip(sourceRange: original.sourceRange,
+                        enabled: original.enabled,
+                        label: original.label)
+        clips.insert(copy, at: index + 1)
+        return copy.id
+    }
+
+    /// Hard-deletes a segment. Unlike cutting, this is **not** recoverable, so
+    /// it is meant for removing a duplicate rather than editing the
+    /// conversation. Refuses to empty the sequence.
+    @discardableResult
+    mutating func remove(clipID: UUID) -> Bool {
+        guard clips.count > 1,
+              let index = clips.firstIndex(where: { $0.id == clipID }) else { return false }
+        clips.remove(at: index)
+        return true
     }
 
     /// User-facing delete. Same as `insertCut` with a manual label default.
@@ -259,9 +406,14 @@ struct EditDecisionList: Codable, Sendable, Equatable {
         return true
     }
 
-    /// Optional hygiene pass: merges adjacent clips with identical
-    /// enabled/label state. Never called implicitly — merging discards the
-    /// ability to recover individual cuts, so the UI offers it explicitly.
+    /// Optional hygiene pass: merges clips that are adjacent **both** in the
+    /// sequence and in the source, and share enabled state and label. The
+    /// source-contiguity test is what keeps this safe once clips can be
+    /// reordered: two segments sitting side by side in the program are only
+    /// mergeable if they were also side by side in the recording.
+    ///
+    /// Never called implicitly — merging discards the ability to recover
+    /// individual cuts, so the UI offers it explicitly.
     mutating func coalesce() {
         var merged: [Clip] = []
         for clip in clips {
