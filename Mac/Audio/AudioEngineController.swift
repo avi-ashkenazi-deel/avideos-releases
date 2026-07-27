@@ -66,6 +66,8 @@ final class AudioEngineController {
     /// authored default. Mid-show you want to kill the loop and let the song
     /// run out *without* editing your sections.
     private(set) var isSectionLooping = false
+    /// Last reason a section couldn't play. Set it to nil to dismiss.
+    var sectionFailureMessage: String?
 
     var sectionSwitchMode: SectionSwitchMode = .atLoopEnd {
         didSet {
@@ -148,6 +150,11 @@ final class AudioEngineController {
         }
         musicPlayer?.onStateChanged = { [weak self] in
             self?.syncMusicState()
+        }
+        // A section that can't play says why rather than failing silently —
+        // mid-show, a dead pad with no explanation is the worst outcome.
+        musicPlayer?.onSectionFailure = { [weak self] reason in
+            self?.sectionFailureMessage = reason
         }
 
         // Ducker wiring: trigger level from the trigger strip's meter.
@@ -332,6 +339,18 @@ final class AudioEngineController {
         if isPlayingMusic != player.isPlaying { isPlayingMusic = player.isPlaying }
         if musicPosition != player.position { musicPosition = player.position }
         if musicDuration != player.duration { musicDuration = player.duration }
+
+        if playingSectionID != player.playingSectionID { playingSectionID = player.playingSectionID }
+        if isSectionLooping != player.isSectionLooping { isSectionLooping = player.isSectionLooping }
+        let queued = player.pending.sectionID
+        if queuedSectionID != queued { queuedSectionID = queued }
+        if queuedSwitchIsCommitted != player.pending.isCommitted {
+            queuedSwitchIsCommitted = player.pending.isCommitted
+        }
+        let countdown = queued == nil
+            ? nil
+            : player.framesToBoundary.map(MusicClock.seconds(fromFrames:))
+        if secondsUntilSwitch != countdown { secondsUntilSwitch = countdown }
     }
 
     // MARK: - Music sections
@@ -349,6 +368,78 @@ final class AudioEngineController {
 
     /// Sections of the host track, in play order.
     var musicSections: [MusicSection] { sectionHostTrack?.sortedSections ?? [] }
+
+    // MARK: Firing sections
+
+    /// Plays a section now or at the next loop boundary, per the sticky mode
+    /// unless `mode` overrides it for this press — so a bound pad can mean
+    /// "chorus, hard cut" without changing the global setting.
+    func playSection(id: UUID, mode: SectionSwitchMode? = nil) {
+        guard let track = sectionHostTrack,
+              let section = track.section(withID: id) else { return }
+        musicPlayer?.playSection(section, in: track, mode: mode)
+        syncMusicState()
+    }
+
+    /// Fires the section bound to a hotkey slot. A slot with no binding does
+    /// nothing at all — never stop the music, never start the wrong thing.
+    func playSection(hotkeyIndex: Int, mode: SectionSwitchMode? = nil) {
+        guard let track = sectionHostTrack,
+              let section = track.section(forHotkeyIndex: hotkeyIndex) else { return }
+        musicPlayer?.playSection(section, in: track, mode: mode)
+        syncMusicState()
+    }
+
+    func queueSection(id: UUID) {
+        playSection(id: id, mode: .atLoopEnd)
+    }
+
+    func cancelQueuedSection() {
+        _ = musicPlayer?.cancelQueuedSection()
+        syncMusicState()
+    }
+
+    func setSectionLoopEnabled(_ enabled: Bool) {
+        musicPlayer?.setSectionLoopEnabled(enabled)
+        syncMusicState()
+    }
+
+    func toggleSectionLoop() {
+        setSectionLoopEnabled(!isSectionLooping)
+    }
+
+    func toggleSectionSwitchMode() {
+        // Two-way toggle: crossfade is chosen deliberately from the picker, not
+        // cycled into by accident mid-show.
+        sectionSwitchMode = sectionSwitchMode == .hardCut ? .atLoopEnd : .hardCut
+    }
+
+    /// Starts a track from its saved start point without engaging any loop.
+    func startFromSection(id: UUID) {
+        playSection(id: id, mode: .hardCut)
+        setSectionLoopEnabled(false)
+    }
+
+    /// Decodes every section of a track up front, so a live switch finds its
+    /// buffer resident rather than waiting on the disk.
+    func prepareSections(forTrackID trackID: UUID) {
+        guard let track = playlist.first(where: { $0.id == trackID }),
+              let url = track.resolve(),
+              let player = musicPlayer else { return }
+        let duration = track.id == currentTrackID && musicDuration > 0
+            ? musicDuration
+            : LoopRegion.maximumSeconds
+        let ranges = MusicSection.resolvedRanges(track.sortedSections, duration: duration)
+        for (sectionID, range) in ranges {
+            player.regions.prepare(
+                key: MusicRegionCache.Key(trackID: trackID, sectionID: sectionID),
+                url: url,
+                startSeconds: range.lowerBound,
+                endSeconds: range.upperBound)
+        }
+    }
+
+    // MARK: Authoring
 
     /// Whole-value replace — the only section writer, so the clamping and
     /// ordering rules live in exactly one place.
