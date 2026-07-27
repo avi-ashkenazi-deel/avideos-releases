@@ -205,15 +205,21 @@ struct VerticalTimelineView: View {
             let columnRect = CGRect(x: column.x, y: 0,
                                     width: trackColumnWidth,
                                     height: viewModel.scale.contentHeight)
-            let silenced = project.linearGain(for: track.id) == 0
+            let isExternal = project.isExternal(track.id)
+            let silenced = track.kind == .audio && project.linearGain(for: track.id) == 0
+            // External lanes tinted distinctly, so an imported angle never
+            // reads as one of the people in the room.
             context.fill(Path(roundedRect: columnRect, cornerRadius: 4),
-                         with: .color(.white.opacity(silenced ? 0.02 : 0.05)))
+                         with: .color(isExternal
+                                      ? .indigo.opacity(0.16)
+                                      : .white.opacity(silenced ? 0.02 : 0.05)))
 
             if let peaks = waveforms.peaks[track.id], !peaks.isEmpty, !silenced {
                 drawWaveform(peaks: peaks, in: columnRect, layouts: layouts, context: context)
             }
 
-            context.draw(Text(track.participantName.prefix(8))
+            context.draw(Text((project.externalSettings(for: track.id)?.label
+                               ?? track.participantName).prefix(8))
                             .font(.system(size: 8))
                             .foregroundStyle(.secondary),
                          at: CGPoint(x: columnRect.midX, y: 8), anchor: .center)
@@ -384,7 +390,12 @@ struct VerticalTimelineView: View {
     /// Tracks that get their own column. Audio only today; imported external
     /// media joins them.
     private var columnTracks: [EditTrack] {
-        project.tracks.filter { $0.kind == .audio }
+        // Audio participants, plus every external clip's video track — an
+        // extra angle is a lane you want to see, even though it has no
+        // waveform. This is the widening the single lane layout existed for.
+        project.tracks.filter {
+            $0.kind == .audio || (project.isExternal($0.id) && $0.kind == .video)
+        }
     }
 
     private var lanes: LaneLayout {

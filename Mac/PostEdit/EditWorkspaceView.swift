@@ -111,8 +111,15 @@ struct EditWorkspaceView: View {
                 }
             }
             Section("Participants") {
-                ForEach(project.tracks) { track in
+                ForEach(project.tracks.filter { !project.isExternal($0.id) }) { track in
                     trackRow(track)
+                }
+            }
+            if !project.externalTrackGroups.isEmpty {
+                Section("Extra Media") {
+                    ForEach(project.externalTrackGroups, id: \.participantID) { group in
+                        externalTrackRow(group)
+                    }
                 }
             }
             Section {
@@ -245,6 +252,8 @@ struct EditWorkspaceView: View {
         }
         .contextMenu {
             Button("Insert as Cutaway at Playhead") { insertCutaway(from: item) }
+            Button("Add as Extra Track") { addExtraTrack(from: item) }
+                .disabled(!item.hasVideo && !item.hasAudio)
             Button("Reveal in Finder") {
                 if let url = item.media.resolve() { NSWorkspace.shared.activateFileViewerSelecting([url]) }
             }
@@ -367,6 +376,18 @@ struct EditWorkspaceView: View {
         }
     }
 
+    /// Brings a bin item in as an extra angle, cut alongside the conversation
+    /// rather than laid over it.
+    private func addExtraTrack(from item: MediaBinItem) {
+        performEdit {
+            project.addExternalTrack(media: item.media,
+                                     label: item.media.displayName,
+                                     duration: item.duration,
+                                     hasVideo: item.hasVideo,
+                                     hasAudio: item.hasAudio)
+        }
+    }
+
     /// Puts a bin item on the overlay lane at the playhead, trimmed to fit
     /// whatever room is left.
     private func insertCutaway(from item: MediaBinItem) {
@@ -384,6 +405,65 @@ struct EditWorkspaceView: View {
         if item.duration > length {
             errorMessage = String(format: "Trimmed to fit the program (%.1fs of %.1fs used).",
                                   length, item.duration)
+        }
+    }
+
+    /// One imported clip acting as an extra angle.
+    ///
+    /// Differs from a participant row in what it *is*, not in how you mix it:
+    /// the level controls are the same fragment. It shows the file's label,
+    /// never the synthesized participant name, which holds a machine id.
+    @ViewBuilder
+    private func externalTrackRow(_ group: EditProject.ExternalGroup) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
+                Image(systemName: group.videoTrack != nil ? "film" : "waveform")
+                    .foregroundStyle(.secondary)
+                    .overlay(alignment: .bottomTrailing) {
+                        Image(systemName: "link").font(.system(size: 7))
+                    }
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(group.label).lineLimit(1)
+                    Text("External · \(timeString(group.duration))")
+                        .font(.caption2).foregroundStyle(.secondary)
+                }
+                Spacer()
+            }
+
+            // The one control a participant never needs: import already
+            // aligned those.
+            HStack(spacing: 4) {
+                Text("Offset").font(.caption2).foregroundStyle(.secondary)
+                Button("−0.5s") { nudgeExternal(group, by: -0.5) }
+                    .buttonStyle(.borderless).font(.caption2)
+                Text(String(format: "%+.2fs", group.sourceOffset))
+                    .font(.caption2.monospacedDigit())
+                Button("+0.5s") { nudgeExternal(group, by: 0.5) }
+                    .buttonStyle(.borderless).font(.caption2)
+            }
+            .help("Shifts this clip against the conversation")
+
+            if let audio = group.audioTrack {
+                levelControls(for: audio)
+            }
+        }
+        .padding(.vertical, 2)
+        .contextMenu {
+            Button("Reveal in Finder") {
+                if let url = group.videoTrack?.url ?? group.audioTrack?.url {
+                    NSWorkspace.shared.activateFileViewerSelecting([url])
+                }
+            }
+            Button("Remove", role: .destructive) {
+                performEdit { project.removeExternalTrack(participantID: group.participantID) }
+            }
+        }
+    }
+
+    private func nudgeExternal(_ group: EditProject.ExternalGroup, by delta: Double) {
+        performEdit {
+            project.setSourceOffset(group.sourceOffset + delta,
+                                    forParticipant: group.participantID)
         }
     }
 
@@ -576,6 +656,16 @@ struct EditWorkspaceView: View {
                     layoutButton("Grid", .grid)
                     layoutButton("Active Speaker", .activeSpeaker)
                     layoutButton("Vertical (9:16)", .verticalStacked)
+                    // Works with no enum change: an external track carries a
+                    // synthetic participant id, so every layout already
+                    // addresses it the same way it addresses a person.
+                    if !project.externalVideoTracks.isEmpty {
+                        Divider()
+                        ForEach(project.externalVideoTracks) { track in
+                            layoutButton("Full Screen — \(project.externalSettings(for: track.id)?.label ?? track.participantName)",
+                                         .fullScreen(participantId: track.participantId))
+                        }
+                    }
                 }
                 .frame(width: 100)
             }

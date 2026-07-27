@@ -34,8 +34,144 @@ struct MediaBinItem: Identifiable, Codable, Hashable {
     var isStill: Bool { duration == 0 && hasVideo }
 }
 
+/// Editor-only state for a track that came from a file rather than the
+/// session recording.
+///
+/// A side table keyed by `EditTrack.id`, exactly like `trackMix` — that type's
+/// doc comment already argues per-track *editor* state belongs on the project
+/// rather than on `EditTrack`, which is shared with the recording models and
+/// describes what was recorded. Presence in this dictionary **is** the
+/// is-external test.
+///
+/// `EditTrack.url` is a bare URL with no bookmark, which is the concrete reason
+/// the `MediaReference` has to live here: an external file that moves must
+/// still be findable.
+struct ExternalTrackSettings: Codable, Sendable, Equatable {
+    var media: MediaReference
+    var label: String
+    /// Session-source seconds at which this file's own t=0 sits. The one thing
+    /// `EditTrack` genuinely cannot express.
+    var sourceOffset: Double
+    var audio: ExternalAudio
+
+    init(media: MediaReference,
+         label: String,
+         sourceOffset: Double = 0,
+         audio: ExternalAudio = .silent) {
+        self.media = media
+        self.label = label
+        self.sourceOffset = sourceOffset
+        self.audio = audio
+    }
+}
+
 extension EditProject {
     var binItems: [MediaBinItem] { mediaBin ?? [] }
+
+    // MARK: External tracks
+
+    func externalSettings(for trackID: String) -> ExternalTrackSettings? {
+        externalMedia?[trackID]
+    }
+
+    func isExternal(_ trackID: String) -> Bool { externalMedia?[trackID] != nil }
+
+    var externalVideoTracks: [EditTrack] {
+        tracks.filter { $0.kind == .video && isExternal($0.id) }
+    }
+
+    /// A synthetic participant id, so layouts, tiling, crop paths and the
+    /// compositor all address an external track exactly as they address a
+    /// person — with no enum change and no parallel code path.
+    static func externalParticipantID(_ id: UUID) -> String { "external-\(id.uuidString)" }
+
+    /// Adds a file as a pair of tracks — one video, one audio, same URL.
+    ///
+    /// Two tracks rather than one because `EditTrack.kind` is one medium per
+    /// file, and splitting is what keeps the waveform store, the mixer, the
+    /// timeline columns and the composition loop working untouched.
+    @discardableResult
+    mutating func addExternalTrack(media: MediaReference,
+                                   label: String,
+                                   duration: Double,
+                                   hasVideo: Bool,
+                                   hasAudio: Bool,
+                                   sourceOffset: Double = 0) -> [String] {
+        guard let url = media.resolve() else { return [] }
+        let participant = Self.externalParticipantID(UUID())
+        var settings = externalMedia ?? [:]
+        var added: [String] = []
+
+        for (kind, present) in [(TrackKind.video, hasVideo), (TrackKind.audio, hasAudio)] {
+            guard present else { continue }
+            let trackID = "\(participant)-\(kind.rawValue)"
+            tracks.append(EditTrack(id: trackID,
+                                    participantId: participant,
+                                    participantName: label,
+                                    kind: kind,
+                                    url: url,
+                                    duration: duration))
+            settings[trackID] = ExternalTrackSettings(
+                media: media, label: label, sourceOffset: sourceOffset,
+                // An extra angle is usually watched, not heard; its audio is
+                // opt-in so adding one can't suddenly double the room tone.
+                audio: kind == .audio ? .silent : .silent)
+            added.append(trackID)
+        }
+        externalMedia = settings
+        return added
+    }
+
+    mutating func removeExternalTrack(participantID: String) {
+        tracks.removeAll { $0.participantId == participantID }
+        externalMedia = (externalMedia ?? [:]).filter { !$0.key.hasPrefix(participantID) }
+        if externalMedia?.isEmpty == true { externalMedia = nil }
+    }
+
+    mutating func setExternalSettings(_ settings: ExternalTrackSettings, for trackID: String) {
+        var all = externalMedia ?? [:]
+        all[trackID] = settings
+        externalMedia = all
+    }
+
+    /// One imported file, and the one or two tracks it produced.
+    struct ExternalGroup {
+        var participantID: String
+        var label: String
+        var sourceOffset: Double
+        var videoTrack: EditTrack?
+        var audioTrack: EditTrack?
+        var duration: Double
+    }
+
+    /// External media grouped back into files, since that is the unit the user
+    /// thinks in — one clip, not a video track and an audio track.
+    var externalTrackGroups: [ExternalGroup] {
+        let external = tracks.filter { isExternal($0.id) }
+        let byParticipant = Dictionary(grouping: external, by: \.participantId)
+        return byParticipant.keys.sorted().map { participant in
+            let group = byParticipant[participant] ?? []
+            let settings = group.compactMap { externalSettings(for: $0.id) }.first
+            return ExternalGroup(
+                participantID: participant,
+                label: settings?.label ?? group.first?.participantName ?? "Clip",
+                sourceOffset: settings?.sourceOffset ?? 0,
+                videoTrack: group.first { $0.kind == .video },
+                audioTrack: group.first { $0.kind == .audio },
+                duration: group.map(\.duration).max() ?? 0)
+        }
+    }
+
+    /// Nudges every track of one external source together, so its picture and
+    /// its sound never drift apart.
+    mutating func setSourceOffset(_ seconds: Double, forParticipant participantID: String) {
+        var all = externalMedia ?? [:]
+        for (trackID, var settings) in all where trackID.hasPrefix(participantID) {
+            settings.sourceOffset = seconds
+            all[trackID] = settings
+        }
+        externalMedia = all
+    }
 
     mutating func addToBin(_ item: MediaBinItem) {
         var all = mediaBin ?? []

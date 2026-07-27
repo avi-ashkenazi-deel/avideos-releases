@@ -657,6 +657,9 @@ struct EditProject: Codable, Sendable, Identifiable, Equatable {
     /// Imported external files available to this project. Optional so projects
     /// written before the bin existed decode unchanged.
     var mediaBin: [MediaBinItem]?
+    /// Editor-only state for tracks that came from a file, keyed by
+    /// `EditTrack.id`. See `ExternalTrackSettings`.
+    var externalMedia: [String: ExternalTrackSettings]?
     /// Level trim per track, keyed by `EditTrack.id`. Absent means unity.
     var trackMix: [String: TrackMix]?
     /// B-roll cutaways over the conversation, in edited-timeline seconds.
@@ -679,6 +682,7 @@ struct EditProject: Codable, Sendable, Identifiable, Equatable {
          trackMix: [String: TrackMix]? = nil,
          overlays: [OverlayClip]? = nil,
          mediaBin: [MediaBinItem]? = nil,
+         externalMedia: [String: ExternalTrackSettings]? = nil,
          schemaVersion: Int = EditProject.currentSchemaVersion) {
         self.id = id
         self.sessionId = sessionId
@@ -693,6 +697,7 @@ struct EditProject: Codable, Sendable, Identifiable, Equatable {
         self.trackMix = trackMix
         self.overlays = overlays
         self.mediaBin = mediaBin
+        self.externalMedia = externalMedia
         self.schemaVersion = schemaVersion
     }
 

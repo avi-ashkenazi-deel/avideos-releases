@@ -88,6 +88,7 @@ final class CompositionBuilder {
 
         var mixParameters: [AVMutableAudioMixInputParameters] = []
         var videoTrackParticipants: [CMPersistentTrackID: String] = [:]
+        var transforms: [CMPersistentTrackID: CGAffineTransform] = [:]
         var joinTimes: [Double] = []   // timeline seconds of every internal join
         do {
             var acc = 0.0
@@ -134,14 +135,27 @@ final class CompositionBuilder {
                 throw BuildError.cannotAddTrack(track.id)
             }
             if track.kind == .video {
-                compTrack.preferredTransform = try await sourceTrack.load(.preferredTransform)
+                let transform = try await sourceTrack.load(.preferredTransform)
+                compTrack.preferredTransform = transform
                 videoTrackParticipants[compTrack.trackID] = track.participantId
+                // Carried to the compositor because it reads raw buffers via
+                // `sourceFrame(byTrackID:)` and AVFoundation does not pre-apply
+                // the transform for a custom compositor. Participant cameras
+                // are always landscape so this never showed; a portrait phone
+                // clip would render sideways.
+                // verify on Mac: that AVFoundation really doesn't apply it here.
+                if !transform.isIdentity { transforms[compTrack.trackID] = transform }
             }
 
             // Clamp to the media this file actually has and pad the rest with
-            // empty time, so every track keeps an identical duration.
+            // empty time, so every track keeps an identical duration. An
+            // external file's own t=0 may not be the session's, hence the
+            // offset — zero for participant recordings, which start together.
             try MediaPlacement.apply(
-                MediaPlacement.placements(segments: segments, assetDuration: assetDuration),
+                MediaPlacement.placements(
+                    segments: segments,
+                    sourceOffset: project.externalSettings(for: track.id)?.sourceOffset ?? 0,
+                    assetDuration: assetDuration),
                 of: sourceTrack, to: compTrack, timescale: Self.timescale)
 
             if track.kind == .audio {
@@ -167,6 +181,7 @@ final class CompositionBuilder {
                 project: project,
                 videoTrackParticipants: videoTrackParticipants,
                 overlayTrackIDs: overlayTrackIDs,
+                transforms: transforms,
                 renderSize: options.renderSize ?? Self.defaultRenderSize(for: project),
                 burnCaptions: options.burnCaptions)
         }
@@ -346,6 +361,7 @@ final class CompositionBuilder {
     private static func makeVideoComposition(project: EditProject,
                                              videoTrackParticipants: [CMPersistentTrackID: String],
                                              overlayTrackIDs: [CMPersistentTrackID: UUID],
+                                             transforms: [CMPersistentTrackID: CGAffineTransform],
                                              renderSize: CGSize,
                                              burnCaptions: Bool) -> AVMutableVideoComposition {
         let videoComposition = AVMutableVideoComposition()
@@ -434,7 +450,8 @@ final class CompositionBuilder {
                 speakerTimeline: speakerTimeline,
                 captionContext: captionContext,
                 cropPaths: project.cropPaths ?? [:],
-                overlaysByTrackID: activeOverlayTracks)
+                overlaysByTrackID: activeOverlayTracks,
+                transformByTrackID: transforms)
             instructions.append(instruction)
         }
         videoComposition.instructions = instructions
@@ -483,6 +500,9 @@ final class LayoutCompositionInstruction: NSObject, AVVideoCompositionInstructio
     /// B-roll cutaways playing across this whole instruction, by the
     /// composition track carrying each one.
     let overlaysByTrackID: [CMPersistentTrackID: OverlayClip]
+    /// Non-identity `preferredTransform` per track. Empty for the usual case
+    /// of landscape participant cameras.
+    let transformByTrackID: [CMPersistentTrackID: CGAffineTransform]
 
     init(timeRange: CMTimeRange,
          layout: ProgramLayout,
@@ -491,7 +511,8 @@ final class LayoutCompositionInstruction: NSObject, AVVideoCompositionInstructio
          speakerTimeline: [(time: Double, participantId: String)],
          captionContext: CaptionRenderContext?,
          cropPaths: [String: [CropKeyframe]] = [:],
-         overlaysByTrackID: [CMPersistentTrackID: OverlayClip] = [:]) {
+         overlaysByTrackID: [CMPersistentTrackID: OverlayClip] = [:],
+         transformByTrackID: [CMPersistentTrackID: CGAffineTransform] = [:]) {
         self.timeRange = timeRange
         self.layout = layout
         self.participantByTrackID = participantByTrackID
@@ -500,6 +521,7 @@ final class LayoutCompositionInstruction: NSObject, AVVideoCompositionInstructio
         self.captionContext = captionContext
         self.cropPaths = cropPaths
         self.overlaysByTrackID = overlaysByTrackID
+        self.transformByTrackID = transformByTrackID
         // Overlay tracks must be requested too, or `sourceFrame(byTrackID:)`
         // returns nothing for them and the cutaway silently never appears.
         self.requiredSourceTrackIDs = (participantByTrackID.keys + overlaysByTrackID.keys)
@@ -594,7 +616,17 @@ final class LayoutVideoCompositor: NSObject, AVVideoCompositing {
         var frames: [String: CIImage] = [:]
         for (trackID, participantId) in instruction.participantByTrackID {
             guard let pixelBuffer = request.sourceFrame(byTrackID: trackID) else { continue }
-            frames[participantId] = CIImage(cvPixelBuffer: pixelBuffer)
+            var image = CIImage(cvPixelBuffer: pixelBuffer)
+            if let transform = instruction.transformByTrackID[trackID] {
+                // Rotate a portrait or otherwise transformed source upright
+                // before it is fitted, then re-origin it — a transformed image
+                // can end up with a negative extent origin, which would place
+                // the tile off-canvas.
+                image = image.transformed(by: transform)
+                image = image.transformed(by: CGAffineTransform(translationX: -image.extent.minX,
+                                                                y: -image.extent.minY))
+            }
+            frames[participantId] = image
         }
 
         var image = CIImage(color: CIColor.black).cropped(to: canvas)
