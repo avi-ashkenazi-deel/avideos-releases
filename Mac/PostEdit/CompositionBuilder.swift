@@ -317,8 +317,8 @@ final class CompositionBuilder {
             let sourceRange = CMTimeRange(
                 start: CMTime(seconds: overlay.sourceStart, preferredTimescale: timescale),
                 duration: CMTime(seconds: take, preferredTimescale: timescale))
-            let at = CMTime(seconds: overlay.timelineRange.lowerBound + timelineOffset,
-                            preferredTimescale: timescale)
+            let programStart = overlay.timelineRange.lowerBound + timelineOffset
+            let at = CMTime(seconds: programStart, preferredTimescale: timescale)
 
             var videoTrackID = kCMPersistentTrackID_Invalid
             if includeVideo, let sourceTrack {
@@ -349,7 +349,7 @@ final class CompositionBuilder {
                     // Butt-joining against silence clicks, so give the clip's
                     // own edges the same short fade a cut boundary gets — via
                     // the shared envelope, so there is one ramp emitter.
-                    let start = overlay.timelineRange.lowerBound + timelineOffset
+                    let start = programStart
                     let params = AVMutableAudioMixInputParameters(track: audioTrack)
                     VolumeAutomation.apply([
                         .init(time: start, volume: 0),
@@ -369,8 +369,7 @@ final class CompositionBuilder {
                 overlayID: overlay.id,
                 videoTrackID: videoTrackID,
                 audioParameters: audioParameters,
-                programRange: (overlay.timelineRange.lowerBound + timelineOffset)
-                    ...(overlay.timelineRange.lowerBound + timelineOffset + take)))
+                programRange: programStart...(programStart + take)))
         }
         return inserted
     }
@@ -619,7 +618,8 @@ final class LayoutCompositionInstruction: NSObject, AVVideoCompositionInstructio
         self.transformByTrackID = transformByTrackID
         // Overlay tracks must be requested too, or `sourceFrame(byTrackID:)`
         // returns nothing for them and the cutaway silently never appears.
-        self.requiredSourceTrackIDs = (participantByTrackID.keys + overlaysByTrackID.keys)
+        self.requiredSourceTrackIDs = (Array(participantByTrackID.keys)
+                                       + Array(overlaysByTrackID.keys))
             .map { NSNumber(value: $0) }
         super.init()
     }

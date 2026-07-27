@@ -31,10 +31,14 @@ enum MIDIAction: Codable, Hashable, Sendable {
 
     /// Everything bindable, in the order the settings table shows it.
     static var all: [MIDIAction] {
-        (1...9).map { .section(index: $0) }
-            + (1...9).map { .pad(index: $0) }
-            + [.switchModeCut, .switchModeAtLoopEnd, .toggleSectionLoop,
-               .cancelQueued, .musicPlayPause, .dropMarker]
+        // Written with explicit element types: an implicit-member closure body
+        // inside a `+` chain is exactly the shape Swift fails to infer.
+        let sections: [MIDIAction] = (1...9).map { MIDIAction.section(index: $0) }
+        let pads: [MIDIAction] = (1...9).map { MIDIAction.pad(index: $0) }
+        let globals: [MIDIAction] = [.switchModeCut, .switchModeAtLoopEnd,
+                                     .toggleSectionLoop, .cancelQueued,
+                                     .musicPlayPause, .dropMarker]
+        return sections + pads + globals
     }
 }
 
