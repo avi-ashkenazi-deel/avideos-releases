@@ -161,6 +161,9 @@ struct TranscriptEditorView: NSViewRepresentable {
             self.parent = parent
         }
 
+        // AppKit delivers gesture actions on the main thread, and the model
+        // this reads is `@MainActor`. Saying so is what lets the two meet.
+        @MainActor
         @objc func handleClick(_ gesture: NSClickGestureRecognizer) {
             guard let textView else { return }
             let point = gesture.location(in: textView)
@@ -196,6 +199,7 @@ struct TranscriptEditorView: NSViewRepresentable {
         /// real `NSLayoutManager`, so `boundingRect(forGlyphRange:in:)` is the
         /// direct answer. Runs are emitted per word; the scale collapses
         /// consecutive ones itself.
+        @MainActor
         func publishWordGeometry(from textView: NSTextView) {
             guard let layoutManager = textView.layoutManager,
                   let container = textView.textContainer else { return }

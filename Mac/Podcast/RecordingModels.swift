@@ -76,7 +76,10 @@ struct ChunkStamp: Codable, Sendable {
 /// An imported, drift-corrected track ready for editing: t=0 == the take's
 /// `startedAtSession` for every track, so composition building is pure
 /// arithmetic. Produced by MediaImportService, consumed by the editor.
-struct EditTrack: Codable, Sendable, Identifiable {
+// Equatable so `SessionLibraryStore.TrackStatus` — which carries an
+// `EditTrack` in its `.imported` case — can synthesize its own conformance,
+// and so SwiftUI can diff track lists without an id-only comparison.
+struct EditTrack: Codable, Sendable, Identifiable, Equatable {
     var id: String
     var participantId: String
     var participantName: String
