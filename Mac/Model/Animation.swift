@@ -298,9 +298,22 @@ struct EntryAnimation: Codable, Hashable, Sendable {
         CGSize(width: size.width * factor, height: size.height * factor)
     }
 
-    /// A single hump above 1 that returns to exactly 1 at p = 1.
+    /// Rises past the target by exactly `amount`, then settles onto it:
+    /// f(0) = 0, max f = 1 + amount at the apex, f(1) = 1.
+    ///
+    /// The previous form was `p + amount * sin(p * .pi)`, which is a hump above
+    /// the *linear ramp* — not above the target. Since the sine vanishes at
+    /// p = 1, its maximum is exactly 1 and it never overshoots anything, so
+    /// pop and both flips were eases wearing an overshoot's name.
+    ///
+    /// Quarter-sines on both sides so the turnaround has zero velocity and
+    /// reads as an apex rather than a corner.
     private static func overshoot(_ p: Double, by amount: Double) -> Double {
-        p + amount * sin(p * .pi)
+        let apex = 0.7
+        if p <= apex {
+            return (1 + amount) * sin(p / apex * .pi / 2)
+        }
+        return 1 + amount * cos((p - apex) / (1 - apex) * .pi / 2)
     }
 
     /// Classic "back" ease: pulls slightly past the target then settles.

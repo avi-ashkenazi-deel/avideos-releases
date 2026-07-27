@@ -42,10 +42,10 @@ enum ScriptAligner {
         //    transcript. Non-unique script shingles may match repeatedly —
         //    that's the retake signal, so keep ALL matches.
         let n = 4
-        guard scriptTokens.count >= n else {
-            return [AlignedSpan(scriptTokenRange: 0..<scriptTokens.count,
-                                transcriptWordRange: 0..<transcriptTokens.count)]
-        }
+        // Too short to shingle: no anchors are possible, so there is no
+        // evidence of alignment. See the note on the anchor guard below for
+        // why that must not be reported as a match.
+        guard scriptTokens.count >= n else { return [] }
 
         var scriptShingles: [String: [Int]] = [:]
         for i in 0...(scriptTokens.count - n) {
@@ -68,10 +68,19 @@ enum ScriptAligner {
                 anchors.append(Anchor(scriptIndex: scriptPositions[0], transcriptIndex: t))
             }
         }
-        guard !anchors.isEmpty else {
-            return [AlignedSpan(scriptTokenRange: 0..<scriptTokens.count,
-                                transcriptWordRange: 0..<transcriptTokens.count)]
-        }
+        // No shared 4-gram anywhere means this transcript is not a read of
+        // this script, and an empty result is the only honest answer.
+        //
+        // This previously returned one span covering everything, which asserts
+        // the opposite — that the whole transcript is a faithful read of the
+        // whole script. Downstream that is not cosmetic: TakeDetector would
+        // manufacture a take from it and ClaudeTakeSelector could then discard
+        // it as the losing one, silently cutting material that was never in
+        // the script at all. Ad-libs are preserved, never cut.
+        //
+        // The one caller already handles this correctly: no spans yields no
+        // takes, and the user is told there is nothing to choose between.
+        guard !anchors.isEmpty else { return [] }
 
         // 2. Split anchors into monotonic runs over TRANSCRIPT order: when
         //    the script index jumps backwards significantly, a new take

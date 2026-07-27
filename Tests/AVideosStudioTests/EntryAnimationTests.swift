@@ -292,10 +292,14 @@ final class EntryAnimationTests: XCTestCase {
                 .apply(progress: 0.4, to: resting)
             let eased = EntryAnimation(style: style, duration: 0.5, curve: .easeIn)
                 .apply(progress: 0.4, to: resting)
+            // Height matters as much as width: wipeFromCenterV moves *only*
+            // the height, so omitting it made this assertion unsatisfiable for
+            // that one style no matter how the curve behaved.
             let differs = abs(linear.opacity - eased.opacity) > 1e-9
                 || abs(linear.center.x - eased.center.x) > 1e-9
                 || abs(linear.center.y - eased.center.y) > 1e-9
                 || abs(linear.size.width - eased.size.width) > 1e-9
+                || abs(linear.size.height - eased.size.height) > 1e-9
                 || abs(linear.rotation - eased.rotation) > 1e-9
             XCTAssertTrue(differs, "\(style) should be shaped by the curve setting")
         }
