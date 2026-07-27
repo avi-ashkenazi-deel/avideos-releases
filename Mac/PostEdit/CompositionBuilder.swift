@@ -112,26 +112,11 @@ final class CompositionBuilder {
                 videoTrackParticipants[compTrack.trackID] = track.participantId
             }
 
-            for (clip, timelineStart) in segments {
-                let at = CMTime(seconds: timelineStart, preferredTimescale: Self.timescale)
-                let clipStart = clip.sourceRange.lowerBound
-                let clipEnd = clip.sourceRange.upperBound
-                // Clamp to the media this file actually has; pad the rest
-                // with empty time so all tracks keep identical durations.
-                let availableEnd = min(clipEnd, assetDuration)
-                if clipStart < availableEnd {
-                    let range = CMTimeRange(
-                        start: CMTime(seconds: clipStart, preferredTimescale: Self.timescale),
-                        end: CMTime(seconds: availableEnd, preferredTimescale: Self.timescale))
-                    try compTrack.insertTimeRange(range, of: sourceTrack, at: at)
-                }
-                if availableEnd < clipEnd {
-                    let emptyStart = timelineStart + max(0, availableEnd - clipStart)
-                    compTrack.insertEmptyTimeRange(CMTimeRange(
-                        start: CMTime(seconds: emptyStart, preferredTimescale: Self.timescale),
-                        end: CMTime(seconds: timelineStart + clip.duration, preferredTimescale: Self.timescale)))
-                }
-            }
+            // Clamp to the media this file actually has and pad the rest with
+            // empty time, so every track keeps an identical duration.
+            try MediaPlacement.apply(
+                MediaPlacement.placements(segments: segments, assetDuration: assetDuration),
+                of: sourceTrack, to: compTrack, timescale: Self.timescale)
 
             if track.kind == .audio {
                 // Stems deliberately ignore mute/solo — a stem of a muted
