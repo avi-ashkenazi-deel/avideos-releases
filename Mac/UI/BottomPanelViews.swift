@@ -118,6 +118,12 @@ private struct PadButton: View {
     }
 }
 
+/// `sheet(item:)` needs an `Identifiable`, and `UUID` isn't one.
+private struct IdentifiedUUID: Identifiable {
+    let id: UUID
+    init(_ id: UUID) { self.id = id }
+}
+
 /// Music playlist + transport.
 struct MusicPlaylistView: View {
     @Environment(StudioController.self) private var studio
@@ -131,6 +137,7 @@ struct MusicPlaylistView: View {
     /// `musicPosition` back, so the thumb fought the pointer. Now the drag owns
     /// the value locally and one seek happens on release.
     @State private var scrubSeconds: Double?
+    @State private var editingTrackID: UUID?
 
     private var audio: AudioEngineController { studio.audio }
 
@@ -153,6 +160,7 @@ struct MusicPlaylistView: View {
                     .onTapGesture(count: 2) { audio.playTrack(id: track.id) }
                     .contextMenu {
                         Button("Play") { audio.playTrack(id: track.id) }
+                        Button("Sections…") { editingTrackID = track.id }
                         Button("Remove", role: .destructive) { audio.removeSong(id: track.id) }
                     }
                 }
@@ -227,6 +235,12 @@ struct MusicPlaylistView: View {
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
 
+                Button("Sections…") {
+                    editingTrackID = audio.sectionHostTrackID
+                }
+                .disabled(audio.sectionHostTrackID == nil)
+                .help("Mark up the loaded track: start point, sections, loops")
+
                 Button("Add…") {
                     let panel = NSOpenPanel()
                     panel.allowedContentTypes = [.audio]
@@ -256,6 +270,14 @@ struct MusicPlaylistView: View {
             Button("OK") { audio.sectionFailureMessage = nil }
         } message: {
             Text(audio.sectionFailureMessage ?? "")
+        }
+        .sheet(item: Binding(get: { editingTrackID.map(IdentifiedUUID.init) },
+                             set: { editingTrackID = $0?.id })) { wrapper in
+            MusicSectionEditorView(trackID: wrapper.id) {
+                editingTrackID = nil
+                audio.prepareSections(forTrackID: wrapper.id)
+            }
+            .environment(studio)
         }
     }
 
