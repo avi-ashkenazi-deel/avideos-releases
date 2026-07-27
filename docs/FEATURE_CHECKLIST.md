@@ -556,14 +556,10 @@ offline; a MIDI controller is only needed for section Z.
 1. **Watermark and intro/outro stingers are stored but never rendered.** The
    brand kit persists them and the Clip Studio panel says so, but
    `ExportService`/`CompositionBuilder` don't composite them yet.
-1b. **Gapless playlist transitions (F-101) are aspirational.** The advance path
-   opens the next file synchronously on the main thread between a `stop()` and
-   a `schedule`, so there is a seam. Section switching *within* one file
-   deliberately avoids that path — the file is already open — so it is not
-   affected. A second player node is the fix.
-1c. **Crossfade as a section switch mode** is defined but falls back to a hard
-   cut: a single player node cannot crossfade with itself. It needs the same
-   second node as the gapless fix.
+1b. **Gapless playlist advance (F-101) is close but not sample-accurate.** The
+   next file is now opened ahead of time and started on the second player
+   node, so the disk is out of the seam; a main-queue hop between the
+   completion handler and the swap remains. Judge it by ear.
 1d. **Beat-grid snapping** for section edges is not implemented; marker
    positions are set by ear and by typed timecode. Zero-crossing snapping was
    considered and rejected — at a loop seam the discontinuity is between the

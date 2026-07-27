@@ -130,9 +130,11 @@ Regression, on a track with **no** sections:
 - [ ] Dragging the scrubber is smooth and doesn't fight you.
 - [ ] A settings file written before this feature loads with devices, gains, ducker, inserts and pads intact.
 
+- [ ] Set the mode to **Crossfade** and switch sections: the two overlap smoothly rather than cutting, with no dip in loudness through the middle.
+- [ ] Let a playlist run from one track into the next: no gap where a file used to be opened at the seam.
+
 Known gaps in this pass — do not report:
-- **Crossfade** is offered as a switch mode but falls back to a hard cut. One player node cannot crossfade with itself; it needs a second node.
-- **Gapless playlist transitions (F-101) are still not real** — the advance path opens the next file on the main thread between a stop and a schedule. Section switching inside one file is unaffected, since the file is already open.
+- Gapless advance is close but not sample-accurate — the disk is out of the seam, but a main-queue hop remains. Judge by ear.
 - No beat-grid snapping; marker positions are set by ear and by typed timecode.
 
 ## MIDI control

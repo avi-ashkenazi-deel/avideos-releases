@@ -88,14 +88,42 @@ enum LoopMode: String, Codable, CaseIterable {
     }
 }
 
-/// Background-music playlist on the music strip. Songs stream from disk via
-/// AVAudioFile scheduling (never fully preloaded); a single player node is
-/// enough because "gapless" for background music means scheduling the next
-/// file in the completion handler — the file read-ahead hides the seam.
+/// Background-music playlist on the music strip, and live section playback.
+///
+/// Whole tracks stream from disk via `AVAudioFile` scheduling. Looped
+/// *sections* are decoded to memory instead, because only a buffer can be
+/// scheduled with `.loops` — which is what puts the wrap, and both switch
+/// modes, inside AVFoundation's render loop rather than in our completion
+/// handlers.
+///
+/// Two player nodes, both feeding `musicBus`. The second one is what makes a
+/// crossfade possible (a node cannot fade with itself) and takes the
+/// synchronous file open out of the playlist advance. An earlier comment here
+/// claimed one node sufficed because the completion handler could schedule the
+/// next file — that was wrong: the handler fires once the segment has already
+/// been consumed, and the hop to main plus a disk read is an audible seam.
 final class MusicPlayer {
     private weak var engine: AVAudioEngine?
-    private let player = AVAudioPlayerNode()
+    /// Two nodes, both attached at init and never created mid-session.
+    ///
+    /// `musicBus` is documented as a pre-mix bus that fans multiple players
+    /// into one strip entry, so a second node costs nothing structurally — and
+    /// it buys two things at once: a crossfade (a single node cannot fade with
+    /// itself) and a genuinely gapless track advance, since the next file can
+    /// be opened and scheduled on the idle node while this one still plays.
+    private let playerA = AVAudioPlayerNode()
+    private let playerB = AVAudioPlayerNode()
+    private var usingB = false
+    /// The node currently carrying the program.
+    private var player: AVAudioPlayerNode { usingB ? playerB : playerA }
+    /// The idle node, staged for the next thing.
+    private var standby: AVAudioPlayerNode { usingB ? playerA : playerB }
+
     private var currentFile: AVAudioFile?
+    /// Crossfade ramp. Its own timer on a userInitiated queue, explicitly not
+    /// main: the ducker owns main at 60 Hz, and a starved fade would strand
+    /// the music at −6 dB mid-show.
+    private var fadeTimer: DispatchSourceTimer?
 
     private(set) var playlist: [MusicTrack] = []
     private(set) var currentTrackID: UUID?
@@ -165,8 +193,14 @@ final class MusicPlayer {
 
     init(engine: AVAudioEngine, musicMixer: AVAudioMixerNode) {
         self.engine = engine
-        engine.attach(player)
-        engine.connect(player, to: musicMixer, format: CanonicalAudio.format)
+        for node in [playerA, playerB] {
+            engine.attach(node)
+            // Both into musicBus, so their sum passes through the insert chain,
+            // the fader, mute, the ducker and the meter. A node wired anywhere
+            // else would silently bypass all five.
+            engine.connect(node, to: musicMixer, format: CanonicalAudio.format)
+            node.volume = 1
+        }
     }
 
     // MARK: - Playlist
@@ -230,7 +264,9 @@ final class MusicPlayer {
         do {
             let file = try AVAudioFile(forReading: url)
             scheduleGeneration += 1
-            player.stop()
+            cancelFade()
+            playerA.stop()
+            playerB.stop()
             currentFile = file
             currentTrackID = track.id
             duration = Double(file.length) / file.processingFormat.sampleRate
@@ -245,6 +281,9 @@ final class MusicPlayer {
             isPlaying = true
             startPositionTimer()
             onStateChanged?()
+            // Open the next file now, while there is time — so the advance
+            // doesn't hit the disk from a completion handler.
+            prefetchNextTrack()
         } catch {
             log.error("Couldn't open \(track.title): \(error.localizedDescription)")
         }
@@ -264,7 +303,14 @@ final class MusicPlayer {
             stop()
             return
         }
-        play(track: playlist[nextIndex])
+        let next = playlist[nextIndex]
+        // Forward advance can use the already-open file; a manual jump
+        // backwards or to an arbitrary track cannot.
+        if delta == 1, let ready = prefetched, ready.trackID == next.id {
+            playPrefetched(track: next, file: ready.file)
+        } else {
+            play(track: next)
+        }
     }
 
     func seek(to seconds: Double) {
@@ -287,7 +333,12 @@ final class MusicPlayer {
 
     func stop() {
         scheduleGeneration += 1
-        player.stop()
+        // Both nodes: stopping only the active one would leave the other
+        // sounding if this lands mid-crossfade.
+        cancelFade()
+        playerA.stop()
+        playerB.stop()
+        prefetched = nil
         currentFile = nil
         currentTrackID = nil
         isPlaying = false
@@ -386,6 +437,9 @@ final class MusicPlayer {
         case .atLoopEnd where isSectionLooping && playingSectionID != nil:
             pending = .queued(sectionID: section.id)
             onStateChanged?()
+        case .crossfade where playingSectionID != nil:
+            crossfade(to: section, buffer: resident.buffer,
+                      region: resident.region, loop: shouldLoop)
         case .atLoopEnd, .hardCut, .crossfade:
             engage(section: section,
                    buffer: resident.buffer,
@@ -393,6 +447,87 @@ final class MusicPlayer {
                    loop: shouldLoop,
                    interrupting: playingSectionID != nil)
         }
+    }
+
+    /// How long a crossfade takes. Long enough to be smooth, short enough that
+    /// a section change still reads as deliberate.
+    static let crossfadeDuration: Double = 0.3
+
+    /// Starts the target on the idle node and rides the two volumes past each
+    /// other.
+    ///
+    /// AVAudioEngine has no sample-accurate gain ramp — `volume` is a plain
+    /// setter — so this is a timer-driven ramp at 120 Hz, which over 300 ms is
+    /// 36 steps on an equal-power curve. Inaudible for a music crossfade; the
+    /// same technique is rejected for declicking a hard cut, which would need
+    /// ~5 ms resolution.
+    private func crossfade(to section: MusicSection,
+                           buffer: AVAudioPCMBuffer,
+                           region: LoopRegion,
+                           loop: Bool) {
+        let incoming = standby
+        let outgoing = player
+
+        scheduleGeneration += 1
+        let generation = scheduleGeneration
+        var options: AVAudioPlayerNodeBufferOptions = []
+        if loop { options.insert(.loops) }
+
+        cancelFade()
+        incoming.volume = 0
+        incoming.scheduleBuffer(buffer, at: nil, options: options) { [weak self] in
+            DispatchQueue.main.async {
+                guard let self, self.scheduleGeneration == generation else { return }
+                self.sectionBufferFinished()
+            }
+        }
+        incoming.play()
+        usingB.toggle()
+
+        anchor = PlaybackAnchor(nodeSampleTime: currentNodeSampleTime(),
+                                trackFrame: region.startFrame,
+                                region: loop ? region : nil)
+        playingSectionID = section.id
+        isSectionLooping = loop
+        pending = .none
+        startPositionTimer()
+        onStateChanged?()
+
+        ride(outgoing: outgoing, incoming: incoming)
+    }
+
+    /// Ends any fade in progress and restores both nodes to unity, so a stop
+    /// or a new switch never leaves one stranded part-way down.
+    private func cancelFade() {
+        fadeTimer?.cancel()
+        fadeTimer = nil
+        playerA.volume = 1
+        playerB.volume = 1
+    }
+
+    private func ride(outgoing: AVAudioPlayerNode, incoming: AVAudioPlayerNode) {
+        fadeTimer?.cancel()
+        let steps = Int(Self.crossfadeDuration * 120)
+        var step = 0
+
+        let timer = DispatchSource.makeTimerSource(
+            queue: DispatchQueue(label: "com.aviashkenazi.avideos.music-fade", qos: .userInitiated))
+        timer.schedule(deadline: .now(), repeating: Self.crossfadeDuration / Double(steps))
+        timer.setEventHandler { [weak self] in
+            step += 1
+            let (out, into) = Crossfade.gainPair(at: Double(step) / Double(steps))
+            outgoing.volume = out
+            incoming.volume = into
+            guard step >= steps else { return }
+            // verify on Mac: writing AVAudioMixing.volume off the main thread.
+            outgoing.stop()
+            outgoing.volume = 1
+            incoming.volume = 1
+            self?.fadeTimer?.cancel()
+            self?.fadeTimer = nil
+        }
+        fadeTimer = timer
+        timer.resume()
     }
 
     /// Opens the track first, then engages — the only path that touches the
@@ -509,6 +644,78 @@ final class MusicPlayer {
         return MusicClock.canonicalFrames(
             fromPlayerSampleTime: playerTime.sampleTime,
             fileSampleRate: currentFile?.processingFormat.sampleRate ?? CanonicalAudio.sampleRate)
+    }
+
+    // MARK: - Gapless advance
+
+    /// The next playlist file, opened ahead of time.
+    ///
+    /// The advance path used to run: completion handler → main queue →
+    /// `AVAudioFile(forReading:)` (a synchronous disk open, on main) →
+    /// `stop()` → schedule → play. That is a stop/restart with a file open in
+    /// the middle, which is why F-101's "gapless" claim was false. Opening the
+    /// file while the current track still plays takes the disk out of the seam.
+    private var prefetched: (trackID: UUID, file: AVAudioFile)?
+    private let prefetchQueue = DispatchQueue(
+        label: "com.aviashkenazi.avideos.music-prefetch", qos: .utility)
+
+    private func prefetchNextTrack() {
+        guard let index = playlist.firstIndex(where: { $0.id == currentTrackID }) else { return }
+        var nextIndex = index + 1
+        if loopMode == .all { nextIndex %= playlist.count }
+        guard playlist.indices.contains(nextIndex) else { return }
+
+        let next = playlist[nextIndex]
+        guard prefetched?.trackID != next.id, let url = next.resolve() else { return }
+        prefetchQueue.async { [weak self] in
+            guard let file = try? AVAudioFile(forReading: url) else { return }
+            Task { @MainActor in self?.prefetched = (next.id, file) }
+        }
+    }
+
+    /// Starts a track whose file is already open, on the standby node, so the
+    /// seam is a node swap rather than a stop-and-reopen.
+    ///
+    /// A main-queue hop still separates the completion handler from this call,
+    /// so it is not sample-accurate — but the disk is out of the path, which
+    /// was the audible part.
+    private func playPrefetched(track: MusicTrack, file: AVAudioFile) {
+        let outgoing = player
+        let incoming = standby
+        scheduleGeneration += 1
+        let generation = scheduleGeneration
+
+        currentFile = file
+        currentTrackID = track.id
+        duration = Double(file.length) / file.processingFormat.sampleRate
+        releaseSectionState()
+
+        let startFrame = AVAudioFramePosition(
+            (track.effectiveStartOffset * file.processingFormat.sampleRate).rounded())
+        let from = max(0, min(startFrame, file.length - 1))
+        let remaining = AVAudioFrameCount(max(0, file.length - from))
+        guard remaining > 0 else { return }
+
+        incoming.volume = 1
+        incoming.scheduleSegment(file, startingFrame: from, frameCount: remaining, at: nil) { [weak self] in
+            DispatchQueue.main.async {
+                guard let self, self.scheduleGeneration == generation else { return }
+                self.trackFinished()
+            }
+        }
+        incoming.play()
+        usingB.toggle()
+        outgoing.stop()
+
+        anchor = PlaybackAnchor(
+            nodeSampleTime: currentNodeSampleTime(),
+            trackFrame: MusicClock.frames(fromSeconds: Double(from) / file.processingFormat.sampleRate),
+            region: nil)
+        isPlaying = true
+        prefetched = nil
+        startPositionTimer()
+        onStateChanged?()
+        prefetchNextTrack()
     }
 
     private func trackFinished() {
