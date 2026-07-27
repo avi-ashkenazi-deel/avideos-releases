@@ -102,6 +102,14 @@ enum LoopMode: String, Codable, CaseIterable {
 /// claimed one node sufficed because the completion handler could schedule the
 /// next file — that was wrong: the handler fires once the segment has already
 /// been consumed, and the hop to main plus a disk read is an audible seam.
+/// `@MainActor` because it already was one in practice: every scheduling
+/// completion handler below hops to main before touching a single property,
+/// and the position timer runs on the main queue. Saying so lets it hold
+/// `MusicRegionCache` directly instead of threading a lock through state that
+/// is only ever read from one thread anyway. The two places that genuinely
+/// are off-main — the crossfade ramp, and the completion handlers themselves —
+/// are marked at their call sites.
+@MainActor
 final class MusicPlayer {
     private weak var engine: AVAudioEngine?
     /// Two nodes, both attached at init and never created mid-session.
@@ -370,7 +378,7 @@ final class MusicPlayer {
         let remaining = AVAudioFrameCount(max(0, file.length - frame))
         guard remaining > 0 else { return }
         player.scheduleSegment(file, startingFrame: frame, frameCount: remaining, at: nil) { [weak self] in
-            DispatchQueue.main.async {
+            Task { @MainActor [weak self] in
                 guard let self, self.scheduleGeneration == generation else { return }
                 self.trackFinished()
             }
@@ -476,7 +484,7 @@ final class MusicPlayer {
         cancelFade()
         incoming.volume = 0
         incoming.scheduleBuffer(buffer, at: nil, options: options) { [weak self] in
-            DispatchQueue.main.async {
+            Task { @MainActor [weak self] in
                 guard let self, self.scheduleGeneration == generation else { return }
                 self.sectionBufferFinished()
             }
@@ -523,8 +531,13 @@ final class MusicPlayer {
             outgoing.stop()
             outgoing.volume = 1
             incoming.volume = 1
-            self?.fadeTimer?.cancel()
-            self?.fadeTimer = nil
+            // The ramp itself must stay off main — that is the whole point of
+            // this queue — but the timer handle is main-actor state, so only
+            // that last bit hops.
+            Task { @MainActor [weak self] in
+                self?.fadeTimer?.cancel()
+                self?.fadeTimer = nil
+            }
         }
         fadeTimer = timer
         timer.resume()
@@ -554,7 +567,7 @@ final class MusicPlayer {
         if interrupting { options.insert(.interrupts) }
 
         player.scheduleBuffer(buffer, at: nil, options: options) { [weak self] in
-            DispatchQueue.main.async {
+            Task { @MainActor [weak self] in
                 guard let self, self.scheduleGeneration == generation else { return }
                 self.sectionBufferFinished()
             }
@@ -698,7 +711,7 @@ final class MusicPlayer {
 
         incoming.volume = 1
         incoming.scheduleSegment(file, startingFrame: from, frameCount: remaining, at: nil) { [weak self] in
-            DispatchQueue.main.async {
+            Task { @MainActor [weak self] in
                 guard let self, self.scheduleGeneration == generation else { return }
                 self.trackFinished()
             }
@@ -748,7 +761,12 @@ final class MusicPlayer {
         let timer = DispatchSource.makeTimerSource(queue: .main)
         timer.schedule(deadline: .now() + positionTickInterval,
                        repeating: positionTickInterval)
-        timer.setEventHandler { [weak self] in self?.tickPosition() }
+        timer.setEventHandler { [weak self] in
+            // Already on the main queue (see the timer source above), so
+            // assume the isolation rather than hopping: a Task here would put
+            // every loop-boundary decision a run-loop turn late.
+            MainActor.assumeIsolated { self?.tickPosition() }
+        }
         positionTimer = timer
         timer.resume()
     }
@@ -808,7 +826,7 @@ final class MusicPlayer {
             // to have been scheduled with `.loops` (it was), and swaps exactly
             // at its loop point.
             player.scheduleBuffer(resident.buffer, at: nil, options: options) { [weak self] in
-                DispatchQueue.main.async {
+                Task { @MainActor [weak self] in
                     guard let self, self.scheduleGeneration == generation else { return }
                     self.sectionBufferFinished()
                 }

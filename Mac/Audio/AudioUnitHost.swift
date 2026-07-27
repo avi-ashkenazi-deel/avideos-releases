@@ -1,6 +1,9 @@
 import Foundation
 import AVFoundation
 import AudioToolbox
+// requestViewController(_:) is a CoreAudioKit category on AUAudioUnit, not
+// part of AudioToolbox's own AUAudioUnit interface.
+import CoreAudioKit
 import AppKit
 import os
 

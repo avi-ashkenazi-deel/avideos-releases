@@ -112,18 +112,23 @@ final class MovieAudioTap {
                 }
             })
 
-        var tap: Unmanaged<MTAudioProcessingTap>?
+        // Audited signature: `tapOut` is `UnsafeMutablePointer<MTAudioProcessingTap?>`,
+        // so Swift owns the returned reference and there is nothing to
+        // take-retained.
+        var tap: MTAudioProcessingTap?
         let status = MTAudioProcessingTapCreate(kCFAllocatorDefault, &callbacks,
                                                 kMTAudioProcessingTapCreationFlag_PostEffects, &tap)
         guard status == noErr, let tap else {
             log.error("MTAudioProcessingTapCreate failed: \(status)")
-            Unmanaged<TapContext>.fromOpaque(Unmanaged.passUnretained(context).toOpaque()).release()
+            // Balance the passRetained above: `finalize` will never run,
+            // because there is no tap to finalize.
+            Unmanaged.passUnretained(context).release()
             self.context = nil
             return
         }
 
         let inputParams = AVMutableAudioMixInputParameters(track: assetTrack)
-        inputParams.audioTapProcessor = tap.takeRetainedValue()
+        inputParams.audioTapProcessor = tap
         let audioMix = AVMutableAudioMix()
         audioMix.inputParameters = [inputParams]
         item.audioMix = audioMix

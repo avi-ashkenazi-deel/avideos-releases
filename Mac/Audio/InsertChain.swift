@@ -156,8 +156,10 @@ final class InsertChain {
 
         switch effect.kind {
         case .compressor:
-            // AUDynamicsProcessor via AudioUnit parameter API.
-            guard let unit = node.audioUnit else { return }
+            // AUDynamicsProcessor via AudioUnit parameter API. `audioUnit` is
+            // a non-optional AudioUnit on AVAudioUnit — there is nothing to
+            // unwrap.
+            let unit = node.audioUnit
             let threshold = Float(-8 - amount * 12)          // -8 … -20 dB
             let ratio = Float(2 + amount * 4)                // 2:1 … 6:1
             AudioUnitSetParameter(unit, kDynamicsProcessorParam_Threshold,
