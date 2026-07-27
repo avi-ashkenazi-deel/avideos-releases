@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import Observation
 
 /// Bidirectional word ↔ clip mapping for the text-based editor. Recomputed
 /// O(words) whenever the EDL or transcript changes — transcript and timeline

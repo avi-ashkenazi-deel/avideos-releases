@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import Observation
 
 /// The timeline, running **top to bottom** so it sits beside the transcript
 /// and scrolls with it.
