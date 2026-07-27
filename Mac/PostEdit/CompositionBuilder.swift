@@ -148,11 +148,21 @@ final class CompositionBuilder {
         let audioMix = AVMutableAudioMix()
         audioMix.inputParameters = mixParameters
 
+        // B-roll: picture only. Each cutaway gets its own composition video
+        // track so overlapping cutaways can't collide, and its audio is never
+        // inserted — the conversation keeps running underneath.
+        var overlayTrackIDs: [CMPersistentTrackID: UUID] = [:]
+        if options.includeVideo {
+            overlayTrackIDs = try await Self.insertOverlays(project.sortedOverlays,
+                                                            into: composition)
+        }
+
         var videoComposition: AVMutableVideoComposition?
-        if options.includeVideo, !videoTrackParticipants.isEmpty {
+        if options.includeVideo, !videoTrackParticipants.isEmpty || !overlayTrackIDs.isEmpty {
             videoComposition = Self.makeVideoComposition(
                 project: project,
                 videoTrackParticipants: videoTrackParticipants,
+                overlayTrackIDs: overlayTrackIDs,
                 renderSize: options.renderSize ?? Self.defaultRenderSize(for: project),
                 burnCaptions: options.burnCaptions)
         }
@@ -170,6 +180,62 @@ final class CompositionBuilder {
             case .cannotAddTrack(let id): return "Could not add composition track for \(id)"
             }
         }
+    }
+
+    // MARK: - Overlays (B-roll)
+
+    /// Inserts each cutaway's **video** into its own composition track at its
+    /// timeline position, and returns the track → overlay mapping the
+    /// compositor needs to draw them.
+    ///
+    /// Audio is deliberately not inserted: the conversation underneath keeps
+    /// playing, and the audio mix stays untouched.
+    private static func insertOverlays(_ overlays: [OverlayClip],
+                                       into composition: AVMutableComposition)
+    async throws -> [CMPersistentTrackID: UUID] {
+        var mapping: [CMPersistentTrackID: UUID] = [:]
+
+        for overlay in overlays {
+            guard let url = overlay.media.resolve() else {
+                Self.logger.warning("B-roll media missing: \(overlay.media.displayName, privacy: .public)")
+                continue
+            }
+            let asset = AVURLAsset(url: url, options: [AVURLAssetPreferPreciseDurationAndTimingKey: true])
+            guard let sourceTrack = try await asset.loadTracks(withMediaType: .video).first else {
+                Self.logger.warning("B-roll has no video track: \(overlay.media.displayName, privacy: .public)")
+                continue
+            }
+
+            guard let compTrack = composition.addMutableTrack(
+                withMediaType: .video,
+                preferredTrackID: kCMPersistentTrackID_Invalid) else {
+                throw BuildError.cannotAddTrack("b-roll \(overlay.media.displayName)")
+            }
+            compTrack.preferredTransform = sourceTrack.preferredTransform
+
+            // Take as much of the cutaway as it actually has; a short clip
+            // simply ends early rather than stretching.
+            let assetDuration = try await asset.load(.duration).seconds
+            let available = max(0, assetDuration - overlay.sourceStart)
+            let take = min(overlay.duration, available)
+            guard take >= EditDecisionList.minimumClipDuration else { continue }
+
+            let sourceRange = CMTimeRange(
+                start: CMTime(seconds: overlay.sourceStart, preferredTimescale: timescale),
+                duration: CMTime(seconds: take, preferredTimescale: timescale))
+            do {
+                try compTrack.insertTimeRange(
+                    sourceRange,
+                    of: sourceTrack,
+                    at: CMTime(seconds: overlay.timelineRange.lowerBound,
+                               preferredTimescale: timescale))
+                mapping[compTrack.trackID] = overlay.id
+            } catch {
+                Self.logger.error("B-roll insert failed: \(error.localizedDescription, privacy: .public)")
+                composition.removeTrack(compTrack)
+            }
+        }
+        return mapping
     }
 
     // MARK: - Audio mix
@@ -206,6 +272,7 @@ final class CompositionBuilder {
 
     private static func makeVideoComposition(project: EditProject,
                                              videoTrackParticipants: [CMPersistentTrackID: String],
+                                             overlayTrackIDs: [CMPersistentTrackID: UUID],
                                              renderSize: CGSize,
                                              burnCaptions: Bool) -> AVMutableVideoComposition {
         let videoComposition = AVMutableVideoComposition()
@@ -231,12 +298,22 @@ final class CompositionBuilder {
             }
         }
 
-        // Layout boundaries, in edited time. A segment boundary only matters
-        // here when the layout actually changes across it.
-        var boundaries: [Double] = [0]
+        // Instruction boundaries, in edited time: wherever the layout changes,
+        // and wherever a cutaway starts or ends — an instruction has one fixed
+        // picture recipe, so an overlay appearing mid-instruction would be
+        // invisible until the next one.
+        var boundarySet: Set<Double> = [0]
         for cue in mappedCues where cue.atTime > 0 && cue.atTime < duration {
-            boundaries.append(cue.atTime)
+            boundarySet.insert(cue.atTime)
         }
+        let overlays = project.sortedOverlays
+        for overlay in overlays {
+            for edge in [overlay.timelineRange.lowerBound, overlay.timelineRange.upperBound]
+            where edge > 0 && edge < duration {
+                boundarySet.insert(edge)
+            }
+        }
+        var boundaries = boundarySet.sorted()
         boundaries.append(max(duration, 1.0 / 30.0))
 
         let speakerTimeline = Self.speakerTimeline(project: project)
@@ -260,6 +337,20 @@ final class CompositionBuilder {
             let start = boundaries[i]
             let end = boundaries[i + 1]
             guard end > start else { continue }
+            // Cutaways covering the middle of this instruction's span. The
+            // boundary set above guarantees an overlay either covers a whole
+            // instruction or none of it, so testing the midpoint is exact.
+            let midpoint = (start + end) / 2
+            let activeOverlays = overlays.filter {
+                $0.timelineRange.lowerBound <= midpoint && midpoint < $0.timelineRange.upperBound
+            }
+            let activeOverlayTracks: [CMPersistentTrackID: OverlayClip] = activeOverlays
+                .reduce(into: [:]) { result, overlay in
+                    if let trackID = overlayTrackIDs.first(where: { $0.value == overlay.id })?.key {
+                        result[trackID] = overlay
+                    }
+                }
+
             let instruction = LayoutCompositionInstruction(
                 timeRange: CMTimeRange(
                     start: CMTime(seconds: start, preferredTimescale: timescale),
@@ -269,7 +360,8 @@ final class CompositionBuilder {
                 participantOrder: orderedParticipants,
                 speakerTimeline: speakerTimeline,
                 captionContext: captionContext,
-                cropPaths: project.cropPaths ?? [:])
+                cropPaths: project.cropPaths ?? [:],
+                overlaysByTrackID: activeOverlayTracks)
             instructions.append(instruction)
         }
         videoComposition.instructions = instructions
@@ -315,6 +407,9 @@ final class LayoutCompositionInstruction: NSObject, AVVideoCompositionInstructio
     /// space). Empty means center-crop, which is what every tile did before
     /// Clip Studio could compute paths.
     let cropPaths: [String: [CropKeyframe]]
+    /// B-roll cutaways playing across this whole instruction, by the
+    /// composition track carrying each one.
+    let overlaysByTrackID: [CMPersistentTrackID: OverlayClip]
 
     init(timeRange: CMTimeRange,
          layout: ProgramLayout,
@@ -322,7 +417,8 @@ final class LayoutCompositionInstruction: NSObject, AVVideoCompositionInstructio
          participantOrder: [String],
          speakerTimeline: [(time: Double, participantId: String)],
          captionContext: CaptionRenderContext?,
-         cropPaths: [String: [CropKeyframe]] = [:]) {
+         cropPaths: [String: [CropKeyframe]] = [:],
+         overlaysByTrackID: [CMPersistentTrackID: OverlayClip] = [:]) {
         self.timeRange = timeRange
         self.layout = layout
         self.participantByTrackID = participantByTrackID
@@ -330,7 +426,11 @@ final class LayoutCompositionInstruction: NSObject, AVVideoCompositionInstructio
         self.speakerTimeline = speakerTimeline
         self.captionContext = captionContext
         self.cropPaths = cropPaths
-        self.requiredSourceTrackIDs = participantByTrackID.keys.map { NSNumber(value: $0) }
+        self.overlaysByTrackID = overlaysByTrackID
+        // Overlay tracks must be requested too, or `sourceFrame(byTrackID:)`
+        // returns nothing for them and the cutaway silently never appears.
+        self.requiredSourceTrackIDs = (participantByTrackID.keys + overlaysByTrackID.keys)
+            .map { NSNumber(value: $0) }
         super.init()
     }
 
@@ -433,6 +533,28 @@ final class LayoutVideoCompositor: NSObject, AVVideoCompositing {
                 SmartReframer.rect(at: time, in: $0)
             }
             image = Self.focusFill(frame, into: rect, normalizedCrop: crop).composited(over: image)
+        }
+
+        // B-roll sits above the participants and below the captions: a cutaway
+        // should hide faces, but subtitles have to stay readable over it.
+        for (trackID, overlay) in instruction.overlaysByTrackID {
+            guard let buffer = request.sourceFrame(byTrackID: trackID) else { continue }
+            let frame = CIImage(cvPixelBuffer: buffer)
+            let target = overlay.mode == .fullFrame
+                ? canvas
+                : CGRect(x: canvas.minX + overlay.insetRect.minX * canvas.width,
+                         // insetRect is y-down like the rest of the document;
+                         // CoreImage is y-up.
+                         y: canvas.minY + (1 - overlay.insetRect.maxY) * canvas.height,
+                         width: overlay.insetRect.width * canvas.width,
+                         height: overlay.insetRect.height * canvas.height)
+            var placed = Self.aspectFill(frame, into: target)
+            if overlay.opacity < 1 {
+                placed = placed.applyingFilter("CIColorMatrix", parameters: [
+                    "inputAVector": CIVector(x: 0, y: 0, z: 0, w: overlay.opacity),
+                ])
+            }
+            image = placed.composited(over: image)
         }
 
         if let captions = instruction.captionContext,

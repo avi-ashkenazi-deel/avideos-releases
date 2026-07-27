@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import UniformTypeIdentifiers
 import Observation
 
 /// The publishing surface: queue on top, metadata form for the next upload

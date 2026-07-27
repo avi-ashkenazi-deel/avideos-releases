@@ -541,6 +541,68 @@ struct Chapter: Codable, Sendable, Identifiable, Equatable {
     }
 }
 
+// MARK: - Overlay (B-roll)
+
+/// A cutaway laid over the conversation: the picture changes, the
+/// conversation's audio keeps running underneath.
+///
+/// **Video only in v1.** The overlay's own audio track is ignored — that is
+/// what B-roll means here, and it keeps the audio mix (and its micro-fades)
+/// entirely out of the feature. A clip you want to *hear* belongs in the
+/// sequence, not on this lane.
+///
+/// Positioned in **edited-timeline** seconds, unlike layout cues: a cutaway is
+/// placed against the program you are watching, not against the recording.
+struct OverlayClip: Codable, Sendable, Identifiable, Equatable {
+    enum Mode: String, Codable, Sendable, CaseIterable {
+        /// Fills the frame, hiding the participants for its duration.
+        case fullFrame
+        /// A corner inset over the ongoing conversation.
+        case inset
+
+        var displayName: String {
+            switch self {
+            case .fullFrame: "Full frame"
+            case .inset: "Inset"
+            }
+        }
+    }
+
+    var id: UUID
+    var media: MediaReference
+    /// Where it plays, in edited-timeline seconds.
+    var timelineRange: ClosedRange<Double>
+    /// Where playback starts inside the overlay's own media.
+    var sourceStart: Double
+    var mode: Mode
+    /// Unit rect for `.inset`, ignored for `.fullFrame`.
+    var insetRect: CGRect
+    var opacity: Double
+    /// Carried through from the AI suggestion that created it, so the UI can
+    /// explain why this cutaway is here.
+    var note: String?
+
+    init(id: UUID = UUID(),
+         media: MediaReference,
+         timelineRange: ClosedRange<Double>,
+         sourceStart: Double = 0,
+         mode: Mode = .fullFrame,
+         insetRect: CGRect = CGRect(x: 0.62, y: 0.06, width: 0.32, height: 0.32),
+         opacity: Double = 1,
+         note: String? = nil) {
+        self.id = id
+        self.media = media
+        self.timelineRange = timelineRange
+        self.sourceStart = sourceStart
+        self.mode = mode
+        self.insetRect = insetRect
+        self.opacity = opacity
+        self.note = note
+    }
+
+    var duration: Double { timelineRange.upperBound - timelineRange.lowerBound }
+}
+
 // MARK: - Track mix
 
 /// Per-track level control in the editor: the fix for a guest who recorded
@@ -591,6 +653,8 @@ struct EditProject: Codable, Sendable, Identifiable, Equatable {
     var cropPaths: [String: [CropKeyframe]]?
     /// Level trim per track, keyed by `EditTrack.id`. Absent means unity.
     var trackMix: [String: TrackMix]?
+    /// B-roll cutaways over the conversation, in edited-timeline seconds.
+    var overlays: [OverlayClip]?
     var schemaVersion: Int
 
     /// `edl` defaults to a fresh full-length EDL derived from the tracks, so
@@ -607,6 +671,7 @@ struct EditProject: Codable, Sendable, Identifiable, Equatable {
          chapters: [Chapter] = [],
          cropPaths: [String: [CropKeyframe]]? = nil,
          trackMix: [String: TrackMix]? = nil,
+         overlays: [OverlayClip]? = nil,
          schemaVersion: Int = EditProject.currentSchemaVersion) {
         self.id = id
         self.sessionId = sessionId
@@ -619,6 +684,7 @@ struct EditProject: Codable, Sendable, Identifiable, Equatable {
         self.chapters = chapters
         self.cropPaths = cropPaths
         self.trackMix = trackMix
+        self.overlays = overlays
         self.schemaVersion = schemaVersion
     }
 
@@ -656,6 +722,48 @@ struct EditProject: Codable, Sendable, Identifiable, Equatable {
         let settings = mix(for: trackID)
         if isAnyTrackSoloed && !settings.isSolo { return 0 }
         return settings.linearGain
+    }
+
+    // MARK: Overlays
+
+    /// Overlays in play order. Stored unsorted; callers that draw or composite
+    /// want them ordered.
+    var sortedOverlays: [OverlayClip] {
+        (overlays ?? []).sorted { $0.timelineRange.lowerBound < $1.timelineRange.lowerBound }
+    }
+
+    mutating func addOverlay(_ overlay: OverlayClip) {
+        var all = overlays ?? []
+        all.append(overlay)
+        overlays = all
+    }
+
+    mutating func removeOverlay(id: UUID) {
+        guard var all = overlays else { return }
+        all.removeAll { $0.id == id }
+        overlays = all.isEmpty ? nil : all
+    }
+
+    /// Moves or resizes a cutaway, clamped to the program. Used by the
+    /// timeline's drag handles.
+    @discardableResult
+    mutating func setOverlayRange(id: UUID, to range: ClosedRange<Double>) -> Bool {
+        guard var all = overlays,
+              let index = all.firstIndex(where: { $0.id == id }) else { return false }
+        let programEnd = max(editedDuration, EditDecisionList.minimumClipDuration)
+        let lower = max(0, min(range.lowerBound, programEnd))
+        let upper = max(0, min(range.upperBound, programEnd))
+        guard upper - lower >= EditDecisionList.minimumClipDuration else { return false }
+        all[index].timelineRange = lower...upper
+        overlays = all
+        return true
+    }
+
+    mutating func updateOverlay(_ overlay: OverlayClip) {
+        guard var all = overlays,
+              let index = all.firstIndex(where: { $0.id == overlay.id }) else { return }
+        all[index] = overlay
+        overlays = all
     }
 
     mutating func setMix(_ newMix: TrackMix, for trackID: String) {

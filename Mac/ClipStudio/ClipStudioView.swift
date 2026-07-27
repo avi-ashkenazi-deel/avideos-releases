@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import UniformTypeIdentifiers
 import Observation
 import os
 
@@ -303,9 +304,24 @@ struct ClipStudioView: View {
                                     .foregroundStyle(.tertiary)
                             }
                         }
-                        Button("Jump") { previewSource(suggestion.timeRange.lowerBound) }
-                            .buttonStyle(.link)
-                            .font(.caption)
+                        HStack(spacing: 12) {
+                            Button("Jump") { previewSource(suggestion.timeRange.lowerBound) }
+                            if suggestion.localCandidates.isEmpty {
+                                Button("Choose File…") { insertBRoll(suggestion, media: nil) }
+                            } else {
+                                Menu("Insert on B-Roll Lane") {
+                                    ForEach(suggestion.localCandidates, id: \.self) { url in
+                                        Button(url.lastPathComponent) {
+                                            insertBRoll(suggestion, media: url)
+                                        }
+                                    }
+                                    Divider()
+                                    Button("Choose File…") { insertBRoll(suggestion, media: nil) }
+                                }
+                            }
+                        }
+                        .buttonStyle(.link)
+                        .font(.caption)
                     }
                     .padding(.vertical, 2)
                 }
@@ -475,6 +491,38 @@ struct ClipStudioView: View {
         if let timeline = project.edl.mapSourceToTimeline(enabled) {
             seek(timeline)
         }
+    }
+
+    /// Turns a suggestion into a real cutaway on the project's B-roll lane —
+    /// the step that was missing, which left the suggester's output with
+    /// nowhere to go. Suggestions are in source time; overlays live on the
+    /// edited timeline, so the range is mapped through the EDL.
+    private func insertBRoll(_ suggestion: BRollSuggestion, media: URL?) {
+        let url: URL?
+        if let media {
+            url = media
+        } else {
+            let panel = NSOpenPanel()
+            panel.allowedContentTypes = [.movie, .mpeg4Movie, .quickTimeMovie, .image]
+            panel.allowsMultipleSelection = false
+            url = panel.runModal() == .OK ? panel.url : nil
+        }
+        guard let url else { return }
+
+        // Anchor to the first surviving frame of the suggested span; if the
+        // whole span was cut, there is nothing to lay a cutaway over.
+        let startSource = project.edl.nearestEnabledSourceTime(to: suggestion.timeRange.lowerBound)
+        guard let start = project.edl.mapSourceToTimeline(startSource) else {
+            model.errorMessage = "That moment isn't in the edit any more."
+            return
+        }
+        let endSource = project.edl.nearestEnabledSourceTime(to: suggestion.timeRange.upperBound)
+        let end = project.edl.mapSourceToTimeline(endSource) ?? (start + suggestion.timeRange.upperBound - suggestion.timeRange.lowerBound)
+        let range = start...max(end, start + 0.5)
+
+        project.addOverlay(OverlayClip(media: MediaReference(url: url),
+                                       timelineRange: range,
+                                       note: suggestion.reason))
     }
 
     private func exportClip(_ clip: ClipSuggestion) {
