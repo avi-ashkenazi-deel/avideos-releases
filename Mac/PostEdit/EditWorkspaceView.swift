@@ -115,6 +115,10 @@ struct EditWorkspaceView: View {
                     trackRow(track)
                 }
             }
+            Section("Intro / Outro") {
+                bookendRow("Intro", clip: project.bookends?.intro) { project.setIntro($0) }
+                bookendRow("Outro", clip: project.bookends?.outro) { project.setOutro($0) }
+            }
             if !project.externalTrackGroups.isEmpty {
                 Section("Extra Media") {
                     ForEach(project.externalTrackGroups, id: \.participantID) { group in
@@ -405,6 +409,51 @@ struct EditWorkspaceView: View {
         if item.duration > length {
             errorMessage = String(format: "Trimmed to fit the program (%.1fs of %.1fs used).",
                                   length, item.duration)
+        }
+    }
+
+    /// Intro or outro. Setting one does not move a single chapter or cutaway —
+    /// it only changes where the conversation sits in the exported file.
+    @ViewBuilder
+    private func bookendRow(_ label: String,
+                            clip: BookendClip?,
+                            set: @escaping (BookendClip?) -> Void) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: label == "Intro" ? "arrow.right.to.line" : "arrow.left.to.line")
+                .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(label).font(.caption)
+                Text(clip.map { "\($0.media.displayName) · \(timeString($0.duration))" } ?? "None")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            Spacer()
+            if clip != nil {
+                Button("Clear") { performEdit { set(nil) } }
+                    .buttonStyle(.link).font(.caption2)
+            }
+            Button("Choose…") { chooseBookend(set) }
+                .buttonStyle(.link).font(.caption2)
+        }
+    }
+
+    private func chooseBookend(_ set: @escaping (BookendClip?) -> Void) {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = Self.externalMediaTypes
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        Task {
+            guard case .ready(let probe) = await mediaImporter.probe(url), probe.duration > 0 else {
+                errorMessage = "\(url.lastPathComponent) can't be used as an intro or outro."
+                return
+            }
+            // sourceRange is stored rather than probed later: programOffset is
+            // read on the main thread every frame, so it must never need to
+            // open an asset.
+            performEdit {
+                set(BookendClip(media: MediaReference(url: url),
+                                sourceRange: 0...probe.duration))
+            }
         }
     }
 

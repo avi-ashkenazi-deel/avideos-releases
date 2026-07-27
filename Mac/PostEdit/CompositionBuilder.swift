@@ -89,6 +89,7 @@ final class CompositionBuilder {
         var mixParameters: [AVMutableAudioMixInputParameters] = []
         var videoTrackParticipants: [CMPersistentTrackID: String] = [:]
         var transforms: [CMPersistentTrackID: CGAffineTransform] = [:]
+        var bookendTrackIDs: [CMPersistentTrackID: ProgramBookendSlot] = [:]
         var joinTimes: [Double] = []   // timeline seconds of every internal join
         do {
             var acc = 0.0
@@ -108,7 +109,9 @@ final class CompositionBuilder {
         if options.includesExternalMedia {
             inserted = try await Self.insertOverlayMedia(project.sortedOverlays,
                                                          into: composition,
-                                                         includeVideo: options.includeVideo)
+                                                         includeVideo: options.includeVideo,
+                                                         timelineOffset: options.includesExternalMedia
+                                                            ? project.programOffset : 0)
         }
         let ducks = options.includesExternalMedia
             ? Self.duckWindows(for: project.sortedOverlays, inserted: inserted)
@@ -117,6 +120,13 @@ final class CompositionBuilder {
         let overlayTrackIDs = Dictionary(uniqueKeysWithValues:
             inserted.filter { $0.videoTrackID != kCMPersistentTrackID_Invalid }
                 .map { ($0.videoTrackID, $0.overlayID) })
+
+        if options.includesExternalMedia, project.hasBookends {
+            let placed = try await Self.insertBookends(project, into: composition,
+                                                       includeVideo: options.includeVideo)
+            mixParameters.append(contentsOf: placed.audioParameters)
+            bookendTrackIDs = placed.videoTrackIDs
+        }
 
         for track in project.tracks {
             let asset = asset(for: track.url)
@@ -155,7 +165,8 @@ final class CompositionBuilder {
                 MediaPlacement.placements(
                     segments: segments,
                     sourceOffset: project.externalSettings(for: track.id)?.sourceOffset ?? 0,
-                    assetDuration: assetDuration),
+                    assetDuration: assetDuration,
+                    timelineOffset: options.includesExternalMedia ? project.programOffset : 0),
                 of: sourceTrack, to: compTrack, timescale: Self.timescale)
 
             if track.kind == .audio {
@@ -182,6 +193,7 @@ final class CompositionBuilder {
                 videoTrackParticipants: videoTrackParticipants,
                 overlayTrackIDs: overlayTrackIDs,
                 transforms: transforms,
+                bookendTrackIDs: bookendTrackIDs,
                 renderSize: options.renderSize ?? Self.defaultRenderSize(for: project),
                 burnCaptions: options.burnCaptions)
         }
@@ -199,6 +211,60 @@ final class CompositionBuilder {
             case .cannotAddTrack(let id): return "Could not add composition track for \(id)"
             }
         }
+    }
+
+    // MARK: - Bookends
+
+    enum ProgramBookendSlot: String, Sendable { case intro, outro }
+
+    private struct PlacedBookends {
+        var videoTrackIDs: [CMPersistentTrackID: ProgramBookendSlot] = [:]
+        var audioParameters: [AVMutableAudioMixInputParameters] = []
+    }
+
+    /// Puts the intro at composition zero and the outro after the
+    /// conversation. Each gets its own tracks, so neither can interfere with
+    /// the participants' placement.
+    private static func insertBookends(_ project: EditProject,
+                                       into composition: AVMutableComposition,
+                                       includeVideo: Bool) async throws -> PlacedBookends {
+        var placed = PlacedBookends()
+        let slots: [(ProgramBookendSlot, BookendClip?, Double)] = [
+            (.intro, project.bookends?.intro, 0),
+            (.outro, project.bookends?.outro, project.programOffset + project.editedDuration),
+        ]
+
+        for (slot, clip, at) in slots {
+            guard let clip, let url = clip.media.resolve() else { continue }
+            let asset = AVURLAsset(url: url, options: [AVURLAssetPreferPreciseDurationAndTimingKey: true])
+            let assetDuration = try await asset.load(.duration).seconds
+            let take = min(clip.duration, max(0, assetDuration - clip.sourceRange.lowerBound))
+            guard take > 0 else { continue }
+
+            let sourceRange = CMTimeRange(
+                start: CMTime(seconds: clip.sourceRange.lowerBound, preferredTimescale: timescale),
+                duration: CMTime(seconds: take, preferredTimescale: timescale))
+            let start = CMTime(seconds: at, preferredTimescale: timescale)
+
+            if includeVideo,
+               let sourceVideo = try await asset.loadTracks(withMediaType: .video).first,
+               let compTrack = composition.addMutableTrack(
+                   withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid) {
+                compTrack.preferredTransform = sourceVideo.preferredTransform
+                try? compTrack.insertTimeRange(sourceRange, of: sourceVideo, at: start)
+                placed.videoTrackIDs[compTrack.trackID] = slot
+            }
+            if clip.audio.isEnabled,
+               let sourceAudio = try await asset.loadTracks(withMediaType: .audio).first,
+               let compTrack = composition.addMutableTrack(
+                   withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid) {
+                try? compTrack.insertTimeRange(sourceRange, of: sourceAudio, at: start)
+                let params = AVMutableAudioMixInputParameters(track: compTrack)
+                params.setVolume(clip.audio.linearGain, at: .zero)
+                placed.audioParameters.append(params)
+            }
+        }
+        return placed
     }
 
     // MARK: - Overlays (B-roll)
@@ -226,7 +292,8 @@ final class CompositionBuilder {
     /// cutaway's sound and the ducking it causes but has no use for its picture.
     private static func insertOverlayMedia(_ overlays: [OverlayClip],
                                            into composition: AVMutableComposition,
-                                           includeVideo: Bool) async throws -> [InsertedOverlay] {
+                                           includeVideo: Bool,
+                                           timelineOffset: Double) async throws -> [InsertedOverlay] {
         var inserted: [InsertedOverlay] = []
 
         for overlay in overlays {
@@ -250,7 +317,7 @@ final class CompositionBuilder {
             let sourceRange = CMTimeRange(
                 start: CMTime(seconds: overlay.sourceStart, preferredTimescale: timescale),
                 duration: CMTime(seconds: take, preferredTimescale: timescale))
-            let at = CMTime(seconds: overlay.timelineRange.lowerBound,
+            let at = CMTime(seconds: overlay.timelineRange.lowerBound + timelineOffset,
                             preferredTimescale: timescale)
 
             var videoTrackID = kCMPersistentTrackID_Invalid
@@ -282,7 +349,7 @@ final class CompositionBuilder {
                     // Butt-joining against silence clicks, so give the clip's
                     // own edges the same short fade a cut boundary gets — via
                     // the shared envelope, so there is one ramp emitter.
-                    let start = overlay.timelineRange.lowerBound
+                    let start = overlay.timelineRange.lowerBound + timelineOffset
                     let params = AVMutableAudioMixInputParameters(track: audioTrack)
                     VolumeAutomation.apply([
                         .init(time: start, volume: 0),
@@ -302,7 +369,8 @@ final class CompositionBuilder {
                 overlayID: overlay.id,
                 videoTrackID: videoTrackID,
                 audioParameters: audioParameters,
-                programRange: overlay.timelineRange.lowerBound...(overlay.timelineRange.lowerBound + take)))
+                programRange: (overlay.timelineRange.lowerBound + timelineOffset)
+                    ...(overlay.timelineRange.lowerBound + timelineOffset + take)))
         }
         return inserted
     }
@@ -362,6 +430,7 @@ final class CompositionBuilder {
                                              videoTrackParticipants: [CMPersistentTrackID: String],
                                              overlayTrackIDs: [CMPersistentTrackID: UUID],
                                              transforms: [CMPersistentTrackID: CGAffineTransform],
+                                             bookendTrackIDs: [CMPersistentTrackID: ProgramBookendSlot],
                                              renderSize: CGSize,
                                              burnCaptions: Bool) -> AVMutableVideoComposition {
         let videoComposition = AVMutableVideoComposition()
@@ -405,7 +474,12 @@ final class CompositionBuilder {
         var boundaries = boundarySet.sorted()
         boundaries.append(max(duration, 1.0 / 30.0))
 
+        // Everything from here is emitted in PROGRAM time: the composition's
+        // clock includes the intro, while all of the authoring above is in
+        // edited time. This is the single conversion point.
+        let offset = project.programOffset
         let speakerTimeline = Self.speakerTimeline(project: project)
+            .map { (time: $0.time + offset, participantId: $0.participantId) }
         // Stable participant ordering for deterministic tiling.
         let orderedParticipants = project.videoTracks.map(\.participantId)
 
@@ -414,8 +488,8 @@ final class CompositionBuilder {
             captionContext = CaptionRenderContext(
                 words: transcript.enabledWords(edl: project.edl).map {
                     CaptionRenderContext.TimedWord(text: $0.word.text,
-                                                   start: $0.timelineStart,
-                                                   end: $0.timelineStart + $0.word.duration,
+                                                   start: $0.timelineStart + offset,
+                                                   end: $0.timelineStart + offset + $0.word.duration,
                                                    trackId: $0.word.trackId)
                 },
                 style: style)
@@ -442,8 +516,8 @@ final class CompositionBuilder {
 
             let instruction = LayoutCompositionInstruction(
                 timeRange: CMTimeRange(
-                    start: CMTime(seconds: start, preferredTimescale: timescale),
-                    end: CMTime(seconds: end, preferredTimescale: timescale)),
+                    start: CMTime(seconds: start + offset, preferredTimescale: timescale),
+                    end: CMTime(seconds: end + offset, preferredTimescale: timescale)),
                 layout: mappedCues.layout(at: start, fallback: .grid),
                 participantByTrackID: videoTrackParticipants,
                 participantOrder: orderedParticipants,
@@ -454,6 +528,27 @@ final class CompositionBuilder {
                 transformByTrackID: transforms)
             instructions.append(instruction)
         }
+
+        // Bookends are ordinary instructions whose only lane is the bookend's
+        // own track, shown full screen — so `tiles(...)` is reused verbatim and
+        // no participant can leak into the intro.
+        for (trackID, slot) in bookendTrackIDs {
+            let lane = "bookend-\(slot.rawValue)"
+            let range = slot == .intro
+                ? 0...offset
+                : (offset + duration)...project.programDuration
+            guard range.upperBound > range.lowerBound else { continue }
+            instructions.append(LayoutCompositionInstruction(
+                timeRange: CMTimeRange(
+                    start: CMTime(seconds: range.lowerBound, preferredTimescale: timescale),
+                    end: CMTime(seconds: range.upperBound, preferredTimescale: timescale)),
+                layout: .fullScreen(participantId: lane),
+                participantByTrackID: [trackID: lane],
+                participantOrder: [lane],
+                speakerTimeline: [],
+                captionContext: nil))
+        }
+        instructions.sort { $0.timeRange.start < $1.timeRange.start }
         videoComposition.instructions = instructions
         return videoComposition
     }

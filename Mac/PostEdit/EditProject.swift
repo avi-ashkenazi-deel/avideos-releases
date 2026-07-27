@@ -660,6 +660,9 @@ struct EditProject: Codable, Sendable, Identifiable, Equatable {
     /// Editor-only state for tracks that came from a file, keyed by
     /// `EditTrack.id`. See `ExternalTrackSettings`.
     var externalMedia: [String: ExternalTrackSettings]?
+    /// Intro / outro clips. See `ProgramBookends` for why these are an offset
+    /// rather than a prepend.
+    var bookends: ProgramBookends?
     /// Level trim per track, keyed by `EditTrack.id`. Absent means unity.
     var trackMix: [String: TrackMix]?
     /// B-roll cutaways over the conversation, in edited-timeline seconds.
@@ -683,6 +686,7 @@ struct EditProject: Codable, Sendable, Identifiable, Equatable {
          overlays: [OverlayClip]? = nil,
          mediaBin: [MediaBinItem]? = nil,
          externalMedia: [String: ExternalTrackSettings]? = nil,
+         bookends: ProgramBookends? = nil,
          schemaVersion: Int = EditProject.currentSchemaVersion) {
         self.id = id
         self.sessionId = sessionId
@@ -698,6 +702,7 @@ struct EditProject: Codable, Sendable, Identifiable, Equatable {
         self.overlays = overlays
         self.mediaBin = mediaBin
         self.externalMedia = externalMedia
+        self.bookends = bookends
         self.schemaVersion = schemaVersion
     }
 

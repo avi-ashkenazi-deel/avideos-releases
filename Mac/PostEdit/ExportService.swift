@@ -91,16 +91,23 @@ final class ExportService {
                 try await Self.exportVideo(composition: result.composition,
                                            audioMix: result.audioMix,
                                            videoComposition: result.videoComposition,
-                                           chapters: project.chapters,
+                                           chapters: project.chapters.map {
+                                               Chapter(id: $0.id, title: $0.title,
+                                                       startTime: $0.startTime + project.programOffset)
+                                           },
                                            to: url, job: job)
                 // Caption sidecars ride along with video exports.
                 if let transcript = project.transcript {
+                    // Sidecars are read against the exported file's clock, so
+                    // they carry the intro's offset — unlike everything stored
+                    // on the project, which stays in edited time.
+                    let offset = project.programOffset
                     let editedWords = transcript.words.compactMap { word -> Word? in
                         guard let mapped = project.edl.mapSourceToTimeline(word.start) else { return nil }
                         var copy = word
                         let duration = word.end - word.start
-                        copy.start = mapped
-                        copy.end = mapped + duration
+                        copy.start = mapped + offset
+                        copy.end = mapped + offset + duration
                         return copy
                     }
                     let lines = CaptionRenderer.lines(from: editedWords)
@@ -112,7 +119,11 @@ final class ExportService {
                                atomically: true, encoding: .utf8)
                 }
                 if !project.chapters.isEmpty {
-                    try? ChapterGenerator.youtubeText(project.chapters)
+                    let shifted = project.chapters.map {
+                        Chapter(id: $0.id, title: $0.title,
+                                startTime: $0.startTime + project.programOffset)
+                    }
+                    try? ChapterGenerator.youtubeText(shifted)
                         .write(to: url.deletingPathExtension().appendingPathExtension("chapters.txt"),
                                atomically: true, encoding: .utf8)
                 }

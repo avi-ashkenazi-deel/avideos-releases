@@ -12,7 +12,16 @@ import os
 @Observable
 final class PreviewPlayer {
     let player = AVPlayer()
+    /// Always in **edited** time, never program time.
+    ///
+    /// The composition's clock includes the intro, but every consumer of this
+    /// — the timeline scale, the transcript, split-at-playhead, the cutaway
+    /// inspector — is authored in edited time. Converting here, once, is what
+    /// keeps the fifteen-odd `mapSourceToTimeline` call sites from each needing
+    /// to know about bookends.
     private(set) var playheadSeconds: Double = 0
+    /// Intro length of the project this item was built from.
+    private var programOffset: Double = 0
     private(set) var isPlaying = false
     private(set) var buildError: String?
 
@@ -27,8 +36,9 @@ final class PreviewPlayer {
             queue: .main
         ) { [weak self] time in
             Task { @MainActor [weak self] in
-                self?.playheadSeconds = time.seconds
-                self?.isPlaying = self?.player.rate != 0
+                guard let self else { return }
+                self.playheadSeconds = max(0, time.seconds - self.programOffset)
+                self.isPlaying = self.player.rate != 0
             }
         }
     }
@@ -58,6 +68,7 @@ final class PreviewPlayer {
     func rebuild(project: EditProject) async {
         do {
             let result = try await builder.build(project: project)
+            programOffset = project.programOffset
             let item = AVPlayerItem(asset: result.composition)
             item.audioMix = result.audioMix
             item.videoComposition = result.videoComposition
@@ -66,7 +77,7 @@ final class PreviewPlayer {
             let position = playheadSeconds
             player.replaceCurrentItem(with: item)
             if position > 0 {
-                await player.seek(to: CMTime(seconds: position, preferredTimescale: 600),
+                await player.seek(to: CMTime(seconds: position + programOffset, preferredTimescale: 600),
                                   toleranceBefore: .zero, toleranceAfter: .zero)
             }
             if wasPlaying { player.play() }
@@ -87,10 +98,12 @@ final class PreviewPlayer {
         }
     }
 
+    /// Takes an **edited**-time second and adds the offset back on the way in.
     func seek(to seconds: Double) {
-        player.seek(to: CMTime(seconds: max(0, seconds), preferredTimescale: 600),
+        let target = max(0, seconds) + programOffset
+        player.seek(to: CMTime(seconds: target, preferredTimescale: 600),
                     toleranceBefore: .zero, toleranceAfter: .zero)
-        playheadSeconds = seconds
+        playheadSeconds = max(0, seconds)
     }
 
     func stepFrame(forward: Bool) {
