@@ -41,6 +41,33 @@ extension KeyboardShortcuts.Name {
     static let musicPlayPause = Self("musicPlayPause",
                                      default: .init(.p, modifiers: [.control, .option]))
 
+    // Music sections: ⌃⌥1…⌃⌥9, the performance sibling of the pads. Distinct
+    // from ⌥1…⌥9 (pads) and ⌘1…⌘9 (scenes), so nothing double-fires.
+    static let section1 = Self("section1", default: .init(.one, modifiers: [.control, .option]))
+    static let section2 = Self("section2", default: .init(.two, modifiers: [.control, .option]))
+    static let section3 = Self("section3", default: .init(.three, modifiers: [.control, .option]))
+    static let section4 = Self("section4", default: .init(.four, modifiers: [.control, .option]))
+    static let section5 = Self("section5", default: .init(.five, modifiers: [.control, .option]))
+    static let section6 = Self("section6", default: .init(.six, modifiers: [.control, .option]))
+    static let section7 = Self("section7", default: .init(.seven, modifiers: [.control, .option]))
+    static let section8 = Self("section8", default: .init(.eight, modifiers: [.control, .option]))
+    static let section9 = Self("section9", default: .init(.nine, modifiers: [.control, .option]))
+
+    /// Switching behaviour has to be reachable while another app is frontmost:
+    /// the segmented control only exists when the studio is, which by
+    /// definition it isn't when global hotkeys matter.
+    static let sectionSwitchModeToggle = Self("sectionSwitchMode",
+                                              default: .init(.c, modifiers: [.control, .option]))
+    static let sectionLoopToggle = Self("sectionLoop",
+                                        default: .init(.l, modifiers: [.control, .option]))
+    /// ⌃⌥K, not ⌃⌥M — mic mute must never be shadowed.
+    static let dropMusicMarker = Self("dropMusicMarker",
+                                      default: .init(.k, modifiers: [.control, .option]))
+    /// With a queued switch there can be seconds between "wrong pad" and
+    /// "on air". Zero reads as "slot none", and sits with 1…9.
+    static let cancelQueuedSection = Self("cancelQueuedSection",
+                                          default: .init(.zero, modifiers: [.control, .option]))
+
     /// The nine pad slots in order, so the soundboard can look up the shortcut
     /// currently assigned to a pad and show it truthfully on the pad.
     static let padSlots: [KeyboardShortcuts.Name] = [
@@ -51,6 +78,17 @@ extension KeyboardShortcuts.Name {
     static func padSlot(hotkeyIndex: Int) -> KeyboardShortcuts.Name? {
         guard hotkeyIndex >= 1, hotkeyIndex <= padSlots.count else { return nil }
         return padSlots[hotkeyIndex - 1]
+    }
+
+    static let sectionSlots: [KeyboardShortcuts.Name] = [
+        .section1, .section2, .section3, .section4, .section5,
+        .section6, .section7, .section8, .section9,
+    ]
+
+    /// `hotkeyIndex` on `MusicSection` is 1-based, same as `SoundPad`'s.
+    static func sectionSlot(hotkeyIndex: Int) -> KeyboardShortcuts.Name? {
+        guard hotkeyIndex >= 1, hotkeyIndex <= sectionSlots.count else { return nil }
+        return sectionSlots[hotkeyIndex - 1]
     }
 }
 
@@ -77,6 +115,18 @@ final class GlobalShortcutRegistrar {
         bind(.toggleTeleprompter, studio) { $0.teleprompter.toggleVisible() }
         bind(.prompterPlayPause, studio) { $0.teleprompter.togglePlay() }
         bind(.musicPlayPause, studio) { $0.audio.musicPlayPause() }
+
+        for (slot, name) in KeyboardShortcuts.Name.sectionSlots.enumerated() {
+            let hotkeyIndex = slot + 1
+            // A slot with nothing bound to it does nothing at all — never stop
+            // the music, never start the wrong section. The pad's badge is the
+            // whole truth about what a key does.
+            bind(name, studio) { $0.audio.playSection(hotkeyIndex: hotkeyIndex) }
+        }
+        bind(.sectionSwitchModeToggle, studio) { $0.audio.toggleSectionSwitchMode() }
+        bind(.sectionLoopToggle, studio)       { $0.audio.toggleSectionLoop() }
+        bind(.dropMusicMarker, studio)         { _ = $0.audio.dropMarkerAtPlayhead() }
+        bind(.cancelQueuedSection, studio)     { $0.audio.cancelQueuedSection() }
     }
 
     /// Registers one hotkey. KeyboardShortcuts invokes handlers from the Carbon

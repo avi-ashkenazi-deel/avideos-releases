@@ -41,7 +41,13 @@ private struct StudioLayout: View {
                     canvas
                         .frame(minHeight: 280)
                     bottomPanel
-                        .frame(minHeight: 160, idealHeight: 220, maxHeight: 340)
+                        // Raised from 340: the music panel now carries a
+                        // now/next readout and a row of section pads above the
+                        // transport, and the playlist was down to a couple of
+                        // visible rows.
+                        // verify on Mac: .windowResizability(.contentSize) may
+                        // interact with VSplitView maxima.
+                        .frame(minHeight: 160, idealHeight: 240, maxHeight: 420)
                 }
                 InspectorView()
                     .frame(minWidth: 240, idealWidth: 280, maxWidth: 340)

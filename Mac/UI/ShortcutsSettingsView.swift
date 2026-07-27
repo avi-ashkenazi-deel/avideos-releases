@@ -37,6 +37,23 @@ struct ShortcutsSettingsView: View {
                 KeyboardShortcuts.Recorder("Music play / pause:", name: .musicPlayPause)
             }
 
+            Section("Music Sections (global)") {
+                Text("Fire a section of the loaded track. A slot with no section bound to it does nothing.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                // `id: \.self` on indices — key paths cannot address tuple
+                // elements, so no `\.offset` on an enumerated sequence.
+                ForEach(KeyboardShortcuts.Name.sectionSlots.indices, id: \.self) { slot in
+                    KeyboardShortcuts.Recorder(sectionLabel(slot: slot + 1),
+                                               name: KeyboardShortcuts.Name.sectionSlots[slot])
+                }
+                KeyboardShortcuts.Recorder("Switch mode (cut / at loop end):",
+                                           name: .sectionSwitchModeToggle)
+                KeyboardShortcuts.Recorder("Loop the playing section:", name: .sectionLoopToggle)
+                KeyboardShortcuts.Recorder("Drop a marker at the playhead:", name: .dropMusicMarker)
+                KeyboardShortcuts.Recorder("Cancel the queued section:", name: .cancelQueuedSection)
+            }
+
             Section("Menu Shortcuts (studio focused)") {
                 Text("Fixed combos, listed in the Studio menu:")
                     .font(.caption)
@@ -63,6 +80,16 @@ struct ShortcutsSettingsView: View {
             return "Pad \(slot) — \(pad.name):"
         }
         return "Pad \(slot) (empty):"
+    }
+
+    /// Same idea for sections, with a third case: sections belong to a track,
+    /// so with nothing loaded there is nothing any slot could fire.
+    private func sectionLabel(slot: Int) -> String {
+        guard audio.sectionHostTrack != nil else { return "Section \(slot) (no track loaded):" }
+        if let section = audio.musicSections.first(where: { $0.hotkeyIndex == slot }) {
+            return "Section \(slot) — \(section.name):"
+        }
+        return "Section \(slot) (empty):"
     }
 
     /// A reference row. A struct rather than a tuple because `ForEach` needs an
