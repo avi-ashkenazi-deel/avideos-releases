@@ -541,6 +541,36 @@ struct Chapter: Codable, Sendable, Identifiable, Equatable {
     }
 }
 
+// MARK: - Track mix
+
+/// Per-track level control in the editor: the fix for a guest who recorded
+/// hot, or a co-host you want to hear under someone else.
+///
+/// Kept on `EditProject` keyed by `EditTrack.id` rather than on `EditTrack`
+/// itself — that type is shared with the podcast recording models and
+/// describes what was *recorded*, not how it is being mixed.
+struct TrackMix: Codable, Sendable, Equatable {
+    /// Level trim in decibels. 0 is unity.
+    var gainDB: Double
+    var isMuted: Bool
+    /// When any track is soloed, every non-soloed track is silent.
+    var isSolo: Bool
+
+    init(gainDB: Double = 0, isMuted: Bool = false, isSolo: Bool = false) {
+        self.gainDB = gainDB
+        self.isMuted = isMuted
+        self.isSolo = isSolo
+    }
+
+    static let unity = TrackMix()
+
+    /// Linear multiplier for the audio mix, ignoring solo (which depends on
+    /// the other tracks and is resolved by `EditProject.linearGain(for:)`).
+    var linearGain: Float {
+        isMuted ? 0 : Float(pow(10, gainDB / 20))
+    }
+}
+
 // MARK: - EditProject
 
 struct EditProject: Codable, Sendable, Identifiable, Equatable {
@@ -559,6 +589,8 @@ struct EditProject: Codable, Sendable, Identifiable, Equatable {
     /// Studio (SceneAnalyzer → SmartReframer) and consumed by
     /// CompositionBuilder. Absent means every tile center-crops as before.
     var cropPaths: [String: [CropKeyframe]]?
+    /// Level trim per track, keyed by `EditTrack.id`. Absent means unity.
+    var trackMix: [String: TrackMix]?
     var schemaVersion: Int
 
     /// `edl` defaults to a fresh full-length EDL derived from the tracks, so
@@ -574,6 +606,7 @@ struct EditProject: Codable, Sendable, Identifiable, Equatable {
          transcript: Transcript? = nil,
          chapters: [Chapter] = [],
          cropPaths: [String: [CropKeyframe]]? = nil,
+         trackMix: [String: TrackMix]? = nil,
          schemaVersion: Int = EditProject.currentSchemaVersion) {
         self.id = id
         self.sessionId = sessionId
@@ -585,6 +618,7 @@ struct EditProject: Codable, Sendable, Identifiable, Equatable {
         self.transcript = transcript
         self.chapters = chapters
         self.cropPaths = cropPaths
+        self.trackMix = trackMix
         self.schemaVersion = schemaVersion
     }
 
@@ -605,6 +639,31 @@ struct EditProject: Codable, Sendable, Identifiable, Equatable {
 
     var sourceDuration: Double { edl.sourceDuration }
     var editedDuration: Double { edl.editedDuration }
+
+    // MARK: Mixing
+
+    var isAnyTrackSoloed: Bool {
+        trackMix?.values.contains { $0.isSolo } ?? false
+    }
+
+    func mix(for trackID: String) -> TrackMix {
+        trackMix?[trackID] ?? .unity
+    }
+
+    /// The level a track should play at, resolving solo against the rest of
+    /// the session: with anything soloed, non-soloed tracks are silent.
+    func linearGain(for trackID: String) -> Float {
+        let settings = mix(for: trackID)
+        if isAnyTrackSoloed && !settings.isSolo { return 0 }
+        return settings.linearGain
+    }
+
+    mutating func setMix(_ newMix: TrackMix, for trackID: String) {
+        var all = trackMix ?? [:]
+        // Don't persist a row that says nothing.
+        if newMix == .unity { all.removeValue(forKey: trackID) } else { all[trackID] = newMix }
+        trackMix = all.isEmpty ? nil : all
+    }
 
     var audioTracks: [EditTrack] { tracks.filter { $0.kind == .audio } }
     var videoTracks: [EditTrack] { tracks.filter { $0.kind == .video } }

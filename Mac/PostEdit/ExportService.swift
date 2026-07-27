@@ -64,7 +64,12 @@ final class ExportService {
                 run(job: Job(title: "Stem — \(track.participantName)")) { [builder, exportsDirectory] job in
                     var solo = project
                     solo.tracks = [track]
-                    let result = try await builder.build(project: solo)
+                    var options = CompositionBuilder.Options()
+                    options.includeVideo = false
+                    // Keep the track's own level trim, but don't let a solo or
+                    // mute set for monitoring silence the stem being written.
+                    options.ignoresMuteAndSolo = true
+                    let result = try await builder.build(project: solo, options: options)
                     let url = exportsDirectory.appendingPathComponent("\(project.name) — \(track.participantName).wav")
                     try await Self.exportAudio(composition: result.composition,
                                                audioMix: result.audioMix,

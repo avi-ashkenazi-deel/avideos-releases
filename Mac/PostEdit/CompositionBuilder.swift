@@ -32,6 +32,10 @@ final class CompositionBuilder {
         var burnCaptions: Bool = false
         /// nil → derived from the first layout cue (verticalStacked → 9:16).
         var renderSize: CGSize? = nil
+        /// Apply each track's gain but ignore mute/solo. Set for stem exports:
+        /// soloing a co-host to check a passage shouldn't silence everyone
+        /// else's stem file.
+        var ignoresMuteAndSolo: Bool = false
 
         init() {}
     }
@@ -130,7 +134,14 @@ final class CompositionBuilder {
             }
 
             if track.kind == .audio {
-                mixParameters.append(Self.audioParameters(for: compTrack, joins: joinTimes))
+                // Stems deliberately ignore mute/solo — a stem of a muted
+                // track is still a stem you asked for — but do carry its gain.
+                let gain = options.ignoresMuteAndSolo
+                    ? project.mix(for: track.id).linearGain
+                    : project.linearGain(for: track.id)
+                mixParameters.append(Self.audioParameters(for: compTrack,
+                                                          joins: joinTimes,
+                                                          gain: gain))
             }
         }
 
@@ -163,10 +174,20 @@ final class CompositionBuilder {
 
     // MARK: - Audio mix
 
+    /// Mix parameters for one audio track: the track's level trim, plus the
+    /// micro-fade pair around every join.
+    ///
+    /// `gain` scales the ramp endpoints as well as the base volume. Ramping to
+    /// a hardcoded 1.0 would make every cut boundary jump the track back to
+    /// unity for 7.5 ms — an audible tick on any track that isn't at 0 dB.
     private static func audioParameters(for track: AVMutableCompositionTrack,
-                                        joins: [Double]) -> AVMutableAudioMixInputParameters {
+                                        joins: [Double],
+                                        gain: Float) -> AVMutableAudioMixInputParameters {
         let params = AVMutableAudioMixInputParameters(track: track)
-        params.setVolume(1.0, at: .zero)
+        params.setVolume(gain, at: .zero)
+        // A silent track needs no fades — and ramping 0→0 just adds work.
+        guard gain > 0 else { return params }
+
         let half = crossfadeDuration / 2
         for join in joins {
             let downRange = CMTimeRange(
@@ -175,8 +196,8 @@ final class CompositionBuilder {
             let upRange = CMTimeRange(
                 start: CMTime(seconds: join, preferredTimescale: timescale),
                 duration: CMTime(seconds: half, preferredTimescale: timescale))
-            params.setVolumeRamp(fromStartVolume: 1.0, toEndVolume: 0.0, timeRange: downRange)
-            params.setVolumeRamp(fromStartVolume: 0.0, toEndVolume: 1.0, timeRange: upRange)
+            params.setVolumeRamp(fromStartVolume: gain, toEndVolume: 0.0, timeRange: downRange)
+            params.setVolumeRamp(fromStartVolume: 0.0, toEndVolume: gain, timeRange: upRange)
         }
         return params
     }

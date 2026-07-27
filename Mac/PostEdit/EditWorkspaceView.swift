@@ -123,24 +123,93 @@ struct EditWorkspaceView: View {
         List {
             Section("Participants") {
                 ForEach(project.tracks) { track in
-                    HStack {
-                        Image(systemName: track.kind == .video ? "video" : "waveform")
-                            .foregroundStyle(.secondary)
-                        VStack(alignment: .leading) {
-                            Text(track.participantName)
-                            Text("\(track.kind.rawValue) · \(Int(track.duration))s")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
+                    trackRow(track)
                 }
             }
             Section("Stats") {
                 LabeledContent("Source", value: timeString(project.sourceDuration))
                 LabeledContent("Edited", value: timeString(project.editedDuration))
                 LabeledContent("Cuts", value: "\(project.edl.clips.filter { !$0.enabled }.count)")
+                LabeledContent("Segments", value: "\(project.edl.clips.count)")
             }
         }
+    }
+
+    /// One participant row. Audio tracks carry the level controls — the fix
+    /// for a guest who recorded hot. Video tracks have nothing to mix.
+    @ViewBuilder
+    private func trackRow(_ track: EditTrack) -> some View {
+        let mix = project.mix(for: track.id)
+        let dimmed = track.kind == .audio
+            && project.linearGain(for: track.id) == 0
+
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
+                Image(systemName: track.kind == .video ? "video" : "waveform")
+                    .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(track.participantName)
+                        .foregroundStyle(dimmed ? .secondary : .primary)
+                    Text("\(track.kind.rawValue) · \(Int(track.duration))s")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+            }
+
+            if track.kind == .audio {
+                HStack(spacing: 4) {
+                    Button("M") { toggleMute(track) }
+                        .buttonStyle(.borderless)
+                        .font(.caption2.bold())
+                        .foregroundStyle(mix.isMuted ? Color.red : .secondary)
+                        .help("Mute this participant")
+                    Button("S") { toggleSolo(track) }
+                        .buttonStyle(.borderless)
+                        .font(.caption2.bold())
+                        .foregroundStyle(mix.isSolo ? Color.yellow : .secondary)
+                        .help("Solo — silences everyone else")
+
+                    Slider(value: Binding(
+                        get: { project.mix(for: track.id).gainDB },
+                        set: { newValue in
+                            var updated = project.mix(for: track.id)
+                            updated.gainDB = newValue
+                            setMix(updated, for: track)
+                        }
+                    ), in: -24...12)
+                    .controlSize(.mini)
+
+                    Text(gainLabel(mix.gainDB))
+                        .font(.caption2.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                        .frame(width: 44, alignment: .trailing)
+                }
+            }
+        }
+        .padding(.vertical, 2)
+    }
+
+    private func gainLabel(_ dB: Double) -> String {
+        abs(dB) < 0.05 ? "0 dB" : String(format: "%+.1f", dB)
+    }
+
+    private func toggleMute(_ track: EditTrack) {
+        var updated = project.mix(for: track.id)
+        updated.isMuted.toggle()
+        setMix(updated, for: track)
+    }
+
+    private func toggleSolo(_ track: EditTrack) {
+        var updated = project.mix(for: track.id)
+        updated.isSolo.toggle()
+        setMix(updated, for: track)
+    }
+
+    /// Level changes are undoable like any other edit, and rebuild the preview
+    /// so you hear the change immediately.
+    private func setMix(_ mix: TrackMix, for track: EditTrack) {
+        performEdit { project.setMix(mix, for: track.id) }
     }
 
     private var transcriptPane: some View {
