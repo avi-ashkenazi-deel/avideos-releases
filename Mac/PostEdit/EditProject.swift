@@ -654,6 +654,9 @@ struct EditProject: Codable, Sendable, Identifiable, Equatable {
     /// Studio (SceneAnalyzer → SmartReframer) and consumed by
     /// CompositionBuilder. Absent means every tile center-crops as before.
     var cropPaths: [String: [CropKeyframe]]?
+    /// Imported external files available to this project. Optional so projects
+    /// written before the bin existed decode unchanged.
+    var mediaBin: [MediaBinItem]?
     /// Level trim per track, keyed by `EditTrack.id`. Absent means unity.
     var trackMix: [String: TrackMix]?
     /// B-roll cutaways over the conversation, in edited-timeline seconds.
@@ -675,6 +678,7 @@ struct EditProject: Codable, Sendable, Identifiable, Equatable {
          cropPaths: [String: [CropKeyframe]]? = nil,
          trackMix: [String: TrackMix]? = nil,
          overlays: [OverlayClip]? = nil,
+         mediaBin: [MediaBinItem]? = nil,
          schemaVersion: Int = EditProject.currentSchemaVersion) {
         self.id = id
         self.sessionId = sessionId
@@ -688,6 +692,7 @@ struct EditProject: Codable, Sendable, Identifiable, Equatable {
         self.cropPaths = cropPaths
         self.trackMix = trackMix
         self.overlays = overlays
+        self.mediaBin = mediaBin
         self.schemaVersion = schemaVersion
     }
 

@@ -1,5 +1,7 @@
 import SwiftUI
 import AVKit
+import AppKit
+import UniformTypeIdentifiers
 
 /// The edit-mode shell: tracks, transcript, timeline and preview as four
 /// columns. The timeline runs vertically beside the transcript rather than as
@@ -16,6 +18,7 @@ struct EditWorkspaceView: View {
     @State private var waveforms = WaveformStore()
     @State private var exporter = ExportService()
     @State private var snapper: SilenceSnapper?
+    @State private var mediaImporter = ExternalMediaImporter()
 
     @State private var isTranscribing = false
     @State private var transcribeStatus = ""
@@ -102,9 +105,33 @@ struct EditWorkspaceView: View {
 
     private var trackListPane: some View {
         List {
+            if !project.missingMedia.isEmpty {
+                Section {
+                    missingMediaBanner
+                }
+            }
             Section("Participants") {
                 ForEach(project.tracks) { track in
                     trackRow(track)
+                }
+            }
+            Section {
+                ForEach(project.binItems) { item in
+                    binRow(item)
+                }
+                Button {
+                    importMedia()
+                } label: {
+                    Label("Add Media…", systemImage: "plus")
+                }
+                .buttonStyle(.borderless)
+                .font(.caption)
+            } header: {
+                Text("Media")
+            } footer: {
+                if project.binItems.isEmpty {
+                    Text("Import a clip once, then use it as many times as you like.")
+                        .font(.caption2)
                 }
             }
             Section("Stats") {
@@ -162,6 +189,159 @@ struct EditWorkspaceView: View {
         .onAppear { timelineVM.update(duration: project.editedDuration) }
         .onChange(of: project.editedDuration) { _, new in
             timelineVM.update(duration: new)
+        }
+    }
+
+    // MARK: - Media bin
+
+    /// Media that no longer resolves. Blocks keep drawing at their timeline
+    /// positions so the edit stays legible; only the picture is missing.
+    private var missingMediaBanner: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Label("\(project.missingMedia.count) file(s) missing",
+                  systemImage: "questionmark.square.dashed")
+                .font(.caption.bold())
+                .foregroundStyle(.orange)
+            ForEach(project.missingMedia, id: \.path) { reference in
+                HStack {
+                    Text(reference.displayName).font(.caption2).lineLimit(1)
+                    Spacer()
+                    Button("Relink…") { relink(reference) }
+                        .buttonStyle(.link)
+                        .font(.caption2)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func binRow(_ item: MediaBinItem) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: item.isStill ? "photo"
+                  : item.hasVideo ? "film" : "waveform")
+                .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(item.media.displayName).lineLimit(1)
+                HStack(spacing: 4) {
+                    if item.duration > 0 {
+                        Text(timeString(item.duration))
+                    } else {
+                        Text("Still")
+                    }
+                    if item.wasConverted {
+                        Text("· Converted")
+                    }
+                    if item.media.resolve() == nil {
+                        Text("· Missing").foregroundStyle(.orange)
+                    }
+                }
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            }
+            Spacer()
+        }
+        .contextMenu {
+            Button("Insert as Cutaway at Playhead") { insertCutaway(from: item) }
+            Button("Reveal in Finder") {
+                if let url = item.media.resolve() { NSWorkspace.shared.activateFileViewerSelecting([url]) }
+            }
+            Button("Remove from Media", role: .destructive) {
+                performEdit { project.removeFromBin(id: item.id) }
+            }
+        }
+    }
+
+    private func importMedia() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = Self.externalMediaTypes
+        panel.allowsMultipleSelection = true
+        guard panel.runModal() == .OK else { return }
+        Task { await ingest(urls: panel.urls) }
+    }
+
+    /// One shared list, used by the picker, the bin and drop validation.
+    static let externalMediaTypes: [UTType] = [.movie, .mpeg4Movie, .quickTimeMovie, .audio, .image]
+
+    /// Probe, convert if the container needs it, then add to the bin.
+    ///
+    /// The whole thing is one `performEdit` at the end — pushing a snapshot
+    /// before the async work would leave an empty undo step if the probe
+    /// failed.
+    private func ingest(urls: [URL]) async {
+        for url in urls {
+            switch await mediaImporter.probe(url) {
+            case .ready(let probe):
+                addToBin(url: url, probe: probe, converted: false)
+            case .protectedContent:
+                errorMessage = "\(url.lastPathComponent) is copy-protected and can't be edited."
+            case .unreadable(let reason):
+                errorMessage = "\(url.lastPathComponent): \(reason)"
+            case .needsTranscode(let reason):
+                await convert(url: url, reason: reason)
+            }
+        }
+    }
+
+    private func convert(url: URL, reason: String) async {
+        busyMessage = "Converting \(url.lastPathComponent)…\n\(reason)"
+        defer { busyMessage = nil }
+        do {
+            let converted = try await mediaImporter.transcode(url, sourceDuration: nil) { _ in }
+            switch await mediaImporter.probe(converted) {
+            case .ready(let probe):
+                addToBin(url: converted, probe: probe, converted: true,
+                         displayName: url.deletingPathExtension().lastPathComponent)
+            default:
+                errorMessage = "\(url.lastPathComponent) converted, but the result couldn't be read."
+            }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func addToBin(url: URL, probe: MediaProbe, converted: Bool, displayName: String? = nil) {
+        var reference = MediaReference(url: url)
+        if let displayName { reference.displayName = displayName }
+        performEdit {
+            project.addToBin(MediaBinItem(media: reference,
+                                          duration: probe.duration,
+                                          hasVideo: probe.hasVideo,
+                                          hasAudio: probe.hasAudio,
+                                          wasConverted: converted))
+        }
+    }
+
+    private func relink(_ reference: MediaReference) {
+        let panel = NSOpenPanel()
+        panel.message = "Where is \(reference.displayName)?"
+        panel.allowedContentTypes = Self.externalMediaTypes
+        panel.directoryURL = URL(fileURLWithPath: reference.path).deletingLastPathComponent()
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+
+        var count = 0
+        performEdit { count = project.relink(oldPath: reference.path, to: url) }
+        if count > 1 {
+            errorMessage = "Relinked \(count) files from that folder."
+        }
+    }
+
+    /// Puts a bin item on the overlay lane at the playhead, trimmed to fit
+    /// whatever room is left.
+    private func insertCutaway(from item: MediaBinItem) {
+        let start = preview.playheadSeconds
+        let remaining = project.editedDuration - start
+        guard remaining > EditDecisionList.minimumClipDuration else {
+            errorMessage = "There's no room at the end of the program. Drop it earlier."
+            return
+        }
+        let length = item.duration > 0 ? min(item.duration, remaining) : min(5, remaining)
+        performEdit {
+            project.addOverlay(OverlayClip(media: item.media,
+                                           timelineRange: start...(start + length)))
+        }
+        if item.duration > length {
+            errorMessage = String(format: "Trimmed to fit the program (%.1fs of %.1fs used).",
+                                  length, item.duration)
         }
     }
 
@@ -306,7 +486,7 @@ struct EditWorkspaceView: View {
             if let overlay = selectedOverlay {
                 OverlayInspectorView(
                     overlay: overlay,
-                    mediaDuration: nil,   // filled in once the media bin probes lengths
+                    mediaDuration: project.mediaDuration(forPath: overlay.media.path),
                     onChange: { updated in
                         // Live while dragging, one undo step for the gesture.
                         performEdit(gesture: "overlay-inspector:" + overlay.id.uuidString) {

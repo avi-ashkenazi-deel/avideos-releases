@@ -283,7 +283,9 @@ struct ClipStudioView: View {
                 Text("B-Roll Suggestions").font(.headline)
                 Spacer()
                 Button("Suggest B-Roll") {
-                    Task { await model.findBRoll(transcript: project.transcript, tracks: project.tracks) }
+                    Task { await model.findBRoll(transcript: project.transcript,
+                                                 tracks: project.tracks,
+                                                 bin: project.binItems) }
                 }
                 .disabled(project.transcript == nil || model.busyMessage != nil)
             }
@@ -696,10 +698,14 @@ final class ClipStudioModel {
         }
     }
 
-    func findBRoll(transcript: Transcript?, tracks: [EditTrack]) async {
+    func findBRoll(transcript: Transcript?, tracks: [EditTrack], bin: [MediaBinItem]) async {
         guard let transcript else { return }
-        // The session's own video masters are the first-choice cutaway source.
+        // The session's own video masters are the first-choice cutaway source,
+        // and anything imported into the media bin comes next — which is the
+        // input `suggest(transcript:mediaLibrary:)` was written for and had
+        // never actually been given.
         let library = tracks.filter { $0.kind == .video }.map(\.url)
+            + bin.filter(\.hasVideo).compactMap { $0.media.resolve() }
         await run("Looking for cutaways…") {
             self.brollSuggestions = try await self.brollSuggester.suggest(transcript: transcript,
                                                                           mediaLibrary: library)
