@@ -9,10 +9,15 @@ xcodegen generate
 open HearIt.xcodeproj        # contains the AVideosStudio scheme too
 ```
 
-Target: macOS 14.0+, Swift 5.9. SPM resolves LiveKit, KeyboardShortcuts, and
-WhisperKit on first build; libASPL backs the audio-driver target (if SPM
-packaging fights XcodeGen, vendor it as a submodule under
-`driver/vendor/libASPL` — see `driver/AVideosAudio/README.md`).
+Target: macOS 14.0+, Swift 5.9. SPM resolves LiveKit, KeyboardShortcuts and
+WhisperKit on first build.
+
+**libASPL is not an SPM package** — it is a CMake C++ library with no
+`Package.swift`, so listing it under `packages:` makes dependency resolution
+fail for the *whole project*, app and tests included. It has to be vendored:
+add it as a submodule under `driver/vendor/libASPL` and add its sources and
+header path to the `AVideosAudioDriver` target. Until that is done that one
+target does not build, and nothing else is affected.
 
 ## First-build checklist (things the Linux authoring pass couldn't do)
 
@@ -39,7 +44,12 @@ packaging fights XcodeGen, vendor it as a submodule under
 The codebase was authored without a compiler, so the first Mac session is a
 bring-up session. Cheapest-first:
 
-1. `brew install xcodegen && xcodegen generate`.
+1. `brew install xcodegen`, then **`./scripts/dev-app-only.sh`** (which
+   regenerates for you). That excludes the camera extension and the audio
+   driver from the app's dependencies — both are *embedded* deps, so without
+   this the app cannot build until you have Developer ID certs and a vendored
+   libASPL. `--restore` puts them back for a release build; `--status` says
+   which mode you are in. It edits `project.yml`, so don't commit it.
 2. **Run the unit tests before anything else** (Cmd-U, or
    `xcodebuild test -scheme AVideosStudio`). They need no hardware,
    entitlements, or network, so they are the fastest way to shake out

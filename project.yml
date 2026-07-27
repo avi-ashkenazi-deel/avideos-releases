@@ -34,12 +34,15 @@ packages:
   WhisperKit:
     url: https://github.com/argmaxinc/WhisperKit
     from: "0.9.0"
-  # libASPL is consumed by the AVideosAudioDriver target. If its SPM packaging
-  # fights XcodeGen on your machine, vendor it as a git submodule under
-  # driver/vendor/libASPL and switch the target to compile it directly.
-  libASPL:
-    url: https://github.com/gavv/libASPL
-    from: "3.1.0"
+  # libASPL is NOT here on purpose. It is a CMake C++ library with no
+  # Package.swift, so declaring it as a Swift package makes SPM resolution fail
+  # for the whole project — including the app and its tests, which have nothing
+  # to do with the driver.
+  #
+  # The audio driver needs it vendored instead: add it as a submodule under
+  # driver/vendor/libASPL and add its sources/headers to the
+  # AVideosAudioDriver target. Until that is done, that one target does not
+  # build; everything else does. See docs/DEV_SETUP.md.
 
 settings:
   base:
@@ -138,6 +141,10 @@ targets:
       - package: LiveKit
       - package: KeyboardShortcuts
       - package: WhisperKit
+      # scripts/dev-app-only.sh comments the marked block below out, so the app
+      # builds without Developer ID certs or a vendored libASPL. Both marker
+      # lines must stay, and nothing but dependency entries may go between them.
+      # dev-app-only:begin
       - target: CameraExtension
         embed: true          # XcodeGen embeds system-extension deps in
                              # Contents/Library/SystemExtensions; verify on
@@ -147,6 +154,7 @@ targets:
         codeSign: true
         copy:
           destination: resources   # install payload copied to /Library/Audio/Plug-Ins/HAL by DriverInstaller
+      # dev-app-only:end
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.aviashkenazi.avideos
@@ -195,8 +203,7 @@ targets:
     platform: macOS
     sources:
       - path: driver/AVideosAudio
-    dependencies:
-      - package: libASPL
+    # No dependencies: libASPL has to be vendored (see the packages note above).
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.aviashkenazi.avideos.audiodriver
