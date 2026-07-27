@@ -10,6 +10,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var activityToken: NSObjectProtocol?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Running the binary directly — which is what a bring-up loop does, to
+        // keep the logs on the terminal — leaves the process unregistered with
+        // LaunchServices. AppKit then treats it as a background app: the window
+        // draws and the render loop runs, but it never becomes key, so every
+        // click is silently discarded. Asserting the policy makes a terminal
+        // launch behave like a double-click, and changes nothing for one.
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate()
+
         activityToken = ProcessInfo.processInfo.beginActivity(
             options: [.userInitiated, .idleSystemSleepDisabled],
             reason: "Live video pipeline must keep producing frames"

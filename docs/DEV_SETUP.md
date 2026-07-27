@@ -45,6 +45,26 @@ Two things that recipe deliberately avoids, and why:
   The virtual camera and virtual microphone are unavailable in this
   configuration, which is expected.
 
+### Launching it
+
+```bash
+open "$(xcodebuild -scheme Streamit -showBuildSettings 2>/dev/null \
+  | awk -F' = ' '/ BUILT_PRODUCTS_DIR/{print $2; exit}')/streamit.app"
+```
+
+Use `open`, not the inner binary. Running the executable directly leaves the
+process unregistered with LaunchServices; AppKit then treats it as a
+background app, and the window draws and the render loop runs but the window
+never becomes key, so every click is silently discarded. `AppDelegate` now
+asserts `.regular` activation policy so a direct launch works too, but `open`
+is the one that behaves like the shipped app.
+
+To watch the logs while it runs under `open`, in another terminal:
+
+```bash
+log stream --level debug --predicate 'process == "streamit"'
+```
+
 Two log lines you can ignore in this configuration:
 
 ```
