@@ -186,6 +186,13 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.aviashkenazi.streamit.tests
         GENERATE_INFOPLIST_FILE: YES
+        # XcodeGen derives TEST_HOST from the host *target* name, which would
+        # be Streamit.app/Contents/MacOS/Streamit. The app overrides
+        # PRODUCT_NAME to the lowercase brand, so the real product is
+        # streamit.app/Contents/MacOS/streamit and the derived path points at
+        # nothing. These two must track the app target's PRODUCT_NAME above.
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/streamit.app/Contents/MacOS/streamit
+        BUNDLE_LOADER: $(TEST_HOST)
 
   # CoreMediaIO camera extension — publishes the "streamit Camera" that Zoom /
   # Meet / Teams list. Sandboxed (mandatory for CMIO extensions).
