@@ -106,6 +106,43 @@ Each phase's exit demo, as checkboxes. Requires a Mac (see docs/DEV_SETUP.md).
 - [ ] Install the virtual mic (Setup) → Zoom hears mic+music+pads through "AVideos Microphone".
 - [ ] Record while live → .mov in ~/Movies/AVideos plays with A/V in sync (clap test).
 
+## Music sections
+Full detail in docs/FEATURE_CHECKLIST.md, F-380…F-430.
+
+Marking a track up (right-click a playlist row → Sections…):
+- [ ] Play the track from inside the sheet and press **M** three times: three sections appear where you tapped, each contiguous with the next, each auto-assigned the next free hotkey slot.
+- [ ] Drag a section's right edge to pin its end; drag the start flag so the track begins there.
+- [ ] Type `1:23.480` into a start field — the marker moves. Type nonsense — the field reverts rather than clearing.
+- [ ] Rename, recolour, set Loop and a hotkey slot; relaunch and they're all still there.
+
+Playing live (music panel):
+- [ ] Click a section pad: it loops seamlessly. Leave it looping five minutes and listen for drift or a tick at the wrap.
+- [ ] With **Cut**, another pad switches immediately. With **At loop end**, it queues — the pad shows NEXT, the countdown runs, and it lands at the wrap.
+- [ ] Cancel a queued switch; the cancel button greys out once it's been handed to the audio engine.
+- [ ] ⌥-click a pad to cut regardless of the mode, without changing the mode.
+- [ ] Talking still ducks the music while a section loops, and the fader, mute, inserts and meter all behave.
+- [ ] Scrub outside the looping section: playback follows the scrubber and the loop releases.
+- [ ] With Zoom frontmost: ⌃⌥3 fires section 3, ⌃⌥C flips the mode, ⌃⌥L toggles the loop, ⌃⌥0 cancels the queue, ⌃⌥K drops a marker.
+
+Regression, on a track with **no** sections:
+- [ ] Plays, seeks, skips and loops exactly as before; section controls are visible but disabled.
+- [ ] A 44.1 kHz track's progress bar now reaches the end as the track ends (it ran ~8.8% fast).
+- [ ] Dragging the scrubber is smooth and doesn't fight you.
+- [ ] A settings file written before this feature loads with devices, gains, ducker, inserts and pads intact.
+
+Known gaps in this pass — do not report:
+- **Crossfade** is offered as a switch mode but falls back to a hard cut. One player node cannot crossfade with itself; it needs a second node.
+- **Gapless playlist transitions (F-101) are still not real** — the advance path opens the next file on the main thread between a stop and a schedule. Section switching inside one file is unaffected, since the file is already open.
+- No beat-grid snapping; marker positions are set by ear and by typed timecode.
+
+## MIDI control
+Needs a class-compliant USB controller. Full detail at F-421…F-430.
+- [ ] Settings → MIDI lists the controller with a green dot, and "Last message" updates when you press a pad even with nothing bound.
+- [ ] Learn a control for Section 1, press a pad — it binds, and then fires that section live, including with Zoom frontmost.
+- [ ] Unplug and replug: bindings still work.
+- [ ] A controller sending clock or active sensing doesn't stutter the app.
+- [ ] Deleting `midi-bindings.json` loses only the bindings, nothing else.
+
 ## Guests & podcast mode
 - [ ] Start a guest session → invite link/QR joins from a Chromium browser; guest appears in the Interview grid and the mixer.
 - [ ] With headphones off on both ends: no echo (guest never hears themselves — mix-minus).

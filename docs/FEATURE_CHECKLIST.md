@@ -1,6 +1,6 @@
 # AVideos Studio — full feature checklist
 
-All 345 user-facing features, each with a stable ID so you can report
+All 430 user-facing features, each with a stable ID so you can report
 back precisely ("F-42 fails"). Ordered so you can work top to bottom: each
 section only depends on the ones above it.
 
@@ -20,6 +20,7 @@ first.
 | **[oauth]** | Needs a platform developer app + OAuth client. |
 | **[2nd device]** | Needs a second machine, phone, or browser. |
 | **[not built]** | The model and callback exist but nothing invokes them yet. Don't test it; it will fail. |
+| **[midi]** | Needs a class-compliant USB MIDI controller. |
 
 ---
 
@@ -479,11 +480,94 @@ focused; **global** hotkeys (⌥ and ⌃⌥-based) work from any app.
 - [ ] **F-272** Undo/redo buttons disable correctly at the ends of the stack. **[offline]**
 - [ ] **F-273** Undo covers layout-cue additions and chapter changes, not just cuts. **[offline]**
 
+## Y. Music sections (live performance)
+
+Mark a track up before the show, then drive it live. Everything here is
+offline; a MIDI controller is only needed for section Z.
+
+### Marking a track up (playlist → Sections…)
+
+- [ ] **F-380** "Sections…" on a playlist row, or the transport button, opens the editor with the waveform drawn. **[offline]**
+- [ ] **F-381** The title is editable in the sheet, and the rename sticks in the playlist. **[offline]**
+- [ ] **F-382** A track whose file has moved says "File missing" instead of drawing an empty strip. **[offline]**
+- [ ] **F-383** Drag the start flag to 0:12, then play that track — it begins at 0:12, not 0:00. **[offline]**
+- [ ] **F-384** Play from inside the sheet: the playhead moves over the waveform. **[offline]**
+- [ ] **F-385** Press **M** three times while it plays — three sections appear at those points. **[offline]**
+- [ ] **F-386** Each new section auto-takes the lowest free hotkey slot, so it's immediately firable. **[offline]**
+- [ ] **F-387** Those three are contiguous: each open section runs to the next one's start, and the last to the end of the file. **[offline]**
+- [ ] **F-388** Drag a section's right edge — that end becomes explicit and stops following the next section. **[offline]**
+- [ ] **F-389** Type `1:23.480` into a start field and press Return: the marker moves. Type nonsense: the field reverts rather than clearing. **[offline]**
+- [ ] **F-390** Rename, recolour, toggle Loop, and set a hotkey slot per section; all persist across relaunch. **[offline]**
+- [ ] **F-391** The star marks a section to fire when the track loads. **[offline]**
+- [ ] **F-392** Zoom in and out; it stops at 50pt/s (past that the waveform data repeats). **[offline]**
+- [ ] **F-393** A section shorter than a quarter second is refused with a reason, not silently dropped. **[offline]**
+- [ ] **F-394** A section longer than three minutes is refused with a reason. **[offline]**
+
+### Playing live (music panel)
+
+- [ ] **F-395** With sections defined, a now/next line and a row of section pads appear above the transport. **[offline]**
+- [ ] **F-396** Click a pad: that section plays and loops seamlessly — leave it looping for five minutes and listen for drift or a tick at the wrap. **[offline]**
+- [ ] **F-397** The playing pad fills with its colour; the position readout stays correct after hundreds of loop passes. **[offline]**
+- [ ] **F-398** With mode **Cut**, clicking another pad switches immediately. **[offline]**
+- [ ] **F-399** With mode **At loop end**, it queues: the pad shows NEXT, the readout counts down, and the switch lands at the wrap. **[offline]**
+- [ ] **F-400** Cancel a queued switch before it fires; the cancel button disables once it's been handed to the audio engine. **[offline]**
+- [ ] **F-401** ⌥-click a pad to cut regardless of the mode, without changing the mode. **[offline]**
+- [ ] **F-402** The Loop button stops the loop and lets the song run on from where it is. **[offline]**
+- [ ] **F-403** Drag the scrubber outside the looping section: playback follows the scrubber and the loop releases (it does not snap back). **[offline]**
+- [ ] **F-404** Talking still ducks the music while a section loops. **[offline]**
+- [ ] **F-405** Insert effects, the music fader, mute and the meter all behave exactly as before on a looping section. **[offline]**
+- [ ] **F-406** A section whose file has gone says why instead of failing silently. **[offline]**
+- [ ] **F-407** Drop audio files onto the music panel to add them (it used to be picker-only). **[offline]**
+- [ ] **F-408** The transport shows elapsed **and** total duration. **[offline]**
+
+### Section hotkeys
+
+- [ ] **F-409** With Zoom frontmost, ⌃⌥3 fires the section bound to slot 3 of the loaded track. **[offline]**
+- [ ] **F-410** A slot with nothing bound does nothing at all — it never stops the music or fires the wrong section. **[offline]**
+- [ ] **F-411** Add a marker *earlier* than an existing one: the existing section keeps its slot (bindings are explicit, not positional). **[offline]**
+- [ ] **F-412** ⌃⌥C flips the switch mode; ⌃⌥L toggles the loop; ⌃⌥0 cancels a queued switch. **[offline]**
+- [ ] **F-413** ⌃⌥K drops a marker at the playhead while another app is frontmost. **[offline]**
+- [ ] **F-414** Pads show the real bound combo; rebinding in Settings → Shortcuts updates the badge, and an unbound slot shows none. **[offline]**
+- [ ] **F-415** Settings → Shortcuts lists each slot with its section's name, "(empty)", or "(no track loaded)". **[offline]**
+
+### Regression — a track with no sections
+
+- [ ] **F-416** Plays, seeks, skips and loops exactly as it did before this feature existed. **[offline]**
+- [ ] **F-417** The section controls are visible but disabled, not hidden. **[offline]**
+- [ ] **F-418** An `audio-settings.json` written before this feature loads with devices, gains, ducker, inserts, pads and playlist intact. **[offline]**
+- [ ] **F-419** A 44.1 kHz track's progress bar reaches the end exactly as the track ends (it used to run ~8.8% fast). **[offline]**
+- [ ] **F-420** Dragging the scrubber is smooth and doesn't fight you; it seeks once, on release. **[offline]**
+
+## Z. MIDI control
+
+- [ ] **F-421** Connect a USB controller: Settings → MIDI lists it with a green dot. **[midi]**
+- [ ] **F-422** Press any pad — "Last message" updates even with nothing bound. **[midi]**
+- [ ] **F-423** Learn a control for Section 1, press a pad, and the binding appears. **[midi]**
+- [ ] **F-424** That pad now fires section 1 live, including while another app is frontmost. **[midi]**
+- [ ] **F-425** Learning a control that's already bound replaces the old binding rather than double-firing. **[midi]**
+- [ ] **F-426** Bind switch mode, loop, cancel-queued and play/pause; all behave like their hotkeys. **[midi]**
+- [ ] **F-427** Soundboard pads can be bound too. **[midi]**
+- [ ] **F-428** Unplug and replug the controller: bindings still work (they match the message, not the device). **[midi]**
+- [ ] **F-429** A controller sending clock or active sensing doesn't flood or stutter the app. **[midi]**
+- [ ] **F-430** Bindings survive relaunch, and live in `midi-bindings.json` — deleting that file loses only bindings, nothing else. **[midi]**
+
 ## Known gaps (don't waste time testing these)
 
 1. **Watermark and intro/outro stingers are stored but never rendered.** The
    brand kit persists them and the Clip Studio panel says so, but
    `ExportService`/`CompositionBuilder` don't composite them yet.
+1b. **Gapless playlist transitions (F-101) are aspirational.** The advance path
+   opens the next file synchronously on the main thread between a `stop()` and
+   a `schedule`, so there is a seam. Section switching *within* one file
+   deliberately avoids that path — the file is already open — so it is not
+   affected. A second player node is the fix.
+1c. **Crossfade as a section switch mode** is defined but falls back to a hard
+   cut: a single player node cannot crossfade with itself. It needs the same
+   second node as the gapless fix.
+1d. **Beat-grid snapping** for section edges is not implemented; marker
+   positions are set by ear and by typed timecode. Zero-crossing snapping was
+   considered and rejected — at a loop seam the discontinuity is between the
+   last sample and the first, so aligning one edge cannot remove it.
 2. **Instagram publishing cannot work end-to-end** by design in v1 — the
    Graph API pulls from a public URL the app doesn't host. It deliberately
    reveals the file in Finder instead.
@@ -509,3 +593,7 @@ focused; **global** hotkeys (⌥ and ⌃⌥-based) work from any app.
 7. **V** (publishing) — needs platform app registrations; do last.
 
 Section **X** (keyboard shortcuts) is offline and can be tested any time after the app builds — do the global hotkeys with Zoom frontmost.
+
+Section **Y** (music sections) is offline and belongs with step 3. Section **Z**
+(MIDI) needs a controller and can go last with the other hardware-dependent
+work.

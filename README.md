@@ -24,7 +24,8 @@ Two products share this repository and one XcodeGen `project.yml`:
 | Frame sources (camera, screen, movie, web overlays, guests, images) | `Mac/Sources/` |
 | Virtual camera (CMIO extension + sink-stream writer) | `CameraExtension/`, `Mac/VirtualCamera/` |
 | Virtual microphone + Guest Send loopback driver | `driver/`, `Mac/Audio/DriverInstaller.swift` |
-| Audio mixer, insert effects, AU hosting, soundboard, music, ducking | `Mac/Audio/` |
+| Audio mixer, insert effects, AU hosting, soundboard, music sections & loops, ducking | `Mac/Audio/` |
+| MIDI control surface (learn mode, section + pad triggers) | `Mac/MIDI/` |
 | Remote guests (LiveKit) + invite links | `Mac/Guests/`, `web/guest/`, `infra/worker/` |
 | Program recording | `Mac/Recording/` |
 | Podcast mode (local 4K recording, chunked upload, drift-aligned import) | `Mac/Podcast/`, `web/guest/recorder.js`, `infra/worker/` |
@@ -35,7 +36,7 @@ Two products share this repository and one XcodeGen `project.yml`:
 | Studio UI | `Mac/UI/` |
 | Unit tests (EDL, drift fit, ring buffer, alignment, Codable/manifest) | `Tests/AVideosStudioTests/` |
 
-Testing: `docs/FEATURE_CHECKLIST.md` is the full 345-item feature inventory
+Testing: `docs/FEATURE_CHECKLIST.md` is the full 430-item feature inventory
 (with prerequisites per item and known gaps); `TESTING.md` has the shorter
 per-phase exit demos.
 

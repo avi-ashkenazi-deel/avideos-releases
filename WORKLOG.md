@@ -9,6 +9,58 @@ A running log of what we've built and shipped.
   fields don't accept emojis. (Chat replies may still use them; this rule is
   specifically about text pasted into TestFlight / App Store Connect.)
 
+## 2026-07-27 — AVideos Studio: live music sections
+
+Avi wanted the background-music player to be performance-controllable:
+choose where a track starts, loop a chosen part, and switch between parts
+mid-show — choosing how the switch happens, with a hard cut available.
+
+**The mechanism.** `AVAudioPlayerNodeBufferOptions` decides the whole
+design. Scheduling a decoded region with `.loops` gives a bit-exact wrap
+inside AVFoundation's render loop, and the same options set gives both
+switch modes: `.interrupts` for a cut, `.interruptsAtLoop` for a switch
+the render thread performs at the boundary. Re-scheduling file segments
+was the alternative and it cannot do "wait for the loop" — there is no
+partial-flush API, so staying seamless means always having the next pass
+queued, and a request then lands a full pass late. Detecting the boundary
+ourselves is worse: render thread, internal thread, main queue (where the
+ducker already runs at 60 Hz), then schedule. 20 ms is 960 frames of
+silence mid-loop. So the switch is always pre-scheduled.
+
+**Queued switching is two-phase** because there is no unschedule API. The
+target stays cancellable until a 500 ms commit window before the boundary,
+so you can change your mind almost until it fires; missing the window
+costs one extra pass, never a gap.
+
+**Position was rebuilt** around an anchor plus a modulus. The old formula
+assumed exactly one segment and a `stop()` before each schedule, which a
+loop cannot honour — and it divided node frames by the *file's* sample
+rate while the graph runs at 48 kHz, so a 44.1 kHz track's progress bar
+ran ~8.8% fast. That assumption is now behind one function with the test
+to settle it on the Mac.
+
+**Two persistence traps closed.** `AudioSettingsStore.load()` swallowed
+every decode error and returned blank settings, so the next debounced save
+overwrote the file half a second later — one unknown enum string was
+enough to destroy the host's devices, faders, ducker, inserts and pads. It
+now quarantines the file and logs why, and the enums decode leniently. New
+`MusicTrack` fields are Optional rather than defaulted vars, because
+synthesized `Decodable` throws `keyNotFound` for a non-optional even when
+it has a default.
+
+**Decisions worth remembering.** Hotkeys resolve by explicit per-section
+binding, never by position: sections stay sorted by start time, so a
+positional map would renumber every slot after any marker added later.
+Sections have *open* ends by default, which is what makes tap-to-mark
+produce contiguous parts without mutating earlier ones. And zero-crossing
+snapping was rejected — at a loop seam the discontinuity is between the
+last sample and the first, so aligning one edge cannot remove it.
+
+**Still open:** crossfade falls back to a hard cut, and gapless playlist
+advance (F-101) remains false — both need a second player node, which
+`musicBus` is already designed to take. Beat-grid snapping and MIDI out
+for controller LEDs are the natural follow-ups.
+
 ## 2026-07-26 — AVideos Studio: podcast editor rework
 
 Avi reviewed the editor and flagged two gaps as critical, correctly: the
