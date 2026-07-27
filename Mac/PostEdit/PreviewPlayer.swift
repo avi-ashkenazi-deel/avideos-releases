@@ -8,6 +8,24 @@ import os
 /// current EDL/layout (debounced — dragging a trim shouldn't rebuild per
 /// pixel), preserves the playhead across rebuilds, and publishes the
 /// playhead in edited-timeline seconds.
+/// Holds the periodic time observer and removes it on teardown.
+///
+/// This exists only so that removal happens somewhere nonisolated.
+/// `AVPlayer.removeTimeObserver` is safe off the main thread; reaching a
+/// `@MainActor` stored property from `deinit` is not, and is rejected outright.
+/// `@unchecked Sendable` is honest here: `token` is written once during
+/// `PreviewPlayer.init` and read once in `deinit`, with no overlap.
+private final class TimeObserverBox: @unchecked Sendable {
+    private let player: AVPlayer
+    var token: Any?
+
+    init(player: AVPlayer) { self.player = player }
+
+    deinit {
+        if let token { player.removeTimeObserver(token) }
+    }
+}
+
 @MainActor
 @Observable
 final class PreviewPlayer {
@@ -26,12 +44,19 @@ final class PreviewPlayer {
     private(set) var buildError: String?
 
     private let builder = CompositionBuilder()
-    private var timeObserver: Any?
+    private let observer: TimeObserverBox
     private var rebuildTask: Task<Void, Never>?
     private let log = Logger(subsystem: "com.aviashkenazi.avideos", category: "preview")
 
     init() {
-        timeObserver = player.addPeriodicTimeObserver(
+        // The observer's lifetime is owned by a nonisolated box rather than by
+        // this class. `deinit` is nonisolated even in a `@MainActor` type, so
+        // it cannot read main-actor state to tear the observer down — but the
+        // box's own deinit can, because nothing about it is isolated. Releasing
+        // this object releases the box, which removes the observer.
+        let box = TimeObserverBox(player: player)
+        observer = box
+        box.token = player.addPeriodicTimeObserver(
             forInterval: CMTime(value: 1, timescale: 30),
             queue: .main
         ) { [weak self] time in
@@ -40,18 +65,6 @@ final class PreviewPlayer {
                 self.playheadSeconds = max(0, time.seconds - self.programOffset)
                 self.isPlaying = self.player.rate != 0
             }
-        }
-    }
-
-    deinit {
-        // deinit is nonisolated even in a @MainActor class. Swift 5.9 permits
-        // reading stored properties here (exclusive access during teardown),
-        // and removeTimeObserver is safe off the main thread.
-        // verify on Mac: if a future compiler mode rejects touching the
-        // MainActor-isolated `timeObserver` var from deinit, move observer
-        // ownership into a small nonisolated holder object.
-        if let observer = timeObserver {
-            player.removeTimeObserver(observer)
         }
     }
 
