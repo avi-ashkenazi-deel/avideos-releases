@@ -1,6 +1,6 @@
 # AVideos Studio — full feature checklist
 
-All 430 user-facing features, each with a stable ID so you can report
+All 476 user-facing features, each with a stable ID so you can report
 back precisely ("F-42 fails"). Ordered so you can work top to bottom: each
 section only depends on the ones above it.
 
@@ -551,11 +551,80 @@ offline; a MIDI controller is only needed for section Z.
 - [ ] **F-429** A controller sending clock or active sensing doesn't flood or stutter the app. **[midi]**
 - [ ] **F-430** Bindings survive relaunch, and live in `midi-bindings.json` — deleting that file loses only bindings, nothing else. **[midi]**
 
+## AA. External media in the editor
+
+Bringing files that were never part of the session into the edit.
+
+### Media bin
+
+- [ ] **F-431** Tracks pane → Media → **Add Media…** imports a file; the row shows its length and whether it has picture or sound. **[offline]**
+- [ ] **F-432** A natively playable file imports instantly, with no conversion step and no copy. **[offline]**
+- [ ] **F-433** A WebM or MKV offers conversion, and the result lands marked "Converted" and survives relaunch. **[ffmpeg]**
+- [ ] **F-434** With no ffmpeg helper present, conversion fails with the "add it to Contents/Helpers" message rather than silently. **[offline]**
+- [ ] **F-435** A copy-protected file is refused by name, and never enters the bin. **[offline]**
+- [ ] **F-436** One bin item can be used for several cutaways. **[offline]**
+- [ ] **F-437** Move a file on disk and reopen: a "files missing" banner appears and the affected rows say Missing. **[offline]**
+- [ ] **F-438** **Relink…** one missing file and its siblings from the same old folder relink too, with a count reported. **[offline]**
+- [ ] **F-439** Blocks for missing media still draw at their timeline positions — only the picture is gone. **[offline]**
+- [ ] **F-440** B-Roll suggestions now consider imported clips, not just the session's own recordings. **[key]**
+
+### Cutaways by hand
+
+- [ ] **F-441** Drag a video from Finder onto the B-roll lane: it becomes a cutaway there, with no AI suggestion involved. **[offline]**
+- [ ] **F-442** During the drag the lane highlights and a chip names the outcome and the time. **[offline]**
+- [ ] **F-443** Dropping on the sequence column is refused, pointing at the B-roll lane. **[offline]**
+- [ ] **F-444** A dropped file also appears in Media, so it can be reused. **[offline]**
+- [ ] **F-445** An audio-only file lands in Media with an explanation, not as an invisible cutaway. **[offline]**
+- [ ] **F-446** A file longer than the room left is trimmed to fit, with a note saying how much was used. **[offline]**
+- [ ] **F-447** Dropping at the very end refuses and suggests using it as an outro. **[offline]**
+- [ ] **F-448** Select a cutaway → the inspector appears under the preview with its poster, name, and the AI's reason if it had one. **[offline]**
+- [ ] **F-449** **Start inside clip** scrubs the media's own in-point, bounded by its real length. **[offline]**
+- [ ] **F-450** Full-frame vs inset, the corner presets and opacity all take effect in the preview. **[offline]**
+- [ ] **F-451** Turn on the cutaway's audio: you hear it, and the conversation ducks. **[offline]**
+- [ ] **F-452** Adjust the duck amount; the conversation is already down when the clip starts, not fading as it begins. **[offline]**
+- [ ] **F-453** A cutaway whose media is missing produces **no** duck, rather than ducking under silence. **[offline]**
+- [ ] **F-454** Stem exports contain no cutaway audio and no ducking. **[offline]**
+- [ ] **F-455** One ⌘Z undoes a whole inspector slider drag, a whole cutaway move, and a whole trim. **[offline]**
+- [ ] **F-456** **B** inserts a cutaway at the playhead from a file picker. **[offline]**
+
+### Extra tracks
+
+- [ ] **F-457** Media → right-click → **Add as Extra Track** puts a clip in its own "Extra Media" section. **[offline]**
+- [ ] **F-458** The row shows the file's name, never a participant name. **[offline]**
+- [ ] **F-459** Offset nudges shift it against the conversation; picture and sound move together. **[offline]**
+- [ ] **F-460** Its M/S/dB behave exactly like a participant's; soloing it silences the people. **[offline]**
+- [ ] **F-461** It gets its own timeline column, tinted distinctly, and the overlay and caption lanes stay correctly positioned. **[offline]**
+- [ ] **F-462** The Layout menu offers "Full Screen — <file>", and switching to it works. **[offline]**
+- [ ] **F-463** A **portrait** clip renders upright rather than sideways (this was a latent bug — participant cameras are always landscape). **[offline]**
+
+### Intro / outro
+
+- [ ] **F-464** Set an intro: the exported file starts with it and the conversation follows. **[offline]**
+- [ ] **F-465** Setting or trimming an intro does **not** move a single chapter or cutaway. **[offline]**
+- [ ] **F-466** Exported chapters, SRT and VTT are all offset by the intro, so they line up with the file. **[offline]**
+- [ ] **F-467** The preview playhead still matches the timeline exactly with an intro set. **[offline]**
+- [ ] **F-468** Set an outro: it plays after the conversation ends. **[offline]**
+- [ ] **F-469** No participant leaks into the intro or outro picture. **[offline]**
+
+### Standalone projects
+
+- [ ] **F-470** Sessions → **New Project from a File…** opens the editor over one clip. **[offline]**
+- [ ] **F-471** Waveform, thumbnails, the mixer and the timeline all work in it. **[offline]**
+- [ ] **F-472** Clip Studio says "transcribe this clip", not "the session". **[offline]**
+- [ ] **F-473** Transcribe it, and the AI features enable. **[offline]**
+- [ ] **F-474** An unreadable file reports why instead of opening an empty editor. **[offline]**
+
+### Regression
+
+- [ ] **F-475** A project with no external media of any kind exports byte-comparably to before. **[offline]**
+- [ ] **F-476** A project saved before any of this opens with cuts, levels, cutaways and chapters intact. **[offline]**
+
 ## Known gaps (don't waste time testing these)
 
-1. **Watermark and intro/outro stingers are stored but never rendered.** The
-   brand kit persists them and the Clip Studio panel says so, but
-   `ExportService`/`CompositionBuilder` don't composite them yet.
+1. **The brand kit's watermark is stored but never rendered.** Intro and outro
+   are real now (F-464+), but they are set per project in the editor rather
+   than pulled from the brand kit — wiring the kit's stingers to default them
+   is the remaining half.
 1b. **Gapless playlist advance (F-101) is close but not sample-accurate.** The
    next file is now opened ahead of time and started on the second player
    node, so the disk is out of the seam; a main-queue hop between the

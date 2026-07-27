@@ -9,6 +9,55 @@ A running log of what we've built and shipped.
   fields don't accept emojis. (Chat replies may still use them; this rule is
   specifically about text pasted into TestFlight / App Store Connect.)
 
+## 2026-07-27 — AVideos Studio: external media in the editor
+
+Avi asked whether external videos could be brought into the edit. They
+couldn't, really: the B-roll lane could hold any file, but the only door
+to it was inside a Claude-generated suggestion, there was no drag-and-drop
+anywhere in the editor, cutaway audio was discarded by design, and an
+external file couldn't be a track at all. `BrandKit`'s intro/outro fields
+had existed all along with nothing consuming them.
+
+**Two pure extractions first**, so the rest was changing tested arithmetic
+rather than inventing it inline. `MediaPlacement` pulls the insert-and-pad
+loop out of `build()`, gaining a source offset (head padding then falls
+out of the same code as the existing tail padding) and a timeline offset.
+`VolumeAutomation` combines the cut micro-fades and any ducking into one
+envelope by pointwise minimum — necessary because their ramps overlap in
+time, and overlapping `setVolumeRamp` ranges on one parameters object are
+not a defined composition.
+
+**Ducking is derived from what was actually inserted**, never from the
+authored range. A cutaway whose media is missing then produces no duck,
+and a short one ducks only for as long as it sounds. The offline attack
+ramp *ends* at the clip start, so the conversation is already down when
+the audio arrives — the anticipatory duck a realtime follower can't do,
+which is why reusing `SidechainDucker` offline was never on the table.
+
+**External tracks are `EditTrack`s with a side table**, the shape
+`trackMix` already uses. The track carries a synthetic participant id, and
+that one choice makes layouts, tiling, crop paths and the compositor
+address an imported angle exactly as they address a person — no enum
+change, no parallel path. One file becomes two tracks, video and audio, so
+every store and loop keeps working untouched.
+
+**Bookends are an offset, not a prepend.** Prepending would renumber every
+chapter and cutaway each time you trimmed the intro. Program time exists
+only inside `CompositionBuilder`, the sidecar writers, and one seam in
+`PreviewPlayer`, which publishes the playhead as always-edited time — four
+lines that keep fifteen `mapSourceToTimeline` call sites from having to
+know bookends exist.
+
+Two bugs fixed on the way: `preferredTransform` was set on composition
+tracks but never applied by the compositor, which reads raw buffers, so a
+portrait clip would have rendered sideways; and the trim/move callbacks
+had been declared and wired to the model since the timeline was built with
+nothing invoking them.
+
+**Still open:** the brand kit's stinger fields don't yet default the
+per-project intro and outro, there's no freeform inset rectangle (corner
+presets only), and no stock-footage search.
+
 ## 2026-07-27 — AVideos Studio: live music sections
 
 Avi wanted the background-music player to be performance-controllable:

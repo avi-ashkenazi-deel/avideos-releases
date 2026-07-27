@@ -380,6 +380,15 @@ struct EditWorkspaceView: View {
         }
     }
 
+    /// Pick a file and drop it straight on the lane at the playhead — the
+    /// keyboard twin of dragging one in.
+    private func insertCutawayFromNewFile() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = Self.externalMediaTypes
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        Task { await dropCutaway(url: url, at: preview.playheadSeconds) }
+    }
+
     /// Brings a bin item in as an extra angle, cut alongside the conversation
     /// rather than laid over it.
     private func addExtraTrack(from item: MediaBinItem) {
@@ -738,6 +747,25 @@ struct EditWorkspaceView: View {
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
         ToolbarItemGroup {
+            Menu {
+                Button("Add Media…") { importMedia() }
+                Button("Insert Cutaway at Playhead") { insertCutawayFromNewFile() }
+                    .keyboardShortcut("b", modifiers: [])
+                Divider()
+                Button("Set Intro…") { chooseBookend { project.setIntro($0) } }
+                    .keyboardShortcut("i", modifiers: [.option, .command])
+                Button("Set Outro…") { chooseBookend { project.setOutro($0) } }
+                    .keyboardShortcut("o", modifiers: [.option, .command])
+            } label: {
+                Label("Add Media", systemImage: "plus.rectangle.on.folder")
+            }
+            // Deliberately no global KeyboardShortcuts.Name for any of these:
+            // that system exists for show control while another app is
+            // frontmost, and nobody imports B-roll with Zoom in front.
+            // verify on Mac: bare "b" fires while a TextField has focus — the
+            // inspector introduces the editor's first text fields, and this is
+            // the same class of conflict already tracked at F-266/F-269.
+
             Button {
                 undo()
             } label: {

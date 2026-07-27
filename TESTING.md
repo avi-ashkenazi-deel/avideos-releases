@@ -146,6 +146,38 @@ Needs a class-compliant USB controller. Full detail at F-421…F-430.
 - [ ] A controller sending clock or active sensing doesn't stutter the app.
 - [ ] Deleting `midi-bindings.json` loses only the bindings, nothing else.
 
+## Editor: external media
+Full detail in docs/FEATURE_CHECKLIST.md, F-431…F-476.
+
+Bringing files in:
+- [ ] Tracks pane → Media → Add Media… imports a clip; a playable file arrives instantly, a WebM offers conversion.
+- [ ] Drag a video from Finder onto the B-roll lane: the lane highlights, a chip names the outcome and time, and it lands as a cutaway.
+- [ ] Dropping on the sequence column is refused, pointing at the B-roll lane.
+- [ ] Move a file on disk and reopen: a missing-media banner appears; relinking one file fixes its siblings from the same folder.
+
+Cutaways:
+- [ ] Select one → the inspector appears under the preview. Scrub "start inside clip", change mode, corner and opacity.
+- [ ] Turn on its audio: you hear it and the conversation ducks, already down as the clip begins rather than fading during it.
+- [ ] A cutaway whose file is missing produces no duck at all.
+- [ ] Drag a cutaway to move it; drag its ends to retime it. One ⌘Z undoes each whole gesture.
+- [ ] Stem exports contain no cutaway audio and no ducking.
+
+Extra angles and bookends:
+- [ ] Add a clip as an Extra Track: it gets its own tracks-pane row with an offset nudge, its own timeline column, and a Layout menu entry.
+- [ ] Its mute/solo/dB behave like a participant's; soloing it silences the people.
+- [ ] A portrait clip renders upright, not sideways.
+- [ ] Set an intro: the export starts with it — and check that no chapter or cutaway moved.
+- [ ] Exported chapters, SRT and VTT line up with the file once an intro is set, and the preview playhead still matches the timeline.
+
+Standalone:
+- [ ] Sessions → New Project from a File… opens the editor over one clip, with waveform, thumbnails and mixer working.
+- [ ] Clip Studio says "transcribe this clip", not "the session"; transcribing enables the AI features.
+
+Known gaps in this pass — do not report:
+- Intro and outro are set per project; the brand kit's stinger fields still don't feed them.
+- No freeform draggable inset rectangle — corner presets only.
+- No stock-footage search.
+
 ## Guests & podcast mode
 - [ ] Start a guest session → invite link/QR joins from a Chromium browser; guest appears in the Interview grid and the mixer.
 - [ ] With headphones off on both ends: no echo (guest never hears themselves — mix-minus).

@@ -36,7 +36,7 @@ Two products share this repository and one XcodeGen `project.yml`:
 | Studio UI | `Mac/UI/` |
 | Unit tests (EDL, drift fit, ring buffer, alignment, Codable/manifest) | `Tests/AVideosStudioTests/` |
 
-Testing: `docs/FEATURE_CHECKLIST.md` is the full 430-item feature inventory
+Testing: `docs/FEATURE_CHECKLIST.md` is the full 476-item feature inventory
 (with prerequisites per item and known gaps); `TESTING.md` has the shorter
 per-phase exit demos.
 
