@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import Observation
+import UniformTypeIdentifiers
 
 /// The timeline, running **top to bottom** so it sits beside the transcript
 /// and scrolls with it.
@@ -33,6 +34,8 @@ struct VerticalTimelineView: View {
     /// undo step that `onMoveOverlay` has been folding into.
     var onEndDrag: () -> Void
     var onRemoveOverlay: (UUID) -> Void
+    /// A file was dropped on the overlay lane at this edited-timeline second.
+    var onDropMedia: (URL, Double) -> Void
     var onSplitAtPlayhead: () -> Void
 
     // Column geometry. Time is the vertical axis, so "lanes" are columns.
@@ -71,9 +74,60 @@ struct VerticalTimelineView: View {
             drawOverlays(context: context, lanes: laneLayout)
             drawCaptions(context: context, lanes: laneLayout)
             drawPlayhead(context: context, size: size)
+            drawDropTarget(context: context, lanes: laneLayout)
         }
         .contentShape(Rectangle())
         .gesture(dragGesture)
+        .onDrop(of: [.fileURL], delegate: TimelineDropDelegate(
+            isOverlayLane: { x in
+                let lanes = self.lanes
+                return (lanes.overlayX...(lanes.overlayX + self.overlayColumnWidth)).contains(x)
+            },
+            isSegmentColumn: { x in
+                (self.rulerWidth + self.columnGap)...(self.rulerWidth + self.columnGap + self.clipColumnWidth)
+                    ~= x
+            },
+            time: { y in
+                min(max(self.viewModel.scale.time(forOffset: y), 0), self.project.editedDuration)
+            },
+            setTarget: { viewModel.dropTarget = $0 },
+            onDrop: onDropMedia))
+    }
+
+    /// Drop feedback is *drawn*, because this lane is a Canvas — a SwiftUI
+    /// overlay would have to duplicate all of the lane geometry.
+    private func drawDropTarget(context: GraphicsContext, lanes: LaneLayout) {
+        guard let target = viewModel.dropTarget else { return }
+        let y = viewModel.scale.offset(forTime: target.time)
+
+        switch target.kind {
+        case .cutaway:
+            let column = CGRect(x: lanes.overlayX, y: 0, width: overlayColumnWidth,
+                                height: viewModel.scale.contentHeight)
+            context.fill(Path(column), with: .color(.purple.opacity(0.15)))
+            var line = Path()
+            line.move(to: CGPoint(x: lanes.overlayX, y: y))
+            line.addLine(to: CGPoint(x: lanes.overlayX + overlayColumnWidth, y: y))
+            context.stroke(line, with: .color(.purple), lineWidth: 2)
+        case .refused:
+            var line = Path()
+            line.move(to: CGPoint(x: rulerWidth, y: y))
+            line.addLine(to: CGPoint(x: rulerWidth + clipColumnWidth, y: y))
+            context.stroke(line, with: .color(.red.opacity(0.7)),
+                           style: StrokeStyle(lineWidth: 2, dash: [4, 3]))
+        }
+
+        // Naming the outcome before you let go is the entire reason the lane
+        // decides this rather than a modifier key — a modifier can't be hinted.
+        let label = switch target.kind {
+        case .cutaway: "Cutaway at \(timeLabel(target.time))"
+        case .refused: "Drop on the B-roll lane"
+        }
+        let chip = CGRect(x: lanes.overlayX, y: max(0, y - 26), width: 150, height: 20)
+        context.fill(Path(roundedRect: chip, cornerRadius: 4),
+                     with: .color(.black.opacity(0.75)))
+        context.draw(Text(label).font(.system(size: 9)).foregroundStyle(.white),
+                     at: CGPoint(x: chip.minX + 6, y: chip.midY), anchor: .leading)
     }
 
     /// Time ticks down the left edge. Step chosen from how much height a
@@ -354,14 +408,21 @@ struct VerticalTimelineView: View {
         DragGesture(minimumDistance: 0)
             .onChanged { value in
                 if value.translation.height == 0 {
-                    // First touch: select whatever is under the pointer, and
+                    // First touch: latch what was grabbed, select it, and
                     // decide once whether this drag scrubs.
+                    viewModel.grabbed = grabZone(at: value.location)
                     hitTest(at: value.location)
-                    viewModel.dragScrubs = isScrubZone(x: value.location.x)
+                    viewModel.dragScrubs = viewModel.grabbed == nil
+                        && isScrubZone(x: value.location.x)
+                }
+
+                if let grabbed = viewModel.grabbed {
+                    applyEdgeDrag(grabbed, to: viewModel.scale.time(forOffset: value.location.y))
+                    return
                 }
                 // Only scrub when the drag *started* on the ruler or the
-                // segment column. Without this, dragging a cutaway drags the
-                // playhead along with it.
+                // segment column and grabbed nothing. Without this, dragging a
+                // cutaway drags the playhead along with it.
                 guard viewModel.dragScrubs else { return }
                 let time = viewModel.scale.time(forOffset: value.location.y)
                 onScrub(min(max(time, 0), project.editedDuration))
@@ -370,17 +431,104 @@ struct VerticalTimelineView: View {
                 defer {
                     viewModel.draggingClipID = nil
                     viewModel.dragScrubs = false
+                    viewModel.grabbed = nil
                     onEndDrag()
                 }
+                // An edge drag has already applied itself; only a body drag
+                // reorders.
+                if viewModel.grabbed != nil { return }
                 guard let dragged = viewModel.draggingClipID else { return }
                 onMoveClip(dragged, dropIndex(forY: value.location.y))
             }
+    }
+
+    /// Moves whichever edge the drag latched onto.
+    ///
+    /// Trimming a segment edge is expressed in *source* time, because that is
+    /// what `EditDecisionList.trim` takes — and it is what lets an edge be
+    /// dragged back out into material an earlier cut had taken.
+    private func applyEdgeDrag(_ grabbed: GrabZone, to time: Double) {
+        let clamped = min(max(time, 0), project.editedDuration)
+        switch grabbed {
+        case .overlayBody(let id):
+            guard let overlay = project.overlays?.first(where: { $0.id == id }) else { return }
+            let length = overlay.duration
+            let start = min(max(clamped - length / 2, 0), project.editedDuration - length)
+            onMoveOverlay(id, start...(start + length))
+
+        case .overlayTop(let id):
+            guard let overlay = project.overlays?.first(where: { $0.id == id }) else { return }
+            let upper = overlay.timelineRange.upperBound
+            guard clamped < upper - EditDecisionList.minimumClipDuration else { return }
+            onMoveOverlay(id, clamped...upper)
+
+        case .overlayBottom(let id):
+            guard let overlay = project.overlays?.first(where: { $0.id == id }) else { return }
+            let lower = overlay.timelineRange.lowerBound
+            guard clamped > lower + EditDecisionList.minimumClipDuration else { return }
+            onMoveOverlay(id, lower...clamped)
+
+        case .clipTop(let id), .clipBottom(let id):
+            guard let layout = segmentLayouts().first(where: { $0.clip.id == id }) else { return }
+            let delta = clamped - viewModel.scale.time(forOffset: layout.minY)
+            let range = layout.clip.sourceRange
+            if case .clipTop = grabbed {
+                let lower = range.lowerBound + delta
+                guard lower < range.upperBound - EditDecisionList.minimumClipDuration else { return }
+                onTrimClip(id, lower...range.upperBound)
+            } else {
+                let upper = range.lowerBound + (clamped - viewModel.scale.time(forOffset: layout.minY))
+                guard upper > range.lowerBound + EditDecisionList.minimumClipDuration else { return }
+                onTrimClip(id, range.lowerBound...upper)
+            }
+        }
     }
 
     /// The ruler and the segment column are the "seek here" surface; every
     /// other lane belongs to the thing drawn in it.
     private func isScrubZone(x: CGFloat) -> Bool {
         x < rulerWidth + columnGap + clipColumnWidth
+    }
+
+    /// Which part of a block a drag grabbed.
+    enum GrabZone: Equatable {
+        case overlayBody(UUID)
+        case overlayTop(UUID)
+        case overlayBottom(UUID)
+        case clipTop(UUID)
+        case clipBottom(UUID)
+    }
+
+    /// Hit width of an edge handle, in points.
+    private var handleSlop: CGFloat { 8 }
+
+    /// What is under the pointer, latched once at touch-down. Re-hit-testing
+    /// every frame is how a drag ends up grabbing a neighbour once two edges
+    /// cross each other.
+    private func grabZone(at point: CGPoint) -> GrabZone? {
+        let laneLayout = lanes
+        if (laneLayout.overlayX...(laneLayout.overlayX + overlayColumnWidth)).contains(point.x) {
+            for overlay in project.sortedOverlays {
+                let top = viewModel.scale.offset(forTime: overlay.timelineRange.lowerBound)
+                let bottom = viewModel.scale.offset(forTime: overlay.timelineRange.upperBound)
+                guard point.y >= top - handleSlop, point.y <= bottom + handleSlop else { continue }
+                if abs(point.y - top) <= handleSlop { return .overlayTop(overlay.id) }
+                if abs(point.y - bottom) <= handleSlop { return .overlayBottom(overlay.id) }
+                return .overlayBody(overlay.id)
+            }
+            return nil
+        }
+
+        let clipRange = (rulerWidth + columnGap)...(rulerWidth + columnGap + clipColumnWidth)
+        if clipRange.contains(point.x) {
+            for layout in segmentLayouts() where layout.clip.enabled {
+                guard point.y >= layout.minY - handleSlop,
+                      point.y <= layout.maxY + handleSlop else { continue }
+                if abs(point.y - layout.minY) <= handleSlop { return .clipTop(layout.clip.id) }
+                if abs(point.y - layout.maxY) <= handleSlop { return .clipBottom(layout.clip.id) }
+            }
+        }
+        return nil
     }
 
     private func hitTest(at point: CGPoint) {
@@ -495,6 +643,63 @@ struct VerticalTimelineView: View {
     }
 }
 
+// MARK: - Drop
+
+/// Where a dragged file would land, and what it would become.
+struct TimelineDropTarget: Equatable {
+    enum Kind: Equatable {
+        case cutaway
+        /// Dropping into the sequence would change the program's length and
+        /// desynchronise the transcript, so it is refused rather than guessed
+        /// at — with the refusal naming the lane that does work.
+        case refused
+    }
+    var kind: Kind
+    var time: Double
+}
+
+/// A `DropDelegate` rather than the closure form of `.onDrop`, because the
+/// outcome depends on where the pointer is and the closure form only reports
+/// whether it is inside the view at all.
+private struct TimelineDropDelegate: DropDelegate {
+    let isOverlayLane: (CGFloat) -> Bool
+    let isSegmentColumn: (CGFloat) -> Bool
+    let time: (CGFloat) -> Double
+    let setTarget: (TimelineDropTarget?) -> Void
+    let onDrop: (URL, Double) -> Void
+
+    func validateDrop(info: DropInfo) -> Bool {
+        // Only claim drops we can honour, so the cursor tells the truth.
+        info.hasItemsConforming(to: [.fileURL])
+            && (isOverlayLane(info.location.x) || isSegmentColumn(info.location.x))
+    }
+
+    func dropEntered(info: DropInfo) { setTarget(target(for: info)) }
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        setTarget(target(for: info))
+        return DropProposal(operation: isOverlayLane(info.location.x) ? .copy : .forbidden)
+    }
+    func dropExited(info: DropInfo) { setTarget(nil) }
+
+    func performDrop(info: DropInfo) -> Bool {
+        defer { setTarget(nil) }
+        guard isOverlayLane(info.location.x) else { return false }
+        let at = time(info.location.y)
+        for provider in info.itemProviders(for: [.fileURL]) {
+            _ = provider.loadObject(ofClass: URL.self) { url, _ in
+                guard let url else { return }
+                Task { @MainActor in onDrop(url, at) }
+            }
+        }
+        return true
+    }
+
+    private func target(for info: DropInfo) -> TimelineDropTarget {
+        TimelineDropTarget(kind: isOverlayLane(info.location.x) ? .cutaway : .refused,
+                           time: time(info.location.y))
+    }
+}
+
 // MARK: - View model
 
 @MainActor
@@ -520,6 +725,11 @@ final class VerticalTimelineViewModel {
     /// Decided once at the start of a drag: does this gesture move the
     /// playhead, or is it manipulating whatever it grabbed?
     var dragScrubs = false
+    /// The edge or block latched at touch-down, so a drag can't switch targets
+    /// mid-gesture.
+    var grabbed: VerticalTimelineView.GrabZone?
+    /// Where a dragged file would land, drawn as feedback.
+    var dropTarget: TimelineDropTarget?
 
     /// Measured text geometry from the transcript, refreshed on relayout.
     var textRuns: [TimelineTextRun] = []

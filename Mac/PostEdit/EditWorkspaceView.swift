@@ -181,6 +181,9 @@ struct EditWorkspaceView: View {
             onRemoveOverlay: { id in
                 performEdit { project.removeOverlay(id: id) }
             },
+            onDropMedia: { url, at in
+                Task { await dropCutaway(url: url, at: at) }
+            },
             onSplitAtPlayhead: {
                 // Timeline-time, so it lands in the occurrence you're looking
                 // at even when a moment plays more than once.
@@ -322,6 +325,45 @@ struct EditWorkspaceView: View {
         performEdit { count = project.relink(oldPath: reference.path, to: url) }
         if count > 1 {
             errorMessage = "Relinked \(count) files from that folder."
+        }
+    }
+
+    /// A file dropped straight onto the overlay lane: probe it, add it to the
+    /// bin so it can be reused, then place it where it landed.
+    ///
+    /// One `performEdit` at the end of the async work, not before it — a
+    /// snapshot pushed up front would leave an empty undo step if the probe
+    /// failed.
+    private func dropCutaway(url: URL, at time: Double) async {
+        guard case .ready(let probe) = await mediaImporter.probe(url) else {
+            await ingest(urls: [url])   // handles conversion, DRM and failure
+            return
+        }
+        // Audio-only lands as a bin item rather than an invisible cutaway.
+        guard probe.hasVideo else {
+            addToBin(url: url, probe: probe, converted: false)
+            errorMessage = "\(url.lastPathComponent) has no picture, so it's in Media rather than on the B-roll lane."
+            return
+        }
+
+        let remaining = project.editedDuration - time
+        guard remaining > EditDecisionList.minimumClipDuration else {
+            errorMessage = "There's no room at the end of the program. Drop it earlier, or use it as an outro."
+            return
+        }
+        let length = probe.duration > 0 ? min(probe.duration, remaining) : min(5, remaining)
+        let reference = MediaReference(url: url)
+        performEdit {
+            project.addToBin(MediaBinItem(media: reference,
+                                          duration: probe.duration,
+                                          hasVideo: probe.hasVideo,
+                                          hasAudio: probe.hasAudio))
+            project.addOverlay(OverlayClip(media: reference,
+                                           timelineRange: time...(time + length)))
+        }
+        if probe.duration > length {
+            errorMessage = String(format: "Trimmed to fit the program (%.1fs of %.1fs used).",
+                                  length, probe.duration)
         }
     }
 

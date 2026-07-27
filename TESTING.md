@@ -170,6 +170,7 @@ Full detail in docs/FEATURE_CHECKLIST.md, F-309…F-345.
 
 Sequencing (the episode is now an ordered list of segments, not a fixed tiling of the source):
 - [ ] Drag a segment to a new position → the episode plays in the new order, all participants still in sync, total length unchanged.
+- [ ] Drag a segment's edge inward to trim it, then outward to extend back into material a cut had taken.
 - [ ] Duplicate a segment → the moment plays twice and appears twice in the transcript.
 - [ ] Cut a word that occurs twice → every occurrence goes; S splits the occurrence under the playhead, not an earlier copy.
 - [ ] Chapters, captions and layout still land correctly after a reorder.
@@ -187,7 +188,7 @@ B-roll lane:
 - [ ] Clip Studio → B-Roll → Insert on B-Roll Lane puts a cutaway on the timeline; the picture changes and the conversation's audio keeps playing underneath.
 - [ ] Scrub across its start and end — the picture switches cleanly at both boundaries.
 - [ ] Captions stay readable over a full-frame cutaway; inset mode shows it as a corner picture.
-- [ ] Select a cutaway and remove it; two overlapping cutaways don't fight.
+- [ ] Drag a cutaway to move it, and drag its ends to retime it; select and remove it; two overlapping cutaways don't fight.
 - [ ] A cutaway whose moment has since been cut refuses to insert, with a clear message.
 
 Vertical timeline:
@@ -204,11 +205,6 @@ Vertical timeline:
 Known gaps in this pass — do not report:
 - Scrolling one pane does not scroll the other; the two views are aligned but not yet linked.
 - Neither pane follows the playhead during playback; you scroll yourself.
-- **Dragging a segment's edge to trim, and dragging a cutaway to move it, are not
-  wired.** The model operations and the timeline's callbacks both exist, but no
-  gesture invokes them yet — the earlier pass shipped the plumbing and not the
-  handles. Reordering a segment by dragging it *does* work. Marked `[not built]`
-  as F-310, F-311 and part of F-329.
 
 ## Clip Studio
 - [ ] Clip Studio opens from the editor toolbar; without a transcript the AI buttons are disabled and the footer says why.
