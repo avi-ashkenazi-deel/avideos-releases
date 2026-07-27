@@ -125,6 +125,47 @@ Each phase's exit demo, as checkboxes. Requires a Mac (see docs/DEV_SETUP.md).
 - [ ] Suggest Clips → ranked list; Export Vertical produces 9:16 with word-by-word captions.
 - [ ] Chapters → YouTube-format list lands on the clipboard and exports as a sidecar.
 
+## Editor: sequencing, levels, B-roll, vertical timeline
+Full detail in docs/FEATURE_CHECKLIST.md, F-309…F-345.
+
+Sequencing (the episode is now an ordered list of segments, not a fixed tiling of the source):
+- [ ] Drag a segment to a new position → the episode plays in the new order, all participants still in sync, total length unchanged.
+- [ ] Drag a segment's edge inward to trim, then outward to extend back into material a cut had taken.
+- [ ] Duplicate a segment → the moment plays twice and appears twice in the transcript.
+- [ ] Cut a word that occurs twice → every occurrence goes; S splits the occurrence under the playhead, not an earlier copy.
+- [ ] Chapters, captions and layout still land correctly after a reorder.
+- [ ] A project saved before this change opens and behaves identically (no migration).
+- [ ] One ⌘Z undoes a whole move, trim or duplicate.
+
+Per-track levels:
+- [ ] Each audio participant row has a dB slider, M and S; −6 dB is audibly quieter in the preview *and* the export.
+- [ ] Solo silences everyone else; several tracks can be soloed at once; muted rows dim.
+- [ ] No click or level jump at a cut boundary on a track that isn't at 0 dB (the 15 ms fades scale with gain).
+- [ ] Stem exports carry each track's gain but deliberately ignore mute/solo.
+- [ ] Levels persist across save/reload and undo like any other edit.
+
+B-roll lane:
+- [ ] Clip Studio → B-Roll → Insert on B-Roll Lane puts a cutaway on the timeline; the picture changes and the conversation's audio keeps playing underneath.
+- [ ] Scrub across its start and end — the picture switches cleanly at both boundaries.
+- [ ] Captions stay readable over a full-frame cutaway; inset mode shows it as a corner picture.
+- [ ] Drag a cutaway to move it; select and remove it; two overlapping cutaways don't fight.
+- [ ] A cutaway whose moment has since been cut refuses to insert, with a clear message.
+
+Vertical timeline:
+- [ ] The timeline is a column beside the transcript, time running top to bottom, drawn in program order.
+- [ ] Text mode: a segment's block sits beside the words it contains; a long silence still gets a block sized by its duration; a short gap does not.
+- [ ] Time mode: constant points per second; zoom in and out.
+- [ ] Switching modes keeps the playhead and selection on the same moment; clicking the timeline seeks the preview exactly in both.
+- [ ] Each block shows a poster frame; they fill in as you scroll and don't re-fetch.
+- [ ] Waveform columns run vertically, one per participant, follow the *edited* program, and dim when muted or not soloed.
+- [ ] The captions lane shows the lines that will actually be burned in.
+- [ ] Cut segments show as thin collapsed strips at their sequence position and can be restored from there.
+- [ ] Before transcription (no measured text) the timeline still renders usefully rather than blank.
+
+Known gaps in this pass — do not report:
+- Scrolling one pane does not scroll the other; the two views are aligned but not yet linked.
+- Neither pane follows the playhead during playback; you scroll yourself.
+
 ## Clip Studio
 - [ ] Clip Studio opens from the editor toolbar; without a transcript the AI buttons are disabled and the footer says why.
 - [ ] Find Clips → ranked suggestions with score badges; Preview seeks the program preview to that moment.

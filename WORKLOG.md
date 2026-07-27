@@ -9,6 +9,57 @@ A running log of what we've built and shipped.
   fields don't accept emojis. (Chat replies may still use them; this rule is
   specifically about text pasted into TestFlight / App Store Connect.)
 
+## 2026-07-26 — AVideos Studio: podcast editor rework
+
+Avi reviewed the editor and flagged two gaps as critical, correctly: the
+tracks pane was read-only (nothing to do about a guest who recorded hot),
+and B-roll suggestions had nowhere to land — the suggester was built, the
+lane in the original plan never was. Alongside those: cut/drag-to-extend,
+moving segments, captions on the timeline, per-clip previews, and turning
+the timeline vertical so it reads beside the transcript.
+
+**The EDL became a real sequence.** It used to document that clips are
+sorted by source time and tile the source exactly, which forbids reordering
+outright. Now array order *is* timeline order; ranges may repeat and appear
+in any order. An EDL written under the old rules is already valid under the
+new ones, so nothing migrates. New ops: trim (can extend back into material
+a cut took), move, duplicate, and one hard remove for duplicates.
+
+The consequence worth remembering: **a source time can now map to zero, one
+or many timeline positions.** `mapSourceToTimeline` answers with the first;
+`timelinePositions(ofSource:)` answers with all. `Transcript.enabledWords`
+and the transcript rebuild were inverted to walk segments rather than words,
+which is what makes a duplicated moment appear twice, keeps the output
+monotonic (captions and the speaker timeline both assume it), and turns an
+O(words × clips) scan into a binary-searched pass.
+
+**Per-track levels**: gain, mute and solo per participant, kept on the
+project rather than on `EditTrack` (that type describes what was recorded).
+The subtle part is that the 15 ms micro-fades had to scale with gain —
+ramping to a hardcoded 1.0 would jump any trimmed track to full level for
+7.5 ms at every cut. Stems carry gain but ignore mute/solo.
+
+**B-roll lane**: `OverlayClip`, video-only, positioned in edited time. Each
+cutaway gets its own composition track; instruction boundaries now split at
+overlay edges too, or a cutaway starting mid-instruction would never appear.
+Drawn above the tiles and below the captions. Clip Studio can finally insert
+one.
+
+**Vertical timeline**, replacing the horizontal strip. A `TimelineScale`
+protocol supplies "how far down is this second", with a strict-time scale
+and a text-aligned one where a word's block sits beside its own text —
+hybrid on purpose, since silences keep duration-proportional height so a
+long pause is still visible and trimmable. Drawn in program order (a
+source-positioned strip cannot render a reordered edit at all), with poster
+frames per block, vertical waveform columns, a captions lane, and cut
+segments as collapsed strips. `TranscriptEditorView` measures word rectangles
+through the TextKit layout manager to feed the aligned scale.
+
+Still open: bidirectional scroll-position sync between the two panes, and
+following the playhead during playback — the latter needs the playhead
+highlight moved out of the attributed-string rebuild first, or it would
+rebuild the whole transcript every tick.
+
 ## 2026-07-26 — AVideos Studio: 20 entry animations for overlay layers
 
 Overlay text/shape/image layers had 7 entry animations. Expanded to 20,

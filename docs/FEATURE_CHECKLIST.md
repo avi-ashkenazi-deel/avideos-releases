@@ -1,6 +1,6 @@
 # AVideos Studio — full feature checklist
 
-All 308 user-facing features, each with a stable ID so you can report
+All 345 user-facing features, each with a stable ID so you can report
 back precisely ("F-42 fails"). Ordered so you can work top to bottom: each
 section only depends on the ones above it.
 
@@ -282,6 +282,55 @@ replays just the entrance, which is the quick way to compare them.
 - [ ] **F-163** Re-enable ("recover") a cut clip; the program lengthens again. **[offline]**
 - [ ] **F-164** Undo/redo across edits. **[offline]**
 - [ ] **F-165** Edits persist: close and reopen the project. **[offline]**
+
+### Sequence editing (reorder, trim, duplicate)
+
+- [ ] **F-309** Drag a segment to a new position — the episode plays in the new order. **[offline]**
+- [ ] **F-310** Drag a segment's edge to trim it shorter. **[offline]**
+- [ ] **F-311** Drag an edge *outward* to extend back into material a cut had taken. **[offline]**
+- [ ] **F-312** Duplicate a segment — the moment plays twice, and appears twice in the transcript. **[offline]**
+- [ ] **F-313** Cut a word that appears twice: **every** occurrence goes, not just the first. **[offline]**
+- [ ] **F-314** Split (S) lands in the occurrence under the playhead, not an earlier copy. **[offline]**
+- [ ] **F-315** Reordering keeps the program length unchanged, and audio stays in sync across participants. **[offline]**
+- [ ] **F-316** Chapters, captions and layout still land correctly after a reorder. **[offline]**
+- [ ] **F-317** A project saved before sequencing opens and behaves exactly as it did. **[offline]**
+- [ ] **F-318** One ⌘Z undoes a whole move, trim or duplicate. **[offline]**
+
+### Per-track levels
+
+- [ ] **F-319** Each audio participant has a gain slider; −6 dB is audibly quieter in the preview and the export. **[offline]**
+- [ ] **F-320** **M** mutes a participant; the row dims. **[offline]**
+- [ ] **F-321** **S** solos — everyone else goes silent; several tracks can be soloed together. **[offline]**
+- [ ] **F-322** No click or level jump at cut boundaries on a track that isn't at 0 dB (the fades scale with gain). **[offline]**
+- [ ] **F-323** Stem exports carry each track's gain but ignore mute/solo. **[offline]**
+- [ ] **F-324** Levels persist across save/reload and undo like any other edit. **[offline]**
+
+### B-roll lane
+
+- [ ] **F-325** Clip Studio → B-Roll → **Insert on B-Roll Lane** puts a cutaway on the timeline. **[key]**
+- [ ] **F-326** The cutaway replaces the picture and the conversation's audio keeps playing underneath. **[offline]**
+- [ ] **F-327** Scrub across its start and end — the picture switches cleanly at both. **[offline]**
+- [ ] **F-328** Captions stay readable **over** a full-frame cutaway. **[offline]**
+- [ ] **F-329** Drag a cutaway to move it; select and remove it. **[offline]**
+- [ ] **F-330** Inset mode shows the cutaway as a corner picture over the conversation. **[offline]**
+- [ ] **F-331** Two overlapping cutaways don't fight each other. **[offline]**
+- [ ] **F-332** A cutaway whose moment was since cut refuses to insert, with a clear message. **[key]**
+
+### Vertical timeline
+
+- [ ] **F-333** The timeline is a column beside the transcript, time running top to bottom. **[offline]**
+- [ ] **F-334** **Text** mode: a segment's block sits beside the words it contains. **[offline]**
+- [ ] **F-335** In text mode a long silence still gets a block sized by its duration — visible and grabbable. **[offline]**
+- [ ] **F-336** A short gap between words does *not* become a block. **[offline]**
+- [ ] **F-337** **Time** mode: constant points per second, zoom in/out works. **[offline]**
+- [ ] **F-338** Switching modes keeps the playhead and selection on the same moment. **[offline]**
+- [ ] **F-339** Clicking anywhere on the timeline seeks the preview to that exact moment in both modes. **[offline]**
+- [ ] **F-340** Each segment block shows a poster frame; they appear as you scroll and don't re-fetch. **[offline]**
+- [ ] **F-341** Waveform columns run vertically, one per participant, and follow the *edited* program. **[offline]**
+- [ ] **F-342** A muted or non-soloed track's column visibly dims. **[offline]**
+- [ ] **F-343** The captions lane shows the lines that will actually be burned in. **[offline]**
+- [ ] **F-344** Cut segments show as thin collapsed strips at their sequence position and can be restored. **[offline]**
+- [ ] **F-345** Before transcription (no measured text) the timeline still renders usefully rather than blank. **[offline]**
 
 ## R. Edit mode — transcript & AI editing
 
