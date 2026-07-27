@@ -121,6 +121,16 @@ private struct PadButton: View {
 struct MusicPlaylistView: View {
     @Environment(StudioController.self) private var studio
 
+    /// Where the thumb is *while you drag it*.
+    ///
+    /// Binding the slider straight to `audio.musicPosition` had two faults at
+    /// once: its setter called `musicSeek` on every tick, and each seek stops
+    /// the player node and re-schedules the file — dozens of times a second
+    /// through a drag. Meanwhile the position timer kept writing
+    /// `musicPosition` back, so the thumb fought the pointer. Now the drag owns
+    /// the value locally and one seek happens on release.
+    @State private var scrubSeconds: Double?
+
     private var audio: AudioEngineController { studio.audio }
 
     var body: some View {
@@ -166,10 +176,20 @@ struct MusicPlaylistView: View {
                         .foregroundStyle(audio.loopMode == .off ? Color.secondary : Color.accentColor)
                 }
 
-                Slider(value: Binding(get: { audio.musicPosition },
-                                      set: { audio.musicSeek(to: $0) }),
-                       in: 0...max(audio.musicDuration, 1))
-                Text(timeString(audio.musicPosition))
+                Slider(value: Binding(get: { scrubSeconds ?? audio.musicPosition },
+                                      set: { scrubSeconds = $0 }),
+                       in: 0...max(audio.musicDuration, 1),
+                       onEditingChanged: { editing in
+                           // One seek, on release. Each seek stops the player
+                           // node and re-schedules the file, so seeking per tick
+                           // was dozens of stop/reschedules per drag.
+                           if !editing, let target = scrubSeconds {
+                               audio.musicSeek(to: target)
+                               scrubSeconds = nil
+                           }
+                       })
+                Text(timeString(scrubSeconds ?? audio.musicPosition)
+                     + " / " + timeString(audio.musicDuration))
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
 

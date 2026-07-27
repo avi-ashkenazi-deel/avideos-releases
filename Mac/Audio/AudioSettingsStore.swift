@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 /// Persisted audio state: devices by UID (never AudioDeviceID — those change
 /// per boot), strip gains, ducker, insert chains, pads, playlist.
@@ -33,6 +34,7 @@ final class AudioSettingsStore {
     private let url: URL
     private var pendingSave: DispatchWorkItem?
     private let queue = DispatchQueue(label: "com.aviashkenazi.avideos.audiosettings", qos: .utility)
+    private let log = Logger(subsystem: "com.aviashkenazi.avideos", category: "audiosettings")
 
     init() {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -42,11 +44,31 @@ final class AudioSettingsStore {
     }
 
     func load() -> AudioSettings {
-        guard let data = try? Data(contentsOf: url),
-              let settings = try? JSONDecoder().decode(AudioSettings.self, from: data) else {
+        guard let data = try? Data(contentsOf: url) else { return AudioSettings() }
+        do {
+            return try JSONDecoder().decode(AudioSettings.self, from: data)
+        } catch {
+            // Returning defaults here means the next debounced save — 0.5s
+            // later — overwrites the file, so the host's devices, faders,
+            // ducker, insert chains, pads and playlist are gone with no way
+            // back. Quarantine the original first so the loss is recoverable
+            // and diagnosable, and say so in the log rather than failing mute.
+            log.error("audio-settings.json could not be decoded: \(error.localizedDescription, privacy: .public)")
+            quarantineCorruptFile()
             return AudioSettings()
         }
-        return settings
+    }
+
+    private func quarantineCorruptFile() {
+        let stamp = Int(Date().timeIntervalSince1970)
+        let backup = url.deletingLastPathComponent()
+            .appendingPathComponent("audio-settings-corrupt-\(stamp).json")
+        do {
+            try FileManager.default.moveItem(at: url, to: backup)
+            log.notice("moved the unreadable settings aside to \(backup.lastPathComponent, privacy: .public)")
+        } catch {
+            log.error("couldn't quarantine the unreadable settings: \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     func saveDebounced(_ settings: AudioSettings, delay: TimeInterval = 0.5) {

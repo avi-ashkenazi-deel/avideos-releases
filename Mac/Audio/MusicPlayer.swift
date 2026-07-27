@@ -30,6 +30,18 @@ struct MusicTrack: Identifiable, Codable, Hashable {
 
 enum LoopMode: String, Codable, CaseIterable {
     case off, one, all
+
+    /// Lenient decode, deliberately.
+    ///
+    /// A raw-value enum throws on an unknown string, and `AudioSettingsStore`
+    /// swallows any throw and returns blank settings — so one stale or
+    /// hand-edited `loopMode` value would silently discard the host's devices,
+    /// faders, mutes, ducker config, insert chains, pads and playlist. Falling
+    /// back to a sane value costs nothing and cannot lose data.
+    init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = Self(rawValue: raw) ?? .off
+    }
 }
 
 /// Background-music playlist on the music strip. Songs stream from disk via
@@ -49,9 +61,13 @@ final class MusicPlayer {
     /// Seconds into the current track / its duration, for the transport UI.
     private(set) var position: Double = 0
     private(set) var duration: Double = 0
-    private var positionTimer: Timer?
-    /// Frame offset of the current schedule (for position math after seeks).
-    private var scheduledFromFrame: AVAudioFramePosition = 0
+    /// `DispatchSourceTimer` rather than `Timer`, because
+    /// `Timer.scheduledTimer` runs in the default run-loop mode and stalls
+    /// during SwiftUI scroll and drag tracking. Tolerable for a coarse progress
+    /// bar; not tolerable once this same tick drives loop-boundary decisions.
+    private var positionTimer: DispatchSourceTimer?
+    /// Where the current content started, in both clocks. See `PlaybackAnchor`.
+    private var anchor: PlaybackAnchor?
     /// Generation token: invalidates stale completion handlers after stop/seek.
     private var scheduleGeneration = 0
 
@@ -92,7 +108,8 @@ final class MusicPlayer {
         if isPlaying {
             player.pause()
             isPlaying = false
-            positionTimer?.invalidate()
+            positionTimer?.cancel()
+            positionTimer = nil
         } else if currentFile != nil {
             player.play()
             isPlaying = true
@@ -164,15 +181,18 @@ final class MusicPlayer {
         isPlaying = false
         position = 0
         duration = 0
-        positionTimer?.invalidate()
+        anchor = nil
+        positionTimer?.cancel()
+        positionTimer = nil
         onStateChanged?()
     }
 
     // MARK: - Scheduling
 
+    /// Schedules the remainder of `file` from `frame` (a *file* frame) and
+    /// re-anchors the position clock to it.
     private func schedule(file: AVAudioFile, from frame: AVAudioFramePosition) {
         let generation = scheduleGeneration
-        scheduledFromFrame = frame
         let remaining = AVAudioFrameCount(max(0, file.length - frame))
         guard remaining > 0 else { return }
         player.scheduleSegment(file, startingFrame: frame, frameCount: remaining, at: nil) { [weak self] in
@@ -181,28 +201,61 @@ final class MusicPlayer {
                 self.trackFinished()
             }
         }
+        // The seek/play path stops the node first, so its sample clock restarts
+        // at zero. Anchor the track position in canonical frames.
+        // verify on Mac: `stop()` zeroes `playerTime.sampleTime` — the previous
+        // position formula silently depended on this too.
+        let seconds = Double(frame) / file.processingFormat.sampleRate
+        anchor = PlaybackAnchor(nodeSampleTime: 0,
+                                trackFrame: MusicClock.frames(fromSeconds: seconds),
+                                region: nil)
     }
 
     private func trackFinished() {
-        switch loopMode {
-        case .one:
+        // Precedence between whole-track loop modes and a looped section lives
+        // in one pure function so the two concepts stay distinct.
+        switch advanceDecision(loopMode: loopMode,
+                               hasActiveSectionLoop: anchor?.region != nil) {
+        case .stayLooping:
+            break
+        case .repeatTrack:
             if let id = currentTrackID, let track = playlist.first(where: { $0.id == id }) {
                 play(track: track)
             }
-        case .all, .off:
+        case .advance:
             step(by: 1)
         }
     }
 
+    /// 4 Hz is plenty for a whole-track progress bar. A looped section needs
+    /// 15 Hz (matching `SoundPadPlayer`'s progress tick) so the loop position
+    /// doesn't staircase and a countdown to the next switch reads smoothly —
+    /// but a track with no sections must not pay for that, so the rate follows
+    /// whether a region is engaged.
+    private var positionTickInterval: Double {
+        anchor?.region == nil ? 0.25 : 1.0 / 15.0
+    }
+
     private func startPositionTimer() {
-        positionTimer?.invalidate()
-        positionTimer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
-            guard let self, let file = self.currentFile,
-                  let nodeTime = self.player.lastRenderTime,
-                  let playerTime = self.player.playerTime(forNodeTime: nodeTime) else { return }
-            let frames = self.scheduledFromFrame + playerTime.sampleTime
-            self.position = Double(frames) / file.processingFormat.sampleRate
-            self.onStateChanged?()
-        }
+        positionTimer?.cancel()
+        let timer = DispatchSource.makeTimerSource(queue: .main)
+        timer.schedule(deadline: .now() + positionTickInterval,
+                       repeating: positionTickInterval)
+        timer.setEventHandler { [weak self] in self?.tickPosition() }
+        positionTimer = timer
+        timer.resume()
+    }
+
+    private func tickPosition() {
+        guard let file = currentFile,
+              let anchor,
+              let nodeTime = player.lastRenderTime,
+              let playerTime = player.playerTime(forNodeTime: nodeTime) else { return }
+        let nodeFrames = MusicClock.canonicalFrames(
+            fromPlayerSampleTime: playerTime.sampleTime,
+            fileSampleRate: file.processingFormat.sampleRate)
+        let resolved = MusicPositionMath.resolve(anchor: anchor, nodeSampleTime: nodeFrames)
+        position = resolved.seconds
+        onStateChanged?()
     }
 }
