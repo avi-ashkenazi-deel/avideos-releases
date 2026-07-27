@@ -7,8 +7,24 @@ import XCTest
 final class VolumeAutomationTests: XCTestCase {
 
     private let crossfade = 0.015
+
+    /// The envelope's value at `time`, interpolated the way AVFoundation will
+    /// read it.
+    ///
+    /// This used to look up an exact breakpoint and return nil otherwise, which
+    /// made every `volume(...)!` in this file a trap for any question asked
+    /// mid-segment — a plateau between two breakpoints has a perfectly
+    /// well-defined level, and asking for it should not crash the suite.
+    /// Exact breakpoints still return their own value untouched.
     private func volume(_ points: [VolumeAutomation.Point], at time: Double) -> Float? {
-        points.first { abs($0.time - time) < 1e-9 }?.volume
+        guard let first = points.first, let last = points.last else { return nil }
+        if let exact = points.first(where: { abs($0.time - time) < 1e-9 }) { return exact.volume }
+        if time <= first.time { return first.volume }
+        if time >= last.time { return last.volume }
+        guard let index = points.firstIndex(where: { $0.time > time }), index > 0 else { return nil }
+        let a = points[index - 1], b = points[index]
+        let progress = (time - a.time) / (b.time - a.time)
+        return a.volume + (b.volume - a.volume) * Float(progress)
     }
 
     // MARK: Cut notches — today's behaviour, unchanged
@@ -81,6 +97,8 @@ final class VolumeAutomationTests: XCTestCase {
 
     func testDuckingScalesWithTheTrackLevel() {
         // A track already at −6 dB ducks to −18 dB, not to −12 dB absolute.
+        // Sampled mid-plateau (t=12, inside the 10…15 window) rather than at a
+        // breakpoint, which is where the scaling is least ambiguous.
         let base: Float = 0.5
         let points = VolumeAutomation.envelope(base: base, joins: [],
                                                ducks: [window(10, 15)],
