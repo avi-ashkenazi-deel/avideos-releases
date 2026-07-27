@@ -21,3 +21,7 @@ VoiceInbox.xcodeproj/
 # Secrets — never commit real OAuth credentials.
 Secrets.xcconfig
 GoogleService-Info.plist
+
+# Throwaway spec written by scripts/dev-app-only.sh. The real spec
+# (project.yml) is never modified, so a dev toggle can never be committed.
+.xcodegen-dev.yml

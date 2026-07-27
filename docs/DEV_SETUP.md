@@ -34,8 +34,13 @@ Two things that recipe deliberately avoids, and why:
   which is *restricted* — only a provisioning profile can grant it, so leaving
   it in makes even a local test run demand development signing, and it is
   meaningless when there is no extension to install. Run
-  `./scripts/dev-app-only.sh --restore` before anything you intend to ship, and
-  don't commit the modified `project.yml`.
+  `./scripts/dev-app-only.sh --restore` before anything you intend to ship.
+
+  It applies those edits to a gitignored copy of the spec and points XcodeGen
+  at that with `--spec`, so **`project.yml` itself is never modified**. An
+  earlier version edited it in place, which made every `git pull` fail on a
+  dirty tree and put the dev toggle one careless `git commit -a` away from
+  shipping.
 - **`CODE_SIGNING_ALLOWED=NO`** skips signing entirely for a local test run.
   The virtual camera and virtual microphone are unavailable in this
   configuration, which is expected.
