@@ -29,6 +29,9 @@ struct EditWorkspaceView: View {
     @State private var publishQueue = PublishQueue()
     @State private var undoStack: [EditSnapshot] = []
     @State private var redoStack: [EditSnapshot] = []
+    /// Token of the gesture currently coalescing into one undo step — see
+    /// `performEdit(gesture:_:)`.
+    @State private var activeGesture: String?
     @State private var errorMessage: String?
 
 
@@ -58,6 +61,11 @@ struct EditWorkspaceView: View {
         .sheet(isPresented: $showingClips) { clipsSheet }
         .sheet(isPresented: $showingClipStudio) {
             ClipStudioView(project: $project,
+                           onEdit: { _, mutate in
+                               // Named for a future undo-menu label; for now it
+                               // just guarantees the sheet's edits are undoable.
+                               performEdit { mutate(&project) }
+                           },
                            snapper: snapper,
                            seek: { preview.seek(to: $0) },
                            export: { exportProject, target in
@@ -136,8 +144,13 @@ struct EditWorkspaceView: View {
                 }
             },
             onMoveOverlay: { id, range in
-                performEdit { _ = project.setOverlayRange(id: id, to: range) }
+                // Coalesced: dragging a cutaway fires this continuously, and
+                // one ⌘Z should put it back where it started.
+                performEdit(gesture: "overlay:" + id.uuidString) {
+                    _ = project.setOverlayRange(id: id, to: range)
+                }
             },
+            onEndDrag: { endGesture() },
             onRemoveOverlay: { id in
                 performEdit { project.removeOverlay(id: id) }
             },
@@ -156,7 +169,6 @@ struct EditWorkspaceView: View {
     /// for a guest who recorded hot. Video tracks have nothing to mix.
     @ViewBuilder
     private func trackRow(_ track: EditTrack) -> some View {
-        let mix = project.mix(for: track.id)
         let dimmed = track.kind == .audio
             && project.linearGain(for: track.id) == 0
 
@@ -175,36 +187,50 @@ struct EditWorkspaceView: View {
             }
 
             if track.kind == .audio {
-                HStack(spacing: 4) {
-                    Button("M") { toggleMute(track) }
-                        .buttonStyle(.borderless)
-                        .font(.caption2.bold())
-                        .foregroundStyle(mix.isMuted ? Color.red : .secondary)
-                        .help("Mute this participant")
-                    Button("S") { toggleSolo(track) }
-                        .buttonStyle(.borderless)
-                        .font(.caption2.bold())
-                        .foregroundStyle(mix.isSolo ? Color.yellow : .secondary)
-                        .help("Solo — silences everyone else")
-
-                    Slider(value: Binding(
-                        get: { project.mix(for: track.id).gainDB },
-                        set: { newValue in
-                            var updated = project.mix(for: track.id)
-                            updated.gainDB = newValue
-                            setMix(updated, for: track)
-                        }
-                    ), in: -24...12)
-                    .controlSize(.mini)
-
-                    Text(gainLabel(mix.gainDB))
-                        .font(.caption2.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                        .frame(width: 44, alignment: .trailing)
-                }
+                levelControls(for: track)
             }
         }
         .padding(.vertical, 2)
+    }
+
+    /// Mute / solo / gain for one audio track. Shared verbatim between
+    /// participants and imported external media — the two rows differ in what
+    /// they are, not in how you mix them.
+    @ViewBuilder
+    private func levelControls(for track: EditTrack) -> some View {
+        let mix = project.mix(for: track.id)
+        HStack(spacing: 4) {
+            Button("M") { toggleMute(track) }
+                .buttonStyle(.borderless)
+                .font(.caption2.bold())
+                .foregroundStyle(mix.isMuted ? Color.red : .secondary)
+                .help("Mute this track")
+            Button("S") { toggleSolo(track) }
+                .buttonStyle(.borderless)
+                .font(.caption2.bold())
+                .foregroundStyle(mix.isSolo ? Color.yellow : .secondary)
+                .help("Solo — silences everything else")
+
+            Slider(value: Binding(
+                get: { project.mix(for: track.id).gainDB },
+                set: { newValue in
+                    var updated = project.mix(for: track.id)
+                    updated.gainDB = newValue
+                    // One undo step for the whole drag, not one per tick.
+                    performEdit(gesture: "gain:" + track.id) {
+                        project.setMix(updated, for: track.id)
+                    }
+                }
+            ), in: -24...12, onEditingChanged: { editing in
+                if !editing { endGesture() }
+            })
+            .controlSize(.mini)
+
+            Text(gainLabel(mix.gainDB))
+                .font(.caption2.monospacedDigit())
+                .foregroundStyle(.secondary)
+                .frame(width: 44, alignment: .trailing)
+        }
     }
 
     private func gainLabel(_ dB: Double) -> String {
@@ -622,30 +648,56 @@ struct EditWorkspaceView: View {
 
     // MARK: - EDL mutation plumbing
 
-    /// The undoable slice of the project. Tracks and transcript are imported
-    /// or derived data, so they are deliberately not part of a snapshot.
+    /// The undoable slice of the project: everything the user *authors*.
+    ///
+    /// Tracks and the transcript stay out because they are imported or derived
+    /// — re-running transcription is not an edit you undo. Overlays, levels and
+    /// crop paths are authored, so they belong here; leaving them out meant
+    /// ⌘Z restored the EDL and silently left the cutaway moved.
     struct EditSnapshot {
         var edl: EditDecisionList
         var layoutCues: [LayoutCue]
         var chapters: [Chapter]
         var captions: CaptionStyle?
+        var overlays: [OverlayClip]?
+        var trackMix: [String: TrackMix]?
+        var cropPaths: [String: [CropKeyframe]]?
     }
 
     private var currentSnapshot: EditSnapshot {
         EditSnapshot(edl: project.edl,
                      layoutCues: project.layoutCues,
                      chapters: project.chapters,
-                     captions: project.captions)
+                     captions: project.captions,
+                     overlays: project.overlays,
+                     trackMix: project.trackMix,
+                     cropPaths: project.cropPaths)
     }
 
     /// Every timeline/transcript/cleanup gesture goes through here, so one ⌘Z
     /// reverts one gesture — or one applied AI change-set — atomically.
-    private func performEdit(_ mutate: () -> Void) {
-        undoStack.append(currentSnapshot)
-        if undoStack.count > 50 { undoStack.removeFirst() }
-        redoStack.removeAll()
+    ///
+    /// `gesture` coalesces a continuous interaction into a single undo step: a
+    /// slider drag or an overlay drag fires this on every tick, and without a
+    /// token each tick would push its own snapshot — fifty of them would fill
+    /// the stack and ⌘Z would move the value a hair. Pass a stable token for
+    /// the duration of the gesture and call `endGesture()` when it finishes.
+    private func performEdit(gesture: String? = nil, _ mutate: () -> Void) {
+        let coalesces = gesture != nil && gesture == activeGesture
+        if !coalesces {
+            undoStack.append(currentSnapshot)
+            if undoStack.count > 50 { undoStack.removeFirst() }
+            redoStack.removeAll()
+        }
+        activeGesture = gesture
         mutate()
         projectChanged()
+    }
+
+    /// Closes the current gesture so the next edit starts a fresh undo step.
+    /// Call from `onEditingChanged: false` and `DragGesture.onEnded`.
+    private func endGesture() {
+        activeGesture = nil
     }
 
     private func apply(_ snapshot: EditSnapshot) {
@@ -653,17 +705,24 @@ struct EditWorkspaceView: View {
         project.layoutCues = snapshot.layoutCues
         project.chapters = snapshot.chapters
         project.captions = snapshot.captions
+        project.overlays = snapshot.overlays
+        project.trackMix = snapshot.trackMix
+        project.cropPaths = snapshot.cropPaths
         projectChanged()
     }
 
     private func undo() {
         guard let previous = undoStack.popLast() else { return }
+        // Undoing mid-gesture must not fold the next edit into the step we
+        // just popped.
+        endGesture()
         redoStack.append(currentSnapshot)
         apply(previous)
     }
 
     private func redo() {
         guard let next = redoStack.popLast() else { return }
+        endGesture()
         undoStack.append(currentSnapshot)
         apply(next)
     }

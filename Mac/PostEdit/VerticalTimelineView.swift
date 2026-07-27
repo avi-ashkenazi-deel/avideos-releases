@@ -28,6 +28,9 @@ struct VerticalTimelineView: View {
     var onTrimClip: (UUID, ClosedRange<Double>) -> Void
     var onToggleClip: (UUID) -> Void
     var onMoveOverlay: (UUID, ClosedRange<Double>) -> Void
+    /// Fires when a drag finishes, so the workspace can close the coalesced
+    /// undo step that `onMoveOverlay` has been folding into.
+    var onEndDrag: () -> Void
     var onRemoveOverlay: (UUID) -> Void
     var onSplitAtPlayhead: () -> Void
 
@@ -57,14 +60,15 @@ struct VerticalTimelineView: View {
 
     private var canvas: some View {
         Canvas { context, size in
-            // Computed once per frame and threaded through: every column needs
-            // it, and it walks the whole sequence.
+            // Both computed once per frame and threaded through: every column
+            // needs them, and `segmentLayouts` walks the whole sequence.
             let layouts = segmentLayouts()
+            let laneLayout = lanes
             drawRuler(context: context, size: size)
             drawSegments(context: context, layouts: layouts)
-            drawTrackColumns(context: context, layouts: layouts)
-            drawOverlays(context: context)
-            drawCaptions(context: context)
+            drawTrackColumns(context: context, layouts: layouts, lanes: laneLayout)
+            drawOverlays(context: context, lanes: laneLayout)
+            drawCaptions(context: context, lanes: laneLayout)
             drawPlayhead(context: context, size: size)
         }
         .contentShape(Rectangle())
@@ -138,12 +142,12 @@ struct VerticalTimelineView: View {
     }
 
     /// One column per audio participant, waveform running downward.
-    private func drawTrackColumns(context: GraphicsContext, layouts: [SegmentLayout]) {
-        var x = rulerWidth + columnGap + clipColumnWidth + columnGap
-        let audioTracks = project.tracks.filter { $0.kind == .audio }
-
-        for track in audioTracks {
-            let columnRect = CGRect(x: x, y: 0,
+    private func drawTrackColumns(context: GraphicsContext,
+                                  layouts: [SegmentLayout],
+                                  lanes: LaneLayout) {
+        for column in lanes.tracks {
+            let track = column.track
+            let columnRect = CGRect(x: column.x, y: 0,
                                     width: trackColumnWidth,
                                     height: viewModel.scale.contentHeight)
             let silenced = project.linearGain(for: track.id) == 0
@@ -158,7 +162,6 @@ struct VerticalTimelineView: View {
                             .font(.system(size: 8))
                             .foregroundStyle(.secondary),
                          at: CGPoint(x: columnRect.midX, y: 8), anchor: .center)
-            x += trackColumnWidth + columnGap
         }
     }
 
@@ -189,8 +192,8 @@ struct VerticalTimelineView: View {
     }
 
     /// B-roll cutaways, positioned in edited time like the rest of this view.
-    private func drawOverlays(context: GraphicsContext) {
-        let x = overlayColumnX
+    private func drawOverlays(context: GraphicsContext, lanes: LaneLayout) {
+        let x = lanes.overlayX
         for overlay in project.sortedOverlays {
             let top = viewModel.scale.offset(forTime: overlay.timelineRange.lowerBound)
             let bottom = viewModel.scale.offset(forTime: overlay.timelineRange.upperBound)
@@ -212,9 +215,9 @@ struct VerticalTimelineView: View {
     }
 
     /// Caption lines, so you can see what will be burned in and where.
-    private func drawCaptions(context: GraphicsContext) {
+    private func drawCaptions(context: GraphicsContext, lanes: LaneLayout) {
         guard project.captions != nil, let transcript = project.transcript else { return }
-        let x = captionColumnX
+        let x = lanes.captionX
         let words = transcript.enabledWords(edl: project.edl)
         guard !words.isEmpty else { return }
 
@@ -301,14 +304,47 @@ struct VerticalTimelineView: View {
         return thumbnails.image(for: videoTrack, at: layout.clip.sourceRange.lowerBound)
     }
 
-    private var overlayColumnX: CGFloat {
-        let audioCount = CGFloat(project.tracks.filter { $0.kind == .audio }.count)
-        return rulerWidth + columnGap + clipColumnWidth + columnGap
-            + audioCount * (trackColumnWidth + columnGap)
+    // MARK: - Lane geometry
+
+    /// One track's column.
+    struct LaneColumn {
+        var track: EditTrack
+        var x: CGFloat
     }
 
-    private var captionColumnX: CGFloat {
-        overlayColumnX + overlayColumnWidth + columnGap
+    /// Where every lane sits horizontally.
+    ///
+    /// This used to be derived in two places — the drawing loop walked its own
+    /// `x`, and `overlayColumnX` recomputed the same thing from the audio-track
+    /// count. Any disagreement between them slides the overlay and caption
+    /// lanes out from under hit-testing: you click a cutaway and select a
+    /// segment, with nothing on screen to explain why. One source of truth.
+    struct LaneLayout {
+        var tracks: [LaneColumn]
+        var overlayX: CGFloat
+        var captionX: CGFloat
+        var totalWidth: CGFloat
+    }
+
+    /// Tracks that get their own column. Audio only today; imported external
+    /// media joins them.
+    private var columnTracks: [EditTrack] {
+        project.tracks.filter { $0.kind == .audio }
+    }
+
+    private var lanes: LaneLayout {
+        var x = rulerWidth + columnGap + clipColumnWidth + columnGap
+        var columns: [LaneColumn] = []
+        for track in columnTracks {
+            columns.append(LaneColumn(track: track, x: x))
+            x += trackColumnWidth + columnGap
+        }
+        let overlayX = x
+        let captionX = overlayX + overlayColumnWidth + columnGap
+        return LaneLayout(tracks: columns,
+                          overlayX: overlayX,
+                          captionX: captionX,
+                          totalWidth: captionX + captionColumnWidth + columnGap)
     }
 
     // MARK: - Interaction
@@ -316,27 +352,39 @@ struct VerticalTimelineView: View {
     private var dragGesture: some Gesture {
         DragGesture(minimumDistance: 0)
             .onChanged { value in
-                let time = viewModel.scale.time(forOffset: value.location.y)
                 if value.translation.height == 0 {
-                    // First touch: select whatever is under the pointer.
+                    // First touch: select whatever is under the pointer, and
+                    // decide once whether this drag scrubs.
                     hitTest(at: value.location)
+                    viewModel.dragScrubs = isScrubZone(x: value.location.x)
                 }
+                // Only scrub when the drag *started* on the ruler or the
+                // segment column. Without this, dragging a cutaway drags the
+                // playhead along with it.
+                guard viewModel.dragScrubs else { return }
+                let time = viewModel.scale.time(forOffset: value.location.y)
                 onScrub(min(max(time, 0), project.editedDuration))
             }
             .onEnded { value in
-                guard let dragged = viewModel.draggingClipID else {
+                defer {
                     viewModel.draggingClipID = nil
-                    return
+                    viewModel.dragScrubs = false
+                    onEndDrag()
                 }
-                let dropY = value.location.y
-                let index = dropIndex(forY: dropY)
-                onMoveClip(dragged, index)
-                viewModel.draggingClipID = nil
+                guard let dragged = viewModel.draggingClipID else { return }
+                onMoveClip(dragged, dropIndex(forY: value.location.y))
             }
     }
 
+    /// The ruler and the segment column are the "seek here" surface; every
+    /// other lane belongs to the thing drawn in it.
+    private func isScrubZone(x: CGFloat) -> Bool {
+        x < rulerWidth + columnGap + clipColumnWidth
+    }
+
     private func hitTest(at point: CGPoint) {
-        let overlayRange = overlayColumnX...(overlayColumnX + overlayColumnWidth)
+        let laneLayout = lanes
+        let overlayRange = laneLayout.overlayX...(laneLayout.overlayX + overlayColumnWidth)
         if overlayRange.contains(point.x) {
             let hit = project.sortedOverlays.first {
                 let top = viewModel.scale.offset(forTime: $0.timelineRange.lowerBound)
@@ -468,6 +516,9 @@ final class VerticalTimelineViewModel {
     var selectedClipID: UUID?
     var selectedOverlayID: UUID?
     var draggingClipID: UUID?
+    /// Decided once at the start of a drag: does this gesture move the
+    /// playhead, or is it manipulating whatever it grabbed?
+    var dragScrubs = false
 
     /// Measured text geometry from the transcript, refreshed on relayout.
     var textRuns: [TimelineTextRun] = []

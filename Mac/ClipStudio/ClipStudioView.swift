@@ -13,6 +13,12 @@ import os
 /// and every export use.
 struct ClipStudioView: View {
     @Binding var project: EditProject
+    /// Routes a change back through the workspace's undo stack.
+    ///
+    /// Writing straight through the binding is what left cutaways, crop paths
+    /// and caption styles chosen here outside ⌘Z entirely — the sheet mutated
+    /// the project and the editor never learned an edit had happened.
+    let onEdit: (String, (inout EditProject) -> Void) -> Void
     /// Silence snapper for the session's audio, so suggested boundaries land
     /// in silence. Nil until the editor has analyzed a track.
     let snapper: SilenceSnapper?
@@ -106,7 +112,7 @@ struct ClipStudioView: View {
             }
             Spacer()
             Button("Done") {
-                project.captions = captionStyle
+                onEdit("Caption Style") { $0.captions = captionStyle }
                 onClose()
             }
             .keyboardShortcut(.defaultAction)
@@ -442,14 +448,15 @@ struct ClipStudioView: View {
 
                 HStack {
                     Button("Compute Crop Paths for \(options.aspect.rawValue)") {
-                        project.cropPaths = model.cropPaths(for: options.aspect, tracks: project.tracks)
+                        let paths = model.cropPaths(for: options.aspect, tracks: project.tracks)
+                        onEdit("Crop Paths") { $0.cropPaths = paths }
                     }
                     Spacer()
                     if let paths = project.cropPaths, !paths.isEmpty {
                         Text("\(paths.count) path(s) stored with the project")
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                        Button("Clear") { project.cropPaths = nil }
+                        Button("Clear") { onEdit("Clear Crop Paths") { $0.cropPaths = nil } }
                             .buttonStyle(.link)
                             .font(.caption)
                     }
@@ -520,9 +527,11 @@ struct ClipStudioView: View {
         let end = project.edl.mapSourceToTimeline(endSource) ?? (start + suggestion.timeRange.upperBound - suggestion.timeRange.lowerBound)
         let range = start...max(end, start + 0.5)
 
-        project.addOverlay(OverlayClip(media: MediaReference(url: url),
-                                       timelineRange: range,
-                                       note: suggestion.reason))
+        onEdit("Insert Cutaway") {
+            $0.addOverlay(OverlayClip(media: MediaReference(url: url),
+                                      timelineRange: range,
+                                      note: suggestion.reason))
+        }
     }
 
     private func exportClip(_ clip: ClipSuggestion) {

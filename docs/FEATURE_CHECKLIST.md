@@ -19,6 +19,7 @@ first.
 | **[ffmpeg]** | Needs the LGPL ffmpeg helper in `Contents/Helpers/`. |
 | **[oauth]** | Needs a platform developer app + OAuth client. |
 | **[2nd device]** | Needs a second machine, phone, or browser. |
+| **[not built]** | The model and callback exist but nothing invokes them yet. Don't test it; it will fail. |
 
 ---
 
@@ -286,8 +287,8 @@ replays just the entrance, which is the quick way to compare them.
 ### Sequence editing (reorder, trim, duplicate)
 
 - [ ] **F-309** Drag a segment to a new position — the episode plays in the new order. **[offline]**
-- [ ] **F-310** Drag a segment's edge to trim it shorter. **[offline]**
-- [ ] **F-311** Drag an edge *outward* to extend back into material a cut had taken. **[offline]**
+- [ ] **F-310** Drag a segment's edge to trim it shorter. **[not built]**
+- [ ] **F-311** Drag an edge *outward* to extend back into material a cut had taken. **[not built]**
 - [ ] **F-312** Duplicate a segment — the moment plays twice, and appears twice in the transcript. **[offline]**
 - [ ] **F-313** Cut a word that appears twice: **every** occurrence goes, not just the first. **[offline]**
 - [ ] **F-314** Split (S) lands in the occurrence under the playhead, not an earlier copy. **[offline]**
@@ -311,7 +312,7 @@ replays just the entrance, which is the quick way to compare them.
 - [ ] **F-326** The cutaway replaces the picture and the conversation's audio keeps playing underneath. **[offline]**
 - [ ] **F-327** Scrub across its start and end — the picture switches cleanly at both. **[offline]**
 - [ ] **F-328** Captions stay readable **over** a full-frame cutaway. **[offline]**
-- [ ] **F-329** Drag a cutaway to move it; select and remove it. **[offline]**
+- [ ] **F-329** Drag a cutaway to move it **[not built]**; select and remove it. **[offline]**
 - [ ] **F-330** Inset mode shows the cutaway as a corner picture over the conversation. **[offline]**
 - [ ] **F-331** Two overlapping cutaways don't fight each other. **[offline]**
 - [ ] **F-332** A cutaway whose moment was since cut refuses to insert, with a clear message. **[key]**
