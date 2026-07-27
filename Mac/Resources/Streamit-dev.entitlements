@@ -4,7 +4,7 @@
 <dict>
 	<!-- Development-only entitlements, selected by scripts/dev-app-only.sh.
 
-	     Identical to AVideosStudio.entitlements except that
+	     Identical to Streamit.entitlements except that
 	     com.apple.developer.system-extension.install is absent. That one is a
 	     RESTRICTED entitlement: only a provisioning profile can grant it, so
 	     including it makes the build demand development signing even for a
@@ -13,7 +13,7 @@
 
 	     With this file the app signs ad-hoc and runs locally. The virtual
 	     camera is unavailable, which is expected: there is no extension to
-	     install. Use AVideosStudio.entitlements (--restore) for anything you
+	     install. Use Streamit.entitlements (--restore) for anything you
 	     intend to ship. -->
 	<key>com.apple.security.cs.disable-library-validation</key>
 	<true/>

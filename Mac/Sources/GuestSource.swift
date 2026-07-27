@@ -22,7 +22,7 @@ final class GuestSource: FrameSource {
     /// Rotating output textures so conversion never waits on the render pass.
     private var outputRing: [MTLTexture] = []
     private var ringIndex = 0
-    private let log = Logger(subsystem: "com.aviashkenazi.avideos", category: "guest-video")
+    private let log = Logger(subsystem: "com.aviashkenazi.streamit", category: "guest-video")
 
     struct YCbCrUniforms {
         var fullRange: Float

@@ -58,7 +58,7 @@ final class StudioController {
     let previewStore = PreviewFrameStore()
 
     private let virtualCameraConsumer: VirtualCameraFrameConsumer
-    private let log = Logger(subsystem: "com.aviashkenazi.avideos", category: "studio")
+    private let log = Logger(subsystem: "com.aviashkenazi.streamit", category: "studio")
 
     // MARK: - Init & wiring
 

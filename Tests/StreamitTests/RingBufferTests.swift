@@ -1,6 +1,6 @@
 import XCTest
 import AVFoundation
-@testable import AVideosStudio
+@testable import Streamit
 
 /// Pins down the SPSC `RingBuffer` that joins the audio subsystem's clock
 /// domains: frame accounting, wrap-around, the zero-fill underrun policy,

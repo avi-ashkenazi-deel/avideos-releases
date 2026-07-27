@@ -55,12 +55,12 @@ final class MusicRegionCache {
     /// Monotonic counter rather than a clock: LRU only needs an ordering, and
     /// wall-clock reads here would be pointless work at 15 Hz.
     private var useCounter: UInt64 = 0
-    private let log = Logger(subsystem: "com.aviashkenazi.avideos", category: "musicregion")
+    private let log = Logger(subsystem: "com.aviashkenazi.streamit", category: "musicregion")
 
     /// Serial on purpose: two quick section presses must not decode
     /// concurrently and allocate 140 MB at once.
     private let decodeQueue = DispatchQueue(
-        label: "com.aviashkenazi.avideos.music-decode", qos: .userInitiated)
+        label: "com.aviashkenazi.streamit.music-decode", qos: .userInitiated)
 
     private(set) var residentBytes = 0
 

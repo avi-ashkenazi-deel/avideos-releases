@@ -1,7 +1,7 @@
 import Foundation
 
 /// Loads and saves projects as pretty-printed JSON documents in
-/// `~/Library/Application Support/AVideos/Projects/<uuid>.avproj`.
+/// `~/Library/Application Support/Streamit/Projects/<uuid>.avproj`.
 /// JSON (not CoreData/SwiftData) because the document is small, deeply
 /// nested, enum-heavy, and benefits from being diffable.
 final class ProjectStore {
@@ -11,7 +11,7 @@ final class ProjectStore {
         var errorDescription: String? {
             switch self {
             case .newerSchema(let found, let supported):
-                "This project was saved by a newer version of AVideos Studio (schema \(found); this app reads up to \(supported))."
+                "This project was saved by a newer version of streamit (schema \(found); this app reads up to \(supported))."
             }
         }
     }
@@ -36,11 +36,11 @@ final class ProjectStore {
     /// Debounce bookkeeping: saves are cheap but the UI mutates the document
     /// continuously while dragging.
     private var pendingSave: DispatchWorkItem?
-    private let saveQueue = DispatchQueue(label: "com.aviashkenazi.avideos.projectstore", qos: .utility)
+    private let saveQueue = DispatchQueue(label: "com.aviashkenazi.streamit.projectstore", qos: .utility)
 
     init(directory: URL? = nil) {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        self.directory = directory ?? base.appendingPathComponent("AVideos/Projects", isDirectory: true)
+        self.directory = directory ?? base.appendingPathComponent("Streamit/Projects", isDirectory: true)
         try? FileManager.default.createDirectory(at: self.directory, withIntermediateDirectories: true)
     }
 

@@ -197,7 +197,7 @@ final class MusicPlayer {
     var onSectionFailure: ((String) -> Void)?
 
     var onStateChanged: (() -> Void)?
-    private let log = Logger(subsystem: "com.aviashkenazi.avideos", category: "music")
+    private let log = Logger(subsystem: "com.aviashkenazi.streamit", category: "music")
 
     init(engine: AVAudioEngine, musicMixer: AVAudioMixerNode) {
         self.engine = engine
@@ -519,7 +519,7 @@ final class MusicPlayer {
         var step = 0
 
         let timer = DispatchSource.makeTimerSource(
-            queue: DispatchQueue(label: "com.aviashkenazi.avideos.music-fade", qos: .userInitiated))
+            queue: DispatchQueue(label: "com.aviashkenazi.streamit.music-fade", qos: .userInitiated))
         timer.schedule(deadline: .now(), repeating: Self.crossfadeDuration / Double(steps))
         timer.setEventHandler { [weak self] in
             step += 1
@@ -670,7 +670,7 @@ final class MusicPlayer {
     /// file while the current track still plays takes the disk out of the seam.
     private var prefetched: (trackID: UUID, file: AVAudioFile)?
     private let prefetchQueue = DispatchQueue(
-        label: "com.aviashkenazi.avideos.music-prefetch", qos: .utility)
+        label: "com.aviashkenazi.streamit.music-prefetch", qos: .utility)
 
     private func prefetchNextTrack() {
         guard let index = playlist.firstIndex(where: { $0.id == currentTrackID }) else { return }

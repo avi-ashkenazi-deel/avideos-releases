@@ -1,6 +1,6 @@
 import XCTest
 import AVFoundation
-@testable import AVideosStudio
+@testable import Streamit
 
 /// Pins the live-music timing arithmetic: playhead resolution while a region
 /// loops, when a queued switch is allowed to commit, and the loop-mode

@@ -5,9 +5,9 @@ import os
 // MARK: - Keychain
 
 /// Minimal generic-password Keychain wrapper for podcast-mode secrets.
-/// The host key lives under service "com.aviashkenazi.avideos.hostkey".
+/// The host key lives under service "com.aviashkenazi.streamit.hostkey".
 struct KeychainStore: Sendable {
-    static let hostKeyService = "com.aviashkenazi.avideos.hostkey"
+    static let hostKeyService = "com.aviashkenazi.streamit.hostkey"
     static let defaultAccount = "default"
 
     enum KeychainError: LocalizedError {
@@ -263,7 +263,7 @@ struct PodcastAPIClient: Sendable {
 
     private let hostKey: String
     private let urlSession: URLSession
-    private let log = Logger(subsystem: "com.aviashkenazi.avideos", category: "PodcastAPI")
+    private let log = Logger(subsystem: "com.aviashkenazi.streamit", category: "PodcastAPI")
 
     init(baseURL: URL, hostKey: String, urlSession: URLSession = PodcastAPIClient.makeURLSession()) {
         self.baseURL = baseURL

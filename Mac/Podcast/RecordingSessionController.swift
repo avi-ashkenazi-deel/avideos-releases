@@ -28,7 +28,7 @@ final class RecordingSessionController {
 
     private var api: PodcastAPIClient?
     private var clockSync: ClockSyncService?
-    private let log = Logger(subsystem: "com.aviashkenazi.avideos", category: "podcast")
+    private let log = Logger(subsystem: "com.aviashkenazi.streamit", category: "podcast")
 
     var isTakeRunning: Bool {
         if case .recording = takeState { return true }

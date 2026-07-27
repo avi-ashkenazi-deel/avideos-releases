@@ -8,7 +8,7 @@ import os
 /// t=0 == the take start.
 ///
 /// The ffmpeg binary is an LGPL build added on the Mac at
-/// AVideosStudio.app/Contents/Helpers/ffmpeg (signed with hardened runtime
+/// Streamit.app/Contents/Helpers/ffmpeg (signed with hardened runtime
 /// for notarization); a missing binary surfaces as a user-readable error,
 /// never a crash.
 final class MediaImportService {
@@ -32,7 +32,7 @@ final class MediaImportService {
     }
 
     private let aligner: TrackAligning
-    private let log = Logger(subsystem: "com.aviashkenazi.avideos", category: "import")
+    private let log = Logger(subsystem: "com.aviashkenazi.streamit", category: "import")
 
     init(aligner: TrackAligning = LinearDriftAligner()) {
         self.aligner = aligner

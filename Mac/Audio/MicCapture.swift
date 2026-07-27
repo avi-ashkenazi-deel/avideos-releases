@@ -32,7 +32,7 @@ final class MicCapture {
     private(set) var currentDeviceUID: String?
     private(set) var voiceProcessingEnabled = false
 
-    private let log = Logger(subsystem: "com.aviashkenazi.avideos", category: "mic")
+    private let log = Logger(subsystem: "com.aviashkenazi.streamit", category: "mic")
 
     init(deviceManager: AudioDeviceManager) {
         self.deviceManager = deviceManager

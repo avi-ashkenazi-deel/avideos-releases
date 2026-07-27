@@ -1,6 +1,6 @@
 //
 //  SplashFrameGenerator.swift
-//  CameraExtension — AVideos Studio virtual camera (CoreMediaIO system extension)
+//  CameraExtension — streamit virtual camera (CoreMediaIO system extension)
 //
 //  Renders the "Studio isn't live" splash frame that the extension sends when
 //  no app is feeding the sink stream. The frame is drawn ONCE per format size
@@ -13,7 +13,7 @@
 //
 //        ┌──────────────────────────────┐
 //        │                              │
-//        │           AVideos            │   ← wordmark, white, bold
+//        │           streamit            │   ← wordmark, white, bold
 //        │      ● Studio isn't live     │   ← red dot + gray subtitle
 //        │                              │
 //        └──────────────────────────────┘
@@ -166,7 +166,7 @@ final class SplashFrameGenerator {
         let wordmarkBaselineY = h * 0.50
         let subtitleBaselineY = h * 0.395
 
-        drawCentered(text: "AVideos", font: wordmarkFont, color: white,
+        drawCentered(text: "streamit", font: wordmarkFont, color: white,
                      baselineY: wordmarkBaselineY, in: context, canvasWidth: w)
 
         let subtitleBounds = drawCentered(text: "Studio isn't live", font: subtitleFont, color: gray,

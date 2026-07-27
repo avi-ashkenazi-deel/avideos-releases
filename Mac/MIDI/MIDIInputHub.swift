@@ -25,7 +25,7 @@ final class MIDIInputHub {
     private var port = MIDIPortRef()
     private var connected: Set<MIDIUniqueID> = []
     private let lock = NSLock()
-    private let log = Logger(subsystem: "com.aviashkenazi.avideos", category: "midi")
+    private let log = Logger(subsystem: "com.aviashkenazi.streamit", category: "midi")
 
     private(set) var isStarted = false
 
@@ -38,7 +38,7 @@ final class MIDIInputHub {
         // on an internal queue rather than the creating thread's run loop
         // (unlike the older `MIDIClientCreate`), so the hop below is required
         // rather than merely tidy.
-        var status = MIDIClientCreateWithBlock("AVideos" as CFString, &client) { [weak self] notification in
+        var status = MIDIClientCreateWithBlock("streamit" as CFString, &client) { [weak self] notification in
             guard notification.pointee.messageID == .msgSetupChanged else { return }
             DispatchQueue.main.async { self?.rescanSources() }
         }
@@ -51,7 +51,7 @@ final class MIDIInputHub {
         // legacy MIDIPacketList path, where Swift iteration through
         // MIDIPacketNext is a well-known source of misaligned-pointer bugs.
         status = MIDIInputPortCreateWithProtocol(
-            client, "AVideos In" as CFString, ._1_0, &port
+            client, "streamit In" as CFString, ._1_0, &port
         ) { [weak self] eventList, _ in
             self?.handle(eventList: eventList)
         }

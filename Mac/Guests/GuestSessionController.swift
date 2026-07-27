@@ -9,7 +9,7 @@ import os
 /// Owns the LiveKit `Room` for a show: connects as host, routes each guest's
 /// video into a `GuestSource` (registered with the SourceRegistry) and audio
 /// into a mixer ring, publishes the mix-minus bus back to guests via the
-/// "AVideos Guest Send" virtual device, and multiplexes the data channel
+/// "streamit Guest Send" virtual device, and multiplexes the data channel
 /// (podcast record control, upload progress, teleprompter remote).
 ///
 /// All LiveKit types stay inside Mac/Guests/ — the rest of the app sees
@@ -44,10 +44,10 @@ final class GuestSessionController {
     private var videoReceivers: [String: GuestVideoReceiver] = [:]
     private var audioReceivers: [String: GuestAudioReceiver] = [:]
     private let metalDevice: MTLDevice
-    private let log = Logger(subsystem: "com.aviashkenazi.avideos", category: "guests")
+    private let log = Logger(subsystem: "com.aviashkenazi.streamit", category: "guests")
 
     /// The mix-minus capture device UID (the loopback driver's second device).
-    static let guestSendDeviceUID = "com.aviashkenazi.avideos.gsend"
+    static let guestSendDeviceUID = "com.aviashkenazi.streamit.gsend"
 
     init(metalDevice: MTLDevice) {
         self.metalDevice = metalDevice

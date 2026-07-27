@@ -1,5 +1,5 @@
 import XCTest
-@testable import AVideosStudio
+@testable import Streamit
 
 /// Pins down the persistence and wire contracts: project documents must
 /// survive a save/load cycle unchanged, and the podcast manifest decoder must

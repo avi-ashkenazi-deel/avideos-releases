@@ -100,7 +100,7 @@ struct PublishMetadataEditor: View {
                 DatePicker("Publish at", selection: $scheduledAt,
                            in: Date()...,
                            displayedComponents: [.date, .hourAndMinute])
-                Text("Scheduling is local: AVideos Studio must be running at that time for the upload to start.")
+                Text("Scheduling is local: streamit must be running at that time for the upload to start.")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }

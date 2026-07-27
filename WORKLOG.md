@@ -9,9 +9,44 @@ A running log of what we've built and shipped.
   fields don't accept emojis. (Chat replies may still use them; this rule is
   specifically about text pasted into TestFlight / App Store Connect.)
 
-## 2026-07-27 — AVideos Studio: first compile, first run, green suite
+## 2026-07-27 — Renamed: AVideos Studio is now streamit
 
-AVideos Studio had never been compiled. Roughly 25k lines of Swift, Metal and
+Every occurrence, in one pass, before anything ships and while there is no
+saved data to migrate.
+
+The convention is **`streamit` lowercase wherever the product name is
+displayed** — the app bundle, the menu bar, the window title, the virtual
+devices Zoom lists ("streamit Camera", "streamit Microphone", "streamit Guest
+Send"), the splash wordmark — and **`Streamit` wherever it is an identifier**:
+the Xcode target, the Swift module, symbols, and paths under Application
+Support. `PRODUCT_NAME: streamit` with `PRODUCT_MODULE_NAME: Streamit` is what
+holds those apart; without the second, the module would silently become
+`streamit` and the tests would import it that way.
+
+Bundle identifiers moved to `com.aviashkenazi.streamit`, which drags three
+contracts with it that have to stay consistent or the product half-works in
+ways that are hard to see: the camera extension's bundle id must sit under the
+app's, its `trustedSigningIDPrefix` must match the app's id or the extension
+refuses the host's frames, and the two loopback device UIDs
+(`…streamit.vmic`, `…streamit.gsend`) are agreed between `Driver.cpp` and
+three Swift files. All verified after the fact rather than assumed.
+
+Backend identifiers moved too — the IndexedDB name, the upload-grant HMAC
+context, the R2 bucket and Worker names in the docs. The grant context never
+crosses the wire (it only derives a key inside the Worker), so web and worker
+cannot disagree, and nothing is deployed yet.
+
+Not renamed, deliberately: the `Mac/`, `CameraExtension/` and `web/`
+directories, which describe what they hold rather than the product; and the
+Xcode *project*, which is still `HearIt.xcodeproj` because HearIt is the
+shipped iOS app that lives alongside this one and is untouched.
+
+**The one thing that changes day to day:** the scheme is now `Streamit`, so
+`xcodebuild ... -scheme Streamit`, and the built bundle is `streamit.app`.
+
+## 2026-07-27 — streamit: first compile, first run, green suite
+
+streamit had never been compiled. Roughly 25k lines of Swift, Metal and
 C++ were written on Linux against documentation and reasoning, and this is the
 session where a Mac finally read them. The app now builds, launches, and its
 269 unit tests pass.
@@ -23,7 +58,7 @@ whole project — including the tests, which have nothing to do with the audio
 driver. It has to be vendored instead. Then the camera extension and driver
 are embedded build dependencies, so a plain build demanded Developer ID certs;
 `scripts/dev-app-only.sh` now comments that block out and swaps in
-`AVideosStudio-dev.entitlements`, which is the shipping file minus
+`Streamit-dev.entitlements`, which is the shipping file minus
 `com.apple.developer.system-extension.install` — a restricted entitlement only
 a provisioning profile can grant, and meaningless in a build with no extension
 to install. A `curl 16` HTTP/2 failure fetching swift-collections was git
@@ -85,7 +120,7 @@ path are still open, chief among them whether `playerTime.sampleTime` is in
 node frames or file frames. Nothing here has yet proved that a camera renders,
 that audio flows, or that a loop wraps without a click.
 
-## 2026-07-27 — AVideos Studio: external media in the editor
+## 2026-07-27 — streamit: external media in the editor
 
 Avi asked whether external videos could be brought into the edit. They
 couldn't, really: the B-roll lane could hold any file, but the only door
@@ -134,7 +169,7 @@ nothing invoking them.
 per-project intro and outro, there's no freeform inset rectangle (corner
 presets only), and no stock-footage search.
 
-## 2026-07-27 — AVideos Studio: live music sections
+## 2026-07-27 — streamit: live music sections
 
 Avi wanted the background-music player to be performance-controllable:
 choose where a track starts, loop a chosen part, and switch between parts
@@ -186,7 +221,7 @@ advance (F-101) remains false — both need a second player node, which
 `musicBus` is already designed to take. Beat-grid snapping and MIDI out
 for controller LEDs are the natural follow-ups.
 
-## 2026-07-26 — AVideos Studio: podcast editor rework
+## 2026-07-26 — streamit: podcast editor rework
 
 Avi reviewed the editor and flagged two gaps as critical, correctly: the
 tracks pane was read-only (nothing to do about a guest who recorded hot),
@@ -237,7 +272,7 @@ following the playhead during playback — the latter needs the playhead
 highlight moved out of the attributed-string rebuild first, or it would
 rebuild the whole transcript every tick.
 
-## 2026-07-26 — AVideos Studio: 20 entry animations for overlay layers
+## 2026-07-26 — streamit: 20 entry animations for overlay layers
 
 Overlay text/shape/image layers had 7 entry animations. Expanded to 20,
 chosen to cover the *feels* broadcast overlays need rather than 20 variants
@@ -272,7 +307,7 @@ style adopts a duration that flatters it (a bounce is slower than a fade).
 Added `replayEntryAnimation` behind a **Play Entry** button, since comparing
 twenty styles by hiding and showing an element is unusable.
 
-## 2026-07-26 — AVideos Studio: source framing (fit / fill / blurred backdrop)
+## 2026-07-26 — streamit: source framing (fit / fill / blurred backdrop)
 
 The program canvas is 16:9 (or 9:16), but a shared window rarely is. Found
 that the compositor did **no** aspect handling at all: source textures were
@@ -301,7 +336,7 @@ black bars you'd expect.
   can't be unit-tested) plus the plan expansion; `SceneModel` gained a
   tolerant decoder so pre-framing projects still load.
 
-## 2026-07-26 — AVideos Studio: gap closure (Clip Studio + Publish UI, tests)
+## 2026-07-26 — streamit: gap closure (Clip Studio + Publish UI, tests)
 
 Audited the tree against the plan and closed what was genuinely missing.
 The finding that mattered: the ClipStudio and Publish *engines* were all
@@ -329,7 +364,7 @@ files. Dead code, not missing code.
   do nothing.
 - **First tests in the Mac target**: 94 cases over the EDL, drift fit, ring
   buffer, script alignment, and Codable/manifest contracts, plus an
-  `AVideosStudioTests` target and a test action on the scheme. Run these
+  `StreamitTests` target and a test action on the scheme. Run these
   first on the Mac — no hardware needed, and they cover the layers
   everything else sits on.
 - App icon asset catalog (placeholder mark), README/TESTING/DEV_SETUP
@@ -338,7 +373,7 @@ files. Dead code, not missing code.
 Layout-cue timebase note: `LayoutCue.atTime` is now documented and tested as
 *source* time throughout.
 
-## 2026-07-26 — AVideos Studio: six-cluster review & consistency pass
+## 2026-07-26 — streamit: six-cluster review & consistency pass
 
 Parallel reviewer agents swept the uncompiled codebase, one per seam-heavy
 cluster (rendering/sources/effects, audio, guests/podcast/backend,
@@ -371,7 +406,7 @@ Highlights of what was caught before ever reaching a compiler:
 Known deploy note: the R2 bucket needs a CORS policy allowing PUTs from
 the guest-page origin (Cloudflare dashboard, not in-repo).
 
-## 2026-07-26 — AVideos Studio: full v1 codebase (macOS live-streaming studio)
+## 2026-07-26 — streamit: full v1 codebase (macOS live-streaming studio)
 
 New product in this repo (HearIt untouched): a macOS 14+ studio app in the
 StreamYard/Riverside/Ecamm class, authored end-to-end in one pass (~25k
@@ -390,7 +425,7 @@ Mac — first build pass should start from docs/DEV_SETUP.md and grep for
   contrast/sharpen — texture-in/texture-out, composable with blends.
 - **Virtual devices**: CMIO camera extension (sink-stream transport,
   branded splash when idle) + our own libASPL loopback driver publishing
-  "AVideos Microphone" and "AVideos Guest Send" (mix-minus), installed
+  "streamit Microphone" and "streamit Guest Send" (mix-minus), installed
   with one admin prompt.
 - **Audio**: three-engine graph (capture / mix hub / device feeders) over
   lock-free rings; per-strip insert chains (Apple AUs with one-knob

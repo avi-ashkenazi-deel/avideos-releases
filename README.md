@@ -1,10 +1,10 @@
-# This repo: HearIt (iOS) + AVideos Studio (macOS)
+# This repo: HearIt (iOS) + streamit (macOS)
 
 Two products share this repository and one XcodeGen `project.yml`:
 
 - **HearIt** — the shipped iPhone/iPad/Watch app that reads your inbox aloud
   (everything below this section).
-- **AVideos Studio** — a macOS live-streaming studio (StreamYard/Riverside/
+- **streamit** — a macOS live-streaming studio (StreamYard/Riverside/
   Ecamm class): scenes with overlays/effects/blend modes, a virtual camera +
   virtual microphone for Zoom/Meet/Teams, an audio mixer with per-strip
   effect inserts and sidechain ducking, browser guests over LiveKit,
@@ -14,7 +14,7 @@ Two products share this repository and one XcodeGen `project.yml`:
   publishing). Sources in `Mac/`, `CameraExtension/`, `driver/`, `web/`,
   `infra/`; start at **[docs/DEV_SETUP.md](docs/DEV_SETUP.md)**.
 
-## AVideos Studio — feature → code map
+## streamit — feature → code map
 
 | Feature | Where |
 | --- | --- |
@@ -34,7 +34,7 @@ Two products share this repository and one XcodeGen `project.yml`:
 | Clip Studio (clip suggestions, moment search, smart reframe, brand kit, B-roll, caption templates) | `Mac/ClipStudio/` |
 | Publishing (YouTube/TikTok, scheduling) | `Mac/Publish/` |
 | Studio UI | `Mac/UI/` |
-| Unit tests (EDL, drift fit, ring buffer, alignment, Codable/manifest) | `Tests/AVideosStudioTests/` |
+| Unit tests (EDL, drift fit, ring buffer, alignment, Codable/manifest) | `Tests/StreamitTests/` |
 
 Testing: `docs/FEATURE_CHECKLIST.md` is the full 476-item feature inventory
 (with prerequisites per item and known gaps); `TESTING.md` has the shorter
@@ -42,7 +42,7 @@ per-phase exit demos.
 
 Keyboard shortcuts: global hotkeys (work from any app) live in
 `Mac/App/GlobalShortcuts.swift` and are rebindable in Settings → Shortcuts;
-menu shortcuts are in `StudioCommands` (`Mac/App/AVideosApp.swift`).
+menu shortcuts are in `StudioCommands` (`Mac/App/StreamitApp.swift`).
 
 ---
 

@@ -49,7 +49,7 @@ final class RingBuffer: @unchecked Sendable {
     private var overWatermarkStreak: Int = 0
     private static let sustainedReadsBeforeCorrection = 32
 
-    private static let signpostLog = OSLog(subsystem: "com.aviashkenazi.avideos",
+    private static let signpostLog = OSLog(subsystem: "com.aviashkenazi.streamit",
                                            category: "audio-ring")
 
     /// - Parameter duration: requested depth in seconds; rounded up to a

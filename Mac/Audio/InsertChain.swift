@@ -52,7 +52,7 @@ final class InsertChain {
     /// The strip's upstream node (source/player mixer) and downstream mixer.
     private weak var sourceNode: AVAudioNode?
     private weak var stripMixer: AVAudioMixerNode?
-    private let log = Logger(subsystem: "com.aviashkenazi.avideos", category: "inserts")
+    private let log = Logger(subsystem: "com.aviashkenazi.streamit", category: "inserts")
 
     init(engine: AVAudioEngine, source: AVAudioNode, stripMixer: AVAudioMixerNode) {
         self.engine = engine

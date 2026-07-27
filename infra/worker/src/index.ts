@@ -1,5 +1,5 @@
 /**
- * AVideos Studio backend — a single Cloudflare Worker.
+ * streamit backend — a single Cloudflare Worker.
  *
  * Endpoints (all JSON, versioned under /v1):
  *   POST /v1/sessions                       host key   create session

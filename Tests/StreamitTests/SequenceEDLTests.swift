@@ -1,5 +1,5 @@
 import XCTest
-@testable import AVideosStudio
+@testable import Streamit
 
 /// Pins down the sequence behaviour of `EditDecisionList`: reordering,
 /// trimming, duplication, and the one-to-many source→timeline mapping that

@@ -29,7 +29,7 @@ struct SceneIndex: Codable {
 }
 
 final class SceneAnalyzer {
-    private let log = Logger(subsystem: "com.aviashkenazi.avideos", category: "sceneanalyzer")
+    private let log = Logger(subsystem: "com.aviashkenazi.streamit", category: "sceneanalyzer")
 
     func analyze(tracks: [EditTrack],
                  onProgress: @escaping (Double) -> Void) async throws -> SceneIndex {

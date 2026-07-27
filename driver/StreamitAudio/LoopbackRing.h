@@ -1,7 +1,7 @@
-// LoopbackRing.h — per-device loopback ring buffer for the AVideos HAL driver.
+// LoopbackRing.h — per-device loopback ring buffer for the streamit HAL driver.
 //
 // One ring per virtual device. The device's OUTPUT side (an app playing
-// program audio into "AVideos Microphone" / "AVideos Guest Send") writes
+// program audio into "streamit Microphone" / "streamit Guest Send") writes
 // mixed Float32 frames at an absolute device sample time; the INPUT side
 // (Zoom/Meet reading the same device as a microphone) reads frames back at
 // the same absolute sample time. Both sides run on the coreaudiod real-time
@@ -30,7 +30,7 @@
 #include <cstring>
 #include <memory>
 
-namespace avideos {
+namespace streamit {
 
 class LoopbackRing {
 public:
@@ -158,4 +158,4 @@ private:
     std::atomic<uint64_t> writeHead_{0};
 };
 
-} // namespace avideos
+} // namespace streamit

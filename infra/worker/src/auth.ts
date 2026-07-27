@@ -10,7 +10,7 @@ import type { Env } from "./env";
 
 const encoder = new TextEncoder();
 
-const GRANT_CONTEXT = "avideos-upload-grant-v1";
+const GRANT_CONTEXT = "streamit-upload-grant-v1";
 export const UPLOAD_GRANT_HEADER = "x-upload-grant";
 export const HOST_KEY_HEADER = "x-host-key";
 

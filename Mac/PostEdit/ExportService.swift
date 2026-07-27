@@ -36,11 +36,11 @@ final class ExportService {
 
     private(set) var jobs: [Job] = []
     private let builder = CompositionBuilder()
-    private let log = Logger(subsystem: "com.aviashkenazi.avideos", category: "export")
+    private let log = Logger(subsystem: "com.aviashkenazi.streamit", category: "export")
 
     private var exportsDirectory: URL {
         let url = FileManager.default.urls(for: .moviesDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("AVideos/Exports", isDirectory: true)
+            .appendingPathComponent("Streamit/Exports", isDirectory: true)
         try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         return url
     }
@@ -208,7 +208,7 @@ final class ExportService {
         writer.startSession(atSourceTime: .zero)
 
         let duration = composition.duration.seconds
-        let queue = DispatchQueue(label: "com.aviashkenazi.avideos.wav-export")
+        let queue = DispatchQueue(label: "com.aviashkenazi.streamit.wav-export")
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             input.requestMediaDataWhenReady(on: queue) {
                 while input.isReadyForMoreMediaData {

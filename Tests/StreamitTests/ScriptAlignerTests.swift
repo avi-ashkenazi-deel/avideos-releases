@@ -1,5 +1,5 @@
 import XCTest
-@testable import AVideosStudio
+@testable import Streamit
 
 /// Pins down the text side of AI take selection: token normalization, the
 /// anchor-based aligner, and the deterministic take signals Claude is given

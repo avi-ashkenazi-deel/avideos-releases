@@ -21,7 +21,7 @@ final class AudioUnitHost {
         var id: String { "\(componentType)-\(subType)-\(manufacturer)" }
     }
 
-    private let log = Logger(subsystem: "com.aviashkenazi.avideos", category: "auhost")
+    private let log = Logger(subsystem: "com.aviashkenazi.streamit", category: "auhost")
     private var pluginWindows: [UUID: NSWindow] = [:]
 
     // MARK: - Discovery

@@ -40,12 +40,12 @@ struct AudioSettings: Codable {
 final class AudioSettingsStore {
     private let url: URL
     private var pendingSave: DispatchWorkItem?
-    private let queue = DispatchQueue(label: "com.aviashkenazi.avideos.audiosettings", qos: .utility)
-    private let log = Logger(subsystem: "com.aviashkenazi.avideos", category: "audiosettings")
+    private let queue = DispatchQueue(label: "com.aviashkenazi.streamit.audiosettings", qos: .utility)
+    private let log = Logger(subsystem: "com.aviashkenazi.streamit", category: "audiosettings")
 
     init() {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        let dir = base.appendingPathComponent("AVideos", isDirectory: true)
+        let dir = base.appendingPathComponent("streamit", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         url = dir.appendingPathComponent("audio-settings.json")
     }

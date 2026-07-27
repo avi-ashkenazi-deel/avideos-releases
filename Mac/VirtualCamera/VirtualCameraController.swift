@@ -28,13 +28,13 @@ final class VirtualCameraController: NSObject {
         }
     }
 
-    static let extensionBundleID = "com.aviashkenazi.avideos.cameraextension"
+    static let extensionBundleID = "com.aviashkenazi.streamit.cameraextension"
 
     private(set) var status: Status = .unknown
     /// True once the sink stream is accepting our frames.
     private(set) var isStreaming = false
 
-    private let log = Logger(subsystem: "com.aviashkenazi.avideos", category: "virtualcam")
+    private let log = Logger(subsystem: "com.aviashkenazi.streamit", category: "virtualcam")
 
     /// The frame writer; created lazily once the extension's device appears.
     let sinkWriter = SinkStreamWriter()

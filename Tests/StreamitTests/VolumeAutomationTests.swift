@@ -1,5 +1,5 @@
 import XCTest
-@testable import AVideosStudio
+@testable import Streamit
 
 /// Pins the volume envelope: the cut micro-fades, ducking under external
 /// audio, and — the whole reason this type exists — what happens where the two

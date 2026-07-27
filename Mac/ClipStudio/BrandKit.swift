@@ -34,7 +34,7 @@ struct BrandKit: Codable, Equatable {
 final class BrandKitStore {
     private var url: URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        return base.appendingPathComponent("AVideos/brand-kit.json")
+        return base.appendingPathComponent("Streamit/brand-kit.json")
     }
 
     func load() -> BrandKit {

@@ -1,11 +1,11 @@
-// Driver.cpp — AVideos Studio CoreAudio HAL AudioServerPlugIn.
+// Driver.cpp — streamit CoreAudio HAL AudioServerPlugIn.
 //
 // Built on libASPL (https://github.com/gavv/libASPL, MIT, C++17), which owns
 // the AudioServerPlugIn boilerplate: property dispatch, zero-timestamp
 // generation off mach_absolute_time at the fixed device rate, client
 // bookkeeping, and control objects. This file only:
 //
-//   1. Describes two loopback devices ("AVideos Microphone", "AVideos Guest
+//   1. Describes two loopback devices ("streamit Microphone", "streamit Guest
 //      Send"), each with one output stream and one input stream at
 //      2 ch / 48 kHz / Float32.
 //   2. Wires each device's IO to a LoopbackRing so that whatever an app
@@ -14,14 +14,14 @@
 //      a microphone and hear the program mix).
 //   3. Exports the CFPlugIn factory named in Info.plist.
 //
-// Loaded by coreaudiod from /Library/Audio/Plug-Ins/HAL/AVideosAudio.driver.
+// Loaded by coreaudiod from /Library/Audio/Plug-Ins/HAL/StreamitAudio.driver.
 // Everything on the IO path (OnWriteMixedOutput / OnReadClientInput) must be
 // allocation-free and lock-free — see LoopbackRing.h.
 //
 // Info.plist contract (do not break):
 //   * CFPlugInFactories maps factory UUID 7A9E4F52-3C81-4D6B-9E2A-51B0A6E24C11
-//     to the exported symbol "AVideosAudioDriverFactory" below.
-//   * Bundle id com.aviashkenazi.avideos.audiodriver.
+//     to the exported symbol "StreamitAudioDriverFactory" below.
+//   * Bundle id com.aviashkenazi.streamit.audiodriver.
 //   * Bump CFBundleVersion whenever this file changes — the app's
 //     DriverInstaller compares it against the installed copy.
 
@@ -47,12 +47,12 @@ namespace {
 // ---------------------------------------------------------------------------
 
 constexpr UInt32 kSampleRate = 48000;
-constexpr UInt32 kChannelCount = avideos::LoopbackRing::kChannels; // 2
+constexpr UInt32 kChannelCount = streamit::LoopbackRing::kChannels; // 2
 constexpr UInt32 kBytesPerFrame = kChannelCount * sizeof(Float32); // 8
 
 // Documented for grep-ability; the authoritative copy lives in Info.plist's
 // CFPlugInFactories dictionary. Changing either side breaks plug-in loading.
-constexpr const char* kAVideosDriverFactoryUUID =
+constexpr const char* kStreamitDriverFactoryUUID =
     "7A9E4F52-3C81-4D6B-9E2A-51B0A6E24C11";
 
 AudioStreamBasicDescription MakeStreamFormat()
@@ -97,7 +97,7 @@ AudioStreamBasicDescription MakeStreamFormat()
 
 class LoopbackIOHandler final : public aspl::IORequestHandler {
 public:
-    explicit LoopbackIOHandler(std::shared_ptr<avideos::LoopbackRing> ring)
+    explicit LoopbackIOHandler(std::shared_ptr<streamit::LoopbackRing> ring)
         : ring_(std::move(ring))
     {
     }
@@ -137,7 +137,7 @@ private:
         return timestamp > 0.0 ? uint64_t(timestamp) : 0;
     }
 
-    const std::shared_ptr<avideos::LoopbackRing> ring_;
+    const std::shared_ptr<streamit::LoopbackRing> ring_;
 };
 
 // ---------------------------------------------------------------------------
@@ -152,7 +152,7 @@ std::shared_ptr<aspl::Device> MakeLoopbackDevice(
 {
     aspl::DeviceParameters params;
     params.Name = name;
-    params.Manufacturer = "AVideos Studio";
+    params.Manufacturer = "streamit";
     params.DeviceUID = uid;
     params.ModelUID = uid + ".model";
     params.SampleRate = kSampleRate;
@@ -162,8 +162,8 @@ std::shared_ptr<aspl::Device> MakeLoopbackDevice(
     // before OnWriteMixedOutput.
     params.EnableMixing = true;
 
-    // "AVideos Microphone" may be picked as the user's default input;
-    // "AVideos Guest Send" is plumbing and should never be auto-selected.
+    // "streamit Microphone" may be picked as the user's default input;
+    // "streamit Guest Send" is plumbing and should never be auto-selected.
     params.CanBeDefaultDevice = canBeDefaultDevice;
 
     // Never eligible for system sounds / alerts (sound-effects routing).
@@ -201,7 +201,7 @@ std::shared_ptr<aspl::Device> MakeLoopbackDevice(
 
     // The ring is owned by the handler; the handler is owned by the device.
     device->SetIOHandler(std::make_shared<LoopbackIOHandler>(
-        std::make_shared<avideos::LoopbackRing>()));
+        std::make_shared<streamit::LoopbackRing>()));
 
     return device;
 }
@@ -212,11 +212,11 @@ std::shared_ptr<aspl::Driver> CreateDriver()
     auto plugin = std::make_shared<aspl::Plugin>(context);
 
     plugin->AddDevice(MakeLoopbackDevice(context,
-        "AVideos Microphone", "com.aviashkenazi.avideos.vmic",
+        "streamit Microphone", "com.aviashkenazi.streamit.vmic",
         /*canBeDefaultDevice=*/true));
 
     plugin->AddDevice(MakeLoopbackDevice(context,
-        "AVideos Guest Send", "com.aviashkenazi.avideos.gsend",
+        "streamit Guest Send", "com.aviashkenazi.streamit.gsend",
         /*canBeDefaultDevice=*/false));
 
     return std::make_shared<aspl::Driver>(context, plugin);
@@ -226,7 +226,7 @@ std::shared_ptr<aspl::Driver> CreateDriver()
 
 // ---------------------------------------------------------------------------
 // CFPlugIn factory — the symbol named in Info.plist CFPlugInFactories under
-// factory UUID kAVideosDriverFactoryUUID (7A9E4F52-3C81-4D6B-9E2A-51B0A6E24C11).
+// factory UUID kStreamitDriverFactoryUUID (7A9E4F52-3C81-4D6B-9E2A-51B0A6E24C11).
 //
 // coreaudiod resolves the AudioServerPlugIn type UUID
 // (443ABAB8-E7B3-491A-B985-BEB9187030DB) to this factory and calls it once;
@@ -235,11 +235,11 @@ std::shared_ptr<aspl::Driver> CreateDriver()
 // for the whole coreaudiod session (HAL plug-ins are never unloaded).
 // ---------------------------------------------------------------------------
 
-extern "C" void* AVideosAudioDriverFactory(
+extern "C" void* StreamitAudioDriverFactory(
     CFAllocatorRef allocator, CFUUIDRef typeUUID)
 {
     (void)allocator;
-    (void)kAVideosDriverFactoryUUID;
+    (void)kStreamitDriverFactoryUUID;
 
     if (typeUUID == nullptr
         || !CFEqual(typeUUID, kAudioServerPlugInTypeUUID)) {

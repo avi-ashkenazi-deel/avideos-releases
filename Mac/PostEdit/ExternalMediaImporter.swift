@@ -102,7 +102,7 @@ final class ExternalMediaImporter {
         case protectedContent
     }
 
-    private let log = Logger(subsystem: "com.aviashkenazi.avideos", category: "externalmedia")
+    private let log = Logger(subsystem: "com.aviashkenazi.streamit", category: "externalmedia")
 
     /// Containers ffmpeg can usually rescue when AVFoundation can't open them.
     private static let transcodableExtensions: Set<String> =
@@ -169,7 +169,7 @@ final class ExternalMediaImporter {
     /// a project that is broken tomorrow.
     static var mediaDirectory: URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("AVideos/Media", isDirectory: true)
+            .appendingPathComponent("Streamit/Media", isDirectory: true)
         try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
         return base
     }

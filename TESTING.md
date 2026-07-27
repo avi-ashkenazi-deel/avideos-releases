@@ -87,13 +87,13 @@ and anything **slow** or **draining battery**.
 
 ---
 
-# AVideos Studio (macOS) — tester guide
+# streamit (macOS) — tester guide
 
 Each phase's exit demo, as checkboxes. Requires a Mac (see docs/DEV_SETUP.md).
 
 ## Live studio
 - [ ] Launch: camera scene shows your camera in the preview at 30fps (fps HUD top-left).
-- [ ] Install the camera extension (Setup tab) → "AVideos Camera" appears in Photo Booth, Zoom, and Google Meet; splash card shows when the app is closed.
+- [ ] Install the camera extension (Setup tab) → "streamit Camera" appears in Photo Booth, Zoom, and Google Meet; splash card shows when the app is closed.
 - [ ] Add a text element → drag/resize/rotate on canvas; toggle Hide/Show and watch the slide-in/out animation reverse itself.
 - [ ] Give a shape an animated fill + a video stroke; set blend mode to Multiply over the camera.
 - [ ] Effects tab: chroma key removes a green screen; virtual background blurs/replaces without one; beautify smooths only the face.
@@ -103,8 +103,8 @@ Each phase's exit demo, as checkboxes. Requires a Mac (see docs/DEV_SETUP.md).
 - [ ] Music plays to headphones with a working fader; talking ducks the music (−12dB default) and it recovers smoothly.
 - [ ] Sound pads fire instantly (⌥1…⌥9), retrigger steals oldest voice.
 - [ ] Add a Compressor insert on the mic; macro knob audibly changes it; a third-party AU opens its own UI.
-- [ ] Install the virtual mic (Setup) → Zoom hears mic+music+pads through "AVideos Microphone".
-- [ ] Record while live → .mov in ~/Movies/AVideos plays with A/V in sync (clap test).
+- [ ] Install the virtual mic (Setup) → Zoom hears mic+music+pads through "streamit Microphone".
+- [ ] Record while live → .mov in ~/Movies/streamit plays with A/V in sync (clap test).
 
 ## Music sections
 Full detail in docs/FEATURE_CHECKLIST.md, F-380…F-430.
@@ -270,7 +270,7 @@ Known gaps in this pass — do not report:
 
 ## Unit tests (no hardware needed)
 - [x] `./scripts/dev-app-only.sh`, then
-      `xcodebuild test -scheme AVideosStudio CODE_SIGNING_ALLOWED=NO` →
+      `xcodebuild test -scheme Streamit CODE_SIGNING_ALLOWED=NO` →
       **269 tests, 0 failures** (first verified 2026-07-27, macOS 26.5 / Xcode 16).
       Cmd-U works too once the project is generated.
 

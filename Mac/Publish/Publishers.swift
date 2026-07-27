@@ -7,7 +7,7 @@ import os
 /// docs/DEV_SETUP.md); the token comes from PlatformAuth.
 struct YouTubePublisher {
     let auth: PlatformAuth
-    private static let log = Logger(subsystem: "com.aviashkenazi.avideos", category: "youtube")
+    private static let log = Logger(subsystem: "com.aviashkenazi.streamit", category: "youtube")
 
     func upload(item: PublishItem, onProgress: @escaping (Double) -> Void) async throws -> String? {
         let token = try auth.accessToken(for: .youtube)

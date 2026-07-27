@@ -52,7 +52,7 @@ final class SoundPadPlayer {
     private weak var padsMixer: AVAudioMixerNode?
     private var voices: [Voice] = []
     private var buffers: [UUID: AVAudioPCMBuffer] = [:]
-    private let log = Logger(subsystem: "com.aviashkenazi.avideos", category: "pads")
+    private let log = Logger(subsystem: "com.aviashkenazi.streamit", category: "pads")
 
     /// Playback progress per pad (0…1), for the UI ring. Main-thread updated.
     private(set) var progress: [UUID: Double] = [:]

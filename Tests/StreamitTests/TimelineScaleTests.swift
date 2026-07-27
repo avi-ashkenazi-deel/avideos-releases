@@ -1,5 +1,5 @@
 import XCTest
-@testable import AVideosStudio
+@testable import Streamit
 
 /// Pins down the vertical timeline's geometry. Both scales must be monotonic
 /// and round-trip, or a click lands on the wrong moment and a drag jumps.

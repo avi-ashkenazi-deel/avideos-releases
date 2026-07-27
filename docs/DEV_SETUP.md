@@ -1,4 +1,4 @@
-# AVideos Studio — Mac Development Setup
+# streamit — Mac Development Setup
 
 The macOS live-streaming studio lives alongside HearIt in this repo. The
 `.xcodeproj` is generated, never committed:
@@ -6,7 +6,7 @@ The macOS live-streaming studio lives alongside HearIt in this repo. The
 ```bash
 brew install xcodegen
 xcodegen generate
-open HearIt.xcodeproj        # contains the AVideosStudio scheme too
+open HearIt.xcodeproj        # contains the Streamit scheme too
 ```
 
 Target: macOS 14.0+, Swift 5.9. SPM resolves LiveKit, KeyboardShortcuts and
@@ -20,14 +20,14 @@ the 269-test suite passes.
 ```bash
 brew install xcodegen
 ./scripts/dev-app-only.sh          # excludes the extension + driver; dev entitlements
-xcodebuild test -scheme AVideosStudio CODE_SIGNING_ALLOWED=NO
+xcodebuild test -scheme Streamit CODE_SIGNING_ALLOWED=NO
 ```
 
 Two things that recipe deliberately avoids, and why:
 
-- **`dev-app-only.sh`** comments the `CameraExtension` and `AVideosAudioDriver`
-  dependencies out of the app target and swaps `AVideosStudio.entitlements` for
-  `AVideosStudio-dev.entitlements`. Both are embedded build dependencies, so
+- **`dev-app-only.sh`** comments the `CameraExtension` and `StreamitAudioDriver`
+  dependencies out of the app target and swaps `Streamit.entitlements` for
+  `Streamit-dev.entitlements`. Both are embedded build dependencies, so
   without this a plain build needs real Developer ID certs and a vendored
   libASPL before it will produce anything runnable. The dev entitlements file
   is the shipping one minus `com.apple.developer.system-extension.install`,
@@ -59,7 +59,7 @@ layer`, that is git transport rather than anything in this repo:
 `Package.swift`, so listing it under `packages:` makes dependency resolution
 fail for the *whole project*, app and tests included. It has to be vendored:
 add it as a submodule under `driver/vendor/libASPL` and add its sources and
-header path to the `AVideosAudioDriver` target. Until that is done that one
+header path to the `StreamitAudioDriver` target. Until that is done that one
 target does not build, and nothing else is affected.
 
 ## First-build checklist (things the Linux authoring pass couldn't do)
@@ -96,7 +96,7 @@ bring-up session. Cheapest-first:
    regenerates for you). That excludes the camera extension and the audio
    driver from the app's dependencies — both are *embedded* deps, so without
    this the app cannot build until you have Developer ID certs and a vendored
-   libASPL. It also swaps in `AVideosStudio-dev.entitlements`, which omits
+   libASPL. It also swaps in `Streamit-dev.entitlements`, which omits
    `com.apple.developer.system-extension.install` — that entitlement is
    *restricted*, so only a provisioning profile can grant it, and its presence
    makes even a local test run demand development signing. `--restore` puts
@@ -104,9 +104,9 @@ bring-up session. Cheapest-first:
    edits `project.yml`, so don't commit it.
 
    To skip signing entirely for a one-off test run:
-   `xcodebuild test -scheme AVideosStudio CODE_SIGNING_ALLOWED=NO`
+   `xcodebuild test -scheme Streamit CODE_SIGNING_ALLOWED=NO`
 2. **Run the unit tests before anything else** (Cmd-U, or
-   `xcodebuild test -scheme AVideosStudio`). They need no hardware,
+   `xcodebuild test -scheme Streamit`). They need no hardware,
    entitlements, or network, so they are the fastest way to shake out
    compile errors in the model, EDL, alignment, ring buffer, and manifest
    decoding — the layers everything else sits on.
@@ -132,8 +132,8 @@ bring-up session. Cheapest-first:
 - Useful incantations:
   ```bash
   systemextensionsctl list
-  systemextensionsctl uninstall <teamID> com.aviashkenazi.avideos.cameraextension
-  log stream --predicate 'subsystem CONTAINS "com.aviashkenazi.avideos"' --level debug
+  systemextensionsctl uninstall <teamID> com.aviashkenazi.streamit.cameraextension
+  log stream --predicate 'subsystem CONTAINS "com.aviashkenazi.streamit"' --level debug
   ```
 - Every extension code change is a new version → re-approval in System
   Settings › General › Login Items & Extensions. When wedged: uninstall,
@@ -146,16 +146,16 @@ bring-up session. Cheapest-first:
 Manual spike install (before wiring the in-app installer):
 
 ```bash
-sudo cp -R build/.../AVideosAudio.driver /Library/Audio/Plug-Ins/HAL/
-sudo chown -R root:wheel /Library/Audio/Plug-Ins/HAL/AVideosAudio.driver
+sudo cp -R build/.../StreamitAudio.driver /Library/Audio/Plug-Ins/HAL/
+sudo chown -R root:wheel /Library/Audio/Plug-Ins/HAL/StreamitAudio.driver
 sudo launchctl kickstart -kp system/com.apple.audio.coreaudiod   # blips ALL audio
-system_profiler SPAudioDataType | grep -A4 AVideos
+system_profiler SPAudioDataType | grep -A4 streamit
 log show --predicate 'process == "coreaudiod"' --last 5m
 ```
 
-Verify: QuickTime records from "AVideos Microphone" while music plays into
+Verify: QuickTime records from "streamit Microphone" while music plays into
 it; Zoom lists it as a mic. Bump `CFBundleVersion` in
-`driver/AVideosAudio/Info.plist` on every driver change — the in-app
+`driver/StreamitAudio/Info.plist` on every driver change — the in-app
 installer uses it for update detection.
 
 ## Backend (guests + podcast uploads)

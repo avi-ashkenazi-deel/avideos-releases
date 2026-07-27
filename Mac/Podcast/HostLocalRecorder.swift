@@ -89,14 +89,14 @@ final class HostLocalRecorder: @unchecked Sendable {
     private let clock: SessionClock
     private let videoPreference: VideoEncoderPreference
     private let rootDirectory: URL
-    private let log = Logger(subsystem: "com.aviashkenazi.avideos", category: "HostLocalRecorder")
+    private let log = Logger(subsystem: "com.aviashkenazi.streamit", category: "HostLocalRecorder")
 
     private let lock = NSLock()
     private var takeId: String?
     private var videoLane: Lane?
     private var audioLane: Lane?
 
-    /// - Parameter rootDirectory: defaults to ~/Movies/AVideos/Sessions.
+    /// - Parameter rootDirectory: defaults to ~/Movies/Streamit/Sessions.
     init(
         sessionId: String,
         hostParticipantId: String,
@@ -110,7 +110,7 @@ final class HostLocalRecorder: @unchecked Sendable {
         self.videoPreference = videoPreference
         self.rootDirectory = rootDirectory
             ?? FileManager.default.urls(for: .moviesDirectory, in: .userDomainMask)[0]
-                .appendingPathComponent("AVideos/Sessions", isDirectory: true)
+                .appendingPathComponent("Streamit/Sessions", isDirectory: true)
     }
 
     var isRecording: Bool {

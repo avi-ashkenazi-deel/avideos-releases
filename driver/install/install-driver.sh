@@ -1,12 +1,12 @@
 #!/bin/bash
 #
-# install-driver.sh — install the AVideosAudio HAL driver bundle.
+# install-driver.sh — install the StreamitAudio HAL driver bundle.
 #
-# Run as root. The AVideos Studio app's DriverInstaller invokes this via
+# Run as root. The streamit app's DriverInstaller invokes this via
 # osascript "do shell script ... with administrator privileges", passing the
 # bundled driver as $1:
 #
-#   sudo ./install-driver.sh /path/to/AVideosAudio.driver
+#   sudo ./install-driver.sh /path/to/StreamitAudio.driver
 #
 # Steps: replace any existing install, fix ownership/permissions (coreaudiod
 # refuses plug-ins not owned by root:wheel), then restart coreaudiod so the
@@ -16,10 +16,10 @@
 set -euo pipefail
 
 HAL_DIR="/Library/Audio/Plug-Ins/HAL"
-DEST="${HAL_DIR}/AVideosAudio.driver"
+DEST="${HAL_DIR}/StreamitAudio.driver"
 
 if [[ $# -ne 1 ]]; then
-    echo "usage: $0 /path/to/AVideosAudio.driver" >&2
+    echo "usage: $0 /path/to/StreamitAudio.driver" >&2
     exit 64
 fi
 

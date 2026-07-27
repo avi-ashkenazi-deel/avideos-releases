@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Release build for AVideos Studio: archive, Developer ID sign, notarize.
+# Release build for streamit: archive, Developer ID sign, notarize.
 #
 # Prereqs (one time):
 #   - Developer ID Application certificate in the login keychain
-#   - notarytool credentials: xcrun notarytool store-credentials avideos \
+#   - notarytool credentials: xcrun notarytool store-credentials streamit \
 #       --apple-id you@example.com --team-id TEAMID --password app-specific
 #
 # Usage: scripts/release-mac.sh [TEAM_ID]
@@ -17,8 +17,8 @@ fi
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BUILD="$ROOT/build/release"
-APP="$BUILD/AVideosStudio.app"
-ZIP="$BUILD/AVideosStudio.zip"
+APP="$BUILD/streamit.app"
+ZIP="$BUILD/Streamit.zip"
 
 echo "==> Generating project"
 cd "$ROOT"
@@ -26,17 +26,17 @@ xcodegen generate
 
 echo "==> Archiving"
 xcodebuild -project HearIt.xcodeproj \
-  -scheme AVideosStudio \
+  -scheme Streamit \
   -configuration Release \
   -destination 'generic/platform=macOS' \
   DEVELOPMENT_TEAM="$TEAM_ID" \
   CODE_SIGN_STYLE=Manual \
   CODE_SIGN_IDENTITY="Developer ID Application" \
-  -archivePath "$BUILD/AVideosStudio.xcarchive" \
+  -archivePath "$BUILD/Streamit.xcarchive" \
   archive
 
 rm -rf "$APP"
-cp -R "$BUILD/AVideosStudio.xcarchive/Products/Applications/AVideosStudio.app" "$APP"
+cp -R "$BUILD/Streamit.xcarchive/Products/Applications/streamit.app" "$APP"
 
 echo "==> Verifying nested signatures (extension, driver, helpers)"
 codesign --verify --deep --strict --verbose=2 "$APP"
@@ -44,7 +44,7 @@ codesign --verify --deep --strict --verbose=2 "$APP"
 echo "==> Notarizing"
 rm -f "$ZIP"
 ditto -c -k --keepParent "$APP" "$ZIP"
-xcrun notarytool submit "$ZIP" --keychain-profile avideos --wait
+xcrun notarytool submit "$ZIP" --keychain-profile streamit --wait
 xcrun stapler staple "$APP"
 
 echo "==> Done: $APP"

@@ -1,14 +1,14 @@
 import Foundation
 import os
 
-/// Installs the bundled CoreAudio loopback driver (AVideosAudio.driver) to
+/// Installs the bundled CoreAudio loopback driver (StreamitAudio.driver) to
 /// /Library/Audio/Plug-Ins/HAL with one admin prompt via
 /// osascript-with-administrator-privileges (SMJobBless is deprecated and a
 /// persistent privileged helper is overkill for a copy-once operation).
 ///
 /// NOTE for project.yml: the install scripts (driver/install/*.sh) must be
 /// copied into the app's Resources so `Bundle.main` can find them — add a
-/// resources copy for `driver/install` to the AVideosStudio target when
+/// resources copy for `driver/install` to the Streamit target when
 /// generating on the Mac.
 ///
 /// The coreaudiod restart audibly interrupts ALL apps' audio for ~1s — the
@@ -30,12 +30,12 @@ final class DriverInstaller {
         }
     }
 
-    static let installedDriverPath = "/Library/Audio/Plug-Ins/HAL/AVideosAudio.driver"
-    static let microphoneUID = "com.aviashkenazi.avideos.vmic"
-    static let guestSendUID = "com.aviashkenazi.avideos.gsend"
+    static let installedDriverPath = "/Library/Audio/Plug-Ins/HAL/StreamitAudio.driver"
+    static let microphoneUID = "com.aviashkenazi.streamit.vmic"
+    static let guestSendUID = "com.aviashkenazi.streamit.gsend"
 
     private let deviceManager: AudioDeviceManager
-    private let log = Logger(subsystem: "com.aviashkenazi.avideos", category: "driver")
+    private let log = Logger(subsystem: "com.aviashkenazi.streamit", category: "driver")
 
     init(deviceManager: AudioDeviceManager) {
         self.deviceManager = deviceManager
@@ -69,7 +69,7 @@ final class DriverInstaller {
     }
 
     private func bundledDriverURL() -> URL? {
-        Bundle.main.resourceURL?.appendingPathComponent("AVideosAudio.driver")
+        Bundle.main.resourceURL?.appendingPathComponent("StreamitAudio.driver")
     }
 
     private func bundledScriptURL(_ name: String) -> URL? {

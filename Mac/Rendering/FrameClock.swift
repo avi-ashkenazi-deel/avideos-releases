@@ -12,7 +12,7 @@ import CoreMedia
 /// virtual camera so all consumers share one timeline.
 final class FrameClock {
     /// The render queue — the ONLY place compositing happens.
-    let queue = DispatchQueue(label: "com.aviashkenazi.avideos.render", qos: .userInteractive)
+    let queue = DispatchQueue(label: "com.aviashkenazi.streamit.render", qos: .userInteractive)
 
     private var timer: DispatchSourceTimer?
     private(set) var fps: Int = 30

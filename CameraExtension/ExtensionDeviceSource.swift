@@ -1,12 +1,12 @@
 //
 //  ExtensionDeviceSource.swift
-//  CameraExtension — AVideos Studio virtual camera (CoreMediaIO system extension)
+//  CameraExtension — streamit virtual camera (CoreMediaIO system extension)
 //
-//  One CMIOExtensionDevice ("AVideos Camera") with two streams:
+//  One CMIOExtensionDevice ("streamit Camera") with two streams:
 //
 //    • Source stream (.source) — the frames conferencing apps (Zoom, Meet,
 //      Photo Booth, …) consume.
-//    • Sink stream (.sink)     — the app-facing input. AVideos Studio locates
+//    • Sink stream (.sink)     — the app-facing input. streamit locates
 //      this stream through the legacy CMIO C API and enqueues composited
 //      program frames; we pull them with consumeSampleBuffer(from:) and
 //      forward each one to the source stream with fresh host-time timing.
@@ -33,7 +33,7 @@ import os.log
 
 enum CameraConfig {
 
-    static let deviceName = "AVideos Camera"
+    static let deviceName = "streamit Camera"
 
     /// Stable identifiers so the device/stream identity survives relaunches
     /// (apps remember cameras by unique ID).
@@ -42,7 +42,7 @@ enum CameraConfig {
     static let sinkStreamUUID   = UUID(uuidString: "7F9C1D3A-52B4-4E7C-9A1E-0C2B6D8F4A12")!
 
     /// Legacy (pre-CMIOExtension) device UID, visible to the C API.
-    static let legacyDeviceID = "com.aviashkenazi.avideos.cameraextension.device"
+    static let legacyDeviceID = "com.aviashkenazi.streamit.cameraextension.device"
 
     /// Nominal frame rate; formats advertise up to `maxFrameRate`.
     static let frameRate = 30
@@ -54,8 +54,8 @@ enum CameraConfig {
 
     /// Only processes whose code-signing identifier matches this prefix may
     /// start (i.e. write to) the sink stream. Matches the host app
-    /// (com.aviashkenazi.avideos) and any of its embedded helpers.
-    static let trustedSigningIDPrefix = "com.aviashkenazi.avideos"
+    /// (com.aviashkenazi.streamit) and any of its embedded helpers.
+    static let trustedSigningIDPrefix = "com.aviashkenazi.streamit"
 
     /// Advertised formats, preferred first. 32BGRA only.
     struct FormatSpec { let width: Int32; let height: Int32 }
@@ -86,7 +86,7 @@ final class ExtensionDeviceSource: NSObject, CMIOExtensionDeviceSource {
 
     /// Serial queue guarding all mutable state below and hosting the splash
     /// timer. Everything that touches counters/timestamps hops here.
-    private let stateQueue = DispatchQueue(label: "com.aviashkenazi.avideos.cameraextension.state")
+    private let stateQueue = DispatchQueue(label: "com.aviashkenazi.streamit.cameraextension.state")
 
     private let splashGenerator = SplashFrameGenerator()
     private var splashTimer: DispatchSourceTimer?
@@ -155,14 +155,14 @@ final class ExtensionDeviceSource: NSObject, CMIOExtensionDeviceSource {
         )
 
         sourceStreamSource = ExtensionSourceStreamSource(
-            localizedName: "AVideos Camera",
+            localizedName: "streamit Camera",
             streamID: CameraConfig.sourceStreamUUID,
             streamFormats: streamFormats,
             device: device,
             deviceSource: self
         )
         sinkStreamSource = ExtensionSinkStreamSource(
-            localizedName: "AVideos Camera Input",
+            localizedName: "streamit Camera Input",
             streamID: CameraConfig.sinkStreamUUID,
             streamFormats: streamFormats,
             device: device,
@@ -189,7 +189,7 @@ final class ExtensionDeviceSource: NSObject, CMIOExtensionDeviceSource {
             deviceProperties.transportType = CameraConfig.virtualTransportType
         }
         if properties.contains(.deviceModel) {
-            deviceProperties.model = "AVideos Virtual Camera"
+            deviceProperties.model = "streamit Virtual Camera"
         }
         if properties.contains(CameraConfig.sinkConnectedProperty) {
             let connected = stateQueue.sync { sinkStreamingCounter > 0 }
@@ -568,7 +568,7 @@ final class ExtensionSinkStreamSource: NSObject, CMIOExtensionStreamSource {
     }
 
     func authorizedToStartStream(for client: CMIOExtensionClient) -> Bool {
-        // Only the AVideos Studio host app (and its embedded helpers) may
+        // Only the streamit host app (and its embedded helpers) may
         // feed frames. CMIOExtensionClient.signingID is the client's
         // code-signing identifier as validated by the system, so this cannot
         // be spoofed by an unsigned/ad-hoc process claiming our bundle id.
@@ -591,7 +591,7 @@ final class ExtensionSinkStreamSource: NSObject, CMIOExtensionStreamSource {
     func startStream() throws {
         guard let client = stream.streamingClients.first else {
             throw NSError(
-                domain: "com.aviashkenazi.avideos.cameraextension",
+                domain: "com.aviashkenazi.streamit.cameraextension",
                 code: 1,
                 userInfo: [NSLocalizedDescriptionKey: "Sink stream started with no streaming client"]
             )

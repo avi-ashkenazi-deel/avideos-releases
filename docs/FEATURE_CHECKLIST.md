@@ -1,4 +1,4 @@
-# AVideos Studio — full feature checklist
+# streamit — full feature checklist
 
 All 476 user-facing features, each with a stable ID so you can report
 back precisely ("F-42 fails"). Ordered so you can work top to bottom: each
@@ -26,12 +26,12 @@ first.
 
 ## A. Build & foundations
 
-- [ ] **F-1** `xcodegen generate` produces a project with 3 new targets (AVideosStudio, CameraExtension, AVideosAudioDriver) + AVideosStudioTests, HearIt targets untouched. **[offline]**
-- [ ] **F-2** Unit tests pass: Cmd-U or `xcodebuild test -scheme AVideosStudio` (no hardware needed). **[offline]**
+- [ ] **F-1** `xcodegen generate` produces a project with 3 new targets (Streamit, CameraExtension, StreamitAudioDriver) + StreamitTests, HearIt targets untouched. **[offline]**
+- [ ] **F-2** Unit tests pass: Cmd-U or `xcodebuild test -scheme Streamit` (no hardware needed). **[offline]**
 - [ ] **F-3** App launches to the main window; app icon appears in Dock/Finder. **[offline]**
 - [ ] **F-4** Window layout: scene list left, preview centre, inspector right, tabbed panel bottom. **[offline]**
 - [ ] **F-5** fps HUD visible on the preview and reads ~30. **[offline]**
-- [ ] **F-6** Quit and relaunch: the project reloads from `~/Library/Application Support/AVideos/Projects/`. **[offline]**
+- [ ] **F-6** Quit and relaunch: the project reloads from `~/Library/Application Support/Streamit/Projects/`. **[offline]**
 
 ## B. Scenes
 
@@ -158,7 +158,7 @@ replays just the entrance, which is the quick way to compare them.
 ## H. Virtual camera
 
 - [ ] **F-66** Setup tab installs/activates the camera system extension (macOS approval prompt appears). **[cert]**
-- [ ] **F-67** "AVideos Camera" appears in **Photo Booth** (pickiest consumer). **[cert]**
+- [ ] **F-67** "streamit Camera" appears in **Photo Booth** (pickiest consumer). **[cert]**
 - [ ] **F-68** Appears and works in **Zoom**. **[cert]**
 - [ ] **F-69** Appears and works in **Google Meet** (Chrome). **[cert]**
 - [ ] **F-70** Appears and works in **Teams**. **[cert]**
@@ -209,9 +209,9 @@ replays just the entrance, which is the quick way to compare them.
 ## L. Virtual microphone (driver)
 
 - [ ] **F-105** Setup tab installs the audio driver (one admin prompt). **[cert]**
-- [ ] **F-106** "AVideos Microphone" appears in System Settings → Sound and in Zoom's mic list. **[cert]**
+- [ ] **F-106** "streamit Microphone" appears in System Settings → Sound and in Zoom's mic list. **[cert]**
 - [ ] **F-107** Zoom hears the full program mix: mic + music + pads + movie. **[cert]**
-- [ ] **F-108** "AVideos Guest Send" device exists (mix-minus feed for guests). **[cert]**
+- [ ] **F-108** "streamit Guest Send" device exists (mix-minus feed for guests). **[cert]**
 - [ ] **F-109** Driver status shows installed + version; re-install after a version bump. **[cert]**
 - [ ] **F-110** Uninstall removes both devices cleanly. **[cert]**
 
@@ -219,7 +219,7 @@ replays just the entrance, which is the quick way to compare them.
 
 - [ ] **F-111** ⇧⌘R starts/stops recording; menu item mirrors the state. **[offline]**
 - [ ] **F-112** REC indicator + elapsed timer while recording. **[offline]**
-- [ ] **F-113** Output `.mov` (HEVC) lands in `~/Movies/AVideos` and plays. **[offline]**
+- [ ] **F-113** Output `.mov` (HEVC) lands in `~/Movies/streamit` and plays. **[offline]**
 - [ ] **F-114** H.264 codec option produces a playable file. **[offline]**
 - [ ] **F-115** **Clap test**: audio and video are in sync in the recording. **[offline]**
 - [ ] **F-116** Recording captures the composited program (scenes, elements, effects) — not the raw camera. **[offline]**
@@ -375,7 +375,7 @@ replays just the entrance, which is the quick way to compare them.
 - [ ] **F-196** Video export 4K. **[offline]**
 - [ ] **F-197** Vertical 9:16 export with burned captions. **[offline]**
 - [ ] **F-198** Export progress per job; cancel works. **[offline]**
-- [ ] **F-199** Exports land in `~/Movies/AVideos/Exports` and play correctly. **[offline]**
+- [ ] **F-199** Exports land in `~/Movies/Streamit/Exports` and play correctly. **[offline]**
 
 ## U. Clip Studio
 

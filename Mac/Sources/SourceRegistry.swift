@@ -12,7 +12,7 @@ final class SourceRegistry {
     private let device: MTLDevice
     private var sources: [SourceKey: FrameSource] = [:]
     private let lock = NSLock()
-    private let log = Logger(subsystem: "com.aviashkenazi.avideos", category: "sources")
+    private let log = Logger(subsystem: "com.aviashkenazi.streamit", category: "sources")
 
     /// Resolves document-level media/config for a key. Set by StudioController.
     var mediaResolver: ((SourceKey) -> URL?)?

@@ -25,7 +25,7 @@ struct CaptionTemplate: Codable, Identifiable, Equatable {
 }
 
 /// Persists user-saved templates to
-/// `~/Library/Application Support/AVideos/caption-templates.json` — same
+/// `~/Library/Application Support/Streamit/caption-templates.json` — same
 /// directory and write discipline as `BrandKitStore`.
 @MainActor
 @Observable
@@ -34,7 +34,7 @@ final class CaptionTemplateStore {
 
     private var url: URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        return base.appendingPathComponent("AVideos/caption-templates.json")
+        return base.appendingPathComponent("Streamit/caption-templates.json")
     }
 
     init() {

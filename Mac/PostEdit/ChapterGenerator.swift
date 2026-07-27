@@ -7,7 +7,7 @@ import os
 /// project, a YouTube-format text block, and (on export) chapter metadata.
 final class ChapterGenerator {
     private let client: ClaudeAPIClient
-    private let log = Logger(subsystem: "com.aviashkenazi.avideos", category: "chapters")
+    private let log = Logger(subsystem: "com.aviashkenazi.streamit", category: "chapters")
 
     init(client: ClaudeAPIClient = ClaudeAPIClient()) {
         self.client = client

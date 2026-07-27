@@ -1,10 +1,10 @@
 //
 //  ExtensionProvider.swift
-//  CameraExtension — AVideos Studio virtual camera (CoreMediaIO system extension)
+//  CameraExtension — streamit virtual camera (CoreMediaIO system extension)
 //
 //  CMIOExtensionProviderSource implementation. The provider owns exactly one
-//  device ("AVideos Camera") which in turn publishes the source stream that
-//  conferencing apps consume and the sink stream that the AVideos Studio host
+//  device ("streamit Camera") which in turn publishes the source stream that
+//  conferencing apps consume and the sink stream that the streamit host
 //  app feeds. This layer is intentionally thin: client connect/disconnect is
 //  accept-all (per-stream authorization happens in the stream sources) and
 //  the only provider-level property we surface is the manufacturer.
@@ -16,7 +16,7 @@ import os.log
 
 /// Shared logger for the whole extension process.
 let extensionLog = Logger(
-    subsystem: "com.aviashkenazi.avideos.cameraextension",
+    subsystem: "com.aviashkenazi.streamit.cameraextension",
     category: "CameraExtension"
 )
 
@@ -63,7 +63,7 @@ final class ExtensionProviderSource: NSObject, CMIOExtensionProviderSource {
     func providerProperties(forProperties properties: Set<CMIOExtensionProperty>) throws -> CMIOExtensionProviderProperties {
         let providerProperties = CMIOExtensionProviderProperties(dictionary: [:])
         if properties.contains(.providerManufacturer) {
-            providerProperties.manufacturer = "AVideos"
+            providerProperties.manufacturer = "streamit"
         }
         return providerProperties
     }

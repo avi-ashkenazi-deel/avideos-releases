@@ -14,9 +14,9 @@ final class WebSource: FrameSource {
     private let content: WebContent
     private let device: MTLDevice
     private let mailbox = FrameMailbox()
-    private let conversionQueue = DispatchQueue(label: "com.aviashkenazi.avideos.web-convert", qos: .utility)
+    private let conversionQueue = DispatchQueue(label: "com.aviashkenazi.streamit.web-convert", qos: .utility)
     private var host: OffscreenWebHost?
-    private let log = Logger(subsystem: "com.aviashkenazi.avideos", category: "web")
+    private let log = Logger(subsystem: "com.aviashkenazi.streamit", category: "web")
 
     init(key: SourceKey, content: WebContent, metalDevice: MTLDevice) {
         self.key = key

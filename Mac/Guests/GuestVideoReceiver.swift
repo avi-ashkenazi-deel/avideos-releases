@@ -17,7 +17,7 @@ import os
 final class GuestVideoReceiver: NSObject, VideoRenderer, @unchecked Sendable {
     let identity: String
     private weak var source: GuestSource?
-    private let log = Logger(subsystem: "com.aviashkenazi.avideos", category: "guest-video")
+    private let log = Logger(subsystem: "com.aviashkenazi.streamit", category: "guest-video")
 
     init(identity: String, source: GuestSource) {
         self.identity = identity

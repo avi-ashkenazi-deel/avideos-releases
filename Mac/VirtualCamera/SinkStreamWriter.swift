@@ -20,8 +20,8 @@ final class SinkStreamWriter {
 
         var errorDescription: String? {
             switch self {
-            case .deviceNotFound: "AVideos Camera device not found (extension installed and approved?)"
-            case .sinkStreamNotFound: "AVideos Camera has no sink stream"
+            case .deviceNotFound: "streamit Camera device not found (extension installed and approved?)"
+            case .sinkStreamNotFound: "streamit Camera has no sink stream"
             case .queueUnavailable: "Couldn't open the sink stream's buffer queue"
             }
         }
@@ -29,7 +29,7 @@ final class SinkStreamWriter {
 
     /// Must match CameraConfig.legacyDeviceID in the extension
     /// (CameraExtension/ExtensionDeviceSource.swift).
-    static let deviceUID = "com.aviashkenazi.avideos.cameraextension.device"
+    static let deviceUID = "com.aviashkenazi.streamit.cameraextension.device"
 
     private var deviceID: CMIODeviceID = 0
     private var streamID: CMIOStreamID = 0
@@ -37,7 +37,7 @@ final class SinkStreamWriter {
     private var formatDescription: CMVideoFormatDescription?
     private var streaming = false
     private let lock = NSLock()
-    private let log = Logger(subsystem: "com.aviashkenazi.avideos", category: "sinkwriter")
+    private let log = Logger(subsystem: "com.aviashkenazi.streamit", category: "sinkwriter")
 
     private(set) var enqueuedFrames = 0
     private(set) var droppedFrames = 0

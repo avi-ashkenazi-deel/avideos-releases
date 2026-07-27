@@ -46,7 +46,7 @@ final class PreviewPlayer {
     private let builder = CompositionBuilder()
     private let observer: TimeObserverBox
     private var rebuildTask: Task<Void, Never>?
-    private let log = Logger(subsystem: "com.aviashkenazi.avideos", category: "preview")
+    private let log = Logger(subsystem: "com.aviashkenazi.streamit", category: "preview")
 
     init() {
         // The observer's lifetime is owned by a nonisolated box rather than by

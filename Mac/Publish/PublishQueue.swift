@@ -61,7 +61,7 @@ final class PublishQueue {
     private(set) var items: [PublishItem] = []
     private var timer: Timer?
     let auth = PlatformAuth()
-    private let log = Logger(subsystem: "com.aviashkenazi.avideos", category: "publish")
+    private let log = Logger(subsystem: "com.aviashkenazi.streamit", category: "publish")
 
     init() {
         // Local scheduler tick: fire due scheduled items once a minute.
@@ -146,7 +146,7 @@ final class PlatformAuth: NSObject {
     }
 
     private func keychainKey(_ platform: PublishPlatform) -> String {
-        "com.aviashkenazi.avideos.publish.\(platform.rawValue)"
+        "com.aviashkenazi.streamit.publish.\(platform.rawValue)"
     }
 
     func accessToken(for platform: PublishPlatform) throws -> String {

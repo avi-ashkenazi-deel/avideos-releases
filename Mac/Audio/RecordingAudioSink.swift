@@ -11,7 +11,7 @@ final class RecordingAudioSink {
     private weak var recorder: ProgramRecorder?
     private var audioFile: AVAudioFile?
     private var formatDescription: CMAudioFormatDescription?
-    private let log = Logger(subsystem: "com.aviashkenazi.avideos", category: "audiosink")
+    private let log = Logger(subsystem: "com.aviashkenazi.streamit", category: "audiosink")
 
     /// Wire to a running program recorder (shared A/V file).
     func attach(recorder: ProgramRecorder) {

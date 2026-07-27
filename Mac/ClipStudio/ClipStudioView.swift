@@ -678,7 +678,7 @@ final class ClipStudioModel {
     private let brollSuggester = BRollSuggester()
     private let analyzer = SceneAnalyzer()
     private let brandStore = BrandKitStore()
-    private let log = Logger(subsystem: "com.aviashkenazi.avideos", category: "clipstudio")
+    private let log = Logger(subsystem: "com.aviashkenazi.streamit", category: "clipstudio")
 
     init() {
         self.brandKit = BrandKitStore().load()

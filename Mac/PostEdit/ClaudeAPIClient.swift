@@ -23,13 +23,13 @@ final class ClaudeAPIClient {
         }
     }
 
-    static let keychainService = "com.aviashkenazi.avideos.claude"
+    static let keychainService = "com.aviashkenazi.streamit.claude"
     /// Most capable current model; per-request override available.
     var model = "claude-opus-5"
     var maxTokens = 8192
 
     private let session: URLSession
-    private let log = Logger(subsystem: "com.aviashkenazi.avideos", category: "claude")
+    private let log = Logger(subsystem: "com.aviashkenazi.streamit", category: "claude")
 
     init(session: URLSession = .shared) {
         self.session = session

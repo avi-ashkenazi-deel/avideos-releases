@@ -16,7 +16,7 @@ final class AudioEngineController {
     // Module-qualified: a bare `typealias InsertEffect = InsertEffect` would
     // be a circular reference inside this scope. (Module name = target name
     // in project.yml.)
-    typealias InsertEffect = AVideosStudio.InsertEffect
+    typealias InsertEffect = Streamit.InsertEffect
 
     // MARK: - Subcomponents
 
@@ -35,7 +35,7 @@ final class AudioEngineController {
     private var movieTap: MovieAudioTap?
     private var driverInstaller: DriverInstaller?
 
-    private let log = Logger(subsystem: "com.aviashkenazi.avideos", category: "audio")
+    private let log = Logger(subsystem: "com.aviashkenazi.streamit", category: "audio")
 
     // MARK: - Observable state (UI-facing)
 

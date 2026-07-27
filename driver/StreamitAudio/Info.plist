@@ -5,13 +5,13 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleExecutable</key>
-	<string>AVideosAudio</string>
+	<string>StreamitAudio</string>
 	<key>CFBundleIdentifier</key>
-	<string>com.aviashkenazi.avideos.audiodriver</string>
+	<string>com.aviashkenazi.streamit.audiodriver</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>AVideosAudio</string>
+	<string>StreamitAudio</string>
 	<key>CFBundlePackageType</key>
 	<string>BNDL</string>
 	<!-- CFBundleVersion is how DriverInstaller detects an out-of-date installed
@@ -22,9 +22,9 @@
 	<string>1</string>
 	<key>CFPlugInFactories</key>
 	<dict>
-		<!-- Factory UUID — must match kAVideosDriverFactoryUUID in Driver.cpp. -->
+		<!-- Factory UUID — must match kStreamitDriverFactoryUUID in Driver.cpp. -->
 		<key>7A9E4F52-3C81-4D6B-9E2A-51B0A6E24C11</key>
-		<string>AVideosAudioDriverFactory</string>
+		<string>StreamitAudioDriverFactory</string>
 	</dict>
 	<key>CFPlugInTypes</key>
 	<dict>

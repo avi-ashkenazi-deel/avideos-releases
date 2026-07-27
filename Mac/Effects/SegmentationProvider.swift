@@ -10,8 +10,8 @@ import os
 /// keeps Vision entirely off the render path.
 final class SegmentationProvider {
     private let device: MTLDevice
-    private let queue = DispatchQueue(label: "com.aviashkenazi.avideos.segmentation", qos: .userInitiated)
-    private let log = Logger(subsystem: "com.aviashkenazi.avideos", category: "segmentation")
+    private let queue = DispatchQueue(label: "com.aviashkenazi.streamit.segmentation", qos: .userInitiated)
+    private let log = Logger(subsystem: "com.aviashkenazi.streamit", category: "segmentation")
 
     private var textureCache: CVMetalTextureCache?
     private let maskLock = NSLock()

@@ -1,5 +1,5 @@
 import XCTest
-@testable import AVideosStudio
+@testable import Streamit
 
 /// Pins down the entry-animation catalogue. The invariants matter more than
 /// any individual curve: every style must land **exactly** on the resting

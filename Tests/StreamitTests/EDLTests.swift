@@ -1,5 +1,5 @@
 import XCTest
-@testable import AVideosStudio
+@testable import Streamit
 
 /// Pins down `EditDecisionList`: the tiling invariants, the cut/recover
 /// primitives, and the source↔timeline mapping that transcript editing,

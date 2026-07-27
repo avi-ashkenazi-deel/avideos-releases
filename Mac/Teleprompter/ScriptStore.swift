@@ -2,14 +2,14 @@ import Foundation
 import os
 
 /// JSON persistence for teleprompter scripts, mirroring `ProjectStore`:
-/// `~/Library/Application Support/AVideos/Scripts/<uuid>.avscript`.
+/// `~/Library/Application Support/Streamit/Scripts/<uuid>.avscript`.
 final class ScriptStore {
     static let shared = ScriptStore()
 
     let directory: URL
 
-    private let log = Logger(subsystem: "com.aviashkenazi.avideos", category: "teleprompter")
-    private let mostRecentKey = "AVideos.Teleprompter.MostRecentScriptID"
+    private let log = Logger(subsystem: "com.aviashkenazi.streamit", category: "teleprompter")
+    private let mostRecentKey = "Streamit.Teleprompter.MostRecentScriptID"
     private let defaults: UserDefaults
 
     private let encoder: JSONEncoder = {
@@ -27,7 +27,7 @@ final class ScriptStore {
 
     init(directory: URL? = nil, defaults: UserDefaults = .standard) {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        self.directory = directory ?? base.appendingPathComponent("AVideos/Scripts", isDirectory: true)
+        self.directory = directory ?? base.appendingPathComponent("Streamit/Scripts", isDirectory: true)
         self.defaults = defaults
         try? FileManager.default.createDirectory(at: self.directory, withIntermediateDirectories: true)
     }

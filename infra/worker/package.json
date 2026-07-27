@@ -1,8 +1,8 @@
 {
-  "name": "avideos-worker",
+  "name": "streamit-worker",
   "version": "1.0.0",
   "private": true,
-  "description": "AVideos Studio backend: sessions, LiveKit tokens, R2 presigning, manifest store.",
+  "description": "streamit backend: sessions, LiveKit tokens, R2 presigning, manifest store.",
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",

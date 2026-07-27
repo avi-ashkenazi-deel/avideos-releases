@@ -1,5 +1,5 @@
 import XCTest
-@testable import AVideosStudio
+@testable import Streamit
 
 /// Sections, open-end resolution, timecode parsing — and the decode cases that
 /// protect the host's whole audio configuration.

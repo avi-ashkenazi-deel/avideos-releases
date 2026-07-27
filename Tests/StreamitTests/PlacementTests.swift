@@ -1,5 +1,5 @@
 import XCTest
-@testable import AVideosStudio
+@testable import Streamit
 
 /// Pins the composition placement arithmetic — the part of building a
 /// composition that has no AVFoundation in it, and therefore the part that can

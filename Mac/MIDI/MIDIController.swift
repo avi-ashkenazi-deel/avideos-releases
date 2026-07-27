@@ -13,7 +13,7 @@ final class MIDIController {
     private let hub = MIDIInputHub()
     private let store = MIDIBindingStore()
     private weak var audio: AudioEngineController?
-    private let log = Logger(subsystem: "com.aviashkenazi.avideos", category: "midi")
+    private let log = Logger(subsystem: "com.aviashkenazi.streamit", category: "midi")
 
     private(set) var bindings: [MIDIBinding] = []
     private(set) var deviceNames: [String] = []

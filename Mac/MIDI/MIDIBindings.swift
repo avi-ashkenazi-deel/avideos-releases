@@ -119,12 +119,12 @@ struct MIDIBinding: Identifiable, Codable, Hashable {
 final class MIDIBindingStore {
     private let url: URL
     private var pendingSave: DispatchWorkItem?
-    private let queue = DispatchQueue(label: "com.aviashkenazi.avideos.midibindings", qos: .utility)
-    private let log = Logger(subsystem: "com.aviashkenazi.avideos", category: "midi")
+    private let queue = DispatchQueue(label: "com.aviashkenazi.streamit.midibindings", qos: .utility)
+    private let log = Logger(subsystem: "com.aviashkenazi.streamit", category: "midi")
 
     init() {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        let dir = base.appendingPathComponent("AVideos", isDirectory: true)
+        let dir = base.appendingPathComponent("streamit", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         url = dir.appendingPathComponent("midi-bindings.json")
     }

@@ -1,5 +1,5 @@
 import XCTest
-@testable import AVideosStudio
+@testable import Streamit
 
 /// Pins down `LinearDriftAligner`: the anchor offset, the least-squares drift
 /// fit over sparse chunk stamps, the ppm clamp, and the anchor-only fallback

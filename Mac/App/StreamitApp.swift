@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// AVideos Studio — macOS live-streaming studio.
+/// streamit — macOS live-streaming studio.
 ///
 /// The app has two top-level modes:
 ///  - Live mode: the studio (scenes, mixer, guests, virtual camera/mic).
@@ -10,7 +10,7 @@ import SwiftUI
 /// audio graph, virtual camera, recorder, guest session) and is created once
 /// for the app's lifetime.
 @main
-struct AVideosApp: App {
+struct StreamitApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     @State private var studio = StudioController()
@@ -18,7 +18,7 @@ struct AVideosApp: App {
     @State private var globalShortcuts = GlobalShortcutRegistrar()
 
     var body: some Scene {
-        Window("AVideos Studio", id: "studio") {
+        Window("streamit", id: "studio") {
             MainWindow()
                 .environment(studio)
                 .environment(studio.audio)   // MixerPanelView reads AudioEngineController directly

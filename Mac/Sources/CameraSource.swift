@@ -15,8 +15,8 @@ final class CameraSource: NSObject, FrameSource, AVCaptureVideoDataOutputSampleB
     private let mailbox = FrameMailbox()
     private let converter: PixelBufferTextureConverter
     private let session = AVCaptureSession()
-    private let outputQueue = DispatchQueue(label: "com.aviashkenazi.avideos.camera", qos: .userInteractive)
-    private let log = Logger(subsystem: "com.aviashkenazi.avideos", category: "camera")
+    private let outputQueue = DispatchQueue(label: "com.aviashkenazi.streamit.camera", qos: .userInteractive)
+    private let log = Logger(subsystem: "com.aviashkenazi.streamit", category: "camera")
 
     /// Optional tap for podcast-mode local recording and segmentation:
     /// receives every raw frame on the capture queue.

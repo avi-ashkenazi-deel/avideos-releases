@@ -19,9 +19,9 @@ final class ScreenSource: NSObject, FrameSource, SCStreamOutput, SCStreamDelegat
     private let showsCursor: Bool
     private let mailbox = FrameMailbox()
     private let converter: PixelBufferTextureConverter
-    private let outputQueue = DispatchQueue(label: "com.aviashkenazi.avideos.screen", qos: .userInteractive)
+    private let outputQueue = DispatchQueue(label: "com.aviashkenazi.streamit.screen", qos: .userInteractive)
     private var stream: SCStream?
-    private let log = Logger(subsystem: "com.aviashkenazi.avideos", category: "screen")
+    private let log = Logger(subsystem: "com.aviashkenazi.streamit", category: "screen")
 
     init(key: SourceKey,
          target: Target,

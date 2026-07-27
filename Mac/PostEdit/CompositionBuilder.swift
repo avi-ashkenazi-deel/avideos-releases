@@ -20,7 +20,7 @@ import os.log
 /// crossfade for butt-joined material on a single composition track.
 /// AutoCleanup documents that it relies on this and adds no fades of its own.
 final class CompositionBuilder {
-    private static let logger = Logger(subsystem: "com.aviashkenazi.avideos", category: "CompositionBuilder")
+    private static let logger = Logger(subsystem: "com.aviashkenazi.streamit", category: "CompositionBuilder")
 
     struct Options: Sendable {
         var includeVideo: Bool = true
@@ -640,9 +640,9 @@ final class LayoutCompositionInstruction: NSObject, AVVideoCompositionInstructio
 /// needs CoreImage + the instruction above, so it can run inside
 /// AVAssetExportSession and AVPlayer alike.
 final class LayoutVideoCompositor: NSObject, AVVideoCompositing {
-    private static let logger = Logger(subsystem: "com.aviashkenazi.avideos", category: "LayoutVideoCompositor")
+    private static let logger = Logger(subsystem: "com.aviashkenazi.streamit", category: "LayoutVideoCompositor")
 
-    private let renderQueue = DispatchQueue(label: "com.aviashkenazi.avideos.postedit.compositor")
+    private let renderQueue = DispatchQueue(label: "com.aviashkenazi.streamit.postedit.compositor")
     private let ciContext = CIContext(options: [.cacheIntermediates: false,
                                                 .name: "PostEditCompositor"])
     private var renderContext: AVVideoCompositionRenderContext?

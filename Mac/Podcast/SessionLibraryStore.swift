@@ -3,8 +3,8 @@ import Observation
 import os
 
 /// Local persistence and status tracking for podcast sessions:
-/// `~/Library/Application Support/AVideos/Sessions/{id}/session.json` plus
-/// media under `~/Movies/AVideos/Sessions/{id}/`.
+/// `~/Library/Application Support/Streamit/Sessions/{id}/session.json` plus
+/// media under `~/Movies/Streamit/Sessions/{id}/`.
 @MainActor
 @Observable
 final class SessionLibraryStore {
@@ -41,16 +41,16 @@ final class SessionLibraryStore {
     private(set) var trackStatus: [TrackKey: TrackStatus] = [:]
 
     private let importService = MediaImportService()
-    private let log = Logger(subsystem: "com.aviashkenazi.avideos", category: "library")
+    private let log = Logger(subsystem: "com.aviashkenazi.streamit", category: "library")
 
     private var documentsDirectory: URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        return base.appendingPathComponent("AVideos/Sessions", isDirectory: true)
+        return base.appendingPathComponent("Streamit/Sessions", isDirectory: true)
     }
 
     private func mediaDirectory(sessionId: String) -> URL {
         FileManager.default.urls(for: .moviesDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("AVideos/Sessions/\(sessionId)", isDirectory: true)
+            .appendingPathComponent("Streamit/Sessions/\(sessionId)", isDirectory: true)
     }
 
     init() {

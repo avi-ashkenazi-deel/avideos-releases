@@ -22,7 +22,7 @@ final class ClaudeTakeSelector {
     }
 
     private let client: ClaudeAPIClient
-    private let log = Logger(subsystem: "com.aviashkenazi.avideos", category: "takeselector")
+    private let log = Logger(subsystem: "com.aviashkenazi.streamit", category: "takeselector")
 
     init(client: ClaudeAPIClient = ClaudeAPIClient()) {
         self.client = client

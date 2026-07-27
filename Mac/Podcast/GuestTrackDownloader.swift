@@ -17,7 +17,7 @@ final class GuestTrackDownloader {
     private let api: PodcastAPIClient
     private let sessionId: String
     private let sessionDirectory: URL
-    private let log = Logger(subsystem: "com.aviashkenazi.avideos", category: "download")
+    private let log = Logger(subsystem: "com.aviashkenazi.streamit", category: "download")
 
     init(api: PodcastAPIClient, sessionId: String, sessionDirectory: URL) {
         self.api = api

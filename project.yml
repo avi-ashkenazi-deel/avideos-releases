@@ -41,7 +41,7 @@ packages:
   #
   # The audio driver needs it vendored instead: add it as a submodule under
   # driver/vendor/libASPL and add its sources/headers to the
-  # AVideosAudioDriver target. Until that is done, that one target does not
+  # StreamitAudioDriver target. Until that is done, that one target does not
   # build; everything else does. See docs/DEV_SETUP.md.
 
 settings:
@@ -130,9 +130,9 @@ targets:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
 
   # ---------------------------------------------------------------------------
-  # AVideos Studio — macOS live-streaming studio (virtual camera + virtual mic)
+  # streamit — macOS live-streaming studio (virtual camera + virtual mic)
   # ---------------------------------------------------------------------------
-  AVideosStudio:
+  Streamit:
     type: application
     platform: macOS
     sources:
@@ -149,7 +149,7 @@ targets:
         embed: true          # XcodeGen embeds system-extension deps in
                              # Contents/Library/SystemExtensions; verify on
                              # first `xcodegen generate` (see docs/DEV_SETUP.md).
-      - target: AVideosAudioDriver
+      - target: StreamitAudioDriver
         embed: true
         codeSign: true
         copy:
@@ -157,30 +157,37 @@ targets:
       # dev-app-only:end
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.aviashkenazi.avideos
+        PRODUCT_BUNDLE_IDENTIFIER: com.aviashkenazi.streamit
+        # The brand is lowercase, so the bundle is streamit.app and the menu
+        # bar reads "streamit" (Info.plist's CFBundleName is $(PRODUCT_NAME)).
+        # PRODUCT_MODULE_NAME must be set alongside it: the Swift module name
+        # otherwise follows PRODUCT_NAME, and `import streamit` in the tests
+        # would be both ugly and a silent rename of the module.
+        PRODUCT_NAME: streamit
+        PRODUCT_MODULE_NAME: Streamit
         INFOPLIST_FILE: Mac/Resources/Info.plist
-        CODE_SIGN_ENTITLEMENTS: Mac/Resources/AVideosStudio.entitlements
+        CODE_SIGN_ENTITLEMENTS: Mac/Resources/Streamit.entitlements
         GENERATE_INFOPLIST_FILE: NO
         ENABLE_HARDENED_RUNTIME: YES      # Developer ID + notarization; app is NOT sandboxed
         ENABLE_PREVIEWS: YES
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
 
-  # Unit tests for AVideos Studio's pure logic (EDL arithmetic, transcript
+  # Unit tests for streamit's pure logic (EDL arithmetic, transcript
   # alignment, drift fitting, ring buffer, Codable round-trips). No hardware,
-  # no network — runnable with Cmd-U or `xcodebuild test -scheme AVideosStudio`.
-  AVideosStudioTests:
+  # no network — runnable with Cmd-U or `xcodebuild test -scheme Streamit`.
+  StreamitTests:
     type: bundle.unit-test
     platform: macOS
     sources:
-      - path: Tests/AVideosStudioTests
+      - path: Tests/StreamitTests
     dependencies:
-      - target: AVideosStudio
+      - target: Streamit
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.aviashkenazi.avideos.tests
+        PRODUCT_BUNDLE_IDENTIFIER: com.aviashkenazi.streamit.tests
         GENERATE_INFOPLIST_FILE: YES
 
-  # CoreMediaIO camera extension — publishes the "AVideos Camera" that Zoom /
+  # CoreMediaIO camera extension — publishes the "streamit Camera" that Zoom /
   # Meet / Teams list. Sandboxed (mandatory for CMIO extensions).
   CameraExtension:
     type: system-extension
@@ -189,7 +196,7 @@ targets:
       - path: CameraExtension
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.aviashkenazi.avideos.cameraextension
+        PRODUCT_BUNDLE_IDENTIFIER: com.aviashkenazi.streamit.cameraextension
         INFOPLIST_FILE: CameraExtension/Info.plist
         CODE_SIGN_ENTITLEMENTS: CameraExtension/CameraExtension.entitlements
         GENERATE_INFOPLIST_FILE: NO
@@ -198,18 +205,18 @@ targets:
   # CoreAudio HAL AudioServerPlugIn (virtual microphone + guest-send loopback
   # devices). Built as a .driver bundle, shipped inside the app's Resources,
   # installed to /Library/Audio/Plug-Ins/HAL on first run (admin prompt).
-  AVideosAudioDriver:
+  StreamitAudioDriver:
     type: bundle
     platform: macOS
     sources:
-      - path: driver/AVideosAudio
+      - path: driver/StreamitAudio
     # No dependencies: libASPL has to be vendored (see the packages note above).
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.aviashkenazi.avideos.audiodriver
-        PRODUCT_NAME: AVideosAudio
+        PRODUCT_BUNDLE_IDENTIFIER: com.aviashkenazi.streamit.audiodriver
+        PRODUCT_NAME: StreamitAudio
         WRAPPER_EXTENSION: driver
-        INFOPLIST_FILE: driver/AVideosAudio/Info.plist
+        INFOPLIST_FILE: driver/StreamitAudio/Info.plist
         GENERATE_INFOPLIST_FILE: NO
         ENABLE_HARDENED_RUNTIME: YES
         CLANG_CXX_LANGUAGE_STANDARD: c++17
@@ -240,16 +247,16 @@ schemes:
     archive:
       config: Release
 
-  AVideosStudio:
+  Streamit:
     build:
       targets:
-        AVideosStudio: all
+        Streamit: all
     run:
       config: Debug
     test:
       config: Debug
       targets:
-        - AVideosStudioTests
+        - StreamitTests
     profile:
       config: Release
     analyze:

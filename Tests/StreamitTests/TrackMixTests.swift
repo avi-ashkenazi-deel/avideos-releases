@@ -1,5 +1,5 @@
 import XCTest
-@testable import AVideosStudio
+@testable import Streamit
 
 /// Pins down per-track level control in the editor: the dB→linear conversion,
 /// how mute and solo resolve against each other, and the storage rule that

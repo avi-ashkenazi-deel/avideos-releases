@@ -11,7 +11,7 @@ import os
 final class MovieAudioTap {
     private let ring: RingBuffer
     private var currentPlayer: AVPlayer?
-    private let log = Logger(subsystem: "com.aviashkenazi.avideos", category: "movietap")
+    private let log = Logger(subsystem: "com.aviashkenazi.streamit", category: "movietap")
 
     /// Context handed to the C callbacks. Owns conversion scratch.
     private final class TapContext {

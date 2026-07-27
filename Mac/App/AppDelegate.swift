@@ -1,7 +1,7 @@
 import AppKit
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    /// Set by AVideosApp once the SwiftUI scene comes up.
+    /// Set by StreamitApp once the SwiftUI scene comes up.
     weak var studio: StudioController?
 
     /// Keeps the process out of App Nap while live — the render clock, the

@@ -43,8 +43,8 @@ final class ProgramRecorder: ProgramFrameConsumer {
     private var sessionStarted = false
     private var firstVideoTime: CMTime = .invalid
 
-    private let queue = DispatchQueue(label: "com.aviashkenazi.avideos.recorder", qos: .userInitiated)
-    private let log = Logger(subsystem: "com.aviashkenazi.avideos", category: "recorder")
+    private let queue = DispatchQueue(label: "com.aviashkenazi.streamit.recorder", qos: .userInitiated)
+    private let log = Logger(subsystem: "com.aviashkenazi.streamit", category: "recorder")
 
     var isRecording: Bool {
         if case .recording = state { return true }
@@ -210,7 +210,7 @@ final class ProgramRecorder: ProgramFrameConsumer {
         let stamp = formatter.string(from: Date())
         let safeName = projectName.replacingOccurrences(of: "/", with: "-")
         let movies = FileManager.default.urls(for: .moviesDirectory, in: .userDomainMask)[0]
-        return movies.appendingPathComponent("AVideos/\(stamp) — \(safeName).mov")
+        return movies.appendingPathComponent("Streamit/\(stamp) — \(safeName).mov")
     }
 
     private static func bitrate(width: Int, height: Int, fps: Int, codec: Codec) -> Int {

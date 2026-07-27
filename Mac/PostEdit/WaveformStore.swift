@@ -19,7 +19,7 @@ final class WaveformStore {
 
     private(set) var peaks: [String: [Float]] = [:]   // key → peaks
     private var inFlight: Set<String> = []
-    private let log = Logger(subsystem: "com.aviashkenazi.avideos", category: "waveform")
+    private let log = Logger(subsystem: "com.aviashkenazi.streamit", category: "waveform")
 
     func ensurePeaks(for track: EditTrack) {
         guard track.kind == .audio else { return }
@@ -54,7 +54,7 @@ final class WaveformStore {
     /// only stop a background caller from asking where the sidecar lives.
     nonisolated static func cachedPeaksURL(for url: URL) -> URL {
         let base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("AVideos/peaks", isDirectory: true)
+            .appendingPathComponent("Streamit/peaks", isDirectory: true)
         try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
         // Path hash rather than the filename: two "intro.mp3"s in different
         // folders must not share a cache entry.

@@ -8,11 +8,11 @@ import os.log
 /// (EDL + layout cues + chapters).
 ///
 /// File format: pretty-printed JSON at
-/// `~/Library/Application Support/AVideos/Projects/Edits/{id}.avedit`.
+/// `~/Library/Application Support/Streamit/Projects/Edits/{id}.avedit`.
 @Observable
 @MainActor
 final class EditProjectStore {
-    private static let logger = Logger(subsystem: "com.aviashkenazi.avideos", category: "EditProjectStore")
+    private static let logger = Logger(subsystem: "com.aviashkenazi.streamit", category: "EditProjectStore")
 
     var project: EditProject
     let undoManager: UndoManager
@@ -35,7 +35,7 @@ final class EditProjectStore {
     // Isolating them to the main actor was an accident of the class annotation.
     nonisolated static var directoryURL: URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        return base.appendingPathComponent("AVideos/Projects/Edits", isDirectory: true)
+        return base.appendingPathComponent("Streamit/Projects/Edits", isDirectory: true)
     }
 
     nonisolated static func fileURL(for id: UUID) -> URL {

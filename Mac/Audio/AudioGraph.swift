@@ -59,8 +59,8 @@ final class AudioGraph {
     private(set) var strips: [MixerStripID: Strip] = [:]
 
     // Rings crossing engine/clock boundaries.
-    let programRing = RingBuffer(duration: 0.25)    // → "AVideos Microphone" feeder
-    let mixMinusRing = RingBuffer(duration: 0.25)   // → "AVideos Guest Send" feeder
+    let programRing = RingBuffer(duration: 0.25)    // → "streamit Microphone" feeder
+    let mixMinusRing = RingBuffer(duration: 0.25)   // → "streamit Guest Send" feeder
     let movieRing = RingBuffer(duration: 0.3)       // ← MovieAudioTap
 
     /// Program-bus meter.
@@ -74,7 +74,7 @@ final class AudioGraph {
     let padsBus = AVAudioMixerNode()
     let musicBus = AVAudioMixerNode()
 
-    private let log = Logger(subsystem: "com.aviashkenazi.avideos", category: "audiograph")
+    private let log = Logger(subsystem: "com.aviashkenazi.streamit", category: "audiograph")
 
     // MARK: - Build
 

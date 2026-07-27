@@ -19,7 +19,7 @@ struct ClipSuggestion: Identifiable {
 
 final class ClipSuggester {
     private let client: ClaudeAPIClient
-    private let log = Logger(subsystem: "com.aviashkenazi.avideos", category: "clips")
+    private let log = Logger(subsystem: "com.aviashkenazi.streamit", category: "clips")
 
     init(client: ClaudeAPIClient = ClaudeAPIClient()) {
         self.client = client

@@ -9,7 +9,7 @@
 	     CMIOExtensionMachServiceName in Info.plist. -->
 	<key>com.apple.security.application-groups</key>
 	<array>
-		<string>$(TeamIdentifierPrefix)com.aviashkenazi.avideos</string>
+		<string>$(TeamIdentifierPrefix)com.aviashkenazi.streamit</string>
 	</array>
 </dict>
 </plist>

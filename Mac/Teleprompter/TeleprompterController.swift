@@ -47,7 +47,7 @@ final class TeleprompterController {
     @ObservationIgnored private var localKeyMonitor: Any?
     @ObservationIgnored private var globalKeyMonitor: Any?
     @ObservationIgnored private var trackingTimer: Timer?
-    private let log = Logger(subsystem: "com.aviashkenazi.avideos", category: "teleprompter")
+    private let log = Logger(subsystem: "com.aviashkenazi.streamit", category: "teleprompter")
 
     init(store: ScriptStore = .shared) {
         self.store = store

@@ -1,5 +1,5 @@
 /**
- * Guest join flow for AVideos Studio.
+ * Guest join flow for streamit.
  *
  * URL contract: index.html?room=SESSIONID&api=https://worker-origin
  *

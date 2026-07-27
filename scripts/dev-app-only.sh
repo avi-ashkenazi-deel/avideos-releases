@@ -1,6 +1,6 @@
 #!/bin/bash
 # Toggles the camera extension and audio driver out of (and back into) the
-# AVideosStudio target's dependencies, then regenerates the Xcode project.
+# Streamit target's dependencies, then regenerates the Xcode project.
 #
 # Why this exists: both are embedded build dependencies of the app, so a plain
 # `xcodegen generate && xcodebuild` needs real Developer ID certs and a vendored
@@ -20,8 +20,8 @@ cd "$(dirname "$0")/.."
 SPEC="project.yml"
 BEGIN="# dev-app-only:begin"
 END="# dev-app-only:end"
-REAL_ENT="CODE_SIGN_ENTITLEMENTS: Mac/Resources/AVideosStudio.entitlements"
-DEV_ENT="CODE_SIGN_ENTITLEMENTS: Mac/Resources/AVideosStudio-dev.entitlements"
+REAL_ENT="CODE_SIGN_ENTITLEMENTS: Mac/Resources/Streamit.entitlements"
+DEV_ENT="CODE_SIGN_ENTITLEMENTS: Mac/Resources/Streamit-dev.entitlements"
 
 if ! grep -qF "$BEGIN" "$SPEC" || ! grep -qF "$END" "$SPEC"; then
     echo "error: markers missing from $SPEC — was the dependencies block edited by hand?" >&2

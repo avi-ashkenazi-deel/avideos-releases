@@ -1,6 +1,6 @@
 //
 //  main.swift
-//  CameraExtension — AVideos Studio virtual camera (CoreMediaIO system extension)
+//  CameraExtension — streamit virtual camera (CoreMediaIO system extension)
 //
 //  Entry point. A CMIO extension is a faceless XPC service: we build the
 //  provider hierarchy (provider → device → streams), hand it to

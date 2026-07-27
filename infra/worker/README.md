@@ -1,6 +1,6 @@
-# AVideos Studio — Worker backend
+# streamit — Worker backend
 
-A single Cloudflare Worker that is the entire backend for AVideos Studio:
+A single Cloudflare Worker that is the entire backend for streamit:
 session creation, LiveKit token minting, presigned R2 upload/download URLs,
 and the per-session `manifest.json` store.
 
@@ -20,11 +20,11 @@ src/manifest.ts  manifest schema + etag-retry read-modify-write
 1. **Create the R2 bucket**
 
    ```sh
-   wrangler r2 bucket create avideos-recordings
+   wrangler r2 bucket create streamit-recordings
    ```
 
 2. **Create an R2 API token** (Cloudflare dashboard → R2 → Manage R2 API
-   Tokens → "Object Read & Write", scoped to `avideos-recordings`). This
+   Tokens → "Object Read & Write", scoped to `streamit-recordings`). This
    yields an Access Key ID + Secret Access Key. These are needed because
    presigned URLs are minted against the S3-compatible endpoint — the bucket
    *binding* alone cannot presign.
@@ -74,7 +74,7 @@ still point at the real S3 endpoint, so uploads need real creds).
 ## How clients point at it
 
 - **Mac app (host)**: configure the worker origin (e.g.
-  `https://avideos-worker.<account>.workers.dev`) and `HOST_KEY`. It calls
+  `https://streamit-worker.<account>.workers.dev`) and `HOST_KEY`. It calls
   `POST /v1/sessions` with header `x-host-key: <HOST_KEY>` and gets back
   `{sessionId, hostToken, livekitUrl, inviteUrl}`. It shares `inviteUrl` with
   guests, joins LiveKit with `hostToken`, reads

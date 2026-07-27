@@ -18,7 +18,7 @@ final class RenderEngine {
     let compositor: Compositor
 
     private let bufferPool: PixelBufferPool
-    private let log = Logger(subsystem: "com.aviashkenazi.avideos", category: "render")
+    private let log = Logger(subsystem: "com.aviashkenazi.streamit", category: "render")
 
     /// The latest compiled plan, swapped atomically from the main actor.
     private let planLock = NSLock()

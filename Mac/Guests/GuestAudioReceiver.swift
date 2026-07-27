@@ -18,7 +18,7 @@ final class GuestAudioReceiver: AudioRenderer, @unchecked Sendable {
     private let ring: RingBuffer
     /// Preallocated interleave scratch; render-path allocation-free.
     private var scratch: [Float]
-    private let log = Logger(subsystem: "com.aviashkenazi.avideos", category: "guest-audio")
+    private let log = Logger(subsystem: "com.aviashkenazi.streamit", category: "guest-audio")
 
     init(identity: String, ring: RingBuffer) {
         self.identity = identity

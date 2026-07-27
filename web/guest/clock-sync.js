@@ -14,7 +14,7 @@ const RESAMPLE_INTERVAL_MS = 5 * 60 * 1000;
 
 export class SessionClock {
   /**
-   * @param {string} apiOrigin worker origin, e.g. "https://avideos-worker.x.workers.dev"
+   * @param {string} apiOrigin worker origin, e.g. "https://streamit-worker.x.workers.dev"
    */
   constructor(apiOrigin) {
     this.apiOrigin = apiOrigin.replace(/\/+$/, "");

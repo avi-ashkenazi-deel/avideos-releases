@@ -22,7 +22,7 @@ final class ThumbnailStore {
     private(set) var images: [Key: NSImage] = [:]
     private var inFlight: Set<Key> = []
     private var generators: [String: AVAssetImageGenerator] = [:]
-    private let log = Logger(subsystem: "com.aviashkenazi.avideos", category: "thumbnails")
+    private let log = Logger(subsystem: "com.aviashkenazi.streamit", category: "thumbnails")
 
     struct Key: Hashable, Sendable {
         /// Whatever the caller looks up by: a track id, a bin item's id, an

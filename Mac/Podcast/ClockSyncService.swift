@@ -47,7 +47,7 @@ final class ClockSyncService: @unchecked Sendable {
     private let samplesPerBurst: Int
     private let interSampleDelay: Duration
     private let resampleInterval: Duration
-    private let log = Logger(subsystem: "com.aviashkenazi.avideos", category: "ClockSync")
+    private let log = Logger(subsystem: "com.aviashkenazi.streamit", category: "ClockSync")
 
     private let stateLock = NSLock()
     private var resampleTask: Task<Void, Never>?

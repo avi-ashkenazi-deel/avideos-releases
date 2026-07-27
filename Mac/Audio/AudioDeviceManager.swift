@@ -20,7 +20,7 @@ final class AudioDeviceManager {
     var onDevicesChanged: (() -> Void)?
 
     private var listenerBlock: AudioObjectPropertyListenerBlock?
-    private let log = Logger(subsystem: "com.aviashkenazi.avideos", category: "audiodevices")
+    private let log = Logger(subsystem: "com.aviashkenazi.streamit", category: "audiodevices")
 
     init() {
         installListener()

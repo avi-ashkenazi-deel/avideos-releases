@@ -1,4 +1,4 @@
-# AVideosAudio — CoreAudio HAL virtual-audio driver
+# StreamitAudio — CoreAudio HAL virtual-audio driver
 
 A HAL `AudioServerPlugIn` (`.driver` bundle) built on
 [libASPL](https://github.com/gavv/libASPL) (MIT, C++17). It publishes two
@@ -6,8 +6,8 @@ loopback devices:
 
 | Device | UID | Default-input eligible |
 |---|---|---|
-| AVideos Microphone | `com.aviashkenazi.avideos.vmic` | yes |
-| AVideos Guest Send | `com.aviashkenazi.avideos.gsend` | no |
+| streamit Microphone | `com.aviashkenazi.streamit.vmic` | yes |
+| streamit Guest Send | `com.aviashkenazi.streamit.gsend` | no |
 
 Each device is fixed at 2 ch / 48 kHz / Float32 with one **output** stream and
 one **input** stream.
@@ -47,7 +47,7 @@ packages:
     from: "3.1.0"
 ```
 
-and the `AVideosAudioDriver` bundle target depends on it. `xcodegen generate`
+and the `StreamitAudioDriver` bundle target depends on it. `xcodegen generate`
 wires it up; Xcode resolves the package on first build.
 
 **Fallback (CMake / submodule)** — if SPM packaging fights XcodeGen on your
@@ -61,7 +61,7 @@ cmake .. && make -j
 # produces libASPL.a + headers under build/include
 ```
 
-Then point the `AVideosAudioDriver` target at the built static lib instead of
+Then point the `StreamitAudioDriver` target at the built static lib instead of
 the package: remove the `package: libASPL` dependency in `project.yml`, add
 `HEADER_SEARCH_PATHS: driver/vendor/libASPL/build/include` and link
 `libASPL.a` (or add libASPL's sources directly to the target — it compiles
@@ -76,17 +76,17 @@ will never pick up the new build. `CFBundleShortVersionString` tracks the
 marketing version and can move with the app.
 
 Do **not** change the factory UUID (`7A9E4F52-3C81-4D6B-9E2A-51B0A6E24C11`)
-or the bundle id (`com.aviashkenazi.avideos.audiodriver`) — both are baked
+or the bundle id (`com.aviashkenazi.streamit.audiodriver`) — both are baked
 into `Info.plist` and matched by `Driver.cpp` / the installer.
 
 ## Manual install (spike / development)
 
-Build the `AVideosAudioDriver` target, then:
+Build the `StreamitAudioDriver` target, then:
 
 ```sh
-sudo cp -R /path/to/Build/Products/Debug/AVideosAudio.driver \
+sudo cp -R /path/to/Build/Products/Debug/StreamitAudio.driver \
     /Library/Audio/Plug-Ins/HAL/
-sudo chown -R root:wheel /Library/Audio/Plug-Ins/HAL/AVideosAudio.driver
+sudo chown -R root:wheel /Library/Audio/Plug-Ins/HAL/StreamitAudio.driver
 sudo launchctl kickstart -kp system/com.apple.audio.coreaudiod
 ```
 
@@ -104,13 +104,13 @@ apps first.
    system_profiler SPAudioDataType
    ```
 
-   should list "AVideos Microphone" and "AVideos Guest Send" with input and
+   should list "streamit Microphone" and "streamit Guest Send" with input and
    output channels at 48 kHz.
 
-2. Loopback works: play audio to "AVideos Microphone" (e.g. set it as an
+2. Loopback works: play audio to "streamit Microphone" (e.g. set it as an
    app's output device, or `ffplay`/`afplay` routed to it via Audio MIDI
    Setup), then open QuickTime Player → New Audio Recording → select
-   "AVideos Microphone" as the source and record; the recording should
+   "streamit Microphone" as the source and record; the recording should
    contain the played audio.
 
 3. If a device is missing, check coreaudiod's log for plug-in load errors:
@@ -125,7 +125,7 @@ apps first.
 
 ## Files
 
-- `Driver.cpp` — factory entry point (`AVideosAudioDriverFactory`), device
+- `Driver.cpp` — factory entry point (`StreamitAudioDriverFactory`), device
   construction (`MakeLoopbackDevice`), loopback IO handler.
 - `LoopbackRing.h` — lock-free sample-time-indexed ring buffer.
 - `Info.plist` — bundle metadata + CFPlugIn factory table (see Versioning).

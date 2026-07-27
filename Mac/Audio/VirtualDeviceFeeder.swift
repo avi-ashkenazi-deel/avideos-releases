@@ -3,8 +3,8 @@ import AVFoundation
 import os
 
 /// Engine #3 of three: a tiny engine whose only job is to pull a ring and
-/// play it into one of our virtual loopback devices ("AVideos Microphone" or
-/// "AVideos Guest Send"). Whatever we play into the device's output side,
+/// play it into one of our virtual loopback devices ("streamit Microphone" or
+/// "streamit Guest Send"). Whatever we play into the device's output side,
 /// Zoom/LiveKit read back from its input side — that's the loopback driver's
 /// contract.
 final class VirtualDeviceFeeder {
@@ -16,7 +16,7 @@ final class VirtualDeviceFeeder {
     private var sourceNode: AVAudioSourceNode?
     private(set) var isRunning = false
     private var deinterleaveScratch = [Float](repeating: 0, count: 8192 * 2)
-    private let log = Logger(subsystem: "com.aviashkenazi.avideos", category: "feeder")
+    private let log = Logger(subsystem: "com.aviashkenazi.streamit", category: "feeder")
 
     init(deviceUID: String, ring: RingBuffer, deviceManager: AudioDeviceManager) {
         self.deviceUID = deviceUID

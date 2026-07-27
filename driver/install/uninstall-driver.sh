@@ -1,19 +1,19 @@
 #!/bin/bash
 #
-# uninstall-driver.sh — remove the AVideosAudio HAL driver bundle.
+# uninstall-driver.sh — remove the StreamitAudio HAL driver bundle.
 #
-# Run as root (the AVideos Studio app's DriverInstaller invokes this via
+# Run as root (the streamit app's DriverInstaller invokes this via
 # osascript with administrator privileges; no arguments):
 #
 #   sudo ./uninstall-driver.sh
 #
-# Removes the installed bundle and restarts coreaudiod so the "AVideos
-# Microphone" / "AVideos Guest Send" devices disappear. Restarting
+# Removes the installed bundle and restarts coreaudiod so the "streamit
+# Microphone" / "streamit Guest Send" devices disappear. Restarting
 # coreaudiod briefly interrupts all system audio.
 
 set -euo pipefail
 
-DEST="/Library/Audio/Plug-Ins/HAL/AVideosAudio.driver"
+DEST="/Library/Audio/Plug-Ins/HAL/StreamitAudio.driver"
 
 if [[ "$(id -u)" -ne 0 ]]; then
     echo "error: must run as root (use sudo or the app's admin prompt)" >&2

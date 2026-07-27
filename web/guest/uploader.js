@@ -8,7 +8,7 @@
  * 3 exponential-backoff retries each, and deletes rows only after a
  * successful PUT.
  *
- * IndexedDB: db "avideos-uploads", store "chunks",
+ * IndexedDB: db "streamit-uploads", store "chunks",
  * key = "{sessionId}/{participantId}/{takeId}/{kind}/{index}".
  *
  * The upload context (api origin + upload grant) is persisted to
@@ -22,9 +22,9 @@
  *   "error"    detail {message, fatal} — fatal=true means the grant is dead
  */
 
-const DB_NAME = "avideos-uploads";
+const DB_NAME = "streamit-uploads";
 const STORE = "chunks";
-const CTX_PREFIX = "avideos-upload-ctx:";
+const CTX_PREFIX = "streamit-upload-ctx:";
 const SIGN_BATCH = 20;
 const PUT_PARALLELISM = 2;
 const PUT_RETRIES = 3;

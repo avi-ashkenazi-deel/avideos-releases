@@ -18,7 +18,7 @@ final class OffscreenWebHost: NSObject, WKNavigationDelegate {
     private let window: NSWindow
     private let webView: WKWebView
     private var timer: Timer?
-    private let log = Logger(subsystem: "com.aviashkenazi.avideos", category: "web")
+    private let log = Logger(subsystem: "com.aviashkenazi.streamit", category: "web")
 
     /// Called on the main thread with each fresh snapshot.
     var onSnapshot: ((CGImage) -> Void)?

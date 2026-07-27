@@ -30,7 +30,7 @@ enum DisfluencyLexicon {
 /// diarization is free).
 final class TranscriptionService {
     private let engine: TranscriptionEngine
-    private let log = Logger(subsystem: "com.aviashkenazi.avideos", category: "transcription")
+    private let log = Logger(subsystem: "com.aviashkenazi.streamit", category: "transcription")
 
     init(engine: TranscriptionEngine = WhisperKitEngine()) {
         self.engine = engine
@@ -55,7 +55,7 @@ final class TranscriptionService {
 /// low-RAM machines.
 final class WhisperKitEngine: TranscriptionEngine {
     var modelName = "large-v3-turbo"
-    private let log = Logger(subsystem: "com.aviashkenazi.avideos", category: "whisper")
+    private let log = Logger(subsystem: "com.aviashkenazi.streamit", category: "whisper")
 
     func transcribe(audioURL: URL,
                     trackId: String,

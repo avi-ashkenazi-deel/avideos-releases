@@ -22,7 +22,7 @@ final class MovieSource: FrameSource {
     private var looper: AVPlayerLooper?
     private var output: AVPlayerItemVideoOutput?
     private var lastFrame: SourceFrame?
-    private let log = Logger(subsystem: "com.aviashkenazi.avideos", category: "movie")
+    private let log = Logger(subsystem: "com.aviashkenazi.streamit", category: "movie")
 
     /// The player, exposed so the audio graph can tap movie audio via an
     /// MTAudioProcessingTap / AVAudioMix (wired by AudioEngineController).

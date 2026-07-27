@@ -16,7 +16,7 @@ final class SilenceSnapper {
     static let silenceThreshold: Float = 0.005
 
     private var energy: [Float] = []
-    private let log = Logger(subsystem: "com.aviashkenazi.avideos", category: "silence")
+    private let log = Logger(subsystem: "com.aviashkenazi.streamit", category: "silence")
 
     private(set) var duration: Double = 0
 

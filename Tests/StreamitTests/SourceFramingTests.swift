@@ -1,5 +1,5 @@
 import XCTest
-@testable import AVideosStudio
+@testable import Streamit
 
 /// Pins down source framing: the sampling-window arithmetic the shader uses to
 /// fit a source into a differently-shaped canvas, and the plan-level expansion
