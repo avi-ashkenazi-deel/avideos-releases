@@ -97,6 +97,13 @@ struct TranscriptEditorView: NSViewRepresentable {
     var onSeek: (Double) -> Void
     var onDeleteWords: (ClosedRange<Double>) -> Void
     var onRecoverClip: (UUID) -> Void
+    /// Where each word ended up on screen, so the vertical timeline can line
+    /// its blocks up with the text. Called after every relayout; the caller
+    /// turns these into a `TextAlignedScale`.
+    var onWordGeometry: ([TimelineTextRun]) -> Void = { _ in }
+    /// The EDL the displayed text was built from, needed to convert a word's
+    /// position into edited-timeline seconds.
+    var edl: EditDecisionList
 
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
@@ -125,12 +132,17 @@ struct TranscriptEditorView: NSViewRepresentable {
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
         guard let textView = scrollView.documentView as? NSTextView else { return }
         context.coordinator.parent = self
+        var didRelayout = false
         if textView.textStorage?.string != model.attributed.string
             || context.coordinator.lastRenderedVersion != model.attributed.hash {
             let selection = textView.selectedRanges
             textView.textStorage?.setAttributedString(model.attributed)
             textView.selectedRanges = selection
             context.coordinator.lastRenderedVersion = model.attributed.hash
+            didRelayout = true
+        }
+        if didRelayout {
+            context.coordinator.publishWordGeometry(from: textView)
         }
     }
 
@@ -174,6 +186,58 @@ struct TranscriptEditorView: NSViewRepresentable {
                 self.parent.onDeleteWords(first.word.start...last.word.end)
                 return nil   // consumed
             }
+        }
+
+        /// Measures where each word landed and reports it in edited-timeline
+        /// terms, which is what the vertical timeline aligns against.
+        ///
+        /// Uses the classic TextKit stack — `scrollableTextView()` gives us a
+        /// real `NSLayoutManager`, so `boundingRect(forGlyphRange:in:)` is the
+        /// direct answer. Runs are emitted per word; the scale collapses
+        /// consecutive ones itself.
+        func publishWordGeometry(from textView: NSTextView) {
+            guard let layoutManager = textView.layoutManager,
+                  let container = textView.textContainer else { return }
+
+            let displays = parent.model.displays
+            guard !displays.isEmpty else {
+                parent.onWordGeometry([])
+                return
+            }
+
+            // Word position in the *program*: walk the sequence the same way
+            // the transcript was built, so the two agree exactly.
+            var runs: [TimelineTextRun] = []
+            runs.reserveCapacity(displays.count)
+            var timelineStart = 0.0
+            var displayIndex = 0
+            let inset = textView.textContainerInset.height
+
+            for clip in parent.edl.clips {
+                guard displayIndex < displays.count else { break }
+                let clipStart = clip.sourceRange.lowerBound
+
+                while displayIndex < displays.count,
+                      displays[displayIndex].clipID == clip.id {
+                    let display = displays[displayIndex]
+                    displayIndex += 1
+                    guard clip.enabled else { continue }
+
+                    let glyphRange = layoutManager.glyphRange(
+                        forCharacterRange: display.characterRange, actualCharacterRange: nil)
+                    let rect = layoutManager.boundingRect(forGlyphRange: glyphRange, in: container)
+                    guard rect.height > 0 else { continue }
+
+                    let offsetIntoClip = display.word.start - clipStart
+                    let start = max(0, timelineStart + offsetIntoClip)
+                    runs.append(TimelineTextRun(startTime: start,
+                                                endTime: start + display.word.duration,
+                                                minY: rect.minY + inset,
+                                                maxY: rect.maxY + inset))
+                }
+                if clip.enabled { timelineStart += clip.duration }
+            }
+            parent.onWordGeometry(runs)
         }
 
         func removeKeyMonitor() {

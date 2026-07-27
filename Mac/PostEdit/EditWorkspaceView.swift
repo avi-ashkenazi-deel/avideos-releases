@@ -1,14 +1,17 @@
 import SwiftUI
 import AVKit
 
-/// The edit-mode shell: track list LEFT, transcript CENTER, preview RIGHT,
-/// timeline BOTTOM — transcript and timeline are two views of the same EDL.
+/// The edit-mode shell: tracks, transcript, timeline and preview as four
+/// columns. The timeline runs vertically beside the transcript rather than as
+/// a strip underneath, so the two can be read against each other — they are
+/// two views of the same EDL, and now they line up line by line.
 struct EditWorkspaceView: View {
     @State private var project: EditProject
     let onClose: () -> Void
 
     @State private var preview = PreviewPlayer()
-    @State private var timelineVM = TimelineViewModel()
+    @State private var timelineVM = VerticalTimelineViewModel()
+    @State private var thumbnails = ThumbnailStore()
     @State private var transcriptModel = TranscriptEditModel()
     @State private var waveforms = WaveformStore()
     @State private var exporter = ExportService()
@@ -35,48 +38,18 @@ struct EditWorkspaceView: View {
     }
 
     var body: some View {
-        VSplitView {
-            HSplitView {
-                trackListPane
-                    .frame(minWidth: 180, maxWidth: 260)
-                transcriptPane
-                    .frame(minWidth: 300)
-                previewPane
-                    .frame(minWidth: 360)
-            }
-            .frame(minHeight: 320)
-
-            EditTimelineView(viewModel: timelineVM,
-                             project: project,
-                             waveforms: waveforms,
-                             playheadSource: project.edl.mapTimelineToSource(preview.playheadSeconds),
-                             onScrub: { source in
-                                 if let timeline = project.edl.mapSourceToTimeline(source) {
-                                     preview.seek(to: timeline)
-                                 }
-                             },
-                             onSplitAt: { source in
-                                 mutateEDL { _ = $0.splitClip(at: source) }
-                             },
-                             onToggleClip: { id in
-                                 mutateEDL { edl in
-                                     if let clip = edl.clips.first(where: { $0.id == id }) {
-                                         if clip.enabled {
-                                             _ = edl.deleteRange(clip.sourceRange, label: .cutManual)
-                                         } else {
-                                             _ = edl.recoverClip(id: id)
-                                         }
-                                     }
-                                 }
-                             },
-                             onDeleteSelection: { deleteTimelineSelection() },
-                             onAddLayoutCue: { time, layout in
-                                 performEdit {
-                                     project.layoutCues.append(LayoutCue(atTime: time, layout: layout))
-                                     project.layoutCues.sort { $0.atTime < $1.atTime }
-                                 }
-                             })
-                .frame(minHeight: 150, idealHeight: 210)
+        // The timeline is a column beside the transcript now, not a strip
+        // beneath everything — that is the whole point of turning it
+        // vertical, so the two can be read against each other.
+        HSplitView {
+            trackListPane
+                .frame(minWidth: 180, maxWidth: 260)
+            transcriptPane
+                .frame(minWidth: 280)
+            verticalTimeline
+                .frame(minWidth: 300, idealWidth: 380)
+            previewPane
+                .frame(minWidth: 340)
         }
         .toolbar { toolbarContent }
         .navigationTitle(project.name)
@@ -132,6 +105,50 @@ struct EditWorkspaceView: View {
                 LabeledContent("Cuts", value: "\(project.edl.clips.filter { !$0.enabled }.count)")
                 LabeledContent("Segments", value: "\(project.edl.clips.count)")
             }
+        }
+    }
+
+    // MARK: - Timeline
+
+    private var verticalTimeline: some View {
+        VerticalTimelineView(
+            viewModel: timelineVM,
+            project: project,
+            waveforms: waveforms,
+            thumbnails: thumbnails,
+            playhead: preview.playheadSeconds,
+            onScrub: { preview.seek(to: $0) },
+            onSelectClip: { _ in },
+            onMoveClip: { id, index in
+                performEdit { _ = project.edl.move(clipID: id, toIndex: index) }
+            },
+            onTrimClip: { id, range in
+                performEdit { _ = project.edl.trim(clipID: id, to: range) }
+            },
+            onToggleClip: { id in
+                mutateEDL { edl in
+                    guard let clip = edl.clips.first(where: { $0.id == id }) else { return }
+                    if clip.enabled {
+                        _ = edl.setEnabled(false, id: id, label: .cutManual)
+                    } else {
+                        _ = edl.recoverClip(id: id)
+                    }
+                }
+            },
+            onMoveOverlay: { id, range in
+                performEdit { _ = project.setOverlayRange(id: id, to: range) }
+            },
+            onRemoveOverlay: { id in
+                performEdit { project.removeOverlay(id: id) }
+            },
+            onSplitAtPlayhead: {
+                // Timeline-time, so it lands in the occurrence you're looking
+                // at even when a moment plays more than once.
+                mutateEDL { _ = $0.splitClip(atTimelineTime: preview.playheadSeconds) }
+            })
+        .onAppear { timelineVM.update(duration: project.editedDuration) }
+        .onChange(of: project.editedDuration) { _, new in
+            timelineVM.update(duration: new)
         }
     }
 
@@ -238,7 +255,15 @@ struct EditWorkspaceView: View {
                                      },
                                      onRecoverClip: { id in
                                          mutateEDL { _ = $0.recoverClip(id: id) }
-                                     })
+                                     },
+                                     // Feeds the text-aligned timeline scale:
+                                     // without measured geometry it falls back
+                                     // to uniform, so this is what makes the
+                                     // two panes actually line up.
+                                     onWordGeometry: { runs in
+                                         timelineVM.update(textRuns: runs)
+                                     },
+                                     edl: project.edl)
             }
         }
     }
