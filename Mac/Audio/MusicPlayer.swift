@@ -8,11 +8,55 @@ struct MusicTrack: Identifiable, Codable, Hashable {
     var bookmark: Data?
     var path: String
 
+    // Everything below is Optional rather than a defaulted `var`, deliberately.
+    //
+    // Swift's synthesized `init(from:)` emits `decode(_:forKey:)` for a
+    // non-optional property *even when it has a default* — defaults are only
+    // used by the memberwise init — so a missing key throws. Every settings
+    // file written before this feature lacks these keys, and
+    // `AudioSettingsStore.load()` turns any throw into blank settings, which
+    // would cost the host their devices, faders, ducker, inserts and pads.
+    // Optionals decode via `decodeIfPresent` and are simply absent.
+
+    /// Where "play this track" begins. nil ⇒ 0.
+    ///
+    /// Separate from sections on purpose: it applies to tracks you never
+    /// sectioned at all (skipping a 12-second intro), and it keeps the
+    /// no-sections path one line in the engine.
+    var startOffset: Double?
+    var sections: [MusicSection]?
+    /// Fire this section when the track loads. nil ⇒ plain playback, exactly
+    /// as before this feature existed.
+    var armedSectionID: UUID?
+
     init(url: URL) {
         self.id = UUID()
         self.title = url.deletingPathExtension().lastPathComponent
         self.bookmark = try? url.bookmarkData(options: [.withSecurityScope])
         self.path = url.path
+    }
+
+    /// Sections in play order. The open-end resolver and the pad row both
+    /// depend on this ordering, so every write goes through it.
+    var sortedSections: [MusicSection] {
+        (sections ?? []).sorted { $0.start < $1.start }
+    }
+
+    var effectiveStartOffset: Double { startOffset ?? 0 }
+
+    func section(withID id: UUID?) -> MusicSection? {
+        guard let id else { return nil }
+        return sections?.first { $0.id == id }
+    }
+
+    /// The section bound to a hotkey slot, if any.
+    ///
+    /// Resolution is by explicit binding, never by position: sections are kept
+    /// sorted by start time, so a positional mapping would renumber every slot
+    /// after any marker you added later — you rehearse "3 is the chorus", drop
+    /// an intro marker, and 3 fires the verse on air.
+    func section(forHotkeyIndex index: Int) -> MusicSection? {
+        sections?.first { $0.hotkeyIndex == index }
     }
 
     func resolve() -> URL? {
@@ -57,6 +101,9 @@ final class MusicPlayer {
     private(set) var currentTrackID: UUID?
     private(set) var isPlaying = false
     var loopMode: LoopMode = .off
+    /// Sticky switch behaviour. Individual calls can override it, so a bound
+    /// pad can mean "chorus, hard cut" without changing the global setting.
+    var switchMode: SectionSwitchMode = .atLoopEnd
 
     /// Seconds into the current track / its duration, for the transport UI.
     private(set) var position: Double = 0
@@ -100,6 +147,19 @@ final class MusicPlayer {
 
     func setPlaylist(_ tracks: [MusicTrack]) {
         playlist = tracks
+    }
+
+    /// Replaces one track in place, keeping the player the source of truth for
+    /// the array (`AudioEngineController.playlist` is only ever assigned from
+    /// `syncMusicState()`).
+    ///
+    /// Deliberately does **not** re-open the file when the edited track is the
+    /// one playing: `currentFile` is already open, and re-opening it would be a
+    /// synchronous disk read on the main thread in the middle of a show.
+    func update(track: MusicTrack) {
+        guard let index = playlist.firstIndex(where: { $0.id == track.id }) else { return }
+        playlist[index] = track
+        onStateChanged?()
     }
 
     // MARK: - Transport

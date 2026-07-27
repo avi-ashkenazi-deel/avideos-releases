@@ -32,7 +32,9 @@ struct SoundPad: Identifiable, Codable, Hashable {
         return FileManager.default.fileExists(atPath: url.path) ? url : nil
     }
 
-    static let palette = ["#E4573D", "#EFA94A", "#57A66E", "#4A90D9", "#9B6BD3", "#D35C9B", "#4AC0BE", "#C9B458"]
+    /// Shared with music sections so the two performance surfaces match.
+    /// Same array, same order — the hash-derived colours above must not move.
+    static let palette = AudioPalette.colors
 }
 
 /// Soundboard playback: samples are fully pre-decoded to canonical-format

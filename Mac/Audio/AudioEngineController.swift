@@ -54,6 +54,26 @@ final class AudioEngineController {
             persist()
         }
     }
+
+    /// Which section is sounding, and which is waiting to take over.
+    private(set) var playingSectionID: UUID?
+    private(set) var queuedSectionID: UUID?
+    /// Past this point the switch is in AVFoundation's hands and can no longer
+    /// be cancelled — the UI stops offering to.
+    private(set) var queuedSwitchIsCommitted = false
+    private(set) var secondsUntilSwitch: Double?
+    /// Live loop state, distinct from `MusicSection.loops`, which is the
+    /// authored default. Mid-show you want to kill the loop and let the song
+    /// run out *without* editing your sections.
+    private(set) var isSectionLooping = false
+
+    var sectionSwitchMode: SectionSwitchMode = .atLoopEnd {
+        didSet {
+            musicPlayer?.switchMode = sectionSwitchMode
+            settings.sectionSwitchMode = sectionSwitchMode
+            persist()
+        }
+    }
     var duckerConfig = DuckerConfig() {
         didSet {
             ducker.config = duckerConfig
@@ -91,6 +111,7 @@ final class AudioEngineController {
 
         // Apply persisted state.
         loopMode = settings.loopMode
+        sectionSwitchMode = settings.sectionSwitchMode ?? .atLoopEnd
         duckerConfig = settings.duckerConfig
         for strip in strips {
             let key = AudioSettings.key(for: strip)
@@ -303,11 +324,120 @@ final class AudioEngineController {
 
     private func syncMusicState() {
         guard let player = musicPlayer else { return }
-        playlist = player.playlist
-        currentTrackID = player.currentTrackID
-        isPlayingMusic = player.isPlaying
-        musicPosition = player.position
-        musicDuration = player.duration
+        // Change-guarded: assigning an unchanged value to an @Observable
+        // property still invalidates every SwiftUI view reading it, and this
+        // runs up to 15 times a second while a section loops.
+        if playlist != player.playlist { playlist = player.playlist }
+        if currentTrackID != player.currentTrackID { currentTrackID = player.currentTrackID }
+        if isPlayingMusic != player.isPlaying { isPlayingMusic = player.isPlaying }
+        if musicPosition != player.position { musicPosition = player.position }
+        if musicDuration != player.duration { musicDuration = player.duration }
+    }
+
+    // MARK: - Music sections
+
+    /// The track a section hotkey or pad acts on.
+    ///
+    /// Before anything has played, that's the first track in the playlist — so
+    /// what the pad row shows is always what a hotkey fires, and hitting ⌃⌥1
+    /// pre-show starts the set on the chorus.
+    var sectionHostTrackID: UUID? { currentTrackID ?? playlist.first?.id }
+
+    var sectionHostTrack: MusicTrack? {
+        playlist.first { $0.id == sectionHostTrackID }
+    }
+
+    /// Sections of the host track, in play order.
+    var musicSections: [MusicSection] { sectionHostTrack?.sortedSections ?? [] }
+
+    /// Whole-value replace — the only section writer, so the clamping and
+    /// ordering rules live in exactly one place.
+    func setSection(_ section: MusicSection, inTrackID trackID: UUID) {
+        guard var track = playlist.first(where: { $0.id == trackID }) else { return }
+        let duration = trackDuration(for: track)
+        var updated = section
+        updated.start = max(0, min(section.start, max(0, duration - MusicSection.minimumLength)))
+        if let end = section.end {
+            updated.end = min(max(end, updated.start + MusicSection.minimumLength), duration)
+        }
+
+        var sections = track.sections ?? []
+        if let index = sections.firstIndex(where: { $0.id == section.id }) {
+            sections[index] = updated
+        } else {
+            sections.append(updated)
+        }
+        track.sections = sections.sorted { $0.start < $1.start }
+        commit(track)
+    }
+
+    @discardableResult
+    func addSection(toTrackID trackID: UUID,
+                    start: Double,
+                    end: Double? = nil,
+                    name: String? = nil) -> UUID? {
+        guard let track = playlist.first(where: { $0.id == trackID }) else { return nil }
+        let existing = track.sections ?? []
+        let section = MusicSection(
+            name: name ?? "Section \(existing.count + 1)",
+            start: start,
+            end: end,
+            colorHex: AudioPalette.color(forIndex: existing.count),
+            hotkeyIndex: MusicSection.nextFreeHotkeyIndex(in: existing),
+            loops: true)
+        setSection(section, inTrackID: trackID)
+        return section.id
+    }
+
+    func removeSection(id: UUID, fromTrackID trackID: UUID) {
+        guard var track = playlist.first(where: { $0.id == trackID }) else { return }
+        track.sections = (track.sections ?? []).filter { $0.id != id }
+        if track.armedSectionID == id { track.armedSectionID = nil }
+        commit(track)
+    }
+
+    func setStartOffset(_ seconds: Double, forTrackID trackID: UUID) {
+        guard var track = playlist.first(where: { $0.id == trackID }) else { return }
+        track.startOffset = max(0, min(seconds, trackDuration(for: track)))
+        commit(track)
+    }
+
+    func setArmedSection(id: UUID?, forTrackID trackID: UUID) {
+        guard var track = playlist.first(where: { $0.id == trackID }) else { return }
+        track.armedSectionID = id
+        commit(track)
+    }
+
+    func renameTrack(id: UUID, to title: String) {
+        guard var track = playlist.first(where: { $0.id == id }) else { return }
+        let trimmed = title.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return }
+        track.title = trimmed
+        commit(track)
+    }
+
+    /// Drops an open-ended marker at the live playhead — the tap-to-mark path.
+    /// Returns the new section's id so the editor can focus its name field.
+    @discardableResult
+    func dropMarkerAtPlayhead() -> UUID? {
+        guard let trackID = sectionHostTrackID else { return nil }
+        return addSection(toTrackID: trackID, start: musicPosition)
+    }
+
+    /// Best duration we know for a track. The playing track reports its real
+    /// one; others fall back to the last section's end so clamping still
+    /// behaves before the file has ever been opened.
+    private func trackDuration(for track: MusicTrack) -> Double {
+        if track.id == currentTrackID, musicDuration > 0 { return musicDuration }
+        let ends = (track.sections ?? []).compactMap { $0.end ?? $0.start }
+        return max(ends.max() ?? 0, track.startOffset ?? 0) + 3600
+    }
+
+    private func commit(_ track: MusicTrack) {
+        musicPlayer?.update(track: track)
+        syncMusicState()
+        settings.playlist = playlist
+        persist()
     }
 
     // MARK: - Inserts

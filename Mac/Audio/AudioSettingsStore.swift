@@ -17,6 +17,13 @@ struct AudioSettings: Codable {
     var pads: [SoundPad] = []
     var playlist: [MusicTrack] = []
     var loopMode: LoopMode = .off
+    /// How a live section switch behaves. Global rather than per-track: it
+    /// describes how the host performs, not a property of the music. Per-track
+    /// storage would silently change the segmented control when the track
+    /// changed — a hard cut when you wanted a bar-aligned one, mid-show.
+    ///
+    /// Optional for the same decode reason as `MusicTrack`'s new fields.
+    var sectionSwitchMode: SectionSwitchMode?
 
     /// JSON-safe StripID key (guest strips aren't persisted — session-scoped).
     static func key(for strip: MixerStripID) -> String {
