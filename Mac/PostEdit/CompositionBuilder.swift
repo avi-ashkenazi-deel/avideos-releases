@@ -648,9 +648,9 @@ final class LayoutVideoCompositor: NSObject, AVVideoCompositing {
     private var renderContext: AVVideoCompositionRenderContext?
     private var shouldCancel = false
 
-    // verify on Mac: recent SDKs type these as [String: any Sendable]; older
-    // SDKs use [String: Any] — adjust the two property signatures if the
-    // compiler disagrees.
+    // `[String: any Sendable]` is what the macOS 26 SDK declares. Older SDKs
+    // used `[String: Any]`; if this ever has to build against one, both
+    // property signatures change together.
     var sourcePixelBufferAttributes: [String: any Sendable]? {
         [kCVPixelBufferPixelFormatTypeKey as String: [
             kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,

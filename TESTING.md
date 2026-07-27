@@ -269,4 +269,12 @@ Known gaps in this pass — do not report:
 - [ ] One ⌘Z reverts a whole Clean Up or applied AI edit, not one clip at a time.
 
 ## Unit tests (no hardware needed)
-- [ ] `xcodegen generate`, then Cmd-U (or `xcodebuild test -scheme AVideosStudio`) → all tests in `Tests/AVideosStudioTests/` pass.
+- [x] `./scripts/dev-app-only.sh`, then
+      `xcodebuild test -scheme AVideosStudio CODE_SIGNING_ALLOWED=NO` →
+      **269 tests, 0 failures** (first verified 2026-07-27, macOS 26.5 / Xcode 16).
+      Cmd-U works too once the project is generated.
+
+These cover pure logic only — EDL arithmetic, volume envelopes, music timing,
+placement, framing geometry, Codable round-trips. Passing them says nothing
+about whether a camera renders, audio flows, or a loop wraps cleanly; those are
+the checklists above, and they still need a person and hardware.

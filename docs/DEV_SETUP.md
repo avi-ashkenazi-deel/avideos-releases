@@ -12,6 +12,49 @@ open HearIt.xcodeproj        # contains the AVideosStudio scheme too
 Target: macOS 14.0+, Swift 5.9. SPM resolves LiveKit, KeyboardShortcuts and
 WhisperKit on first build.
 
+## The build that works today
+
+Verified on macOS 26.5, Xcode 16, Apple M4 Pro: the app builds, launches, and
+the 269-test suite passes.
+
+```bash
+brew install xcodegen
+./scripts/dev-app-only.sh          # excludes the extension + driver; dev entitlements
+xcodebuild test -scheme AVideosStudio CODE_SIGNING_ALLOWED=NO
+```
+
+Two things that recipe deliberately avoids, and why:
+
+- **`dev-app-only.sh`** comments the `CameraExtension` and `AVideosAudioDriver`
+  dependencies out of the app target and swaps `AVideosStudio.entitlements` for
+  `AVideosStudio-dev.entitlements`. Both are embedded build dependencies, so
+  without this a plain build needs real Developer ID certs and a vendored
+  libASPL before it will produce anything runnable. The dev entitlements file
+  is the shipping one minus `com.apple.developer.system-extension.install`,
+  which is *restricted* — only a provisioning profile can grant it, so leaving
+  it in makes even a local test run demand development signing, and it is
+  meaningless when there is no extension to install. Run
+  `./scripts/dev-app-only.sh --restore` before anything you intend to ship, and
+  don't commit the modified `project.yml`.
+- **`CODE_SIGNING_ALLOWED=NO`** skips signing entirely for a local test run.
+  The virtual camera and virtual microphone are unavailable in this
+  configuration, which is expected.
+
+Two log lines you can ignore in this configuration:
+
+```
+CMIOExtensionSession.m:1309 ... kCSIdentityInvalidPosixNameErr
+[Connection] ... connection to service named com.apple.linkd.autoShortcut
+```
+
+The first is `VirtualCameraController` looking for the camera extension that
+this build excludes. The second is Shortcuts indexing, unavailable to an
+ad-hoc-signed app. Neither appears in a signed build with the extension in.
+
+If SPM fails to clone a dependency with `curl 16 Error in the HTTP2 framing
+layer`, that is git transport rather than anything in this repo:
+`git config --global http.version HTTP/1.1` and retry.
+
 **libASPL is not an SPM package** — it is a CMake C++ library with no
 `Package.swift`, so listing it under `packages:` makes dependency resolution
 fail for the *whole project*, app and tests included. It has to be vendored:
@@ -33,10 +76,15 @@ target does not build, and nothing else is affected.
      `Contents/Library/SystemExtensions/` (add an explicit copyFiles phase
      if it landed in PlugIns).
 3. **`// verify on Mac:` comments** mark every API assumption made without a
-   compiler: LiveKit 2.x delegate/renderer signatures (`Mac/Guests/`),
-   WhisperKit's transcribe API, CMIOExtension sink-property setters
-   (`CameraExtension/`), libASPL hook names (`driver/`), voice-processing
-   toggles. Grep for them on the first compile pass:
+   compiler. The `Mac/Guests/` ones are now resolved — the LiveKit integration
+   was audited against the SDK version that actually resolves (2.15.3, from
+   `from: "2.6.0"`) — but 33 remain, and getting the app to build settled
+   almost none of them. They are runtime questions, and the test suite is pure
+   logic that touches no hardware. Still open and load-bearing: whether
+   `playerTime.sampleTime` is in node or file frames (`Mac/Audio/MusicTiming.swift`),
+   `.interruptsAtLoop` boundary behaviour, CMIOExtension sink-property setters
+   (`CameraExtension/`), libASPL hook names (`driver/`), overlapping
+   `setVolumeRamp` ranges, and voice-processing toggles. Grep for them:
    `grep -rn "verify on Mac" Mac/ CameraExtension/ driver/`
 
 ## Mac-day runbook (recommended order)

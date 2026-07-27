@@ -9,6 +9,82 @@ A running log of what we've built and shipped.
   fields don't accept emojis. (Chat replies may still use them; this rule is
   specifically about text pasted into TestFlight / App Store Connect.)
 
+## 2026-07-27 — AVideos Studio: first compile, first run, green suite
+
+AVideos Studio had never been compiled. Roughly 25k lines of Swift, Metal and
+C++ were written on Linux against documentation and reasoning, and this is the
+session where a Mac finally read them. The app now builds, launches, and its
+269 unit tests pass.
+
+**Getting to a build took four environment fixes before a single line of our
+own code was compiled.** libASPL was declared as a Swift package, but it is a
+CMake C++ library with no `Package.swift`, so SPM resolution failed for the
+whole project — including the tests, which have nothing to do with the audio
+driver. It has to be vendored instead. Then the camera extension and driver
+are embedded build dependencies, so a plain build demanded Developer ID certs;
+`scripts/dev-app-only.sh` now comments that block out and swaps in
+`AVideosStudio-dev.entitlements`, which is the shipping file minus
+`com.apple.developer.system-extension.install` — a restricted entitlement only
+a provisioning profile can grant, and meaningless in a build with no extension
+to install. A `curl 16` HTTP/2 failure fetching swift-collections was git
+transport, not us.
+
+**Nine of our own compile errors, in seven rounds.** The instructive part is
+the distribution. Only three were ordinary mistakes: a `...` range split across
+a newline (whitespace before but not after makes `...` lex as the *prefix*
+operator, so the parser closed the expression and wanted a comma),
+`Dictionary.Keys + Dictionary.Keys` where no `+` overload exists, and an
+implicit-member closure inside a `+` chain that the type checker could not
+anchor. Two were audited-API drift: `MTAudioProcessingTapCreate`'s `tapOut` is
+now `UnsafeMutablePointer<MTAudioProcessingTap?>` rather than `Unmanaged`, and
+`AVAudioUnit.audioUnit` is not Optional. One was a missing import —
+`requestViewController` is a CoreAudioKit category on `AUAudioUnit`, not part
+of AudioToolbox.
+
+**The remaining four were all actor isolation, and that is the lesson.**
+Isolation is the one property that cannot be checked while writing a file in
+isolation — it is a whole-module question, and every `@MainActor` boundary in
+25k lines got checked at once, for the first time, in the same minute. Each
+wanted a different answer. `TranscriptEditorView.Coordinator` needed two
+methods annotated rather than the class, because `dismantleNSView` is a
+nonisolated static requirement. `PreviewPlayer` needed its time observer moved
+into a nonisolated box, because `deinit` is nonisolated even in a `@MainActor`
+class — a `verify on Mac:` note had predicted exactly this and named the fix.
+`MusicPlayer` became `@MainActor`, which it already was in practice: all five
+of its scheduling completion handlers opened with `DispatchQueue.main.async`.
+And `EditProjectStore`'s path statics needed `nonisolated`, because a static
+member inherits the class's isolation and `write(_:)` runs detached.
+
+**LiveKit had moved three APIs.** `from: "2.6.0"` resolves to 2.15.3.
+Rather than guess one build at a time, the resolved SDK source was read and
+every call site audited against it. That found two things the compiler could
+not: `GuestVideoReceiver` was a plain Swift class, but `VideoRenderer` is an
+`@objc` protocol whose `render` requirements are *optional* and reached via
+ObjC optional dispatch — it would have type-checked and never received a
+frame. And the SDK's adapter calls both `render(frame:)` and
+`render(frame:captureDevice:captureOptions:)` for every frame, so implementing
+both meant converting and ingesting each guest frame twice.
+
+**Then the suite found two real bugs.** `ScriptAligner` returned, when it found
+no anchors at all, a single span covering the entire script and the entire
+transcript — asserting the opposite of what "nothing matched" means.
+Downstream, `TakeDetector` would manufacture a take from it and
+`ClaudeTakeSelector` could discard it as the loser, silently cutting material
+that was never in the script. The design says ad-libs are never cut; this was
+the path that broke it. Separately, the overshoot easing never overshot:
+`p + amount * sin(p * .pi)` humps above the linear *ramp*, not the target, and
+the sine vanishes at p = 1, so pop and both flips were eases wearing an
+overshoot's name.
+
+**What this does not establish.** The suite is pure logic by design — EDL
+arithmetic, envelopes, timing math, Codable round-trips. It touches no
+hardware and no AVFoundation runtime. 33 `verify on Mac:` markers remain and
+this run settled none of the runtime ones, only the compile-time question of
+how the current SDK types `sourcePixelBufferAttributes`. The eight on the music
+path are still open, chief among them whether `playerTime.sampleTime` is in
+node frames or file frames. Nothing here has yet proved that a camera renders,
+that audio flows, or that a loop wraps without a click.
+
 ## 2026-07-27 — AVideos Studio: external media in the editor
 
 Avi asked whether external videos could be brought into the edit. They
