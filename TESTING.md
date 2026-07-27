@@ -130,6 +130,7 @@ Regression, on a track with **no** sections:
 - [ ] Dragging the scrubber is smooth and doesn't fight you.
 - [ ] A settings file written before this feature loads with devices, gains, ducker, inserts and pads intact.
 
+Crossfade and gapless:
 - [ ] Set the mode to **Crossfade** and switch sections: the two overlap smoothly rather than cutting, with no dip in loudness through the middle.
 - [ ] Let a playlist run from one track into the next: no gap where a file used to be opened at the seam.
 
