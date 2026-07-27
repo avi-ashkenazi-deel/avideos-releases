@@ -126,7 +126,8 @@ final class CompositionBuilder {
                     : project.linearGain(for: track.id)
                 mixParameters.append(Self.audioParameters(for: compTrack,
                                                           joins: joinTimes,
-                                                          gain: gain))
+                                                          gain: gain,
+                                                          duration: project.editedDuration))
             }
         }
 
@@ -231,25 +232,30 @@ final class CompositionBuilder {
     /// `gain` scales the ramp endpoints as well as the base volume. Ramping to
     /// a hardcoded 1.0 would make every cut boundary jump the track back to
     /// unity for 7.5 ms — an audible tick on any track that isn't at 0 dB.
+    /// One envelope per track, covering both the micro-fades at cut boundaries
+    /// and any ducking under external audio.
+    ///
+    /// These are computed together rather than layered, because their ramps
+    /// overlap in time and overlapping `setVolumeRamp` ranges on one parameters
+    /// object are not a defined composition — see `VolumeAutomation`.
     private static func audioParameters(for track: AVMutableCompositionTrack,
                                         joins: [Double],
-                                        gain: Float) -> AVMutableAudioMixInputParameters {
+                                        gain: Float,
+                                        ducks: [VolumeAutomation.DuckWindow] = [],
+                                        duration: Double) -> AVMutableAudioMixInputParameters {
         let params = AVMutableAudioMixInputParameters(track: track)
-        params.setVolume(gain, at: .zero)
-        // A silent track needs no fades — and ramping 0→0 just adds work.
-        guard gain > 0 else { return params }
-
-        let half = crossfadeDuration / 2
-        for join in joins {
-            let downRange = CMTimeRange(
-                start: CMTime(seconds: max(0, join - half), preferredTimescale: timescale),
-                end: CMTime(seconds: join, preferredTimescale: timescale))
-            let upRange = CMTimeRange(
-                start: CMTime(seconds: join, preferredTimescale: timescale),
-                duration: CMTime(seconds: half, preferredTimescale: timescale))
-            params.setVolumeRamp(fromStartVolume: gain, toEndVolume: 0.0, timeRange: downRange)
-            params.setVolumeRamp(fromStartVolume: 0.0, toEndVolume: gain, timeRange: upRange)
+        // A silent track needs no envelope — and it can't be ducked below zero,
+        // so mute and solo compose for free.
+        guard gain > 0 else {
+            params.setVolume(0, at: .zero)
+            return params
         }
+        let points = VolumeAutomation.envelope(base: gain,
+                                               joins: joins,
+                                               ducks: ducks,
+                                               crossfadeDuration: crossfadeDuration,
+                                               duration: duration)
+        VolumeAutomation.apply(points, to: params, timescale: timescale)
         return params
     }
 
