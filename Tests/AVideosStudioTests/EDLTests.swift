@@ -268,8 +268,11 @@ final class EDLTests: XCTestCase {
 
     // MARK: Helpers
 
-    /// Invariant 2 from `EditDecisionList`'s doc comment: clips tile the
-    /// source domain exactly, in order, with no gaps or overlaps.
+    /// Tiling is no longer a global EDL invariant — clips can be reordered,
+    /// trimmed and duplicated (see `SequenceEDLTests`). But **cutting alone**
+    /// still preserves it, because a cut only ever splits and disables. These
+    /// tests assert that property for cut-only workflows, which is what
+    /// guarantees a straight recording still behaves exactly as it used to.
     private func assertTiling(_ edl: EditDecisionList,
                               expectedSourceDuration: Double,
                               file: StaticString = #filePath,
