@@ -73,10 +73,10 @@ final class GuestSessionController {
             // host + music + pads but never themselves (mix-minus by
             // construction). Voice processing off: the feed is already clean
             // and guests' browsers do their own AEC.
-            // verify on Mac: AudioManager device selection API in the pinned
-            // LiveKit release (AudioManager.shared.inputDevice = AudioDevice).
+            // `inputDevice` is a settable property, and macOS-only — on other
+            // platforms the setter is a no-op, which is why it can't throw.
             if let device = AudioManager.shared.inputDevices.first(where: { $0.deviceId == Self.guestSendDeviceUID }) {
-                try? AudioManager.shared.set(inputDevice: device)
+                AudioManager.shared.inputDevice = device
             } else {
                 log.warning("Guest Send device not found; guests will hear the raw default mic")
             }
@@ -112,8 +112,6 @@ final class GuestSessionController {
         guard let room,
               let data = try? JSONSerialization.data(withJSONObject: message) else { return }
         Task {
-            // verify on Mac: publishData options type in pinned SDK
-            // (DataPublishOptions(reliable: true)).
             try? await room.localParticipant.publish(data: data, options: DataPublishOptions(reliable: true))
         }
     }
@@ -179,9 +177,10 @@ final class GuestSessionController {
         let receiver = GuestAudioReceiver(identity: identity, ring: ring)
         audioReceivers[identity] = receiver
         track.add(audioRenderer: receiver)
-        // Mute SDK playback — renderers keep receiving buffers, but audio
-        // reaches speakers only through our mixer strip.
-        // verify on Mac: property name (`track.volume = 0` vs player muting).
+        // Mute SDK playback — the renderer keeps receiving buffers, but audio
+        // reaches speakers only through our mixer strip. `volume` is playback
+        // gain on the remote track, so this does not affect what `add(audio-
+        // Renderer:)` delivers.
         track.volume = 0
         guests.first(where: { $0.identity == identity })?.hasAudio = true
         onGuestsChanged?()
@@ -245,10 +244,13 @@ extension GuestSessionController: RoomDelegate {
         }
     }
 
+    /// `encryptionType` is ignored: the room is not E2EE, and a packet that
+    /// arrived at all was already decrypted by the SDK if it needed to be.
     nonisolated func room(_ room: Room,
                           participant: RemoteParticipant?,
                           didReceiveData data: Data,
-                          forTopic topic: String) {
+                          forTopic topic: String,
+                          encryptionType: EncryptionType) {
         let identity = participant?.identity?.stringValue
         Task { @MainActor in
             self.handleIncomingData(data, from: identity)

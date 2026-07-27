@@ -8,7 +8,12 @@ import os
 /// muted at subscribe time (see GuestSessionController) so guest audio
 /// reaches the speakers ONLY through our mixer strip — otherwise it doubles
 /// outside our volume control.
-final class GuestAudioReceiver: AudioRenderer {
+/// Unlike `VideoRenderer`, `AudioRenderer`'s single requirement is
+/// non-optional, so the SDK dispatches through the Swift witness table and a
+/// plain class is correct — the SDK's own `AudioFrameWatcher` is one.
+/// `@unchecked Sendable` covers the reused scratch buffer, which only the
+/// SDK's serialized render callback ever touches.
+final class GuestAudioReceiver: AudioRenderer, @unchecked Sendable {
     let identity: String
     private let ring: RingBuffer
     /// Preallocated interleave scratch; render-path allocation-free.
@@ -24,8 +29,7 @@ final class GuestAudioReceiver: AudioRenderer {
     // MARK: - AudioRenderer
 
     /// LiveKit delivers 48kHz PCM buffers (mono or stereo, usually
-    /// non-interleaved Float32). // verify on Mac: exact AudioRenderer
-    /// requirement — LiveKit 2.x uses `render(pcmBuffer: AVAudioPCMBuffer)`.
+    /// non-interleaved Float32).
     func render(pcmBuffer: AVAudioPCMBuffer) {
         let frameCount = Int(pcmBuffer.frameLength)
         guard frameCount > 0, let channelData = pcmBuffer.floatChannelData else { return }
