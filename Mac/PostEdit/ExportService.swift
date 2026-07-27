@@ -69,6 +69,10 @@ final class ExportService {
                     // Keep the track's own level trim, but don't let a solo or
                     // mute set for monitoring silence the stem being written.
                     options.ignoresMuteAndSolo = true
+                    // The project copy carries the overlays along, so without
+                    // this a stem would silently gain cutaway audio and its
+                    // ducking.
+                    options.includesExternalMedia = false
                     let result = try await builder.build(project: solo, options: options)
                     let url = exportsDirectory.appendingPathComponent("\(project.name) — \(track.participantName).wav")
                     try await Self.exportAudio(composition: result.composition,

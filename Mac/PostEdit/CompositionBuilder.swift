@@ -36,6 +36,12 @@ final class CompositionBuilder {
         /// soloing a co-host to check a passage shouldn't silence everyone
         /// else's stem file.
         var ignoresMuteAndSolo: Bool = false
+        /// Include cutaways — their picture, their audio, and the ducking they
+        /// cause. Set false for stem exports: a stem is raw material, and
+        /// ducking is a mix decision, so the same reasoning as the flag above.
+        /// Without this, a stem would silently acquire cutaway audio, because
+        /// the stems path copies the whole project.
+        var includesExternalMedia: Bool = true
 
         init() {}
     }
@@ -91,6 +97,26 @@ final class CompositionBuilder {
             }
         }
 
+        // Cutaways go in first, because their inserted ranges are what the
+        // participants' duck windows are derived from. Each gets its own
+        // composition video track so overlapping cutaways can't collide.
+        //
+        // Stems skip them entirely: a stem is raw material, and ducking is a
+        // mix decision — the same reasoning as ignoring mute and solo there.
+        var inserted: [InsertedOverlay] = []
+        if options.includesExternalMedia {
+            inserted = try await Self.insertOverlayMedia(project.sortedOverlays,
+                                                         into: composition,
+                                                         includeVideo: options.includeVideo)
+        }
+        let ducks = options.includesExternalMedia
+            ? Self.duckWindows(for: project.sortedOverlays, inserted: inserted)
+            : []
+        mixParameters.append(contentsOf: inserted.compactMap(\.audioParameters))
+        let overlayTrackIDs = Dictionary(uniqueKeysWithValues:
+            inserted.filter { $0.videoTrackID != kCMPersistentTrackID_Invalid }
+                .map { ($0.videoTrackID, $0.overlayID) })
+
         for track in project.tracks {
             let asset = asset(for: track.url)
             let mediaType: AVMediaType = track.kind == .audio ? .audio : .video
@@ -127,21 +153,13 @@ final class CompositionBuilder {
                 mixParameters.append(Self.audioParameters(for: compTrack,
                                                           joins: joinTimes,
                                                           gain: gain,
+                                                          ducks: ducks,
                                                           duration: project.editedDuration))
             }
         }
 
         let audioMix = AVMutableAudioMix()
         audioMix.inputParameters = mixParameters
-
-        // B-roll: picture only. Each cutaway gets its own composition video
-        // track so overlapping cutaways can't collide, and its audio is never
-        // inserted — the conversation keeps running underneath.
-        var overlayTrackIDs: [CMPersistentTrackID: UUID] = [:]
-        if options.includeVideo {
-            overlayTrackIDs = try await Self.insertOverlays(project.sortedOverlays,
-                                                            into: composition)
-        }
 
         var videoComposition: AVMutableVideoComposition?
         if options.includeVideo, !videoTrackParticipants.isEmpty || !overlayTrackIDs.isEmpty {
@@ -170,16 +188,31 @@ final class CompositionBuilder {
 
     // MARK: - Overlays (B-roll)
 
-    /// Inserts each cutaway's **video** into its own composition track at its
-    /// timeline position, and returns the track → overlay mapping the
-    /// compositor needs to draw them.
+    /// What one cutaway actually got, once its media had its say.
+    struct InsertedOverlay {
+        var overlayID: UUID
+        var videoTrackID: CMPersistentTrackID
+        var audioParameters: AVMutableAudioMixInputParameters?
+        /// The range that really made it into the composition — shorter than
+        /// the authored one when the file ran out.
+        var programRange: ClosedRange<Double>
+    }
+
+    /// Inserts each cutaway's video, and its audio when asked for, returning
+    /// what was actually placed.
     ///
-    /// Audio is deliberately not inserted: the conversation underneath keeps
-    /// playing, and the audio mix stays untouched.
-    private static func insertOverlays(_ overlays: [OverlayClip],
-                                       into composition: AVMutableComposition)
-    async throws -> [CMPersistentTrackID: UUID] {
-        var mapping: [CMPersistentTrackID: UUID] = [:]
+    /// Returning the *inserted* range rather than the authored one is what
+    /// keeps ducking honest: a cutaway whose media is missing produces no duck
+    /// at all, and one whose file is short ducks only for as long as it sounds.
+    /// Deriving windows from `timelineRange` would leave the conversation
+    /// ducked under silence.
+    ///
+    /// `includeVideo` is false for an audio master, which still wants the
+    /// cutaway's sound and the ducking it causes but has no use for its picture.
+    private static func insertOverlayMedia(_ overlays: [OverlayClip],
+                                           into composition: AVMutableComposition,
+                                           includeVideo: Bool) async throws -> [InsertedOverlay] {
+        var inserted: [InsertedOverlay] = []
 
         for overlay in overlays {
             guard let url = overlay.media.resolve() else {
@@ -187,17 +220,10 @@ final class CompositionBuilder {
                 continue
             }
             let asset = AVURLAsset(url: url, options: [AVURLAssetPreferPreciseDurationAndTimingKey: true])
-            guard let sourceTrack = try await asset.loadTracks(withMediaType: .video).first else {
+            let sourceTrack = try await asset.loadTracks(withMediaType: .video).first
+            if includeVideo, sourceTrack == nil {
                 Self.logger.warning("B-roll has no video track: \(overlay.media.displayName, privacy: .public)")
-                continue
             }
-
-            guard let compTrack = composition.addMutableTrack(
-                withMediaType: .video,
-                preferredTrackID: kCMPersistentTrackID_Invalid) else {
-                throw BuildError.cannotAddTrack("b-roll \(overlay.media.displayName)")
-            }
-            compTrack.preferredTransform = sourceTrack.preferredTransform
 
             // Take as much of the cutaway as it actually has; a short clip
             // simply ends early rather than stretching.
@@ -209,19 +235,75 @@ final class CompositionBuilder {
             let sourceRange = CMTimeRange(
                 start: CMTime(seconds: overlay.sourceStart, preferredTimescale: timescale),
                 duration: CMTime(seconds: take, preferredTimescale: timescale))
-            do {
-                try compTrack.insertTimeRange(
-                    sourceRange,
-                    of: sourceTrack,
-                    at: CMTime(seconds: overlay.timelineRange.lowerBound,
-                               preferredTimescale: timescale))
-                mapping[compTrack.trackID] = overlay.id
-            } catch {
-                Self.logger.error("B-roll insert failed: \(error.localizedDescription, privacy: .public)")
-                composition.removeTrack(compTrack)
+            let at = CMTime(seconds: overlay.timelineRange.lowerBound,
+                            preferredTimescale: timescale)
+
+            var videoTrackID = kCMPersistentTrackID_Invalid
+            if includeVideo, let sourceTrack {
+                guard let compTrack = composition.addMutableTrack(
+                    withMediaType: .video,
+                    preferredTrackID: kCMPersistentTrackID_Invalid) else {
+                    throw BuildError.cannotAddTrack("b-roll \(overlay.media.displayName)")
+                }
+                compTrack.preferredTransform = sourceTrack.preferredTransform
+                do {
+                    try compTrack.insertTimeRange(sourceRange, of: sourceTrack, at: at)
+                    videoTrackID = compTrack.trackID
+                } catch {
+                    Self.logger.error("B-roll insert failed: \(error.localizedDescription, privacy: .public)")
+                    composition.removeTrack(compTrack)
+                    continue
+                }
             }
+
+            // The cutaway's own audio, on its own track, only when asked for.
+            var audioParameters: AVMutableAudioMixInputParameters?
+            if let audio = overlay.audio, audio.isEnabled,
+               let sourceAudio = try await asset.loadTracks(withMediaType: .audio).first,
+               let audioTrack = composition.addMutableTrack(
+                   withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid) {
+                do {
+                    try audioTrack.insertTimeRange(sourceRange, of: sourceAudio, at: at)
+                    // Butt-joining against silence clicks, so give the clip's
+                    // own edges the same short fade a cut boundary gets — via
+                    // the shared envelope, so there is one ramp emitter.
+                    let start = overlay.timelineRange.lowerBound
+                    let params = AVMutableAudioMixInputParameters(track: audioTrack)
+                    VolumeAutomation.apply([
+                        .init(time: start, volume: 0),
+                        .init(time: start + crossfadeDuration, volume: audio.linearGain),
+                        .init(time: start + max(take - crossfadeDuration, crossfadeDuration),
+                              volume: audio.linearGain),
+                        .init(time: start + take, volume: 0),
+                    ], to: params, timescale: timescale)
+                    audioParameters = params
+                } catch {
+                    Self.logger.error("B-roll audio insert failed: \(error.localizedDescription, privacy: .public)")
+                    composition.removeTrack(audioTrack)
+                }
+            }
+
+            inserted.append(InsertedOverlay(
+                overlayID: overlay.id,
+                videoTrackID: videoTrackID,
+                audioParameters: audioParameters,
+                programRange: overlay.timelineRange.lowerBound...(overlay.timelineRange.lowerBound + take)))
         }
-        return mapping
+        return inserted
+    }
+
+    /// Duck windows for everything that actually made it into the composition.
+    static func duckWindows(for overlays: [OverlayClip],
+                            inserted: [InsertedOverlay]) -> [VolumeAutomation.DuckWindow] {
+        let byID = Dictionary(uniqueKeysWithValues: inserted.map { ($0.overlayID, $0.programRange) })
+        return overlays.compactMap { overlay in
+            guard let audio = overlay.audio, audio.isEnabled,
+                  let ducking = audio.ducking,
+                  let range = byID[overlay.id] else { return nil }
+            return VolumeAutomation.DuckWindow(start: range.lowerBound,
+                                               end: range.upperBound,
+                                               settings: ducking)
+        }
     }
 
     // MARK: - Audio mix

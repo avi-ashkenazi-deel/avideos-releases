@@ -294,7 +294,36 @@ struct EditWorkspaceView: View {
         }
     }
 
+    /// The cutaway the timeline has selected, if any.
+    private var selectedOverlay: OverlayClip? {
+        guard let id = timelineVM.selectedOverlayID else { return nil }
+        return project.overlays?.first { $0.id == id }
+    }
+
     private var previewPane: some View {
+        VSplitView {
+            preview3Up
+            if let overlay = selectedOverlay {
+                OverlayInspectorView(
+                    overlay: overlay,
+                    mediaDuration: nil,   // filled in once the media bin probes lengths
+                    onChange: { updated in
+                        // Live while dragging, one undo step for the gesture.
+                        performEdit(gesture: "overlay-inspector:" + overlay.id.uuidString) {
+                            project.updateOverlay(updated)
+                        }
+                    },
+                    onCommit: { endGesture() },
+                    onRemove: {
+                        performEdit { project.removeOverlay(id: overlay.id) }
+                        timelineVM.selectedOverlayID = nil
+                    })
+                    .frame(minHeight: 160, idealHeight: 240)
+            }
+        }
+    }
+
+    private var preview3Up: some View {
         VStack(spacing: 8) {
             VideoPlayer(player: preview.player)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)

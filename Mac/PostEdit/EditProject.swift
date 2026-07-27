@@ -543,13 +543,11 @@ struct Chapter: Codable, Sendable, Identifiable, Equatable {
 
 // MARK: - Overlay (B-roll)
 
-/// A cutaway laid over the conversation: the picture changes, the
-/// conversation's audio keeps running underneath.
+/// A cutaway laid over the conversation: the picture changes, and — if you ask
+/// for it — the clip's own audio plays while the conversation ducks underneath.
 ///
-/// **Video only in v1.** The overlay's own audio track is ignored — that is
-/// what B-roll means here, and it keeps the audio mix (and its micro-fades)
-/// entirely out of the feature. A clip you want to *hear* belongs in the
-/// sequence, not on this lane.
+/// Audio is off by default, so a cutaway added before this existed still
+/// behaves as pure video-over.
 ///
 /// Positioned in **edited-timeline** seconds, unlike layout cues: a cutaway is
 /// placed against the program you are watching, not against the recording.
@@ -581,6 +579,9 @@ struct OverlayClip: Codable, Sendable, Identifiable, Equatable {
     /// Carried through from the AI suggestion that created it, so the UI can
     /// explain why this cutaway is here.
     var note: String?
+    /// nil ⇒ silent, which is how every cutaway created before this behaved.
+    /// Optional rather than a defaulted var so old documents decode.
+    var audio: ExternalAudio?
 
     init(id: UUID = UUID(),
          media: MediaReference,
@@ -589,7 +590,9 @@ struct OverlayClip: Codable, Sendable, Identifiable, Equatable {
          mode: Mode = .fullFrame,
          insetRect: CGRect = CGRect(x: 0.62, y: 0.06, width: 0.32, height: 0.32),
          opacity: Double = 1,
-         note: String? = nil) {
+         note: String? = nil,
+         audio: ExternalAudio? = nil) {
+        self.audio = audio
         self.id = id
         self.media = media
         self.timelineRange = timelineRange
