@@ -48,7 +48,11 @@ final class WaveformStore {
     }
 
     /// Cache location for media the app doesn't own.
-    static func cachedPeaksURL(for url: URL) -> URL {
+    ///
+    /// `nonisolated` for the same reason as `computePeaks` below: it is path
+    /// arithmetic over no shared state, and pinning it to the main actor would
+    /// only stop a background caller from asking where the sidecar lives.
+    nonisolated static func cachedPeaksURL(for url: URL) -> URL {
         let base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("AVideos/peaks", isDirectory: true)
         try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)

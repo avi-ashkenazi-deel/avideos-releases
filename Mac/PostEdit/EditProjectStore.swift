@@ -30,12 +30,15 @@ final class EditProjectStore {
 
     // MARK: - Locations
 
-    static var directoryURL: URL {
+    // Both are pure path arithmetic over no shared state, and `write` — which
+    // runs on a detached task so a save never blocks a keystroke — needs them.
+    // Isolating them to the main actor was an accident of the class annotation.
+    nonisolated static var directoryURL: URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         return base.appendingPathComponent("AVideos/Projects/Edits", isDirectory: true)
     }
 
-    static func fileURL(for id: UUID) -> URL {
+    nonisolated static func fileURL(for id: UUID) -> URL {
         directoryURL.appendingPathComponent("\(id.uuidString).avedit")
     }
 
