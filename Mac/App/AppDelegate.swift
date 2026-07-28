@@ -25,6 +25,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var diagHandle: FileHandle?
     private var heartbeatTimer: Timer?
     private var heartbeatCount = 0
+    private var clickCount = 0
+    private var keyCount = 0
+
+    /// Shows the event count in the title of the very window being clicked —
+    /// an answer that cannot be misread by either side of the debugging
+    /// conversation. If events reach this process, the title counts.
+    private func updateTitleCounter() {
+        NSApp.windows.first?.title = "streamit — clicks \(clickCount) keys \(keyCount)"
+    }
 
     /// Every probe line goes to the unified log AND to a plain file, because
     /// `log stream` needs an admin account and the bring-up machine's user
@@ -56,12 +65,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             let key = NSApp.keyWindow?.title ?? "<nil>"
             let main = NSApp.mainWindow?.title ?? "<nil>"
+            self?.clickCount += 1
+            self?.updateTitleCounter()
             self?.diagLine("mouseDown at \(event.locationInWindow) window='\(title)' [\(cls)] hit=\(hit) keyWindow='\(key)' mainWindow='\(main)'")
             return event
         } as Any)
         inputProbe.append(NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             let title = event.window?.title ?? "<no window>"
             let key = NSApp.keyWindow?.title ?? "<nil>"
+            self?.keyCount += 1
+            self?.updateTitleCounter()
             self?.diagLine("keyDown code=\(event.keyCode) mods=\(event.modifierFlags.rawValue) window='\(title)' keyWindow='\(key)'")
             return event
         } as Any)
