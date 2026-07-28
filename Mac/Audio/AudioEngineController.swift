@@ -315,6 +315,21 @@ final class AudioEngineController {
         padPlayer?.durations[id]
     }
 
+    /// Moves a pad into a folder (nil = top level). Folders exist only
+    /// through their members — no separate folder list to keep in sync.
+    func setPadFolder(id: UUID, folder: String?) {
+        guard let index = pads.firstIndex(where: { $0.id == id }) else { return }
+        let trimmed = folder?.trimmingCharacters(in: .whitespaces)
+        pads[index].folder = (trimmed?.isEmpty ?? true) ? nil : trimmed
+        settings.pads = pads
+        persist()
+    }
+
+    /// Existing folder names, for the move-to menu.
+    var padFolders: [String] {
+        Array(Set(pads.compactMap(\.folder))).sorted()
+    }
+
     /// Sets a pad's in/out points (seconds; nil = full file). Applies from
     /// the next fire — a sounding pad keeps its already-scheduled slice.
     func setPadTrim(id: UUID, start: Double?, end: Double?) {
@@ -605,6 +620,13 @@ final class AudioEngineController {
 
     func setMacro(_ amount: Double, insertID: UUID, strip: StripID) {
         graph.strip(strip)?.inserts?.setMacro(amount, id: insertID)
+        syncInsertState(for: strip)
+    }
+
+    /// Graphic-EQ band gains for an `.eq` insert (dB, one per
+    /// `InsertEffect.eqBands` slot).
+    func setEQBandGains(_ gains: [Double], insertID: UUID, strip: StripID) {
+        graph.strip(strip)?.inserts?.setEQBandGains(gains, id: insertID)
         syncInsertState(for: strip)
     }
 

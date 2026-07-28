@@ -453,13 +453,26 @@ struct SoundEffectsPalette: View {
             } else {
                 ScrollView {
                     LazyVStack(spacing: 2) {
-                        ForEach(audio.pads) { pad in
+                        // Top-level sounds first, then one disclosure per
+                        // folder — folders exist only through their members.
+                        ForEach(audio.pads.filter { $0.folder == nil }) { pad in
                             SoundEffectRow(pad: pad)
+                        }
+                        ForEach(audio.padFolders, id: \.self) { folder in
+                            DisclosureGroup {
+                                ForEach(audio.pads.filter { $0.folder == folder }) { pad in
+                                    SoundEffectRow(pad: pad)
+                                }
+                            } label: {
+                                Label(folder, systemImage: "folder.fill")
+                                    .font(.caption.weight(.medium))
+                            }
+                            .padding(.horizontal, 4)
                         }
                     }
                     .padding(6)
                 }
-                .frame(height: min(320, max(90, CGFloat(audio.pads.count) * 34 + 16)))
+                .frame(height: min(340, max(90, CGFloat(audio.pads.count + audio.padFolders.count) * 34 + 16)))
             }
 
             Divider()
@@ -507,6 +520,8 @@ private struct SoundEffectRow: View {
     @State private var showingTrim = false
     @State private var renameText = ""
     @State private var isRenaming = false
+    @State private var newFolderText = ""
+    @State private var isNamingFolder = false
 
     private var audio: AudioEngineController { studio.audio }
     private var progress: Double? { audio.padProgress[pad.id] }
@@ -587,12 +602,32 @@ private struct SoundEffectRow: View {
                 renameText = pad.name
                 isRenaming = true
             }
+            Menu("Move to Folder") {
+                if pad.folder != nil {
+                    Button("Top Level") { audio.setPadFolder(id: pad.id, folder: nil) }
+                }
+                ForEach(audio.padFolders.filter { $0 != pad.folder }, id: \.self) { folder in
+                    Button(folder) { audio.setPadFolder(id: pad.id, folder: folder) }
+                }
+                Divider()
+                Button("New Folder…") {
+                    newFolderText = ""
+                    isNamingFolder = true
+                }
+            }
             Button("Remove", role: .destructive) { audio.removePad(id: pad.id) }
         }
         .alert("Rename Sound", isPresented: $isRenaming) {
             TextField("Name", text: $renameText)
             Button("Rename") { audio.renamePad(id: pad.id, to: renameText) }
             Button("Cancel", role: .cancel) {}
+        }
+        .alert("New Folder", isPresented: $isNamingFolder) {
+            TextField("Name", text: $newFolderText)
+            Button("Create") { audio.setPadFolder(id: pad.id, folder: newFolderText) }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("\(pad.name) moves into the new folder.")
         }
     }
 

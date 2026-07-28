@@ -250,6 +250,11 @@ private struct InsertRow: View {
         return false
     }
 
+    private var isEQ: Bool {
+        if case .eq = insert.kind { return true }
+        return false
+    }
+
     var body: some View {
         HStack(spacing: 8) {
             Button {
@@ -268,12 +273,18 @@ private struct InsertRow: View {
                 Text(insert.displayName)
                     .font(.caption.weight(.medium))
                     .lineLimit(1)
-                Slider(value: Binding(
-                    get: { insert.macroAmount },
-                    set: { audio.setMacro($0, insertID: insert.id, strip: strip) }
-                ), in: 0...1)
-                .controlSize(.mini)
-                .help("Macro amount")
+                if isEQ {
+                    // An EQ is bands, not a volume-looking macro slider —
+                    // the band editor lives right here in the row.
+                    EQBandEditor(strip: strip, insert: insert)
+                } else {
+                    Slider(value: Binding(
+                        get: { insert.macroAmount },
+                        set: { audio.setMacro($0, insertID: insert.id, strip: strip) }
+                    ), in: 0...1)
+                    .controlSize(.mini)
+                    .help("Macro amount")
+                }
             }
             .opacity(insert.bypassed ? 0.45 : 1)
 
@@ -301,6 +312,109 @@ private struct InsertRow: View {
         }
         .padding(6)
         .background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 6))
+    }
+}
+
+// MARK: - EQ band editor
+
+/// Six bipolar band faders (−12…+12 dB) over the fixed band layout in
+/// `InsertEffect.eqBands`. Drag a band to set it; double-click zeroes it.
+/// The first touch replaces the macro "presence" curve with explicit bands.
+private struct EQBandEditor: View {
+    @Environment(AudioEngineController.self) private var audio
+    let strip: AudioEngineController.StripID
+    let insert: AudioEngineController.InsertEffect
+
+    private static let range: ClosedRange<Double> = -12...12
+
+    private var gains: [Double] {
+        insert.eqBandGains ?? Array(repeating: 0, count: InsertEffect.eqBands.count)
+    }
+
+    var body: some View {
+        HStack(alignment: .bottom, spacing: 6) {
+            ForEach(Array(InsertEffect.eqBands.enumerated()), id: \.offset) { index, band in
+                VStack(spacing: 2) {
+                    Text(gainLabel(gains[safe: index] ?? 0))
+                        .font(.system(size: 8).monospacedDigit())
+                        .foregroundStyle(.secondary)
+                    BipolarFader(value: Binding(
+                        get: { gains[safe: index] ?? 0 },
+                        set: { setGain($0, at: index) }
+                    ), range: Self.range)
+                    .frame(width: 16, height: 64)
+                    Text(band.label)
+                        .font(.system(size: 8))
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .padding(.top, 2)
+    }
+
+    private func gainLabel(_ value: Double) -> String {
+        value == 0 ? "0" : String(format: "%+.0f", value)
+    }
+
+    private func setGain(_ value: Double, at index: Int) {
+        var updated = gains
+        while updated.count < InsertEffect.eqBands.count { updated.append(0) }
+        updated[index] = min(max(value, Self.range.lowerBound), Self.range.upperBound)
+        audio.setEQBandGains(updated, insertID: insert.id, strip: strip)
+    }
+}
+
+/// A tiny vertical fader centered on zero, for dB-style bipolar values.
+private struct BipolarFader: View {
+    @Binding var value: Double
+    let range: ClosedRange<Double>
+
+    var body: some View {
+        GeometryReader { geo in
+            let height = geo.size.height
+            let span = range.upperBound - range.lowerBound
+            let normalized = (value - range.lowerBound) / span   // 0…1, bottom-up
+            let thumbY = height * (1 - CGFloat(normalized))
+            let zeroY = height * (1 - CGFloat((0 - range.lowerBound) / span))
+
+            ZStack(alignment: .top) {
+                Capsule()
+                    .fill(Color.black.opacity(0.6))
+                    .frame(width: 3)
+                    .frame(maxWidth: .infinity)
+                // Fill from the zero line to the thumb, either direction.
+                Rectangle()
+                    .fill(Color.accentColor.opacity(0.75))
+                    .frame(width: 3, height: abs(zeroY - thumbY))
+                    .offset(y: min(zeroY, thumbY))
+                    .frame(maxWidth: .infinity)
+                Rectangle()
+                    .fill(.white.opacity(0.35))
+                    .frame(height: 1)
+                    .offset(y: zeroY)
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(Color(white: 0.88))
+                    .frame(width: 12, height: 7)
+                    .shadow(color: .black.opacity(0.5), radius: 1, y: 1)
+                    .offset(y: min(max(thumbY - 3.5, 0), height - 7))
+                    .frame(maxWidth: .infinity)
+            }
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { drag in
+                        let fraction = 1 - min(max(drag.location.y / height, 0), 1)
+                        value = range.lowerBound + Double(fraction) * span
+                    }
+            )
+            .onTapGesture(count: 2) { value = 0 }
+        }
+    }
+}
+
+private extension Array {
+    subscript(safe index: Int) -> Element? {
+        indices.contains(index) ? self[index] : nil
     }
 }
 

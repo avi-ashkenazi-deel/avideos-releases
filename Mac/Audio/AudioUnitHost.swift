@@ -91,7 +91,7 @@ final class AudioUnitHost {
         case .delay:
             return AVAudioUnitDelay()
         case .eq:
-            return AVAudioUnitEQ(numberOfBands: 3)
+            return AVAudioUnitEQ(numberOfBands: InsertEffect.eqBands.count)
         case .reverb:
             return AVAudioUnitReverb()
         case .compressor, .thirdParty:

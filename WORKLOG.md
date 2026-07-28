@@ -30,6 +30,17 @@ trimmed length, a progress fill sweeping the row, and a gear popover editing
 in/out points (`SoundPad.trimStart/trimEnd`, Optional for settings-decode
 compatibility; `SoundPadPlayer` slices the pre-decoded buffer at fire time).
 
+The EQ insert stopped pretending to be a volume knob: `.eq` rows now show a
+six-band graphic editor (80 Hz low shelf … 12 kHz high shelf, ±12 dB bipolar
+faders, double-click to zero) instead of the macro slider. Gains live on
+`InsertEffect.eqBandGains` (Optional — same settings-decode rule) and apply
+through `InsertChain.setEQBandGains`; an untouched EQ keeps the legacy
+"presence" macro curve. The sound list also gained user folders
+(`SoundPad.folder`, move-to-folder via context menu, DisclosureGroups in the
+palette) — background tracks and FX can be organized the way Ecamm's Songs
+folder is. The Music palette stays separate for now: the playlist carries
+the section-loop/performance machinery, which doesn't collapse into a row.
+
 First-use bug batch, from Avi's punch list after the first real session:
 text elements were invisible (TextRasterizer scaled the 1080p-reference font
 size by the element's height instead of the canvas's — a 64pt title rendered

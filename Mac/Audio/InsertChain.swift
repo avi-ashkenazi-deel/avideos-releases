@@ -20,6 +20,18 @@ struct InsertEffect: Identifiable, Codable {
     var kind: Kind
     var bypassed: Bool
     var macroAmount: Double
+    /// Graphic-EQ gains in dB (−12…+12), one per `InsertEffect.eqBands` slot.
+    /// nil = the macro "presence" curve. Only meaningful for `.eq`. Optional
+    /// on purpose: settings decode swallows errors and returns blank settings,
+    /// so a required field would wipe the whole audio configuration on load.
+    var eqBandGains: [Double]?
+
+    /// The fixed band layout of the built-in EQ: a low shelf, four
+    /// parametrics, a high shelf — speech-centered.
+    static let eqBands: [(frequency: Double, label: String)] = [
+        (80, "80"), (250, "250"), (800, "800"),
+        (2500, "2.5k"), (6000, "6k"), (12_000, "12k"),
+    ]
     var fullStateData: Data?
 
     init(kind: Kind, bypassed: Bool = false, macroAmount: Double = 0.5) {
@@ -93,6 +105,37 @@ final class InsertChain {
         guard let index = effects.firstIndex(where: { $0.id == id }) else { return }
         effects[index].macroAmount = amount
         applyMacro(effects[index])
+    }
+
+    /// Sets the graphic-EQ band gains (dB, one per `InsertEffect.eqBands`
+    /// slot) on an `.eq` insert and applies them to the node immediately.
+    func setEQBandGains(_ gains: [Double], id: UUID) {
+        guard let index = effects.firstIndex(where: { $0.id == id }),
+              case .eq = effects[index].kind else { return }
+        effects[index].eqBandGains = gains
+        if let eq = nodes[id] as? AVAudioUnitEQ {
+            applyEQBands(gains, to: eq)
+        }
+    }
+
+    private func applyEQBands(_ gains: [Double], to eq: AVAudioUnitEQ) {
+        let spec = InsertEffect.eqBands
+        for (index, band) in eq.bands.enumerated() {
+            guard index < spec.count, index < gains.count else {
+                band.bypass = true
+                continue
+            }
+            switch index {
+            case 0: band.filterType = .lowShelf
+            case spec.count - 1: band.filterType = .highShelf
+            default:
+                band.filterType = .parametric
+                band.bandwidth = 1.0
+            }
+            band.frequency = Float(spec[index].frequency)
+            band.gain = Float(min(max(gains[index], -12), 12))
+            band.bypass = false
+        }
     }
 
     func node(for id: UUID) -> AVAudioUnit? {
@@ -182,24 +225,30 @@ final class InsertChain {
             delay.feedback = Float(20 + amount * 25)         // 20 … 45 %
             delay.lowPassCutoff = 12_000
         case .eq:
-            guard let eq = node as? AVAudioUnitEQ, eq.bands.count >= 3 else { return }
-            // "Presence" curve: warmth shelf + clarity bell + air shelf.
-            let warmth = eq.bands[0]
-            warmth.filterType = .lowShelf
-            warmth.frequency = 120
-            warmth.gain = Float(amount * 3)
-            warmth.bypass = false
-            let clarity = eq.bands[1]
-            clarity.filterType = .parametric
-            clarity.frequency = 3000
-            clarity.bandwidth = 1.0
-            clarity.gain = Float(amount * 4)
-            clarity.bypass = false
-            let air = eq.bands[2]
-            air.filterType = .highShelf
-            air.frequency = 10_000
-            air.gain = Float(amount * 2.5)
-            air.bypass = false
+            guard let eq = node as? AVAudioUnitEQ else { return }
+            if let gains = effect.eqBandGains {
+                applyEQBands(gains, to: eq)
+            } else if eq.bands.count >= 3 {
+                // Legacy macro "presence" curve: warmth shelf + clarity bell
+                // + air shelf. Used until the user touches the band editor.
+                for band in eq.bands { band.bypass = true }
+                let warmth = eq.bands[0]
+                warmth.filterType = .lowShelf
+                warmth.frequency = 120
+                warmth.gain = Float(amount * 3)
+                warmth.bypass = false
+                let clarity = eq.bands[1]
+                clarity.filterType = .parametric
+                clarity.frequency = 3000
+                clarity.bandwidth = 1.0
+                clarity.gain = Float(amount * 4)
+                clarity.bypass = false
+                let air = eq.bands[2]
+                air.filterType = .highShelf
+                air.frequency = 10_000
+                air.gain = Float(amount * 2.5)
+                air.bypass = false
+            }
         case .reverb:
             guard let reverb = node as? AVAudioUnitReverb else { return }
             reverb.loadFactoryPreset(.mediumRoom)

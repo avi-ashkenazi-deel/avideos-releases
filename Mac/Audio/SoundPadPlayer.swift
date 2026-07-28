@@ -16,6 +16,9 @@ struct SoundPad: Identifiable, Codable, Hashable {
     /// whole audio configuration when an old settings file is read.
     var trimStart: Double?
     var trimEnd: Double?
+    /// User folder in the sound-effects list ("FX", "Beds"…); nil = top
+    /// level. Same Optional-for-decode-compat rule as the trim fields.
+    var folder: String?
 
     init(url: URL, hotkeyIndex: Int? = nil) {
         self.id = UUID()
