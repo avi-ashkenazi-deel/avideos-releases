@@ -27,9 +27,20 @@ private struct StudioLayout: View {
     @State private var showingScriptEditor = false
 
     var body: some View {
+        @Bindable var studio = studio
         canvas
         .overlay(alignment: .trailing) {
             PaletteStrip().padding(.trailing, 8)
+        }
+        .confirmationDialog("Recording saved",
+                            isPresented: $studio.showingRecordingOptions,
+                            titleVisibility: .visible) {
+            Button("Open in Editor") { studio.openLastRecordingInEditor() }
+            Button("Show in Finder") { studio.revealLastRecordingInFinder() }
+            Button("Delete (Bad Take)", role: .destructive) { studio.discardLastRecording() }
+            Button("Keep", role: .cancel) {}
+        } message: {
+            Text(studio.lastRecordingURL?.lastPathComponent ?? "")
         }
         .overlay(alignment: .topLeading) {
             HStack(spacing: 10) {
@@ -211,6 +222,13 @@ private struct GeneralSettingsView: View {
                     get: { studio.audio.voiceProcessingEnabled },
                     set: { studio.audio.voiceProcessingEnabled = $0 }
                 ))
+                Toggle("Hear my own mic (self-monitoring)", isOn: Binding(
+                    get: { studio.audio.micMonitorEnabled },
+                    set: { studio.audio.micMonitorEnabled = $0 }
+                ))
+                Text("Off by default. The mic always reaches recordings, the virtual mic and guests — this only controls your local speakers.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             Section("Virtual Devices") {

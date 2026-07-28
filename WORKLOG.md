@@ -30,6 +30,26 @@ trimmed length, a progress fill sweeping the row, and a gear popover editing
 in/out points (`SoundPad.trimStart/trimEnd`, Optional for settings-decode
 compatibility; `SoundPadPlayer` slices the pre-decoded buffer at fire time).
 
+Third pass, from running it live. **You heard your own mic** — the program
+bus (which must contain the mic, for recording and the virtual devices) was
+also the monitor. The graph now has a dedicated `monitorMixer`: every strip
+except the mic feeds it, the program bus reaches the output only through a
+silencer (so its tap keeps firing), and the mic can rejoin the monitor
+through a gate node — a "Hear my own mic" toggle in Settings, off by
+default. **Recording looked broken** because `isRecording` was computed off
+the non-observable ProgramRecorder — SwiftUI never updated the Record
+button; the state is now mirrored observably, and stopping presents a
+what-now dialog: Open in Editor / Show in Finder / Delete (bad take) / Keep.
+**The mixer got the Ecamm treatment**: horizontal rows — name, MUTE, one
+slider whose groove doubles as the live green meter — replacing the rough
+vertical strips. **Selection got a pencil** that opens the Inspector window
+on the element. **New image/video elements start at the media's real size**
+(1:1 canvas pixels when they fit, scaled at their own aspect when not; EXIF
+rotation respected). **Camera and guest tiles are addable as elements** from
+the overlays palette, for host-small-over-screen-share. And **Delete on the
+canvas now hides** (exit animation, recoverable via the eye) — only the
+Overlays palette's remove genuinely deletes.
+
 Second pass after Avi ran it: the palettes must be *independent windows* you
 can move anywhere (that's what Ecamm does), not views drawn inside the studio
 window. Rebuilt on `WindowGroup(id: "palette", for: PaletteKind.self)` — the

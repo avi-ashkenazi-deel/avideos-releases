@@ -1,71 +1,53 @@
 import SwiftUI
 
-/// The broadcast-console mixer: one vertical channel strip per audio strip
-/// (mic, pads, music, movie, each connected guest) with fader, mute, live
-/// meter and an insert-chain popover, plus the sidechain ducker controls.
+/// The Sound Levels panel, Ecamm-style: one horizontal row per source —
+/// name, MUTE, and a slider whose track doubles as the live level meter —
+/// plus the sidechain ducker below.
 struct MixerPanelView: View {
     @Environment(AudioEngineController.self) private var audio
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(alignment: .top, spacing: 8) {
-                    ForEach(audio.strips, id: \.self) { strip in
-                        ChannelStripView(strip: strip)
-                    }
-                }
-                .padding(.vertical, 2)
+        VStack(alignment: .leading, spacing: 6) {
+            ForEach(audio.strips, id: \.self) { strip in
+                LevelRow(strip: strip)
             }
+            Divider().padding(.vertical, 4)
             DuckerSection()
         }
         .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(Color(white: 0.09))
-        )
     }
 }
 
-// MARK: - Channel strip
+// MARK: - Level row
 
-private struct ChannelStripView: View {
+private struct LevelRow: View {
     @Environment(AudioEngineController.self) private var audio
     let strip: AudioEngineController.StripID
 
     @State private var showsInserts = false
 
     var body: some View {
-        VStack(spacing: 8) {
+        HStack(spacing: 10) {
             Text(audio.displayName(for: strip))
-                .font(.caption2.weight(.semibold))
+                .font(.callout)
                 .lineLimit(1)
                 .truncationMode(.tail)
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity)
+                .frame(width: 120, alignment: .trailing)
 
-            HStack(spacing: 6) {
-                VerticalFader(value: Binding(
+            muteButton
+
+            MeterSlider(
+                value: Binding(
                     get: { Double(audio.volume(for: strip)) },
-                    set: { audio.setVolume(Float($0), for: strip) }))
-                LevelMeter(strip: strip)
-            }
-            .frame(height: 130)
+                    set: { audio.setVolume(Float($0), for: strip) }),
+                levels: { audio.levels(for: strip) },
+                dimmed: audio.isMuted(strip)
+            )
+            .frame(height: 18)
 
-            HStack(spacing: 6) {
-                muteButton
-                fxButton
-            }
+            fxButton
         }
-        .padding(8)
-        .frame(width: 76)
-        .background(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(.ultraThinMaterial)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .strokeBorder(.white.opacity(0.06))
-        )
+        .padding(.vertical, 3)
     }
 
     private var muteButton: some View {
@@ -73,14 +55,15 @@ private struct ChannelStripView: View {
         return Button {
             audio.setMuted(!muted, for: strip)
         } label: {
-            Image(systemName: muted ? "speaker.slash.fill" : "speaker.wave.2.fill")
-                .font(.system(size: 10, weight: .semibold))
-                .frame(width: 26, height: 20)
+            Text("MUTE")
+                .font(.system(size: 9, weight: .bold))
+                .padding(.horizontal, 7)
+                .padding(.vertical, 4)
                 .foregroundStyle(muted ? Color.white : Color.secondary)
                 .background(
                     muted ? AnyShapeStyle(Color.red.opacity(0.85))
-                          : AnyShapeStyle(Color.white.opacity(0.08)),
-                    in: RoundedRectangle(cornerRadius: 5))
+                          : AnyShapeStyle(Color.white.opacity(0.1)),
+                    in: RoundedRectangle(cornerRadius: 4))
         }
         .buttonStyle(.plain)
         .help(muted ? "Unmute" : "Mute")
@@ -93,7 +76,7 @@ private struct ChannelStripView: View {
         } label: {
             Text(count > 0 ? "FX\u{2009}\(count)" : "FX")
                 .font(.system(size: 9, weight: .bold))
-                .frame(width: 26, height: 20)
+                .frame(width: 30, height: 20)
                 .foregroundStyle(count > 0 ? Color.accentColor : Color.secondary)
                 .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 5))
         }
@@ -105,76 +88,49 @@ private struct ChannelStripView: View {
     }
 }
 
-// MARK: - Fader
-
-/// Custom vertical fader (0…1 linear gain). Double-click resets to unity.
-private struct VerticalFader: View {
+/// A horizontal volume slider whose track is also the live meter: the green
+/// level plays inside the groove, the knob sets the fader. Double-click
+/// resets to unity.
+private struct MeterSlider: View {
     @Binding var value: Double
-
-    var body: some View {
-        GeometryReader { geo in
-            let height = geo.size.height
-            let fill = height * CGFloat(min(max(value, 0), 1))
-            let thumbCenter = min(max(fill, 6), height - 6)
-
-            ZStack(alignment: .bottom) {
-                Capsule()
-                    .fill(Color.black.opacity(0.6))
-                    .frame(width: 4)
-                    .frame(maxWidth: .infinity)
-                Capsule()
-                    .fill(Color.accentColor.opacity(0.75))
-                    .frame(width: 4, height: fill)
-                    .frame(maxWidth: .infinity)
-                RoundedRectangle(cornerRadius: 3)
-                    .fill(Color(white: 0.88))
-                    .frame(width: 20, height: 12)
-                    .shadow(color: .black.opacity(0.5), radius: 1, y: 1)
-                    .offset(y: -(thumbCenter - 6))
-            }
-            .contentShape(Rectangle())
-            .gesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { drag in
-                        value = min(max(1 - drag.location.y / height, 0), 1)
-                    }
-            )
-            .onTapGesture(count: 2) { value = 1 }
-        }
-        .frame(width: 24)
-    }
-}
-
-// MARK: - Level meter
-
-/// RMS bar with a floating peak tick, redrawn every display frame.
-private struct LevelMeter: View {
-    @Environment(AudioEngineController.self) private var audio
-    let strip: AudioEngineController.StripID
+    let levels: () -> AudioLevels
+    var dimmed = false
 
     var body: some View {
         TimelineView(.animation) { _ in
             GeometryReader { geo in
-                let height = geo.size.height
-                let levels = audio.levels(for: strip)
-                let rms = CGFloat(min(max(levels.rms, 0), 1))
-                let peak = CGFloat(min(max(levels.peak, 0), 1))
+                let width = geo.size.width
+                let level = CGFloat(min(max(levels().rms, 0), 1))
+                let knobX = min(max(width * CGFloat(min(max(value, 0), 1)), 7), width - 7)
 
-                ZStack(alignment: .bottom) {
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(Color.black.opacity(0.6))
-                    LinearGradient(colors: [.green, .green, .yellow, .red],
-                                   startPoint: .bottom, endPoint: .top)
-                        .frame(height: height * rms)
-                        .clipShape(RoundedRectangle(cornerRadius: 2))
-                    Rectangle()
-                        .fill(.white.opacity(0.9))
-                        .frame(height: 1.5)
-                        .offset(y: -min(height * peak, height - 1.5))
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(Color.black.opacity(0.55))
+                        .frame(height: 6)
+                    // Live level inside the groove, capped at the fader so
+                    // the picture matches what's audible.
+                    Capsule()
+                        .fill(LinearGradient(colors: [.green, .green, .yellow],
+                                             startPoint: .leading, endPoint: .trailing))
+                        .frame(width: max(6, width * level * CGFloat(min(max(value, 0), 1))),
+                               height: 6)
+                        .opacity(dimmed ? 0.25 : 0.9)
+                    Circle()
+                        .fill(Color(white: 0.92))
+                        .frame(width: 14, height: 14)
+                        .shadow(color: .black.opacity(0.5), radius: 1, y: 1)
+                        .position(x: knobX, y: geo.size.height / 2)
                 }
+                .contentShape(Rectangle())
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { drag in
+                            value = min(max(drag.location.x / width, 0), 1)
+                        }
+                )
+                .onTapGesture(count: 2) { value = 1 }
             }
         }
-        .frame(width: 6)
     }
 }
 

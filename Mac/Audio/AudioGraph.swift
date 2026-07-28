@@ -7,13 +7,17 @@ import os
 ///
 ///   entry (source node / player bus) → [insert chain] → strip mixer
 ///
-/// Fan-out: mic/pads/music/movie strip mixers feed BOTH `programMixer` and
-/// `mixMinusMixer` (multi-destination connect); guest strips feed
-/// `programMixer` only — that omission IS the mix-minus, structurally
-/// guaranteeing guests never hear themselves.
+/// Fan-out (three buses, per strip):
+///  - `programMixer`: every strip — what recording and the virtual mic get.
+///  - `mixMinusMixer`: every non-guest strip — that omission IS the
+///    mix-minus, structurally guaranteeing guests never hear themselves.
+///  - `monitorMixer`: every strip EXCEPT the mic — the host must not hear
+///    their own voice on the speakers (asked for explicitly on first use).
+///    The mic reaches it only through `micMonitorGate`, off by default.
 ///
-/// Outputs: programMixer → mainMixer → outputNode (monitor device);
-/// one tap on programMixer multiplexes program-ring (virtual mic feeder) +
+/// Outputs: monitorMixer → mainMixer → outputNode (monitor device); the
+/// program bus reaches mainMixer only through a silencer so its tap fires.
+/// One tap on programMixer multiplexes program-ring (virtual mic feeder) +
 /// recording sink + program meter; one tap on mixMinusMixer feeds the
 /// guest-send ring.
 ///
@@ -40,6 +44,23 @@ final class AudioGraph {
     /// phase-coherent. `outputVolume` on a node whose only job is to be
     /// silenced is well-defined and cannot be misread.
     private let mixMinusSilencer = AVAudioMixerNode()
+    /// What the speakers actually play. Everything except the mic feeds it
+    /// directly; the mic only via `micMonitorGate`.
+    let monitorMixer = AVAudioMixerNode()
+    /// Same trick as `mixMinusSilencer`, for the program bus: it must reach
+    /// the output so the engine pulls it and its tap fires, but the audible
+    /// path is the monitor bus — without this, every strip arrives at the
+    /// speakers twice (and the mic once too often).
+    private let programSilencer = AVAudioMixerNode()
+    /// Mic → monitor, normally silent. `outputVolume` 1 turns on
+    /// self-monitoring for hosts who want to hear themselves.
+    private let micMonitorGate = AVAudioMixerNode()
+
+    /// Whether the host hears their own mic on the monitor output.
+    var micMonitorEnabled: Bool {
+        get { micMonitorGate.outputVolume > 0.5 }
+        set { micMonitorGate.outputVolume = newValue ? 1 : 0 }
+    }
 
     /// One strip = entry point + insert chain + strip mixer + meter state.
     final class Strip {
@@ -99,11 +120,22 @@ final class AudioGraph {
         engine.attach(programMixer)
         engine.attach(mixMinusMixer)
         engine.attach(mixMinusSilencer)
+        engine.attach(monitorMixer)
+        engine.attach(programSilencer)
+        engine.attach(micMonitorGate)
         engine.attach(padsBus)
         engine.attach(musicBus)
 
-        // Bus wiring. The program bus is the monitor.
-        engine.connect(programMixer, to: engine.mainMixerNode, format: format)
+        // Bus wiring. The MONITOR bus is what's heard; the program bus only
+        // reaches the output through a silencer so its tap keeps firing.
+        engine.connect(monitorMixer, to: engine.mainMixerNode, format: format)
+        engine.connect(programMixer, to: programSilencer, format: format)
+        engine.connect(programSilencer, to: engine.mainMixerNode, format: format)
+        programSilencer.outputVolume = 0
+
+        // Mic self-monitoring path, silent unless the host opts in.
+        engine.connect(micMonitorGate, to: monitorMixer, format: format)
+        micMonitorGate.outputVolume = 0
 
         // The mix-minus bus reaches the output only so the engine pulls it and
         // its tap fires; the silencer makes sure none of it is audible. The tap
@@ -148,7 +180,8 @@ final class AudioGraph {
         // Entry → strip mixer (the insert chain re-wires this when populated).
         engine.connect(entry, to: strip.mixer, format: format)
 
-        // Strip → buses. Guests skip mix-minus (that's the whole trick).
+        // Strip → buses. Guests skip mix-minus (that's the whole trick);
+        // the mic skips the monitor — its only local path is the gate.
         let isGuest: Bool
         if case .guest = id { isGuest = true } else { isGuest = false }
         var destinations = [AVAudioConnectionPoint(node: programMixer,
@@ -156,6 +189,13 @@ final class AudioGraph {
         if !isGuest {
             destinations.append(AVAudioConnectionPoint(node: mixMinusMixer,
                                                        bus: mixMinusMixer.nextAvailableInputBus))
+        }
+        if id == .mic {
+            destinations.append(AVAudioConnectionPoint(node: micMonitorGate,
+                                                       bus: micMonitorGate.nextAvailableInputBus))
+        } else {
+            destinations.append(AVAudioConnectionPoint(node: monitorMixer,
+                                                       bus: monitorMixer.nextAvailableInputBus))
         }
         engine.connect(strip.mixer, to: destinations, fromBus: 0, format: format)
 

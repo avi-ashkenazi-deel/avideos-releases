@@ -1,7 +1,9 @@
 import Foundation
 import AppKit
+import AVFoundation
 import CoreMedia
 import CoreVideo
+import ImageIO
 import Metal
 import Observation
 import os
@@ -52,7 +54,16 @@ final class StudioController {
     }
 
     private(set) var isLive = false
-    var isRecording: Bool { recorder.isRecording }
+    /// Observable mirror of the recorder's state. ProgramRecorder is a plain
+    /// class — computing this from `recorder.state` compiled fine but SwiftUI
+    /// never saw changes, so the Record button gave no feedback at all and
+    /// recording looked broken.
+    private(set) var isRecording = false
+
+    /// The finished take, driving the "what now" dialog (delete / show in
+    /// Finder / open in editor) after every stop.
+    var lastRecordingURL: URL?
+    var showingRecordingOptions = false
 
     /// Latest program frame for the preview MTKView.
     let previewStore = PreviewFrameStore()
@@ -351,13 +362,20 @@ final class StudioController {
     func addImageElement(url: URL) {
         addElement(Element(name: url.lastPathComponent,
                            kind: .image(MediaReference(url: url)),
+                           transform: mediaTransform(forPixelSize: Self.imagePixelSize(url: url)),
                            entryAnimation: .styled(.fade)))
     }
 
     func addVideoElement(url: URL) {
-        addElement(Element(name: url.lastPathComponent,
-                           kind: .video(VideoContent(media: MediaReference(url: url))),
-                           entryAnimation: .styled(.fade)))
+        // Natural size loads async; the element appears once probed so its
+        // bounding box starts at the video's real shape, not a default square.
+        Task { @MainActor in
+            let pixelSize = await Self.videoPixelSize(url: url)
+            addElement(Element(name: url.lastPathComponent,
+                               kind: .video(VideoContent(media: MediaReference(url: url))),
+                               transform: mediaTransform(forPixelSize: pixelSize),
+                               entryAnimation: .styled(.fade)))
+        }
     }
 
     func addWebElement() {
@@ -365,6 +383,58 @@ final class StudioController {
                            kind: .web(WebContent(urlString: "https://example.com")),
                            transform: .fullCanvas,
                            entryAnimation: .styled(.fade)))
+    }
+
+    /// A camera PiP tile — the host small over a screen share, or a second
+    /// angle. 16:9 tile in the lower-right, like an interview inset.
+    func addCameraElement(deviceUniqueID: String, name: String) {
+        addElement(Element(name: name,
+                           kind: .source(.camera(deviceUniqueID: deviceUniqueID)),
+                           transform: ElementTransform(center: CGPoint(x: 0.82, y: 0.76),
+                                                       size: CGSize(width: 0.28, height: 0.28)),
+                           entryAnimation: .styled(.fade)))
+    }
+
+    /// A guest tile as a freely placeable element (beyond the interview grid).
+    func addGuestElement(identity: String, name: String) {
+        addElement(Element(name: name,
+                           kind: .source(.guest(identity: identity)),
+                           transform: ElementTransform(center: CGPoint(x: 0.82, y: 0.76),
+                                                       size: CGSize(width: 0.28, height: 0.28)),
+                           entryAnimation: .styled(.fade)))
+    }
+
+    /// Element transform matching the media's real pixels: 1:1 with canvas
+    /// pixels when it fits, scaled down at its own aspect when it doesn't.
+    private func mediaTransform(forPixelSize pixelSize: CGSize?) -> ElementTransform {
+        guard let pixelSize, pixelSize.width > 0, pixelSize.height > 0 else {
+            return ElementTransform()
+        }
+        let canvas = project.canvasSize
+        let scale = min(1, canvas.width / pixelSize.width, canvas.height / pixelSize.height)
+        return ElementTransform(center: CGPoint(x: 0.5, y: 0.5),
+                                size: CGSize(width: pixelSize.width * scale / canvas.width,
+                                             height: pixelSize.height * scale / canvas.height))
+    }
+
+    private static func imagePixelSize(url: URL) -> CGSize? {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+              let width = properties[kCGImagePropertyPixelWidth] as? Double,
+              let height = properties[kCGImagePropertyPixelHeight] as? Double else { return nil }
+        // EXIF orientations 5-8 are 90°-rotated; the displayed shape swaps.
+        let orientation = properties[kCGImagePropertyOrientation] as? UInt32 ?? 1
+        return orientation >= 5 ? CGSize(width: height, height: width)
+                                : CGSize(width: width, height: height)
+    }
+
+    private static func videoPixelSize(url: URL) async -> CGSize? {
+        let asset = AVURLAsset(url: url)
+        guard let track = try? await asset.loadTracks(withMediaType: .video).first,
+              let (size, transform) = try? await track.load(.naturalSize, .preferredTransform)
+        else { return nil }
+        let rect = CGRect(origin: .zero, size: size).applying(transform)
+        return CGSize(width: abs(rect.width), height: abs(rect.height))
     }
 
     /// Show/hide with entry/exit animation (exit = reversed entry).
@@ -441,9 +511,17 @@ final class StudioController {
     // MARK: - Recording
 
     func toggleRecording() {
-        if recorder.isRecording {
+        if isRecording {
+            isRecording = false
             recorder.stop { [weak self] url in
-                if let url { self?.log.info("Recording saved: \(url.path)") }
+                Task { @MainActor in
+                    guard let self else { return }
+                    if let url {
+                        self.log.info("Recording saved: \(url.path)")
+                        self.lastRecordingURL = url
+                        self.showingRecordingOptions = true
+                    }
+                }
             }
             audio.stopRecordingSink()
             renderEngine.map { $0.removeConsumer(recorder) }
@@ -454,8 +532,30 @@ final class StudioController {
                                    projectName: project.name)
                 audio.startRecordingSink(recorder: recorder)
                 renderEngine?.addConsumer(recorder)
+                isRecording = true
             } catch {
                 log.error("Couldn't start recording: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    /// "Bad take" — removes the file that just finished writing.
+    func discardLastRecording() {
+        guard let url = lastRecordingURL else { return }
+        try? FileManager.default.removeItem(at: url)
+        lastRecordingURL = nil
+    }
+
+    func revealLastRecordingInFinder() {
+        guard let url = lastRecordingURL else { return }
+        NSWorkspace.shared.activateFileViewerSelecting([url])
+    }
+
+    func openLastRecordingInEditor() {
+        guard let url = lastRecordingURL else { return }
+        Task {
+            if await !openEditor(fileURL: url) {
+                log.error("Recording couldn't be opened in the editor: \(url.path)")
             }
         }
     }

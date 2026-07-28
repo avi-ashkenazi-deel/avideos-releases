@@ -33,8 +33,12 @@ struct CanvasEditorOverlay: View {
             .focusEffectDisabled()
             .focused($canvasFocused)
             .onDeleteCommand {
-                if let id = studio.selectedElementID {
-                    studio.removeElement(id: id)
+                // Delete on the canvas HIDES (exit animation, recoverable
+                // from the Overlays palette). Only the palette's remove
+                // actually deletes — asked for explicitly.
+                if let id = studio.selectedElementID,
+                   studio.findElement(id: id)?.isVisible == true {
+                    studio.toggleElementVisibility(id: id)
                 }
             }
         }
@@ -64,6 +68,7 @@ struct CanvasEditorOverlay: View {
 /// Selection rectangle + resize handles + rotation grip for one element.
 private struct SelectionChrome: View {
     @Environment(StudioController.self) private var studio
+    @Environment(\.openWindow) private var openWindow
     let element: Element
     let canvas: CanvasTransform
 
@@ -116,6 +121,24 @@ private struct SelectionChrome: View {
                 .frame(width: 10, height: 10)
                 .offset(y: -rect.height / 2 - 22)
                 .gesture(rotateGesture(rect: rect))
+
+            // Pencil at the left edge (Ecamm-style): opens the inspector
+            // window on this element for radius, opacity, stroke, effects,
+            // text styling.
+            Button {
+                studio.selectedElementID = element.id
+                openWindow(id: "palette", value: PaletteKind.inspector)
+            } label: {
+                Image(systemName: "pencil")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 24, height: 24)
+                    .background(.black.opacity(0.65), in: Circle())
+                    .overlay(Circle().strokeBorder(.white.opacity(0.35)))
+            }
+            .buttonStyle(.plain)
+            .offset(x: -rect.width / 2 - 18)
+            .help("Edit this element")
         }
         .rotationEffect(.radians(element.transform.rotation))
         .position(x: rect.midX, y: rect.midY)

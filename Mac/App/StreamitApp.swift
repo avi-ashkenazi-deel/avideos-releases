@@ -90,9 +90,12 @@ struct StudioCommands: Commands {
             // The discoverable twin of pressing Delete with the canvas
             // focused. Command-modified on purpose: the inspector has text
             // fields, and a bare-Delete menu equivalent would race them.
-            Button("Delete Element") {
-                if let id = studio.selectedElementID {
-                    studio.removeElement(id: id)
+            // HIDES rather than deletes — deleting for real lives only in
+            // the Overlays palette (asked for explicitly).
+            Button("Hide Element") {
+                if let id = studio.selectedElementID,
+                   studio.findElement(id: id)?.isVisible == true {
+                    studio.toggleElementVisibility(id: id)
                 }
             }
             .keyboardShortcut(.delete, modifiers: [.command])

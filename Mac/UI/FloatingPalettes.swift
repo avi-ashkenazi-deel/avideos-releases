@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import AVFoundation
 import UniformTypeIdentifiers
 import KeyboardShortcuts
 
@@ -98,8 +99,7 @@ struct PaletteWindowContent: View {
         case .sounds:
             SoundEffectsPalette()
         case .levels:
-            MixerPanelView()
-                .frame(height: 320)
+            MixerPanelView()   // rows size themselves; the ducker sits below
         case .music:
             MusicPlaylistView()
                 .frame(height: 380)
@@ -311,6 +311,32 @@ struct AddElementButtons: View {
                 .help("Add video")
             Button { studio.addWebElement() } label: { Image(systemName: "globe") }
                 .help("Add web page")
+            // Camera / guest PiP tiles — the host small over a screen share.
+            Menu {
+                Section("Cameras") {
+                    ForEach(CameraSource.availableCameras(), id: \.uniqueID) { device in
+                        Button(device.localizedName) {
+                            studio.addCameraElement(deviceUniqueID: device.uniqueID,
+                                                    name: device.localizedName)
+                        }
+                    }
+                }
+                if let guests = studio.guests?.guests, !guests.isEmpty {
+                    Section("Guests") {
+                        ForEach(guests) { guest in
+                            Button(guest.displayName) {
+                                studio.addGuestElement(identity: guest.identity,
+                                                       name: guest.displayName)
+                            }
+                        }
+                    }
+                }
+            } label: {
+                Image(systemName: "video.badge.plus")
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+            .help("Add a camera or guest tile")
         }
         .buttonStyle(.borderless)
     }

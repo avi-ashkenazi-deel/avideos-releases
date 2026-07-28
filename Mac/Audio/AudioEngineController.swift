@@ -94,6 +94,17 @@ final class AudioEngineController {
             persist()
         }
     }
+
+    /// Hear your own mic locally. Off by default — the mic always reaches
+    /// recording, the virtual mic and guests regardless.
+    var micMonitorEnabled: Bool {
+        get { settings.micMonitorEnabled ?? false }
+        set {
+            settings.micMonitorEnabled = newValue
+            graph.micMonitorEnabled = newValue
+            persist()
+        }
+    }
     var monitorDeviceUID: String? { settings.monitorDeviceUID }
     var micDeviceUID: String? { settings.micDeviceUID }
 
@@ -140,6 +151,7 @@ final class AudioEngineController {
         _ = deviceManager.setOutputDevice(uid: settings.monitorDeviceUID, on: graph.engine)
         micCapture.start(deviceUID: settings.micDeviceUID,
                          voiceProcessing: settings.voiceProcessingEnabled)
+        graph.micMonitorEnabled = settings.micMonitorEnabled ?? false
 
         // Decode pads, wire callbacks.
         for pad in pads {

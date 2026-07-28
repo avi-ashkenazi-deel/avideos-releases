@@ -25,6 +25,11 @@ struct AudioSettings: Codable {
     /// Optional for the same decode reason as `MusicTrack`'s new fields.
     var sectionSwitchMode: SectionSwitchMode?
 
+    /// Hear your own mic on the monitor output. nil = false — off is the only
+    /// sane default (hearing yourself echo mid-show was reported as a bug).
+    /// Optional for the same decode reason as above.
+    var micMonitorEnabled: Bool?
+
     /// JSON-safe StripID key (guest strips aren't persisted — session-scoped).
     static func key(for strip: MixerStripID) -> String {
         switch strip {
