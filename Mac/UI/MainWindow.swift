@@ -45,8 +45,10 @@ private struct StudioLayout: View {
                         // now/next readout and a row of section pads above the
                         // transport, and the playlist was down to a couple of
                         // visible rows.
-                        // verify on Mac: .windowResizability(.contentSize) may
-                        // interact with VSplitView maxima.
+                        // The scene uses .contentMinSize, not .contentSize —
+                        // see StreamitApp. A window pinned to content size
+                        // cannot satisfy a maxHeight here and a resizable pane
+                        // at the same time.
                         .frame(minHeight: 160, idealHeight: 240, maxHeight: 420)
                 }
                 InspectorView()

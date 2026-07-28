@@ -27,7 +27,15 @@ struct StreamitApp: App {
                     globalShortcuts.register(studio: studio)
                 }
         }
-        .windowResizability(.contentSize)
+        // `.contentSize` was wrong twice over. It pins the window to the
+        // content's measured size, so a studio window the user cannot resize —
+        // and this content is two nested AppKit split views (HSplitView inside
+        // NavigationSplitView, VSplitView inside that), whose own sizing
+        // negotiation fights a window that refuses to move. `.contentMinSize`
+        // honours the panes' minimums and lets the window grow, which is what
+        // every pane in here was written expecting.
+        .windowResizability(.contentMinSize)
+        .defaultSize(width: 1440, height: 900)
         .commands {
             StudioCommands(studio: studio)
         }
