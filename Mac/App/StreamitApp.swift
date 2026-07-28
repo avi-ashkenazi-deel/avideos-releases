@@ -47,6 +47,21 @@ struct StreamitApp: App {
             StudioCommands(studio: studio)
         }
 
+        // Studio palettes: each is a real independent window (Ecamm-style),
+        // opened from the preview's icon strip via
+        // openWindow(id: "palette", value: kind) — the same value refocuses
+        // the existing window instead of duplicating it. Window behavior
+        // (floating level, hide-on-deactivate, frame autosave) is applied by
+        // PaletteWindowConfigurator inside the content.
+        WindowGroup(id: "palette", for: PaletteKind.self) { $kind in
+            if let kind {
+                PaletteWindowContent(kind: kind)
+                    .environment(studio)
+                    .environment(studio.audio)
+            }
+        }
+        .windowResizability(.contentSize)
+
         Settings {
             SettingsView()
                 .environment(studio)

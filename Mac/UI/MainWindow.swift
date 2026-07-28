@@ -27,9 +27,9 @@ private struct StudioLayout: View {
     @State private var showingScriptEditor = false
 
     var body: some View {
-        ZStack {
-            canvas
-            PaletteBoard()
+        canvas
+        .overlay(alignment: .trailing) {
+            PaletteStrip().padding(.trailing, 8)
         }
         .overlay(alignment: .topLeading) {
             HStack(spacing: 10) {

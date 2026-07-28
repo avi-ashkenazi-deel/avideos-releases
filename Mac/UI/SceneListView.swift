@@ -10,7 +10,9 @@ struct SceneListView: View {
             get: { studio.project.activeSceneID },
             set: { id in if let id { studio.switchScene(to: id) } }
         )) {
-            Section("Scenes") {
+            // No "Scenes" section header: the list lives in a palette window
+            // whose title bar already says Scenes.
+            Section {
                 ForEach(studio.project.scenes) { scene in
                     SceneRow(scene: scene, isActive: scene.id == studio.project.activeSceneID)
                         .tag(scene.id)

@@ -3,13 +3,16 @@ import AppKit
 import UniformTypeIdentifiers
 import KeyboardShortcuts
 
-/// The Ecamm-style studio chrome: every control surface is a small floating
-/// palette sitting on the live preview itself, draggable by its title bar and
-/// toggleable from the icon strip on the right edge. The preview is the
-/// window; the palettes are furniture on top of it.
+/// The Ecamm-style studio chrome: every control surface is an INDEPENDENT
+/// floating window (not a view inside the studio window) — movable anywhere,
+/// across displays, closed with its own close button, opened from the icon
+/// strip on the preview. Windows float above the studio, hide when the app
+/// deactivates, and remember their frames via autosave names.
 ///
-/// Positions and the open set persist across launches (UserDefaults — this is
-/// window furniture, not document state, so it stays out of the project file).
+/// Scene side: `StreamitApp` declares `WindowGroup(id: "palette",
+/// for: PaletteKind.self)`; the strip opens one via
+/// `openWindow(id: "palette", value: kind)` — the same value refocuses the
+/// existing window instead of duplicating it.
 
 // MARK: - Palette catalogue
 
@@ -64,62 +67,34 @@ enum PaletteKind: String, CaseIterable, Codable, Identifiable {
         }
     }
 
-    /// Where a palette lands the first time it opens (top-leading offsets).
-    var defaultPosition: CGPoint {
-        switch self {
-        case .scenes: CGPoint(x: 16, y: 48)
-        case .overlays: CGPoint(x: 252, y: 48)
-        case .sounds: CGPoint(x: 16, y: 420)
-        case .levels: CGPoint(x: 340, y: 500)
-        case .music: CGPoint(x: 550, y: 48)
-        case .guests: CGPoint(x: 550, y: 380)
-        case .inspector: CGPoint(x: 900, y: 48)
-        case .setup: CGPoint(x: 340, y: 200)
-        }
-    }
 }
 
-// MARK: - Board (open set + positions + the icon strip)
+// MARK: - Palette windows
 
-struct PaletteBoard: View {
-    @Environment(StudioController.self) private var studio
-
-    /// Open palettes in z-order — last is frontmost.
-    @State private var open: [PaletteKind] = []
-    @State private var positions: [PaletteKind: CGPoint] = [:]
-    @State private var restored = false
-
-    private static let defaultsKey = "paletteBoard.v1"
+/// Content of one palette window. Each palette is a real, independent macOS
+/// window: `StreamitApp` declares `WindowGroup(id: "palette",
+/// for: PaletteKind.self)` and this view is its body.
+struct PaletteWindowContent: View {
+    let kind: PaletteKind
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        ZStack(alignment: .topLeading) {
-            ForEach(open) { kind in
-                FloatingPalette(
-                    title: kind.title,
-                    position: binding(for: kind),
-                    onRaise: { raise(kind) },
-                    onClose: { close(kind) }
-                ) {
-                    content(for: kind)
-                }
-                .frame(width: kind.width)
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .overlay(alignment: .trailing) { iconStrip.padding(.trailing, 8) }
-        .onAppear(perform: restore)
-        .onChange(of: open) { persist() }
-        .onChange(of: positions) { persist() }
+        content
+            .frame(width: kind.width)
+            .navigationTitle(kind.title)
+            .background(PaletteWindowConfigurator(kind: kind))
     }
 
     @ViewBuilder
-    private func content(for kind: PaletteKind) -> some View {
+    private var content: some View {
         switch kind {
         case .scenes:
             SceneListView()
                 .frame(height: 360)
         case .overlays:
-            OverlaysPalette(openInspector: { openIfNeeded(.inspector) })
+            OverlaysPalette(openInspector: {
+                openWindow(id: "palette", value: PaletteKind.inspector)
+            })
         case .sounds:
             SoundEffectsPalette()
         case .levels:
@@ -139,21 +114,53 @@ struct PaletteBoard: View {
                 .frame(height: 320)
         }
     }
+}
 
-    /// The right-edge toggle strip — one icon per palette, filled when open.
-    private var iconStrip: some View {
+/// Turns the plain WindowGroup window into a studio palette: floats above
+/// the studio window, hides when the app deactivates, drags by its body,
+/// keeps its frame per palette, and drops minimize/zoom (a palette is
+/// closed, not minimized).
+private struct PaletteWindowConfigurator: NSViewRepresentable {
+    let kind: PaletteKind
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        // The window doesn't exist until the view lands in one.
+        DispatchQueue.main.async {
+            guard let window = view.window else { return }
+            window.level = .floating
+            window.hidesOnDeactivate = true
+            window.isMovableByWindowBackground = true
+            window.titlebarAppearsTransparent = true
+            window.standardWindowButton(.miniaturizeButton)?.isHidden = true
+            window.standardWindowButton(.zoomButton)?.isHidden = true
+            window.collectionBehavior.insert(.fullScreenAuxiliary)
+            window.setFrameAutosaveName("palette-\(kind.rawValue)")
+        }
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {}
+}
+
+/// The icon strip on the preview's right edge — one button per palette.
+/// Clicking opens the palette window (or brings the existing one forward;
+/// same value never duplicates). Palettes close with their own close button.
+struct PaletteStrip: View {
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
         VStack(spacing: 10) {
             ForEach(PaletteKind.allCases) { kind in
                 Button {
-                    if open.contains(kind) { close(kind) } else { openIfNeeded(kind) }
+                    openWindow(id: "palette", value: kind)
                 } label: {
                     Image(systemName: kind.icon)
                         .font(.system(size: 15))
                         .frame(width: 34, height: 30)
                         .background(
                             RoundedRectangle(cornerRadius: 7)
-                                .fill(open.contains(kind) ? Color.accentColor.opacity(0.55)
-                                                          : Color.white.opacity(0.08))
+                                .fill(Color.white.opacity(0.08))
                         )
                 }
                 .buttonStyle(.plain)
@@ -162,120 +169,6 @@ struct PaletteBoard: View {
         }
         .padding(6)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
-    }
-
-    // MARK: State plumbing
-
-    private func binding(for kind: PaletteKind) -> Binding<CGPoint> {
-        Binding(
-            get: { positions[kind] ?? kind.defaultPosition },
-            set: { positions[kind] = $0 }
-        )
-    }
-
-    private func openIfNeeded(_ kind: PaletteKind) {
-        if let index = open.firstIndex(of: kind) {
-            open.remove(at: index)
-        }
-        open.append(kind)   // end of array = frontmost
-    }
-
-    private func raise(_ kind: PaletteKind) {
-        guard open.last != kind, let index = open.firstIndex(of: kind) else { return }
-        open.remove(at: index)
-        open.append(kind)
-    }
-
-    private func close(_ kind: PaletteKind) {
-        open.removeAll { $0 == kind }
-    }
-
-    // MARK: Persistence
-
-    private struct BoardState: Codable {
-        var open: [PaletteKind]
-        var positions: [String: CGPoint]
-    }
-
-    private func restore() {
-        guard !restored else { return }
-        restored = true
-        if let data = UserDefaults.standard.data(forKey: Self.defaultsKey),
-           let state = try? JSONDecoder().decode(BoardState.self, from: data) {
-            open = state.open
-            positions = Dictionary(uniqueKeysWithValues: state.positions.compactMap { key, point in
-                PaletteKind(rawValue: key).map { ($0, point) }
-            })
-        } else {
-            open = [.scenes, .overlays, .sounds, .levels]
-        }
-    }
-
-    private func persist() {
-        guard restored else { return }
-        let state = BoardState(open: open,
-                               positions: Dictionary(uniqueKeysWithValues:
-                                   positions.map { ($0.key.rawValue, $0.value) }))
-        if let data = try? JSONEncoder().encode(state) {
-            UserDefaults.standard.set(data, forKey: Self.defaultsKey)
-        }
-    }
-}
-
-// MARK: - Palette chrome
-
-/// Title bar + material card around any palette content. Dragging the title
-/// bar moves it; clicking anywhere raises it.
-struct FloatingPalette<Content: View>: View {
-    let title: String
-    @Binding var position: CGPoint
-    let onRaise: () -> Void
-    let onClose: () -> Void
-    @ViewBuilder let content: Content
-
-    @GestureState private var dragOffset: CGSize = .zero
-
-    var body: some View {
-        VStack(spacing: 0) {
-            titleBar
-            Divider()
-            content
-        }
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(.white.opacity(0.12)))
-        .shadow(color: .black.opacity(0.45), radius: 14, y: 6)
-        .offset(x: position.x + dragOffset.width, y: position.y + dragOffset.height)
-        .simultaneousGesture(TapGesture().onEnded { onRaise() })
-    }
-
-    private var titleBar: some View {
-        HStack(spacing: 6) {
-            Button(action: onClose) {
-                Image(systemName: "xmark.circle.fill")
-                    .foregroundStyle(.secondary)
-            }
-            .buttonStyle(.plain)
-            Spacer()
-            Text(title)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-            Spacer()
-            // Balances the close button so the title stays centered.
-            Image(systemName: "xmark.circle.fill").opacity(0)
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-        .contentShape(Rectangle())
-        .gesture(
-            DragGesture(coordinateSpace: .global)
-                .updating($dragOffset) { value, state, _ in
-                    state = value.translation
-                }
-                .onEnded { value in
-                    position = CGPoint(x: max(0, position.x + value.translation.width),
-                                       y: max(0, position.y + value.translation.height))
-                }
-        )
     }
 }
 

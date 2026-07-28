@@ -30,6 +30,15 @@ trimmed length, a progress fill sweeping the row, and a gear popover editing
 in/out points (`SoundPad.trimStart/trimEnd`, Optional for settings-decode
 compatibility; `SoundPadPlayer` slices the pre-decoded buffer at fire time).
 
+Second pass after Avi ran it: the palettes must be *independent windows* you
+can move anywhere (that's what Ecamm does), not views drawn inside the studio
+window. Rebuilt on `WindowGroup(id: "palette", for: PaletteKind.self)` — the
+icon strip calls `openWindow(value: kind)`, which refocuses rather than
+duplicates; `PaletteWindowConfigurator` (an NSViewRepresentable) makes each
+window a real palette: `.floating` level, hides on deactivate, movable by
+background, minimize/zoom hidden, frame autosaved per palette. The in-window
+drag/position/persistence machinery from the first pass is deleted.
+
 The EQ insert stopped pretending to be a volume knob: `.eq` rows now show a
 six-band graphic editor (80 Hz low shelf … 12 kHz high shelf, ±12 dB bipolar
 faders, double-click to zero) instead of the macro slider. Gains live on
