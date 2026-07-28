@@ -24,6 +24,13 @@ struct StreamitApp: App {
                 .environment(studio.audio)   // MixerPanelView reads AudioEngineController directly
                 .onAppear {
                     appDelegate.studio = studio
+                    // Ignition lives here, not in StudioController.init: init
+                    // runs before NSApplicationMain (it is a @State default
+                    // value), and starting capture/audio/MIDI/CMIO that early
+                    // races AppKit for the process's window-server
+                    // registration — losing the race launches the app unable
+                    // to be activated. onAppear runs after launch completes.
+                    studio.bootSubsystems()
                     globalShortcuts.register(studio: studio)
                 }
         }

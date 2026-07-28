@@ -55,7 +55,9 @@ final class TeleprompterController {
             script = recent
             activeSectionID = recent.sections.first?.id
         }
-        installKeyMonitors()
+        // Key monitors are installed by StudioController.bootSubsystems(),
+        // not here: this controller is constructed before NSApplicationMain,
+        // and NSEvent monitors must not touch the event system that early.
     }
 
     /// Removes event monitors and the tracking timer. Call from app teardown;
@@ -301,7 +303,9 @@ final class TeleprompterController {
     // verify on Mac: the global monitor only receives events once the app has
     // been granted Accessibility (Input Monitoring) permission, and it cannot
     // consume the event — the frontmost app still sees the keystroke.
-    private func installKeyMonitors() {
+    /// Idempotent: safe to call from every boot/show path.
+    func installKeyMonitorsIfNeeded() {
+        guard localKeyMonitor == nil else { return }
         localKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             MainActor.assumeIsolated {
                 guard let self else { return event }

@@ -74,6 +74,29 @@ final class StudioController {
         self.virtualCameraConsumer = VirtualCameraFrameConsumer(writer: virtualCamera.sinkWriter)
 
         wireSubsystems()
+    }
+
+    /// Whether `bootSubsystems()` has run.
+    private var hasBooted = false
+
+    /// Starts everything that talks to the outside world: the render clock,
+    /// the camera (via the first plan compile), the audio engines, CoreMIDI,
+    /// the CMIO sink, and the teleprompter's event monitors.
+    ///
+    /// Deliberately NOT part of `init`. This controller is created as a
+    /// SwiftUI `@State` default value, which runs when the App struct is built
+    /// — before `NSApplicationMain`, before AppKit registers the process as a
+    /// GUI application. Starting capture and media-daemon connections that
+    /// early races AppKit for the process's window-server registration; when
+    /// the wrong side wins, the app launches in a half-registered state where
+    /// windows draw but activation is refused — clicks, menus and key
+    /// equivalents all dead, and only on some launches. First observed on the
+    /// app's first real Mac bring-up; the fix is simply to ignite after
+    /// launch, from `onAppear`.
+    func bootSubsystems() {
+        guard !hasBooted else { return }
+        hasBooted = true
+        teleprompter.installKeyMonitorsIfNeeded()
         renderEngine?.start(canvasSize: project.canvasSize, fps: project.frameRate)
         recompileAndPublish()
         audio.start()
