@@ -65,7 +65,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.diagLine("keyDown code=\(event.keyCode) mods=\(event.modifierFlags.rawValue) window='\(title)' keyWindow='\(key)'")
             return event
         } as Any)
+        // Fires ONLY for events delivered to OTHER applications. If a click on
+        // our own window shows up here instead of in the local monitor above,
+        // some other app's window — visible or not — is sitting over ours and
+        // taking the event; the frontmost name says whose.
+        inputProbe.append(NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
+            let front = NSWorkspace.shared.frontmostApplication
+            self?.diagLine("GLOBAL mouseDown at screen \(NSEvent.mouseLocation) delivered to another app (frontmost='\(front?.localizedName ?? "?")' pid \(front?.processIdentifier ?? -1))")
+        } as Any)
         diagLine("input probe installed; policy=\(NSApp.activationPolicy().rawValue) active=\(NSApp.isActive) windows=\(NSApp.windows.count)")
+        for (index, screen) in NSScreen.screens.enumerated() {
+            diagLine("screen[\(index)] frame=\(screen.frame) visible=\(screen.visibleFrame)")
+        }
+
+        // EXPERIMENT: after 2 s, move the window to the primary display's
+        // centre. The autosaved frame (2998, -42) straddles the second
+        // display's edge; if clicks work at the primary's centre but not
+        // there, the fault is window placement — a Space/display boundary —
+        // and not event routing.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
+            guard let self, let window = NSApp.windows.first else { return }
+            self.diagLine("EXPERIMENT: window was \(window.frame) onActiveSpace=\(window.isOnActiveSpace)")
+            if let primary = NSScreen.screens.first {
+                let f = window.frame
+                window.setFrameOrigin(NSPoint(x: primary.visibleFrame.midX - f.width / 2,
+                                              y: primary.visibleFrame.midY - f.height / 2))
+                window.makeKeyAndOrderFront(nil)
+                self.diagLine("EXPERIMENT: window moved to \(window.frame) onActiveSpace=\(window.isOnActiveSpace)")
+            }
+        }
 
         // The launch inventory is a single instant — occlusion and activation
         // both settle asynchronously, so sample them for 30 seconds. If the
@@ -78,7 +106,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let front = NSWorkspace.shared.frontmostApplication
             self.diagLine("heartbeat[\(self.heartbeatCount)] active=\(NSApp.isActive) frontmost='\(front?.localizedName ?? "?")' (pid \(front?.processIdentifier ?? -1))")
             for window in NSApp.windows {
-                self.diagLine("  hb '\(window.title)' key=\(window.isKeyWindow) main=\(window.isMainWindow) onscreen=\(window.occlusionState.contains(.visible)) frame=\(window.frame)")
+                self.diagLine("  hb '\(window.title)' key=\(window.isKeyWindow) main=\(window.isMainWindow) onscreen=\(window.occlusionState.contains(.visible)) onActiveSpace=\(window.isOnActiveSpace) frame=\(window.frame)")
             }
             if self.heartbeatCount >= 10 {
                 self.heartbeatTimer?.invalidate()
