@@ -15,17 +15,31 @@ import os
 /// Outputs: programMixer → mainMixer → outputNode (monitor device);
 /// one tap on programMixer multiplexes program-ring (virtual mic feeder) +
 /// recording sink + program meter; one tap on mixMinusMixer feeds the
-/// guest-send ring. mixMinusMixer also connects to mainMixer with its
-/// AVAudioMixing `volume` at 0 so the engine pulls it without it being
-/// audible (taps see the pre-destination signal).
-/// // verify on Mac: AVAudioMixerNode.volume (AVAudioMixing) silences the
-/// // destination contribution while installTap still receives full signal.
+/// guest-send ring.
+///
+/// The mix-minus bus has to reach the output too, because AVAudioEngine only
+/// renders what reaches the output — an unconnected bus is never pulled and its
+/// tap never fires. But it must not be *heard*, or every non-guest strip
+/// arrives at the speakers twice. It goes through `mixMinusSilencer`, whose
+/// `outputVolume` is 0: the tap upstream of it still sees full signal, and the
+/// monitor gets zeros.
 final class AudioGraph {
     let engine = AVAudioEngine()
 
     // Bus mixers.
     let programMixer = AVAudioMixerNode()
     let mixMinusMixer = AVAudioMixerNode()
+    /// Exists only to mute the mix-minus bus on the way to the monitor.
+    ///
+    /// This used to be `mixMinusMixer.volume = 0` — the `AVAudioMixing`
+    /// property, which scales a node's contribution at its destination and
+    /// would have left the upstream tap intact. On a real Mac it silences
+    /// nothing: `AVAudioMixerNode`'s AVAudioMixing conformance is not
+    /// dependable when the node is acting as a source, and the audible result
+    /// was hearing yourself, the music and the pads twice, summed — 6 dB up and
+    /// phase-coherent. `outputVolume` on a node whose only job is to be
+    /// silenced is well-defined and cannot be misread.
+    private let mixMinusSilencer = AVAudioMixerNode()
 
     /// One strip = entry point + insert chain + strip mixer + meter state.
     final class Strip {
@@ -84,18 +98,20 @@ final class AudioGraph {
 
         engine.attach(programMixer)
         engine.attach(mixMinusMixer)
+        engine.attach(mixMinusSilencer)
         engine.attach(padsBus)
         engine.attach(musicBus)
 
-        // Bus wiring.
+        // Bus wiring. The program bus is the monitor.
         engine.connect(programMixer, to: engine.mainMixerNode, format: format)
-        engine.connect(mixMinusMixer, to: engine.mainMixerNode, format: format)
-        // Deliberately `.volume` (AVAudioMixing — scales this node's
-        // contribution at the DESTINATION mixer's input bus), NOT
-        // `.outputVolume` (scales the node's own output, which the tap sees):
-        // the tap on mixMinusMixer must keep receiving full signal while the
-        // monitor path stays silent.
-        mixMinusMixer.volume = 0   // pulled by the engine, silent on monitor
+
+        // The mix-minus bus reaches the output only so the engine pulls it and
+        // its tap fires; the silencer makes sure none of it is audible. The tap
+        // sits on mixMinusMixer, upstream of the silencer, so it still gets the
+        // full signal to send to guests.
+        engine.connect(mixMinusMixer, to: mixMinusSilencer, format: format)
+        engine.connect(mixMinusSilencer, to: engine.mainMixerNode, format: format)
+        mixMinusSilencer.outputVolume = 0
 
         // Static strips.
         addStrip(id: .mic, entry: makeRingSource(ring: micRing))
