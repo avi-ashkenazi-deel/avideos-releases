@@ -28,11 +28,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var clickCount = 0
     private var keyCount = 0
 
-    /// Shows the event count in the title of the very window being clicked —
-    /// an answer that cannot be misread by either side of the debugging
-    /// conversation. If events reach this process, the title counts.
+    private var hoverTimer: Timer?
+
+    /// The title of the very window being looked at now reports, live, whether
+    /// the system's pointer position is inside the system's window frame:
+    ///
+    ///   IN  m(730,540) c2 k1     pointer inside the frame; clicks should land
+    ///   OUT m(1571,411) c0 k0    pointer OUTSIDE the frame macOS believes in
+    ///
+    /// Every recorded click so far has landed just outside the logical frame
+    /// while the user was visually on the window — so either the window is
+    /// drawn away from its logical frame, or the pointer is reported away from
+    /// its visual position (a pointer-driver issue). Holding the pointer over
+    /// the window's centre and reading the title separates the two.
     private func updateTitleCounter() {
-        NSApp.windows.first?.title = "streamit — clicks \(clickCount) keys \(keyCount)"
+        guard let window = NSApp.windows.first else { return }
+        let mouse = NSEvent.mouseLocation
+        let inside = NSPointInRect(mouse, window.frame)
+        window.title = "\(inside ? "IN" : "OUT") m(\(Int(mouse.x)),\(Int(mouse.y))) c\(clickCount) k\(keyCount)"
     }
 
     /// Every probe line goes to the unified log AND to a plain file, because
@@ -162,6 +175,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
 
         installInputProbe()
+
+        // Live pointer-vs-frame readout in the title, 10 Hz for ten minutes.
+        hoverTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+            self?.updateTitleCounter()
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 600) { [weak self] in
+            self?.hoverTimer?.invalidate()
+            self?.hoverTimer = nil
+        }
     }
 
     func applicationDidBecomeActive(_ notification: Notification) {
