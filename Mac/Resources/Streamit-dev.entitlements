@@ -13,8 +13,15 @@
 
 	     With this file the app signs ad-hoc and runs locally. The virtual
 	     camera is unavailable, which is expected: there is no extension to
-	     install. Use Streamit.entitlements (--restore) for anything you
-	     intend to ship. -->
+	     install. Use Streamit.entitlements (the restore flag of
+	     dev-app-only.sh) for anything you intend to ship.
+
+	     Do not write a double hyphen anywhere in this comment: XML forbids
+	     "- -" (joined) inside comments, and AMFI refuses the whole file with
+	     "AMFIUnserializeXML: syntax error" — which means codesign fails and,
+	     had it been the build's entitlements file, the app would build
+	     unsigned or not at all. This comment previously said "(- -restore)"
+	     joined, and that single token made the file unparseable. -->
 	<key>com.apple.security.cs.disable-library-validation</key>
 	<true/>
 	<key>com.apple.security.device.audio-input</key>
