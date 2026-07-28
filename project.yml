@@ -1,18 +1,19 @@
-# XcodeGen project definition for VoiceInbox.
+# XcodeGen project definition for this repo's apps: streamit (macOS studio)
+# and HearIt (the shipped iOS app), which share one generated project.
 #
-# This file is the source of truth for the Xcode project. The generated
-# `VoiceInbox.xcodeproj` is intentionally NOT committed (see .gitignore).
+# This file is the source of truth. The generated `Streamit.xcodeproj` is
+# intentionally NOT committed (see .gitignore).
 #
 # To generate / regenerate the Xcode project on a Mac:
 #
 #     brew install xcodegen   # one time
-#     xcodegen generate
-#     open VoiceInbox.xcodeproj
+#     xcodegen generate       # or ./scripts/dev-app-only.sh for a dev build
+#     open Streamit.xcodeproj
 #
 # Then set your Apple Developer team and a unique bundle id prefix in
 # Xcode's signing settings (or in Secrets.xcconfig) before running on device.
 
-name: HearIt
+name: Streamit
 
 options:
   bundleIdPrefix: com.aviashkenazi

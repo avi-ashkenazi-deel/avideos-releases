@@ -11,7 +11,7 @@
 # which meant every `git pull` failed on a dirty tree and the toggle was one
 # careless `git commit -a` away from shipping. Instead the edits are applied to
 # a throwaway copy that git ignores, and XcodeGen is pointed at that with
-# `--spec`. Both specs produce the same HearIt.xcodeproj, so nothing downstream
+# `--spec`. Both specs produce the same Streamit.xcodeproj, so nothing downstream
 # has to know which one was used.
 #
 # Safe to run repeatedly.

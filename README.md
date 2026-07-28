@@ -68,8 +68,8 @@ fragile to hand-edit). On a Mac:
 
 ```bash
 brew install xcodegen      # one time
-xcodegen generate          # creates HearIt.xcodeproj from project.yml
-open HearIt.xcodeproj
+xcodegen generate          # creates Streamit.xcodeproj from project.yml
+open Streamit.xcodeproj
 ```
 
 Then in Xcode:

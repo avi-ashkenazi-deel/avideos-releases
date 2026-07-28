@@ -6,7 +6,7 @@ The macOS live-streaming studio lives alongside HearIt in this repo. The
 ```bash
 brew install xcodegen
 xcodegen generate
-open HearIt.xcodeproj        # contains the Streamit scheme too
+open Streamit.xcodeproj      # contains the HearIt iOS targets too
 ```
 
 Target: macOS 14.0+, Swift 5.9. SPM resolves LiveKit, KeyboardShortcuts and

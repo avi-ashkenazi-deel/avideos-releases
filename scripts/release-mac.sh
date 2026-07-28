@@ -25,7 +25,7 @@ cd "$ROOT"
 xcodegen generate
 
 echo "==> Archiving"
-xcodebuild -project HearIt.xcodeproj \
+xcodebuild -project Streamit.xcodeproj \
   -scheme Streamit \
   -configuration Release \
   -destination 'generic/platform=macOS' \
