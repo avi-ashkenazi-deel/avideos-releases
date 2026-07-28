@@ -22,9 +22,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     //   - hit=SomeView          → AppKit is fine; the fault is above, in SwiftUI
     private var inputProbe: [Any] = []
     private let inputLog = Logger(subsystem: "com.aviashkenazi.streamit", category: "input-diag")
+    private var diagHandle: FileHandle?
+
+    /// Every probe line goes to the unified log AND to a plain file, because
+    /// `log stream` needs an admin account and the bring-up machine's user
+    /// isn't one. `cat /tmp/streamit-input-diag.log` needs nothing.
+    private func diagLine(_ line: String) {
+        inputLog.notice("\(line, privacy: .public)")
+        if diagHandle == nil {
+            let path = "/tmp/streamit-input-diag.log"
+            FileManager.default.createFile(atPath: path, contents: nil)
+            diagHandle = FileHandle(forWritingAtPath: path)
+            _ = try? diagHandle?.seekToEnd()
+        }
+        try? diagHandle?.write(contentsOf: Data("\(Date()) \(line)\n".utf8))
+    }
 
     private func installInputProbe() {
-        inputProbe.append(NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [inputLog] event in
+        inputProbe.append(NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
             let window = event.window
             let title = window?.title ?? "<no window>"
             let cls = window.map { String(describing: type(of: $0)) } ?? "-"
@@ -35,19 +50,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             let key = NSApp.keyWindow?.title ?? "<nil>"
             let main = NSApp.mainWindow?.title ?? "<nil>"
-            inputLog.notice("mouseDown at \(String(describing: event.locationInWindow), privacy: .public) window='\(title, privacy: .public)' [\(cls, privacy: .public)] hit=\(hit, privacy: .public) keyWindow='\(key, privacy: .public)' mainWindow='\(main, privacy: .public)'")
+            self?.diagLine("mouseDown at \(event.locationInWindow) window='\(title)' [\(cls)] hit=\(hit) keyWindow='\(key)' mainWindow='\(main)'")
             return event
         } as Any)
-        inputProbe.append(NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [inputLog] event in
+        inputProbe.append(NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             let title = event.window?.title ?? "<no window>"
             let key = NSApp.keyWindow?.title ?? "<nil>"
-            inputLog.notice("keyDown code=\(event.keyCode) mods=\(event.modifierFlags.rawValue) window='\(title, privacy: .public)' keyWindow='\(key, privacy: .public)'")
+            self?.diagLine("keyDown code=\(event.keyCode) mods=\(event.modifierFlags.rawValue) window='\(title)' keyWindow='\(key)'")
             return event
         } as Any)
-        inputLog.notice("input probe installed; policy=\(NSApp.activationPolicy().rawValue) active=\(NSApp.isActive) windows=\(NSApp.windows.count)")
+        diagLine("input probe installed; policy=\(NSApp.activationPolicy().rawValue) active=\(NSApp.isActive) windows=\(NSApp.windows.count)")
         // Window inventory: catches an invisible window sitting over the UI.
         for (index, window) in NSApp.windows.enumerated() {
-            inputLog.notice("window[\(index)] '\(window.title, privacy: .public)' [\(String(describing: type(of: window)), privacy: .public)] level=\(window.level.rawValue) visible=\(window.isOccluded ? "occluded" : "yes", privacy: .public) frame=\(String(describing: window.frame), privacy: .public) ignoresMouse=\(window.ignoresMouseEvents)")
+            diagLine("window[\(index)] '\(window.title)' [\(String(describing: type(of: window)))] level=\(window.level.rawValue) occluded=\(window.isOccluded) visible=\(window.isVisible) frame=\(window.frame) ignoresMouse=\(window.ignoresMouseEvents)")
         }
     }
 
