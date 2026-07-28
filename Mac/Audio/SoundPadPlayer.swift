@@ -147,6 +147,24 @@ final class SoundPadPlayer {
         startProgressTracking(padID: pad.id, duration: duration)
     }
 
+    /// Whether this pad is sounding right now. Progress is set at fire and
+    /// cleared at completion or stop, so it doubles as the playing set.
+    func isPlaying(_ padID: UUID) -> Bool {
+        progress[padID] != nil
+    }
+
+    /// Stops just this pad's voice(s), leaving the rest of the board alone.
+    /// The stopped voice is marked oldest so the next fire steals it first.
+    func stop(padID: UUID) {
+        for index in voices.indices where voices[index].padID == padID {
+            voices[index].node.stop()
+            voices[index].startedAt = .distantPast
+            voices[index].padID = nil
+        }
+        progress.removeValue(forKey: padID)
+        onProgressChanged?()
+    }
+
     func stopAll() {
         voices.forEach { $0.node.stop() }
         progress.removeAll()

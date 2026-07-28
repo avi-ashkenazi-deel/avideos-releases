@@ -50,6 +50,20 @@ struct ScriptEditorView: View {
             }
         }
         .frame(minWidth: 700, minHeight: 460)
+        // A sheet has no close box, and until this bar existed the only way
+        // out was "Load into Prompter" — browsing without loading trapped you.
+        .safeAreaInset(edge: .bottom) {
+            HStack {
+                Spacer()
+                Button("Close") {
+                    saveCurrent()
+                    dismiss()
+                }
+                .keyboardShortcut(.cancelAction)   // Esc works too
+            }
+            .padding(10)
+            .background(.bar)
+        }
         .onAppear { scripts = store.list() }
         .onDisappear { saveCurrent() }
         .sheet(isPresented: $showingImport) { importSheet }

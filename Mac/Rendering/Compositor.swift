@@ -312,7 +312,8 @@ final class Compositor {
         case .text(let text, let colorFill):
             let pixelSize = CGSize(width: transform.size.width * canvasSize.width,
                                    height: transform.size.height * canvasSize.height)
-            guard let glyphs = textRasterizer.texture(for: text, pixelSize: pixelSize)
+            guard let glyphs = textRasterizer.texture(for: text, pixelSize: pixelSize,
+                                                      canvasHeight: canvasSize.height)
             else { return nil }
             let paint = resolvePaint(fill: colorFill, itemID: item.id, at: time,
                                      sourceTextures: sourceTextures)

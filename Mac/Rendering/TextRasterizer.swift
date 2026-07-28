@@ -19,11 +19,14 @@ final class TextRasterizer {
     /// Texture for the given text at the given pixel size. White glyphs on
     /// clear background — the compositor tints/paints via the item's fill,
     /// so colored, gradient, and video-filled text all share one raster.
-    func texture(for content: TextContent, pixelSize: CGSize) -> MTLTexture? {
+    /// `canvasHeight` sets the font scale: `fontSize` is authored against a
+    /// 1080p canvas, so the point size must track the canvas, not the element.
+    func texture(for content: TextContent, pixelSize: CGSize, canvasHeight: CGFloat) -> MTLTexture? {
         var hasher = Hasher()
         hasher.combine(content)
         hasher.combine(Int(pixelSize.width))
         hasher.combine(Int(pixelSize.height))
+        hasher.combine(Int(canvasHeight))
         let key = hasher.finalize()
 
         lock.lock()
@@ -33,7 +36,8 @@ final class TextRasterizer {
         }
         lock.unlock()
 
-        guard let texture = rasterize(content, pixelSize: pixelSize) else { return nil }
+        guard let texture = rasterize(content, pixelSize: pixelSize, canvasHeight: canvasHeight)
+        else { return nil }
 
         lock.lock()
         // Bound the cache; text variations are few in practice.
@@ -43,7 +47,8 @@ final class TextRasterizer {
         return texture
     }
 
-    private func rasterize(_ content: TextContent, pixelSize: CGSize) -> MTLTexture? {
+    private func rasterize(_ content: TextContent, pixelSize: CGSize,
+                           canvasHeight: CGFloat) -> MTLTexture? {
         let width = max(2, Int(pixelSize.width))
         let height = max(2, Int(pixelSize.height))
 
@@ -59,8 +64,11 @@ final class TextRasterizer {
 
         ctx.clear(CGRect(x: 0, y: 0, width: width, height: height))
 
-        // Font size is authored against a 1080p canvas; scale with height.
-        let scale = CGFloat(height) / 1080.0 * heightScaleCompensation(content, pixelSize: pixelSize)
+        // Font size is authored against a 1080p canvas, so it scales with the
+        // CANVAS height. Scaling with the element's own height (the earlier
+        // code) shrank a 64 pt title to ~8 px inside a default-height text box
+        // — drawn, but invisible on screen.
+        let scale = canvasHeight / 1080.0
         let fontSize = CGFloat(content.fontSize) * max(scale, 0.01)
         let font: NSFont = content.fontName.isEmpty
             ? NSFont.systemFont(ofSize: fontSize, weight: .semibold)
@@ -106,12 +114,6 @@ final class TextRasterizer {
                         withBytes: data,
                         bytesPerRow: width * 4)
         return texture
-    }
-
-    /// Keeps authored point sizes stable if an element is authored tall/thin:
-    /// no compensation for now, but isolated here so tuning has one home.
-    private func heightScaleCompensation(_ content: TextContent, pixelSize: CGSize) -> CGFloat {
-        1.0
     }
 
     func drainCache() {

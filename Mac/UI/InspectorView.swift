@@ -77,6 +77,26 @@ struct InspectorView: View {
                     textEditor(element, content: content)
                 }
 
+                if case .web(let content) = element.kind {
+                    // The one property a web overlay has, previously settable
+                    // nowhere — every web element was stuck on its placeholder.
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("URL").font(.headline)
+                        TextField("https://…", text: Binding(
+                            get: { content.urlString },
+                            set: { newValue in
+                                var updated = element
+                                var web = content
+                                web.urlString = newValue
+                                updated.kind = .web(web)
+                                studio.updateElement(updated)
+                            }
+                        ))
+                        .textFieldStyle(.roundedBorder)
+                        .autocorrectionDisabled()
+                    }
+                }
+
                 HStack {
                     Button(element.isVisible ? "Hide (animated)" : "Show (animated)") {
                         studio.toggleElementVisibility(id: element.id)

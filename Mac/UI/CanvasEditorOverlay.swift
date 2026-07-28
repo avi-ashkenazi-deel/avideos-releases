@@ -5,6 +5,10 @@ import SwiftUI
 /// document through StudioController; the render plan republishes on change.
 struct CanvasEditorOverlay: View {
     @Environment(StudioController.self) private var studio
+    /// Focus lands here when a click selects an element, so Delete reaches
+    /// `onDeleteCommand` below — and never fires while an inspector text
+    /// field is being edited, because then the field has focus, not us.
+    @FocusState private var canvasFocused: Bool
 
     var body: some View {
         GeometryReader { geo in
@@ -16,12 +20,21 @@ struct CanvasEditorOverlay: View {
                     .contentShape(Rectangle())
                     .onTapGesture { location in
                         studio.selectedElementID = hitTest(at: location, transform: transform)
+                        canvasFocused = studio.selectedElementID != nil
                     }
 
                 if let selectedID = studio.selectedElementID,
                    let element = studio.findElement(id: selectedID),
                    !element.isLocked {
                     SelectionChrome(element: element, canvas: transform)
+                }
+            }
+            .focusable()
+            .focusEffectDisabled()
+            .focused($canvasFocused)
+            .onDeleteCommand {
+                if let id = studio.selectedElementID {
+                    studio.removeElement(id: id)
                 }
             }
         }

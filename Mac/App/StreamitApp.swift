@@ -71,6 +71,19 @@ struct StudioCommands: Commands {
     }
 
     var body: some Commands {
+        CommandGroup(after: .pasteboard) {
+            // The discoverable twin of pressing Delete with the canvas
+            // focused. Command-modified on purpose: the inspector has text
+            // fields, and a bare-Delete menu equivalent would race them.
+            Button("Delete Element") {
+                if let id = studio.selectedElementID {
+                    studio.removeElement(id: id)
+                }
+            }
+            .keyboardShortcut(.delete, modifiers: [.command])
+            .disabled(studio.selectedElementID == nil)
+        }
+
         CommandMenu("Studio") {
             Button(studio.isRecording ? "Stop Recording" : "Start Recording") {
                 studio.toggleRecording()

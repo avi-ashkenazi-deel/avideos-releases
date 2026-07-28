@@ -210,8 +210,16 @@ final class AudioEngineController {
 
     func displayName(for strip: StripID) -> String { strip.displayName }
 
+    // Read `settings` first, the graph strip second. Not cosmetic: `Strip` is
+    // a plain class, invisible to Observation, while `settings` is a stored
+    // property of this @Observable facade — so reading it from a view body is
+    // what registers the dependency that makes a fader re-render *while* it is
+    // dragged. Reading only the strip left the mixer visually frozen until
+    // something else rebuilt the view (first seen as "faders only move after
+    // switching tabs and back").
     func volume(for strip: StripID) -> Float {
-        graph.strip(strip)?.userVolume ?? 1
+        settings.stripVolumes[AudioSettings.key(for: strip)]
+            ?? graph.strip(strip)?.userVolume ?? 1
     }
 
     func setVolume(_ volume: Float, for strip: StripID) {
@@ -221,7 +229,8 @@ final class AudioEngineController {
     }
 
     func isMuted(_ strip: StripID) -> Bool {
-        graph.strip(strip)?.isMuted ?? false
+        settings.stripMutes[AudioSettings.key(for: strip)]
+            ?? graph.strip(strip)?.isMuted ?? false
     }
 
     func setMuted(_ muted: Bool, for strip: StripID) {
@@ -260,8 +269,18 @@ final class AudioEngineController {
 
     // MARK: - Sound pads
 
+    /// Fire the pad — or stop it if it is already sounding. A toggle rather
+    /// than a retrigger: one-shots here are stings and beds, and the thing a
+    /// host reaches for mid-show is "make it stop", with no other affordance
+    /// on the pad that could mean that. (Asked for explicitly on first use:
+    /// a fired pad could not be stopped at all.)
     func playPad(_ pad: SoundPad) {
-        padPlayer?.play(pad)
+        guard let padPlayer else { return }
+        if padPlayer.isPlaying(pad.id) {
+            padPlayer.stop(padID: pad.id)
+        } else {
+            padPlayer.play(pad)
+        }
     }
 
     func addPad(fileURL: URL) {
