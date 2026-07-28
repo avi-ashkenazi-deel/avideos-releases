@@ -222,21 +222,36 @@ final class EffectChainRenderer {
     /// so the background stays sharp.
     private func beautify(strength: Double, input: MTLTexture, commandBuffer: MTLCommandBuffer) -> MTLTexture {
         coreImage(input: input, commandBuffer: commandBuffer) { image in
-            let radius = 3.0 + strength * 6.0
+            let s = min(max(strength, 0), 1)
+            let radius = 3.0 + s * 6.0
             let blurred = image
                 .clampedToExtent()
                 .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: radius])
                 .cropped(to: image.extent)
-            // Keep high-frequency detail: original*(k) + blurred*(1-k), with a
-            // touch of the original's luma detail added back.
-            let k = 1.0 - min(max(strength, 0), 1) * 0.75
-            let smooth = image.applyingFilter("CIMix", parameters: [
-                kCIInputBackgroundImageKey: blurred,
-                "inputAmount": 1.0 - k,
+            // CIMix: amount 1 → inputImage (the receiver), 0 → background.
+            // Blurred over the original, scaled by strength: 0 is a true
+            // no-op, 1 is 75% blur — detail always shows through. The first
+            // cut had this backwards (max strength = weakest smoothing).
+            let smooth = blurred.applyingFilter("CIMix", parameters: [
+                kCIInputBackgroundImageKey: image,
+                "inputAmount": s * 0.75,
             ])
             if let mask = self.segmentation.currentMask,
-               let maskImage = CIImage(mtlTexture: mask, options: nil)?
+               let rawMask = CIImage(mtlTexture: mask, options: nil)?
                    .resized(to: image.extent.size) {
+                // The Vision mask is r8Unorm, which samples as (r, 0, 0) —
+                // CIBlendWithMask reads grayscale luminance, so a full-person
+                // pixel would count as ~21% and mute the whole effect.
+                // Broadcast red into RGB first.
+                // verify on Mac: confirm CI wraps r8 as red-only (not
+                // greyscale); if greyscale, this matrix is a harmless no-op.
+                let maskImage = rawMask.applyingFilter("CIColorMatrix", parameters: [
+                    "inputRVector": CIVector(x: 1, y: 0, z: 0, w: 0),
+                    "inputGVector": CIVector(x: 1, y: 0, z: 0, w: 0),
+                    "inputBVector": CIVector(x: 1, y: 0, z: 0, w: 0),
+                    "inputAVector": CIVector(x: 0, y: 0, z: 0, w: 0),
+                    "inputBiasVector": CIVector(x: 0, y: 0, z: 0, w: 1),
+                ])
                 // Blend smoothed skin over the original only where the person is.
                 return smooth.applyingFilter("CIBlendWithMask", parameters: [
                     kCIInputBackgroundImageKey: image,

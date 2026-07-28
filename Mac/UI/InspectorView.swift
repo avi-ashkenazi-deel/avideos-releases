@@ -354,61 +354,10 @@ struct InspectorView: View {
     // MARK: - Add-element bar
 
     private var addElementBar: some View {
-        HStack {
-            Button { addText() } label: { Image(systemName: "textformat") }
-                .help("Add text")
-            Button { addShape() } label: { Image(systemName: "square.on.circle") }
-                .help("Add shape")
-            Button { addMedia(images: true) } label: { Image(systemName: "photo") }
-                .help("Add image")
-            Button { addMedia(images: false) } label: { Image(systemName: "film") }
-                .help("Add video")
-            Button { addWeb() } label: { Image(systemName: "globe") }
-                .help("Add web page")
-            Spacer()
-        }
-        .buttonStyle(.borderless)
-        .padding(8)
-    }
-
-    private func addText() {
-        studio.addElement(Element(name: "Text",
-                                  kind: .text(TextContent(string: "Your text")),
-                                  transform: ElementTransform(center: CGPoint(x: 0.5, y: 0.8),
-                                                              size: CGSize(width: 0.5, height: 0.12)),
-                                  fill: .solid(.white),
-                                  entryAnimation: .styled(.slideFromBottom)))
-    }
-
-    private func addShape() {
-        studio.addElement(Element(name: "Shape",
-                                  kind: .shape(ShapeContent(shape: .roundedRectangle)),
-                                  transform: ElementTransform(center: CGPoint(x: 0.5, y: 0.82),
-                                                              size: CGSize(width: 0.55, height: 0.16)),
-                                  fill: .shader(ShaderFill()),
-                                  entryAnimation: .styled(.slideFromLeft)))
-    }
-
-    private func addMedia(images: Bool) {
-        let panel = NSOpenPanel()
-        panel.allowedContentTypes = images ? [.image] : [.movie, .mpeg4Movie, .quickTimeMovie]
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        if images {
-            studio.addElement(Element(name: url.lastPathComponent,
-                                      kind: .image(MediaReference(url: url)),
-                                      entryAnimation: .styled(.fade)))
-        } else {
-            studio.addElement(Element(name: url.lastPathComponent,
-                                      kind: .video(VideoContent(media: MediaReference(url: url))),
-                                      entryAnimation: .styled(.fade)))
-        }
-    }
-
-    private func addWeb() {
-        studio.addElement(Element(name: "Web Overlay",
-                                  kind: .web(WebContent(urlString: "https://example.com")),
-                                  transform: .fullCanvas,
-                                  entryAnimation: .styled(.fade)))
+        // Element creation lives on StudioController — the overlays palette
+        // shares the same factories.
+        AddElementButtons()
+            .padding(8)
     }
 
     // MARK: - Binding helpers

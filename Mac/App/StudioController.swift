@@ -320,6 +320,53 @@ final class StudioController {
         if selectedElementID == id { selectedElementID = nil }
     }
 
+    /// Reorders elements within the active scene (array order = z-order,
+    /// later draws on top). List.onMove signature so the layers panel binds
+    /// straight through.
+    func moveElements(fromOffsets: IndexSet, toOffset: Int) {
+        guard let sceneIndex = project.scenes.firstIndex(where: { $0.id == project.activeSceneID }) else { return }
+        project.scenes[sceneIndex].elements.move(fromOffsets: fromOffsets, toOffset: toOffset)
+    }
+
+    // MARK: - Element factories (inspector add-bar + overlays palette)
+
+    func addTextElement() {
+        addElement(Element(name: "Text",
+                           kind: .text(TextContent(string: "Your text")),
+                           transform: ElementTransform(center: CGPoint(x: 0.5, y: 0.8),
+                                                       size: CGSize(width: 0.5, height: 0.12)),
+                           fill: .solid(.white),
+                           entryAnimation: .styled(.slideFromBottom)))
+    }
+
+    func addShapeElement() {
+        addElement(Element(name: "Shape",
+                           kind: .shape(ShapeContent(shape: .roundedRectangle)),
+                           transform: ElementTransform(center: CGPoint(x: 0.5, y: 0.82),
+                                                       size: CGSize(width: 0.55, height: 0.16)),
+                           fill: .shader(ShaderFill()),
+                           entryAnimation: .styled(.slideFromLeft)))
+    }
+
+    func addImageElement(url: URL) {
+        addElement(Element(name: url.lastPathComponent,
+                           kind: .image(MediaReference(url: url)),
+                           entryAnimation: .styled(.fade)))
+    }
+
+    func addVideoElement(url: URL) {
+        addElement(Element(name: url.lastPathComponent,
+                           kind: .video(VideoContent(media: MediaReference(url: url))),
+                           entryAnimation: .styled(.fade)))
+    }
+
+    func addWebElement() {
+        addElement(Element(name: "Web Overlay",
+                           kind: .web(WebContent(urlString: "https://example.com")),
+                           transform: .fullCanvas,
+                           entryAnimation: .styled(.fade)))
+    }
+
     /// Show/hide with entry/exit animation (exit = reversed entry).
     /// Replays an element's entry animation from the start without hiding it
     /// first — the way to actually judge one of the twenty styles while

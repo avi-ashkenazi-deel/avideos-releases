@@ -9,6 +9,41 @@ A running log of what we've built and shipped.
   fields don't accept emojis. (Chat replies may still use them; this rule is
   specifically about text pasted into TestFlight / App Store Connect.)
 
+## 2026-07-28 — streamit: floating-palette shell, first-use bug batch
+
+Avi shared reference screenshots (Ecamm Live) of the interface he's
+imagining: everything sits on the recording itself. Rebuilt the live-mode
+shell to match — the preview now fills the window and every control surface
+is a draggable floating palette on top of it (`Mac/UI/FloatingPalettes.swift`):
+Scenes, Overlays, Sound Effects, Sound Levels, Music, Interview, Inspector,
+Setup, toggled from an icon strip on the right edge, with positions and the
+open set persisted in UserDefaults. On-video chrome: scene switcher top-left,
+Record bottom-center. The NavigationSplitView + bottom-tab layout is gone.
+
+Two new palettes replace old panels outright. **Overlays** is the layers
+panel that didn't exist: one row per element with an eye (show/hide through
+the entry/exit animation), kind icon, drag-to-reorder z-order (topmost
+first), gear to the inspector, and the add-element row shared with the
+inspector (element factories moved to `StudioController`). **Sound Effects**
+replaces the pad grid with rows — play/stop toggle, name, hotkey badge,
+trimmed length, a progress fill sweeping the row, and a gear popover editing
+in/out points (`SoundPad.trimStart/trimEnd`, Optional for settings-decode
+compatibility; `SoundPadPlayer` slices the pre-decoded buffer at fire time).
+
+First-use bug batch, from Avi's punch list after the first real session:
+text elements were invisible (TextRasterizer scaled the 1080p-reference font
+size by the element's height instead of the canvas's — a 64pt title rendered
+at ~8px); mixer faders froze mid-drag (reads went to the non-observable
+AudioGraph strip, so SwiftUI never saw changes); a fired pad couldn't be
+stopped (playPad now toggles); Delete removes the selected canvas element
+(onDeleteCommand + a ⌘⌫ menu twin); web elements gained a URL field; the
+script editor sheet gained a Close button; beautify did nothing (CIMix amount
+was inverted — max strength gave the weakest smoothing — and the r8 Vision
+mask sampled as red-only, so CIBlendWithMask read a full-person pixel as ~21%
+grey; both fixed, `verify on Mac:` on the wrap assumption); and the Setup
+cards now detect a dev-app-only build and explain that there is nothing to
+install instead of failing raw.
+
 ## 2026-07-28 — streamit: first interactive run, and the dead-input hunt
 
 The app built, launched, rendered at 30 fps and played audio — and responded

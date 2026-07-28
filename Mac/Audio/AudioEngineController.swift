@@ -310,6 +310,21 @@ final class AudioEngineController {
         persist()
     }
 
+    /// Full (untrimmed) length in seconds of a decoded pad.
+    func padDuration(id: UUID) -> Double? {
+        padPlayer?.durations[id]
+    }
+
+    /// Sets a pad's in/out points (seconds; nil = full file). Applies from
+    /// the next fire — a sounding pad keeps its already-scheduled slice.
+    func setPadTrim(id: UUID, start: Double?, end: Double?) {
+        guard let index = pads.firstIndex(where: { $0.id == id }) else { return }
+        pads[index].trimStart = start
+        pads[index].trimEnd = end
+        settings.pads = pads
+        persist()
+    }
+
     /// Global hotkey entry (⌥1…⌥9 registered by the UI layer).
     func playPad(hotkeyIndex: Int) {
         guard let pad = pads.first(where: { $0.hotkeyIndex == hotkeyIndex }) else { return }

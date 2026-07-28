@@ -17,43 +17,29 @@ struct MainWindow: View {
     }
 }
 
+/// Ecamm-style shell: the live preview fills the window, and every control
+/// surface is a floating palette sitting on the recording itself (see
+/// `FloatingPalettes.swift`). On-video chrome: the scene switcher top-left,
+/// the record button bottom-center, the palette strip on the right edge.
 private struct StudioLayout: View {
     @Environment(StudioController.self) private var studio
-    @State private var bottomTab: BottomTab = .mixer
     @State private var showingSessionLibrary = false
     @State private var showingScriptEditor = false
 
-    private enum BottomTab: String, CaseIterable {
-        case mixer = "Mixer"
-        case sounds = "Sounds"
-        case music = "Music"
-        case guests = "Guests"
-        case setup = "Setup"
-    }
-
     var body: some View {
-        NavigationSplitView {
-            SceneListView()
-                .navigationSplitViewColumnWidth(min: 170, ideal: 200, max: 280)
-        } detail: {
-            HSplitView {
-                VSplitView {
-                    canvas
-                        .frame(minHeight: 280)
-                    bottomPanel
-                        // Raised from 340: the music panel now carries a
-                        // now/next readout and a row of section pads above the
-                        // transport, and the playlist was down to a couple of
-                        // visible rows.
-                        // The scene uses .contentMinSize, not .contentSize —
-                        // see StreamitApp. A window pinned to content size
-                        // cannot satisfy a maxHeight here and a resizable pane
-                        // at the same time.
-                        .frame(minHeight: 160, idealHeight: 240, maxHeight: 420)
-                }
-                InspectorView()
-                    .frame(minWidth: 240, idealWidth: 280, maxWidth: 340)
+        ZStack {
+            canvas
+            PaletteBoard()
+        }
+        .overlay(alignment: .topLeading) {
+            HStack(spacing: 10) {
+                sceneSwitcher
+                StatsHUD()
             }
+            .padding(10)
+        }
+        .overlay(alignment: .bottom) {
+            recordButton.padding(.bottom, 18)
         }
         .toolbar { toolbarContent }
         .sheet(isPresented: $showingSessionLibrary) {
@@ -80,43 +66,63 @@ private struct StudioLayout: View {
         }
         .coordinateSpace(name: "canvas")
         .background(Color.black)
-        .overlay(alignment: .topLeading) {
-            StatsHUD().padding(8)
-        }
+        .ignoresSafeArea()
     }
 
-    private var bottomPanel: some View {
-        VStack(spacing: 0) {
-            Picker("", selection: $bottomTab) {
-                ForEach(BottomTab.allCases, id: \.self) { Text($0.rawValue) }
+    /// Scene name + menu, sitting on the video like Ecamm's scene dropdown.
+    private var sceneSwitcher: some View {
+        Menu {
+            ForEach(Array(studio.project.scenes.enumerated()), id: \.element.id) { index, scene in
+                Button {
+                    studio.switchToScene(number: index + 1)
+                } label: {
+                    if scene.id == studio.project.activeSceneID {
+                        Label(scene.name, systemImage: "checkmark")
+                    } else {
+                        Text(scene.name)
+                    }
+                }
             }
-            .pickerStyle(.segmented)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-
-            switch bottomTab {
-            case .mixer: MixerPanelView()
-            case .sounds: SoundBoardView()
-            case .music: MusicPlaylistView()
-            case .guests: GuestsPanelView()
-            case .setup: ScrollView { DriverStatusView().padding(10) }
+        } label: {
+            HStack(spacing: 6) {
+                Text(studio.activeScene?.name ?? "No Scene")
+                    .font(.callout.weight(.semibold))
+                Image(systemName: "chevron.down")
+                    .font(.caption2)
             }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .background(.ultraThinMaterial, in: Capsule())
         }
-        .background(.black.opacity(0.15))
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+    }
+
+    private var recordButton: some View {
+        Button {
+            studio.toggleRecording()
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: studio.isRecording ? "stop.fill" : "record.circle")
+                Text(studio.isRecording ? "Stop" : "Record")
+                    .font(.body.weight(.semibold))
+            }
+            .padding(.horizontal, 26)
+            .padding(.vertical, 10)
+            .background(studio.isRecording ? Color.red : Color.accentColor,
+                        in: RoundedRectangle(cornerRadius: 9))
+            .foregroundStyle(.white)
+        }
+        .buttonStyle(.plain)
+        // ⇧⌘R already lives on the Studio menu command; binding it here too
+        // would fire the toggle twice per press.
+        .help("Record the program to disk (⇧⌘R)")
     }
 
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
         ToolbarItemGroup {
-            Button {
-                studio.toggleRecording()
-            } label: {
-                Label(studio.isRecording ? "Stop" : "Record",
-                      systemImage: studio.isRecording ? "stop.circle.fill" : "record.circle")
-                    .foregroundStyle(studio.isRecording ? .red : .primary)
-            }
-            .help("Record the program to disk (⇧⌘R)")
-
+            // Record lives on the video itself (bottom-center), not up here.
             Button {
                 studio.teleprompter.toggleVisible()
             } label: {

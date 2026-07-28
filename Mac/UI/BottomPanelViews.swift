@@ -3,120 +3,9 @@ import AppKit
 import UniformTypeIdentifiers
 import KeyboardShortcuts
 
-/// Soundboard grid: colored pads with hotkey badges + progress rings,
-/// drag-drop audio files to add.
-struct SoundBoardView: View {
-    @Environment(StudioController.self) private var studio
-
-    private var audio: AudioEngineController { studio.audio }
-
-    var body: some View {
-        ScrollView {
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 110), spacing: 8)], spacing: 8) {
-                ForEach(audio.pads) { pad in
-                    PadButton(pad: pad,
-                              progress: audio.padProgress[pad.id],
-                              play: { audio.playPad(pad) },
-                              remove: { audio.removePad(id: pad.id) },
-                              rename: { audio.renamePad(id: pad.id, to: $0) })
-                }
-                addPadTile
-            }
-            .padding(10)
-        }
-        .onDrop(of: [.fileURL], isTargeted: nil) { providers in
-            for provider in providers {
-                _ = provider.loadObject(ofClass: URL.self) { url, _ in
-                    guard let url else { return }
-                    Task { @MainActor in audio.addPad(fileURL: url) }
-                }
-            }
-            return true
-        }
-    }
-
-    private var addPadTile: some View {
-        Button {
-            let panel = NSOpenPanel()
-            panel.allowedContentTypes = [.audio]
-            panel.allowsMultipleSelection = true
-            if panel.runModal() == .OK {
-                panel.urls.forEach { audio.addPad(fileURL: $0) }
-            }
-        } label: {
-            VStack {
-                Image(systemName: "plus")
-                Text("Add Sound").font(.caption2)
-            }
-            .frame(maxWidth: .infinity, minHeight: 56)
-            .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 8))
-        }
-        .buttonStyle(.plain)
-    }
-}
-
-private struct PadButton: View {
-    let pad: SoundPad
-    let progress: Double?
-    let play: () -> Void
-    let remove: () -> Void
-    let rename: (String) -> Void
-
-    @State private var renameText = ""
-    @State private var isRenaming = false
-
-    /// The global hotkey currently bound to this pad's slot, e.g. "⌥3".
-    private var assignedShortcutBadge: String? {
-        guard let index = pad.hotkeyIndex,
-              let name = KeyboardShortcuts.Name.padSlot(hotkeyIndex: index),
-              let shortcut = KeyboardShortcuts.getShortcut(for: name) else { return nil }
-        return shortcut.description
-    }
-
-    var body: some View {
-        Button(action: play) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(Color(hex: pad.colorHex).opacity(0.75))
-                VStack(spacing: 3) {
-                    Text(pad.name)
-                        .font(.caption.bold())
-                        .lineLimit(2)
-                        .multilineTextAlignment(.center)
-                    // The real assigned combo, not an assumed one: the host can
-                    // rebind these in Settings → Shortcuts, and an unbound pad
-                    // must not advertise a key that does nothing.
-                    if let badge = assignedShortcutBadge {
-                        Text(badge)
-                            .font(.system(size: 9, design: .monospaced))
-                            .padding(.horizontal, 4)
-                            .background(.black.opacity(0.3), in: Capsule())
-                    }
-                }
-                .padding(6)
-                if let progress {
-                    RoundedRectangle(cornerRadius: 8)
-                        .trim(from: 0, to: progress)
-                        .stroke(Color.white, lineWidth: 2.5)
-                }
-            }
-            .frame(minHeight: 56)
-        }
-        .buttonStyle(.plain)
-        .contextMenu {
-            Button("Rename…") {
-                renameText = pad.name
-                isRenaming = true
-            }
-            Button("Remove", role: .destructive, action: remove)
-        }
-        .alert("Rename Pad", isPresented: $isRenaming) {
-            TextField("Name", text: $renameText)
-            Button("Rename") { rename(renameText) }
-            Button("Cancel", role: .cancel) {}
-        }
-    }
-}
+// SoundBoardView (the pad grid) was replaced by SoundEffectsPalette in
+// FloatingPalettes.swift — sounds are rows with a play/stop toggle, length,
+// progress fill, and an in/out trim editor, per the Ecamm-style reference.
 
 /// `sheet(item:)` needs an `Identifiable`, and `UUID` isn't one.
 private struct IdentifiedUUID: Identifiable {
@@ -527,6 +416,11 @@ private struct TakeTimer: View {
 }
 
 /// Virtual camera + virtual mic status card (onboarding + settings).
+///
+/// A dev build (scripts/dev-app-only.sh) ships without the camera extension
+/// and audio driver payloads, so "Install" could only fail with a raw error.
+/// Each card checks its payload is actually in the bundle first and explains
+/// the dev build when it isn't, instead of offering a dead button.
 struct DriverStatusView: View {
     @Environment(StudioController.self) private var studio
     @State private var busy = false
@@ -534,43 +428,87 @@ struct DriverStatusView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             GroupBox("Virtual Camera") {
-                HStack {
-                    statusDot(installed: studio.virtualCamera.status == .installed)
-                    Text(studio.virtualCamera.status.displayText)
-                    Spacer()
-                    Button("Install Camera Extension") {
-                        studio.virtualCamera.activate()
+                if cameraExtensionBundled {
+                    HStack {
+                        statusDot(installed: studio.virtualCamera.status == .installed)
+                        Text(studio.virtualCamera.status.displayText)
+                        Spacer()
+                        Button("Install Camera Extension") {
+                            studio.virtualCamera.activate()
+                        }
                     }
-                }
-                if studio.virtualCamera.status == .pendingApproval {
-                    Text("Approve it in System Settings › General › Login Items & Extensions.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    if studio.virtualCamera.status == .pendingApproval {
+                        Text("Approve it in System Settings › General › Login Items & Extensions.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                } else {
+                    devBuildExplanation(component: "camera extension",
+                                        consequence: "The app won't appear as a camera in Zoom or Meet.")
                 }
             }
 
             GroupBox("Virtual Microphone") {
-                HStack {
-                    statusDot(installed: studio.audio.driverStatus == .installed)
-                    Text(studio.audio.driverStatus.displayText)
-                    Spacer()
-                    switch studio.audio.driverStatus {
-                    case .installed:
-                        Button("Uninstall", role: .destructive) {
-                            run { await studio.audio.uninstallDriver() }
+                if audioDriverBundled {
+                    HStack {
+                        statusDot(installed: studio.audio.driverStatus == .installed)
+                        Text(studio.audio.driverStatus.displayText)
+                        Spacer()
+                        switch studio.audio.driverStatus {
+                        case .installed:
+                            Button("Uninstall", role: .destructive) {
+                                run { await studio.audio.uninstallDriver() }
+                            }
+                        default:
+                            Button(busy ? "Installing…" : "Install Virtual Mic") {
+                                run { await studio.audio.installDriver() }
+                            }
+                            .disabled(busy)
                         }
-                    default:
-                        Button(busy ? "Installing…" : "Install Virtual Mic") {
-                            run { await studio.audio.installDriver() }
-                        }
-                        .disabled(busy)
                     }
+                    Text("Installing needs your admin password and blips system audio for about a second — don't do it mid-show.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    devBuildExplanation(component: "audio driver",
+                                        consequence: "Zoom won't list a streamit microphone; everything else works.")
                 }
-                Text("Installing needs your admin password and blips system audio for about a second — don't do it mid-show.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
         }
+    }
+
+    // MARK: - Dev-build detection
+
+    /// The camera extension embeds at Contents/Library/SystemExtensions when
+    /// the full project is generated; the dev spec comments that dependency out.
+    private var cameraExtensionBundled: Bool {
+        let dir = Bundle.main.bundleURL
+            .appendingPathComponent("Contents/Library/SystemExtensions")
+        let contents = (try? FileManager.default.contentsOfDirectory(
+            at: dir, includingPropertiesForKeys: nil)) ?? []
+        return contents.contains { $0.pathExtension == "systemextension" }
+    }
+
+    /// The driver install payload is copied into Resources by the full build
+    /// (and also needs libASPL vendored — see docs/DEV_SETUP.md).
+    private var audioDriverBundled: Bool {
+        guard let url = Bundle.main.resourceURL?.appendingPathComponent("StreamitAudio.driver")
+        else { return false }
+        return FileManager.default.fileExists(atPath: url.path)
+    }
+
+    private func devBuildExplanation(component: String, consequence: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
+                statusDot(installed: false)
+                Text("Not included in this build")
+            }
+            Text("This is a development build (scripts/dev-app-only.sh), so the \(component) isn't inside the app and there is nothing to install. \(consequence) Run ./scripts/dev-app-only.sh --restore and rebuild with a Developer ID to get it.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func statusDot(installed: Bool) -> some View {

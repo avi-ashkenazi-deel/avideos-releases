@@ -10,6 +10,12 @@ struct SoundPad: Identifiable, Codable, Hashable {
     var bookmark: Data?
     var path: String
     var hotkeyIndex: Int?
+    /// In/out points in seconds; nil = full file. Optional on purpose:
+    /// AudioSettingsStore.load() swallows decode errors and returns blank
+    /// settings, so a non-optional field here would silently wipe the user's
+    /// whole audio configuration when an old settings file is read.
+    var trimStart: Double?
+    var trimEnd: Double?
 
     init(url: URL, hotkeyIndex: Int? = nil) {
         self.id = UUID()
@@ -56,6 +62,9 @@ final class SoundPadPlayer {
 
     /// Playback progress per pad (0…1), for the UI ring. Main-thread updated.
     private(set) var progress: [UUID: Double] = [:]
+    /// Full (untrimmed) duration in seconds per decoded pad, for the UI row
+    /// and the trim editor's slider range. Set at load, cleared at unload.
+    private(set) var durations: [UUID: Double] = [:]
     var onProgressChanged: (() -> Void)?
     private var progressTimer: Timer?
 
@@ -89,6 +98,7 @@ final class SoundPadPlayer {
 
         if file.processingFormat == canonical {
             buffers[pad.id] = fileBuffer
+            durations[pad.id] = Double(fileBuffer.frameLength) / canonical.sampleRate
             return
         }
         guard let converter = AVAudioConverter(from: file.processingFormat, to: canonical) else {
@@ -112,17 +122,19 @@ final class SoundPadPlayer {
             return fileBuffer
         })
         buffers[pad.id] = converted
+        durations[pad.id] = Double(converted.frameLength) / canonical.sampleRate
     }
 
     func unload(padID: UUID) {
         buffers.removeValue(forKey: padID)
         progress.removeValue(forKey: padID)
+        durations.removeValue(forKey: padID)
     }
 
     // MARK: - Playback
 
     func play(_ pad: SoundPad) {
-        guard let buffer = buffers[pad.id] else {
+        guard let full = buffers[pad.id] else {
             log.warning("Pad \(pad.name) has no decoded buffer")
             return
         }
@@ -135,6 +147,9 @@ final class SoundPadPlayer {
         voice.padID = pad.id
         voices[index] = voice
 
+        // In/out points slice the pre-decoded buffer at fire time — a memcpy
+        // of at most a few MB, well inside the <10ms pad budget.
+        let buffer = trimmed(full, start: pad.trimStart, end: pad.trimEnd) ?? full
         let duration = Double(buffer.frameLength) / buffer.format.sampleRate
         voice.node.scheduleBuffer(buffer, at: nil) { [weak self] in
             DispatchQueue.main.async {
@@ -169,6 +184,28 @@ final class SoundPadPlayer {
         voices.forEach { $0.node.stop() }
         progress.removeAll()
         onProgressChanged?()
+    }
+
+    /// Copies the [start, end) window of a decoded buffer into a fresh buffer.
+    /// Returns nil when the pad has no trim (or the trim is degenerate), so
+    /// the caller falls back to the original with no copy at all.
+    private func trimmed(_ buffer: AVAudioPCMBuffer, start: Double?, end: Double?) -> AVAudioPCMBuffer? {
+        let rate = buffer.format.sampleRate
+        let fullFrames = AVAudioFramePosition(buffer.frameLength)
+        let startFrame = AVAudioFramePosition((max(start ?? 0, 0)) * rate)
+        let endFrame = min(AVAudioFramePosition((end ?? .greatestFiniteMagnitude) * rate), fullFrames)
+        guard startFrame > 0 || endFrame < fullFrames else { return nil }
+        guard endFrame > startFrame, startFrame < fullFrames else { return nil }
+
+        let frames = AVAudioFrameCount(endFrame - startFrame)
+        guard let out = AVAudioPCMBuffer(pcmFormat: buffer.format, frameCapacity: frames),
+              let src = buffer.floatChannelData,
+              let dst = out.floatChannelData else { return nil }
+        out.frameLength = frames
+        for channel in 0..<Int(buffer.format.channelCount) {
+            dst[channel].update(from: src[channel] + Int(startFrame), count: Int(frames))
+        }
+        return out
     }
 
     private func startProgressTracking(padID: UUID, duration: TimeInterval) {
