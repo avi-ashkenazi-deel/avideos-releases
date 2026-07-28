@@ -71,7 +71,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // taking the event; the frontmost name says whose.
         inputProbe.append(NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
             let front = NSWorkspace.shared.frontmostApplication
-            self?.diagLine("GLOBAL mouseDown at screen \(NSEvent.mouseLocation) delivered to another app (frontmost='\(front?.localizedName ?? "?")' pid \(front?.processIdentifier ?? -1))")
+            let location = NSEvent.mouseLocation
+            // The verdict flag: a click INSIDE our own window's screen rect
+            // that was delivered to another application is proof positive that
+            // an invisible window sits on top of ours.
+            let inOurWindow = NSApp.windows.first.map { NSPointInRect(location, $0.frame) } ?? false
+            self?.diagLine("GLOBAL mouseDown at \(location) inOurWindow=\(inOurWindow) delivered to '\(front?.localizedName ?? "?")' (pid \(front?.processIdentifier ?? -1))\(inOurWindow ? "  <-- ANOTHER APP IS COVERING OUR WINDOW" : "")")
         } as Any)
         diagLine("input probe installed; policy=\(NSApp.activationPolicy().rawValue) active=\(NSApp.isActive) windows=\(NSApp.windows.count)")
         for (index, screen) in NSScreen.screens.enumerated() {
@@ -105,6 +110,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self.heartbeatCount += 1
             let front = NSWorkspace.shared.frontmostApplication
             self.diagLine("heartbeat[\(self.heartbeatCount)] active=\(NSApp.isActive) frontmost='\(front?.localizedName ?? "?")' (pid \(front?.processIdentifier ?? -1))")
+            // Cooperative activation has proven flaky across identical
+            // launches (run 2 activated instantly, run 3 never did). If we are
+            // still inactive by the third beat, force it the pre-macOS-14 way
+            // and log the outcome — diagnostic and workaround-proof at once.
+            if self.heartbeatCount == 3, !NSApp.isActive {
+                NSApp.activate(ignoringOtherApps: true)
+                self.diagLine("forced activate(ignoringOtherApps:) — active now \(NSApp.isActive)")
+            }
             for window in NSApp.windows {
                 self.diagLine("  hb '\(window.title)' key=\(window.isKeyWindow) main=\(window.isMainWindow) onscreen=\(window.occlusionState.contains(.visible)) onActiveSpace=\(window.isOnActiveSpace) frame=\(window.frame)")
             }
