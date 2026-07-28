@@ -70,7 +70,9 @@ private struct StudioLayout: View {
     private var canvas: some View {
         ZStack {
             if let engine = studio.renderEngine {
-                ProgramPreviewView(previewStore: studio.previewStore, device: engine.device)
+                ProgramPreviewView(previewStore: studio.previewStore,
+                                   device: engine.device,
+                                   framesPerSecond: studio.project.frameRate)
             } else {
                 ContentUnavailableView("No Metal device", systemImage: "exclamationmark.triangle")
             }

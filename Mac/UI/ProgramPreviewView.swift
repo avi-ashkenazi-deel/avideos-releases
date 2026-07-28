@@ -8,6 +8,11 @@ import simd
 struct ProgramPreviewView: NSViewRepresentable {
     let previewStore: PreviewFrameStore
     let device: MTLDevice
+    /// The render engine's target rate. Drawing faster than frames arrive just
+    /// re-presents identical pixels while blocking the main thread in
+    /// `currentDrawable` — which a first-run stack sample showed to be the
+    /// single largest consumer of main-thread time in the app.
+    let framesPerSecond: Int
 
     func makeCoordinator() -> Renderer {
         Renderer(device: device, previewStore: previewStore)
@@ -16,13 +21,19 @@ struct ProgramPreviewView: NSViewRepresentable {
     func makeNSView(context: Context) -> MTKView {
         let view = MTKView(frame: .zero, device: device)
         view.colorPixelFormat = .bgra8Unorm
-        view.preferredFramesPerSecond = 60
+        view.preferredFramesPerSecond = max(1, framesPerSecond)
         view.delegate = context.coordinator
         view.layer?.backgroundColor = NSColor.black.cgColor
         return view
     }
 
-    func updateNSView(_ nsView: MTKView, context: Context) {}
+    func updateNSView(_ nsView: MTKView, context: Context) {
+        // Follow a project frame-rate change without rebuilding the view.
+        let target = max(1, framesPerSecond)
+        if nsView.preferredFramesPerSecond != target {
+            nsView.preferredFramesPerSecond = target
+        }
+    }
 
     final class Renderer: NSObject, MTKViewDelegate {
         private let device: MTLDevice
