@@ -44,9 +44,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let title = window?.title ?? "<no window>"
             let cls = window.map { String(describing: type(of: $0)) } ?? "-"
             var hit = "(no window)"
-            if let window, let content = window.contentView {
-                let inContent = content.convert(event.locationInWindow, from: nil)
-                hit = content.hitTest(inContent).map { String(describing: type(of: $0)) } ?? "(none)"
+            // hitTest(_:) wants the point in the receiver's SUPERVIEW's
+            // coordinates, so test from the window's frame view (the content
+            // view's superview), whose own coordinates are window coordinates.
+            if let window, let frameView = window.contentView?.superview {
+                hit = frameView.hitTest(event.locationInWindow).map { String(describing: type(of: $0)) } ?? "(none)"
             }
             let key = NSApp.keyWindow?.title ?? "<nil>"
             let main = NSApp.mainWindow?.title ?? "<nil>"
@@ -62,7 +64,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         diagLine("input probe installed; policy=\(NSApp.activationPolicy().rawValue) active=\(NSApp.isActive) windows=\(NSApp.windows.count)")
         // Window inventory: catches an invisible window sitting over the UI.
         for (index, window) in NSApp.windows.enumerated() {
-            diagLine("window[\(index)] '\(window.title)' [\(String(describing: type(of: window)))] level=\(window.level.rawValue) occluded=\(window.isOccluded) visible=\(window.isVisible) frame=\(window.frame) ignoresMouse=\(window.ignoresMouseEvents)")
+            diagLine("window[\(index)] '\(window.title)' [\(String(describing: type(of: window)))] level=\(window.level.rawValue) visible=\(window.isVisible) onscreen=\(window.occlusionState.contains(.visible)) frame=\(window.frame) ignoresMouse=\(window.ignoresMouseEvents)")
         }
     }
 
