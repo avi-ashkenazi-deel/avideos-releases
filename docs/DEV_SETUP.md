@@ -12,7 +12,29 @@ open Streamit.xcodeproj      # contains the HearIt iOS targets too
 Target: macOS 14.0+, Swift 5.9. SPM resolves LiveKit, KeyboardShortcuts and
 WhisperKit on first build.
 
-## The build that works today
+## The dev loop that works today
+
+Open the project in Xcode and run — verified end to end (launch, input, live
+camera, mixer) on macOS 26.5 / Xcode 16:
+
+```bash
+./scripts/dev-app-only.sh      # generates Streamit.xcodeproj (no ext/driver)
+open Streamit.xcodeproj        # scheme "Streamit", then Cmd-R
+```
+
+If Xcode asks about signing, pick your team on the Streamit target — the dev
+entitlements carry nothing restricted, so any Apple Development identity
+signs cleanly.
+
+Do not start subsystems before `NSApplicationMain` (see
+`StudioController.bootSubsystems`): capture/audio/MIDI/CMIO connections made
+during App-struct construction race AppKit for the process's window-server
+registration, and losing that race launches an app whose windows draw but
+which cannot be activated — input dead on some launches and not others. This
+cost a full day to diagnose on first bring-up; the WORKLOG entry for
+2026-07-28 has the whole story.
+
+## The command-line build (tests, CI)
 
 Verified on macOS 26.5, Xcode 16, Apple M4 Pro: the app builds, launches, and
 the 269-test suite passes.

@@ -9,6 +9,62 @@ A running log of what we've built and shipped.
   fields don't accept emojis. (Chat replies may still use them; this rule is
   specifically about text pasted into TestFlight / App Store Connect.)
 
+## 2026-07-28 — streamit: first interactive run, and the dead-input hunt
+
+The app built, launched, rendered at 30 fps and played audio — and responded
+to nothing. No clicks, no menus, no Cmd-Q, across hours and eleven rounds of
+instrumentation. Today it works. The root cause was ours, subtle, and worth
+recording in detail because every symptom pointed somewhere else first.
+
+**Root cause: subsystems started before `NSApplicationMain`.**
+`StudioController` is a SwiftUI `@State` default value, so its init ran while
+the App struct was being built — before AppKit registered the process as a GUI
+application. That init started everything: the render clock, the first plan
+compile (which starts the camera), three audio engines, CoreMIDI, the CMIO
+sink connection; `TeleprompterController`'s init installed NSEvent global key
+monitors equally early. Connections that early race AppKit for the process's
+window-server registration. Lose the race and the app comes up
+half-registered: windows draw, the render loop runs, but activation is
+refused — clicks are consumed by failed activation attempts and delivered to
+no one. Win the race and everything works, which is why the symptom came and
+went between identical launches. Forensics that finally pinned it: forced
+`activate(ignoringOtherApps:)` returning inactive, `procRole: Background` in a
+crash report, LaunchServices `StatusLabel=[NULL]`, and clicks that produced
+neither a local monitor hit in-process nor a global monitor hit in any other
+process — events destroyed, not misrouted. The fix is structural: `init` only
+constructs and wires; a new idempotent `bootSubsystems()` performs all
+ignition from `onAppear`, after launch completes.
+
+**The instrument that cracked it** was built up over rounds inside
+AppDelegate (now removed): a file-teed event probe (`log stream` needs admin),
+window/screen/Space inventories, a 30-second activation heartbeat, a global
+monitor distinguishing "delivered elsewhere" from "vanished", a title-bar
+counter showing the window's own view of its input, and a live
+pointer-vs-frame readout that exonerated both the user's aim and the window's
+geometry in one gesture. `scripts/list-event-taps.swift` — which enumerates
+every filtering event tap in the session — stays, because it answers a class
+of question nothing else does.
+
+**Red herrings, so nobody chases them again:** the Handy dictation utility's
+filtering event tap (quit it, no change); ad-hoc signing vs the linker stub
+(properly signed, no change — though signing did surface that the dev
+entitlements file had been unparseable XML all along: a double hyphen inside a
+comment); a Claude-desktop overlay stealing clicks (one genuinely stolen
+in-window click remains on record from one run — most plausibly a transient
+screenshot-capture surface — but it was not the standing cause); and window
+geometry (the autosaved frame at (2998, -42) was legitimate all along).
+
+**Real fixes that fell out of the hunt:** the mix-minus bus reaching the
+speakers (heard as doubled audio — `AVAudioMixerNode.volume` does not silence
+a source-side node; a dedicated silencer mixer does), the preview drawing at
+60 fps against a 30 fps engine (44% of main-thread time waiting in
+`currentDrawable`), `.contentSize` window resizability (window could not be
+resized at all), the activation policy for terminal launches, dev-app-only.sh
+no longer editing project.yml in place, the test bundle's TEST_HOST following
+the lowercase product name, and the generated project renamed to
+Streamit.xcodeproj. The recommended dev loop is now Xcode itself: open
+Streamit.xcodeproj, scheme Streamit, Cmd-R.
+
 ## 2026-07-27 — Renamed: AVideos Studio is now streamit
 
 Every occurrence, in one pass, before anything ships and while there is no
