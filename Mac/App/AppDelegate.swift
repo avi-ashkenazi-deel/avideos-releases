@@ -23,6 +23,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var inputProbe: [Any] = []
     private let inputLog = Logger(subsystem: "com.aviashkenazi.streamit", category: "input-diag")
     private var diagHandle: FileHandle?
+    private var heartbeatTimer: Timer?
+    private var heartbeatCount = 0
 
     /// Every probe line goes to the unified log AND to a plain file, because
     /// `log stream` needs an admin account and the bring-up machine's user
@@ -35,7 +37,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             diagHandle = FileHandle(forWritingAtPath: path)
             _ = try? diagHandle?.seekToEnd()
         }
-        try? diagHandle?.write(contentsOf: Data("\(Date()) \(line)\n".utf8))
+        // The pid makes two concurrently running instances — one drawn on
+        // screen, one not — instantly visible as interleaved prefixes.
+        try? diagHandle?.write(contentsOf: Data("\(Date()) [\(ProcessInfo.processInfo.processIdentifier)] \(line)\n".utf8))
     }
 
     private func installInputProbe() {
@@ -62,6 +66,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return event
         } as Any)
         diagLine("input probe installed; policy=\(NSApp.activationPolicy().rawValue) active=\(NSApp.isActive) windows=\(NSApp.windows.count)")
+
+        // The launch inventory is a single instant — occlusion and activation
+        // both settle asynchronously, so sample them for 30 seconds. If the
+        // window never reports onscreen=true, the window being clicked on the
+        // monitor is not this window. If active never goes true, the app never
+        // completes activation, which kills the menu bar and key equivalents.
+        heartbeatTimer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in
+            guard let self else { return }
+            self.heartbeatCount += 1
+            let front = NSWorkspace.shared.frontmostApplication
+            self.diagLine("heartbeat[\(self.heartbeatCount)] active=\(NSApp.isActive) frontmost='\(front?.localizedName ?? "?")' (pid \(front?.processIdentifier ?? -1))")
+            for window in NSApp.windows {
+                self.diagLine("  hb '\(window.title)' key=\(window.isKeyWindow) main=\(window.isMainWindow) onscreen=\(window.occlusionState.contains(.visible)) frame=\(window.frame)")
+            }
+            if self.heartbeatCount >= 10 {
+                self.heartbeatTimer?.invalidate()
+                self.heartbeatTimer = nil
+                self.diagLine("heartbeat done")
+            }
+        }
         // Window inventory: catches an invisible window sitting over the UI.
         for (index, window) in NSApp.windows.enumerated() {
             diagLine("window[\(index)] '\(window.title)' [\(String(describing: type(of: window)))] level=\(window.level.rawValue) visible=\(window.isVisible) onscreen=\(window.occlusionState.contains(.visible)) frame=\(window.frame) ignoresMouse=\(window.ignoresMouseEvents)")
@@ -84,6 +108,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
 
         installInputProbe()
+    }
+
+    func applicationDidBecomeActive(_ notification: Notification) {
+        diagLine("applicationDidBecomeActive")
+    }
+
+    func applicationDidResignActive(_ notification: Notification) {
+        diagLine("applicationDidResignActive")
     }
 
     func applicationWillTerminate(_ notification: Notification) {
