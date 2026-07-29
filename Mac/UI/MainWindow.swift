@@ -128,11 +128,17 @@ private struct StudioLayout: View {
         .fixedSize()
     }
 
-    /// Ecamm's camera strip: one tile per device, click to switch the active
-    /// camera scene live — you are never stuck with the starting camera.
+    /// Ecamm's camera strip: one LIVE preview tile per device (phones and
+    /// iPads included once presented), in a stable name order — tiles never
+    /// shuffle on click. Clicking dissolves the program to that camera.
     private var cameraStrip: some View {
-        HStack(spacing: 8) {
-            ForEach(CameraSource.availableCameras(), id: \.uniqueID) { device in
+        // Discovery order shifts with use; name order keeps every tile where
+        // the host's muscle memory expects it.
+        let devices = CameraSource.availableCameras().sorted {
+            $0.localizedName.localizedCaseInsensitiveCompare($1.localizedName) == .orderedAscending
+        }
+        return HStack(spacing: 8) {
+            ForEach(devices, id: \.uniqueID) { device in
                 let isActive = studio.activeSceneCameraUID == device.uniqueID
                     || (studio.activeSceneCameraUID == nil
                         && device.uniqueID == CameraSource.device(uniqueID: nil)?.uniqueID)
@@ -140,10 +146,9 @@ private struct StudioLayout: View {
                     studio.setActiveCamera(deviceUniqueID: device.uniqueID)
                 } label: {
                     VStack(spacing: 3) {
-                        Image(systemName: "video.fill")
-                            .font(.system(size: 15))
-                            .frame(width: 72, height: 40)
-                            .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 6))
+                        CameraThumbnailView(deviceUniqueID: device.uniqueID)
+                            .frame(width: 76, height: 44)
+                            .clipShape(RoundedRectangle(cornerRadius: 6))
                             .overlay(
                                 RoundedRectangle(cornerRadius: 6)
                                     .strokeBorder(isActive ? Color.white : .white.opacity(0.2),
@@ -153,7 +158,7 @@ private struct StudioLayout: View {
                             .font(.caption2)
                             .lineLimit(1)
                             .truncationMode(.middle)
-                            .frame(width: 78)
+                            .frame(width: 80)
                     }
                 }
                 .buttonStyle(.plain)
@@ -209,6 +214,61 @@ private struct StudioLayout: View {
             }
             .help("Podcast-mode session library")
         }
+    }
+}
+
+/// Tiny live preview for a camera-strip tile. Each tile runs its own low-res
+/// capture session — macOS shares a device between sessions in-process, so
+/// the program feed is unaffected.
+/// verify on Mac: some virtual cameras refuse a second session; their tile
+/// stays dark but still switches.
+private struct CameraThumbnailView: NSViewRepresentable {
+    let deviceUniqueID: String
+
+    final class PreviewView: NSView {
+        var session: AVCaptureSession?
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            guard let session else { return }
+            if window == nil {
+                if session.isRunning { session.stopRunning() }
+            } else if !session.isRunning {
+                DispatchQueue.global(qos: .userInitiated).async { session.startRunning() }
+            }
+        }
+    }
+
+    func makeNSView(context: Context) -> PreviewView {
+        let view = PreviewView()
+        view.wantsLayer = true
+        view.layer?.backgroundColor = NSColor.black.cgColor
+
+        guard let device = AVCaptureDevice(uniqueID: deviceUniqueID),
+              let input = try? AVCaptureDeviceInput(device: device) else { return view }
+        let session = AVCaptureSession()
+        if session.canSetSessionPreset(.low) {
+            session.sessionPreset = .low   // it's a 76pt tile
+        }
+        guard session.canAddInput(input) else { return view }
+        session.addInput(input)
+
+        let layer = AVCaptureVideoPreviewLayer(session: session)
+        layer.videoGravity = .resizeAspectFill
+        layer.frame = view.bounds
+        layer.autoresizingMask = [.layerWidthSizable, .layerHeightSizable]
+        view.layer?.addSublayer(layer)
+        view.session = session
+        // startRunning blocks; never on the main thread.
+        DispatchQueue.global(qos: .userInitiated).async { session.startRunning() }
+        return view
+    }
+
+    func updateNSView(_ nsView: PreviewView, context: Context) {}
+
+    static func dismantleNSView(_ nsView: PreviewView, coordinator: ()) {
+        nsView.session?.stopRunning()
+        nsView.session = nil
     }
 }
 

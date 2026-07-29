@@ -204,6 +204,7 @@ final class StudioController {
         updateTimerTick(scene: scene)
         ensureScenePrimarySources(for: scene)
         sourceRegistry?.activate(keys: SourceRegistry.keys(in: plan))
+        syncWebPageSizes(scene: scene)
     }
 
     /// Switches scenes with the configured transition (magic move by default).
@@ -358,6 +359,19 @@ final class StudioController {
 
     // MARK: - Web overlays (they are browsers)
 
+    /// The element's bounding box IS the browser viewport: every recompile
+    /// (which fires on drags/resizes) pushes the element's pixel size into
+    /// the page so it relayouts like a resizing browser window.
+    private func syncWebPageSizes(scene: SceneModel) {
+        for element in scene.elements {
+            guard case .web = element.kind, element.isVisible else { continue }
+            let size = CGSize(width: element.transform.size.width * project.canvasSize.width,
+                              height: element.transform.size.height * project.canvasSize.height)
+            (sourceRegistry?.source(for: .web(elementID: element.id)) as? WebSource)?
+                .setPageSize(size)
+        }
+    }
+
     /// Pushes the element's current URL into the running page — the source
     /// captures its content at start, so an edited URL must be re-fed.
     func reloadWebElement(id: UUID) {
@@ -389,12 +403,44 @@ final class StudioController {
         return false
     }
 
-    /// Switches the active camera scene to another device, live — you are
-    /// not stuck with the camera the scene started with.
+    /// Switches the active camera scene to another device, live, with a fast
+    /// dissolve — both cameras run through the fade, so the cut is smooth
+    /// rather than a black gap while the new device spins up.
     func setActiveCamera(deviceUniqueID: String) {
         guard let index = project.scenes.firstIndex(where: { $0.id == project.activeSceneID }),
-              case .camera = project.scenes[index].kind else { return }
+              case .camera(let current) = project.scenes[index].kind,
+              current.deviceUniqueID != deviceUniqueID else { return }
+
+        guard let engine = renderEngine, let scene = project.activeScene else {
+            project.scenes[index].kind = .camera(CameraSceneConfig(deviceUniqueID: deviceUniqueID))
+            return
+        }
+
+        let guestList = guests?.guestDescriptors ?? []
+        let fromPlan = RenderPlanCompiler.compile(project: project, scene: scene,
+                                                  guests: guestList,
+                                                  elementAnimations: elementAnimations,
+                                                  timerTexts: currentTimerTexts(scene: scene))
+        var toProject = project
+        toProject.scenes[index].kind = .camera(CameraSceneConfig(deviceUniqueID: deviceUniqueID))
+        let toScene = toProject.scenes[index]
+        let toPlan = RenderPlanCompiler.compile(project: toProject, scene: toScene,
+                                                guests: guestList,
+                                                elementAnimations: elementAnimations,
+                                                timerTexts: currentTimerTexts(scene: toScene))
+
+        // Both devices must produce frames through the fade.
+        let unionKeys = SourceRegistry.keys(in: fromPlan).union(SourceRegistry.keys(in: toPlan))
+        sourceRegistry?.activate(keys: unionKeys)
+
+        engine.beginTransition(from: fromPlan, to: toPlan, style: .dissolve, duration: 0.25)
         project.scenes[index].kind = .camera(CameraSceneConfig(deviceUniqueID: deviceUniqueID))
+
+        // Drop the outgoing camera once the fade lands.
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(0.4))
+            self?.recompileAndPublish()
+        }
     }
 
     /// Duplicates a scene (fresh ids so animations, sources and transition

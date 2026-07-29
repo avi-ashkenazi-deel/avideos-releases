@@ -56,6 +56,23 @@ final class OffscreenWebHost: NSObject, WKNavigationDelegate {
         webView.load(URLRequest(url: url))
     }
 
+    /// The element's bounding box IS the browser viewport: resizing the box
+    /// resizes the page, and it relayouts like any browser window. Deferred
+    /// while the interactive window is open (the user drives that size).
+    private var pendingSize: CGSize?
+
+    func setPageSize(_ size: CGSize) {
+        guard size.width >= 50, size.height >= 50 else { return }
+        guard abs(webView.frame.width - size.width) > 1
+                || abs(webView.frame.height - size.height) > 1 else { return }
+        if interactiveWindow != nil {
+            pendingSize = size
+            return
+        }
+        window.setContentSize(size)
+        webView.frame = CGRect(origin: .zero, size: size)
+    }
+
     func startSnapshots(fps: Int) {
         stopSnapshots()
         let interval = 1.0 / Double(max(1, min(fps, 15)))
@@ -121,10 +138,15 @@ final class OffscreenWebHost: NSObject, WKNavigationDelegate {
     @objc private func interactiveWindowWillClose(_ note: Notification) {
         guard let win = interactiveWindow else { return }
         NotificationCenter.default.removeObserver(self, name: NSWindow.willCloseNotification, object: win)
-        // Back to the offscreen window at the page's authored size.
+        interactiveWindow = nil
+        // Back to the offscreen window, adopting any resize the canvas
+        // requested while the interactive window had the view.
+        if let pendingSize {
+            window.setContentSize(pendingSize)
+            self.pendingSize = nil
+        }
         webView.frame = CGRect(origin: .zero, size: window.frame.size)
         window.contentView = webView
-        interactiveWindow = nil
     }
 
     func teardown() {

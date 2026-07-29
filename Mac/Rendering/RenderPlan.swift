@@ -209,9 +209,15 @@ enum RenderPlanCompiler {
                               entryAnimation: element.entryAnimation,
                               animation: state)
         // A PiP tile covers its frame (a circle mask over letterboxing reads
-        // as a bug); scene primaries manage their own framing elsewhere.
-        if case .source = element.kind {
+        // as a bug), and a web overlay's box IS its browser viewport — while
+        // the page catches up to a resize, cropping reads as a browser
+        // resize; letterboxing reads as broken. Scene primaries manage their
+        // own framing elsewhere.
+        switch element.kind {
+        case .source, .web:
             item.presentation.fit = .fill
+        default:
+            break
         }
         if let background {
             return [background, item]

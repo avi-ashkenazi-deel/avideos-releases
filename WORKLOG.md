@@ -30,6 +30,20 @@ trimmed length, a progress fill sweeping the row, and a gear popover editing
 in/out points (`SoundPad.trimStart/trimEnd`, Optional for settings-decode
 compatibility; `SoundPadPlayer` slices the pre-decoded buffer at fire time).
 
+Eighth pass. **The web overlay's box is its browser viewport**: every
+recompile pushes the element's pixel size into the WKWebView (window +
+frame), so resizing the box relayouts the page like a browser window —
+before, the page rendered at a fixed internal size and letterboxed into
+whatever shape the box was. Web items render `.fill` so mid-resize frames
+crop browser-style; a resize arriving while the interactive window is open
+applies when it closes. **The camera strip got its Ecamm polish**: every
+tile is a live preview (per-tile low-res capture session — macOS shares a
+device between in-process sessions; `verify on Mac:` for virtual cameras
+that refuse a second client), tiles sort by device name so they never
+shuffle on click, and switching dissolves program over 0.25s with both
+cameras running through the fade (reusing the scene-transition engine)
+instead of hard-cutting to a device that's still spinning up.
+
 Seventh pass, rapid-fire from live use. **Camera switching**: an Ecamm-style
 strip above Record (one tile per device, click to switch the active camera
 scene live) plus `setActiveCamera` — you were stuck with the scene's

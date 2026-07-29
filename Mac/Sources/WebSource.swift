@@ -63,6 +63,14 @@ final class WebSource: FrameSource {
         }
     }
 
+    /// Resizes the browser viewport to the element's pixel size — the
+    /// bounding box IS the browser window, not a letterboxed frame.
+    func setPageSize(_ size: CGSize) {
+        Task { @MainActor [weak self] in
+            self?.host?.setPageSize(size)
+        }
+    }
+
     func stop() {
         state = .idle
         mailbox.clear()
