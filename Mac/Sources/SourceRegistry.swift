@@ -14,6 +14,10 @@ final class SourceRegistry {
     private let lock = NSLock()
     private let log = Logger(subsystem: "com.aviashkenazi.streamit", category: "sources")
 
+    /// Program frame rate for screen sources (was hardcoded 30). Set by
+    /// StudioController from the project; applies to sources created after.
+    var framesPerSecond = 30
+
     /// Resolves document-level media/config for a key. Set by StudioController.
     var mediaResolver: ((SourceKey) -> URL?)?
     var webContentResolver: ((SourceKey) -> WebContent?)?
@@ -62,6 +66,19 @@ final class SourceRegistry {
         source?.stop()
     }
 
+    /// Drops all display/window screen sources so the next `activate` (or
+    /// recompile) rebuilds them — they capture their frame rate at creation.
+    func unregisterScreenSources() {
+        lock.lock()
+        let screenKeys = sources.keys.filter { key in
+            if case .display = key { return true }
+            if case .window = key { return true }
+            return false
+        }
+        lock.unlock()
+        screenKeys.forEach { unregister(key: $0) }
+    }
+
     /// Reconciles running sources with the set a plan (or transition) needs:
     /// starts missing ones, stops orphans. Guest sources are exempt from
     /// stopping (session-scoped, not scene-scoped).
@@ -90,10 +107,10 @@ final class SourceRegistry {
             return source
         case .display(let displayID):
             return ScreenSource(key: key, target: .display(displayID: displayID),
-                                framesPerSecond: 30, showsCursor: true, metalDevice: device)
+                                framesPerSecond: framesPerSecond, showsCursor: true, metalDevice: device)
         case .window(let windowID):
             return ScreenSource(key: key, target: .window(windowID: windowID),
-                                framesPerSecond: 30, showsCursor: true, metalDevice: device)
+                                framesPerSecond: framesPerSecond, showsCursor: true, metalDevice: device)
         case .movie(let elementID):
             guard let url = mediaResolver?(key) else {
                 log.warning("No media for movie element \(elementID)")

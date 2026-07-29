@@ -57,11 +57,26 @@ enum CameraConfig {
     /// (com.aviashkenazi.streamit) and any of its embedded helpers.
     static let trustedSigningIDPrefix = "com.aviashkenazi.streamit"
 
-    /// Advertised formats, preferred first. 32BGRA only.
+    /// Advertised formats, preferred first. 32BGRA only. Covers every
+    /// Shape & Size preset (wide/classic/square/tall at each quality tier)
+    /// so a reshaped program still matches an advertised format.
+    /// verify on Mac: meeting apps accepting the non-16:9 entries from the
+    /// sink → source forwarding path (nothing checks the active format).
     struct FormatSpec { let width: Int32; let height: Int32 }
     static let formats: [FormatSpec] = [
         FormatSpec(width: 1920, height: 1080),
         FormatSpec(width: 1280, height: 720),
+        FormatSpec(width: 3840, height: 2160),
+        FormatSpec(width: 960, height: 540),
+        // Classic 4:3
+        FormatSpec(width: 1440, height: 1080),
+        FormatSpec(width: 960, height: 720),
+        // Square
+        FormatSpec(width: 1080, height: 1080),
+        FormatSpec(width: 720, height: 720),
+        // Tall 9:16
+        FormatSpec(width: 1080, height: 1920),
+        FormatSpec(width: 720, height: 1280),
     ]
 
     /// Custom device property with 4CC 'avst'. CMIO extensions expose custom

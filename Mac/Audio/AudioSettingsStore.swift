@@ -34,6 +34,10 @@ struct AudioSettings: Codable {
     /// Optional for the same decode reason as above.
     var extraInputUIDs: [String]?
 
+    /// "Mute Movie Sound On Speakers" — local monitor only; the program,
+    /// recording and guests keep the movie audio. Optional, same reason.
+    var movieMonitorMuted: Bool?
+
     /// JSON-safe StripID key (guest strips aren't persisted — session-scoped).
     static func key(for strip: MixerStripID) -> String {
         switch strip {

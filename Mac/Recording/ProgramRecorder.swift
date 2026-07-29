@@ -58,11 +58,12 @@ final class ProgramRecorder: ProgramFrameConsumer {
     func start(canvasSize: CGSize,
                frameRate: Int,
                codec: Codec = .hevc,
-               projectName: String) throws {
+               projectName: String,
+               folderPath: String? = nil) throws {
         try queue.sync {
             guard writer == nil else { return }
 
-            let url = Self.outputURL(projectName: projectName)
+            let url = Self.outputURL(projectName: projectName, folderPath: folderPath)
             try FileManager.default.createDirectory(at: url.deletingLastPathComponent(),
                                                     withIntermediateDirectories: true)
 
@@ -204,13 +205,17 @@ final class ProgramRecorder: ProgramFrameConsumer {
 
     // MARK: - Helpers
 
-    private static func outputURL(projectName: String) -> URL {
+    private static func outputURL(projectName: String, folderPath: String?) -> URL {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd HH.mm.ss"
         let stamp = formatter.string(from: Date())
         let safeName = projectName.replacingOccurrences(of: "/", with: "-")
-        let movies = FileManager.default.urls(for: .moviesDirectory, in: .userDomainMask)[0]
-        return movies.appendingPathComponent("Streamit/\(stamp) — \(safeName).mov")
+        // The Recordings pane can point somewhere else; default stays
+        // ~/Movies/Streamit.
+        let folder = folderPath.map { URL(fileURLWithPath: $0) }
+            ?? FileManager.default.urls(for: .moviesDirectory, in: .userDomainMask)[0]
+                .appendingPathComponent("Streamit")
+        return folder.appendingPathComponent("\(stamp) — \(safeName).mov")
     }
 
     private static func bitrate(width: Int, height: Int, fps: Int, codec: Codec) -> Int {

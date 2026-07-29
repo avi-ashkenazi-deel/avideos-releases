@@ -30,11 +30,17 @@ final class MovieSource: FrameSource {
     /// Fires on the main queue when (non-looping) playback finishes.
     var onPlaybackEnded: (() -> Void)?
 
-    init(key: SourceKey, url: URL, loops: Bool, muted: Bool, metalDevice: MTLDevice) {
+    /// `autoplay: false` starts paused on the first frame — the "Auto-Play
+    /// Video Files" preference, off. `resume()` starts it.
+    private let autoplay: Bool
+
+    init(key: SourceKey, url: URL, loops: Bool, muted: Bool, metalDevice: MTLDevice,
+         autoplay: Bool = true) {
         self.key = key
         self.url = url
         self.loops = loops
         self.muted = muted
+        self.autoplay = autoplay
         self.converter = PixelBufferTextureConverter(device: metalDevice)
     }
 
@@ -66,7 +72,11 @@ final class MovieSource: FrameSource {
             }
         }
         self.player = player
-        player.play()
+        if autoplay {
+            player.play()
+        }
+        // Paused still counts as running: the video output serves the first
+        // frame, so the scene shows the poster until resume().
         state = .running
     }
 

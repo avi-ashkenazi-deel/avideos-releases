@@ -78,12 +78,15 @@ enum PaletteKind: String, CaseIterable, Codable, Identifiable {
 struct PaletteWindowContent: View {
     let kind: PaletteKind
     @Environment(\.openWindow) private var openWindow
+    @Environment(StudioController.self) private var studio
 
     var body: some View {
         content
             .frame(width: kind.width)
             .navigationTitle(kind.title)
-            .background(PaletteWindowConfigurator(kind: kind))
+            .background(PaletteWindowConfigurator(
+                kind: kind,
+                staysVisibleInBackground: studio.prefs.palettesStayVisibleInBackground))
     }
 
     @ViewBuilder
@@ -122,6 +125,9 @@ struct PaletteWindowContent: View {
 /// closed, not minimized).
 private struct PaletteWindowConfigurator: NSViewRepresentable {
     let kind: PaletteKind
+    /// "Keep Utility Windows In Front" preference — palettes normally hide
+    /// panel-style when the app deactivates.
+    var staysVisibleInBackground: Bool
 
     func makeNSView(context: Context) -> NSView {
         let view = NSView()
@@ -129,7 +135,7 @@ private struct PaletteWindowConfigurator: NSViewRepresentable {
         DispatchQueue.main.async {
             guard let window = view.window else { return }
             window.level = .floating
-            window.hidesOnDeactivate = true
+            window.hidesOnDeactivate = !staysVisibleInBackground
             window.isMovableByWindowBackground = true
             window.titlebarAppearsTransparent = true
             window.standardWindowButton(.miniaturizeButton)?.isHidden = true
@@ -140,7 +146,11 @@ private struct PaletteWindowConfigurator: NSViewRepresentable {
         return view
     }
 
-    func updateNSView(_ nsView: NSView, context: Context) {}
+    func updateNSView(_ nsView: NSView, context: Context) {
+        // Applies live when the preference flips (the parent view re-renders
+        // on the @Observable read).
+        nsView.window?.hidesOnDeactivate = !staysVisibleInBackground
+    }
 }
 
 /// The icon strip on the preview's right edge — one button per palette.

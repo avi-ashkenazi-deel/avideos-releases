@@ -105,6 +105,16 @@ final class AudioEngineController {
             persist()
         }
     }
+
+    /// Mute movie sound on the local speakers only (broadcast keeps it).
+    var movieMonitorMuted: Bool {
+        get { settings.movieMonitorMuted ?? false }
+        set {
+            settings.movieMonitorMuted = newValue
+            graph.movieMonitorMuted = newValue
+            persist()
+        }
+    }
     var monitorDeviceUID: String? { settings.monitorDeviceUID }
     var micDeviceUID: String? { settings.micDeviceUID }
 
@@ -152,6 +162,7 @@ final class AudioEngineController {
         micCapture.start(deviceUID: settings.micDeviceUID,
                          voiceProcessing: settings.voiceProcessingEnabled)
         graph.micMonitorEnabled = settings.micMonitorEnabled ?? false
+        graph.movieMonitorMuted = settings.movieMonitorMuted ?? false
 
         // Restore extra capture inputs (second mic etc.). Missing devices
         // simply produce silence until replugged; the strip stays.

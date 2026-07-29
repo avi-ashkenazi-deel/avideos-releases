@@ -25,6 +25,7 @@ final class StudioController {
 
     let renderEngine: RenderEngine?
     let sourceRegistry: SourceRegistry?
+    let prefs = AppPreferences()
     let virtualCamera = VirtualCameraController()
     let recorder = ProgramRecorder()
     let audio = AudioEngineController()
@@ -114,6 +115,7 @@ final class StudioController {
         guard !hasBooted else { return }
         hasBooted = true
         teleprompter.installKeyMonitorsIfNeeded()
+        sourceRegistry?.framesPerSecond = project.frameRate
         renderEngine?.start(canvasSize: project.canvasSize, fps: project.frameRate)
         recompileAndPublish()
         audio.start()
@@ -277,7 +279,8 @@ final class StudioController {
             guard registry.source(for: key) == nil,
                   let url = config.media?.resolve() else { return }
             let source = MovieSource(key: key, url: url, loops: config.loops,
-                                     muted: true, metalDevice: engine.device)
+                                     muted: true, metalDevice: engine.device,
+                                     autoplay: prefs.autoPlayMovies)
             registry.register(source)
             if let player = source.avPlayer {
                 audio.attachMoviePlayer(player)
@@ -386,6 +389,41 @@ final class StudioController {
     func openWebElementBrowser(id: UUID) {
         (sourceRegistry?.source(for: .web(elementID: id)) as? WebSource)?
             .openInteractiveWindow(title: findElement(id: id)?.name ?? "Browser")
+    }
+
+    // MARK: - Shape & Size (program format)
+
+    /// Applies a new canvas size / frame rate to the RUNNING studio — the
+    /// Shape & Size preferences. Refused while recording (the pane disables
+    /// itself; this guard is the backstop): an in-flight AVAssetWriter is
+    /// pinned to its start dimensions.
+    func applyCanvasSettings(size: CGSize, fps: Int) {
+        guard !isRecording else {
+            log.error("Canvas settings change refused while recording")
+            return
+        }
+        let sizeChanged = project.canvasSize != size
+        let fpsChanged = project.frameRate != fps
+        guard sizeChanged || fpsChanged else { return }
+
+        project.canvasSize = size
+        project.frameRate = fps
+        sourceRegistry?.framesPerSecond = fps
+        renderEngine?.reconfigure(canvasSize: size, fps: fps)
+
+        if fpsChanged, let registry = sourceRegistry {
+            // Screen sources capture their frame rate at creation; drop them
+            // so the recompile below rebuilds them at the new rate. Movie
+            // scene primaries are left alone — restarting them mid-show to
+            // change nothing would be worse.
+            registry.unregisterScreenSources()
+            for scene in project.scenes {
+                if case .screenShare = scene.kind {
+                    registry.unregister(key: .scenePrimary(sceneID: scene.id))
+                }
+            }
+        }
+        recompileAndPublish()
     }
 
     // MARK: - Live camera switching
@@ -681,9 +719,22 @@ final class StudioController {
     // MARK: - Scenes
 
     func addScene(kind: SceneKind, name: String) {
-        let scene = SceneModel(name: name, kind: kind)
+        // New scenes adopt the preferred transition (Video preferences).
+        let scene = SceneModel(name: name, kind: kind,
+                               transitionStyle: prefs.defaultSceneTransition)
         project.scenes.append(scene)
         if project.activeSceneID == nil { project.activeSceneID = scene.id }
+    }
+
+    /// The scene-list plus button's primary click: adds a scene of the
+    /// preferred kind (Video preferences) without opening the menu.
+    func addDefaultScene() {
+        switch prefs.defaultSceneKind {
+        case .camera: addScene(kind: .camera(CameraSceneConfig()), name: "Camera")
+        case .screenShare: addScene(kind: .screenShare(ScreenSceneConfig()), name: "Screen Share")
+        case .movie: addScene(kind: .movie(MovieSceneConfig()), name: "Movie")
+        case .interview: addScene(kind: .interview(InterviewSceneConfig()), name: "Interview")
+        }
     }
 
     func removeScene(id: UUID) {
@@ -694,6 +745,10 @@ final class StudioController {
     }
 
     // MARK: - Recording
+
+    /// Non-nil while the record countdown runs; the Record button shows it.
+    /// Pressing Record again during the count cancels.
+    private(set) var recordingCountdown: Int?
 
     func toggleRecording() {
         if isRecording {
@@ -710,17 +765,37 @@ final class StudioController {
             }
             audio.stopRecordingSink()
             renderEngine.map { $0.removeConsumer(recorder) }
-        } else {
-            do {
-                try recorder.start(canvasSize: project.canvasSize,
-                                   frameRate: project.frameRate,
-                                   projectName: project.name)
-                audio.startRecordingSink(recorder: recorder)
-                renderEngine?.addConsumer(recorder)
-                isRecording = true
-            } catch {
-                log.error("Couldn't start recording: \(error.localizedDescription)")
+        } else if recordingCountdown != nil {
+            recordingCountdown = nil   // pressing again cancels the count
+        } else if prefs.recordCountdown {
+            recordingCountdown = 3
+            Task { [weak self] in
+                for remaining in stride(from: 3, through: 1, by: -1) {
+                    guard let self, self.recordingCountdown != nil else { return }
+                    self.recordingCountdown = remaining
+                    try? await Task.sleep(for: .seconds(1))
+                }
+                guard let self, self.recordingCountdown != nil else { return }
+                self.recordingCountdown = nil
+                self.startRecordingNow()
             }
+        } else {
+            startRecordingNow()
+        }
+    }
+
+    private func startRecordingNow() {
+        do {
+            try recorder.start(canvasSize: project.canvasSize,
+                               frameRate: project.frameRate,
+                               codec: prefs.recordingCodec,
+                               projectName: project.name,
+                               folderPath: prefs.recordingsFolderPath)
+            audio.startRecordingSink(recorder: recorder)
+            renderEngine?.addConsumer(recorder)
+            isRecording = true
+        } catch {
+            log.error("Couldn't start recording: \(error.localizedDescription)")
         }
     }
 

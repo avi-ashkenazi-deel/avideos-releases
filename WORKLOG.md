@@ -30,6 +30,30 @@ trimmed length, a progress fill sweeping the row, and a gear popover editing
 in/out points (`SoundPad.trimStart/trimEnd`, Optional for settings-decode
 compatibility; `SoundPadPlayer` slices the pre-decoded buffer at fire time).
 
+Ninth pass — Ecamm-style Preferences, planned against a real trace of how
+canvas size and frame rate propagate. The enabler:
+`RenderEngine.reconfigure` (pool.configure + the long-unused `flush()` hook
++ clock restart) — everything downstream already sizes off the target
+texture, so the program reshapes live. `StudioController.applyCanvasSettings`
+guards recording (an in-flight writer is pinned to its start dims), pushes
+fps into the source registry (which was hardcoding 30 for screen sources),
+and rebuilds screen sources on fps changes. The extension's advertised
+format list grows to cover every preset (`verify on Mac:` non-16:9 in Zoom).
+
+The panes: **Shape & Size** (per-project: Wide/Classic/Square/Tall ×
+4K/1080/720/540 × 24-60 FPS, aspect changes confirm because unit transforms
+stretch existing overlays, disabled while recording); **Recording** (codec
+picker finally wiring the recorder's unreachable HEVC/H.264 param, a
+recordings-folder chooser, a 3-second countdown with press-again-to-cancel);
+**Video** (default source mode — the scene-list plus button gained a
+primary click — default transition + duration, Auto-Play Video Files via a
+paused-start MovieSource); **Audio** (devices + echo cancellation + mic
+self-monitor moved in, plus Mute Movie Sound On Speakers — a movie gate on
+the monitor bus, same pattern as the mic gate); **General** (Show Camera
+Switcher, Keep Utility Windows In Front — palette `hidesOnDeactivate`
+follows the pref live). All app-level toggles live in a new UserDefaults-
+backed `AppPreferences` (@Observable) on StudioController.
+
 Eighth pass. **The web overlay's box is its browser viewport**: every
 recompile pushes the element's pixel size into the WKWebView (window +
 frame), so resizing the box relayouts the page like a browser window —

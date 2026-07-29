@@ -55,6 +55,18 @@ final class RenderEngine {
         clock.start(fps: fps)
     }
 
+    /// Applies a new canvas size / frame rate to a RUNNING engine (the
+    /// Shape & Size preferences). The pool rebuilds and flushes its old-size
+    /// buffers, the clock restarts (`FrameClock.start` stops first), and
+    /// everything downstream follows automatically: the compositor sizes off
+    /// the target texture, the preview aspect-fits per draw, and the virtual
+    /// camera's host side rebuilds its format description on width change.
+    func reconfigure(canvasSize: CGSize, fps: Int) {
+        bufferPool.configure(width: Int(canvasSize.width), height: Int(canvasSize.height))
+        bufferPool.flush()
+        clock.start(fps: fps)
+    }
+
     func stop() {
         clock.stop()
     }

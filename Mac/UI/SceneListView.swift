@@ -96,6 +96,8 @@ struct SceneListView: View {
     @State private var renameText = ""
 
     private var addSceneMenu: some View {
+        // Primary click adds the preferred kind (Video preferences);
+        // the menu still offers every kind.
         Menu {
             Button("Camera Scene") {
                 studio.addScene(kind: .camera(CameraSceneConfig()), name: "Camera")
@@ -112,6 +114,8 @@ struct SceneListView: View {
         } label: {
             Label("Add Scene", systemImage: "plus")
                 .frame(maxWidth: .infinity)
+        } primaryAction: {
+            studio.addDefaultScene()
         }
         .menuStyle(.borderlessButton)
     }

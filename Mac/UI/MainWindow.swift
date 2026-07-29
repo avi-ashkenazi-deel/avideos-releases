@@ -53,7 +53,7 @@ private struct StudioLayout: View {
         }
         .overlay(alignment: .bottom) {
             VStack(spacing: 10) {
-                if studio.activeSceneIsCamera {
+                if studio.activeSceneIsCamera && studio.prefs.showCameraSwitcher {
                     cameraStrip
                 }
                 recordButton
@@ -175,7 +175,8 @@ private struct StudioLayout: View {
         } label: {
             HStack(spacing: 8) {
                 Image(systemName: studio.isRecording ? "stop.fill" : "record.circle")
-                Text(studio.isRecording ? "Stop" : "Record")
+                Text(studio.recordingCountdown.map { "\($0)…" }
+                     ?? (studio.isRecording ? "Stop" : "Record"))
                     .font(.body.weight(.semibold))
             }
             .padding(.horizontal, 26)
@@ -286,18 +287,27 @@ private struct SceneShortcutBadge: ViewModifier {
     }
 }
 
-/// App settings: session server, AI key, devices.
+/// The preferences window, Ecamm-style panes: General, Shape & Size,
+/// Recording, Video, Audio, plus Shortcuts and MIDI.
 struct SettingsView: View {
     var body: some View {
         TabView {
             GeneralSettingsView()
                 .tabItem { Label("General", systemImage: "gearshape") }
+            ShapeSizePane()
+                .tabItem { Label("Shape & Size", systemImage: "aspectratio") }
+            RecordingPane()
+                .tabItem { Label("Recording", systemImage: "record.circle") }
+            VideoPane()
+                .tabItem { Label("Video", systemImage: "video") }
+            AudioPane()
+                .tabItem { Label("Audio", systemImage: "speaker.wave.2") }
             ShortcutsSettingsView()
                 .tabItem { Label("Shortcuts", systemImage: "keyboard") }
             MIDISettingsView()
                 .tabItem { Label("MIDI", systemImage: "pianokeys") }
         }
-        .frame(width: 560)
+        .frame(width: 620)
     }
 }
 
@@ -328,34 +338,22 @@ private struct GeneralSettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
-            Section("Audio Devices") {
-                Picker("Microphone", selection: Binding(
-                    get: { studio.audio.micDeviceUID ?? "" },
-                    set: { studio.audio.setMicDevice(uid: $0.isEmpty ? nil : $0) }
-                )) {
-                    Text("System Default").tag("")
-                    ForEach(studio.audio.inputDevices, id: \.uid) { device in
-                        Text(device.name).tag(device.uid)
-                    }
-                }
-                Picker("Monitor Output", selection: Binding(
-                    get: { studio.audio.monitorDeviceUID ?? "" },
-                    set: { studio.audio.setMonitorDevice(uid: $0.isEmpty ? nil : $0) }
-                )) {
-                    Text("System Default").tag("")
-                    ForEach(studio.audio.outputDevices, id: \.uid) { device in
-                        Text(device.name).tag(device.uid)
-                    }
-                }
-                Toggle("Mic noise suppression (Apple voice processing)", isOn: Binding(
-                    get: { studio.audio.voiceProcessingEnabled },
-                    set: { studio.audio.voiceProcessingEnabled = $0 }
+            // Audio devices and monitoring live in the Audio pane now.
+
+            Section("Main Window") {
+                Toggle("Show Camera Switcher", isOn: Binding(
+                    get: { studio.prefs.showCameraSwitcher },
+                    set: { studio.prefs.showCameraSwitcher = $0 }
                 ))
-                Toggle("Hear my own mic (self-monitoring)", isOn: Binding(
-                    get: { studio.audio.micMonitorEnabled },
-                    set: { studio.audio.micMonitorEnabled = $0 }
+                Text("The live camera strip above Record when a camera scene is active.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Toggle("Keep Utility Windows In Front", isOn: Binding(
+                    get: { studio.prefs.palettesStayVisibleInBackground },
+                    set: { studio.prefs.palettesStayVisibleInBackground = $0 }
                 ))
-                Text("Off by default. The mic always reaches recordings, the virtual mic and guests — this only controls your local speakers.")
+                Text("Palette windows stay visible while another app is frontmost — handy when streamit feeds Zoom behind your call.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

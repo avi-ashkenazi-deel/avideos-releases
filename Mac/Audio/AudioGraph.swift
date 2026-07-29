@@ -62,6 +62,16 @@ final class AudioGraph {
         set { micMonitorGate.outputVolume = newValue ? 1 : 0 }
     }
 
+    /// Movie → monitor, normally audible. "Mute Movie Sound On Speakers":
+    /// roll a movie into the broadcast without hearing it locally — the
+    /// program, recording and guests still get it.
+    private let movieMonitorGate = AVAudioMixerNode()
+
+    var movieMonitorMuted: Bool {
+        get { movieMonitorGate.outputVolume < 0.5 }
+        set { movieMonitorGate.outputVolume = newValue ? 0 : 1 }
+    }
+
     /// One strip = entry point + insert chain + strip mixer + meter state.
     final class Strip {
         let id: MixerStripID
@@ -123,6 +133,7 @@ final class AudioGraph {
         engine.attach(monitorMixer)
         engine.attach(programSilencer)
         engine.attach(micMonitorGate)
+        engine.attach(movieMonitorGate)
         engine.attach(padsBus)
         engine.attach(musicBus)
 
@@ -136,6 +147,10 @@ final class AudioGraph {
         // Mic self-monitoring path, silent unless the host opts in.
         engine.connect(micMonitorGate, to: monitorMixer, format: format)
         micMonitorGate.outputVolume = 0
+
+        // Movie monitor path, audible unless muted in Audio preferences.
+        engine.connect(movieMonitorGate, to: monitorMixer, format: format)
+        movieMonitorGate.outputVolume = 1
 
         // The mix-minus bus reaches the output only so the engine pulls it and
         // its tap fires; the silencer makes sure none of it is audible. The tap
@@ -196,6 +211,11 @@ final class AudioGraph {
             // mic on the speakers echoes exactly like the first.
             destinations.append(AVAudioConnectionPoint(node: micMonitorGate,
                                                        bus: micMonitorGate.nextAvailableInputBus))
+        case .movie:
+            // Through its own gate so "Mute Movie Sound On Speakers" can
+            // silence just this strip locally.
+            destinations.append(AVAudioConnectionPoint(node: movieMonitorGate,
+                                                       bus: movieMonitorGate.nextAvailableInputBus))
         default:
             destinations.append(AVAudioConnectionPoint(node: monitorMixer,
                                                        bus: monitorMixer.nextAvailableInputBus))
