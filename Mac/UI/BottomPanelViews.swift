@@ -62,8 +62,13 @@ struct MusicPlaylistView: View {
                 sectionPads
             }
 
+            // Two rows, sized for a palette window: one long HStack overflowed
+            // the palette's width and silently CLIPPED the scrubber, the time
+            // readout and the Sections/Add buttons — half the transport was
+            // simply not on screen.
             HStack(spacing: 10) {
                 Button { audio.musicPrevious() } label: { Image(systemName: "backward.fill") }
+                    .help("Restart the track (from the top: previous track)")
                 Button { audio.musicPlayPause() } label: {
                     Image(systemName: audio.isPlayingMusic ? "pause.fill" : "play.fill")
                 }
@@ -76,36 +81,12 @@ struct MusicPlaylistView: View {
                     }
                 } label: {
                     Image(systemName: audio.loopMode == .one ? "repeat.1" : "repeat")
-                        .foregroundStyle(audio.loopMode == .off ? Color.secondary : Color.accentColor)
+                        .foregroundStyle(audio.loopMode == .off ? Color.secondary : Color.white)
+                        .padding(3)
+                        .background(audio.loopMode == .off ? Color.clear : Color.accentColor.opacity(0.7),
+                                    in: RoundedRectangle(cornerRadius: 4))
                 }
                 .help("Playlist loop: off / all / one")
-
-                // Section controls. Disabled rather than hidden when the track
-                // has no sections — a row that reflows as state changes is how
-                // you click the wrong thing live.
-                Picker("", selection: Binding(get: { audio.sectionSwitchMode },
-                                              set: { audio.sectionSwitchMode = $0 })) {
-                    Text("Cut").tag(SectionSwitchMode.hardCut)
-                    Text("At loop end").tag(SectionSwitchMode.atLoopEnd)
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .frame(width: 150)
-                .disabled(audio.musicSections.isEmpty)
-                .help("How a section switch happens. ⌥-click a section pad to cut regardless.")
-
-                Toggle("Loop", isOn: Binding(get: { audio.isSectionLooping },
-                                             set: { audio.setSectionLoopEnabled($0) }))
-                    .toggleStyle(.button)
-                    .controlSize(.small)
-                    .disabled(audio.playingSectionID == nil)
-                    .help("Loop the playing section. The word, not a second repeat glyph — the one on the left is the playlist's.")
-
-                Button { audio.cancelQueuedSection() } label: {
-                    Image(systemName: "xmark.circle")
-                }
-                .disabled(audio.queuedSectionID == nil || audio.queuedSwitchIsCommitted)
-                .help("Cancel the queued section (only until it's handed to the audio engine)")
 
                 Slider(value: Binding(get: { scrubSeconds ?? audio.musicPosition },
                                       set: { scrubSeconds = $0 }),
@@ -123,6 +104,39 @@ struct MusicPlaylistView: View {
                      + " / " + timeString(audio.musicDuration))
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.borderless)
+            .padding(.horizontal, 10)
+
+            HStack(spacing: 10) {
+                // Section controls. Disabled rather than hidden when the track
+                // has no sections — a row that reflows as state changes is how
+                // you click the wrong thing live.
+                Picker("", selection: Binding(get: { audio.sectionSwitchMode },
+                                              set: { audio.sectionSwitchMode = $0 })) {
+                    Text("Cut").tag(SectionSwitchMode.hardCut)
+                    Text("At loop end").tag(SectionSwitchMode.atLoopEnd)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .frame(width: 140)
+                .disabled(audio.musicSections.isEmpty)
+                .help("How a section switch happens (needs sections — mark them up via Sections…). ⌥-click a section pad to cut regardless.")
+
+                Toggle("Loop", isOn: Binding(get: { audio.isSectionLooping },
+                                             set: { audio.setSectionLoopEnabled($0) }))
+                    .toggleStyle(.button)
+                    .controlSize(.small)
+                    .disabled(audio.playingSectionID == nil)
+                    .help("Loop the playing section. The word, not a second repeat glyph — the one on the left is the playlist's.")
+
+                Button { audio.cancelQueuedSection() } label: {
+                    Image(systemName: "xmark.circle")
+                }
+                .disabled(audio.queuedSectionID == nil || audio.queuedSwitchIsCommitted)
+                .help("Cancel the queued section (only until it's handed to the audio engine)")
+
+                Spacer()
 
                 Button("Sections…") {
                     editingTrackID = audio.sectionHostTrackID

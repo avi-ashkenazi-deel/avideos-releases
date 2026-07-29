@@ -558,8 +558,9 @@ private struct SoundEffectRow: View {
     }
 }
 
-/// In/out points over the full decoded length. Commits on slider release —
-/// each commit persists audio settings, so mid-drag writes would be churn.
+/// In/out points set by dragging handles ON the waveform — the trim editor
+/// is the soundtrack itself, time-proportional. Commits on drag end (each
+/// commit persists audio settings, so mid-drag writes would be churn).
 private struct PadTrimEditor: View {
     @Environment(StudioController.self) private var studio
     let pad: SoundPad
@@ -573,31 +574,34 @@ private struct PadTrimEditor: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(pad.name).font(.headline)
-            if full > 0 {
-                LabeledContent("In") {
-                    Text(SoundEffectRow.timecode(start)).monospacedDigit()
+            HStack {
+                Text(pad.name).font(.headline).lineLimit(1)
+                Spacer()
+                Button("Reset") {
+                    start = 0
+                    end = full
+                    audio.setPadTrim(id: pad.id, start: nil, end: nil)
                 }
-                Slider(value: $start, in: 0...full) { editing in
-                    if !editing { commit() }
-                }
-                LabeledContent("Out") {
-                    Text(SoundEffectRow.timecode(end)).monospacedDigit()
-                }
-                Slider(value: $end, in: 0...full) { editing in
-                    if !editing { commit() }
-                }
+                .disabled(full <= 0)
+            }
+            if full > 0, let peaks = audio.padPeaks(id: pad.id) {
+                TrimWaveform(peaks: peaks,
+                             duration: full,
+                             color: Color(hex: pad.colorHex),
+                             start: $start,
+                             end: $end,
+                             progress: audio.padProgress[pad.id],
+                             onCommit: commit)
+                    .frame(height: 76)
                 HStack {
+                    Text("In \(SoundEffectRow.timecode(start))")
+                    Spacer()
                     Text("Plays \(SoundEffectRow.timecode(max(0, end - start))) of \(SoundEffectRow.timecode(full))")
-                        .font(.caption)
                         .foregroundStyle(.secondary)
                     Spacer()
-                    Button("Reset") {
-                        start = 0
-                        end = full
-                        audio.setPadTrim(id: pad.id, start: nil, end: nil)
-                    }
+                    Text("Out \(SoundEffectRow.timecode(end))")
                 }
+                .font(.caption.monospacedDigit())
             } else {
                 Text("This sound isn't decoded — re-add the file.")
                     .font(.caption)
@@ -605,7 +609,7 @@ private struct PadTrimEditor: View {
             }
         }
         .padding(14)
-        .frame(width: 300)
+        .frame(width: 380)
         .onAppear {
             guard !loaded else { return }
             loaded = true
@@ -621,5 +625,100 @@ private struct PadTrimEditor: View {
         audio.setPadTrim(id: pad.id,
                          start: isFull ? nil : start,
                          end: isFull ? nil : end)
+    }
+}
+
+/// The waveform with draggable in/out handles. Bars inside the window carry
+/// the pad's color; outside they dim. A playhead sweeps the window while the
+/// pad sounds.
+private struct TrimWaveform: View {
+    let peaks: [Float]
+    let duration: Double
+    let color: Color
+    @Binding var start: Double
+    @Binding var end: Double
+    var progress: Double?          // 0…1 across the trimmed window
+    let onCommit: () -> Void
+
+    var body: some View {
+        GeometryReader { geo in
+            let width = geo.size.width
+            let height = geo.size.height
+            let inX = x(forSeconds: start, width: width)
+            let outX = x(forSeconds: end, width: width)
+
+            ZStack(alignment: .topLeading) {
+                Canvas { context, size in
+                    // Window backdrop.
+                    context.fill(
+                        Path(roundedRect: CGRect(x: inX, y: 0,
+                                                 width: max(0, outX - inX),
+                                                 height: size.height),
+                             cornerRadius: 3),
+                        with: .color(color.opacity(0.14)))
+
+                    let barWidth = size.width / CGFloat(peaks.count)
+                    for (index, peak) in peaks.enumerated() {
+                        let centerX = CGFloat(index) * barWidth + barWidth / 2
+                        let amp = max(2, CGFloat(peak) * size.height * 0.92)
+                        let bar = CGRect(x: centerX - barWidth * 0.32,
+                                         y: (size.height - amp) / 2,
+                                         width: barWidth * 0.64,
+                                         height: amp)
+                        let inWindow = centerX >= inX && centerX <= outX
+                        context.fill(Path(roundedRect: bar, cornerRadius: 1),
+                                     with: .color(inWindow ? color : color.opacity(0.25)))
+                    }
+
+                    if let progress {
+                        let playX = inX + (outX - inX) * CGFloat(min(max(progress, 0), 1))
+                        context.fill(Path(CGRect(x: playX - 0.75, y: 0,
+                                                 width: 1.5, height: size.height)),
+                                     with: .color(.white))
+                    }
+                }
+
+                handle(atX: inX, height: height, isIn: true)
+                    .gesture(dragGesture(width: width, isIn: true))
+                handle(atX: outX, height: height, isIn: false)
+                    .gesture(dragGesture(width: width, isIn: false))
+            }
+        }
+    }
+
+    private func x(forSeconds seconds: Double, width: CGFloat) -> CGFloat {
+        guard duration > 0 else { return 0 }
+        return CGFloat(min(max(seconds / duration, 0), 1)) * width
+    }
+
+    /// Full-height grip with a fat invisible hit area — draggable without
+    /// pixel-hunting a 2pt line.
+    private func handle(atX x: CGFloat, height: CGFloat, isIn: Bool) -> some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 1.5)
+                .fill(Color.white)
+                .frame(width: 3, height: height)
+            Circle()
+                .fill(Color.white)
+                .frame(width: 9, height: 9)
+                .offset(y: isIn ? -height / 2 + 4.5 : height / 2 - 4.5)
+        }
+        .frame(width: 22, height: height)   // hit area
+        .contentShape(Rectangle())
+        .position(x: x, y: height / 2)
+    }
+
+    private func dragGesture(width: CGFloat, isIn: Bool) -> some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { value in
+                guard duration > 0 else { return }
+                let seconds = Double(min(max(value.location.x / width, 0), 1)) * duration
+                if isIn {
+                    start = min(seconds, end - 0.05)
+                } else {
+                    end = max(seconds, start + 0.05)
+                }
+            }
+            .onEnded { _ in onCommit() }
     }
 }

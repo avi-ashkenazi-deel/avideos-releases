@@ -298,7 +298,18 @@ final class MusicPlayer {
     }
 
     func next() { step(by: 1) }
-    func previous() { step(by: -1) }
+
+    /// Standard player semantics: a couple of seconds into a track,
+    /// "previous" means restart it — stepping only from the very top. This
+    /// also gives the button a purpose in a one-track playlist, where
+    /// stepping had nowhere to go.
+    func previous() {
+        if currentFile != nil, position > 2 {
+            seek(to: 0)
+            return
+        }
+        step(by: -1)
+    }
 
     private func step(by delta: Int) {
         guard !playlist.isEmpty else { return }

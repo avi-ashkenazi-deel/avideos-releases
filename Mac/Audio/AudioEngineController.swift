@@ -327,6 +327,11 @@ final class AudioEngineController {
         padPlayer?.durations[id]
     }
 
+    /// Normalized waveform peaks for the trim editor.
+    func padPeaks(id: UUID) -> [Float]? {
+        padPlayer?.peaks(padID: id)
+    }
+
     /// Moves a pad into a folder (nil = top level). Folders exist only
     /// through their members — no separate folder list to keep in sync.
     func setPadFolder(id: UUID, folder: String?) {

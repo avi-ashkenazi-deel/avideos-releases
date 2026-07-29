@@ -30,6 +30,25 @@ trimmed length, a progress fill sweeping the row, and a gear popover editing
 in/out points (`SoundPad.trimStart/trimEnd`, Optional for settings-decode
 compatibility; `SoundPadPlayer` slices the pre-decoded buffer at fire time).
 
+Fourth pass, live-testing fallout. **Playing any pad crashed**: the trim
+slice computed its end frame as `(end ?? .greatestFiniteMagnitude) × rate`
+converted to `AVAudioFramePosition` — out of Int64 range for every
+untrimmed pad, so the very first play trapped. Mapped the optional instead;
+committed the moment it was diagnosed. **The pad trim editor became the
+soundtrack itself**: peaks computed straight off the already-decoded PCM
+buffer (`SoundPadPlayer.peaks`, vDSP, cached), drawn time-proportionally
+with draggable in/out handles on the waveform, a dimmed outside-window
+region and a playhead sweeping while it sounds — replacing the two abstract
+sliders. **The music transport was half missing**: its single HStack
+overflowed the palette width and clipped the scrubber, time readout and
+Sections/Add buttons; split into two rows, gave the playlist-loop button a
+visible on-state chip, and gave "previous" standard semantics (restart the
+track when more than 2s in — it also had nothing to do in a one-track
+playlist). **Dragging elements was jittery**: move/resize gestures measured
+translation in the moving view's own coordinate space, which re-measures
+against the moved view every tick and oscillates; both now measure in the
+stable "canvas" space, like the rotation grip always did.
+
 Third pass, from running it live. **You heard your own mic** — the program
 bus (which must contain the mic, for recording and the virtual devices) was
 also the monitor. The graph now has a dedicated `monitorMixer`: every strip

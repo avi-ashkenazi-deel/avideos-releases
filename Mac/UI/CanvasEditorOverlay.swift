@@ -145,8 +145,13 @@ private struct SelectionChrome: View {
         .animation(nil, value: element.transform)
     }
 
+    // Move and resize measure in the CANVAS coordinate space, like the
+    // rotation grip. Measuring in the gesture view's own space feeds back:
+    // the chrome moves under the pointer as the drag applies, the local
+    // translation re-measures against the moved view, and the element
+    // jitters between two positions.
     private var moveGesture: some Gesture {
-        DragGesture(minimumDistance: 1)
+        DragGesture(minimumDistance: 1, coordinateSpace: .named("canvas"))
             .onChanged { value in
                 if dragStart == nil { dragStart = element.transform }
                 guard let start = dragStart else { return }
@@ -162,7 +167,7 @@ private struct SelectionChrome: View {
     }
 
     private func resizeGesture(handle: Handle) -> some Gesture {
-        DragGesture(minimumDistance: 1)
+        DragGesture(minimumDistance: 1, coordinateSpace: .named("canvas"))
             .onChanged { value in
                 if dragStart == nil { dragStart = element.transform }
                 guard let start = dragStart else { return }

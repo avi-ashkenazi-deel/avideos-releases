@@ -1,5 +1,6 @@
 import Foundation
 import AVFoundation
+import Accelerate
 import os
 
 /// One soundboard pad: name, color, source file (bookmark), optional hotkey.
@@ -86,6 +87,7 @@ final class SoundPadPlayer {
 
     /// Decodes the file fully into a canonical-format buffer.
     func load(pad: SoundPad) throws {
+        peaksCache.removeValue(forKey: pad.id)   // re-add = fresh waveform
         guard let url = pad.resolve() else {
             throw NSError(domain: "SoundPadPlayer", code: 1,
                           userInfo: [NSLocalizedDescriptionKey: "File not found for \(pad.name)"])
@@ -132,6 +134,37 @@ final class SoundPadPlayer {
         buffers.removeValue(forKey: padID)
         progress.removeValue(forKey: padID)
         durations.removeValue(forKey: padID)
+        peaksCache.removeValue(forKey: padID)
+    }
+
+    private var peaksCache: [UUID: [Float]] = [:]
+
+    /// Max-abs waveform peaks over the full (untrimmed) sample, for the trim
+    /// editor. Computed once from the decoded buffer and cached.
+    func peaks(padID: UUID, count: Int = 200) -> [Float]? {
+        if let cached = peaksCache[padID], cached.count == count { return cached }
+        guard let buffer = buffers[padID],
+              let data = buffer.floatChannelData,
+              count > 0 else { return nil }
+        let frames = Int(buffer.frameLength)
+        guard frames > 0 else { return nil }
+        let bucket = max(1, frames / count)
+        var result = [Float](repeating: 0, count: count)
+        for index in 0..<count {
+            let startIndex = index * bucket
+            guard startIndex < frames else { break }
+            var peak: Float = 0
+            vDSP_maxmgv(data[0] + startIndex, 1, &peak,
+                        vDSP_Length(min(bucket, frames - startIndex)))
+            result[index] = peak
+        }
+        // Normalize so quiet files still draw a readable shape.
+        if let top = result.max(), top > 0 {
+            var scale = 1 / top
+            vDSP_vsmul(result, 1, &scale, &result, 1, vDSP_Length(count))
+        }
+        peaksCache[padID] = result
+        return result
     }
 
     // MARK: - Playback
