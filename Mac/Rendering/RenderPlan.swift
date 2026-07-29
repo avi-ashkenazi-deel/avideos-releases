@@ -254,7 +254,9 @@ enum RenderPlanCompiler {
 
     private static func sourceKey(for binding: SourceBinding) -> SourceKey {
         switch binding {
-        case .camera(let uid): .camera(deviceUniqueID: uid)
+        // "" is "system default"; the registry keys on nil for that, so both
+        // spellings resolve to ONE capture session rather than two.
+        case .camera(let uid): .camera(deviceUniqueID: uid.isEmpty ? nil : uid)
         case .display(let id): .display(displayID: id)
         case .window(let id): .window(windowID: id)
         case .guest(let identity): .guest(identity: identity)

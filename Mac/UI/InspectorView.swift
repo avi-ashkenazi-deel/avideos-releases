@@ -384,7 +384,7 @@ struct InspectorView: View {
 
         func tag(for binding: SourceBinding) -> String {
             switch binding {
-            case .camera(let uid): "camera:\(uid ?? "")"
+            case .camera(let uid): "camera:\(uid)"
             case .guest(let identity): "guest:\(identity)"
             case .display(let id): "display:\(id)"
             case .window(let id): "window:\(id)"
@@ -398,7 +398,7 @@ struct InspectorView: View {
                 set: { newTag in
                     guard var updated = studio.findElement(id: element.id) else { return }
                     if newTag == "camera:" {
-                        updated.kind = .source(.camera(deviceUniqueID: nil))
+                        updated.kind = .source(.camera(deviceUniqueID: ""))
                     } else if newTag.hasPrefix("camera:") {
                         updated.kind = .source(.camera(deviceUniqueID: String(newTag.dropFirst(7))))
                     } else if newTag.hasPrefix("guest:") {

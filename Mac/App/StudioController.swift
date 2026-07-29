@@ -744,8 +744,11 @@ final class StudioController {
     /// = the system default camera; the inspector picks a specific one after
     /// placing it, so adding an overlay is a single click.
     func addCameraElement(deviceUniqueID: String? = nil, name: String? = nil) {
+        // SourceBinding.camera carries a non-optional id; "" is the agreed
+        // spelling of "system default" (CameraSource.device resolves an
+        // unmatched id to the default device).
         addElement(Element(name: name ?? "Camera",
-                           kind: .source(.camera(deviceUniqueID: deviceUniqueID)),
+                           kind: .source(.camera(deviceUniqueID: deviceUniqueID ?? "")),
                            transform: ElementTransform(center: CGPoint(x: 0.82, y: 0.76),
                                                        size: CGSize(width: 0.28, height: 0.28)),
                            entryAnimation: .styled(.fade)))
