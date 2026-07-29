@@ -86,7 +86,7 @@ private struct LevelRow: View {
                           : AnyShapeStyle(Color.white.opacity(0.1)),
                     in: RoundedRectangle(cornerRadius: 4))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.studioIconCompact)
         .help(muted ? "Unmute" : "Mute")
     }
 
@@ -101,7 +101,7 @@ private struct LevelRow: View {
                 .foregroundStyle(count > 0 ? Color.accentColor : Color.secondary)
                 .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 5))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.studioIconCompact)
         .help("Insert effects")
         .popover(isPresented: $showsInserts, arrowEdge: .bottom) {
             InsertChainView(strip: strip)
@@ -254,7 +254,7 @@ private struct InsertRow: View {
                     .frame(width: 20, height: 20)
                     .background(Color.white.opacity(0.06), in: Circle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.studioIconCompact)
             .help(insert.bypassed ? "Enable" : "Bypass")
 
             VStack(alignment: .leading, spacing: 2) {
@@ -284,7 +284,7 @@ private struct InsertRow: View {
                 Image(systemName: "macwindow")
                     .font(.system(size: 10))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.studioIconCompact)
             .foregroundStyle(.secondary)
             .help("Open plug-in window")
 
@@ -294,7 +294,7 @@ private struct InsertRow: View {
                 Image(systemName: "xmark.circle.fill")
                     .font(.system(size: 11))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.studioIconCompact)
             .foregroundStyle(.tertiary)
             .help("Remove effect")
         }

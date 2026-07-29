@@ -17,15 +17,18 @@ import KeyboardShortcuts
 
 // MARK: - Palette catalogue
 
+/// Strip order = declaration order: scenes, overlays, then the two audio
+/// libraries side by side (FX + Music), the mixer, guests, inspector.
+/// No `setup` entry — virtual-device install lives in Settings (⌘,) where
+/// every other preference is.
 enum PaletteKind: String, CaseIterable, Codable, Identifiable {
     case scenes
     case overlays
     case sounds
-    case levels
     case music
+    case levels
     case guests
     case inspector
-    case setup
 
     var id: String { rawValue }
 
@@ -38,20 +41,20 @@ enum PaletteKind: String, CaseIterable, Codable, Identifiable {
         case .music: "Music"
         case .guests: "Interview"
         case .inspector: "Inspector"
-        case .setup: "Setup"
         }
     }
 
+    /// Sound effects read as "FX" rather than a speaker, so they can't be
+    /// confused with music (notes) or the mixer (faders).
     var icon: String {
         switch self {
         case .scenes: "rectangle.stack"
         case .overlays: "square.3.layers.3d.top.filled"
-        case .sounds: "speaker.wave.2"
-        case .levels: "slider.horizontal.3"
+        case .sounds: "fx"
         case .music: "music.note.list"
+        case .levels: "slider.horizontal.3"
         case .guests: "person.2"
         case .inspector: "sidebar.right"
-        case .setup: "gearshape.2"
         }
     }
 
@@ -64,7 +67,6 @@ enum PaletteKind: String, CaseIterable, Codable, Identifiable {
         case .music: 340
         case .guests: 320
         case .inspector: 300
-        case .setup: 360
         }
     }
 
@@ -112,9 +114,6 @@ struct PaletteWindowContent: View {
         case .inspector:
             InspectorView()
                 .frame(height: 520)
-        case .setup:
-            ScrollView { DriverStatusView().padding(10) }
-                .frame(height: 320)
         }
     }
 }
@@ -165,15 +164,22 @@ struct PaletteStrip: View {
                 Button {
                     openWindow(id: "palette", value: kind)
                 } label: {
-                    Image(systemName: kind.icon)
-                        .font(.system(size: 15))
-                        .frame(width: 34, height: 30)
-                        .background(
-                            RoundedRectangle(cornerRadius: 7)
-                                .fill(Color.white.opacity(0.08))
-                        )
+                    Group {
+                        // Sound effects read as "FX"; everything else is a
+                        // symbol.
+                        if kind == .sounds {
+                            Text("FX").font(.system(size: 13, weight: .heavy))
+                        } else {
+                            Image(systemName: kind.icon).font(.system(size: 15))
+                        }
+                    }
+                    .frame(width: 34, height: 30)
+                    .background(
+                        RoundedRectangle(cornerRadius: 7)
+                            .fill(Color.white.opacity(0.08))
+                    )
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.studioIcon)
                 .help(kind.title)
             }
         }
@@ -224,7 +230,9 @@ struct OverlaysPalette: View {
                                        studio.selectedElementID = element.id
                                        openInspector()
                                    },
-                                   remove: { studio.removeElement(id: element.id) })
+                                   remove: { studio.removeElement(id: element.id) },
+                                   copy: { studio.copyElement(id: element.id) },
+                                   cut: { studio.cutElement(id: element.id) })
                     }
                     .onMove { displayFrom, displayTo in
                         let count = elements.count
@@ -273,6 +281,8 @@ private struct OverlayRow: View {
     let toggleEye: () -> Void
     let inspect: () -> Void
     let remove: () -> Void
+    let copy: () -> Void
+    let cut: () -> Void
 
     private var kindIcon: String {
         switch element.kind {
@@ -292,7 +302,7 @@ private struct OverlayRow: View {
                 Image(systemName: element.isVisible ? "eye.fill" : "eye.slash")
                     .foregroundStyle(element.isVisible ? .primary : .tertiary)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.studioIconCompact)
             .help(element.isVisible ? "Hide (plays the exit animation)" : "Show")
 
             Image(systemName: kindIcon)
@@ -309,15 +319,18 @@ private struct OverlayRow: View {
                 Image(systemName: "slider.horizontal.3")
                     .foregroundStyle(.secondary)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.studioIconCompact)
             .help("Open in the inspector")
         }
         .padding(.vertical, 2)
         .contentShape(Rectangle())
+        .hoverHighlight(cornerRadius: 4)
         .onTapGesture(perform: select)
         .listRowBackground(isSelected ? Color.accentColor.opacity(0.25) : Color.clear)
         .contextMenu {
             Button("Inspect", action: inspect)
+            Button("Copy", action: copy)
+            Button("Cut", action: cut)
             Button("Remove", role: .destructive, action: remove)
         }
     }
@@ -483,7 +496,7 @@ private struct SoundEffectRow: View {
                     .foregroundStyle(Color(hex: pad.colorHex))
                     .frame(width: 18)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.studioIconCompact)
 
             Text(pad.name)
                 .lineLimit(1)
@@ -509,7 +522,7 @@ private struct SoundEffectRow: View {
                 Image(systemName: "gearshape.fill")
                     .foregroundStyle(.secondary)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.studioIconCompact)
             .help("Trim in/out points")
             .popover(isPresented: $showingTrim) {
                 PadTrimEditor(pad: pad)
@@ -529,6 +542,7 @@ private struct SoundEffectRow: View {
         }
         .background(.white.opacity(0.05))
         .clipShape(RoundedRectangle(cornerRadius: 6))
+        .hoverHighlight(cornerRadius: 6)
         .contextMenu {
             Button("Rename…") {
                 renameText = pad.name

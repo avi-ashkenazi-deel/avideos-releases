@@ -33,6 +33,8 @@ final class Compositor {
         var zoom: Float = 1
         var pan: SIMD2<Float> = .zero
         var blurStrength: Float = 0
+        /// 1 = untouched; < 1 darkens (the fake-extrusion side layers).
+        var tint: Float = 1
     }
 
     /// Shader-side values for `SourceFit`. Contain and cover are the only two
@@ -212,6 +214,32 @@ final class Compositor {
                                         strokeWidthPx: 0,
                                         time: Float(now.truncatingRemainder(dividingBy: 3600)))
             applyFraming(&uniforms, item: item, texture: contentTexture)
+
+            // 3a. Fake extrusion: the same quad drawn as a receding stack of
+            // darkened copies behind the real one, offset along the element's
+            // projected 3D normal. Cheap (one texture, N tiny draws) and it
+            // reads as thickness without a real 3D pipeline.
+            if transform.depthValue > 0, !item.blendMode.needsDestinationSample {
+                let step = Self.extrusionStep(transform: transform,
+                                              canvasSize: CGSize(width: canvasW, height: canvasH))
+                let layers = min(max(Int(transform.depthValue * 220), 2), 14)
+                // Farthest first so nearer layers cover them.
+                for layer in stride(from: layers, through: 1, by: -1) {
+                    let fraction = Float(layer) / Float(layers)
+                    var layerUniforms = uniforms
+                    layerUniforms.transform = Self.quadToNDC(
+                        transform: transform,
+                        canvasSize: CGSize(width: canvasW, height: canvasH),
+                        pixelOffset: step * fraction)
+                    // Darkest at the back, easing up to the front face.
+                    layerUniforms.tint = 0.32 + 0.4 * (1 - fraction)
+                    drawQuad(uniforms: layerUniforms,
+                             content: contentTexture,
+                             glyph: resolved.glyph,
+                             onto: accum,
+                             in: commandBuffer)
+                }
+            }
 
             if item.blendMode.needsDestinationSample {
                 // Render the item alone onto a cleared layer, then blend pass.
@@ -399,8 +427,12 @@ final class Compositor {
     }
 
     /// Unit quad (0…1, y-down) → NDC, with rotation performed in pixel space
-    /// so rotated elements don't skew on non-square canvases.
-    static func quadToNDC(transform: ElementTransform, canvasSize: CGSize) -> simd_float3x3 {
+    /// so rotated elements don't skew on non-square canvases. Carries skew,
+    /// 3D tilt and perspective as a homography when the transform asks for
+    /// them; `pixelOffset` displaces the whole quad (extrusion layers).
+    static func quadToNDC(transform: ElementTransform,
+                          canvasSize: CGSize,
+                          pixelOffset: SIMD2<Float> = .zero) -> simd_float3x3 {
         let cw = Float(canvasSize.width)
         let ch = Float(canvasSize.height)
         let sizePx = SIMD2(Float(transform.size.width) * cw,
@@ -424,7 +456,7 @@ final class Compositor {
         let translate = simd_float3x3(columns: (
             SIMD3(1, 0, 0),
             SIMD3(0, 1, 0),
-            SIMD3(centerPx.x, centerPx.y, 1)
+            SIMD3(centerPx.x + pixelOffset.x, centerPx.y + pixelOffset.y, 1)
         ))
         // px -> NDC (flip y).
         let toNDC = simd_float3x3(columns: (
@@ -432,7 +464,68 @@ final class Compositor {
             SIMD3(0, -2 / ch, 0),
             SIMD3(-1, 1, 1)
         ))
-        return toNDC * translate * rotate * toCentered
+
+        // Flat element (the common case): plain affine, third row (0,0,1), so
+        // the shader's perspective divide is a divide by one.
+        guard transform.hasDepthEffects else {
+            return toNDC * translate * rotate * toCentered
+        }
+
+        // Skew + 3D tilt + perspective, all expressible as ONE homography:
+        // the projected coordinates are ratios of linear functions of the
+        // corner, which is exactly what a 3x3 on homogeneous 2D coords is.
+        // Rows below map (cx, cy, 1) -> (X, Y, w); the shader divides.
+        let skew = transform.skewValue
+        let tiltX = Float(transform.tiltXValue)
+        let tiltY = Float(transform.tiltYValue)
+        // Camera distance in pixels, from the element's own size — so the
+        // amount of perspective doesn't change when the element is resized.
+        let focal = Float(transform.perspectiveValue) * max(sizePx.x, sizePx.y)
+
+        // Centered + skewed corner: x1 = a·(cx,cy,1), y1 = b·(cx,cy,1).
+        let kx = Float(skew.x), ky = Float(skew.y)
+        let a = SIMD3<Float>(sizePx.x,
+                             kx * sizePx.y,
+                             -sizePx.x / 2 - kx * sizePx.y / 2)
+        let b = SIMD3<Float>(ky * sizePx.x,
+                             sizePx.y,
+                             -sizePx.y / 2 - ky * sizePx.x / 2)
+
+        // Rotate about X then Y (z starts at 0):
+        //   X = x1·cosβ + y1·sinα·sinβ
+        //   Y = y1·cosα
+        //   Z = −x1·sinβ + y1·sinα·cosβ
+        let sinA3 = sin(tiltX), cosA3 = cos(tiltX)
+        let sinB3 = sin(tiltY), cosB3 = cos(tiltY)
+        let rowX = a * cosB3 + b * (sinA3 * sinB3)
+        let rowY = b * cosA3
+        let rowZ = a * (-sinB3) + b * (sinA3 * cosB3)
+        // Weak perspective: divide by (1 − Z/focal).
+        var rowW = -rowZ / focal
+        rowW.z += 1
+
+        let perspectiveRows = simd_float3x3(rows: [rowX, rowY, rowW])
+        return toNDC * translate * rotate * perspectiveRows
+    }
+
+    /// Screen-space direction the extrusion recedes along, in pixels for a
+    /// full `depth` of 1 — the element's 3D normal projected to the canvas.
+    /// With no tilt there is no normal to project, so it falls back to a
+    /// down-right offset (the classic extruded-title look).
+    static func extrusionStep(transform: ElementTransform, canvasSize: CGSize) -> SIMD2<Float> {
+        let tiltX = Float(transform.tiltXValue)
+        let tiltY = Float(transform.tiltYValue)
+        // R_y(β)·R_x(α) applied to (0,0,1) → (cosα·sinβ, −sinα, cosα·cosβ).
+        var direction = SIMD2<Float>(cos(tiltX) * sin(tiltY), -sin(tiltX))
+        let length = simd_length(direction)
+        if length < 0.02 {
+            direction = SIMD2<Float>(0.45, 0.65)   // no tilt: pick a look
+        } else {
+            direction /= length
+        }
+        // Extrude AWAY from the viewer: opposite the normal's screen part.
+        let magnitude = Float(transform.depthValue) * Float(canvasSize.width)
+        return -direction * magnitude
     }
 
     private func drawQuad(uniforms: ItemUniforms,

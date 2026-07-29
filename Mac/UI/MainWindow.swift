@@ -164,7 +164,7 @@ private struct StudioLayout: View {
                             .frame(width: 80)
                     }
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.studioTile)
                 .help(device.localizedName)
             }
         }
@@ -188,7 +188,7 @@ private struct StudioLayout: View {
                         in: RoundedRectangle(cornerRadius: 9))
             .foregroundStyle(.white)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.studioTile)
         // ⇧⌘R already lives on the Studio menu command; binding it here too
         // would fire the toggle twice per press.
         .help("Record the program to disk (⇧⌘R)")

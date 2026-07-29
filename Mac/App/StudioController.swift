@@ -86,13 +86,33 @@ final class StudioController {
         self.renderEngine = engine
         let registry = engine.map { SourceRegistry(device: $0.device) }
         self.sourceRegistry = registry
-        self.project = ProjectStore.shared.loadMostRecentOrStarter()
+        self.project = Self.normalizingCameraFraming(
+            ProjectStore.shared.loadMostRecentOrStarter())
         self.teleprompter = TeleprompterController()
         self.podcast = RecordingSessionController()
         self.guests = engine.map { GuestSessionController(metalDevice: $0.device) }
         self.virtualCameraConsumer = VirtualCameraFrameConsumer(writer: virtualCamera.sinkWriter)
 
         wireSubsystems()
+    }
+
+    /// Camera and interview scenes should COVER the canvas. Scenes whose
+    /// framing was never configured (still exactly `.default`) are migrated
+    /// on load, so an existing project stops letterboxing its camera the
+    /// moment the program isn't 16:9.
+    private static func normalizingCameraFraming(_ project: Project) -> Project {
+        var copy = project
+        for index in copy.scenes.indices {
+            switch copy.scenes[index].kind {
+            case .camera, .interview:
+                if copy.scenes[index].primaryPresentation == .default {
+                    copy.scenes[index].primaryPresentation = .camera
+                }
+            case .screenShare, .movie:
+                break   // fit is right: cropping a shared screen loses content
+            }
+        }
+        return copy
     }
 
     /// Whether `bootSubsystems()` has run.
@@ -472,6 +492,36 @@ final class StudioController {
             }
         }
         recompileAndPublish()
+        if sizeChanged { matchStudioWindow(toAspect: size) }
+    }
+
+    /// Reshapes the studio window to the program's aspect and LOCKS it there,
+    /// so a square or vertical show fills its window instead of sitting in
+    /// black bars. AppKit enforces `contentAspectRatio` on every later
+    /// user resize, which is exactly the behaviour asked for.
+    private func matchStudioWindow(toAspect size: CGSize) {
+        guard size.width > 0, size.height > 0 else { return }
+        // The studio window is the normal-level titled one; palettes float
+        // and carry autosave names.
+        guard let window = NSApp.windows.first(where: {
+            $0.level == .normal && $0.styleMask.contains(.titled) && $0.isVisible
+        }) else { return }
+
+        let aspect = size.width / size.height
+        window.contentAspectRatio = NSSize(width: aspect, height: 1)
+        // Keep the current width, take the height the aspect implies, and
+        // stay on screen.
+        let currentContent = window.contentRect(forFrameRect: window.frame)
+        var width = currentContent.width
+        var height = width / aspect
+        if let visible = window.screen?.visibleFrame {
+            let maxHeight = visible.height - 60
+            if height > maxHeight {
+                height = maxHeight
+                width = height * aspect
+            }
+        }
+        window.setContentSize(NSSize(width: width, height: height))
     }
 
     // MARK: - Live camera switching
@@ -570,6 +620,45 @@ final class StudioController {
         elementAnimations.removeValue(forKey: id)
         timerStarts.removeValue(forKey: id)
         if selectedElementID == id { selectedElementID = nil }
+    }
+
+    // MARK: - Copy / paste elements between scenes
+
+    /// The copied element, if any — an in-app clipboard so a layer can be
+    /// lifted out of one scene and pasted into another (the natural way to
+    /// move an overlay across scenes). Not the system pasteboard: these are
+    /// document values, and clobbering the user's real clipboard while they
+    /// work would be rude.
+    private(set) var copiedElement: Element?
+    var hasCopiedElement: Bool { copiedElement != nil }
+
+    func copyElement(id: UUID) {
+        copiedElement = findElement(id: id)
+    }
+
+    func cutElement(id: UUID) {
+        copiedElement = findElement(id: id)
+        removeElement(id: id)
+    }
+
+    /// Pastes the copied element into the ACTIVE scene, on top, with a fresh
+    /// id — pasting into the scene it came from gives a real second copy, and
+    /// pasting into another scene keeps both independent. Nudged slightly so
+    /// the pasted copy is visibly distinct from the original.
+    func pasteElement() {
+        guard var element = copiedElement,
+              let sceneIndex = project.scenes.firstIndex(where: { $0.id == project.activeSceneID })
+        else { return }
+        element.id = UUID()
+        if project.scenes[sceneIndex].elements.contains(where: {
+            $0.transform.center == element.transform.center && $0.name == element.name
+        }) {
+            element.transform.center.x = min(element.transform.center.x + 0.03, 1)
+            element.transform.center.y = min(element.transform.center.y + 0.03, 1)
+            element.name += " Copy"
+        }
+        project.scenes[sceneIndex].elements.append(element)
+        selectedElementID = element.id
     }
 
     /// Reorders elements within the active scene (array order = z-order,
@@ -768,9 +857,16 @@ final class StudioController {
     // MARK: - Scenes
 
     func addScene(kind: SceneKind, name: String) {
-        // New scenes adopt the preferred transition (Video preferences).
+        // New scenes adopt the preferred transition (Video preferences), and
+        // camera-ish scenes cover the canvas rather than letterboxing.
+        let isCameraish: Bool
+        switch kind {
+        case .camera, .interview: isCameraish = true
+        case .screenShare, .movie: isCameraish = false
+        }
         let scene = SceneModel(name: name, kind: kind,
-                               transitionStyle: prefs.defaultSceneTransition)
+                               transitionStyle: prefs.defaultSceneTransition,
+                               primaryPresentation: isCameraish ? .camera : .default)
         project.scenes.append(scene)
         if project.activeSceneID == nil { project.activeSceneID = scene.id }
     }

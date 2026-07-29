@@ -30,6 +30,37 @@ trimmed length, a progress fill sweeping the row, and a gear popover editing
 in/out points (`SoundPad.trimStart/trimEnd`, Optional for settings-decode
 compatibility; `SoundPadPlayer` slices the pre-decoded buffer at fire time).
 
+Twelfth pass — a 3D-ish transform layer, and a chrome sweep. **Skew, gimbal
+tilt and fake extrusion**: `ElementTransform` gains tiltX/tiltY/skew/depth/
+perspective (all Optional, so old projects decode unchanged, with
+non-optional accessors for the UI and full lerp support so magic move can
+tilt a flat tile into perspective across a switch). The renderer needed
+almost nothing new — `quadToNDC` already returned a 3×3 on homogeneous 2D
+coords, which can carry a full projective transform, so skew + two-axis
+rotation + weak perspective compose into ONE homography; the vertex shader
+now hands the third component to the rasterizer as `w`, which buys both the
+divide and perspective-correct uv interpolation for free. Flat elements keep
+the plain affine path (third row stays (0,0,1)). Extrusion is the same quad
+drawn as a receding stack of darkened copies (new `tint` uniform) offset
+along the element's projected 3D normal — with no tilt it falls back to a
+down-right offset, the classic extruded-title look. The inspector gets a
+gimbal pad (drag to tilt both axes, drawn horizon, double-click to reset)
+plus Lens, Depth and skew sliders.
+
+Also: **copy/paste elements between scenes** (⇧⌘C/⇧⌘X/⇧⌘V and the layer
+row's context menu — an in-app clipboard, so the user's real pasteboard is
+untouched); canvas Delete now **deselects** as it hides, so no selection box
+lingers around an invisible element; **camera scenes cover the canvas**
+(`SourcePresentation.camera`, migrated on load for never-configured scenes —
+letterboxing a camera in a square show is never wanted, while shared screens
+keep `.fit`); the **window adopts the program's aspect** and locks to it on
+a shape change, so a square or vertical show fills its window; the palette
+strip drops the Setup icon (virtual-device install lives in Settings with
+every other preference) and puts FX (a text icon) next to Music (notes);
+and a new `StudioButtonStyles` gives the studio's icon buttons, picture
+tiles and list rows real **hover states** — `.plain` and `.borderless` drew
+nothing, so most of the chrome never looked clickable.
+
 Eleventh pass — magic move made SMART, not just possible. Identity-only
 matching still faded Avi's photo out and in ("that's not smart"). Two
 changes. Content now beats identity where content IS identity:

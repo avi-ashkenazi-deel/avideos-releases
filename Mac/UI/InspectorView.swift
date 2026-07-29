@@ -210,6 +210,38 @@ struct InspectorView: View {
                     studio.updateElement(updated)
                 }
             ), range: 0...0.5)
+
+            depthEditor(element)
+        }
+    }
+
+    /// 3D-ish placement: a gimbal pad you drag to tilt the element in
+    /// perspective, plus skew, extrusion depth and lens strength.
+    private func depthEditor(_ element: Element) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("3D").font(.headline).padding(.top, 4)
+            HStack(alignment: .top, spacing: 12) {
+                GimbalPad(tiltX: bindTransform(element, \.tiltXNonOptional),
+                          tiltY: bindTransform(element, \.tiltYNonOptional))
+                    .frame(width: 92, height: 92)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Drag to tilt. Double-click to reset.")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    LabeledSlider(label: "Lens",
+                                  value: bindTransform(element, \.perspectiveNonOptional),
+                                  range: 0.6...8)
+                    LabeledSlider(label: "Depth",
+                                  value: bindTransform(element, \.depthNonOptional),
+                                  range: 0...0.06)
+                }
+            }
+            LabeledSlider(label: "Skew X",
+                          value: bindTransform(element, \.skewXNonOptional),
+                          range: -1...1)
+            LabeledSlider(label: "Skew Y",
+                          value: bindTransform(element, \.skewYNonOptional),
+                          range: -1...1)
         }
     }
 
@@ -636,6 +668,68 @@ private struct WebURLEditor: View {
         updated.kind = .web(web)
         studio.updateElement(updated)
         studio.reloadWebElement(id: element.id)
+    }
+}
+
+/// A gimbal: drag anywhere in the pad to tilt the element in two axes at
+/// once (right = turn right, up = lean back), with a drawn horizon so the
+/// current attitude is readable at a glance. Double-click resets to flat.
+private struct GimbalPad: View {
+    @Binding var tiltX: Double
+    @Binding var tiltY: Double
+
+    /// ±50° of travel across the pad — past that a quad is edge-on and the
+    /// perspective divide gets ugly.
+    private static let limit = 50.0 * .pi / 180.0
+
+    var body: some View {
+        GeometryReader { geo in
+            let size = min(geo.size.width, geo.size.height)
+            // Normalized -1…1 knob position.
+            let nx = tiltY / Self.limit
+            let ny = -tiltX / Self.limit
+
+            ZStack {
+                Circle()
+                    .fill(Color.black.opacity(0.35))
+                Circle()
+                    .strokeBorder(.white.opacity(0.15))
+                // Horizon + meridian, tilted by the current attitude, so the
+                // pad shows the plane's orientation rather than just a dot.
+                Path { path in
+                    path.move(to: CGPoint(x: 6, y: size / 2))
+                    path.addLine(to: CGPoint(x: size - 6, y: size / 2))
+                }
+                .stroke(.white.opacity(0.5), lineWidth: 1)
+                .offset(y: CGFloat(ny) * size * 0.32)
+                Path { path in
+                    path.move(to: CGPoint(x: size / 2, y: 6))
+                    path.addLine(to: CGPoint(x: size / 2, y: size - 6))
+                }
+                .stroke(.white.opacity(0.25), lineWidth: 1)
+                .offset(x: CGFloat(nx) * size * 0.32)
+                Circle()
+                    .fill(Color.accentColor)
+                    .frame(width: 11, height: 11)
+                    .position(x: size / 2 + CGFloat(nx) * size * 0.42,
+                              y: size / 2 + CGFloat(ny) * size * 0.42)
+            }
+            .frame(width: size, height: size)
+            .contentShape(Circle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { value in
+                        let dx = (value.location.x - size / 2) / (size * 0.42)
+                        let dy = (value.location.y - size / 2) / (size * 0.42)
+                        tiltY = min(max(Double(dx), -1), 1) * Self.limit
+                        tiltX = -min(max(Double(dy), -1), 1) * Self.limit
+                    }
+            )
+            .onTapGesture(count: 2) {
+                tiltX = 0
+                tiltY = 0
+            }
+        }
     }
 }
 

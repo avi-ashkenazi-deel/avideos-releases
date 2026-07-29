@@ -20,6 +20,7 @@ struct ItemUniforms {
     float    zoom;          // 1 = the fit rule as-is; >1 zooms in
     float2   pan;           // pan within the sampled window
     float    blurStrength;  // >0 => blur the sample (the backdrop copy)
+    float    tint;          // 1 = as-is; <1 darkens (fake-extrusion side layers)
 };
 
 struct VSOut {
@@ -35,7 +36,14 @@ vertex VSOut composite_vertex(uint vid [[vertex_id]],
     float3 pos = u.transform * float3(corner, 1.0);
 
     VSOut out;
-    out.position = float4(pos.xy, 0.0, 1.0);
+    // pos.z is the homography's w: 1 for a flat element (plain affine), and
+    // the perspective divisor once the element is tilted. Handing it to the
+    // rasterizer as w gives the divide AND perspective-correct uv
+    // interpolation for free — a linear uv/w interpolation is exactly what
+    // texture mapping a tilted plane needs. Clamped so a corner can never
+    // cross the camera plane and wrap.
+    float w = max(pos.z, 0.02);
+    out.position = float4(pos.xy, 0.0, w);
     out.uv = corner;
     return out;
 }
@@ -282,7 +290,9 @@ fragment float4 composite_fragment(VSOut in [[stage_in]],
 
     float glyphAlpha = glyphTex.sample(s, in.uv).a;
     float alpha = color.a * glyphAlpha * u.opacity * mask;
-    return float4(color.rgb * alpha, alpha);   // premultiply
+    // Extrusion side layers pass tint < 1: same picture, darker, so the stack
+    // of offset copies reads as a shaded thickness.
+    return float4(color.rgb * u.tint * alpha, alpha);   // premultiply
 }
 
 // ---- preview blit -----------------------------------------------------------

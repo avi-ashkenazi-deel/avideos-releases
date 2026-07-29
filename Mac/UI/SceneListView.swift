@@ -109,7 +109,7 @@ struct SceneListView: View {
                             }
                         }
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.studioTile)
                     .contextMenu { sceneContextMenu(scene) }
                 }
             }
@@ -267,6 +267,7 @@ private struct SceneRow: View {
             }
         }
         .padding(.vertical, 2)
+        .hoverHighlight(cornerRadius: 4)
     }
 
     private var icon: String {

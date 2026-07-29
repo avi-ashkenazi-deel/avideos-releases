@@ -39,6 +39,12 @@ struct CanvasEditorOverlay: View {
                 if let id = studio.selectedElementID,
                    studio.findElement(id: id)?.isVisible == true {
                     studio.toggleElementVisibility(id: id)
+                    // …and deselect, so the selection box and its handles go
+                    // with it. Leaving a chrome around an invisible element
+                    // means the pointer is still captured by something that
+                    // isn't on screen.
+                    studio.selectedElementID = nil
+                    canvasFocused = false
                 }
             }
         }
@@ -136,7 +142,7 @@ private struct SelectionChrome: View {
                     .background(.black.opacity(0.65), in: Circle())
                     .overlay(Circle().strokeBorder(.white.opacity(0.35)))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.studioIcon)
             .offset(x: -rect.width / 2 - 18)
             .help("Edit this element")
         }

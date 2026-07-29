@@ -84,6 +84,29 @@ struct StudioCommands: Commands {
 
     var body: some Commands {
         CommandGroup(after: .pasteboard) {
+            // Copy a layer in one scene, switch scenes, paste — the natural
+            // way to move an overlay between scenes. An in-app clipboard, so
+            // the system pasteboard the user is working with stays untouched.
+            Button("Copy Element") {
+                if let id = studio.selectedElementID { studio.copyElement(id: id) }
+            }
+            .keyboardShortcut("c", modifiers: [.command, .shift])
+            .disabled(studio.selectedElementID == nil)
+
+            Button("Cut Element") {
+                if let id = studio.selectedElementID { studio.cutElement(id: id) }
+            }
+            .keyboardShortcut("x", modifiers: [.command, .shift])
+            .disabled(studio.selectedElementID == nil)
+
+            Button("Paste Element") {
+                studio.pasteElement()
+            }
+            .keyboardShortcut("v", modifiers: [.command, .shift])
+            .disabled(!studio.hasCopiedElement)
+
+            Divider()
+
             // The discoverable twin of pressing Delete with the canvas
             // focused. Command-modified on purpose: the inspector has text
             // fields, and a bare-Delete menu equivalent would race them.
@@ -93,6 +116,7 @@ struct StudioCommands: Commands {
                 if let id = studio.selectedElementID,
                    studio.findElement(id: id)?.isVisible == true {
                     studio.toggleElementVisibility(id: id)
+                    studio.selectedElementID = nil   // drop the selection box too
                 }
             }
             .keyboardShortcut(.delete, modifiers: [.command])

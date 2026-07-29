@@ -42,14 +42,95 @@ struct ElementTransform: Codable, Hashable, Sendable {
     /// 0…1.
     var opacity: Double
 
+    // MARK: 3D-ish placement
+    //
+    // All Optional so existing documents decode unchanged (a synthesized
+    // Decodable treats Optional properties as decodeIfPresent). Read them
+    // through the non-optional accessors below.
+
+    /// Tilt about the horizontal axis, radians — the top edge leans away or
+    /// toward the viewer. The gimbal's vertical drag.
+    var tiltX: Double?
+    /// Turn about the vertical axis, radians — the left/right edge leans.
+    /// The gimbal's horizontal drag.
+    var tiltY: Double?
+    /// Shear factors: x shifts with y, y shifts with x. Independent of tilt,
+    /// for the flat-parallelogram look.
+    var skew: CGPoint?
+    /// Fake extrusion depth in unit canvas width — the element is drawn as a
+    /// short stack of darkened copies receding along its 3D normal, which
+    /// reads as thickness without a real 3D pipeline.
+    var depth: Double?
+    /// How strong the perspective is: the virtual camera distance in units of
+    /// the element's own size. Small = wide-angle drama, large = orthographic.
+    var perspective: Double?
+
+    var tiltXValue: Double { tiltX ?? 0 }
+    var tiltYValue: Double { tiltY ?? 0 }
+    var skewValue: CGPoint { skew ?? .zero }
+    var depthValue: Double { depth ?? 0 }
+    /// 2.5 is a natural-looking default (≈35° field of view over the quad).
+    var perspectiveValue: Double { max(perspective ?? 2.5, 0.4) }
+
+    // Non-optional views of the same storage, so UI can bind with a plain
+    // WritableKeyPath (a Binding to an Optional slider value is misery).
+    // Writing a neutral value clears the field, keeping saved documents free
+    // of no-op keys.
+    var tiltXNonOptional: Double {
+        get { tiltXValue }
+        set { tiltX = newValue == 0 ? nil : newValue }
+    }
+    var tiltYNonOptional: Double {
+        get { tiltYValue }
+        set { tiltY = newValue == 0 ? nil : newValue }
+    }
+    var skewXNonOptional: Double {
+        get { Double(skewValue.x) }
+        set {
+            let point = CGPoint(x: newValue, y: skewValue.y)
+            skew = point == .zero ? nil : point
+        }
+    }
+    var skewYNonOptional: Double {
+        get { Double(skewValue.y) }
+        set {
+            let point = CGPoint(x: skewValue.x, y: newValue)
+            skew = point == .zero ? nil : point
+        }
+    }
+    var depthNonOptional: Double {
+        get { depthValue }
+        set { depth = newValue <= 0 ? nil : newValue }
+    }
+    var perspectiveNonOptional: Double {
+        get { perspectiveValue }
+        set { perspective = newValue }
+    }
+    /// Is any 3D-ish field doing something? Lets the renderer keep the plain
+    /// affine path for the overwhelmingly common flat element.
+    var hasDepthEffects: Bool {
+        tiltXValue != 0 || tiltYValue != 0
+            || skewValue != .zero || depthValue > 0
+    }
+
     init(center: CGPoint = CGPoint(x: 0.5, y: 0.5),
          size: CGSize = CGSize(width: 0.4, height: 0.3),
          rotation: Double = 0,
-         opacity: Double = 1) {
+         opacity: Double = 1,
+         tiltX: Double? = nil,
+         tiltY: Double? = nil,
+         skew: CGPoint? = nil,
+         depth: Double? = nil,
+         perspective: Double? = nil) {
         self.center = center
         self.size = size
         self.rotation = rotation
         self.opacity = opacity
+        self.tiltX = tiltX
+        self.tiltY = tiltY
+        self.skew = skew
+        self.depth = depth
+        self.perspective = perspective
     }
 
     static let fullCanvas = ElementTransform(
@@ -61,13 +142,22 @@ struct ElementTransform: Codable, Hashable, Sendable {
     /// scene-transition engine ("magic move").
     static func lerp(_ a: ElementTransform, _ b: ElementTransform, _ t: Double) -> ElementTransform {
         let t = min(max(t, 0), 1)
+        func mix(_ x: Double, _ y: Double) -> Double { x + (y - x) * t }
         return ElementTransform(
             center: CGPoint(x: a.center.x + (b.center.x - a.center.x) * t,
                             y: a.center.y + (b.center.y - a.center.y) * t),
             size: CGSize(width: a.size.width + (b.size.width - a.size.width) * t,
                          height: a.size.height + (b.size.height - a.size.height) * t),
-            rotation: a.rotation + (b.rotation - a.rotation) * t,
-            opacity: a.opacity + (b.opacity - a.opacity) * t
+            rotation: mix(a.rotation, b.rotation),
+            opacity: mix(a.opacity, b.opacity),
+            // Interpolated too, so magic move can tilt a flat tile into a
+            // perspective one across a scene switch.
+            tiltX: mix(a.tiltXValue, b.tiltXValue),
+            tiltY: mix(a.tiltYValue, b.tiltYValue),
+            skew: CGPoint(x: mix(Double(a.skewValue.x), Double(b.skewValue.x)),
+                          y: mix(Double(a.skewValue.y), Double(b.skewValue.y))),
+            depth: mix(a.depthValue, b.depthValue),
+            perspective: mix(a.perspectiveValue, b.perspectiveValue)
         )
     }
 }
@@ -172,6 +262,13 @@ struct SourcePresentation: Codable, Hashable, Sendable {
     }
 
     static let `default` = SourcePresentation()
+
+    /// What a LIVE CAMERA should do: cover the canvas. A camera framing is
+    /// the shot itself — letterboxing it (which `.fit` does the moment the
+    /// program isn't the camera's aspect, e.g. a square or vertical show)
+    /// is never what anyone wants. Shared screens keep `.fit`, where losing
+    /// edges would cut off content.
+    static let camera = SourcePresentation(fit: .fill)
 
     /// Clamped to ranges the shader can handle sensibly.
     var sanitized: SourcePresentation {
