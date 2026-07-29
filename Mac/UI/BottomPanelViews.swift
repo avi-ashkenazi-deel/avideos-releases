@@ -561,6 +561,11 @@ struct StatsHUD: View {
                     Label("REC", systemImage: "record.circle.fill")
                         .foregroundStyle(.red)
                 }
+                // Which build is this? The stamp answers it at a glance, so a
+                // stale binary can't masquerade as a fresh pull.
+                Text(BuildInfo.hudString)
+                    .foregroundStyle(.tertiary)
+                    .help(BuildInfo.longString)
             }
             .font(.caption.monospacedDigit())
             .padding(.horizontal, 10)

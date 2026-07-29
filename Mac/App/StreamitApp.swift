@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 /// streamit — macOS live-streaming studio.
 ///
@@ -81,8 +82,24 @@ struct StudioCommands: Commands {
     let studio: StudioController
     @Environment(\.openWindow) private var openWindow
 
+    /// Standard About panel, with the build stamp in the version field so
+    /// "which build is this?" has one answer everywhere.
+    private func showAboutPanel() {
+        NSApplication.shared.orderFrontStandardAboutPanel(options: [
+            .applicationVersion: BuildInfo.longString,
+        ])
+    }
+
 
     var body: some Commands {
+        // The streamit menu: version + build time, right at the top, and an
+        // About panel that repeats it.
+        CommandGroup(replacing: .appInfo) {
+            Button(BuildInfo.longString) {}
+                .disabled(true)
+            Button("About streamit") { showAboutPanel() }
+        }
+
         CommandGroup(after: .pasteboard) {
             // Copy a layer in one scene, switch scenes, paste — the natural
             // way to move an overlay between scenes. An in-app clipboard, so
