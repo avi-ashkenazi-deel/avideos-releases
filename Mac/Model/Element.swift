@@ -16,6 +16,9 @@ struct Element: Codable, Hashable, Sendable, Identifiable {
     var entryAnimation: EntryAnimation
     var isVisible: Bool
     var isLocked: Bool
+    /// Tile shape for `.source` elements (camera/guest PiP): aspect preset +
+    /// mask, Ecamm-style. nil = plain rectangle. Optional so old files decode.
+    var tileShape: SourceTileShape?
 
     init(id: UUID = UUID(),
          name: String,
@@ -66,6 +69,8 @@ enum ElementKind: Codable, Hashable, Sendable {
     case web(WebContent)
     /// Live source inset (camera PiP, a guest tile, a screen region).
     case source(SourceBinding)
+    /// Countdown overlay — renders as text that ticks once a second.
+    case timer(TimerContent)
 
     var displayName: String {
         switch self {
@@ -75,6 +80,7 @@ enum ElementKind: Codable, Hashable, Sendable {
         case .video: "Video"
         case .web: "Web Page"
         case .source: "Source"
+        case .timer: "Timer"
         }
     }
 }
@@ -87,6 +93,11 @@ struct TextContent: Codable, Hashable, Sendable {
     var fontSize: Double
     var alignment: Alignment
     var lineSpacing: Double
+    /// Background box behind the glyphs (the "text box" overlay). Optional
+    /// twice over: nil = plain text, and old project files lack the keys.
+    var boxFill: Fill?
+    /// Unit corner radius of the box; nil = a small default.
+    var boxCornerRadius: Double?
 
     enum Alignment: String, Codable, CaseIterable, Sendable {
         case leading, center, trailing
@@ -96,12 +107,87 @@ struct TextContent: Codable, Hashable, Sendable {
          fontName: String = "",
          fontSize: Double = 64,
          alignment: Alignment = .center,
-         lineSpacing: Double = 1.1) {
+         lineSpacing: Double = 1.1,
+         boxFill: Fill? = nil,
+         boxCornerRadius: Double? = nil) {
         self.string = string
         self.fontName = fontName
         self.fontSize = fontSize
         self.alignment = alignment
         self.lineSpacing = lineSpacing
+        self.boxFill = boxFill
+        self.boxCornerRadius = boxCornerRadius
+    }
+}
+
+/// Tile shape for a source inset (camera / guest PiP): an aspect preset and
+/// its mask. The aspect applies when picked (it rewrites the element's
+/// transform); the mask applies every frame.
+enum SourceTileShape: String, Codable, CaseIterable, Sendable {
+    case wide       // 16:9
+    case classic    // 4:3
+    case square
+    case circle
+    case squircle
+    case tall       // 9:16
+
+    var displayName: String {
+        switch self {
+        case .wide: "Wide (16:9)"
+        case .classic: "Classic (4:3)"
+        case .square: "Square"
+        case .circle: "Circle"
+        case .squircle: "Squircle"
+        case .tall: "Tall (9:16)"
+        }
+    }
+
+    /// Content aspect (width / height).
+    var aspect: Double {
+        switch self {
+        case .wide: 16.0 / 9.0
+        case .classic: 4.0 / 3.0
+        case .square, .circle, .squircle: 1
+        case .tall: 9.0 / 16.0
+        }
+    }
+
+    /// Unit corner radius for the render item; -1 is the ellipse-mask
+    /// sentinel the compositor already understands.
+    var cornerRadius: Double {
+        switch self {
+        case .circle: -1
+        case .squircle: 0.22
+        default: 0.02
+        }
+    }
+}
+
+/// Countdown state that persists: how long, and how it's drawn. The running
+/// clock (when it was started) is runtime state on StudioController — a saved
+/// project must not resume mid-count.
+struct TimerContent: Codable, Hashable, Sendable {
+    var durationSeconds: Double
+    var fontName: String
+    /// Point size at 1080p reference, like TextContent.
+    var fontSize: Double
+
+    init(durationSeconds: Double = 300,
+         fontName: String = "",
+         fontSize: Double = 140) {
+        self.durationSeconds = durationSeconds
+        self.fontName = fontName
+        self.fontSize = fontSize
+    }
+
+    /// "3:21", or "1:02:05" past the hour — what the tile shows.
+    static func formatted(_ seconds: Double) -> String {
+        let total = max(0, Int(seconds.rounded()))
+        let hours = total / 3600
+        let minutes = (total % 3600) / 60
+        let secs = total % 60
+        return hours > 0 ? String(format: "%d:%02d:%02d", hours, minutes, secs)
+                         : String(format: "%d:%02d", minutes, secs)
     }
 }
 

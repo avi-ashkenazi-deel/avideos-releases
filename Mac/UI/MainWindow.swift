@@ -23,6 +23,7 @@ struct MainWindow: View {
 /// the record button bottom-center, the palette strip on the right edge.
 private struct StudioLayout: View {
     @Environment(StudioController.self) private var studio
+    @Environment(\.openWindow) private var openWindow
     @State private var showingSessionLibrary = false
     @State private var showingScriptEditor = false
 
@@ -80,9 +81,17 @@ private struct StudioLayout: View {
         .ignoresSafeArea()
     }
 
-    /// Scene name + menu, sitting on the video like Ecamm's scene dropdown.
+    /// Scene name + menu, sitting on the video like Ecamm's scene dropdown:
+    /// "Show Scenes Window" first, then the scenes with their ⌘N shortcuts.
     private var sceneSwitcher: some View {
         Menu {
+            Button("Show Scenes Window") {
+                openWindow(id: "palette", value: PaletteKind.scenes)
+            }
+            .keyboardShortcut("\\", modifiers: [.command])
+
+            Divider()
+
             ForEach(Array(studio.project.scenes.enumerated()), id: \.element.id) { index, scene in
                 Button {
                     studio.switchToScene(number: index + 1)
@@ -93,6 +102,9 @@ private struct StudioLayout: View {
                         Text(scene.name)
                     }
                 }
+                // ⌘1…⌘9 badges match the Studio menu bindings, which are the
+                // ones that fire while the popup is closed.
+                .modifier(SceneShortcutBadge(index: index))
             }
         } label: {
             HStack(spacing: 6) {
@@ -153,6 +165,20 @@ private struct StudioLayout: View {
                 Label("Sessions", systemImage: "tray.full")
             }
             .help("Podcast-mode session library")
+        }
+    }
+}
+
+/// ⌘1…⌘9 badges on the first nine scene menu items; scenes past nine get none.
+private struct SceneShortcutBadge: ViewModifier {
+    let index: Int
+
+    func body(content: Content) -> some View {
+        if index < 9 {
+            content.keyboardShortcut(KeyEquivalent(Character("\(index + 1)")),
+                                     modifiers: [.command])
+        } else {
+            content
         }
     }
 }

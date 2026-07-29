@@ -44,6 +44,12 @@ final class StudioController {
     }
     /// Entry/exit animation lifecycle per element.
     private var elementAnimations: [UUID: AnimationState] = [:]
+    /// Countdown start per timer element — runtime state; a saved project
+    /// must not resume mid-count. Restarts when the element is shown.
+    private var timerStarts: [UUID: Date] = [:]
+    /// 1 Hz recompile while a visible timer element exists in the active
+    /// scene; nil otherwise so timer-less scenes pay nothing.
+    private var timerTick: DispatchSourceTimer?
     var selectedElementID: UUID?
     var mode: Mode = .live
 
@@ -192,8 +198,10 @@ final class StudioController {
         let plan = RenderPlanCompiler.compile(project: project,
                                               scene: scene,
                                               guests: guests?.guestDescriptors ?? [],
-                                              elementAnimations: elementAnimations)
+                                              elementAnimations: elementAnimations,
+                                              timerTexts: currentTimerTexts(scene: scene))
         engine.publish(plan: plan)
+        updateTimerTick(scene: scene)
         ensureScenePrimarySources(for: scene)
         sourceRegistry?.activate(keys: SourceRegistry.keys(in: plan))
     }
@@ -208,13 +216,15 @@ final class StudioController {
         let guestList = guests?.guestDescriptors ?? []
         let fromPlan = RenderPlanCompiler.compile(project: project, scene: fromScene,
                                                   guests: guestList,
-                                                  elementAnimations: elementAnimations)
+                                                  elementAnimations: elementAnimations,
+                                                  timerTexts: currentTimerTexts(scene: fromScene))
         elementAnimations.removeAll()
         var toProject = project
         toProject.activeSceneID = sceneID
         let toPlan = RenderPlanCompiler.compile(project: toProject, scene: toScene,
                                                 guests: guestList,
-                                                elementAnimations: [:])
+                                                elementAnimations: [:],
+                                                timerTexts: currentTimerTexts(scene: toScene))
 
         // Both scenes' sources must run through the transition window.
         ensureScenePrimarySources(for: toScene)
@@ -305,6 +315,47 @@ final class StudioController {
         }
     }
 
+    // MARK: - Countdown timers
+
+    /// Remaining-time strings for the scene's timer elements, for the plan.
+    private func currentTimerTexts(scene: SceneModel) -> [UUID: String] {
+        var texts: [UUID: String] = [:]
+        for element in scene.elements {
+            guard case .timer(let timer) = element.kind else { continue }
+            let elapsed = timerStarts[element.id].map { Date().timeIntervalSince($0) } ?? 0
+            texts[element.id] = TimerContent.formatted(timer.durationSeconds - elapsed)
+        }
+        return texts
+    }
+
+    private func updateTimerTick(scene: SceneModel) {
+        let hasLiveTimer = scene.elements.contains {
+            if case .timer = $0.kind { return $0.isVisible }
+            return false
+        }
+        if hasLiveTimer, timerTick == nil {
+            let tick = DispatchSource.makeTimerSource(queue: .main)
+            tick.schedule(deadline: .now() + 1, repeating: 1)
+            tick.setEventHandler { [weak self] in
+                // The source fires on the main queue; hop the isolation.
+                MainActor.assumeIsolated {
+                    self?.recompileAndPublish()
+                }
+            }
+            tick.resume()
+            timerTick = tick
+        } else if !hasLiveTimer, let tick = timerTick {
+            tick.cancel()
+            timerTick = nil
+        }
+    }
+
+    /// Starts the countdown over (also what showing a hidden timer does).
+    func restartTimer(id: UUID) {
+        timerStarts[id] = Date()
+        recompileAndPublish()
+    }
+
     // MARK: - Element editing
 
     func findElement(id: UUID) -> Element? {
@@ -328,6 +379,7 @@ final class StudioController {
         guard let sceneIndex = project.scenes.firstIndex(where: { $0.id == project.activeSceneID }) else { return }
         project.scenes[sceneIndex].elements.removeAll { $0.id == id }
         elementAnimations.removeValue(forKey: id)
+        timerStarts.removeValue(forKey: id)
         if selectedElementID == id { selectedElementID = nil }
     }
 
@@ -383,6 +435,30 @@ final class StudioController {
                            kind: .web(WebContent(urlString: "https://example.com")),
                            transform: .fullCanvas,
                            entryAnimation: .styled(.fade)))
+    }
+
+    /// Text with a background box (lower-third style).
+    func addTextBoxElement() {
+        addElement(Element(name: "Text Box",
+                           kind: .text(TextContent(string: "Your text",
+                                                   boxFill: .solid(RGBAColor(red: 0, green: 0, blue: 0, alpha: 0.55)),
+                                                   boxCornerRadius: 0.04)),
+                           transform: ElementTransform(center: CGPoint(x: 0.5, y: 0.8),
+                                                       size: CGSize(width: 0.5, height: 0.14)),
+                           fill: .solid(.white),
+                           entryAnimation: .styled(.slideFromBottom)))
+    }
+
+    /// Countdown overlay; the count starts the moment it's added.
+    func addTimerElement() {
+        let element = Element(name: "Timer",
+                              kind: .timer(TimerContent()),
+                              transform: ElementTransform(center: CGPoint(x: 0.5, y: 0.5),
+                                                          size: CGSize(width: 0.4, height: 0.22)),
+                              fill: .solid(.white),
+                              entryAnimation: .styled(.fade))
+        timerStarts[element.id] = Date()
+        addElement(element)
     }
 
     /// A camera PiP tile — the host small over a screen share, or a second
@@ -465,6 +541,11 @@ final class StudioController {
         } else {
             elementAnimations[id] = .entering(startSeconds: now)
             element.isVisible = true
+            // Showing a countdown starts it over — the count while hidden
+            // is never what a host means.
+            if case .timer = element.kind {
+                timerStarts[id] = Date()
+            }
         }
         updateElement(element)   // triggers recompile via project.didSet
         // Recompile again after the animation completes to drop exited items.

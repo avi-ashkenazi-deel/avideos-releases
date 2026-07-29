@@ -79,6 +79,7 @@ struct StreamitApp: App {
 /// keypress can never trigger both paths and toggle twice.
 struct StudioCommands: Commands {
     let studio: StudioController
+    @Environment(\.openWindow) private var openWindow
 
     /// Sidebar positions that get a ⌘N shortcut (the first nine scenes).
     private var sceneMenuIndices: Range<Int> {
@@ -103,6 +104,16 @@ struct StudioCommands: Commands {
         }
 
         CommandMenu("Studio") {
+            // The functional twin of the scene popup's first row — a view
+            // menu's shortcuts only fire while it is open; this one is live
+            // whenever the app is.
+            Button("Show Scenes Window") {
+                openWindow(id: "palette", value: PaletteKind.scenes)
+            }
+            .keyboardShortcut("\\", modifiers: [.command])
+
+            Divider()
+
             Button(studio.isRecording ? "Stop Recording" : "Start Recording") {
                 studio.toggleRecording()
             }

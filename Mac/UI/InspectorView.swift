@@ -77,6 +77,18 @@ struct InspectorView: View {
                     textEditor(element, content: content)
                 }
 
+                if case .shape(let content) = element.kind {
+                    shapeEditor(element, content: content)
+                }
+
+                if case .timer(let content) = element.kind {
+                    timerEditor(element, content: content)
+                }
+
+                if case .source = element.kind {
+                    tileShapeEditor(element)
+                }
+
                 if case .web(let content) = element.kind {
                     // The one property a web overlay has, previously settable
                     // nowhere — every web element was stuck on its placeholder.
@@ -232,6 +244,138 @@ struct InspectorView: View {
                     studio.updateElement(updated)
                 }
             ), range: 12...240)
+
+            // The "text box" look: a painted box behind the glyphs.
+            Toggle("Background box", isOn: Binding(
+                get: { content.boxFill != nil },
+                set: { on in
+                    updateText(element, content) { text in
+                        text.boxFill = on ? .solid(RGBAColor(red: 0, green: 0, blue: 0, alpha: 0.55)) : nil
+                    }
+                }
+            ))
+            if let boxFill = content.boxFill {
+                FillEditor(title: "Box Fill", fill: Binding(
+                    get: { boxFill },
+                    set: { newFill in
+                        updateText(element, content) { $0.boxFill = newFill }
+                    }
+                ))
+                LabeledSlider(label: "Box Radius", value: Binding(
+                    get: { content.boxCornerRadius ?? 0.04 },
+                    set: { newValue in
+                        updateText(element, content) { $0.boxCornerRadius = newValue }
+                    }
+                ), range: 0...0.3)
+            }
+        }
+    }
+
+    private func updateText(_ element: Element, _ content: TextContent,
+                            _ mutate: (inout TextContent) -> Void) {
+        var updated = element
+        var text = content
+        mutate(&text)
+        updated.kind = .text(text)
+        studio.updateElement(updated)
+    }
+
+    /// Shape controls — the picker and radius Ecamm shows for a shape overlay.
+    private func shapeEditor(_ element: Element, content: ShapeContent) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Shape").font(.headline)
+            Picker("Shape", selection: Binding(
+                get: { content.shape },
+                set: { newShape in
+                    var updated = element
+                    var shape = content
+                    shape.shape = newShape
+                    updated.kind = .shape(shape)
+                    studio.updateElement(updated)
+                }
+            )) {
+                Text("Rectangle").tag(ShapeContent.Shape.rectangle)
+                Text("Rounded Rectangle").tag(ShapeContent.Shape.roundedRectangle)
+                Text("Ellipse").tag(ShapeContent.Shape.ellipse)
+                Text("Line").tag(ShapeContent.Shape.line)
+            }
+            if content.shape == .roundedRectangle {
+                LabeledSlider(label: "Radius", value: Binding(
+                    get: { content.cornerRadius },
+                    set: { newValue in
+                        var updated = element
+                        var shape = content
+                        shape.cornerRadius = newValue
+                        updated.kind = .shape(shape)
+                        studio.updateElement(updated)
+                    }
+                ), range: 0...0.3)
+            }
+        }
+    }
+
+    /// Countdown controls: duration, size, restart.
+    private func timerEditor(_ element: Element, content: TimerContent) -> some View {
+        let minutes = Int(content.durationSeconds) / 60
+        let seconds = Int(content.durationSeconds) % 60
+
+        func setDuration(minutes: Int, seconds: Int) {
+            var updated = element
+            var timer = content
+            timer.durationSeconds = Double(max(0, minutes) * 60 + max(0, seconds))
+            updated.kind = .timer(timer)
+            studio.updateElement(updated)
+            studio.restartTimer(id: element.id)
+        }
+
+        return VStack(alignment: .leading, spacing: 6) {
+            Text("Countdown").font(.headline)
+            HStack {
+                Stepper("\(minutes) min", value: Binding(
+                    get: { minutes },
+                    set: { setDuration(minutes: $0, seconds: seconds) }
+                ), in: 0...180)
+                Stepper("\(seconds) sec", value: Binding(
+                    get: { seconds },
+                    set: { setDuration(minutes: minutes, seconds: $0) }
+                ), in: 0...59)
+            }
+            LabeledSlider(label: "Size", value: Binding(
+                get: { content.fontSize },
+                set: { newSize in
+                    var updated = element
+                    var timer = content
+                    timer.fontSize = newSize
+                    updated.kind = .timer(timer)
+                    studio.updateElement(updated)
+                }
+            ), range: 24...400)
+            Button("Restart Countdown") {
+                studio.restartTimer(id: element.id)
+            }
+        }
+    }
+
+    /// Tile shape for camera/guest insets — aspect preset + mask.
+    private func tileShapeEditor(_ element: Element) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Tile Shape").font(.headline)
+            Picker("Shape", selection: Binding(
+                get: { element.tileShape ?? .wide },
+                set: { newShape in
+                    var updated = element
+                    updated.tileShape = newShape
+                    // The preset rewrites the tile's aspect around its width.
+                    let canvas = studio.project.canvasSize
+                    updated.transform.size.height = updated.transform.size.width
+                        * (canvas.width / canvas.height) / newShape.aspect
+                    studio.updateElement(updated)
+                }
+            )) {
+                ForEach(SourceTileShape.allCases, id: \.self) { shape in
+                    Text(shape.displayName).tag(shape)
+                }
+            }
         }
     }
 
@@ -405,7 +549,7 @@ struct InspectorView: View {
 
     private func isFillable(_ element: Element) -> Bool {
         switch element.kind {
-        case .text, .shape: true
+        case .text, .shape, .timer: true
         default: false
         }
     }

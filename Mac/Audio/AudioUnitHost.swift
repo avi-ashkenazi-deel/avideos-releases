@@ -136,11 +136,11 @@ final class AudioUnitHost {
                 if let viewController {
                     content = viewController
                 } else {
-                    let fallback = NSViewController()
-                    let label = NSTextField(labelWithString: "\(title) has no custom editor.\nUse the macro knob, or edit in another host.")
-                    label.alignment = .center
-                    fallback.view = label
-                    content = fallback
+                    // No custom editor — CoreAudioKit's generic parameter
+                    // list, the same fallback Logic and Ecamm show.
+                    let generic = AUGenericViewController()
+                    generic.auAudioUnit = node.auAudioUnit
+                    content = generic
                 }
                 let window = NSWindow(contentViewController: content)
                 window.title = title

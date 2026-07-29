@@ -173,26 +173,42 @@ private struct InsertChainView: View {
     }
 
     private var addMenu: some View {
+        // Quick built-ins first, then the full AU catalog grouped by
+        // manufacturer (Apple's AUGraphicEQ/AUDistortion/… included), the way
+        // Ecamm's Add Plugin reads. Every added unit opens its own native
+        // plug-in window from the row.
         Menu {
-            Button("Compressor") { audio.addInsert(kind: .compressor, to: strip) }
-            Button("EQ") { audio.addInsert(kind: .eq, to: strip) }
-            Button("Delay") { audio.addInsert(kind: .delay, to: strip) }
-            Button("Reverb") { audio.addInsert(kind: .reverb, to: strip) }
-            if !thirdPartyEffects.isEmpty {
-                Menu("Audio Units…") {
-                    ForEach(thirdPartyEffects) { component in
-                        Button("\(component.name) — \(component.manufacturerName)") {
+            Section("Quick") {
+                Button("Compressor") { audio.addInsert(kind: .compressor, to: strip) }
+                Button("EQ") { audio.addInsert(kind: .eq, to: strip) }
+                Button("Delay") { audio.addInsert(kind: .delay, to: strip) }
+                Button("Reverb") { audio.addInsert(kind: .reverb, to: strip) }
+            }
+            ForEach(manufacturers, id: \.self) { manufacturer in
+                Menu(manufacturer) {
+                    ForEach(thirdPartyEffects.filter { $0.manufacturerName == manufacturer }) { component in
+                        Button(component.name) {
                             audio.addThirdPartyInsert(component: component, to: strip)
                         }
                     }
                 }
             }
         } label: {
-            Label("Add", systemImage: "plus")
+            Label("Add Plugin", systemImage: "plus")
                 .font(.caption)
         }
         .menuStyle(.borderlessButton)
         .fixedSize()
+    }
+
+    /// Apple first, then everyone else alphabetically.
+    private var manufacturers: [String] {
+        let names = Set(thirdPartyEffects.map(\.manufacturerName))
+        return names.sorted { a, b in
+            if a == "Apple" { return true }
+            if b == "Apple" { return false }
+            return a.localizedCaseInsensitiveCompare(b) == .orderedAscending
+        }
     }
 }
 
@@ -200,11 +216,6 @@ private struct InsertRow: View {
     @Environment(AudioEngineController.self) private var audio
     let strip: AudioEngineController.StripID
     let insert: AudioEngineController.InsertEffect
-
-    private var isThirdParty: Bool {
-        if case .thirdParty = insert.kind { return true }
-        return false
-    }
 
     private var isEQ: Bool {
         if case .eq = insert.kind { return true }
@@ -244,17 +255,17 @@ private struct InsertRow: View {
             }
             .opacity(insert.bypassed ? 0.45 : 1)
 
-            if isThirdParty {
-                Button {
-                    audio.showPluginUI(insertID: insert.id, strip: strip)
-                } label: {
-                    Image(systemName: "macwindow")
-                        .font(.system(size: 10))
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
-                .help("Open plug-in window")
+            // Every insert opens its native AU window (Ecamm-style) — the
+            // four quick built-ins included; they're Apple AUs underneath.
+            Button {
+                audio.showPluginUI(insertID: insert.id, strip: strip)
+            } label: {
+                Image(systemName: "macwindow")
+                    .font(.system(size: 10))
             }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            .help("Open plug-in window")
 
             Button {
                 audio.removeInsert(id: insert.id, from: strip)

@@ -119,10 +119,13 @@ enum RenderPlanCompiler {
     /// Compiles the active scene into a plan. `elementAnimations` carries the
     /// runtime show/hide state keyed by element ID (managed by SceneRuntime);
     /// elements absent from the map are `.resting`.
+    /// `timerTexts` carries the current countdown string per timer element —
+    /// runtime state the document doesn't hold (StudioController ticks it).
     static func compile(project: Project,
                         scene: SceneModel,
                         guests: [GuestDescriptor],
-                        elementAnimations: [UUID: AnimationState]) -> RenderPlan {
+                        elementAnimations: [UUID: AnimationState],
+                        timerTexts: [UUID: String] = [:]) -> RenderPlan {
         var items: [RenderItem] = []
 
         // 1. The scene's primary content fills the canvas underneath overlays.
@@ -135,7 +138,9 @@ enum RenderPlanCompiler {
             if !element.isVisible {
                 guard case .exiting = state else { continue }
             }
-            items.append(item(for: element, state: state ?? .resting))
+            items.append(contentsOf: items(for: element,
+                                           state: state ?? .resting,
+                                           timerTexts: timerTexts))
         }
 
         return RenderPlan(canvasSize: project.canvasSize,
@@ -143,12 +148,32 @@ enum RenderPlanCompiler {
                           backgroundColor: .black)
     }
 
-    private static func item(for element: Element, state: AnimationState) -> RenderItem {
+    /// One element usually compiles to one item; a boxed text compiles to a
+    /// background shape item plus the glyph item on top (same transform, same
+    /// animation, so they move as one).
+    private static func items(for element: Element,
+                              state: AnimationState,
+                              timerTexts: [UUID: String]) -> [RenderItem] {
         let content: RenderContent
         var cornerRadius = 0.0
+        var background: RenderItem?
 
         switch element.kind {
         case .text(let text):
+            content = .text(text, color: element.fill ?? .solid(.white))
+            if let boxFill = text.boxFill {
+                background = boxItem(for: element,
+                                     fill: boxFill,
+                                     cornerRadius: text.boxCornerRadius ?? 0.04,
+                                     state: state)
+            }
+        case .timer(let timer):
+            // A countdown is text whose string the studio ticks per second.
+            let string = timerTexts[element.id] ?? TimerContent.formatted(timer.durationSeconds)
+            let text = TextContent(string: string,
+                                   fontName: timer.fontName,
+                                   fontSize: timer.fontSize,
+                                   alignment: .center)
             content = .text(text, color: element.fill ?? .solid(.white))
         case .shape(let shape):
             content = .fill(element.fill ?? .solid(.white))
@@ -162,19 +187,57 @@ enum RenderPlanCompiler {
             content = .source(sourceKey: .web(elementID: element.id))
         case .source(let binding):
             content = .source(sourceKey: sourceKey(for: binding))
-            cornerRadius = 0.01
+            cornerRadius = element.tileShape?.cornerRadius ?? 0.01
         }
 
-        return RenderItem(id: element.id,
-                          transitionKey: element.transitionKey,
-                          content: content,
-                          transform: element.transform,
-                          blendMode: element.blendMode,
-                          effects: element.effects,
-                          stroke: element.stroke,
-                          cornerRadius: cornerRadius,
-                          entryAnimation: element.entryAnimation,
-                          animation: state)
+        var item = RenderItem(id: element.id,
+                              transitionKey: element.transitionKey,
+                              content: content,
+                              transform: element.transform,
+                              blendMode: element.blendMode,
+                              effects: element.effects,
+                              // A boxed text's stroke borders the BOX, not the
+                              // glyph quad.
+                              stroke: background == nil ? element.stroke : nil,
+                              cornerRadius: cornerRadius,
+                              entryAnimation: element.entryAnimation,
+                              animation: state)
+        // A PiP tile covers its frame (a circle mask over letterboxing reads
+        // as a bug); scene primaries manage their own framing elsewhere.
+        if case .source = element.kind {
+            item.presentation.fit = .fill
+        }
+        if let background {
+            return [background, item]
+        }
+        return [item]
+    }
+
+    /// The text-box background: same footprint as the text item, painted with
+    /// the box fill, carrying the element's stroke.
+    private static func boxItem(for element: Element,
+                                fill: Fill,
+                                cornerRadius: Double,
+                                state: AnimationState) -> RenderItem {
+        RenderItem(id: textBoxID(for: element.id),
+                   transitionKey: element.transitionKey + ":box",
+                   content: .fill(fill),
+                   transform: element.transform,
+                   blendMode: element.blendMode,
+                   effects: EffectChain(),
+                   stroke: element.stroke,
+                   cornerRadius: cornerRadius,
+                   entryAnimation: element.entryAnimation,
+                   animation: state)
+    }
+
+    /// Deterministic sibling id for a text element's box item — stable across
+    /// recompiles, never equal to the element's own id (same trick as
+    /// `backdropID`).
+    static func textBoxID(for elementID: UUID) -> UUID {
+        var bytes = elementID.uuid
+        bytes.0 = bytes.0 ^ 0xFF
+        return UUID(uuid: bytes)
     }
 
     private static func sourceKey(for binding: SourceBinding) -> SourceKey {

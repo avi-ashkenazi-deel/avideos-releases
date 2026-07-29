@@ -30,6 +30,25 @@ trimmed length, a progress fill sweeping the row, and a gear popover editing
 in/out points (`SoundPad.trimStart/trimEnd`, Optional for settings-decode
 compatibility; `SoundPadPlayer` slices the pre-decoded buffer at fire time).
 
+Fifth pass — Ecamm parity round, from Avi's side-by-side screenshots. The
+scene popup matches theirs: "Show Scenes Window" (⌘\, also a real menu-bar
+command) above the scene list with ⌘1…⌘9 badges. The overlay add-row now
+reads like Ecamm's: text, **text box** (new: `TextContent.boxFill` — the
+plan compiles a background shape item under the glyph item, same transform
+and animation, stroke moves to the box), shape, image, video, **countdown
+timer** (new `ElementKind.timer`: renders as text the studio re-ticks at
+1 Hz via a `timerTexts` map into the plan compiler; the count restarts when
+the element is shown; duration/size/restart in the inspector), browser, and
+camera. The inspector got kind-aware sections: shape picker + radius for
+shapes, box controls for text, countdown controls for timers, and a **tile
+shape** picker for camera/guest insets (Wide/Classic/Square/Circle/Squircle/
+Tall — aspect preset rewrites the transform, circle uses the existing
+ellipse-mask sentinel, and source tiles now render `.fill`). Audio effects
+load the Ecamm way: the insert Add menu lists the full AU catalog grouped
+by manufacturer (Apple's AUGraphicEQ/AUDistortion included), every insert
+row opens its native plug-in window, and units without a custom view get
+CoreAudioKit's generic parameter editor instead of a shrug label.
+
 Fourth pass, live-testing fallout. **Playing any pad crashed**: the trim
 slice computed its end frame as `(end ?? .greatestFiniteMagnitude) × rate`
 converted to `AVAudioFramePosition` — out of Int64 range for every

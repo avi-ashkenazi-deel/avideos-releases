@@ -255,6 +255,7 @@ private struct OverlayRow: View {
         case .video: "film"
         case .web: "globe"
         case .source: "camera"
+        case .timer: "timer"
         }
     }
 
@@ -302,15 +303,19 @@ struct AddElementButtons: View {
     var body: some View {
         HStack {
             Button { studio.addTextElement() } label: { Image(systemName: "textformat") }
-                .help("Add text")
+                .help("New Text Overlay")
+            Button { studio.addTextBoxElement() } label: { Image(systemName: "character.textbox") }
+                .help("New Text Box Overlay")
             Button { studio.addShapeElement() } label: { Image(systemName: "square.on.circle") }
-                .help("Add shape")
+                .help("New Shape Overlay")
             Button { addMedia(images: true) } label: { Image(systemName: "photo") }
-                .help("Add image")
+                .help("New Image Overlay")
             Button { addMedia(images: false) } label: { Image(systemName: "film") }
-                .help("Add video")
+                .help("New Video Overlay")
+            Button { studio.addTimerElement() } label: { Image(systemName: "timer") }
+                .help("New Countdown Overlay")
             Button { studio.addWebElement() } label: { Image(systemName: "globe") }
-                .help("Add web page")
+                .help("New Browser Overlay")
             // Camera / guest PiP tiles — the host small over a screen share.
             Menu {
                 Section("Cameras") {
@@ -336,7 +341,7 @@ struct AddElementButtons: View {
             }
             .menuStyle(.borderlessButton)
             .fixedSize()
-            .help("Add a camera or guest tile")
+            .help("New Camera Overlay")
         }
         .buttonStyle(.borderless)
     }
