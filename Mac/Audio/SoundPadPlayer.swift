@@ -193,10 +193,13 @@ final class SoundPadPlayer {
     /// Returns nil when the pad has no trim (or the trim is degenerate), so
     /// the caller falls back to the original with no copy at all.
     private func trimmed(_ buffer: AVAudioPCMBuffer, start: Double?, end: Double?) -> AVAudioPCMBuffer? {
+        guard start != nil || end != nil else { return nil }
         let rate = buffer.format.sampleRate
         let fullFrames = AVAudioFramePosition(buffer.frameLength)
-        let startFrame = AVAudioFramePosition((max(start ?? 0, 0)) * rate)
-        let endFrame = min(AVAudioFramePosition((end ?? .greatestFiniteMagnitude) * rate), fullFrames)
+        let startFrame = AVAudioFramePosition(max(start ?? 0, 0) * rate)
+        // No sentinel arithmetic here: converting a huge Double through
+        // AVAudioFramePosition traps (it crashed the first pad ever played).
+        let endFrame = end.map { min(AVAudioFramePosition($0 * rate), fullFrames) } ?? fullFrames
         guard startFrame > 0 || endFrame < fullFrames else { return nil }
         guard endFrame > startFrame, startFrame < fullFrames else { return nil }
 
