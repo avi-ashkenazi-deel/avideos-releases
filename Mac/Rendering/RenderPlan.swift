@@ -138,9 +138,9 @@ enum RenderPlanCompiler {
             if !element.isVisible {
                 guard case .exiting = state else { continue }
             }
-            items.append(contentsOf: items(for: element,
-                                           state: state ?? .resting,
-                                           timerTexts: timerTexts))
+            items.append(contentsOf: renderItems(for: element,
+                                                 state: state ?? .resting,
+                                                 timerTexts: timerTexts))
         }
 
         return RenderPlan(canvasSize: project.canvasSize,
@@ -151,9 +151,9 @@ enum RenderPlanCompiler {
     /// One element usually compiles to one item; a boxed text compiles to a
     /// background shape item plus the glyph item on top (same transform, same
     /// animation, so they move as one).
-    private static func items(for element: Element,
-                              state: AnimationState,
-                              timerTexts: [UUID: String]) -> [RenderItem] {
+    private static func renderItems(for element: Element,
+                                    state: AnimationState,
+                                    timerTexts: [UUID: String]) -> [RenderItem] {
         let content: RenderContent
         var cornerRadius = 0.0
         var background: RenderItem?
