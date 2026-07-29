@@ -1,6 +1,7 @@
 import Foundation
 import AppKit
 import AVFoundation
+import CoreImage
 import CoreMedia
 import CoreVideo
 import ImageIO
@@ -122,6 +123,7 @@ final class StudioController {
         // After audio, since every MIDI action lands on the audio facade.
         midi.start(audio: audio)
         virtualCamera.connectSinkIfNeeded()
+        startThumbnailTimer()
     }
 
     private func wireSubsystems() {
@@ -215,6 +217,9 @@ final class StudioController {
               let engine = renderEngine,
               let fromScene = project.activeScene,
               let toScene = project.scenes.first(where: { $0.id == sceneID }) else { return }
+
+        // Freeze the outgoing scene's last look for its palette tile.
+        captureActiveSceneThumbnail()
 
         let guestList = guests?.guestDescriptors ?? []
         let fromPlan = RenderPlanCompiler.compile(project: project, scene: fromScene,
@@ -391,6 +396,49 @@ final class StudioController {
             .openInteractiveWindow(title: findElement(id: id)?.name ?? "Browser")
     }
 
+    // MARK: - Scene thumbnails ("what it looked like last time")
+
+    /// The last rendered look of each scene, for the Scenes palette. Runtime
+    /// state — never persisted.
+    private(set) var sceneThumbnails: [UUID: CGImage] = [:]
+    private var thumbnailTimer: DispatchSourceTimer?
+
+    /// Refreshes the ACTIVE scene's thumbnail every few seconds; scene
+    /// switches also capture the outgoing look, so inactive tiles show the
+    /// scene as it last appeared on program.
+    private func startThumbnailTimer() {
+        guard thumbnailTimer == nil else { return }
+        let timer = DispatchSource.makeTimerSource(queue: .main)
+        timer.schedule(deadline: .now() + 2, repeating: 3)
+        timer.setEventHandler { [weak self] in
+            MainActor.assumeIsolated {
+                self?.captureActiveSceneThumbnail()
+            }
+        }
+        timer.resume()
+        thumbnailTimer = timer
+    }
+
+    private func captureActiveSceneThumbnail() {
+        guard let sceneID = project.activeSceneID,
+              let buffer = previewStore.latestPixelBuffer else { return }
+        Task.detached(priority: .utility) { [weak self] in
+            guard let image = Self.thumbnail(from: buffer) else { return }
+            await MainActor.run {
+                self?.sceneThumbnails[sceneID] = image
+            }
+        }
+    }
+
+    /// ~320px-wide CGImage from a program pixel buffer, off the main thread.
+    nonisolated private static func thumbnail(from buffer: CVPixelBuffer) -> CGImage? {
+        let image = CIImage(cvPixelBuffer: buffer)
+        guard image.extent.width > 0 else { return nil }
+        let scale = 320 / image.extent.width
+        let scaled = image.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+        return sceneThumbnailContext.createCGImage(scaled, from: scaled.extent)
+    }
+
     // MARK: - Shape & Size (program format)
 
     /// Applies a new canvas size / frame rate to the RUNNING studio — the
@@ -481,19 +529,18 @@ final class StudioController {
         }
     }
 
-    /// Duplicates a scene (fresh ids so animations, sources and transition
-    /// matching treat it as its own thing) and switches to the copy.
+    /// Duplicates a scene and switches to the copy. Elements KEEP their ids
+    /// on purpose: `Element.transitionKey` falls back to the element id, so
+    /// shared ids are what make magic move match a text/shape/image across
+    /// the original and the copy — move a title in the copy and switching
+    /// glides it there instead of fading it out and in. (Per-scene runtime
+    /// state doesn't collide: elementAnimations clears on every switch.)
     func duplicateScene(id: UUID) {
         guard let index = project.scenes.firstIndex(where: { $0.id == id }) else { return }
         var copy = project.scenes[index]
         copy.id = UUID()
         copy.name += " Copy"
         copy.shortcutNumber = nil
-        copy.elements = copy.elements.map { element in
-            var duplicated = element
-            duplicated.id = UUID()
-            return duplicated
-        }
         project.scenes.insert(copy, at: index + 1)
         project.activeSceneID = copy.id
     }
@@ -880,6 +927,7 @@ final class StudioController {
 final class PreviewFrameStore: ProgramFrameConsumer {
     private let lock = NSLock()
     private var texture: MTLTexture?
+    private var pixelBuffer: CVPixelBuffer?
 
     var latestTexture: MTLTexture? {
         lock.lock()
@@ -887,12 +935,25 @@ final class PreviewFrameStore: ProgramFrameConsumer {
         return texture
     }
 
+    /// The latest program frame as a pixel buffer — scene thumbnails read it.
+    var latestPixelBuffer: CVPixelBuffer? {
+        lock.lock()
+        defer { lock.unlock() }
+        return pixelBuffer
+    }
+
     func consumeProgramFrame(_ pixelBuffer: CVPixelBuffer, texture: MTLTexture, at time: CMTime) {
         lock.lock()
         self.texture = texture
+        self.pixelBuffer = pixelBuffer
         lock.unlock()
     }
 }
+
+/// Shared by scene-thumbnail rendering (CIContext is thread-safe; a file
+/// global keeps it out of StudioController's main-actor isolation, which
+/// statics inherit).
+private let sceneThumbnailContext = CIContext(options: [.cacheIntermediates: false])
 
 /// Pushes program frames into the camera extension's sink stream.
 final class VirtualCameraFrameConsumer: ProgramFrameConsumer {

@@ -261,6 +261,22 @@ enum RenderPlanCompiler {
         }
     }
 
+    /// Transition identity for a source key — the SAME namespace
+    /// `Element.transitionKey` uses for source elements and the interview
+    /// tiles use, so a scene's full-screen camera matches that camera's PiP
+    /// tile (or interview tile) in the next scene and GLIDES there instead
+    /// of cutting. This used to be a private "primary:…" namespace, which is
+    /// why magic move never matched primaries to anything.
+    private static func transitionKey(for key: SourceKey) -> String {
+        switch key {
+        case .camera(let uid): "camera:\(uid ?? "default")"
+        case .display(let id): "display:\(id)"
+        case .window(let id): "window:\(id)"
+        case .guest(let identity): "guest:\(identity)"
+        default: "source:\(key)"
+        }
+    }
+
     /// The scene's primary content: one full-canvas item for camera/screen/
     /// movie scenes; a computed tile layout for interview scenes.
     private static func primaryItems(for scene: SceneModel,
@@ -340,7 +356,7 @@ enum RenderPlanCompiler {
                                     cornerRadius: Double = 0,
                                     transitionKeySuffix: String = "") -> RenderItem {
         RenderItem(id: scene.id,
-                   transitionKey: "primary:\(key)\(transitionKeySuffix)",
+                   transitionKey: Self.transitionKey(for: key) + transitionKeySuffix,
                    content: .source(sourceKey: key),
                    transform: transform,
                    blendMode: .normal,

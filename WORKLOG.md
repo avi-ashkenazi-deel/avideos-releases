@@ -30,6 +30,22 @@ trimmed length, a progress fill sweeping the row, and a gear popover editing
 in/out points (`SoundPad.trimStart/trimEnd`, Optional for settings-decode
 compatibility; `SoundPadPlayer` slices the pre-decoded buffer at fire time).
 
+Tenth pass — magic move made real, and the Scenes palette got its previews.
+The transition engine was always capable of gliding matched items; nothing
+ever MATCHED, because scene primaries carried a private "primary:…"
+transition key while camera/guest tiles use "camera:<uid>"/"guest:<id>".
+Primaries now share that namespace, so a full-screen camera glides into its
+PiP tile (or interview tile) in the next scene — position, size and corner
+radius interpolate, which is exactly the full-screen → half-screen → little
+circle ask. `duplicateScene` keeps element ids for the same reason: the id
+is the fallback transition key, so a title moved in the copy glides instead
+of fading out and in. Scenes: every row/tile shows the scene's last program
+look (3 s refresh of the active scene + a capture on every switch-away,
+CIContext downscale off-main from the preview's pixel buffer), with Ecamm's
+list/grid display toggle and the ⌘N badge in both modes. And the on-video
+scene popup shows exactly one chevron (`menuIndicator(.hidden)` — the menu
+style was drawing a second one).
+
 Ninth pass — Ecamm-style Preferences, planned against a real trace of how
 canvas size and frame rate propagate. The enabler:
 `RenderEngine.reconfigure` (pool.configure + the long-unused `flush()` hook

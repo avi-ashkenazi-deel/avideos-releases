@@ -94,7 +94,7 @@ struct PaletteWindowContent: View {
         switch kind {
         case .scenes:
             SceneListView()
-                .frame(height: 360)
+                .frame(height: 460)   // tall enough for a few grid tiles
         case .overlays:
             OverlaysPalette(openInspector: {
                 openWindow(id: "palette", value: PaletteKind.inspector)

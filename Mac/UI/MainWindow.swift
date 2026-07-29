@@ -125,6 +125,9 @@ private struct StudioLayout: View {
             .background(.ultraThinMaterial, in: Capsule())
         }
         .menuStyle(.borderlessButton)
+        // One chevron, ours, on the right — the menu style draws its own
+        // indicator too, which doubled it.
+        .menuIndicator(.hidden)
         .fixedSize()
     }
 
