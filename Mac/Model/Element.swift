@@ -49,10 +49,19 @@ struct Element: Codable, Hashable, Sendable, Identifiable {
     }
 
     /// Identity used by the scene-transition engine to match "the same thing"
-    /// across two scenes so it can glide instead of cut: explicit element id
-    /// wins, else the source binding (e.g. the same guest's tile in two
-    /// layouts), else nothing matches and entry/exit animations play.
+    /// across two scenes so it can glide instead of cut. Content beats
+    /// identity where content IS the identity: the same image file in two
+    /// scenes is the same picture wherever it came from, so it matches by
+    /// path and glides — element ids only break the tie for text/shapes
+    /// (same id = a duplicated scene's sibling), with the engine's
+    /// proximity pass catching the rest.
     var transitionKey: String {
+        switch kind {
+        case .image(let media): return "image:\(media.path)"
+        case .video(let content): return "video:\(content.media.path)"
+        case .web(let content): return "web:\(content.urlString)"
+        default: break
+        }
         if case .source(let binding) = kind {
             switch binding {
             case .camera(let uid): return "camera:\(uid)"

@@ -30,6 +30,19 @@ trimmed length, a progress fill sweeping the row, and a gear popover editing
 in/out points (`SoundPad.trimStart/trimEnd`, Optional for settings-decode
 compatibility; `SoundPadPlayer` slices the pre-decoded buffer at fire time).
 
+Eleventh pass — magic move made SMART, not just possible. Identity-only
+matching still faded Avi's photo out and in ("that's not smart"). Two
+changes. Content now beats identity where content IS identity:
+`Element.transitionKey` keys images/videos by media path and web overlays
+by URL, so the same picture in two scenes glides between its positions no
+matter how the scenes were made. And the engine gained a second matching
+pass: leftover items of the same content class (text↔text, shape↔shape,
+image↔image) pair with the nearest unclaimed sibling by center distance —
+so a lower-third that exists in both scenes stays put and swaps its words
+in place instead of fading through black. Live sources are excluded from
+proximity pairing on purpose (two different cameras must never morph); the
+key pass already matched those.
+
 Tenth pass — magic move made real, and the Scenes palette got its previews.
 The transition engine was always capable of gliding matched items; nothing
 ever MATCHED, because scene primaries carried a private "primary:…"
