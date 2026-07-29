@@ -104,10 +104,60 @@ layer`, that is git transport rather than anything in this repo:
 
 **libASPL is not an SPM package** — it is a CMake C++ library with no
 `Package.swift`, so listing it under `packages:` makes dependency resolution
-fail for the *whole project*, app and tests included. It has to be vendored:
-add it as a submodule under `driver/vendor/libASPL` and add its sources and
-header path to the `StreamitAudioDriver` target. Until that is done that one
-target does not build, and nothing else is affected.
+fail for the *whole project*, app and tests included. It is **vendored as a
+git submodule** at `driver/vendor/libASPL`, compiled directly into the
+`StreamitAudioDriver` target (its generated sources are committed upstream,
+so no CMake step). Fresh or existing clones need:
+
+```bash
+git submodule update --init
+```
+
+## Testing the virtual camera and virtual microphone
+
+The everyday dev build excludes both, so this is its own session. Both need
+your PAID Apple Developer team (free personal teams cannot run system
+extensions).
+
+**Virtual camera** (doesn't need the driver):
+
+```bash
+git submodule update --init      # once
+./scripts/dev-app-only.sh --camera   # extension IN, driver out, real entitlements
+open Streamit.xcodeproj
+```
+
+1. In Xcode signing settings, select your team on BOTH `Streamit` and
+   `CameraExtension`. The extension inherits the restricted
+   `system-extension.install` entitlement via the app's provisioning profile.
+2. One-time: `systemextensionsctl developer on` (lets extensions activate
+   from Xcode's build folder instead of /Applications).
+3. Run the app → Setup palette → Install Camera Extension → approve in
+   System Settings › General › Login Items & Extensions.
+4. Test in Photo Booth first (pickiest), then Zoom: pick "streamit Camera".
+   With the app closed you should see the branded splash card; running, the
+   live program. Try a Square program shape too — the format list covers it,
+   but non-16:9 forwarding carries a `verify on Mac:` marker.
+
+**Virtual microphone** (libASPL now vendored, so the driver target builds):
+
+```bash
+./scripts/dev-app-only.sh --restore   # full spec: extension + driver
+open Streamit.xcodeproj               # build; driver lands in app Resources
+```
+
+1. Run the app → Setup palette → Install Virtual Mic (admin prompt; blips
+   ALL system audio for about a second — coreaudiod restarts).
+2. `system_profiler SPAudioDataType | grep -A4 streamit` should list
+   "streamit Microphone" and "streamit Guest Send".
+3. QuickTime: New Audio Recording from "streamit Microphone" while you talk
+   and play a sound pad — the recording should carry the full program mix.
+4. Zoom: pick "streamit Microphone" as the mic. The mix-minus check needs a
+   guest connected: they should hear you and the music, never themselves.
+
+If the driver misbehaves, `log show --predicate 'process == "coreaudiod"'
+--last 5m` is where libASPL hook problems surface — the hook names carry
+`verify on Mac:` markers (first real compile of that target).
 
 ## First-build checklist (things the Linux authoring pass couldn't do)
 

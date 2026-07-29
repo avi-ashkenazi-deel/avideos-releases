@@ -40,10 +40,9 @@ packages:
   # for the whole project — including the app and its tests, which have nothing
   # to do with the driver.
   #
-  # The audio driver needs it vendored instead: add it as a submodule under
-  # driver/vendor/libASPL and add its sources/headers to the
-  # StreamitAudioDriver target. Until that is done, that one target does not
-  # build; everything else does. See docs/DEV_SETUP.md.
+  # It is vendored instead: a git submodule at driver/vendor/libASPL, compiled
+  # straight into the StreamitAudioDriver target (see that target's sources).
+  # Fresh clones need: git submodule update --init
 
 settings:
   base:
@@ -218,7 +217,14 @@ targets:
     platform: macOS
     sources:
       - path: driver/StreamitAudio
-    # No dependencies: libASPL has to be vendored (see the packages note above).
+      # libASPL is vendored as a git submodule (driver/vendor/libASPL) — it
+      # is CMake-based with no Package.swift, so it can't be an SPM package
+      # (see the packages note above). All its generated sources are
+      # committed upstream, so compiling src/ directly needs no CMake step.
+      # After cloning this repo: git submodule update --init
+      - path: driver/vendor/libASPL/src
+        excludes:
+          - "*.json"
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.aviashkenazi.streamit.audiodriver
@@ -228,6 +234,9 @@ targets:
         GENERATE_INFOPLIST_FILE: NO
         ENABLE_HARDENED_RUNTIME: YES
         CLANG_CXX_LANGUAGE_STANDARD: c++17
+        HEADER_SEARCH_PATHS:
+          - driver/vendor/libASPL/include
+          - driver/vendor/libASPL/src
 
 # Declare schemes explicitly so regenerating the project always keeps a
 # runnable scheme for the app (and the watch) — Xcode's auto-created schemes
