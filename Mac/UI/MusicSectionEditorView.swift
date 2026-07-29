@@ -16,8 +16,14 @@ struct MusicSectionEditorView: View {
 
     @Environment(StudioController.self) private var studio
     @State private var waveforms = WaveformStore()
-    @State private var pointsPerSecond: CGFloat = 12
+    /// nil = fit the whole track to the window, which is what you want the
+    /// moment the sheet opens; a number is an explicit zoom.
+    @State private var zoomScale: CGFloat?
+    @State private var viewportWidth: CGFloat = 760
     @State private var drag: DragState?
+    /// The section keyboard actions act on. Click a band to select it.
+    @State private var selectedSectionID: UUID?
+    @FocusState private var keyboardFocused: Bool
 
     private var audio: AudioEngineController { studio.audio }
     private var track: MusicTrack? { audio.playlist.first { $0.id == trackID } }
@@ -35,6 +41,10 @@ struct MusicSectionEditorView: View {
         case startFlag
         case sectionStart(UUID)
         case sectionEnd(UUID)
+        case sectionBody(UUID, grabOffset: Double)
+        /// Dragging across empty waveform draws a new section — the way you
+        /// actually pick a loop: by eye, across the shape of the music.
+        case creating(anchor: Double, current: Double)
     }
 
     var body: some View {
@@ -47,8 +57,25 @@ struct MusicSectionEditorView: View {
             Divider()
             footer
         }
-        .frame(minWidth: 760, minHeight: 480)
+        .frame(minWidth: 820, minHeight: 520)
+        // Keyboard first: marking up a track is a listen-and-tap job, so the
+        // sheet takes focus and the transport keys work without aiming at a
+        // button. Text fields steal focus while editing, which is correct —
+        // space types a space there.
+        .focusable()
+        .focusEffectDisabled()
+        .focused($keyboardFocused)
+        .onKeyPress(.space) { togglePlay(); return .handled }
+        .onKeyPress(.delete) { deleteSelected(); return .handled }
+        .onKeyPress(.deleteForward) { deleteSelected(); return .handled }
+        .onKeyPress(.escape) { selectedSectionID = nil; return .handled }
+        .onKeyPress(.leftArrow) { nudgeSelected(by: -0.1); return .handled }
+        .onKeyPress(.rightArrow) { nudgeSelected(by: 0.1); return .handled }
+        .onKeyPress(KeyEquivalent("l")) { toggleLoopOnSelected(); return .handled }
+        .onKeyPress(KeyEquivalent("i")) { setSelectedEdgeToPlayhead(start: true); return .handled }
+        .onKeyPress(KeyEquivalent("o")) { setSelectedEdgeToPlayhead(start: false); return .handled }
         .onAppear {
+            keyboardFocused = true
             guard let url = track?.resolve() else { return }
             waveforms.ensurePeaks(url: url,
                                   key: trackID.uuidString,
@@ -60,6 +87,15 @@ struct MusicSectionEditorView: View {
 
     private var header: some View {
         HStack(spacing: 10) {
+            // Same top-left close as the other sheets.
+            Button(action: onClose) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 15))
+                    .foregroundStyle(.red)
+            }
+            .buttonStyle(.studioIconCompact)
+            .help("Close")
+
             VStack(alignment: .leading, spacing: 2) {
                 TextField("Title", text: Binding(
                     get: { track?.title ?? "" },
@@ -83,37 +119,51 @@ struct MusicSectionEditorView: View {
             } label: {
                 Image(systemName: isHostTrack && audio.isPlayingMusic ? "pause.fill" : "play.fill")
             }
-            .help("Author while listening — this drives the real player")
+            .help("Space — author while listening; this drives the real player")
 
-            Button("Drop Marker") { dropMarker() }
+            Button("Mark") { dropMarker() }
                 .keyboardShortcut("m", modifiers: [])
                 .disabled(!isHostTrack)
                 .help("M — drops an open-ended section at the playhead")
 
             Divider().frame(height: 18)
             Button { zoom(by: 1 / 1.6) } label: { Image(systemName: "minus.magnifyingglass") }
-            Button("Fit") { pointsPerSecond = 12 }
+            Button("Fit") { zoomScale = nil }
+                .disabled(zoomScale == nil)
             Button { zoom(by: 1.6) } label: { Image(systemName: "plus.magnifyingglass") }
         }
         .padding(10)
+    }
+
+    /// Points per second actually in use: the explicit zoom, else whatever
+    /// fits the whole track in the window.
+    private var pointsPerSecond: CGFloat {
+        zoomScale ?? fitScale
+    }
+
+    private var fitScale: CGFloat {
+        max(1, viewportWidth / max(CGFloat(duration), 1))
     }
 
     private func zoom(by factor: CGFloat) {
         // Above ~50pt/s the peaks visibly repeat: WaveformStore samples at
         // 50/second and is not re-extracted at higher resolution. Loop points
         // get set by ear and by typed timecode, not by pixel.
-        pointsPerSecond = min(50, max(2, pointsPerSecond * factor))
+        zoomScale = min(50, max(1, pointsPerSecond * factor))
     }
 
     // MARK: Waveform
 
-    private var contentWidth: CGFloat { max(200, CGFloat(duration) * pointsPerSecond) }
+    private var contentWidth: CGFloat {
+        max(viewportWidth, CGFloat(duration) * pointsPerSecond)
+    }
 
     private var waveformStrip: some View {
         ScrollView(.horizontal) {
             Canvas { context, size in
                 drawPeaks(context: context, size: size)
                 drawSectionBands(context: context, size: size)
+                drawCreationBand(context: context, size: size)
                 drawStartFlag(context: context, size: size)
                 drawPlayhead(context: context, size: size)
             }
@@ -122,7 +172,28 @@ struct MusicSectionEditorView: View {
             .gesture(strip)
         }
         .frame(height: 150)
-        .background(Color.black.opacity(0.2))
+        .background(
+            GeometryReader { geo in
+                Color.black.opacity(0.2)
+                    .onAppear { viewportWidth = geo.size.width }
+                    .onChange(of: geo.size.width) { _, width in viewportWidth = width }
+            }
+        )
+    }
+
+    /// The band being dragged out right now, before it exists as a section.
+    private func drawCreationBand(context: GraphicsContext, size: CGSize) {
+        guard case .creating(let anchor, let current) = drag else { return }
+        let lower = min(anchor, current), upper = max(anchor, current)
+        let rect = CGRect(x: x(for: lower), y: 0,
+                          width: max(1, x(for: upper) - x(for: lower)),
+                          height: size.height)
+        context.fill(Path(rect), with: .color(.white.opacity(0.18)))
+        context.stroke(Path(rect), with: .color(.white.opacity(0.8)), lineWidth: 1)
+        context.draw(Text(MusicTimecode.shortString(from: upper - lower))
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.white),
+                     at: CGPoint(x: rect.midX, y: size.height / 2))
     }
 
     private func x(for seconds: Double) -> CGFloat { CGFloat(seconds) * pointsPerSecond }
@@ -161,9 +232,15 @@ struct MusicSectionEditorView: View {
 
             let isPlaying = section.id == audio.playingSectionID
             let isQueued = section.id == audio.queuedSectionID
+            let isSelected = section.id == selectedSectionID
             context.stroke(Path(rect), with: .color(tint.opacity(isPlaying ? 1 : 0.6)),
                            style: StrokeStyle(lineWidth: isPlaying ? 2 : 1,
                                               dash: isQueued ? [4, 3] : []))
+            if isSelected {
+                // Keyboard actions target this one; say so.
+                context.stroke(Path(rect.insetBy(dx: 1.5, dy: 1.5)),
+                               with: .color(.white.opacity(0.9)), lineWidth: 1.5)
+            }
             context.draw(Text(section.name + (isQueued ? " · NEXT" : ""))
                             .font(.system(size: 9, weight: isPlaying ? .bold : .regular))
                             .foregroundStyle(.white),
@@ -199,11 +276,21 @@ struct MusicSectionEditorView: View {
     private var strip: some Gesture {
         DragGesture(minimumDistance: 0)
             .onChanged { value in
+                let time = seconds(forX: value.location.x)
                 // Latch what was grabbed on first touch. Re-hit-testing every
                 // frame is how you end up dragging a neighbour once the edges
                 // cross.
-                if drag == nil { drag = hitTest(at: value.location.x) }
-                apply(drag: drag, to: seconds(forX: value.location.x), commit: false)
+                if drag == nil {
+                    drag = hitTest(at: value.location.x) ?? .creating(anchor: time, current: time)
+                    if case .sectionBody(let id, _) = drag { selectedSectionID = id }
+                    if case .sectionStart(let id) = drag { selectedSectionID = id }
+                    if case .sectionEnd(let id) = drag { selectedSectionID = id }
+                }
+                // The new-section band needs to redraw as it grows; the others
+                // commit on release so the settings debounce isn't hammered.
+                if case .creating(let anchor, _) = drag {
+                    drag = .creating(anchor: anchor, current: time)
+                }
             }
             .onEnded { value in
                 apply(drag: drag, to: seconds(forX: value.location.x), commit: true)
@@ -213,6 +300,8 @@ struct MusicSectionEditorView: View {
 
     private func hitTest(at pointX: CGFloat) -> DragState? {
         let ranges = MusicSection.resolvedRanges(sections, duration: duration)
+        // Edges first: they sit inside a body, and grabbing an edge is the
+        // more precise intent.
         for section in sections {
             guard let range = ranges[section.id] else { continue }
             if abs(pointX - x(for: range.lowerBound)) <= handleSlop { return .sectionStart(section.id) }
@@ -220,6 +309,12 @@ struct MusicSectionEditorView: View {
         }
         if let offset = track?.startOffset, abs(pointX - x(for: offset)) <= handleSlop {
             return .startFlag
+        }
+        // Inside a band: slide the whole section, keeping the grab point.
+        let time = seconds(forX: pointX)
+        for section in sections {
+            guard let range = ranges[section.id], range.contains(time) else { continue }
+            return .sectionBody(section.id, grabOffset: time - range.lowerBound)
         }
         return nil
     }
@@ -241,11 +336,78 @@ struct MusicSectionEditorView: View {
             // explicit one.
             section.end = time
             audio.setSection(section, inTrackID: trackID)
+        case .sectionBody(let id, let grabOffset):
+            guard var section = sections.first(where: { $0.id == id }),
+                  let range = MusicSection.resolvedRanges(sections, duration: duration)[id]
+            else { return }
+            let length = range.upperBound - range.lowerBound
+            let newStart = min(max(time - grabOffset, 0), max(duration - length, 0))
+            section.start = newStart
+            // Moving a band keeps its length, so an explicit end follows; a
+            // derived end stays derived.
+            if section.end != nil { section.end = newStart + length }
+            audio.setSection(section, inTrackID: trackID)
+        case .creating(let anchor, _):
+            let lower = min(anchor, time), upper = max(anchor, time)
+            // A click (rather than a drag) means "put the playhead here",
+            // not "make a zero-length section".
+            guard upper - lower > 0.25 else {
+                audio.musicSeek(to: lower)
+                selectedSectionID = nil
+                return
+            }
+            if let id = audio.addSection(toTrackID: trackID, start: lower, end: upper) {
+                selectedSectionID = id
+            }
         }
     }
 
     private func dropMarker() {
-        _ = audio.dropMarkerAtPlayhead()
+        if let id = audio.dropMarkerAtPlayhead() { selectedSectionID = id }
+    }
+
+    // MARK: Keyboard actions
+
+    private func togglePlay() {
+        if isHostTrack { audio.musicPlayPause() } else { audio.playTrack(id: trackID) }
+    }
+
+    private func deleteSelected() {
+        guard let id = selectedSectionID else { return }
+        audio.removeSection(id: id, fromTrackID: trackID)
+        selectedSectionID = nil
+    }
+
+    private func toggleLoopOnSelected() {
+        guard var section = sections.first(where: { $0.id == selectedSectionID }) else { return }
+        section.loops.toggle()
+        audio.setSection(section, inTrackID: trackID)
+    }
+
+    /// Slides the selected section, keeping its length.
+    private func nudgeSelected(by delta: Double) {
+        guard var section = sections.first(where: { $0.id == selectedSectionID }),
+              let range = MusicSection.resolvedRanges(sections, duration: duration)[section.id]
+        else { return }
+        let length = range.upperBound - range.lowerBound
+        let newStart = min(max(section.start + delta, 0), max(duration - length, 0))
+        section.start = newStart
+        if section.end != nil { section.end = newStart + length }
+        audio.setSection(section, inTrackID: trackID)
+    }
+
+    /// I/O: set the selected section's in or out point to the live playhead —
+    /// the by-ear way to trim a loop while it plays.
+    private func setSelectedEdgeToPlayhead(start: Bool) {
+        guard isHostTrack,
+              var section = sections.first(where: { $0.id == selectedSectionID }) else { return }
+        let time = audio.musicPosition
+        if start {
+            section.start = min(time, (section.end ?? duration) - 0.25)
+        } else {
+            section.end = max(time, section.start + 0.25)
+        }
+        audio.setSection(section, inTrackID: trackID)
     }
 
     // MARK: Table
@@ -253,12 +415,16 @@ struct MusicSectionEditorView: View {
     private var sectionTable: some View {
         List {
             if sections.isEmpty {
-                Text("No sections yet. Play the track and press M to mark one, or use Add Section.")
+                Text("No sections yet — drag across the waveform to make one, or play the track and press M.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
             ForEach(sections) { section in
                 sectionRow(section)
+                    .listRowBackground(section.id == selectedSectionID
+                                       ? Color.accentColor.opacity(0.18) : Color.clear)
+                    .contentShape(Rectangle())
+                    .onTapGesture { selectedSectionID = section.id }
             }
         }
         .listStyle(.inset)
@@ -295,7 +461,15 @@ struct MusicSectionEditorView: View {
                 updated.start = newValue
                 audio.setSection(updated, inTrackID: trackID)
             }
-            timecodeField("End", value: section.end) { newValue in
+            // A nil end means "until the next section (or the end of the
+            // track)" — show that derived time greyed out instead of the bare
+            // word "End", which read like a broken field.
+            TimecodeField(
+                label: "End",
+                value: section.end,
+                placeholder: MusicSection.resolvedRanges(sections, duration: duration)[section.id]
+                    .map { MusicTimecode.string(from: $0.upperBound) } ?? "End"
+            ) { newValue in
                 var updated = section
                 updated.end = newValue
                 audio.setSection(updated, inTrackID: trackID)
@@ -348,7 +522,7 @@ struct MusicSectionEditorView: View {
     private func timecodeField(_ label: String,
                                value: Double?,
                                set: @escaping (Double) -> Void) -> some View {
-        TimecodeField(label: label, value: value, onCommit: set)
+        TimecodeField(label: label, value: value, placeholder: label, onCommit: set)
     }
 
     // MARK: Footer
@@ -357,12 +531,19 @@ struct MusicSectionEditorView: View {
         HStack {
             Button("Add Section") {
                 let at = isHostTrack ? audio.musicPosition : 0
-                _ = audio.addSection(toTrackID: trackID, start: at)
+                // Eight seconds is a musical-feeling default that is
+                // immediately visible and draggable, rather than a
+                // zero-width sliver.
+                if let id = audio.addSection(toTrackID: trackID,
+                                             start: at,
+                                             end: min(at + 8, duration)) {
+                    selectedSectionID = id
+                }
             }
             Button("Prepare Audio") { audio.prepareSections(forTrackID: trackID) }
                 .help("Decode every section now, so a live switch never waits")
             Spacer()
-            Text("⌥-click a section pad in the music panel to cut regardless of the switch mode.")
+            Text("Drag the waveform to make a section · Space play · M mark · I/O trim to playhead · ←→ nudge · L loop · ⌫ delete")
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Button("Done", action: onClose)
@@ -376,13 +557,16 @@ struct MusicSectionEditorView: View {
 private struct TimecodeField: View {
     let label: String
     let value: Double?
+    /// Shown when there is no explicit value — for an open-ended section this
+    /// is the time it actually plays until.
+    var placeholder: String
     let onCommit: (Double) -> Void
 
     @State private var text = ""
     @FocusState private var isFocused: Bool
 
     var body: some View {
-        TextField(label, text: $text)
+        TextField(placeholder, text: $text)
             .textFieldStyle(.roundedBorder)
             .frame(width: 90)
             .font(.body.monospacedDigit())

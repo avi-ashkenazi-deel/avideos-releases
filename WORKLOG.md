@@ -30,6 +30,21 @@ trimmed length, a progress fill sweeping the row, and a gear popover editing
 in/out points (`SoundPad.trimStart/trimEnd`, Optional for settings-decode
 compatibility; `SoundPadPlayer` slices the pre-decoded buffer at fire time).
 
+Thirteenth pass — the music section editor, rebuilt around the pointer and
+the keyboard. It opened zoomed to a fixed 12 pt/s (so a 3:39 track ran off
+the window), sections could only be made from the transport, and the End
+column showed the literal word "End" for the common open-ended case. Now:
+the waveform **fits the whole track by default** (Fit clears the explicit
+zoom rather than restoring a magic number), **dragging across the waveform
+draws a new section** with a live band and its length in the middle, a short
+click seeks instead, dragging a band's middle **slides it** while keeping
+its length, edges still resize, clicking selects (white ring + highlighted
+row), and the End field shows the **derived** end time greyed out. Keyboard,
+which is how marking up actually goes: Space play/pause, M mark at the
+playhead, I/O trim the selected section's in/out to the playhead, ←→ nudge,
+L loop, ⌫ delete, Esc deselect — with the legend in the footer where the
+⌥-click tip used to be.
+
 Twelfth pass — a 3D-ish transform layer, and a chrome sweep. **Skew, gimbal
 tilt and fake extrusion**: `ElementTransform` gains tiltX/tiltY/skew/depth/
 perspective (all Optional, so old projects decode unchanged, with
