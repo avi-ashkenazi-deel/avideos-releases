@@ -30,6 +30,28 @@ trimmed length, a progress fill sweeping the row, and a gear popover editing
 in/out points (`SoundPad.trimStart/trimEnd`, Optional for settings-decode
 compatibility; `SoundPadPlayer` slices the pre-decoded buffer at fire time).
 
+Seventh pass, rapid-fire from live use. **Camera switching**: an Ecamm-style
+strip above Record (one tile per device, click to switch the active camera
+scene live) plus `setActiveCamera` — you were stuck with the scene's
+starting camera. **Web overlays are browsers now**: the URL commits on Enter
+and actually navigates the running page (`WebSource` captured its content at
+init and never reloaded — the edit only changed the document), "airbnb.com"
+gets https:// prepended, and "Open Browser…" puts the live WKWebView in a
+floating window to click/scroll/log in — closing hands it back to the
+offscreen host, snapshots flowing throughout. **Border radius for
+everything**: `Element.cornerRadius` overrides every kind's default in the
+plan compiler (circle masks stay circles), one Radius slider in the
+transform editor. **Four new shader fills** (aurora, stripes, radial pulse,
+smoke) end-to-end: enum + dispatch indices + Metal; the style picker now
+derives from CaseIterable so new kinds can't be forgotten. **Scenes**: ⌘D
+duplicates (fresh scene+element ids, name + " Copy"); scene rows show their
+live ⌘N badge; the badge is reassignable per scene (context menu → Shortcut)
+with explicit picks winning and the rest numbering by position
+(`Project.sceneShortcuts`); the on-video popup and Studio menu read the same
+map. **Close buttons**: the teleprompter's close leads its control strip as
+a red circle (was buried at the far end), and the script editor and podcast
+Sessions sheets got Mac-style top-left closes (Esc still works).
+
 Sixth pass — device presentation and multi-input. Plugged-in iPhones and
 iPads can be presented: `CameraSource` opts the process into CoreMediaIO's
 screen-capture devices (the QuickTime/Ecamm flag, wireless included) and

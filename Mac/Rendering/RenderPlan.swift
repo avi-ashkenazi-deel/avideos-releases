@@ -190,6 +190,12 @@ enum RenderPlanCompiler {
             cornerRadius = element.tileShape?.cornerRadius ?? 0.01
         }
 
+        // The per-element radius overrides every kind's default — except a
+        // circle mask (-1 sentinel), which stays a circle.
+        if let radius = element.cornerRadius, cornerRadius >= 0 {
+            cornerRadius = radius
+        }
+
         var item = RenderItem(id: element.id,
                               transitionKey: element.transitionKey,
                               content: content,

@@ -50,18 +50,26 @@ struct ScriptEditorView: View {
             }
         }
         .frame(minWidth: 700, minHeight: 460)
-        // A sheet has no close box, and until this bar existed the only way
-        // out was "Load into Prompter" — browsing without loading trapped you.
-        .safeAreaInset(edge: .bottom) {
+        // A sheet has no close box, so it gets one where a Mac window keeps
+        // it: top-left. (It started life as a bottom-right button, which
+        // read as an action, not an exit.)
+        .safeAreaInset(edge: .top) {
             HStack {
-                Spacer()
-                Button("Close") {
+                Button {
                     saveCurrent()
                     dismiss()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 15))
+                        .foregroundStyle(.red)
                 }
+                .buttonStyle(.plain)
                 .keyboardShortcut(.cancelAction)   // Esc works too
+                .help("Close (saves the script)")
+                Spacer()
             }
-            .padding(10)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
             .background(.bar)
         }
         .onAppear { scripts = store.list() }

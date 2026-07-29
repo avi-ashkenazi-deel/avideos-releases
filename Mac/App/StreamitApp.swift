@@ -81,10 +81,6 @@ struct StudioCommands: Commands {
     let studio: StudioController
     @Environment(\.openWindow) private var openWindow
 
-    /// Sidebar positions that get a ⌘N shortcut (the first nine scenes).
-    private var sceneMenuIndices: Range<Int> {
-        0..<min(studio.project.scenes.count, 9)
-    }
 
     var body: some Commands {
         CommandGroup(after: .pasteboard) {
@@ -132,17 +128,24 @@ struct StudioCommands: Commands {
                 .keyboardShortcut("[", modifiers: [.command])
 
             Menu("Switch to Scene") {
-                // ⌘1…⌘9 jump straight to a scene by sidebar position. Indexed
-                // rather than enumerated: `id:` key paths can't address tuple
-                // elements.
-                ForEach(sceneMenuIndices, id: \.self) { index in
-                    Button(studio.project.scenes[index].name) {
-                        studio.switchToScene(number: index + 1)
+                // ⌘1…⌘9 per Project.sceneShortcuts: explicit per-scene
+                // bindings win, the rest number by sidebar position.
+                ForEach(studio.project.sceneShortcuts, id: \.scene.id) { entry in
+                    Button(entry.scene.name) {
+                        studio.switchToScene(number: entry.number)
                     }
-                    .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")),
+                    .keyboardShortcut(KeyEquivalent(Character("\(entry.number)")),
                                       modifiers: [.command])
                 }
             }
+
+            Button("Duplicate Scene") {
+                if let id = studio.project.activeSceneID {
+                    studio.duplicateScene(id: id)
+                }
+            }
+            .keyboardShortcut("d", modifiers: [.command])
+            .disabled(studio.project.activeSceneID == nil)
 
             Divider()
 

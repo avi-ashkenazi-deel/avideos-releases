@@ -19,6 +19,10 @@ struct Element: Codable, Hashable, Sendable, Identifiable {
     /// Tile shape for `.source` elements (camera/guest PiP): aspect preset +
     /// mask, Ecamm-style. nil = plain rectangle. Optional so old files decode.
     var tileShape: SourceTileShape?
+    /// Unit corner radius applied to ANY element kind — images, videos, web,
+    /// tiles, shapes alike ("border radius for everything"). nil = the
+    /// kind's own default. Optional so old files decode.
+    var cornerRadius: Double?
 
     init(id: UUID = UUID(),
          name: String,

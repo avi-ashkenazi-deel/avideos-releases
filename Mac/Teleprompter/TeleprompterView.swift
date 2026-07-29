@@ -66,6 +66,16 @@ struct TeleprompterView: View {
 
     private var controlStrip: some View {
         HStack(spacing: 10) {
+            // Close leads, like a Mac window's traffic lights — it was
+            // buried at the far end of the strip.
+            Button {
+                controller.toggleVisible()
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundStyle(.red)
+            }
+            .help("Hide the teleprompter (⇧⌘T)")
+
             Button {
                 controller.togglePlay()
             } label: {
@@ -116,12 +126,6 @@ struct TeleprompterView: View {
             }
             .toggleStyle(.button)
             .help("Click-through: the panel ignores the mouse while live")
-
-            Button {
-                controller.toggleVisible()
-            } label: {
-                Image(systemName: "xmark")
-            }
         }
         .buttonStyle(.borderless)
         .controlSize(.small)

@@ -90,23 +90,7 @@ struct InspectorView: View {
                 }
 
                 if case .web(let content) = element.kind {
-                    // The one property a web overlay has, previously settable
-                    // nowhere — every web element was stuck on its placeholder.
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("URL").font(.headline)
-                        TextField("https://…", text: Binding(
-                            get: { content.urlString },
-                            set: { newValue in
-                                var updated = element
-                                var web = content
-                                web.urlString = newValue
-                                updated.kind = .web(web)
-                                studio.updateElement(updated)
-                            }
-                        ))
-                        .textFieldStyle(.roundedBorder)
-                        .autocorrectionDisabled()
-                    }
+                    WebURLEditor(element: element, content: content)
                 }
 
                 HStack {
@@ -215,6 +199,15 @@ struct InspectorView: View {
             LabeledSlider(label: "Height", value: bindTransformCG(element, \.size.height), range: 0.02...1)
             LabeledSlider(label: "Rotate", value: bindTransform(element, \.rotation), range: -3.14...3.14)
             LabeledSlider(label: "Opacity", value: bindTransform(element, \.opacity), range: 0...1)
+            // Corner radius for EVERYTHING — images, videos, tiles, shapes.
+            LabeledSlider(label: "Radius", value: Binding(
+                get: { element.cornerRadius ?? 0 },
+                set: { newValue in
+                    guard var updated = studio.findElement(id: element.id) else { return }
+                    updated.cornerRadius = newValue > 0.001 ? newValue : nil
+                    studio.updateElement(updated)
+                }
+            ), range: 0...0.5)
         }
     }
 
@@ -299,18 +292,8 @@ struct InspectorView: View {
                 Text("Ellipse").tag(ShapeContent.Shape.ellipse)
                 Text("Line").tag(ShapeContent.Shape.line)
             }
-            if content.shape == .roundedRectangle {
-                LabeledSlider(label: "Radius", value: Binding(
-                    get: { content.cornerRadius },
-                    set: { newValue in
-                        var updated = element
-                        var shape = content
-                        shape.cornerRadius = newValue
-                        updated.kind = .shape(shape)
-                        studio.updateElement(updated)
-                    }
-                ), range: 0...0.3)
-            }
+            // Radius lives on the generic transform editor above — it
+            // applies to every element kind, shapes included.
         }
     }
 
@@ -552,6 +535,57 @@ struct InspectorView: View {
         case .text, .shape, .timer: true
         default: false
         }
+    }
+}
+
+/// A web overlay IS a browser: the URL commits on Enter and navigates the
+/// live page (editing the document alone never reloaded it), and the page
+/// opens in a real window to click/scroll/log in — the canvas keeps
+/// rendering it throughout.
+private struct WebURLEditor: View {
+    @Environment(StudioController.self) private var studio
+    let element: Element
+    let content: WebContent
+
+    @State private var draft = ""
+    @State private var loaded = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("URL").font(.headline)
+            TextField("https://…", text: $draft)
+                .textFieldStyle(.roundedBorder)
+                .autocorrectionDisabled()
+                .onSubmit(commit)
+            HStack {
+                Button("Go") { commit() }
+                Button("Open Browser…") {
+                    studio.openWebElementBrowser(id: element.id)
+                }
+                .help("Interact with the live page — click, scroll, log in. The canvas keeps showing it.")
+            }
+            .controlSize(.small)
+        }
+        .onAppear {
+            guard !loaded else { return }
+            loaded = true
+            draft = content.urlString
+        }
+    }
+
+    private func commit() {
+        var urlString = draft.trimmingCharacters(in: .whitespaces)
+        // Typing "airbnb.com" should just work.
+        if !urlString.isEmpty, !urlString.contains("://") {
+            urlString = "https://" + urlString
+            draft = urlString
+        }
+        guard var updated = studio.findElement(id: element.id),
+              case .web(var web) = updated.kind else { return }
+        web.urlString = urlString
+        updated.kind = .web(web)
+        studio.updateElement(updated)
+        studio.reloadWebElement(id: element.id)
     }
 }
 

@@ -1,4 +1,5 @@
 import SwiftUI
+import AVFoundation   // camera strip enumerates AVCaptureDevices
 
 /// The main window: live-mode studio (scenes | preview+panels | inspector)
 /// or edit mode when a session is opened in the editor.
@@ -51,7 +52,13 @@ private struct StudioLayout: View {
             .padding(10)
         }
         .overlay(alignment: .bottom) {
-            recordButton.padding(.bottom, 18)
+            VStack(spacing: 10) {
+                if studio.activeSceneIsCamera {
+                    cameraStrip
+                }
+                recordButton
+            }
+            .padding(.bottom, 18)
         }
         .toolbar { toolbarContent }
         .sheet(isPresented: $showingSessionLibrary) {
@@ -92,9 +99,9 @@ private struct StudioLayout: View {
 
             Divider()
 
-            ForEach(Array(studio.project.scenes.enumerated()), id: \.element.id) { index, scene in
+            ForEach(studio.project.scenes) { scene in
                 Button {
-                    studio.switchToScene(number: index + 1)
+                    studio.switchScene(to: scene.id)
                 } label: {
                     if scene.id == studio.project.activeSceneID {
                         Label(scene.name, systemImage: "checkmark")
@@ -104,7 +111,7 @@ private struct StudioLayout: View {
                 }
                 // ⌘1…⌘9 badges match the Studio menu bindings, which are the
                 // ones that fire while the popup is closed.
-                .modifier(SceneShortcutBadge(index: index))
+                .modifier(SceneShortcutBadge(number: studio.project.shortcutNumber(for: scene.id)))
             }
         } label: {
             HStack(spacing: 6) {
@@ -119,6 +126,42 @@ private struct StudioLayout: View {
         }
         .menuStyle(.borderlessButton)
         .fixedSize()
+    }
+
+    /// Ecamm's camera strip: one tile per device, click to switch the active
+    /// camera scene live — you are never stuck with the starting camera.
+    private var cameraStrip: some View {
+        HStack(spacing: 8) {
+            ForEach(CameraSource.availableCameras(), id: \.uniqueID) { device in
+                let isActive = studio.activeSceneCameraUID == device.uniqueID
+                    || (studio.activeSceneCameraUID == nil
+                        && device.uniqueID == CameraSource.device(uniqueID: nil)?.uniqueID)
+                Button {
+                    studio.setActiveCamera(deviceUniqueID: device.uniqueID)
+                } label: {
+                    VStack(spacing: 3) {
+                        Image(systemName: "video.fill")
+                            .font(.system(size: 15))
+                            .frame(width: 72, height: 40)
+                            .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 6))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .strokeBorder(isActive ? Color.white : .white.opacity(0.2),
+                                                  lineWidth: isActive ? 2 : 1)
+                            )
+                        Text(device.localizedName)
+                            .font(.caption2)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                            .frame(width: 78)
+                    }
+                }
+                .buttonStyle(.plain)
+                .help(device.localizedName)
+            }
+        }
+        .padding(8)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
     }
 
     private var recordButton: some View {
@@ -169,13 +212,13 @@ private struct StudioLayout: View {
     }
 }
 
-/// ⌘1…⌘9 badges on the first nine scene menu items; scenes past nine get none.
+/// ⌘N badges on scene menu items; scenes without an assignment get none.
 private struct SceneShortcutBadge: ViewModifier {
-    let index: Int
+    let number: Int?
 
     func body(content: Content) -> some View {
-        if index < 9 {
-            content.keyboardShortcut(KeyEquivalent(Character("\(index + 1)")),
+        if let number, (1...9).contains(number) {
+            content.keyboardShortcut(KeyEquivalent(Character("\(number)")),
                                      modifiers: [.command])
         } else {
             content

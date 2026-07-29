@@ -86,9 +86,51 @@ final class OffscreenWebHost: NSObject, WKNavigationDelegate {
         }
     }
 
+    // MARK: - Interactive mode
+
+    /// It IS a browser — this puts the live WKWebView in a normal floating
+    /// window so the host can click, scroll, and log in. Closing the window
+    /// hands the view back to the offscreen host; snapshots keep flowing to
+    /// the canvas the whole time (the view is always in *a* window).
+    private var interactiveWindow: NSWindow?
+
+    func openInteractiveWindow(title: String) {
+        if let interactiveWindow {
+            interactiveWindow.makeKeyAndOrderFront(nil)
+            return
+        }
+        let win = NSWindow(contentRect: CGRect(origin: .zero, size: webView.frame.size),
+                           styleMask: [.titled, .closable, .resizable],
+                           backing: .buffered,
+                           defer: false)
+        win.title = title
+        win.isReleasedWhenClosed = false
+        win.level = .floating
+        win.sharingType = .none
+        webView.autoresizingMask = [.width, .height]
+        win.contentView = webView
+        win.center()
+        win.makeKeyAndOrderFront(nil)
+        interactiveWindow = win
+        NotificationCenter.default.addObserver(self,
+                                               selector: #selector(interactiveWindowWillClose(_:)),
+                                               name: NSWindow.willCloseNotification,
+                                               object: win)
+    }
+
+    @objc private func interactiveWindowWillClose(_ note: Notification) {
+        guard let win = interactiveWindow else { return }
+        NotificationCenter.default.removeObserver(self, name: NSWindow.willCloseNotification, object: win)
+        // Back to the offscreen window at the page's authored size.
+        webView.frame = CGRect(origin: .zero, size: window.frame.size)
+        window.contentView = webView
+        interactiveWindow = nil
+    }
+
     func teardown() {
         stopSnapshots()
         webView.stopLoading()
+        interactiveWindow?.close()
         window.close()
     }
 

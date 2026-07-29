@@ -33,6 +33,31 @@ struct SceneListView: View {
                                     }
                                 }
                             }
+                            Menu("Shortcut") {
+                                ForEach(1...9, id: \.self) { number in
+                                    Button {
+                                        var updated = scene
+                                        updated.shortcutNumber = number
+                                        replace(scene: updated)
+                                    } label: {
+                                        if studio.project.shortcutNumber(for: scene.id) == number {
+                                            Label("⌘\(number)", systemImage: "checkmark")
+                                        } else {
+                                            Text("⌘\(number)")
+                                        }
+                                    }
+                                }
+                                Divider()
+                                Button("Automatic (by position)") {
+                                    var updated = scene
+                                    updated.shortcutNumber = nil
+                                    replace(scene: updated)
+                                }
+                            }
+                            // ⌘D lives on the Studio menu (duplicates the
+                            // active scene); binding it here too would fire
+                            // twice.
+                            Button("Duplicate") { studio.duplicateScene(id: scene.id) }
                             Button("Rename…") { renameTarget = scene }
                             Button("Delete", role: .destructive) {
                                 studio.removeScene(id: scene.id)
@@ -98,6 +123,7 @@ struct SceneListView: View {
 }
 
 private struct SceneRow: View {
+    @Environment(StudioController.self) private var studio
     let scene: SceneModel
     let isActive: Bool
 
@@ -114,6 +140,14 @@ private struct SceneRow: View {
                     .foregroundStyle(.secondary)
             }
             Spacer()
+            // The scene's live ⌘N, reassignable from the context menu.
+            if let number = studio.project.shortcutNumber(for: scene.id) {
+                Text("⌘\(number)")
+                    .font(.caption.monospaced())
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 4)
+                    .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 4))
+            }
             if isActive {
                 Circle().fill(Color.red).frame(width: 7, height: 7)
             }

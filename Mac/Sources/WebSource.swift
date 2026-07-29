@@ -46,6 +46,23 @@ final class WebSource: FrameSource {
         }
     }
 
+    /// Navigates the running page to the element's current URL. The source
+    /// captured its content at init, so URL edits in the inspector must be
+    /// pushed through here — the page never reloaded otherwise.
+    func reload(content: WebContent) {
+        guard let url = URL(string: content.urlString), url.scheme?.hasPrefix("http") == true else { return }
+        Task { @MainActor [weak self] in
+            self?.host?.load(url: url)
+        }
+    }
+
+    /// Opens the live page in a normal window for clicking/scrolling.
+    func openInteractiveWindow(title: String) {
+        Task { @MainActor [weak self] in
+            self?.host?.openInteractiveWindow(title: title)
+        }
+    }
+
     func stop() {
         state = .idle
         mailbox.clear()

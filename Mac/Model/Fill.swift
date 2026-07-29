@@ -20,6 +20,23 @@ struct ShaderFill: Codable, Hashable, Sendable {
         case plasma                // classic smooth-noise plasma
         case waves                 // horizontal sine bands drifting
         case sparkle               // twinkling points over a base color
+        case aurora                // slow curtains of light, borealis-style
+        case stripes               // diagonal bands marching
+        case radialPulse           // concentric rings breathing from center
+        case smoke                 // drifting fractal noise
+
+        var displayName: String {
+            switch self {
+            case .linearGradientSweep: "Gradient Sweep"
+            case .plasma: "Plasma"
+            case .waves: "Waves"
+            case .sparkle: "Sparkle"
+            case .aurora: "Aurora"
+            case .stripes: "Stripes"
+            case .radialPulse: "Radial Pulse"
+            case .smoke: "Smoke"
+            }
+        }
     }
 
     var kind: Kind

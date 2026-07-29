@@ -17,6 +17,9 @@ struct SceneModel: Codable, Hashable, Sendable, Identifiable {
     /// How the primary source is framed when its shape doesn't match the
     /// canvas — the common case for shared windows and portrait captures.
     var primaryPresentation: SourcePresentation
+    /// Explicit ⌘N binding (1…9). nil = numbered by sidebar position after
+    /// the explicit picks. User-assignable from the scene's context menu.
+    var shortcutNumber: Int?
 
     init(id: UUID = UUID(),
          name: String,
@@ -24,7 +27,8 @@ struct SceneModel: Codable, Hashable, Sendable, Identifiable {
          primaryEffects: EffectChain = EffectChain(),
          elements: [Element] = [],
          transitionStyle: SceneTransitionStyle = .magicMove,
-         primaryPresentation: SourcePresentation = .default) {
+         primaryPresentation: SourcePresentation = .default,
+         shortcutNumber: Int? = nil) {
         self.id = id
         self.name = name
         self.kind = kind
@@ -32,12 +36,14 @@ struct SceneModel: Codable, Hashable, Sendable, Identifiable {
         self.elements = elements
         self.transitionStyle = transitionStyle
         self.primaryPresentation = primaryPresentation
+        self.shortcutNumber = shortcutNumber
     }
 
     /// Older documents predate framing, so a missing key decodes as the
     /// default fit rather than failing the whole project load.
     enum CodingKeys: String, CodingKey {
         case id, name, kind, primaryEffects, elements, transitionStyle, primaryPresentation
+        case shortcutNumber
     }
 
     init(from decoder: Decoder) throws {
@@ -53,6 +59,35 @@ struct SceneModel: Codable, Hashable, Sendable, Identifiable {
         self.primaryPresentation = try container.decodeIfPresent(SourcePresentation.self,
                                                                  forKey: .primaryPresentation)
             ?? .default
+        self.shortcutNumber = try container.decodeIfPresent(Int.self, forKey: .shortcutNumber)
+    }
+}
+
+extension Project {
+    /// ⌘N assignments: explicit `shortcutNumber` picks win; the remaining
+    /// scenes fill the free numbers in sidebar order. At most nine.
+    var sceneShortcuts: [(number: Int, scene: SceneModel)] {
+        var taken = Set<Int>()
+        var assigned: [(Int, SceneModel)] = []
+        for scene in scenes {
+            if let number = scene.shortcutNumber, (1...9).contains(number),
+               !taken.contains(number) {
+                assigned.append((number, scene))
+                taken.insert(number)
+            }
+        }
+        var next = 1
+        for scene in scenes where !assigned.contains(where: { $0.1.id == scene.id }) {
+            while taken.contains(next) { next += 1 }
+            guard next <= 9 else { break }
+            assigned.append((next, scene))
+            taken.insert(next)
+        }
+        return assigned.sorted { $0.0 < $1.0 }
+    }
+
+    func shortcutNumber(for sceneID: UUID) -> Int? {
+        sceneShortcuts.first { $0.scene.id == sceneID }?.number
     }
 }
 

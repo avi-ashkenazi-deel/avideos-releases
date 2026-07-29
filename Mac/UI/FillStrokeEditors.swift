@@ -82,10 +82,9 @@ struct ShaderFillEditor: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Picker("Style", selection: $shader.kind) {
-                Text("Gradient Sweep").tag(ShaderFill.Kind.linearGradientSweep)
-                Text("Plasma").tag(ShaderFill.Kind.plasma)
-                Text("Waves").tag(ShaderFill.Kind.waves)
-                Text("Sparkle").tag(ShaderFill.Kind.sparkle)
+                ForEach(ShaderFill.Kind.allCases, id: \.self) { kind in
+                    Text(kind.displayName).tag(kind)
+                }
             }
             HStack {
                 ColorPicker("A", selection: Binding(

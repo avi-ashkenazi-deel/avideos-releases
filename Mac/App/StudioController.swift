@@ -259,11 +259,11 @@ final class StudioController {
         switchScene(to: project.scenes[nextIndex].id)
     }
 
-    /// Switches to the Nth scene in the sidebar (1-based) — the ⌘1…⌘9 menu
-    /// commands. No-op when there is no such scene.
+    /// Switches to the scene bound to ⌘N (explicit bindings win, the rest
+    /// number by sidebar position — see `Project.sceneShortcuts`).
     func switchToScene(number: Int) {
-        guard number >= 1, number <= project.scenes.count else { return }
-        switchScene(to: project.scenes[number - 1].id)
+        guard let match = project.sceneShortcuts.first(where: { $0.number == number }) else { return }
+        switchScene(to: match.scene.id)
     }
 
     /// Movie scenes and picker-based screen scenes need concrete sources the
@@ -354,6 +354,64 @@ final class StudioController {
     func restartTimer(id: UUID) {
         timerStarts[id] = Date()
         recompileAndPublish()
+    }
+
+    // MARK: - Web overlays (they are browsers)
+
+    /// Pushes the element's current URL into the running page — the source
+    /// captures its content at start, so an edited URL must be re-fed.
+    func reloadWebElement(id: UUID) {
+        guard let element = findElement(id: id),
+              case .web(let content) = element.kind else { return }
+        (sourceRegistry?.source(for: .web(elementID: id)) as? WebSource)?
+            .reload(content: content)
+    }
+
+    /// Opens the overlay's live page in a floating window to click/scroll/
+    /// log in; the canvas keeps rendering it throughout.
+    func openWebElementBrowser(id: UUID) {
+        (sourceRegistry?.source(for: .web(elementID: id)) as? WebSource)?
+            .openInteractiveWindow(title: findElement(id: id)?.name ?? "Browser")
+    }
+
+    // MARK: - Live camera switching
+
+    /// The active scene's camera device, when it is a camera scene.
+    var activeSceneCameraUID: String? {
+        if case .camera(let config) = project.activeScene?.kind {
+            return config.deviceUniqueID
+        }
+        return nil
+    }
+
+    var activeSceneIsCamera: Bool {
+        if case .camera = project.activeScene?.kind { return true }
+        return false
+    }
+
+    /// Switches the active camera scene to another device, live — you are
+    /// not stuck with the camera the scene started with.
+    func setActiveCamera(deviceUniqueID: String) {
+        guard let index = project.scenes.firstIndex(where: { $0.id == project.activeSceneID }),
+              case .camera = project.scenes[index].kind else { return }
+        project.scenes[index].kind = .camera(CameraSceneConfig(deviceUniqueID: deviceUniqueID))
+    }
+
+    /// Duplicates a scene (fresh ids so animations, sources and transition
+    /// matching treat it as its own thing) and switches to the copy.
+    func duplicateScene(id: UUID) {
+        guard let index = project.scenes.firstIndex(where: { $0.id == id }) else { return }
+        var copy = project.scenes[index]
+        copy.id = UUID()
+        copy.name += " Copy"
+        copy.shortcutNumber = nil
+        copy.elements = copy.elements.map { element in
+            var duplicated = element
+            duplicated.id = UUID()
+            return duplicated
+        }
+        project.scenes.insert(copy, at: index + 1)
+        project.activeSceneID = copy.id
     }
 
     // MARK: - Element editing

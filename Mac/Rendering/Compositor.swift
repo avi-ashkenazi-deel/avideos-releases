@@ -69,6 +69,10 @@ final class Compositor {
             case .plasma: 2
             case .waves: 3
             case .sparkle: 4
+            case .aurora: 5
+            case .stripes: 6
+            case .radialPulse: 7
+            case .smoke: 8
             }
         }
     }

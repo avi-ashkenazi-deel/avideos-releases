@@ -123,6 +123,43 @@ static float4 proceduralFill(float2 uv, constant ItemUniforms &u) {
             float star = step(0.92, rnd) * tw;
             return mix(u.fillColorA, u.fillColorB, saturate(star));
         }
+        case 5: { // aurora: slow vertical curtains of light
+            float x = uv.x * 3.0 * scale;
+            float curtain = sin(x * 2.1 + t * 0.5) * 0.5
+                          + sin(x * 3.7 - t * 0.33 + 1.7) * 0.3
+                          + sin(x * 0.9 + t * 0.21 + 4.0) * 0.4;
+            float band = 1.0 - abs(uv.y - (0.5 + curtain * 0.25));
+            float glow = pow(saturate(band), 3.0 + 2.0 * scale);
+            return mix(u.fillColorA, u.fillColorB, saturate(glow * (0.7 + 0.3 * sin(t + x))));
+        }
+        case 6: { // stripes: diagonal bands marching
+            float d = (uv.x + uv.y) * 7.0 * scale - t;
+            float v = smoothstep(0.35, 0.65, fract(d));
+            return mix(u.fillColorA, u.fillColorB, v);
+        }
+        case 7: { // radialPulse: concentric rings breathing from center
+            float r = length(uv - 0.5) * 4.0 * scale;
+            float v = sin(r * 6.28318 - t * 2.0) * 0.5 + 0.5;
+            float fadeOut = saturate(1.0 - r * 0.35);
+            return mix(u.fillColorA, u.fillColorB, saturate(v * fadeOut));
+        }
+        case 8: { // smoke: drifting value-noise octaves
+            float2 p = uv * 4.0 * scale + float2(t * 0.15, -t * 0.08);
+            float v = 0.0;
+            float amp = 0.55;
+            for (int i = 0; i < 4; i++) {
+                float2 cell = floor(p);
+                float2 f = fract(p);
+                f = f * f * (3.0 - 2.0 * f);
+                float n = mix(mix(hash21(cell), hash21(cell + float2(1, 0)), f.x),
+                              mix(hash21(cell + float2(0, 1)), hash21(cell + float2(1, 1)), f.x),
+                              f.y);
+                v += n * amp;
+                amp *= 0.5;
+                p = p * 2.03 + float2(11.7, 5.3);
+            }
+            return mix(u.fillColorA, u.fillColorB, saturate(v));
+        }
         default:
             return u.fillColorA;
     }

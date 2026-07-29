@@ -6,6 +6,7 @@ import UniformTypeIdentifiers
 /// tracks with live status, download/import pipeline, and "Open in Editor".
 struct SessionLibraryView: View {
     @Environment(StudioController.self) private var studio
+    @Environment(\.dismiss) private var dismiss
     @State private var standaloneError: String?
     @State private var selectedSessionID: String?
     @State private var isProcessing = false
@@ -21,6 +22,25 @@ struct SessionLibraryView: View {
         }
         .toolbar {
             Button("New Project from a File…") { openStandalone() }
+        }
+        // Sheets have no close box; put one where a Mac window keeps it.
+        .safeAreaInset(edge: .top) {
+            HStack {
+                Button {
+                    dismiss()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 15))
+                        .foregroundStyle(.red)
+                }
+                .buttonStyle(.plain)
+                .keyboardShortcut(.cancelAction)
+                .help("Close")
+                Spacer()
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(.bar)
         }
         .alert("Couldn't open that file", isPresented: Binding(
             get: { standaloneError != nil },
