@@ -190,6 +190,10 @@ struct PaletteStrip: View {
 struct OverlaysPalette: View {
     @Environment(StudioController.self) private var studio
     var openInspector: () -> Void
+    /// Focus lands here when a row is clicked, so Delete reaches
+    /// `onDeleteCommand` below — and never fires while a rename field or the
+    /// canvas has focus instead.
+    @FocusState private var listFocused: Bool
 
     private var elements: [Element] {
         studio.project.activeScene?.elements ?? []
@@ -211,7 +215,10 @@ struct OverlaysPalette: View {
                     ForEach(elements.reversed()) { element in
                         OverlayRow(element: element,
                                    isSelected: studio.selectedElementID == element.id,
-                                   select: { studio.selectedElementID = element.id },
+                                   select: {
+                                       studio.selectedElementID = element.id
+                                       listFocused = true   // arms Delete
+                                   },
                                    toggleEye: { studio.toggleElementVisibility(id: element.id) },
                                    inspect: {
                                        studio.selectedElementID = element.id
@@ -229,6 +236,16 @@ struct OverlaysPalette: View {
                 .listStyle(.plain)
                 .scrollContentBackground(.hidden)
                 .frame(height: min(320, max(120, CGFloat(elements.count) * 34 + 20)))
+                .focusable()
+                .focusEffectDisabled()
+                .focused($listFocused)
+                // Delete in the LAYERS panel really deletes — the canvas's
+                // Delete only hides. Asked for explicitly.
+                .onDeleteCommand {
+                    if let id = studio.selectedElementID {
+                        studio.removeElement(id: id)
+                    }
+                }
             }
 
             Divider()
@@ -326,31 +343,12 @@ struct AddElementButtons: View {
                 .help("New Countdown Overlay")
             Button { studio.addWebElement() } label: { Image(systemName: "globe") }
                 .help("New Browser Overlay")
-            // Camera / guest PiP tiles — the host small over a screen share.
-            Menu {
-                Section("Cameras") {
-                    ForEach(CameraSource.availableCameras(), id: \.uniqueID) { device in
-                        Button(device.localizedName) {
-                            studio.addCameraElement(deviceUniqueID: device.uniqueID,
-                                                    name: device.localizedName)
-                        }
-                    }
-                }
-                if let guests = studio.guests?.guests, !guests.isEmpty {
-                    Section("Guests") {
-                        ForEach(guests) { guest in
-                            Button(guest.displayName) {
-                                studio.addGuestElement(identity: guest.identity,
-                                                       name: guest.displayName)
-                            }
-                        }
-                    }
-                }
-            } label: {
+            // One click, one camera overlay — no menu. Which device it shows
+            // is an inspector decision, made after placing it (asked for
+            // explicitly: "just have a camera icon there, no dropdown").
+            Button { studio.addCameraElement() } label: {
                 Image(systemName: "video.badge.plus")
             }
-            .menuStyle(.borderlessButton)
-            .fixedSize()
             .help("New Camera Overlay")
         }
         .buttonStyle(.borderless)

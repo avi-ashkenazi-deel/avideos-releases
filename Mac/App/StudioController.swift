@@ -651,9 +651,11 @@ final class StudioController {
     }
 
     /// A camera PiP tile — the host small over a screen share, or a second
-    /// angle. 16:9 tile in the lower-right, like an interview inset.
-    func addCameraElement(deviceUniqueID: String, name: String) {
-        addElement(Element(name: name,
+    /// angle. Tile in the lower-right, like an interview inset. `nil` device
+    /// = the system default camera; the inspector picks a specific one after
+    /// placing it, so adding an overlay is a single click.
+    func addCameraElement(deviceUniqueID: String? = nil, name: String? = nil) {
+        addElement(Element(name: name ?? "Camera",
                            kind: .source(.camera(deviceUniqueID: deviceUniqueID)),
                            transform: ElementTransform(center: CGPoint(x: 0.82, y: 0.76),
                                                        size: CGSize(width: 0.28, height: 0.28)),

@@ -1,4 +1,5 @@
 import SwiftUI
+import AVFoundation   // the video-source picker enumerates capture devices
 
 /// Right-hand inspector: Element / Effects / Animate tabs for the selected
 /// element, or the scene's primary effects when nothing is selected.
@@ -85,7 +86,8 @@ struct InspectorView: View {
                     timerEditor(element, content: content)
                 }
 
-                if case .source = element.kind {
+                if case .source(let binding) = element.kind {
+                    sourceBindingEditor(element, binding: binding)
                     tileShapeEditor(element)
                 }
 
@@ -335,6 +337,54 @@ struct InspectorView: View {
             ), range: 24...400)
             Button("Restart Countdown") {
                 studio.restartTimer(id: element.id)
+            }
+        }
+    }
+
+    /// Which camera (or guest) a source overlay shows — chosen here, after
+    /// placing it, so the add-row's camera button is a single click.
+    private func sourceBindingEditor(_ element: Element,
+                                     binding: SourceBinding) -> some View {
+        // Tag by a string so cameras, guests and "system default" can share
+        // one picker (SourceBinding itself carries associated values).
+        let cameras = CameraSource.availableCameras()
+        let guests = studio.guests?.guests ?? []
+
+        func tag(for binding: SourceBinding) -> String {
+            switch binding {
+            case .camera(let uid): "camera:\(uid ?? "")"
+            case .guest(let identity): "guest:\(identity)"
+            case .display(let id): "display:\(id)"
+            case .window(let id): "window:\(id)"
+            }
+        }
+
+        return VStack(alignment: .leading, spacing: 6) {
+            Text("Video Source").font(.headline)
+            Picker("Source", selection: Binding(
+                get: { tag(for: binding) },
+                set: { newTag in
+                    guard var updated = studio.findElement(id: element.id) else { return }
+                    if newTag == "camera:" {
+                        updated.kind = .source(.camera(deviceUniqueID: nil))
+                    } else if newTag.hasPrefix("camera:") {
+                        updated.kind = .source(.camera(deviceUniqueID: String(newTag.dropFirst(7))))
+                    } else if newTag.hasPrefix("guest:") {
+                        updated.kind = .source(.guest(identity: String(newTag.dropFirst(6))))
+                    }
+                    studio.updateElement(updated)
+                }
+            )) {
+                Text("System Default Camera").tag("camera:")
+                ForEach(cameras, id: \.uniqueID) { device in
+                    Text(device.localizedName).tag("camera:\(device.uniqueID)")
+                }
+                if !guests.isEmpty {
+                    Divider()
+                    ForEach(guests) { guest in
+                        Text(guest.displayName).tag("guest:\(guest.identity)")
+                    }
+                }
             }
         }
     }
