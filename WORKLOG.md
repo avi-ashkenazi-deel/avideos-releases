@@ -30,6 +30,19 @@ trimmed length, a progress fill sweeping the row, and a gear popover editing
 in/out points (`SoundPad.trimStart/trimEnd`, Optional for settings-decode
 compatibility; `SoundPadPlayer` slices the pre-decoded buffer at fire time).
 
+Sixth pass — device presentation and multi-input. Plugged-in iPhones and
+iPads can be presented: `CameraSource` opts the process into CoreMediaIO's
+screen-capture devices (the QuickTime/Ecamm flag, wireless included) and
+discovery now also sweeps MUXED external devices, which is how iOS screens
+present; Android phones acting as UVC webcams were already covered by
+`.external`. Muxed devices reject the .high preset, so it's now conditional.
+Multiple microphones: new `.input(uid)` mixer strips — each extra input runs
+its own `MicCapture` engine feeding a ring into the mix hub, joins program
+and mix-minus but not the monitor (a second mic echoes exactly like the
+first), persists in `AudioSettings.extraInputUIDs` (Optional, decode-safe),
+and appears as a normal mixer row with fader/mute/FX. "Add Input" menu in
+Sound Levels; right-click an input row to remove it.
+
 Fifth pass — Ecamm parity round, from Avi's side-by-side screenshots. The
 scene popup matches theirs: "Show Scenes Window" (⌘\, also a real menu-bar
 command) above the scene list with ⌘1…⌘9 badges. The overlay add-row now

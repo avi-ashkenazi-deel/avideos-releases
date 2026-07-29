@@ -153,6 +153,17 @@ final class AudioEngineController {
                          voiceProcessing: settings.voiceProcessingEnabled)
         graph.micMonitorEnabled = settings.micMonitorEnabled ?? false
 
+        // Restore extra capture inputs (second mic etc.). Missing devices
+        // simply produce silence until replugged; the strip stays.
+        for uid in settings.extraInputUIDs ?? [] where extraInputs[uid] == nil {
+            let capture = MicCapture(deviceManager: deviceManager)
+            graph.addInputStrip(uid: uid, ring: capture.ring)
+            capture.start(deviceUID: uid, voiceProcessing: false)
+            extraInputs[uid] = capture
+            let index = strips.firstIndex { $0 == .pads } ?? strips.endIndex
+            strips.insert(.input(uid), at: index)
+        }
+
         // Decode pads, wire callbacks.
         for pad in pads {
             try? padPlayer?.load(pad: pad)
@@ -220,7 +231,47 @@ final class AudioEngineController {
 
     // MARK: - Strips
 
-    func displayName(for strip: StripID) -> String { strip.displayName }
+    func displayName(for strip: StripID) -> String {
+        if case .input(let uid) = strip {
+            return deviceManager.inputDevices().first { $0.uid == uid }?.name ?? "Input"
+        }
+        return strip.displayName
+    }
+
+    // MARK: - Extra inputs (second mic / interface channel / phone audio)
+
+    private var extraInputs: [String: MicCapture] = [:]
+
+    /// Input devices not yet on the mixer, for the Add Input menu.
+    var addableInputDevices: [AudioDeviceManager.DeviceInfo] {
+        inputDevices.filter { device in
+            device.uid != micDeviceUID && extraInputs[device.uid] == nil
+        }
+    }
+
+    func addInputStrip(deviceUID: String) {
+        guard extraInputs[deviceUID] == nil else { return }
+        let capture = MicCapture(deviceManager: deviceManager)
+        graph.addInputStrip(uid: deviceUID, ring: capture.ring)
+        // Extra inputs skip voice processing: it's tuned for a talking head,
+        // and a second input is as often an instrument or a phone.
+        capture.start(deviceUID: deviceUID, voiceProcessing: false)
+        extraInputs[deviceUID] = capture
+        // After the mic, before pads — same order the sort key encodes.
+        let index = strips.firstIndex { $0 == .pads } ?? strips.endIndex
+        strips.insert(.input(deviceUID), at: index)
+        settings.extraInputUIDs = extraInputs.keys.sorted()
+        persist()
+    }
+
+    func removeInputStrip(deviceUID: String) {
+        guard let capture = extraInputs.removeValue(forKey: deviceUID) else { return }
+        capture.stop()
+        graph.removeStrip(id: .input(deviceUID))
+        strips.removeAll { $0 == .input(deviceUID) }
+        settings.extraInputUIDs = extraInputs.keys.sorted()
+        persist()
+    }
 
     // Read `settings` first, the graph strip second. Not cosmetic: `Strip` is
     // a plain class, invisible to Observation, while `settings` is a stored

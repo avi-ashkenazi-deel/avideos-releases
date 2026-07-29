@@ -30,10 +30,15 @@ struct AudioSettings: Codable {
     /// Optional for the same decode reason as above.
     var micMonitorEnabled: Bool?
 
+    /// Extra capture inputs (second mic, interface channel) by device UID.
+    /// Optional for the same decode reason as above.
+    var extraInputUIDs: [String]?
+
     /// JSON-safe StripID key (guest strips aren't persisted — session-scoped).
     static func key(for strip: MixerStripID) -> String {
         switch strip {
         case .mic: "mic"
+        case .input(let uid): "input:\(uid)"
         case .pads: "pads"
         case .music: "music"
         case .movie: "movie"

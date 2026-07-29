@@ -1,6 +1,7 @@
 import Foundation
 import AVFoundation
 import CoreMedia
+import CoreMediaIO
 import Metal
 import os
 
@@ -36,12 +37,46 @@ final class CameraSource: NSObject, FrameSource, AVCaptureVideoDataOutputSampleB
         return AVCaptureDevice.default(for: .video)
     }
 
+    /// Opts this process into CoreMediaIO's screen-capture devices — the flag
+    /// QuickTime/Ecamm set so a plugged-in iPhone or iPad shows up as a
+    /// presentable capture device (its screen, not its camera). Set once;
+    /// devices arrive asynchronously after it flips.
+    /// verify on Mac: a USB iPhone appears in the camera menu a moment after
+    /// first launch (unlock the phone; "Trust This Computer" must be done).
+    private static let allowScreenCaptureDevices: Void = {
+        var allow: UInt32 = 1
+        var address = CMIOObjectPropertyAddress(
+            mSelector: CMIOObjectPropertySelector(kCMIOHardwarePropertyAllowScreenCaptureDevices),
+            mScope: CMIOObjectPropertyScope(kCMIOObjectPropertyScopeGlobal),
+            mElement: CMIOObjectPropertyElement(kCMIOObjectPropertyElementMain))
+        CMIOObjectSetPropertyData(CMIOObjectID(kCMIOObjectSystemObject), &address,
+                                  0, nil, UInt32(MemoryLayout<UInt32>.size), &allow)
+        var wireless = CMIOObjectPropertyAddress(
+            mSelector: CMIOObjectPropertySelector(kCMIOHardwarePropertyAllowWirelessScreenCaptureDevices),
+            mScope: CMIOObjectPropertyScope(kCMIOObjectPropertyScopeGlobal),
+            mElement: CMIOObjectPropertyElement(kCMIOObjectPropertyElementMain))
+        CMIOObjectSetPropertyData(CMIOObjectID(kCMIOObjectSystemObject), &wireless,
+                                  0, nil, UInt32(MemoryLayout<UInt32>.size), &allow)
+    }()
+
     static func availableCameras() -> [AVCaptureDevice] {
-        AVCaptureDevice.DiscoverySession(
+        _ = allowScreenCaptureDevices
+        // Cameras (built-in, USB/UVC — Android phones presenting as webcams
+        // land here — and Continuity iPhones)…
+        let cameras = AVCaptureDevice.DiscoverySession(
             deviceTypes: [.builtInWideAngleCamera, .external, .continuityCamera],
             mediaType: .video,
             position: .unspecified
         ).devices
+        // …plus iOS screen-capture devices, which present as MUXED external
+        // devices, not video ones.
+        let screens = AVCaptureDevice.DiscoverySession(
+            deviceTypes: [.external],
+            mediaType: .muxed,
+            position: .unspecified
+        ).devices
+        var seen = Set<String>()
+        return (cameras + screens).filter { seen.insert($0.uniqueID).inserted }
     }
 
     func start() {
@@ -59,7 +94,10 @@ final class CameraSource: NSObject, FrameSource, AVCaptureVideoDataOutputSampleB
         }
         do {
             session.beginConfiguration()
-            session.sessionPreset = .high
+            // iOS screen-capture (muxed) devices reject the .high preset.
+            if session.canSetSessionPreset(.high) {
+                session.sessionPreset = .high
+            }
             let input = try AVCaptureDeviceInput(device: device)
             guard session.canAddInput(input) else {
                 session.commitConfiguration()

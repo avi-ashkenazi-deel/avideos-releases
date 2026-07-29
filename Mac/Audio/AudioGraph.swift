@@ -190,10 +190,13 @@ final class AudioGraph {
             destinations.append(AVAudioConnectionPoint(node: mixMinusMixer,
                                                        bus: mixMinusMixer.nextAvailableInputBus))
         }
-        if id == .mic {
+        switch id {
+        case .mic, .input:
+            // Live capture inputs never self-monitor by default — a second
+            // mic on the speakers echoes exactly like the first.
             destinations.append(AVAudioConnectionPoint(node: micMonitorGate,
                                                        bus: micMonitorGate.nextAvailableInputBus))
-        } else {
+        default:
             destinations.append(AVAudioConnectionPoint(node: monitorMixer,
                                                        bus: monitorMixer.nextAvailableInputBus))
         }
@@ -223,8 +226,18 @@ final class AudioGraph {
         return ring
     }
 
+    /// Adds a strip for an extra capture input (second mic etc.) fed by the
+    /// given ring — the capture engine writes it, this engine reads it.
+    func addInputStrip(uid: String, ring: RingBuffer) {
+        addStrip(id: .input(uid), entry: makeRingSource(ring: ring))
+    }
+
     func removeGuestStrip(identity: String) {
-        guard let strip = strips.removeValue(forKey: .guest(identity)) else { return }
+        removeStrip(id: .guest(identity))
+    }
+
+    func removeStrip(id: MixerStripID) {
+        guard let strip = strips.removeValue(forKey: id) else { return }
         strip.mixer.removeTap(onBus: 0)          // taps off before detach
         strip.inserts?.detachAllNodes()          // any insert AUs on the strip
         engine.detach(strip.mixer)

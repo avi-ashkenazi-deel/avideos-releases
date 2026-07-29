@@ -11,6 +11,20 @@ struct MixerPanelView: View {
             ForEach(audio.strips, id: \.self) { strip in
                 LevelRow(strip: strip)
             }
+            HStack {
+                Menu {
+                    ForEach(audio.addableInputDevices, id: \.uid) { device in
+                        Button(device.name) { audio.addInputStrip(deviceUID: device.uid) }
+                    }
+                } label: {
+                    Label("Add Input", systemImage: "plus")
+                        .font(.caption)
+                }
+                .menuStyle(.borderlessButton)
+                .fixedSize()
+                .help("Add another microphone or input device to the mix")
+                Spacer()
+            }
             Divider().padding(.vertical, 4)
             DuckerSection()
         }
@@ -48,6 +62,13 @@ private struct LevelRow: View {
             fxButton
         }
         .padding(.vertical, 3)
+        .contextMenu {
+            if case .input(let uid) = strip {
+                Button("Remove Input", role: .destructive) {
+                    audio.removeInputStrip(deviceUID: uid)
+                }
+            }
+        }
     }
 
     private var muteButton: some View {

@@ -25,6 +25,9 @@ struct DuckerConfig: Codable, Equatable {
 /// Identifies one mixer strip everywhere (UI, settings, ducker).
 enum MixerStripID: Codable, Hashable, Comparable {
     case mic
+    /// An additional capture device (second mic, interface channel, a
+    /// phone's audio), keyed by device UID.
+    case input(String)
     case pads
     case music
     case movie
@@ -33,6 +36,7 @@ enum MixerStripID: Codable, Hashable, Comparable {
     var displayName: String {
         switch self {
         case .mic: "Microphone"
+        case .input: "Input"   // the facade shows the device's real name
         case .pads: "Sound FX"
         case .music: "Music"
         case .movie: "Movie"
@@ -43,10 +47,11 @@ enum MixerStripID: Codable, Hashable, Comparable {
     private var sortKey: String {
         switch self {
         case .mic: "0"
-        case .pads: "1"
-        case .music: "2"
-        case .movie: "3"
-        case .guest(let id): "4\(id)"
+        case .input(let uid): "1\(uid)"
+        case .pads: "2"
+        case .music: "3"
+        case .movie: "4"
+        case .guest(let id): "5\(id)"
         }
     }
 
