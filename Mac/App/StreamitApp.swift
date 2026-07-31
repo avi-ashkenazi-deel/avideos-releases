@@ -156,6 +156,12 @@ struct StudioCommands: Commands {
             }
             .keyboardShortcut("r", modifiers: [.command, .shift])
 
+            Button(studio.isRecordingPaused ? "Resume Recording" : "Pause Recording") {
+                studio.toggleRecordingPause()
+            }
+            .keyboardShortcut("r", modifiers: [.command, .option])
+            .disabled(!studio.isRecording)
+
             Button(studio.audio.isMuted(.mic) ? "Unmute Microphone" : "Mute Microphone") {
                 studio.audio.toggleMute(for: .mic)
             }

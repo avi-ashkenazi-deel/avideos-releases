@@ -30,6 +30,33 @@ trimmed length, a progress fill sweeping the row, and a gear popover editing
 in/out points (`SoundPad.trimStart/trimEnd`, Optional for settings-decode
 compatibility; `SoundPadPlayer` slices the pre-decoded buffer at fire time).
 
+Fifteenth pass — **pause mid-recording**. `AVAssetWriter` has no pause API,
+so this works by compacting the writer's timeline: while paused nothing is
+appended, and every timestamp appended afterwards has the accumulated paused
+span subtracted from it (`ProgramRecorder.pause()/resume()`, host-clock
+deltas). The resulting file is therefore **gapless** — the paused span is
+absent rather than a frozen frame or a stretch of silence — and A/V sync
+survives because video and audio are stamped against the same host clock and
+get the same offset. Two details that would otherwise bite: a frame or audio
+buffer stamped *inside* the pause window can still be delivered after the
+resume, and compacting it would move the timeline backwards, so both paths
+drop anything older than the resume instant; and audio needs a retimed copy
+(`CMSampleBufferCreateCopyWithNewTiming`) whose timing entry keeps the
+buffer's **per-sample** duration — `CMSampleBufferGetDuration` returns the
+total and would have been wrong. Surfaced as a Pause button beside Record
+(only while recording), ⌥⌘R on the Studio menu, ⌃⌥. globally, and a HUD that
+turns amber and stops its clock. The elapsed readout is new too, and counts
+*written* media, so it always matches the length of the file you get.
+
+Fourteenth pass — a build stamp, because "am I running what I just pulled?"
+had no answer. `Mac/App/BuildInfo.swift` reads `CFBundleShortVersionString` /
+`CFBundleVersion` and derives the build *time* from the executable's own
+modification date — deliberately runtime-only, so there is no generated
+source or build script to dirty the tree or invalidate a signature. It shows
+next to the frame rate in the HUD (`v0.3.0 (19) · 17:57`, long form on
+hover), leads the streamit menu as a disabled line, and fills the standard
+About panel. Version bumped to 0.3.0 (19).
+
 Thirteenth pass — the music section editor, rebuilt around the pointer and
 the keyboard. It opened zoomed to a fixed 12 pt/s (so a 3:39 track ran off
 the window), sections could only be made from the transport, and the End

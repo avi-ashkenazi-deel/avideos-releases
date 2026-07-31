@@ -36,6 +36,10 @@ final class ProgramRecorder: ProgramFrameConsumer {
     private(set) var outputURL: URL?
     private(set) var droppedVideoFrames = 0
 
+    /// Paused mid-take. `AVAssetWriter` has no pause API — see the
+    /// timeline-compaction note on `pause()`.
+    private(set) var isPaused = false
+
     private var writer: AVAssetWriter?
     private var videoInput: AVAssetWriterInput?
     private var audioInput: AVAssetWriterInput?
@@ -43,12 +47,35 @@ final class ProgramRecorder: ProgramFrameConsumer {
     private var sessionStarted = false
     private var firstVideoTime: CMTime = .invalid
 
+    /// Host time the current pause began (`.invalid` when running).
+    private var pauseStartedAtHostTime: CMTime = .invalid
+    /// Total time spent paused so far, subtracted from every appended
+    /// timestamp so the file has no gap.
+    private var pausedDuration: CMTime = .zero
+    /// Host time of the last resume. Anything stamped earlier than this is
+    /// stale pause-window media and must be dropped, or the compacted
+    /// timeline would go backwards.
+    private var resumedAtHostTime: CMTime = .invalid
+
     private let queue = DispatchQueue(label: "com.aviashkenazi.streamit.recorder", qos: .userInitiated)
     private let log = Logger(subsystem: "com.aviashkenazi.streamit", category: "recorder")
 
     var isRecording: Bool {
         if case .recording = state { return true }
         return false
+    }
+
+    /// Media actually written so far, i.e. wall time minus every paused span —
+    /// which is exactly the duration of the finished file. This is the number
+    /// the HUD counts up.
+    var recordedDuration: TimeInterval {
+        guard case .recording(let startedAt) = state else { return 0 }
+        var paused = pausedDuration.seconds
+        if isPaused, pauseStartedAtHostTime.isValid {
+            paused += CMTimeSubtract(CMClockGetTime(CMClockGetHostTimeClock()),
+                                     pauseStartedAtHostTime).seconds
+        }
+        return max(0, Date().timeIntervalSince(startedAt) - paused)
     }
 
     // MARK: - Lifecycle
@@ -127,6 +154,10 @@ final class ProgramRecorder: ProgramFrameConsumer {
             self.pixelBufferAdaptor = adaptor
             self.sessionStarted = false
             self.firstVideoTime = .invalid
+            self.isPaused = false
+            self.pauseStartedAtHostTime = .invalid
+            self.pausedDuration = .zero
+            self.resumedAtHostTime = .invalid
             self.outputURL = url
             self.droppedVideoFrames = 0
             self.state = .recording(startedAt: Date())
@@ -152,8 +183,54 @@ final class ProgramRecorder: ProgramFrameConsumer {
             self.videoInput = nil
             self.audioInput = nil
             self.pixelBufferAdaptor = nil
+            self.isPaused = false
+            self.pauseStartedAtHostTime = .invalid
+            self.pausedDuration = .zero
+            self.resumedAtHostTime = .invalid
             self.state = .idle
         }
+    }
+
+    // MARK: - Pause / resume
+
+    /// Pauses mid-take. There is no `AVAssetWriter.pause()`, so this works by
+    /// **compacting the timeline**: while paused nothing is appended, and every
+    /// timestamp appended afterwards has the accumulated paused span
+    /// subtracted from it. The file therefore contains no gap — it plays as if
+    /// the pause never happened — and video and audio stay in sync because
+    /// both sides are stamped against the same host clock and get the same
+    /// offset.
+    ///
+    /// Not a `RecorderState` case on purpose: the writer really is still
+    /// writing, `outputURL` is still the take in progress, and every existing
+    /// `isRecording` check should stay true through a pause.
+    func pause() {
+        queue.async { [weak self] in
+            guard let self, self.writer != nil, !self.isPaused else { return }
+            self.isPaused = true
+            self.pauseStartedAtHostTime = CMClockGetTime(CMClockGetHostTimeClock())
+            self.log.info("Recording paused")
+        }
+    }
+
+    func resume() {
+        queue.async { [weak self] in
+            guard let self, self.writer != nil, self.isPaused else { return }
+            let now = CMClockGetTime(CMClockGetHostTimeClock())
+            if self.pauseStartedAtHostTime.isValid {
+                self.pausedDuration = CMTimeAdd(
+                    self.pausedDuration,
+                    CMTimeSubtract(now, self.pauseStartedAtHostTime))
+            }
+            self.isPaused = false
+            self.pauseStartedAtHostTime = .invalid
+            self.resumedAtHostTime = now
+            self.log.info("Recording resumed")
+        }
+    }
+
+    func setPaused(_ paused: Bool) {
+        paused ? pause() : resume()
     }
 
     // MARK: - ProgramFrameConsumer (render queue)
@@ -166,17 +243,26 @@ final class ProgramRecorder: ProgramFrameConsumer {
                   let adaptor = self.pixelBufferAdaptor,
                   writer.status == .writing else { return }
 
+            // Paused: not a dropped frame, a deliberately unwritten one.
+            if self.isPaused { return }
+            // A frame stamped inside the pause window but delivered after the
+            // resume would compact to a timestamp at or before the last one
+            // written, which the writer rejects.
+            if self.resumedAtHostTime.isValid, time < self.resumedAtHostTime { return }
+
+            let pts = CMTimeSubtract(time, self.pausedDuration)
+
             if !self.sessionStarted {
-                writer.startSession(atSourceTime: time)
+                writer.startSession(atSourceTime: pts)
                 self.sessionStarted = true
-                self.firstVideoTime = time
+                self.firstVideoTime = pts
             }
 
             guard videoInput.isReadyForMoreMediaData else {
                 self.droppedVideoFrames += 1
                 return
             }
-            if !adaptor.append(pixelBuffer, withPresentationTime: time) {
+            if !adaptor.append(pixelBuffer, withPresentationTime: pts) {
                 self.droppedVideoFrames += 1
                 if writer.status == .failed {
                     self.state = .failed(writer.error?.localizedDescription ?? "Writer failed")
@@ -196,10 +282,51 @@ final class ProgramRecorder: ProgramFrameConsumer {
                   let audioInput = self.audioInput,
                   writer.status == .writing,
                   self.sessionStarted,   // video defines t0; drop earlier audio
+                  !self.isPaused,
                   audioInput.isReadyForMoreMediaData else { return }
+
+            let raw = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+            // Same stale-buffer guard as the video path: audio captured during
+            // the pause can still be queued behind the resume.
+            if self.resumedAtHostTime.isValid, raw < self.resumedAtHostTime { return }
+
+            let pts = CMTimeSubtract(raw, self.pausedDuration)
             // Drop audio that predates the session start.
-            if CMSampleBufferGetPresentationTimeStamp(sampleBuffer) < self.firstVideoTime { return }
-            audioInput.append(sampleBuffer)
+            if pts < self.firstVideoTime { return }
+
+            guard self.pausedDuration != .zero else {
+                audioInput.append(sampleBuffer)   // never paused: append as-is
+                return
+            }
+            // Retiming needs a copy; the buffer we were handed belongs to the
+            // audio tap. Take the existing timing and replace only the
+            // presentation stamp — for LPCM the entry's `duration` is the
+            // PER-SAMPLE duration (1/48000), not the buffer's total, so
+            // `CMSampleBufferGetDuration` would be wrong here.
+            // verify on Mac: first use of CMSampleBufferCreateCopyWithNewTiming
+            // in this codebase — if AAC encode rejects the copy, the fallback
+            // is to retime inside RecordingAudioSink instead (it owns the
+            // buffer before it is made data-ready).
+            var timing = CMSampleTimingInfo()
+            guard CMSampleBufferGetSampleTimingInfo(sampleBuffer,
+                                                    at: 0,
+                                                    timingInfoOut: &timing) == noErr else {
+                self.log.error("Couldn't read audio timing while paused-offsetting")
+                return
+            }
+            timing.presentationTimeStamp = pts
+            var retimed: CMSampleBuffer?
+            let status = CMSampleBufferCreateCopyWithNewTiming(
+                allocator: kCFAllocatorDefault,
+                sampleBuffer: sampleBuffer,
+                sampleTimingEntryCount: 1,
+                sampleTimingArray: &timing,
+                sampleBufferOut: &retimed)
+            if status == noErr, let retimed {
+                audioInput.append(retimed)
+            } else {
+                self.log.error("Couldn't retime paused audio (status \(status))")
+            }
         }
     }
 

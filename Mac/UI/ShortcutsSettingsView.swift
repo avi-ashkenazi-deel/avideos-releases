@@ -29,6 +29,7 @@ struct ShortcutsSettingsView: View {
 
             Section("Show Control (global)") {
                 KeyboardShortcuts.Recorder("Start / stop recording:", name: .toggleRecording)
+                KeyboardShortcuts.Recorder("Pause / resume recording:", name: .toggleRecordingPause)
                 KeyboardShortcuts.Recorder("Mute / unmute microphone:", name: .toggleMicMute)
                 KeyboardShortcuts.Recorder("Next scene:", name: .nextScene)
                 KeyboardShortcuts.Recorder("Previous scene:", name: .previousScene)

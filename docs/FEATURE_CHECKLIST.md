@@ -1,6 +1,6 @@
 # streamit — full feature checklist
 
-All 476 user-facing features, each with a stable ID so you can report
+All 481 user-facing features, each with a stable ID so you can report
 back precisely ("F-42 fails"). Ordered so you can work top to bottom: each
 section only depends on the ones above it.
 
@@ -224,6 +224,14 @@ replays just the entrance, which is the quick way to compare them.
 - [ ] **F-115** **Clap test**: audio and video are in sync in the recording. **[offline]**
 - [ ] **F-116** Recording captures the composited program (scenes, elements, effects) — not the raw camera. **[offline]**
 - [ ] **F-117** Force-quit mid-recording: the fragmented file (5s interval) is still playable. **[offline]**
+
+### Pause mid-take
+
+- [ ] **F-477** A Pause button appears beside Record while recording, and nowhere else. **[offline]**
+- [ ] **F-478** Pause turns the HUD amber ("PAUSED"), and the elapsed clock stops counting. **[offline]**
+- [ ] **F-479** Resume, stop, and play the file: it is **gapless** — the paused span is absent, not silent/frozen. **[offline]**
+- [ ] **F-480** Audio stays in sync with video across a pause (clap before and after one). **[offline]**
+- [ ] **F-481** ⌥⌘R pauses/resumes from the menu; ⌃⌥. does it with another app frontmost. **[offline]**
 
 ## N. Remote guests
 

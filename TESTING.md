@@ -105,6 +105,7 @@ Each phase's exit demo, as checkboxes. Requires a Mac (see docs/DEV_SETUP.md).
 - [ ] Add a Compressor insert on the mic; macro knob audibly changes it; a third-party AU opens its own UI.
 - [ ] Install the virtual mic (Setup) → Zoom hears mic+music+pads through "streamit Microphone".
 - [ ] Record while live → .mov in ~/Movies/streamit plays with A/V in sync (clap test).
+- [ ] Mid-take: clap, Pause (⌥⌘R), wait ~10s, Resume, clap again, Stop. The file is **gapless** — no ten-second freeze or silence — and both claps line up with their picture.
 
 ## Music sections
 Full detail in docs/FEATURE_CHECKLIST.md, F-380…F-430.

@@ -558,8 +558,15 @@ struct StatsHUD: View {
                         .foregroundStyle(.green)
                 }
                 if studio.isRecording {
-                    Label("REC", systemImage: "record.circle.fill")
-                        .foregroundStyle(.red)
+                    // Paused reads as PAUSED in amber, and the elapsed clock
+                    // freezes — it counts written media, not wall time, so it
+                    // matches the length of the file you end up with.
+                    Label(studio.isRecordingPaused ? "PAUSED" : "REC",
+                          systemImage: studio.isRecordingPaused
+                              ? "pause.circle.fill" : "record.circle.fill")
+                        .foregroundStyle(studio.isRecordingPaused ? .orange : .red)
+                    Text(Self.timecode(studio.recordingElapsed))
+                        .foregroundStyle(studio.isRecordingPaused ? .orange : .red)
                 }
                 // Which build is this? The stamp answers it at a glance, so a
                 // stale binary can't masquerade as a fresh pull.
@@ -572,6 +579,15 @@ struct StatsHUD: View {
             .padding(.vertical, 4)
             .background(.ultraThinMaterial, in: Capsule())
         }
+    }
+
+    /// h:mm:ss once past an hour, m:ss before — the recording clock.
+    private static func timecode(_ seconds: TimeInterval) -> String {
+        let total = Int(seconds.rounded(.down))
+        let (h, m, s) = (total / 3600, (total % 3600) / 60, total % 60)
+        return h > 0
+            ? String(format: "%d:%02d:%02d", h, m, s)
+            : String(format: "%d:%02d", m, s)
     }
 }
 

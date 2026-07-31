@@ -67,6 +67,9 @@ final class StudioController {
     /// never saw changes, so the Record button gave no feedback at all and
     /// recording looked broken.
     private(set) var isRecording = false
+    /// Paused mid-take. Same reason as `isRecording` for mirroring it here:
+    /// ProgramRecorder isn't observable, so the button needs a stored copy.
+    private(set) var isRecordingPaused = false
 
     /// The finished take, driving the "what now" dialog (delete / show in
     /// Finder / open in editor) after every stop.
@@ -898,9 +901,24 @@ final class StudioController {
     /// Pressing Record again during the count cancels.
     private(set) var recordingCountdown: Int?
 
+    /// Wall time actually written to the file, paused spans excluded — the
+    /// number the HUD counts up. Recomputed by the HUD's 1 Hz TimelineView, so
+    /// it needs no observable mirror of its own.
+    var recordingElapsed: TimeInterval { recorder.recordedDuration }
+
+    /// Pause / resume mid-take. The file ends up gapless (see
+    /// `ProgramRecorder.pause()`), so a pause is a hole in the *take*, not in
+    /// the recording — the program keeps rendering and streaming throughout.
+    func toggleRecordingPause() {
+        guard isRecording else { return }
+        isRecordingPaused.toggle()
+        recorder.setPaused(isRecordingPaused)
+    }
+
     func toggleRecording() {
         if isRecording {
             isRecording = false
+            isRecordingPaused = false
             recorder.stop { [weak self] url in
                 Task { @MainActor in
                     guard let self else { return }
@@ -942,6 +960,7 @@ final class StudioController {
             audio.startRecordingSink(recorder: recorder)
             renderEngine?.addConsumer(recorder)
             isRecording = true
+            isRecordingPaused = false
         } catch {
             log.error("Couldn't start recording: \(error.localizedDescription)")
         }

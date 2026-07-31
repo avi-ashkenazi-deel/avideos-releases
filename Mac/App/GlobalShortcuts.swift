@@ -28,6 +28,10 @@ extension KeyboardShortcuts.Name {
     // Show control.
     static let toggleRecording = Self("toggleRecording",
                                       default: .init(.r, modifiers: [.control, .option]))
+    /// Pause / resume the take. ⌃⌥. — a pause has to be reachable from inside
+    /// the app you are presenting, which is the whole point of pausing.
+    static let toggleRecordingPause = Self("toggleRecordingPause",
+                                           default: .init(.period, modifiers: [.control, .option]))
     static let toggleMicMute = Self("toggleMicMute",
                                     default: .init(.m, modifiers: [.control, .option]))
     static let nextScene = Self("nextScene",
@@ -109,6 +113,7 @@ final class GlobalShortcutRegistrar {
         }
 
         bind(.toggleRecording, studio) { $0.toggleRecording() }
+        bind(.toggleRecordingPause, studio) { $0.toggleRecordingPause() }
         bind(.toggleMicMute, studio) { $0.audio.toggleMute(for: .mic) }
         bind(.nextScene, studio) { $0.advanceScene(by: 1) }
         bind(.previousScene, studio) { $0.advanceScene(by: -1) }

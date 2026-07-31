@@ -56,7 +56,10 @@ private struct StudioLayout: View {
                 if studio.activeSceneIsCamera && studio.prefs.showCameraSwitcher {
                     cameraStrip
                 }
-                recordButton
+                HStack(spacing: 10) {
+                    recordButton
+                    if studio.isRecording { pauseButton }
+                }
             }
             .padding(.bottom, 18)
         }
@@ -192,6 +195,30 @@ private struct StudioLayout: View {
         // ⇧⌘R already lives on the Studio menu command; binding it here too
         // would fire the toggle twice per press.
         .help("Record the program to disk (⇧⌘R)")
+    }
+
+    /// Pause the take without ending it. Only exists while recording — there
+    /// is nothing to pause otherwise. The take resumes gapless (the writer's
+    /// timeline is compacted), so the file plays as one continuous piece.
+    private var pauseButton: some View {
+        Button {
+            studio.toggleRecordingPause()
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: studio.isRecordingPaused ? "play.fill" : "pause.fill")
+                Text(studio.isRecordingPaused ? "Resume" : "Pause")
+                    .font(.body.weight(.semibold))
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 10)
+            .background(studio.isRecordingPaused ? Color.orange : Color.black.opacity(0.55),
+                        in: RoundedRectangle(cornerRadius: 9))
+            .foregroundStyle(.white)
+        }
+        .buttonStyle(.studioTile)
+        .help(studio.isRecordingPaused
+              ? "Resume the take — the file stays gapless (⌥⌘R)"
+              : "Pause the take without stopping the recording (⌥⌘R)")
     }
 
     @ToolbarContentBuilder
