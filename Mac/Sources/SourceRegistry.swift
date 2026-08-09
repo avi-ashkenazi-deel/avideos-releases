@@ -102,7 +102,7 @@ final class SourceRegistry {
     private func makeSource(for key: SourceKey) -> FrameSource? {
         switch key {
         case .camera(let uid):
-            let source = CameraSource(key: key, deviceUniqueID: uid, metalDevice: device)
+            let source = CameraSource(key: key, deviceUniqueID: uid.uid, metalDevice: device)
             source.frameTap = cameraFrameTap
             return source
         case .display(let displayID):

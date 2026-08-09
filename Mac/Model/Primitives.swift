@@ -281,9 +281,48 @@ struct SourcePresentation: Codable, Hashable, Sendable {
     }
 }
 
+/// Which camera: the system default, or a specific device by unique id.
+///
+/// This used to be spelled two ways — `SourceKey.camera` used `nil` for the
+/// default while `SourceBinding.camera` used `""` — with the translation
+/// copy-pasted at three sites. One type, one spelling, zero translations.
+///
+/// Encodes as the bare uid string ("" for the default), which is exactly what
+/// documents already store, so existing projects decode unchanged.
+struct CameraID: Codable, Hashable, Sendable, CustomStringConvertible {
+    /// "" means the system default — private so no call site can re-invent
+    /// the sentinel; go through `uid` / `isSystemDefault`.
+    private let rawUID: String
+
+    static let systemDefault = CameraID(uid: nil)
+
+    /// `nil` (or empty) = system default.
+    init(uid: String?) {
+        self.rawUID = uid ?? ""
+    }
+
+    /// The device unique id, or nil for the system default — the shape
+    /// `CameraSource.device(uniqueID:)` takes.
+    var uid: String? { rawUID.isEmpty ? nil : rawUID }
+    var isSystemDefault: Bool { rawUID.isEmpty }
+
+    /// Stable identity component for transition keys and picker tags.
+    var description: String { rawUID.isEmpty ? "default" : rawUID }
+
+    init(from decoder: Decoder) throws {
+        rawUID = try decoder.singleValueContainer().decode(String.self)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawUID)
+    }
+}
+
 /// Which live source an element (or scene primary) is bound to.
 enum SourceBinding: Codable, Hashable, Sendable {
-    case camera(deviceUniqueID: String)
+    // The label stays `deviceUniqueID` — it is the persisted JSON key.
+    case camera(deviceUniqueID: CameraID)
     case display(displayID: UInt32)
     case window(windowID: UInt32)
     /// A remote guest, keyed by LiveKit participant identity.

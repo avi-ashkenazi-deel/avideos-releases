@@ -384,6 +384,8 @@ struct InspectorView: View {
 
         func tag(for binding: SourceBinding) -> String {
             switch binding {
+            // CameraID prints "default" for the system default, so the
+            // default's tag is "camera:default" — matching the picker row.
             case .camera(let uid): "camera:\(uid)"
             case .guest(let identity): "guest:\(identity)"
             case .display(let id): "display:\(id)"
@@ -397,17 +399,17 @@ struct InspectorView: View {
                 get: { tag(for: binding) },
                 set: { newTag in
                     guard var updated = studio.findElement(id: element.id) else { return }
-                    if newTag == "camera:" {
-                        updated.kind = .source(.camera(deviceUniqueID: ""))
+                    if newTag == "camera:default" {
+                        updated.kind = .source(.camera(deviceUniqueID: .systemDefault))
                     } else if newTag.hasPrefix("camera:") {
-                        updated.kind = .source(.camera(deviceUniqueID: String(newTag.dropFirst(7))))
+                        updated.kind = .source(.camera(deviceUniqueID: CameraID(uid: String(newTag.dropFirst(7)))))
                     } else if newTag.hasPrefix("guest:") {
                         updated.kind = .source(.guest(identity: String(newTag.dropFirst(6))))
                     }
                     studio.updateElement(updated)
                 }
             )) {
-                Text("System Default Camera").tag("camera:")
+                Text("System Default Camera").tag("camera:default")
                 ForEach(cameras, id: \.uniqueID) { device in
                     Text(device.localizedName).tag("camera:\(device.uniqueID)")
                 }

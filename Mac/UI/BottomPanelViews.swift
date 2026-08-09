@@ -420,8 +420,7 @@ private struct TakeTimer: View {
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1)) { timeline in
             if case .recording(_, let startedAt) = state {
-                let elapsed = Int(timeline.date.timeIntervalSince(startedAt))
-                Text(String(format: "%d:%02d", elapsed / 60, elapsed % 60))
+                Text(Timecode.clock(timeline.date.timeIntervalSince(startedAt)))
                     .font(.body.monospacedDigit())
                     .foregroundStyle(.red)
             }
@@ -565,7 +564,7 @@ struct StatsHUD: View {
                           systemImage: studio.isRecordingPaused
                               ? "pause.circle.fill" : "record.circle.fill")
                         .foregroundStyle(studio.isRecordingPaused ? .orange : .red)
-                    Text(Self.timecode(studio.recordingElapsed))
+                    Text(Timecode.clock(studio.recordingElapsed))
                         .foregroundStyle(studio.isRecordingPaused ? .orange : .red)
                 }
                 // Which build is this? The stamp answers it at a glance, so a
@@ -579,15 +578,6 @@ struct StatsHUD: View {
             .padding(.vertical, 4)
             .background(.ultraThinMaterial, in: Capsule())
         }
-    }
-
-    /// h:mm:ss once past an hour, m:ss before — the recording clock.
-    private static func timecode(_ seconds: TimeInterval) -> String {
-        let total = Int(seconds.rounded(.down))
-        let (h, m, s) = (total / 3600, (total % 3600) / 60, total % 60)
-        return h > 0
-            ? String(format: "%d:%02d:%02d", h, m, s)
-            : String(format: "%d:%02d", m, s)
     }
 }
 

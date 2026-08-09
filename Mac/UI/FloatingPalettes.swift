@@ -578,10 +578,7 @@ private struct SoundEffectRow: View {
     }
 
     static func timecode(_ seconds: Double) -> String {
-        let total = max(0, seconds)
-        let minutes = Int(total) / 60
-        let secs = total - Double(minutes * 60)
-        return String(format: "%d:%04.1f", minutes, secs)
+        Timecode.tenths(seconds)
     }
 }
 

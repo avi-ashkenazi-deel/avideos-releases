@@ -64,10 +64,10 @@ struct Element: Codable, Hashable, Sendable, Identifiable {
         }
         if case .source(let binding) = kind {
             switch binding {
-            // "" means the system default; match the token RenderPlan's
-            // primaries use, so a default-camera tile and a default-camera
-            // scene primary are the same thing to magic move.
-            case .camera(let uid): return "camera:\(uid.isEmpty ? "default" : uid)"
+            // CameraID prints "default" for the system default — the same
+            // token RenderPlan's primaries use, so a default-camera tile and
+            // a default-camera scene primary are one thing to magic move.
+            case .camera(let uid): return "camera:\(uid)"
             case .guest(let identity): return "guest:\(identity)"
             case .display(let d): return "display:\(d)"
             case .window(let w): return "window:\(w)"
@@ -168,11 +168,12 @@ enum SourceTileShape: String, Codable, CaseIterable, Sendable {
         }
     }
 
-    /// Unit corner radius for the render item; -1 is the ellipse-mask
-    /// sentinel the compositor already understands.
+    /// Unit corner radius for the rounded shapes. Circle is not a radius at
+    /// all — it is the ellipse mask; RenderPlan maps it to `MaskShape.ellipse`
+    /// (this used to smuggle the shader's -1 sentinel through the model).
     var cornerRadius: Double {
         switch self {
-        case .circle: -1
+        case .circle: 0   // unused — RenderPlan special-cases .circle
         case .squircle: 0.22
         default: 0.02
         }
@@ -198,12 +199,7 @@ struct TimerContent: Codable, Hashable, Sendable {
 
     /// "3:21", or "1:02:05" past the hour — what the tile shows.
     static func formatted(_ seconds: Double) -> String {
-        let total = max(0, Int(seconds.rounded()))
-        let hours = total / 3600
-        let minutes = (total % 3600) / 60
-        let secs = total % 60
-        return hours > 0 ? String(format: "%d:%02d:%02d", hours, minutes, secs)
-                         : String(format: "%d:%02d", minutes, secs)
+        Timecode.clock(seconds)
     }
 }
 

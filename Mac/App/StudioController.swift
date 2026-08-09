@@ -48,7 +48,9 @@ final class StudioController {
     private var elementAnimations: [UUID: AnimationState] = [:]
     /// Countdown start per timer element — runtime state; a saved project
     /// must not resume mid-count. Restarts when the element is shown.
-    private var timerStarts: [UUID: Date] = [:]
+    /// Internal (not private) because the element factories live in
+    /// StudioControllerElements.swift and `private` is file-scoped.
+    var timerStarts: [UUID: Date] = [:]
     /// 1 Hz recompile while a visible timer element exists in the active
     /// scene; nil otherwise so timer-less scenes pay nothing.
     private var timerTick: DispatchSourceTimer?
@@ -600,26 +602,37 @@ final class StudioController {
 
     // MARK: - Element editing
 
+    /// Mutates the active scene in place; a no-op returning false when there
+    /// is none. The firstIndex-then-guard dance was copy-pasted at six sites
+    /// before it earned a name — every active-scene mutation goes through
+    /// here now.
+    @discardableResult
+    private func withActiveScene(_ body: (inout SceneModel) -> Void) -> Bool {
+        guard let index = project.scenes.firstIndex(where: { $0.id == project.activeSceneID })
+        else { return false }
+        body(&project.scenes[index])
+        return true
+    }
+
     func findElement(id: UUID) -> Element? {
         project.activeScene?.elements.first { $0.id == id }
     }
 
     func updateElement(_ element: Element) {
-        guard let sceneIndex = project.scenes.firstIndex(where: { $0.id == project.activeSceneID }),
-              let elementIndex = project.scenes[sceneIndex].elements.firstIndex(where: { $0.id == element.id })
-        else { return }
-        project.scenes[sceneIndex].elements[elementIndex] = element
+        withActiveScene { scene in
+            guard let index = scene.elements.firstIndex(where: { $0.id == element.id }) else { return }
+            scene.elements[index] = element
+        }
     }
 
     func addElement(_ element: Element) {
-        guard let sceneIndex = project.scenes.firstIndex(where: { $0.id == project.activeSceneID }) else { return }
-        project.scenes[sceneIndex].elements.append(element)
-        selectedElementID = element.id
+        if withActiveScene({ $0.elements.append(element) }) {
+            selectedElementID = element.id
+        }
     }
 
     func removeElement(id: UUID) {
-        guard let sceneIndex = project.scenes.firstIndex(where: { $0.id == project.activeSceneID }) else { return }
-        project.scenes[sceneIndex].elements.removeAll { $0.id == id }
+        guard withActiveScene({ $0.elements.removeAll { $0.id == id } }) else { return }
         elementAnimations.removeValue(forKey: id)
         timerStarts.removeValue(forKey: id)
         if selectedElementID == id { selectedElementID = nil }
@@ -649,154 +662,26 @@ final class StudioController {
     /// pasting into another scene keeps both independent. Nudged slightly so
     /// the pasted copy is visibly distinct from the original.
     func pasteElement() {
-        guard var element = copiedElement,
-              let sceneIndex = project.scenes.firstIndex(where: { $0.id == project.activeSceneID })
-        else { return }
+        guard var element = copiedElement else { return }
         element.id = UUID()
-        if project.scenes[sceneIndex].elements.contains(where: {
-            $0.transform.center == element.transform.center && $0.name == element.name
-        }) {
-            element.transform.center.x = min(element.transform.center.x + 0.03, 1)
-            element.transform.center.y = min(element.transform.center.y + 0.03, 1)
-            element.name += " Copy"
+        let pasted = withActiveScene { scene in
+            if scene.elements.contains(where: {
+                $0.transform.center == element.transform.center && $0.name == element.name
+            }) {
+                element.transform.center.x = min(element.transform.center.x + 0.03, 1)
+                element.transform.center.y = min(element.transform.center.y + 0.03, 1)
+                element.name += " Copy"
+            }
+            scene.elements.append(element)
         }
-        project.scenes[sceneIndex].elements.append(element)
-        selectedElementID = element.id
+        if pasted { selectedElementID = element.id }
     }
 
     /// Reorders elements within the active scene (array order = z-order,
     /// later draws on top). List.onMove signature so the layers panel binds
     /// straight through.
     func moveElements(fromOffsets: IndexSet, toOffset: Int) {
-        guard let sceneIndex = project.scenes.firstIndex(where: { $0.id == project.activeSceneID }) else { return }
-        project.scenes[sceneIndex].elements.move(fromOffsets: fromOffsets, toOffset: toOffset)
-    }
-
-    // MARK: - Element factories (inspector add-bar + overlays palette)
-
-    func addTextElement() {
-        addElement(Element(name: "Text",
-                           kind: .text(TextContent(string: "Your text")),
-                           transform: ElementTransform(center: CGPoint(x: 0.5, y: 0.8),
-                                                       size: CGSize(width: 0.5, height: 0.12)),
-                           fill: .solid(.white),
-                           entryAnimation: .styled(.slideFromBottom)))
-    }
-
-    func addShapeElement() {
-        addElement(Element(name: "Shape",
-                           kind: .shape(ShapeContent(shape: .roundedRectangle)),
-                           transform: ElementTransform(center: CGPoint(x: 0.5, y: 0.82),
-                                                       size: CGSize(width: 0.55, height: 0.16)),
-                           fill: .shader(ShaderFill()),
-                           entryAnimation: .styled(.slideFromLeft)))
-    }
-
-    func addImageElement(url: URL) {
-        addElement(Element(name: url.lastPathComponent,
-                           kind: .image(MediaReference(url: url)),
-                           transform: mediaTransform(forPixelSize: Self.imagePixelSize(url: url)),
-                           entryAnimation: .styled(.fade)))
-    }
-
-    func addVideoElement(url: URL) {
-        // Natural size loads async; the element appears once probed so its
-        // bounding box starts at the video's real shape, not a default square.
-        Task { @MainActor in
-            let pixelSize = await Self.videoPixelSize(url: url)
-            addElement(Element(name: url.lastPathComponent,
-                               kind: .video(VideoContent(media: MediaReference(url: url))),
-                               transform: mediaTransform(forPixelSize: pixelSize),
-                               entryAnimation: .styled(.fade)))
-        }
-    }
-
-    func addWebElement() {
-        addElement(Element(name: "Web Overlay",
-                           kind: .web(WebContent(urlString: "https://example.com")),
-                           transform: .fullCanvas,
-                           entryAnimation: .styled(.fade)))
-    }
-
-    /// Text with a background box (lower-third style).
-    func addTextBoxElement() {
-        addElement(Element(name: "Text Box",
-                           kind: .text(TextContent(string: "Your text",
-                                                   boxFill: .solid(RGBAColor(red: 0, green: 0, blue: 0, alpha: 0.55)),
-                                                   boxCornerRadius: 0.04)),
-                           transform: ElementTransform(center: CGPoint(x: 0.5, y: 0.8),
-                                                       size: CGSize(width: 0.5, height: 0.14)),
-                           fill: .solid(.white),
-                           entryAnimation: .styled(.slideFromBottom)))
-    }
-
-    /// Countdown overlay; the count starts the moment it's added.
-    func addTimerElement() {
-        let element = Element(name: "Timer",
-                              kind: .timer(TimerContent()),
-                              transform: ElementTransform(center: CGPoint(x: 0.5, y: 0.5),
-                                                          size: CGSize(width: 0.4, height: 0.22)),
-                              fill: .solid(.white),
-                              entryAnimation: .styled(.fade))
-        timerStarts[element.id] = Date()
-        addElement(element)
-    }
-
-    /// A camera PiP tile — the host small over a screen share, or a second
-    /// angle. Tile in the lower-right, like an interview inset. `nil` device
-    /// = the system default camera; the inspector picks a specific one after
-    /// placing it, so adding an overlay is a single click.
-    func addCameraElement(deviceUniqueID: String? = nil, name: String? = nil) {
-        // SourceBinding.camera carries a non-optional id; "" is the agreed
-        // spelling of "system default" (CameraSource.device resolves an
-        // unmatched id to the default device).
-        addElement(Element(name: name ?? "Camera",
-                           kind: .source(.camera(deviceUniqueID: deviceUniqueID ?? "")),
-                           transform: ElementTransform(center: CGPoint(x: 0.82, y: 0.76),
-                                                       size: CGSize(width: 0.28, height: 0.28)),
-                           entryAnimation: .styled(.fade)))
-    }
-
-    /// A guest tile as a freely placeable element (beyond the interview grid).
-    func addGuestElement(identity: String, name: String) {
-        addElement(Element(name: name,
-                           kind: .source(.guest(identity: identity)),
-                           transform: ElementTransform(center: CGPoint(x: 0.82, y: 0.76),
-                                                       size: CGSize(width: 0.28, height: 0.28)),
-                           entryAnimation: .styled(.fade)))
-    }
-
-    /// Element transform matching the media's real pixels: 1:1 with canvas
-    /// pixels when it fits, scaled down at its own aspect when it doesn't.
-    private func mediaTransform(forPixelSize pixelSize: CGSize?) -> ElementTransform {
-        guard let pixelSize, pixelSize.width > 0, pixelSize.height > 0 else {
-            return ElementTransform()
-        }
-        let canvas = project.canvasSize
-        let scale = min(1, canvas.width / pixelSize.width, canvas.height / pixelSize.height)
-        return ElementTransform(center: CGPoint(x: 0.5, y: 0.5),
-                                size: CGSize(width: pixelSize.width * scale / canvas.width,
-                                             height: pixelSize.height * scale / canvas.height))
-    }
-
-    private static func imagePixelSize(url: URL) -> CGSize? {
-        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
-              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
-              let width = properties[kCGImagePropertyPixelWidth] as? Double,
-              let height = properties[kCGImagePropertyPixelHeight] as? Double else { return nil }
-        // EXIF orientations 5-8 are 90°-rotated; the displayed shape swaps.
-        let orientation = properties[kCGImagePropertyOrientation] as? UInt32 ?? 1
-        return orientation >= 5 ? CGSize(width: height, height: width)
-                                : CGSize(width: width, height: height)
-    }
-
-    private static func videoPixelSize(url: URL) async -> CGSize? {
-        let asset = AVURLAsset(url: url)
-        guard let track = try? await asset.loadTracks(withMediaType: .video).first,
-              let (size, transform) = try? await track.load(.naturalSize, .preferredTransform)
-        else { return nil }
-        let rect = CGRect(origin: .zero, size: size).applying(transform)
-        return CGSize(width: abs(rect.width), height: abs(rect.height))
+        withActiveScene { $0.elements.move(fromOffsets: fromOffsets, toOffset: toOffset) }
     }
 
     /// Show/hide with entry/exit animation (exit = reversed entry).

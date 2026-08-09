@@ -60,7 +60,7 @@ enum RenderContent: Sendable {
 /// Stable identity for a live source across plan rebuilds.
 /// The registry owns the actual `FrameSource` instances.
 enum SourceKey: Hashable, Sendable, CustomStringConvertible {
-    case camera(deviceUniqueID: String?)
+    case camera(deviceUniqueID: CameraID)
     case display(displayID: UInt32)
     case window(windowID: UInt32)
     case movie(elementID: UUID)
@@ -73,7 +73,7 @@ enum SourceKey: Hashable, Sendable, CustomStringConvertible {
 
     var description: String {
         switch self {
-        case .camera(let id): "camera:\(id ?? "default")"
+        case .camera(let id): "camera:\(id)"
         case .display(let id): "display:\(id)"
         case .window(let id): "window:\(id)"
         case .movie(let id): "movie:\(id)"
@@ -151,11 +151,26 @@ enum RenderPlanCompiler {
     /// One element usually compiles to one item; a boxed text compiles to a
     /// background shape item plus the glyph item on top (same transform, same
     /// animation, so they move as one).
+    /// How an item's quad is masked. The shader's encoding is a single float
+    /// (negative = ellipse, see Composite.metal) — this names the two cases
+    /// at the one place that used to hand-write the `-1` sentinel.
+    private enum MaskShape {
+        case rounded(Double)
+        case ellipse
+
+        var encodedRadius: Double {
+            switch self {
+            case .rounded(let radius): radius
+            case .ellipse: -1
+            }
+        }
+    }
+
     private static func renderItems(for element: Element,
                                     state: AnimationState,
                                     timerTexts: [UUID: String]) -> [RenderItem] {
         let content: RenderContent
-        var cornerRadius = 0.0
+        var mask = MaskShape.rounded(0)
         var background: RenderItem?
 
         switch element.kind {
@@ -177,8 +192,8 @@ enum RenderPlanCompiler {
             content = .text(text, color: element.fill ?? .solid(.white))
         case .shape(let shape):
             content = .fill(element.fill ?? .solid(.white))
-            if shape.shape == .roundedRectangle { cornerRadius = shape.cornerRadius }
-            if shape.shape == .ellipse { cornerRadius = -1 } // sentinel: ellipse mask
+            if shape.shape == .roundedRectangle { mask = .rounded(shape.cornerRadius) }
+            if shape.shape == .ellipse { mask = .ellipse }
         case .image:
             content = .source(sourceKey: .image(elementID: element.id))
         case .video:
@@ -187,14 +202,17 @@ enum RenderPlanCompiler {
             content = .source(sourceKey: .web(elementID: element.id))
         case .source(let binding):
             content = .source(sourceKey: sourceKey(for: binding))
-            cornerRadius = element.tileShape?.cornerRadius ?? 0.01
+            mask = element.tileShape == .circle
+                ? .ellipse
+                : .rounded(element.tileShape?.cornerRadius ?? 0.01)
         }
 
-        // The per-element radius overrides every kind's default — except a
-        // circle mask (-1 sentinel), which stays a circle.
-        if let radius = element.cornerRadius, cornerRadius >= 0 {
-            cornerRadius = radius
+        // The per-element radius overrides every kind's default radius — but
+        // never turns an ellipse mask back into a rectangle.
+        if let radius = element.cornerRadius, case .rounded = mask {
+            mask = .rounded(radius)
         }
+        let cornerRadius = mask.encodedRadius
 
         var item = RenderItem(id: element.id,
                               transitionKey: element.transitionKey,
@@ -254,9 +272,9 @@ enum RenderPlanCompiler {
 
     private static func sourceKey(for binding: SourceBinding) -> SourceKey {
         switch binding {
-        // "" is "system default"; the registry keys on nil for that, so both
-        // spellings resolve to ONE capture session rather than two.
-        case .camera(let uid): .camera(deviceUniqueID: uid.isEmpty ? nil : uid)
+        // Both sides speak CameraID now, so a binding's default camera and a
+        // scene's default camera resolve to ONE capture session by identity.
+        case .camera(let id): .camera(deviceUniqueID: id)
         case .display(let id): .display(displayID: id)
         case .window(let id): .window(windowID: id)
         case .guest(let identity): .guest(identity: identity)
@@ -271,7 +289,7 @@ enum RenderPlanCompiler {
     /// why magic move never matched primaries to anything.
     private static func transitionKey(for key: SourceKey) -> String {
         switch key {
-        case .camera(let uid): "camera:\(uid ?? "default")"
+        case .camera(let uid): "camera:\(uid)"
         case .display(let id): "display:\(id)"
         case .window(let id): "window:\(id)"
         case .guest(let identity): "guest:\(identity)"
@@ -286,7 +304,7 @@ enum RenderPlanCompiler {
         switch scene.kind {
         case .camera(let config):
             return framedPrimary(scene: scene,
-                                 key: .camera(deviceUniqueID: config.deviceUniqueID))
+                                 key: .camera(deviceUniqueID: CameraID(uid: config.deviceUniqueID)))
         case .screenShare(let config):
             let key: SourceKey
             switch config.target {
@@ -377,8 +395,8 @@ enum RenderPlanCompiler {
                                        guests: [GuestDescriptor]) -> [RenderItem] {
         var tiles: [(key: SourceKey, transitionKey: String)] = []
         if config.includesHost {
-            let key = SourceKey.camera(deviceUniqueID: config.hostDeviceUniqueID)
-            tiles.append((key, "camera:\(config.hostDeviceUniqueID ?? "default")"))
+            let id = CameraID(uid: config.hostDeviceUniqueID)
+            tiles.append((.camera(deviceUniqueID: id), "camera:\(id)"))
         }
         for guest in guests {
             tiles.append((.guest(identity: guest.identity), "guest:\(guest.identity)"))

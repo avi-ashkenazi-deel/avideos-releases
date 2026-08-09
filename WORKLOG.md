@@ -30,6 +30,32 @@ trimmed length, a progress fill sweeping the row, and a gear popover editing
 in/out points (`SoundPad.trimStart/trimEnd`, Optional for settings-decode
 compatibility; `SoundPadPlayer` slices the pre-decoded buffer at fire time).
 
+Sixteenth pass — a maintainability review (run at Avi's request against an
+extremely strict external rubric), then its fixes, all behavior-preserving.
+The two files past the 1000-line boundary were split by moving text, not
+redesigning: StudioController's element factories now live in
+`StudioControllerElements.swift` (1096 → 972 lines) and EditWorkspaceView's
+async AI actions + undo system in `EditWorkspaceActions.swift` (1202 → 940);
+members those extensions touch dropped `private` (it is file-scoped), noted
+at the declarations. The camera id had two spellings — `SourceKey` used
+`nil` for "system default", `SourceBinding` used `""`, translated at three
+scattered sites — replaced by one `CameraID` struct (Primitives.swift) that
+encodes as the same bare string documents already store, so nothing
+re-persists. The `-1` ellipse-mask sentinel is now produced by a named
+`MaskShape` enum in RenderPlan (and `SourceTileShape.circle` no longer
+smuggles the shader constant through the model). The six copy-pasted
+active-scene `firstIndex` guards collapsed into `withActiveScene(_:)`. Five
+drifted per-view timecode formatters became `Timecode.clock/tenths`
+(Mac/Model/Timecode.swift) — YouTube chapter stamps deliberately stay their
+own format. And guest-track chunk downloads now run six-wide through a
+throwing task group instead of one at a time — these are the multi-GB 4K
+masters, and the single connection was the import bottleneck; order never
+mattered because chunks land as named files and are concatenated by key.
+Left alone on purpose: AudioEngineController's pass-throughs (that facade is
+the design), the Optional-everywhere settings convention (load-bearing — a
+non-optional new field silently wipes user config), and MusicPlayer's state
+variables (deliberate, untested on hardware, and under the line limit).
+
 Fifteenth pass — **pause mid-recording**. `AVAssetWriter` has no pause API,
 so this works by compacting the writer's timeline: while paused nothing is
 appended, and every timestamp appended afterwards has the accumulated paused
