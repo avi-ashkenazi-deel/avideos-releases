@@ -388,6 +388,7 @@ struct InspectorView: View {
             // default's tag is "camera:default" — matching the picker row.
             case .camera(let uid): "camera:\(uid)"
             case .guest(let identity): "guest:\(identity)"
+            case .guestScreen(let identity): "guestscreen:\(identity)"
             case .display(let id): "display:\(id)"
             case .window(let id): "window:\(id)"
             }
@@ -403,6 +404,8 @@ struct InspectorView: View {
                         updated.kind = .source(.camera(deviceUniqueID: .systemDefault))
                     } else if newTag.hasPrefix("camera:") {
                         updated.kind = .source(.camera(deviceUniqueID: CameraID(uid: String(newTag.dropFirst(7)))))
+                    } else if newTag.hasPrefix("guestscreen:") {
+                        updated.kind = .source(.guestScreen(identity: String(newTag.dropFirst(12))))
                     } else if newTag.hasPrefix("guest:") {
                         updated.kind = .source(.guest(identity: String(newTag.dropFirst(6))))
                     }
@@ -417,6 +420,12 @@ struct InspectorView: View {
                     Divider()
                     ForEach(guests) { guest in
                         Text(guest.displayName).tag("guest:\(guest.identity)")
+                    }
+                    // Shared screens are their own feeds, listed after the
+                    // faces. A screen tile letterboxes instead of cropping.
+                    ForEach(guests.filter(\.isSharingScreen)) { guest in
+                        Text("\(guest.displayName)'s Screen")
+                            .tag("guestscreen:\(guest.identity)")
                     }
                 }
             }

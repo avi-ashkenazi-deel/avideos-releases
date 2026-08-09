@@ -184,6 +184,7 @@ Known gaps in this pass — do not report:
 - [ ] With headphones off on both ends: no echo (guest never hears themselves — mix-minus).
 - [ ] Record Take → guest's tab shows REC + upload %; kill the guest tab mid-take, reopen → recording resumes, at most ~5s lost.
 - [ ] Call-in gate: a joining caller shows "waiting" in the Guests palette and is absent from the program and inaudible, but hears the show; Put On Air adds them to the tiles and unmutes them, and their page flips "off air" → ON AIR; clicking again pulls them back without disconnecting.
+- [ ] Guest screen share: guest clicks Share screen → the interview scene puts the screen on stage (letterboxed) with every face in a strip below; their camera tile keeps running; stopping via the browser's own "Stop sharing" bar returns the grid and resets the page button.
 
 ## Editor: delivery polish and multicam
 Full detail in docs/FEATURE_CHECKLIST.md, F-488…F-499.

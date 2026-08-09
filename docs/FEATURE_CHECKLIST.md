@@ -1,6 +1,6 @@
 # streamit — full feature checklist
 
-All 499 user-facing features, each with a stable ID so you can report
+All 506 user-facing features, each with a stable ID so you can report
 back precisely ("F-42 fails"). Ordered so you can work top to bottom: each
 section only depends on the ones above it.
 
@@ -259,6 +259,16 @@ replays just the entrance, which is the quick way to compare them.
 - [ ] **F-497** Sync against non-overlapping audio reports "no confident match" instead of silently guessing. **[offline]**
 - [ ] **F-498** With 2+ cameras, a **Cut to** strip appears above the timeline; clicking an angle cuts the program to it at the playhead. **[offline]**
 - [ ] **F-499** Re-cutting at the same playhead replaces the cue instead of stacking cues. **[offline]**
+
+## AD. Guest screen share
+
+- [ ] **F-500** The guest page has **Share screen**; picking a screen/window/tab publishes it, and the button turns red ("Stop sharing"). **[net] [2nd device]**
+- [ ] **F-501** With the sharer ON AIR, the interview scene switches itself to screen-on-stage: the screen big and letterboxed (never cropped), every face — host included — in the strip below. **[net] [2nd device]**
+- [ ] **F-502** Stopping the share (button OR the browser's own "Stop sharing" bar) returns the interview scene to its grid, and the page button resets either way. **[net] [2nd device]**
+- [ ] **F-503** The guest's camera tile keeps working while they share — two independent feeds. **[net] [2nd device]**
+- [ ] **F-504** Right-click the guest in the palette → "Add <name>'s Screen as Tile" places the screen on any scene; the inspector's source picker also lists "<name>'s Screen". **[net] [2nd device]**
+- [ ] **F-505** An off-air caller's screen never reaches the program (same gate as their camera). **[net] [2nd device]**
+- [ ] **F-506** Known gap, don't report: screen-share TAB AUDIO is not mixed in v1 — the guest's mic carries the sound. **[not built]**
 
 ## N. Remote guests
 

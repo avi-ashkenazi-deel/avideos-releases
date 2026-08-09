@@ -67,6 +67,9 @@ enum SourceKey: Hashable, Sendable, CustomStringConvertible {
     case web(elementID: UUID)
     case image(elementID: UUID)
     case guest(identity: String)
+    /// A guest's shared screen — a second, independent feed from the same
+    /// participant (their camera stays `.guest`).
+    case guestScreen(identity: String)
     case fillVideo(elementID: UUID)
     /// Scene-level primary sources use the scene ID.
     case scenePrimary(sceneID: UUID)
@@ -80,6 +83,7 @@ enum SourceKey: Hashable, Sendable, CustomStringConvertible {
         case .web(let id): "web:\(id)"
         case .image(let id): "image:\(id)"
         case .guest(let id): "guest:\(id)"
+        case .guestScreen(let id): "guestscreen:\(id)"
         case .fillVideo(let id): "fillVideo:\(id)"
         case .scenePrimary(let id): "scene:\(id)"
         }
@@ -230,8 +234,11 @@ enum RenderPlanCompiler {
         // as a bug), and a web overlay's box IS its browser viewport — while
         // the page catches up to a resize, cropping reads as a browser
         // resize; letterboxing reads as broken. Scene primaries manage their
-        // own framing elsewhere.
+        // own framing elsewhere. The one exception: a guest's SHARED SCREEN
+        // must letterbox — cropping a screen loses content.
         switch element.kind {
+        case .source(.guestScreen):
+            item.presentation.fit = .fit
         case .source, .web:
             item.presentation.fit = .fill
         default:
@@ -278,6 +285,7 @@ enum RenderPlanCompiler {
         case .display(let id): .display(displayID: id)
         case .window(let id): .window(windowID: id)
         case .guest(let identity): .guest(identity: identity)
+        case .guestScreen(let identity): .guestScreen(identity: identity)
         }
     }
 
@@ -293,6 +301,7 @@ enum RenderPlanCompiler {
         case .display(let id): "display:\(id)"
         case .window(let id): "window:\(id)"
         case .guest(let identity): "guest:\(identity)"
+        case .guestScreen(let identity): "guestscreen:\(identity)"
         default: "source:\(key)"
         }
     }
@@ -393,25 +402,41 @@ enum RenderPlanCompiler {
     private static func interviewItems(scene: SceneModel,
                                        config: InterviewSceneConfig,
                                        guests: [GuestDescriptor]) -> [RenderItem] {
-        var tiles: [(key: SourceKey, transitionKey: String)] = []
+        var tiles: [(key: SourceKey, transitionKey: String, isScreen: Bool)] = []
+
+        // A shared screen takes the stage: the spotlight arrangement with the
+        // screen as the main tile and every face (host included) in the
+        // strip. First sharer wins if several share at once.
+        let sharer = guests.first(where: \.isSharingScreen)
+        if let sharer {
+            tiles.append((.guestScreen(identity: sharer.identity),
+                          "guestscreen:\(sharer.identity)", true))
+        }
         if config.includesHost {
             let id = CameraID(uid: config.hostDeviceUniqueID)
-            tiles.append((.camera(deviceUniqueID: id), "camera:\(id)"))
+            tiles.append((.camera(deviceUniqueID: id), "camera:\(id)", false))
         }
         for guest in guests {
-            tiles.append((.guest(identity: guest.identity), "guest:\(guest.identity)"))
+            tiles.append((.guest(identity: guest.identity), "guest:\(guest.identity)", false))
         }
         guard !tiles.isEmpty else { return [] }
 
-        let frames = InterviewLayout.frames(count: tiles.count,
-                                            style: config.gridStyle,
-                                            spacing: config.tileSpacing)
+        let frames = sharer != nil
+            ? InterviewLayout.frames(count: tiles.count, style: .spotlight,
+                                     spacing: config.tileSpacing)
+            : InterviewLayout.frames(count: tiles.count, style: config.gridStyle,
+                                     spacing: config.tileSpacing)
         return zip(tiles, frames).map { tile, frame in
             var item = primaryItem(scene: scene,
                                    key: tile.key,
                                    transform: frame,
                                    cornerRadius: config.tileCornerRadius)
             item.transitionKey = tile.transitionKey
+            if tile.isScreen {
+                // A screen must letterbox inside its tile — cropping a shared
+                // screen loses content, unlike cropping a face.
+                item.presentation.fit = .fit
+            }
             return item
         }
     }
@@ -421,6 +446,8 @@ enum RenderPlanCompiler {
 struct GuestDescriptor: Sendable, Hashable {
     var identity: String
     var displayName: String
+    /// They published a screen-share feed; the interview layout reacts.
+    var isSharingScreen: Bool = false
 }
 
 /// Pure layout math for interview grids — unit-coordinate tile frames.

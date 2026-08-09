@@ -99,6 +99,17 @@ extension StudioController {
                            entryAnimation: .styled(.fade)))
     }
 
+    /// A guest's shared screen as a placeable element. Starts large and
+    /// centered — a screen is content, not a face in a corner — and renders
+    /// letterboxed (RenderPlan gives `.guestScreen` bindings `.fit`).
+    func addGuestScreenElement(identity: String, name: String) {
+        addElement(Element(name: "\(name)'s Screen",
+                           kind: .source(.guestScreen(identity: identity)),
+                           transform: ElementTransform(center: CGPoint(x: 0.5, y: 0.44),
+                                                       size: CGSize(width: 0.78, height: 0.78)),
+                           entryAnimation: .styled(.fade)))
+    }
+
     /// Element transform matching the media's real pixels: 1:1 with canvas
     /// pixels when it fits, scaled down at its own aspect when it doesn't.
     private func mediaTransform(forPixelSize pixelSize: CGSize?) -> ElementTransform {

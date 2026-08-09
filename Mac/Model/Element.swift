@@ -69,6 +69,7 @@ struct Element: Codable, Hashable, Sendable, Identifiable {
             // a default-camera scene primary are one thing to magic move.
             case .camera(let uid): return "camera:\(uid)"
             case .guest(let identity): return "guest:\(identity)"
+            case .guestScreen(let identity): return "guestscreen:\(identity)"
             case .display(let d): return "display:\(d)"
             case .window(let w): return "window:\(w)"
             }

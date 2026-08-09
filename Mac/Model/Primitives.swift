@@ -327,4 +327,6 @@ enum SourceBinding: Codable, Hashable, Sendable {
     case window(windowID: UInt32)
     /// A remote guest, keyed by LiveKit participant identity.
     case guest(identity: String)
+    /// A remote guest's shared screen — independent of their camera tile.
+    case guestScreen(identity: String)
 }

@@ -56,6 +56,7 @@ const els = {
   diskWarning: $("disk-warning"),
   micBtn: $("mic-btn"),
   camBtn: $("cam-btn"),
+  screenBtn: $("screen-btn"),
   leaveBtn: $("leave-btn"),
 
   drainBar: $("drain-bar"),
@@ -421,6 +422,10 @@ async function join() {
         }
       })
       .on(RoomEvent.TrackUnsubscribed, (track) => track.detach())
+      // The browser's own "Stop sharing" bar can end a screen share without
+      // our button — track the real publish state, not our last click.
+      .on(RoomEvent.LocalTrackPublished, refreshScreenButton)
+      .on(RoomEvent.LocalTrackUnpublished, refreshScreenButton)
       .on(RoomEvent.AudioPlaybackStatusChanged, () => {
         room.canPlaybackAudio ? hide(els.enableAudioBtn) : show(els.enableAudioBtn);
       })
@@ -515,6 +520,30 @@ els.camBtn.addEventListener("click", async () => {
   } catch (err) {
     showError(`Camera toggle failed: ${err.message}`);
   }
+});
+
+/** Reflect the actual publish state — the browser's own "Stop sharing" bar
+ * can end the share without us, so always read back from the participant. */
+function refreshScreenButton() {
+  const on = room?.localParticipant.isScreenShareEnabled === true;
+  els.screenBtn.classList.toggle("on", on);
+  els.screenBtn.textContent = on ? "Stop sharing" : "Share screen";
+}
+
+els.screenBtn.addEventListener("click", async () => {
+  if (!room) return;
+  const enabled = room.localParticipant.isScreenShareEnabled;
+  try {
+    // Second video track, marked as a screen-share source; the studio gives
+    // it its own tile and takes the interview stage with it.
+    await room.localParticipant.setScreenShareEnabled(!enabled);
+  } catch (err) {
+    // Cancelling the browser's picker rejects — that's a choice, not an error.
+    if (err.name !== "NotAllowedError") {
+      showError(`Screen share failed: ${err.message}`);
+    }
+  }
+  refreshScreenButton();
 });
 
 els.leaveBtn.addEventListener("click", async () => {

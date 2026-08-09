@@ -269,6 +269,12 @@ button.off { border-color: var(--danger); color: var(--danger); }
 
 .controls { display: flex; gap: 12px; justify-content: center; }
 .controls .danger { margin-left: 24px; }
+/* Sharing is a live-to-the-show state, so it reads like one. */
+.controls #screen-btn.on {
+  background: var(--rec);
+  border-color: var(--rec);
+  color: #fff;
+}
 
 /* ---- error banner ---- */
 

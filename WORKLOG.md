@@ -61,6 +61,26 @@ full-screen-this-camera layout cues at the playhead, replacing a cue within
 fades, and offset recovery from synthetic envelopes (`EditorAudioTests`).
 F-488…F-499.
 
+Nineteenth pass — **guest screen share**. The guest page gets a Share
+screen button (`setScreenShareEnabled`; the button reflects the real
+publish state via LocalTrackPublished/Unpublished, because the browser's
+own "Stop sharing" bar can end a share without us). Host side, the fix
+that makes it work is per-source keying: a guest's camera and screen are
+two independent feeds — `SourceKey.guestScreen(identity:)` +
+`SourceBinding.guestScreen`, a second receiver map in
+GuestSessionController (routing on `publication.source`, with a `verify on
+Mac:` on the pinned SDK's spellings), and the registry skips both guest
+key kinds when reaping. When an on-air guest shares, the interview scene
+recomposes itself: spotlight arrangement with the screen as the stage —
+letterboxed, never cropped, unlike every face tile — and host + all faces
+in the strip. The screen is also placeable anywhere: right-click the guest
+row → "Add <name>'s Screen as Tile" (a new element factory that starts
+large and centered), and the inspector's source picker lists "<name>'s
+Screen". The green-room gate applies unchanged — an off-air caller's
+screen stays off the program. Deliberately not in v1: screen-share tab
+audio (the guest strip carries one ring, the mic's; flagged F-506).
+F-500…F-506.
+
 Seventeenth pass — **call-ins**, per "i want to get calls in". The guest
 system could already take a browser caller (any device, invite link, no
 app), but anyone opening the link landed straight on the program. Now

@@ -407,6 +407,12 @@ struct GuestsPanelView: View {
                         .font(.caption2)
                         .foregroundStyle(.orange)
                 }
+                if guest.isSharingScreen {
+                    Image(systemName: "rectangle.inset.filled.and.person.filled")
+                        .foregroundStyle(.blue)
+                        .font(.caption)
+                        .help("\(guest.displayName) is sharing their screen — it takes the interview stage while they're on air. Right-click to add it as a tile on any scene.")
+                }
                 if guest.isRecordingLocally {
                     Image(systemName: "record.circle").foregroundStyle(.red).font(.caption)
                 }
@@ -446,6 +452,16 @@ struct GuestsPanelView: View {
             }
         }
         .padding(.vertical, 3)
+        .contextMenu {
+            Button("Add \(guest.displayName) as Tile") {
+                studio.addGuestElement(identity: guest.identity, name: guest.displayName)
+            }
+            if guest.isSharingScreen {
+                Button("Add \(guest.displayName)'s Screen as Tile") {
+                    studio.addGuestScreenElement(identity: guest.identity, name: guest.displayName)
+                }
+            }
+        }
     }
 }
 

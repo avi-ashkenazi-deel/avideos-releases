@@ -8,6 +8,9 @@ final class GuestParticipant: Identifiable {
     var displayName: String
     var hasVideo: Bool = false
     var hasAudio: Bool = false
+    /// The guest published a screen-share track (a second, independent feed —
+    /// "Dana's screen" is not "Dana's camera").
+    var isSharingScreen: Bool = false
     var isMutedInMix: Bool = false
     /// The call-in gate. Off air = the green room: the caller is connected,
     /// hears the show, and the host sees them in the Guests palette — but
@@ -29,6 +32,8 @@ final class GuestParticipant: Identifiable {
     }
 
     var descriptor: GuestDescriptor {
-        GuestDescriptor(identity: identity, displayName: displayName)
+        GuestDescriptor(identity: identity,
+                        displayName: displayName,
+                        isSharingScreen: isSharingScreen)
     }
 }

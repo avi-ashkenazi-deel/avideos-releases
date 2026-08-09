@@ -94,7 +94,10 @@ final class SourceRegistry {
         }
 
         for key in existing.subtracting(keys) {
+            // Guest feeds (camera and screen) are owned by the session
+            // controller, which registers/unregisters them on subscribe.
             if case .guest = key { continue }
+            if case .guestScreen = key { continue }
             unregister(key: key)
         }
     }
@@ -129,9 +132,9 @@ final class SourceRegistry {
         case .image:
             guard let url = mediaResolver?(key) else { return nil }
             return ImageSource(key: key, url: url, metalDevice: device)
-        case .guest:
-            // Guest sources are registered by GuestSessionController, never
-            // fabricated here.
+        case .guest, .guestScreen:
+            // Guest sources (camera and screen) are registered by
+            // GuestSessionController, never fabricated here.
             return nil
         case .scenePrimary:
             // Scene-primary sources (movie scene player, picker-chosen screen)

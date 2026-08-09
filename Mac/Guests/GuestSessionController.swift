@@ -45,6 +45,9 @@ final class GuestSessionController {
 
     private var room: Room?
     private var videoReceivers: [String: GuestVideoReceiver] = [:]
+    /// Screen-share feeds, keyed separately: one guest can publish a camera
+    /// AND a screen, and they are independent tiles on the program.
+    private var screenReceivers: [String: GuestVideoReceiver] = [:]
     private var audioReceivers: [String: GuestAudioReceiver] = [:]
     private let metalDevice: MTLDevice
     private let log = Logger(subsystem: "com.aviashkenazi.streamit", category: "guests")
@@ -178,8 +181,10 @@ final class GuestSessionController {
 
     private func teardownGuest(identity: String) {
         videoReceivers.removeValue(forKey: identity)
+        screenReceivers.removeValue(forKey: identity)
         audioReceivers.removeValue(forKey: identity)
         unregisterSource?(.guest(identity: identity))
+        unregisterSource?(.guestScreen(identity: identity))
         detachGuestAudio?(identity)
     }
 
@@ -190,6 +195,27 @@ final class GuestSessionController {
         videoReceivers[identity] = receiver
         track.add(videoRenderer: receiver)
         guests.first(where: { $0.identity == identity })?.hasVideo = true
+        onGuestsChanged?()
+    }
+
+    /// The guest's shared screen — same plumbing as their camera, under its
+    /// own source key so both feeds can be on the program at once.
+    /// verify on Mac: `RemoteTrackPublication.source` spellings
+    /// (.screenShareVideo / .screenShareAudio) on the pinned LiveKit release.
+    private func attachScreen(track: RemoteVideoTrack, identity: String) {
+        let source = GuestSource(key: .guestScreen(identity: identity), metalDevice: metalDevice)
+        registerSource?(source)
+        let receiver = GuestVideoReceiver(identity: identity, source: source)
+        screenReceivers[identity] = receiver
+        track.add(videoRenderer: receiver)
+        guests.first(where: { $0.identity == identity })?.isSharingScreen = true
+        onGuestsChanged?()
+    }
+
+    private func detachScreen(identity: String) {
+        screenReceivers.removeValue(forKey: identity)
+        unregisterSource?(.guestScreen(identity: identity))
+        guests.first(where: { $0.identity == identity })?.isSharingScreen = false
         onGuestsChanged?()
     }
 
@@ -234,9 +260,20 @@ extension GuestSessionController: RoomDelegate {
             self.setupGuest(participant: participant)
             switch publication.track {
             case let video as RemoteVideoTrack:
-                self.attachVideo(track: video, identity: identity)
+                // The publication's source separates the guest's camera from
+                // their shared screen — two independent feeds, two tiles.
+                if publication.source == .screenShareVideo {
+                    self.attachScreen(track: video, identity: identity)
+                } else {
+                    self.attachVideo(track: video, identity: identity)
+                }
             case let audio as RemoteAudioTrack:
-                self.attachAudio(track: audio, identity: identity)
+                // Screen-share (tab) audio is NOT routed in v1: the guest
+                // strip carries one ring, the mic's. Mixing a second stream
+                // into it needs its own strip — noted in the checklist.
+                if publication.source != .screenShareAudio {
+                    self.attachAudio(track: audio, identity: identity)
+                }
             default:
                 break
             }
@@ -248,15 +285,19 @@ extension GuestSessionController: RoomDelegate {
                           didUnsubscribeTrack publication: RemoteTrackPublication) {
         Task { @MainActor in
             let identity = participant.identity?.stringValue ?? ""
-            // Key off publication.kind, not publication.track — the track
-            // reference may already be cleared by the time the unsubscribe
-            // callback fires, which would leak receivers/sources.
+            // Key off publication.kind/source, not publication.track — the
+            // track reference may already be cleared by the time the
+            // unsubscribe callback fires, which would leak receivers/sources.
             if publication.kind == .video {
-                self.videoReceivers.removeValue(forKey: identity)
-                self.unregisterSource?(.guest(identity: identity))
-                self.guests.first(where: { $0.identity == identity })?.hasVideo = false
+                if publication.source == .screenShareVideo {
+                    self.detachScreen(identity: identity)
+                } else {
+                    self.videoReceivers.removeValue(forKey: identity)
+                    self.unregisterSource?(.guest(identity: identity))
+                    self.guests.first(where: { $0.identity == identity })?.hasVideo = false
+                }
             }
-            if publication.kind == .audio {
+            if publication.kind == .audio, publication.source != .screenShareAudio {
                 self.audioReceivers.removeValue(forKey: identity)
                 self.detachGuestAudio?(identity)
                 self.guests.first(where: { $0.identity == identity })?.hasAudio = false
