@@ -10,6 +10,7 @@
  * Data-channel contract (JSON, reliable):
  *   host -> guests : {type:"record-start", takeId, sessionTimeMs}
  *                    {type:"record-stop", takeId}
+ *                    {type:"on-air", participantId, value}   // call-in gate
  *   guest -> host  : {type:"upload-progress", participantId, pct,
  *                     queuedChunks, uploadedBytes, totalBytes, recording}
  */
@@ -47,6 +48,8 @@ const els = {
   hostAudio: $("host-audio"),
   enableAudioBtn: $("enable-audio"),
   recIndicator: $("rec-indicator"),
+  onAirIndicator: $("onair-indicator"),
+  stageStatus: $("stage-status"),
   connState: $("conn-state"),
   uploadBar: $("upload-bar"),
   uploadLabel: $("upload-label"),
@@ -327,9 +330,26 @@ function onDataReceived(payload) {
     case "record-stop":
       onRecordStop(msg);
       break;
+    case "on-air":
+      // Broadcast to the whole room; only our own gate state applies.
+      if (msg.participantId === participantId) setOnAir(msg.value === true);
+      break;
     default:
       break; // prompter-* etc. are not for us
   }
+}
+
+/**
+ * The call-in gate badge. Off air means the host sees and hears you in the
+ * Guests panel but you are NOT on the program; local recording is unaffected
+ * (podcast takes capture waiting guests too — that is by design).
+ */
+function setOnAir(on) {
+  els.onAirIndicator.classList.toggle("on", on);
+  els.onAirIndicator.textContent = on ? "ON AIR" : "off air";
+  els.stageStatus.textContent = on
+    ? "You're on the air."
+    : "You're connected — the host will bring you in.";
 }
 
 // ---------------------------------------------------------------------------

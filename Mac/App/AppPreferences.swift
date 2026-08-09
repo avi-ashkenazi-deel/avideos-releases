@@ -68,6 +68,15 @@ final class AppPreferences {
         didSet { defaults.set(palettesStayVisibleInBackground, forKey: "pref.palettesStayVisible") }
     }
 
+    // MARK: Guests / call-ins
+
+    /// Off (the default) is the call-in posture: a joining caller waits in
+    /// the green room — connected, hearing the show, visible to the host —
+    /// until put on air. On restores walk-right-in for planned interviews.
+    var guestsStartOnAir: Bool {
+        didSet { defaults.set(guestsStartOnAir, forKey: "pref.guestsStartOnAir") }
+    }
+
     init() {
         recordingCodec = defaults.string(forKey: "pref.recordingCodec")
             .flatMap(ProgramRecorder.Codec.init(rawValue:)) ?? .hevc
@@ -80,5 +89,6 @@ final class AppPreferences {
         autoPlayMovies = defaults.object(forKey: "pref.autoPlayMovies") as? Bool ?? true
         showCameraSwitcher = defaults.object(forKey: "pref.showCameraSwitcher") as? Bool ?? true
         palettesStayVisibleInBackground = defaults.bool(forKey: "pref.palettesStayVisible")
+        guestsStartOnAir = defaults.bool(forKey: "pref.guestsStartOnAir")
     }
 }

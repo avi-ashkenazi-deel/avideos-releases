@@ -195,9 +195,19 @@ final class StudioController {
         // channel multiplexed to podcast + teleprompter.
         guests?.registerSource = { [weak registry] source in registry?.register(source) }
         guests?.unregisterSource = { [weak registry] key in registry?.unregister(key: key) }
-        guests?.attachGuestAudio = { [weak self] identity in self?.audio.attachGuest(identity: identity) }
+        guests?.attachGuestAudio = { [weak self] identity in
+            guard let self else { return nil }
+            let ring = self.audio.attachGuest(identity: identity)
+            // A waiting caller's strip starts muted — their audio must not
+            // reach the program (or the speakers) until they are on air.
+            if self.guests?.guests.first(where: { $0.identity == identity })?.isOnAir == false {
+                self.audio.setMuted(true, for: .guest(identity))
+            }
+            return ring
+        }
         guests?.detachGuestAudio = { [weak self] identity in self?.audio.detachGuest(identity: identity) }
         guests?.onGuestsChanged = { [weak self] in self?.recompileAndPublish() }
+        guests?.newGuestsStartOnAir = { [weak self] in self?.prefs.guestsStartOnAir ?? false }
         guests?.onDataMessage = { [weak self] json in
             self?.podcast.handleDataMessage(json)
             self?.teleprompter.handleDataMessage(json)
@@ -226,7 +236,7 @@ final class StudioController {
         cleanupFinishedExits()
         let plan = RenderPlanCompiler.compile(project: project,
                                               scene: scene,
-                                              guests: guests?.guestDescriptors ?? [],
+                                              guests: guests?.onAirDescriptors ?? [],
                                               elementAnimations: elementAnimations,
                                               timerTexts: currentTimerTexts(scene: scene))
         engine.publish(plan: plan)
@@ -246,7 +256,7 @@ final class StudioController {
         // Freeze the outgoing scene's last look for its palette tile.
         captureActiveSceneThumbnail()
 
-        let guestList = guests?.guestDescriptors ?? []
+        let guestList = guests?.onAirDescriptors ?? []
         let fromPlan = RenderPlanCompiler.compile(project: project, scene: fromScene,
                                                   guests: guestList,
                                                   elementAnimations: elementAnimations,
@@ -557,7 +567,7 @@ final class StudioController {
             return
         }
 
-        let guestList = guests?.guestDescriptors ?? []
+        let guestList = guests?.onAirDescriptors ?? []
         let fromPlan = RenderPlanCompiler.compile(project: project, scene: scene,
                                                   guests: guestList,
                                                   elementAnimations: elementAnimations,
@@ -873,6 +883,22 @@ final class StudioController {
     }
 
     // MARK: - Going live with guests / podcast session
+
+    /// The call-in gate: puts a waiting caller on the program, or pulls a
+    /// live one back to the green room. On air = present in interview tiles
+    /// and audible; off air = connected and hearing the show, but absent
+    /// from the program. The caller's page is told, so their badge is honest.
+    func setGuestOnAir(identity: String, _ onAir: Bool) {
+        guard let guests,
+              let guest = guests.guests.first(where: { $0.identity == identity }),
+              guest.isOnAir != onAir else { return }
+        guest.isOnAir = onAir
+        // On air means audible — the gate owns the strip's mute. (A host who
+        // wants a live-but-muted guest still has the palette's Mute after.)
+        audio.setMuted(!onAir, for: .guest(identity))
+        guests.sendOnAirState(identity: identity, onAir: onAir)
+        recompileAndPublish()
+    }
 
     func startGuestSession() async {
         guard let workerBaseURL else {

@@ -75,6 +75,7 @@
   <main id="call" class="screen hidden">
     <div class="call-layout">
       <header class="call-header">
+        <span id="onair-indicator" class="onair-indicator">off air</span>
         <span id="rec-indicator" class="rec-indicator">standby</span>
         <span id="conn-state" class="conn-state" data-state="">connecting</span>
         <button id="enable-audio" class="primary small hidden">Enable host audio</button>
@@ -82,7 +83,7 @@
 
       <div class="stage">
         <div class="stage-message">
-          <p>You're live in the session.</p>
+          <p id="stage-status">You're connected — the host will bring you in.</p>
           <p class="dim">The host controls recording. Keep this tab open and in the foreground.</p>
         </div>
         <video id="local-video" autoplay playsinline muted></video>

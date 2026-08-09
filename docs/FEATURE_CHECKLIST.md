@@ -1,6 +1,6 @@
 # streamit — full feature checklist
 
-All 481 user-facing features, each with a stable ID so you can report
+All 487 user-facing features, each with a stable ID so you can report
 back precisely ("F-42 fails"). Ordered so you can work top to bottom: each
 section only depends on the ones above it.
 
@@ -232,6 +232,15 @@ replays just the entrance, which is the quick way to compare them.
 - [ ] **F-479** Resume, stop, and play the file: it is **gapless** — the paused span is absent, not silent/frozen. **[offline]**
 - [ ] **F-480** Audio stays in sync with video across a pause (clap before and after one). **[offline]**
 - [ ] **F-481** ⌥⌘R pauses/resumes from the menu; ⌃⌥. does it with another app frontmost. **[offline]**
+
+### Call-ins (green room)
+
+- [ ] **F-482** A joining caller lands OFF AIR: not in interview tiles, inaudible, listed in the Guests palette with an orange "waiting" state. **[net] [2nd device]**
+- [ ] **F-483** The waiting caller hears the show (mix-minus) while off air. **[net] [2nd device]**
+- [ ] **F-484** Put On Air adds them to the program and unmutes them; their page flips "off air" → red ON AIR. **[net] [2nd device]**
+- [ ] **F-485** Clicking again pulls them off air without disconnecting them; the badge follows. **[net] [2nd device]**
+- [ ] **F-486** "New callers wait off air" toggled off restores walk-right-in guests. **[net] [2nd device]**
+- [ ] **F-487** The palette's Mute is disabled for waiting callers (off air is already silent) and works normally on air. **[net] [2nd device]**
 
 ## N. Remote guests
 

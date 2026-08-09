@@ -369,6 +369,21 @@ struct GuestsPanelView: View {
 
             Divider()
 
+            // Call-in posture up front: callers land in the green room and
+            // wait until put on air (toggle off to let guests walk right in).
+            Toggle("New callers wait off air", isOn: Binding(
+                get: { !studio.prefs.guestsStartOnAir },
+                set: { studio.prefs.guestsStartOnAir = !$0 }
+            ))
+            .font(.caption)
+
+            let waiting = guests.guests.filter { !$0.isOnAir }
+            if !waiting.isEmpty {
+                Text(waiting.count == 1 ? "1 caller waiting" : "\(waiting.count) callers waiting")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.orange)
+            }
+
             ForEach(guests.guests) { guest in
                 guestRow(guest)
             }
@@ -384,19 +399,39 @@ struct GuestsPanelView: View {
         VStack(alignment: .leading, spacing: 3) {
             HStack {
                 Circle()
-                    .fill(guest.hasVideo ? Color.green : Color.gray)
+                    .fill(guest.isOnAir ? (guest.hasVideo ? Color.green : Color.gray) : Color.orange)
                     .frame(width: 7, height: 7)
                 Text(guest.displayName).fontWeight(.medium)
+                if !guest.isOnAir {
+                    Text("waiting")
+                        .font(.caption2)
+                        .foregroundStyle(.orange)
+                }
                 if guest.isRecordingLocally {
                     Image(systemName: "record.circle").foregroundStyle(.red).font(.caption)
                 }
                 Spacer()
+                // The call-in gate. Green invitation while they wait; a red
+                // ON AIR state you click to pull them back to the green room.
+                Button {
+                    studio.setGuestOnAir(identity: guest.identity, !guest.isOnAir)
+                } label: {
+                    Text(guest.isOnAir ? "On Air" : "Put On Air")
+                        .font(.caption.weight(.semibold))
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(guest.isOnAir ? .red : .green)
+                .controlSize(.small)
+                .help(guest.isOnAir
+                      ? "Take \(guest.displayName) off the program (they stay connected)"
+                      : "Put \(guest.displayName) on the program")
                 Toggle("Mute", isOn: Binding(
                     get: { studio.audio.isMuted(.guest(guest.identity)) },
                     set: { studio.audio.setMuted($0, for: .guest(guest.identity)) }
                 ))
                 .toggleStyle(.button)
                 .controlSize(.small)
+                .disabled(!guest.isOnAir)   // off air is already silent
             }
             if let progress = guest.uploadProgress {
                 HStack(spacing: 6) {

@@ -30,6 +30,25 @@ trimmed length, a progress fill sweeping the row, and a gear popover editing
 in/out points (`SoundPad.trimStart/trimEnd`, Optional for settings-decode
 compatibility; `SoundPadPlayer` slices the pre-decoded buffer at fire time).
 
+Seventeenth pass — **call-ins**, per "i want to get calls in". The guest
+system could already take a browser caller (any device, invite link, no
+app), but anyone opening the link landed straight on the program. Now
+there's a gate: a joining caller starts **off air** in a green room —
+connected, hearing the mix-minus, visible in the Guests palette with an
+orange "waiting" state — and joins the program only when the host clicks
+**Put On Air** (which unmutes their strip, adds them to the interview
+tiles, recompiles the plan, and flips a red ON AIR badge on their page via
+a new `on-air` data message; clicking again pulls them back without
+disconnecting). Plan compilation reads `onAirDescriptors` instead of all
+guests; the strip attaches muted for waiting callers; the palette's Mute is
+disabled off-air (already silent). "New callers wait off air" in the
+palette (AppPreferences.guestsStartOnAir, default screening ON) restores
+walk-right-in for planned interviews. DEV_SETUP gained a "Taking call-ins"
+runbook — browser call-ins work as soon as the Worker + LiveKit backend is
+deployed — and documents the designed-but-unbuilt PSTN path (LiveKit SIP
+trunk; a phone caller would arrive as a normal audio-only participant and
+flow through this same gate). F-482…F-487.
+
 Sixteenth pass — a maintainability review (run at Avi's request against an
 extremely strict external rubric), then its fixes, all behavior-preserving.
 The two files past the 1000-line boundary were split by moving text, not

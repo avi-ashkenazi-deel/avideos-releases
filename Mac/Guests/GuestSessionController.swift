@@ -39,6 +39,9 @@ final class GuestSessionController {
     var onDataMessage: (([String: Any]) -> Void)?
     /// Guests changed (join/leave/name) — recompile the render plan.
     var onGuestsChanged: (() -> Void)?
+    /// Whether a newly joined caller starts on air (AppPreferences; default
+    /// false = they wait in the green room until the host brings them in).
+    var newGuestsStartOnAir: (() -> Bool)?
 
     private var room: Room?
     private var videoReceivers: [String: GuestVideoReceiver] = [:]
@@ -55,6 +58,19 @@ final class GuestSessionController {
 
     var guestDescriptors: [GuestDescriptor] {
         guests.map(\.descriptor)
+    }
+
+    /// Only the guests the host has put on air — what interview layouts and
+    /// scene tiles compile from. Waiting callers stay off the program.
+    var onAirDescriptors: [GuestDescriptor] {
+        guests.filter(\.isOnAir).map(\.descriptor)
+    }
+
+    /// Tells one caller their current gate state, so the guest page can show
+    /// ON AIR vs standby truthfully. Broadcast (the data channel has no
+    /// per-recipient address here); each page filters by participantId.
+    func sendOnAirState(identity: String, onAir: Bool) {
+        sendData(["type": "on-air", "participantId": identity, "value": onAir])
     }
 
     // MARK: - Connection
@@ -151,7 +167,12 @@ final class GuestSessionController {
         // The prompter remote joins the room but publishes nothing and should
         // not appear as a guest tile.
         if name == "Prompter" { return }
-        guests.append(GuestParticipant(identity: identity, displayName: name))
+        let guest = GuestParticipant(identity: identity, displayName: name)
+        guest.isOnAir = newGuestsStartOnAir?() ?? false
+        guests.append(guest)
+        // The page renders "standby" until told otherwise, so this mainly
+        // confirms — but it also covers the start-on-air preference.
+        sendOnAirState(identity: identity, onAir: guest.isOnAir)
         onGuestsChanged?()
     }
 

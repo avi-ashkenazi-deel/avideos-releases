@@ -261,6 +261,29 @@ One Cloudflare Worker + R2 bucket + Pages site. Full steps in
 `infra/worker/README.md`. Point the app at it in Settings → Session Server.
 LiveKit Cloud free tier covers development.
 
+## Taking call-ins
+
+Once the backend above is deployed, browser call-ins work end to end:
+
+1. Guests palette → **Start Guest Session** → copy the invite link (or show
+   the QR for phones — a phone's browser is a caller, no app needed).
+2. Callers open the link, pick mic/camera, join — and land **off air** in
+   the green room: they hear the show, you see them in the Guests palette
+   with an orange "waiting" state, their page says "off air".
+3. **Put On Air** when ready — they join the interview tiles and the mix,
+   and their page flips to a red ON AIR badge. Click again to pull them
+   back off air (they stay connected).
+4. "New callers wait off air" in the palette toggles the whole screening
+   posture off for planned interviews where guests should walk right in.
+
+**Real telephone dial-in (PSTN) — designed next step, not built.** The path
+is LiveKit SIP: rent a number from a SIP trunk provider (e.g. Twilio),
+configure a LiveKit SIP trunk + dispatch rule pointing at the session room,
+and the caller appears as a normal audio-only participant — the studio
+treats them exactly like a browser caller (green room, Put On Air, own
+mixer strip). Studio-side work when we build it: a call-in number pane and
+an audio-only tile treatment.
+
 ## Publishing (optional)
 
 YouTube/TikTok publishing needs per-platform app registrations (Google

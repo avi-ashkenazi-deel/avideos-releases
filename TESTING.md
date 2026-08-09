@@ -183,6 +183,7 @@ Known gaps in this pass — do not report:
 - [ ] Start a guest session → invite link/QR joins from a Chromium browser; guest appears in the Interview grid and the mixer.
 - [ ] With headphones off on both ends: no echo (guest never hears themselves — mix-minus).
 - [ ] Record Take → guest's tab shows REC + upload %; kill the guest tab mid-take, reopen → recording resumes, at most ~5s lost.
+- [ ] Call-in gate: a joining caller shows "waiting" in the Guests palette and is absent from the program and inaudible, but hears the show; Put On Air adds them to the tiles and unmutes them, and their page flips "off air" → ON AIR; clicking again pulls them back without disconnecting.
 - [ ] Sessions library: Download & Import All → aligned .movs; two-device clap within ~30ms at minute 0 and minute 30.
 
 ## Teleprompter

@@ -158,6 +158,25 @@ button.off { border-color: var(--danger); color: var(--danger); }
   gap: 12px;
 }
 
+/* Off air / ON AIR — the call-in gate state, set by the host. Same pill
+   family as the rec indicator; red means your mic and camera are on the
+   program. */
+.onair-indicator {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--dim);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 4px 12px;
+}
+.onair-indicator.on {
+  color: #fff;
+  background: var(--rec);
+  border-color: var(--rec);
+}
+
 .rec-indicator {
   font-size: 12px;
   font-weight: 700;
