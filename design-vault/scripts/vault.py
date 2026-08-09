@@ -191,6 +191,7 @@ def cmd_resolve(args) -> int:
 
     print(f"{args.batch}: kept {kept} → collections/{manifest['collection']}/, "
           f"rejected {rejected}, still pending {remaining}")
+    cmd_db(None)  # keep the offline database in sync with the catalogs
     return 0
 
 
@@ -213,6 +214,8 @@ def cmd_tag(args) -> int:
             entry["year"] = args.year
     catalog_path.write_text(json.dumps(catalog, indent=2, ensure_ascii=False))
     print(f"Tagged {hit} entries in {args.collection}")
+    if hit:
+        cmd_db(None)  # keep the offline database in sync with the catalogs
     return 0
 
 
@@ -308,6 +311,45 @@ def cmd_browse(args) -> int:
     return 0
 
 
+def cmd_db(_args) -> int:
+    """Consolidate every collection catalog into vault.db (SQLite) for offline use."""
+    import sqlite3
+    db_path = VAULT / "vault.db"
+    con = sqlite3.connect(db_path)
+    con.executescript("""
+        DROP TABLE IF EXISTS items;
+        CREATE TABLE items (
+            collection TEXT NOT NULL,
+            file       TEXT NOT NULL,   -- path relative to design-vault/
+            title      TEXT,
+            year       INTEGER,
+            tags       TEXT,            -- comma-separated
+            license    TEXT,
+            artist     TEXT,
+            batch      TEXT,
+            timecode   TEXT,            -- storyboard frames only
+            page_url   TEXT,
+            source_url TEXT
+        );
+        CREATE INDEX idx_items_collection ON items(collection);
+        CREATE INDEX idx_items_year ON items(year);
+    """)
+    total = 0
+    for catalog_path in sorted(COLLECTIONS.glob("*/items.json")):
+        collection = catalog_path.parent.name
+        for e in json.loads(catalog_path.read_text()):
+            con.execute("INSERT INTO items VALUES (?,?,?,?,?,?,?,?,?,?,?)", (
+                collection, f"collections/{collection}/{e['file']}",
+                e.get("title"), e.get("year"), ",".join(e.get("tags", [])),
+                e.get("license"), e.get("artist"), e.get("batch"),
+                e.get("timecode"), e.get("page_url"), e.get("source_url")))
+            total += 1
+    con.commit()
+    con.close()
+    print(f"Wrote {db_path} ({total} items)")
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -327,9 +369,10 @@ def main() -> int:
     bp = sub.add_parser("browse")
     bp.add_argument("--embed", action="store_true",
                     help="inline images as data URIs (self-contained gallery)")
+    sub.add_parser("db")
     args = ap.parse_args()
-    return {"review": cmd_review, "resolve": cmd_resolve,
-            "tag": cmd_tag, "browse": cmd_browse}[args.cmd](args)
+    return {"review": cmd_review, "resolve": cmd_resolve, "tag": cmd_tag,
+            "browse": cmd_browse, "db": cmd_db}[args.cmd](args)
 
 
 if __name__ == "__main__":

@@ -99,6 +99,27 @@ python3 design-vault/scripts/vault.py resolve currency/2026-08-09-swiss-franc \
   --keep 1,4,7 --rest reject
 ```
 
+## Offline access — everything together
+
+The repo *is* the offline database: clone it and every approved image plus its
+metadata is on your disk. Three layers, all committed and always in sync:
+
+1. **Files** — `collections/<name>/` folders you can browse in Finder.
+2. **`vault.db`** — one SQLite database over the whole library (collection,
+   title, year, tags, license, artist, source). Rebuilt automatically on every
+   resolve/tag; query it from anything that speaks SQLite:
+
+   ```sql
+   SELECT title, year FROM items WHERE tags LIKE '%swiss-style%' ORDER BY year;
+   SELECT collection, COUNT(*) FROM items GROUP BY collection;
+   ```
+
+3. **`browse.html`** — open it straight from the local clone (images load from
+   the repo folders, no network) for the visual, decade-filterable view.
+
+To keep a machine current: `git pull`. On iPhone/iPad, a git client like
+Working Copy gives you the same folders and galleries offline.
+
 ## Ground rules
 
 - **Provenance always** — no image enters `collections/` without `source_url` and
