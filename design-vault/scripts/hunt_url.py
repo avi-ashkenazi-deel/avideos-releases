@@ -9,7 +9,8 @@ Sources:
   pinterest.com/<user>/<board>/   public boards via Pinterest's widget endpoint (up to 50 pins)
   are.na/<user>/<channel>         needs ARENA_TOKEN env var (personal access token)
   flickr.com/...tags/<tag>        keyless public feed (recent photos for a tag)
-  unsplash.com/s/photos/<query>   needs UNSPLASH_ACCESS_KEY (free at unsplash.com/developers)
+  vsco.co/<user>/gallery          VSCO profile galleries (Cloudflare blocks datacenter
+                                  IPs — run from local Claude Code)
   ffffound.com / any dead site    relics via the Wayback Machine CDX API
                                   (archive.org is blocked in some cloud environments —
                                   run from local Claude Code if it 403s)
@@ -119,23 +120,58 @@ def pins_from_flickr(url: str, count: int) -> list:
     return out
 
 
-def pins_from_unsplash(url: str, count: int) -> list:
-    key = os.environ.get("UNSPLASH_ACCESS_KEY")
-    if not key:
-        sys.exit("Unsplash blocks scraping; set UNSPLASH_ACCESS_KEY "
-                 "(free demo key at unsplash.com/developers)")
-    m = re.search(r"/s/photos/([^/?]+)", url)
-    query = m.group(1) if m else urllib.parse.urlparse(url).path.strip("/")
-    api = (f"https://api.unsplash.com/search/photos?query={urllib.parse.quote(query)}"
-           f"&per_page={min(count, 30)}&client_id={key}")
-    data = json.loads(fetch(api))
-    return [{
-        "title": strip_tags(p.get("alt_description") or p.get("description") or p["id"])[:120],
-        "page_url": p["links"]["html"],
-        "image_url": p["urls"]["regular"],
-        "fallback_url": p["urls"]["small"],
-        "artist": p["user"]["name"],
-    } for p in data.get("results", [])]
+def pins_from_vsco(url: str, count: int) -> list:
+    """VSCO profile gallery via the site's own web API.
+
+    Cloudflare blocks datacenter IPs, so this only works from a residential
+    connection (local Claude Code). Flow: the profile page sets a `vs` session
+    token cookie, which authorizes the sites + medias API calls.
+    """
+    m = re.search(r"vsco\.co/([^/?]+)", url)
+    if not m:
+        sys.exit("Give a VSCO profile URL, e.g. vsco.co/<username>/gallery")
+    user = m.group(1)
+    import http.cookiejar
+    jar = http.cookiejar.CookieJar()
+    opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
+    opener.addheaders = [("User-Agent", BROWSER_UA), ("Accept", "*/*")]
+    try:
+        opener.open(f"https://vsco.co/{user}/gallery", timeout=60).read()
+    except Exception as e:
+        sys.exit(f"VSCO refused the connection ({e}) — Cloudflare blocks datacenter "
+                 "IPs; run this hunt from local Claude Code on your own network.")
+    token = next((c.value for c in jar if c.name == "vs"), None)
+    if not token:
+        sys.exit("VSCO session token not found — the web flow may have changed.")
+
+    def api(path):
+        req = urllib.request.Request(f"https://vsco.co/api/2.0/{path}", headers={
+            "User-Agent": BROWSER_UA, "Authorization": f"Bearer {token}"})
+        return json.loads(opener.open(req, timeout=60).read())
+
+    sites = api(f"sites?subdomain={user}").get("sites", [])
+    if not sites:
+        sys.exit(f"No VSCO site found for user {user}")
+    medias = api(f"medias?site_id={sites[0]['id']}&size={min(count, 100)}&page=1")
+    from datetime import datetime, timezone
+    out = []
+    for media in medias.get("media", [])[:count]:
+        img = media.get("responsive_url", "")
+        cap = media.get("capture_date") or media.get("upload_date")
+        year = None
+        if isinstance(cap, (int, float)):  # epoch millis
+            year = datetime.fromtimestamp(cap / 1000, tz=timezone.utc).year
+        elif isinstance(cap, str) and cap[:4].isdigit():
+            year = int(cap[:4])
+        out.append({
+            "title": strip_tags(media.get("description", ""))[:120] or f"vsco {media.get('_id', '')[:8]}",
+            "page_url": f"https://vsco.co/{user}/media/{media.get('_id', '')}",
+            "image_url": f"https://{img}" if img and not img.startswith("http") else img,
+            "fallback_url": None,
+            "artist": user,
+            "year": year,
+        })
+    return out
 
 
 def pins_from_wayback(url: str, count: int) -> list:
@@ -211,8 +247,8 @@ def main() -> int:
         candidates, source = pins_from_arena(args.url, args.count), "arena"
     elif "flickr.com" in host:
         candidates, source = pins_from_flickr(args.url, args.count), "flickr"
-    elif "unsplash.com" in host:
-        candidates, source = pins_from_unsplash(args.url, args.count), "unsplash"
+    elif "vsco.co" in host:
+        candidates, source = pins_from_vsco(args.url, args.count), "vsco"
     elif args.wayback or "ffffound.com" in host or "web.archive.org" in host:
         candidates, source = pins_from_wayback(args.url, args.count), "wayback"
     else:

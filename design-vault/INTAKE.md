@@ -47,7 +47,7 @@ timecode, so the approved storyboard stays ordered. Tune `--threshold` down
 | Pinterest board | `hunt_url.py <board-url>` — works directly, no login |
 | Are.na channel | `hunt_url.py` with `ARENA_TOKEN` set |
 | Flickr | `hunt_url.py "flickr.com/photos/tags/<tag>"` — keyless public feed, photographer + date kept |
-| Unsplash | `hunt_url.py` with `UNSPLASH_ACCESS_KEY` set (free at unsplash.com/developers) — direct scraping is anti-bot walled |
+| VSCO | `hunt_url.py "vsco.co/<user>/gallery"` — Cloudflare blocks datacenter IPs; run from local Claude Code (capture year kept) |
 | FFFFOUND! and other dead sites | `hunt_url.py <domain> --wayback` — relics via the Wayback Machine. archive.org is blocked in the cloud environment's egress policy; run from local Claude Code |
 | layers.so / layers.to | Fully client-rendered + gated — no scrape route; screenshot to Drive |
 | Generic web page | `hunt_url.py` — og:image + large images |
