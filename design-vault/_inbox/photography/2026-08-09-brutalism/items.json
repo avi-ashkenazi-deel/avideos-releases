@@ -1,0 +1,135 @@
+{
+  "collection": "photography",
+  "batch": "2026-08-09-brutalism",
+  "source": "flickr",
+  "items": [
+    {
+      "id": 1,
+      "file": "01-concrete-geometry-and-shadows-in-puerto-de-tazac.jpg",
+      "title": "Concrete Geometry and Shadows in Puerto de Tazacorte",
+      "year": 2026,
+      "tags": [
+        "brutalism",
+        "architecture"
+      ],
+      "page_url": "https://www.flickr.com/photos/grzegorzgrzesiak/55452926885/",
+      "source_url": "https://live.staticflickr.com/65535/55452926885_2a42001fdc_b.jpg",
+      "license": "unknown (personal reference)",
+      "artist": "Siuloon",
+      "query": "https://www.flickr.com/photos/tags/brutalism",
+      "status": "pending"
+    },
+    {
+      "id": 2,
+      "file": "02-etagen.jpg",
+      "title": "Etagen",
+      "year": 2026,
+      "tags": [
+        "brutalism",
+        "architecture"
+      ],
+      "page_url": "https://www.flickr.com/photos/199836353@N02/55452296053/",
+      "source_url": "https://live.staticflickr.com/65535/55452296053_9afb3dc828_b.jpg",
+      "license": "unknown (personal reference)",
+      "artist": "Tim M. B.",
+      "query": "https://www.flickr.com/photos/tags/brutalism",
+      "status": "pending"
+    },
+    {
+      "id": 3,
+      "file": "03-rathaus-bensberg-gottfried-b-hm-2026.jpg",
+      "title": "Rathaus Bensberg — Gottfried Böhm, 2026",
+      "year": 2026,
+      "tags": [
+        "brutalism",
+        "architecture"
+      ],
+      "page_url": "https://www.flickr.com/photos/kersavond/55452220089/",
+      "source_url": "https://live.staticflickr.com/65535/55452220089_e96fefd9d5_b.jpg",
+      "license": "unknown (personal reference)",
+      "artist": "urbanpresents.net",
+      "query": "https://www.flickr.com/photos/tags/brutalism",
+      "status": "pending"
+    },
+    {
+      "id": 4,
+      "file": "04-rathaus-bensberg-gottfried-b-hm-2026.jpg",
+      "title": "Rathaus Bensberg — Gottfried Böhm, 2026",
+      "year": 2026,
+      "tags": [
+        "brutalism",
+        "architecture"
+      ],
+      "page_url": "https://www.flickr.com/photos/kersavond/55451079832/",
+      "source_url": "https://live.staticflickr.com/65535/55451079832_0ff12d494e_b.jpg",
+      "license": "unknown (personal reference)",
+      "artist": "urbanpresents.net",
+      "query": "https://www.flickr.com/photos/tags/brutalism",
+      "status": "pending"
+    },
+    {
+      "id": 5,
+      "file": "05-rathaus-bensberg-gottfried-b-hm-2026.jpg",
+      "title": "Rathaus Bensberg — Gottfried Böhm, 2026",
+      "year": 2026,
+      "tags": [
+        "brutalism",
+        "architecture"
+      ],
+      "page_url": "https://www.flickr.com/photos/kersavond/55452170603/",
+      "source_url": "https://live.staticflickr.com/65535/55452170603_5289e1ba32_b.jpg",
+      "license": "unknown (personal reference)",
+      "artist": "urbanpresents.net",
+      "query": "https://www.flickr.com/photos/tags/brutalism",
+      "status": "pending"
+    },
+    {
+      "id": 6,
+      "file": "06-rathaus-bensberg-gottfried-b-hm-2026.jpg",
+      "title": "Rathaus Bensberg — Gottfried Böhm, 2026",
+      "year": 2026,
+      "tags": [
+        "brutalism",
+        "architecture"
+      ],
+      "page_url": "https://www.flickr.com/photos/kersavond/55451079822/",
+      "source_url": "https://live.staticflickr.com/65535/55451079822_3b707eda5f_b.jpg",
+      "license": "unknown (personal reference)",
+      "artist": "urbanpresents.net",
+      "query": "https://www.flickr.com/photos/tags/brutalism",
+      "status": "pending"
+    },
+    {
+      "id": 7,
+      "file": "07-rathaus-bensberg-gottfried-b-hm-2026.jpg",
+      "title": "Rathaus Bensberg — Gottfried Böhm, 2026",
+      "year": 2026,
+      "tags": [
+        "brutalism",
+        "architecture"
+      ],
+      "page_url": "https://www.flickr.com/photos/kersavond/55452055271/",
+      "source_url": "https://live.staticflickr.com/65535/55452055271_e54cca2f02_b.jpg",
+      "license": "unknown (personal reference)",
+      "artist": "urbanpresents.net",
+      "query": "https://www.flickr.com/photos/tags/brutalism",
+      "status": "pending"
+    },
+    {
+      "id": 8,
+      "file": "08-rathaus-bensberg-gottfried-b-hm-2026.jpg",
+      "title": "Rathaus Bensberg — Gottfried Böhm, 2026",
+      "year": 2026,
+      "tags": [
+        "brutalism",
+        "architecture"
+      ],
+      "page_url": "https://www.flickr.com/photos/kersavond/55452219984/",
+      "source_url": "https://live.staticflickr.com/65535/55452219984_59a17cae7e_b.jpg",
+      "license": "unknown (personal reference)",
+      "artist": "urbanpresents.net",
+      "query": "https://www.flickr.com/photos/tags/brutalism",
+      "status": "pending"
+    }
+  ]
+}

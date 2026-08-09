@@ -8,6 +8,11 @@ loop as the Commons hunter.
 Sources:
   pinterest.com/<user>/<board>/   public boards via Pinterest's widget endpoint (up to 50 pins)
   are.na/<user>/<channel>         needs ARENA_TOKEN env var (personal access token)
+  flickr.com/...tags/<tag>        keyless public feed (recent photos for a tag)
+  unsplash.com/s/photos/<query>   needs UNSPLASH_ACCESS_KEY (free at unsplash.com/developers)
+  ffffound.com / any dead site    relics via the Wayback Machine CDX API
+                                  (archive.org is blocked in some cloud environments —
+                                  run from local Claude Code if it 403s)
   any other URL                   scrapes og:image + large <img> tags from the page
 
 Licensing: unlike Commons, these sources carry no license metadata — items are
@@ -90,6 +95,80 @@ def pins_from_arena(url: str, count: int) -> list:
     return out
 
 
+def pins_from_flickr(url: str, count: int) -> list:
+    m = re.search(r"tags/([^/?]+)", url) or re.search(r"[?&]tags=([^&]+)", url)
+    if not m:
+        sys.exit("Give a Flickr tag URL, e.g. flickr.com/photos/tags/brutalism")
+    tag = m.group(1)
+    api = ("https://api.flickr.com/services/feeds/photos_public.gne"
+           f"?tags={urllib.parse.quote(tag)}&format=json&nojsoncallback=1")
+    data = json.loads(fetch(api))
+    out = []
+    for item in data.get("items", [])[:count]:
+        img = item["media"]["m"].replace("_m.", "_b.")  # medium -> large
+        year = re.match(r"(\d{4})", item.get("date_taken", "") or "")
+        out.append({
+            "title": strip_tags(item.get("title", ""))[:120] or "untitled",
+            "page_url": item.get("link"),
+            "image_url": img,
+            "fallback_url": item["media"]["m"],
+            "artist": (item.get("author", "").split('"')[1]
+                       if '"' in item.get("author", "") else ""),
+            "year": int(year.group(1)) if year else None,
+        })
+    return out
+
+
+def pins_from_unsplash(url: str, count: int) -> list:
+    key = os.environ.get("UNSPLASH_ACCESS_KEY")
+    if not key:
+        sys.exit("Unsplash blocks scraping; set UNSPLASH_ACCESS_KEY "
+                 "(free demo key at unsplash.com/developers)")
+    m = re.search(r"/s/photos/([^/?]+)", url)
+    query = m.group(1) if m else urllib.parse.urlparse(url).path.strip("/")
+    api = (f"https://api.unsplash.com/search/photos?query={urllib.parse.quote(query)}"
+           f"&per_page={min(count, 30)}&client_id={key}")
+    data = json.loads(fetch(api))
+    return [{
+        "title": strip_tags(p.get("alt_description") or p.get("description") or p["id"])[:120],
+        "page_url": p["links"]["html"],
+        "image_url": p["urls"]["regular"],
+        "fallback_url": p["urls"]["small"],
+        "artist": p["user"]["name"],
+    } for p in data.get("results", [])]
+
+
+def pins_from_wayback(url: str, count: int) -> list:
+    """Relics of dead sites (FFFFOUND! et al.) via the Wayback Machine CDX API."""
+    parsed = urllib.parse.urlparse(url if "//" in url else f"https://{url}")
+    target = parsed.netloc + (parsed.path if len(parsed.path) > 1 else "")
+    if "ffffound.com" in target and "/" not in target.rstrip("/").replace("ffffound.com", ""):
+        target = "ffffound.com/static/images/uploaded/"  # where the images lived
+    cdx = ("https://web.archive.org/cdx/search/cdx"
+           f"?url={urllib.parse.quote(target + '*')}&output=json"
+           "&filter=mimetype:image/jpeg&filter=statuscode:200"
+           f"&collapse=digest&limit={count * 2}")
+    try:
+        rows = json.loads(fetch(cdx))
+    except Exception as e:
+        sys.exit("Wayback Machine unreachable — this cloud environment's egress policy "
+                 f"blocks archive.org. Run this hunt from local Claude Code instead. ({e})")
+    out = []
+    for row in rows[1:]:  # first row is the header
+        ts, original = row[1], row[2]
+        out.append({
+            "title": Path(urllib.parse.urlparse(original).path).stem[:120],
+            "page_url": f"https://web.archive.org/web/{ts}/{original}",
+            "image_url": f"https://web.archive.org/web/{ts}if_/{original}",
+            "fallback_url": None,
+            "artist": "",
+            "year": int(ts[:4]),
+        })
+        if len(out) >= count:
+            break
+    return out
+
+
 def pins_from_page(url: str, count: int) -> list:
     page = fetch(url).decode("utf-8", "replace")
     found, seen = [], set()
@@ -119,14 +198,23 @@ def main() -> int:
     ap.add_argument("--tags", default="", help="comma-separated tags applied to every item")
     ap.add_argument("--min-bytes", type=int, default=25_000,
                     help="skip images smaller than this (filters icons/trackers on generic pages)")
+    ap.add_argument("--wayback", action="store_true",
+                    help="treat the URL as a dead site and hunt the Wayback Machine")
     args = ap.parse_args()
     tags = [t.strip() for t in args.tags.split(",") if t.strip()]
 
-    host = urllib.parse.urlparse(args.url).netloc.lower()
+    host = urllib.parse.urlparse(args.url if "//" in args.url
+                                 else f"https://{args.url}").netloc.lower()
     if "pinterest." in host:
         candidates, source = pins_from_pinterest(args.url, args.count), "pinterest"
     elif "are.na" in host:
         candidates, source = pins_from_arena(args.url, args.count), "arena"
+    elif "flickr.com" in host:
+        candidates, source = pins_from_flickr(args.url, args.count), "flickr"
+    elif "unsplash.com" in host:
+        candidates, source = pins_from_unsplash(args.url, args.count), "unsplash"
+    elif args.wayback or "ffffound.com" in host or "web.archive.org" in host:
+        candidates, source = pins_from_wayback(args.url, args.count), "wayback"
     else:
         candidates, source = pins_from_page(args.url, args.count), "page"
     if not candidates:
@@ -155,10 +243,14 @@ def main() -> int:
         ext = Path(urllib.parse.urlparse(cand["image_url"]).path).suffix or ".jpg"
         fname = f"{n:02d}-{slugify(cand['title'])}{ext}"
         (batch_dir / fname).write_bytes(blob)
-        year = re.search(r"\b(1[5-9]\d\d|20\d\d)\b", cand["title"])
+        if cand.get("year"):
+            year = cand["year"]
+        else:
+            m = re.search(r"\b(1[5-9]\d\d|20\d\d)\b", cand["title"])
+            year = int(m.group(1)) if m else None
         items.append({
             "id": n, "file": fname, "title": cand["title"],
-            "year": int(year.group(1)) if year else None, "tags": tags,
+            "year": year, "tags": tags,
             "page_url": cand["page_url"], "source_url": cand["image_url"],
             "license": "unknown (personal reference)", "artist": cand["artist"],
             "query": args.url, "status": "pending",
