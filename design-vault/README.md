@@ -16,8 +16,14 @@ The loop is: **brief → hunt → review → approve/reject → filed in folders
    direct URL, license, artist, and the query that found it).
    - `scripts/hunt_commons.py` hunts Wikimedia Commons (license-safe, great for
      currency, passports, vintage posters, historical logos).
-   - Other sources (web search, specific sites) are hunted ad hoc by Claude in a
-     session; anything downloaded still lands in `_inbox` with the same metadata shape.
+   - `scripts/hunt_url.py` hunts a URL you spotted: a public Pinterest board
+     (via Pinterest's widget endpoint, up to 50 pins, no login), an Are.na
+     channel (set `ARENA_TOKEN` from dev.are.na), or any web page (scrapes
+     `og:image` + large `<img>` tags). Items are recorded as
+     "unknown (personal reference)" license — a private swipe file, not
+     cleared for reuse.
+   - Anything else (web search, screenshot hunts) is done ad hoc by Claude in a
+     session; downloads land in `_inbox` with the same metadata shape.
 3. **Review** — `scripts/vault.py review` builds `review.html`: a numbered gallery
    of everything pending. Claude publishes it as an artifact; you reply with which
    numbers to keep ("keep 2, 5, 9, drop the rest").
@@ -71,6 +77,11 @@ collection, sorted by year, with decade filter chips.
 # Hunt: 12 candidates for the currency collection
 python3 design-vault/scripts/hunt_commons.py \
   --collection currency --query "Swiss franc banknote" --count 12
+
+# Saw a great collection online? Pull it in (Pinterest board / Are.na channel / any page)
+python3 design-vault/scripts/hunt_url.py \
+  "https://www.pinterest.com/<user>/<board>/" \
+  --collection posters --tags "brutalism" --count 30
 
 # Build the review gallery from everything pending in the inbox
 python3 design-vault/scripts/vault.py review
