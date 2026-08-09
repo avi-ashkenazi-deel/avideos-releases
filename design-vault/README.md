@@ -47,6 +47,24 @@ design-vault/
 Each collection folder holds the approved images plus an `items.json` catalog —
 so the provenance of every file survives even after the inbox batch is gone.
 
+## Tagging & years
+
+Tagging is a first-class part of the catalog — every item carries a `year` (the
+design's year, extracted from Commons metadata or the title, best-effort) and a
+`tags` list. The hunter can stamp a whole batch (`--tags "swiss-style,grid"`),
+and `vault.py tag` curates after the fact:
+
+```bash
+# Fix a wrong year (scrapers often pick up the upload date, not the design date)
+python3 design-vault/scripts/vault.py tag logos --match mobil --year 1964 --add "chermayeff-geismar"
+
+# Tag every entry in a collection
+python3 design-vault/scripts/vault.py tag posters --match "" --add "typography,grid"
+```
+
+`vault.py browse` renders the whole approved library (`browse.html`) grouped by
+collection, sorted by year, with decade filter chips.
+
 ## Commands
 
 ```bash

@@ -7,8 +7,8 @@ Format: `- [ ] <collection>: <what to look for> (<rough count>)`
 
 ## Open
 
-- [ ] logos: modernist single-mark logos, 1960s–1980s corporate identity (12)
-- [ ] posters: Swiss International Typographic Style posters (12)
+- [ ] logos: modernist single-mark logos, 1960s–1980s corporate identity — Commons is weak here,
+      needs a targeted hunt (specific marks by name: Chase, NBC, Bell, Braun, Lufthansa…)
 - [ ] interface-design: dense data-table / dashboard patterns done well (10)
 - [ ] inspiration: security-print patterns — guilloché, microtext, latent images (10)
 - [ ] tv-interfaces: streaming-app home screens, EPG grids, smart-TV nav (screenshot hunt, per session)
@@ -18,6 +18,8 @@ Format: `- [ ] <collection>: <what to look for> (<rough count>)`
 
 ## Done
 
+- [x] logos: logotypes + historic trademarks — first pass, quality mixed (2026-08-09)
+- [x] posters: Swiss International Typographic Style — Müller-Brockmann, Kunsthalle Basel (2026-08-09)
 - [x] currency: engraved banknotes with strong design (pilot batch, 2026-08-09)
 - [x] passports: passport covers + inner-page design (pilot batch, 2026-08-09)
 - [x] watch-faces: wristwatch dials (pilot batch, 2026-08-09)

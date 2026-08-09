@@ -35,6 +35,17 @@ def strip_tags(html: str) -> str:
     return re.sub(r"<[^>]+>", "", html or "").strip()
 
 
+def extract_year(meta: dict, title: str):
+    """Best-effort year for the design itself, from Commons date metadata or the title."""
+    for field in ("DateTimeOriginal", "DateTime"):
+        val = strip_tags(meta.get(field, {}).get("value", ""))
+        m = re.search(r"\b(1[5-9]\d\d|20\d\d)\b", val)
+        if m:
+            return int(m.group(1))
+    m = re.search(r"\b(1[5-9]\d\d|20\d\d)\b", title)
+    return int(m.group(1)) if m else None
+
+
 def slugify(text: str, max_len: int = 48) -> str:
     slug = re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
     return slug[:max_len].rstrip("-") or "item"
@@ -65,7 +76,9 @@ def main() -> int:
     ap.add_argument("--query", required=True, help="Commons search query")
     ap.add_argument("--count", type=int, default=12)
     ap.add_argument("--batch", help="batch name (default: <date>-<query-slug>)")
+    ap.add_argument("--tags", default="", help="comma-separated tags applied to every item in the batch")
     args = ap.parse_args()
+    tags = [t.strip() for t in args.tags.split(",") if t.strip()]
 
     batch = args.batch or f"{date.today().isoformat()}-{slugify(args.query, 32)}"
     batch_dir = VAULT / "_inbox" / args.collection / batch
@@ -91,11 +104,14 @@ def main() -> int:
             print(f"  skip {page['title']}: {e}", file=sys.stderr)
             n -= 1
             continue
+        title = (strip_tags(meta.get("ObjectName", {}).get("value", ""))
+                 or page["title"].removeprefix("File:"))
         items.append({
             "id": n,
             "file": fname,
-            "title": strip_tags(meta.get("ObjectName", {}).get("value", ""))
-                     or page["title"].removeprefix("File:"),
+            "title": title,
+            "year": extract_year(meta, page["title"]),
+            "tags": tags,
             "page_url": info.get("descriptionurl"),
             "source_url": info.get("url"),
             "license": strip_tags(meta.get("LicenseShortName", {}).get("value", "")) or "unknown",
@@ -103,7 +119,7 @@ def main() -> int:
             "query": args.query,
             "status": "pending",
         })
-        print(f"  {fname}  [{items[-1]['license']}]")
+        print(f"  {fname}  [{items[-1]['license']}] ({items[-1]['year'] or 'year?'})")
 
     manifest = {"collection": args.collection, "batch": batch, "items": items}
     (batch_dir / "items.json").write_text(json.dumps(manifest, indent=2, ensure_ascii=False))

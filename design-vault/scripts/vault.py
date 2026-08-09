@@ -145,7 +145,10 @@ def cmd_resolve(args) -> int:
         print(f"No such batch: {args.batch}", file=sys.stderr)
         return 1
     manifest = json.loads(manifest_path.read_text())
-    keep = {int(x) for x in args.keep.split(",")} if args.keep else set()
+    if args.keep == "all":
+        keep = {i["id"] for i in manifest["items"]}
+    else:
+        keep = {int(x) for x in args.keep.split(",")} if args.keep else set()
 
     dest = COLLECTIONS / manifest["collection"]
     dest.mkdir(parents=True, exist_ok=True)
@@ -191,6 +194,120 @@ def cmd_resolve(args) -> int:
     return 0
 
 
+def cmd_tag(args) -> int:
+    """Add tags / set a year on catalog entries whose file or title matches a substring."""
+    catalog_path = COLLECTIONS / args.collection / "items.json"
+    if not catalog_path.exists():
+        print(f"No catalog for collection: {args.collection}", file=sys.stderr)
+        return 1
+    catalog = json.loads(catalog_path.read_text())
+    add = [t.strip() for t in args.add.split(",") if t.strip()]
+    needle = args.match.lower()
+    hit = 0
+    for entry in catalog:
+        if needle and needle not in entry["file"].lower() and needle not in entry.get("title", "").lower():
+            continue
+        hit += 1
+        entry["tags"] = sorted(set(entry.get("tags", [])) | set(add))
+        if args.year is not None:
+            entry["year"] = args.year
+    catalog_path.write_text(json.dumps(catalog, indent=2, ensure_ascii=False))
+    print(f"Tagged {hit} entries in {args.collection}")
+    return 0
+
+
+def cmd_browse(args) -> int:
+    """Render browse.html — the approved library, filterable by decade and tag."""
+    sections = []
+    decades = set()
+    total = 0
+    for catalog_path in sorted(COLLECTIONS.glob("*/items.json")):
+        catalog = json.loads(catalog_path.read_text())
+        if not catalog:
+            continue
+        collection = catalog_path.parent.name
+        cards = []
+        for entry in sorted(catalog, key=lambda e: (e.get("year") or 9999, e["file"])):
+            total += 1
+            year = entry.get("year")
+            decade = f"{year // 10 * 10}s" if year else "undated"
+            decades.add(decade)
+            tags = entry.get("tags", [])
+            if args.embed:
+                img = embed_thumb(catalog_path.parent / entry["file"])
+            else:
+                img = html.escape(str(catalog_path.parent.relative_to(VAULT) / entry["file"]))
+            chips = "".join(f'<span class="chip">{html.escape(t)}</span>' for t in tags)
+            cards.append(f"""
+      <figure data-decade="{decade}" data-tags="{html.escape(' '.join(tags))}">
+        <span class="year">{year or '—'}</span>
+        <img src="{img}" loading="lazy" alt="{html.escape(entry.get('title', ''))}">
+        <figcaption>
+          <strong>{html.escape(entry.get('title', ''))}</strong>
+          <span class="chips">{chips}</span>
+          <span class="meta"><span class="lic">{html.escape(entry.get('license', ''))}</span>
+          <a href="{html.escape(entry.get('page_url') or '')}" target="_blank" rel="noopener">source ↗</a></span>
+        </figcaption>
+      </figure>""")
+        sections.append(f"""
+    <section>
+      <h2>{html.escape(collection)} <span class="count">{len(catalog)}</span></h2>
+      <div class="grid">{''.join(cards)}
+      </div>
+    </section>""")
+
+    chips = "".join(f'<button class="decade" data-decade="{d}">{d}</button>'
+                    for d in sorted(decades, key=lambda d: (d == "undated", d)))
+    out = VAULT / "browse.html"
+    out.write_text(f"""<title>Design Vault — library ({total} items)</title>
+<style>
+  body {{ font: 15px/1.55 "Avenir Next", "Segoe UI", system-ui, sans-serif;
+         margin: 0; padding: 2.5rem clamp(1rem, 4vw, 3.5rem) 4rem;
+         background: #16171a; color: #e9e7e2; }}
+  h1 {{ font-size: 1.3rem; font-weight: 600; margin: 0 0 .25rem; }}
+  .sub {{ color: #9b978f; margin: 0 0 1.2rem; }}
+  #filters {{ display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 1rem; }}
+  .decade {{ background: #1f2024; color: #e9e7e2; border: 1px solid #2c2d33; border-radius: 99px;
+            padding: 4px 14px; cursor: pointer; font: inherit; font-size: .82rem;
+            font-variant-numeric: tabular-nums; }}
+  .decade.on {{ background: #d8c96a; color: #16171a; border-color: #d8c96a; font-weight: 600; }}
+  h2 {{ margin: 2.6rem 0 1rem; font-size: 1rem; font-weight: 600; text-transform: uppercase;
+       letter-spacing: .08em; }}
+  .count {{ color: #9b978f; font-weight: 400; font-variant-numeric: tabular-nums; }}
+  .grid {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; }}
+  figure {{ margin: 0; background: #1f2024; border-radius: 6px; overflow: hidden; position: relative; }}
+  figure.hide {{ display: none; }}
+  figure img {{ width: 100%; height: 215px; object-fit: contain; background: #0c0d0f; display: block; }}
+  .year {{ position: absolute; top: 8px; left: 8px; background: #16171a; color: #d8c96a;
+          border-radius: 4px; padding: 1px 8px; font-weight: 600; font-size: .8rem;
+          font-variant-numeric: tabular-nums; }}
+  figcaption {{ padding: .6rem .8rem .7rem; font-size: .78rem; display: grid; gap: 4px; }}
+  figcaption strong {{ font-weight: 600; overflow-wrap: anywhere; }}
+  .chips {{ display: flex; flex-wrap: wrap; gap: 4px; }}
+  .chip {{ background: #2c2d33; border-radius: 99px; padding: 1px 8px; font-size: .72rem; }}
+  .meta {{ display: flex; justify-content: space-between; gap: .5rem; }}
+  .lic {{ color: #8fbfa4; }}
+  a {{ color: #7ab8ff; text-decoration: none; }} a:hover {{ text-decoration: underline; }}
+  section:not(:has(figure:not(.hide))) {{ display: none; }}
+</style>
+<h1>Design Vault — {total} items in the library</h1>
+<p class="sub">Filter by decade; click a filter again to clear it.</p>
+<div id="filters">{chips}</div>
+{''.join(sections) if sections else '<p>Library is empty — approve some inbox batches first.</p>'}
+<script>
+  let active = null;
+  document.querySelectorAll('.decade').forEach(btn => btn.addEventListener('click', () => {{
+    active = active === btn.dataset.decade ? null : btn.dataset.decade;
+    document.querySelectorAll('.decade').forEach(b => b.classList.toggle('on', b.dataset.decade === active));
+    document.querySelectorAll('figure').forEach(f =>
+      f.classList.toggle('hide', active !== null && f.dataset.decade !== active));
+  }}));
+</script>
+""")
+    print(f"Wrote {out} ({total} items)")
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -199,11 +316,20 @@ def main() -> int:
                     help="inline images as data URIs (self-contained gallery)")
     rp = sub.add_parser("resolve")
     rp.add_argument("batch", help="<collection>/<batch-name>")
-    rp.add_argument("--keep", default="", help="comma-separated ids to approve")
+    rp.add_argument("--keep", default="", help="comma-separated ids to approve, or 'all'")
     rp.add_argument("--rest", choices=["reject", "pending"], default="pending",
                     help="what happens to undecided items (default: stay pending)")
+    tp = sub.add_parser("tag")
+    tp.add_argument("collection")
+    tp.add_argument("--match", default="", help="substring of file/title to select entries (empty = all)")
+    tp.add_argument("--add", default="", help="comma-separated tags to add")
+    tp.add_argument("--year", type=int, help="set the design year")
+    bp = sub.add_parser("browse")
+    bp.add_argument("--embed", action="store_true",
+                    help="inline images as data URIs (self-contained gallery)")
     args = ap.parse_args()
-    return cmd_review(args) if args.cmd == "review" else cmd_resolve(args)
+    return {"review": cmd_review, "resolve": cmd_resolve,
+            "tag": cmd_tag, "browse": cmd_browse}[args.cmd](args)
 
 
 if __name__ == "__main__":
