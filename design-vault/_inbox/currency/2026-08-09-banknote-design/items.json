@@ -1,0 +1,160 @@
+{
+  "collection": "currency",
+  "batch": "2026-08-09-banknote-design",
+  "items": [
+    {
+      "id": 1,
+      "file": "01-swe-31-sveriges-riksbank-1000-kronor-1909-specim.jpg",
+      "title": "SWE-31-Sveriges Riksbank-1000 Kronor (1909, specimen)",
+      "page_url": "https://commons.wikimedia.org/wiki/File:SWE-31-Sveriges_Riksbank-1000_Kronor_(1909,_specimen).jpg",
+      "source_url": "https://upload.wikimedia.org/wikipedia/commons/6/6f/SWE-31-Sveriges_Riksbank-1000_Kronor_%281909%2C_specimen%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "license": "Public domain",
+      "artist": "Jacob Bagges and Son (Printers) for Sveriges Riksbank, in part anonymous, in part Max Mirowsky (Svea)",
+      "query": "banknote engraving specimen",
+      "status": "pending"
+    },
+    {
+      "id": 2,
+      "file": "02-reverse-of-5-banknote-canada-1954-series-devil-s.jpg",
+      "title": "Reverse of $5 banknote, Canada 1954 Series, \"Devil's Head\" printing",
+      "page_url": "https://commons.wikimedia.org/wiki/File:Reverse_of_$5_banknote,_Canada_1954_Series,_%22Devil%27s_Head%22_printing.jpg",
+      "source_url": "https://upload.wikimedia.org/wikipedia/commons/a/a4/Reverse_of_%245_banknote%2C_Canada_1954_Series%2C_%22Devil%27s_Head%22_printing.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "license": "Public domain",
+      "artist": "Bank of Canada.",
+      "query": "banknote engraving specimen",
+      "status": "pending"
+    },
+    {
+      "id": 3,
+      "file": "03-reverse-of-10-banknote-canada-1954-series-devil.jpg",
+      "title": "Reverse of $10 banknote, Canada 1954 Series, \"Devil's Head\" printing",
+      "page_url": "https://commons.wikimedia.org/wiki/File:Reverse_of_$10_banknote,_Canada_1954_Series,_%22Devil%27s_Head%22_printing.jpg",
+      "source_url": "https://upload.wikimedia.org/wikipedia/commons/9/9f/Reverse_of_%2410_banknote%2C_Canada_1954_Series%2C_%22Devil%27s_Head%22_printing.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "license": "Public domain",
+      "artist": "Bank of Canada.",
+      "query": "banknote engraving specimen",
+      "status": "pending"
+    },
+    {
+      "id": 4,
+      "file": "04-mercantil-yucatan-hl-1000-specimen-02-jpg.jpg",
+      "title": "Mercantil-Yucatan-HL-1000-specimen 02",
+      "page_url": "https://commons.wikimedia.org/wiki/File:Mercantil-Yucatan-HL-1000-specimen_02.jpg",
+      "source_url": "https://upload.wikimedia.org/wikipedia/commons/4/43/Mercantil-Yucatan-HL-1000-specimen_02.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "license": "Public domain",
+      "artist": "El Banco Mercantil de Yucatán, engraving &amp; design Thomas F. Morris II (d. 1898) of the Homer Lee Bank Note Company.",
+      "query": "banknote engraving specimen",
+      "status": "pending"
+    },
+    {
+      "id": 5,
+      "file": "05-mercantil-yucatan-hl-1000-specimen-01-jpg.jpg",
+      "title": "Mercantil-Yucatan-HL-1000-specimen 01",
+      "page_url": "https://commons.wikimedia.org/wiki/File:Mercantil-Yucatan-HL-1000-specimen_01.jpg",
+      "source_url": "https://upload.wikimedia.org/wikipedia/commons/3/3f/Mercantil-Yucatan-HL-1000-specimen_01.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "license": "Public domain",
+      "artist": "El Banco Mercantil de Yucatán, engraving &amp; design Thomas F. Morris II (d. 1898) of the Homer Lee Bank Note Company.",
+      "query": "banknote engraving specimen",
+      "status": "pending"
+    },
+    {
+      "id": 6,
+      "file": "06-us-5000-gc-1882-fr-1221a-jpg.jpg",
+      "title": "US-$5000-GC-1882-Fr-1221a",
+      "page_url": "https://commons.wikimedia.org/wiki/File:US-$5000-GC-1882-Fr-1221a.jpg",
+      "source_url": "https://upload.wikimedia.org/wikipedia/commons/1/16/US-%245000-GC-1882-Fr-1221a.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "license": "Public domain",
+      "artist": "National Museum of American History",
+      "query": "banknote engraving specimen",
+      "status": "pending"
+    },
+    {
+      "id": 7,
+      "file": "07-us-10000-gc-1882-fr-1223a-jpg.jpg",
+      "title": "US-$10000-GC-1882-Fr-1223a",
+      "page_url": "https://commons.wikimedia.org/wiki/File:US-$10000-GC-1882-Fr-1223a.jpg",
+      "source_url": "https://upload.wikimedia.org/wikipedia/commons/b/b8/US-%2410000-GC-1882-Fr-1223a.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "license": "Public domain",
+      "artist": "National Museum of American History",
+      "query": "banknote engraving specimen",
+      "status": "pending"
+    },
+    {
+      "id": 8,
+      "file": "08-us-b-l-consols-4-5000-1877-specimen-face-only-jp.jpg",
+      "title": "US-B&L-Consols-4%-$5000-1877 (Specimen face only)",
+      "page_url": "https://commons.wikimedia.org/wiki/File:US-B%26L-Consols-4%25-$5000-1877_(Specimen_face_only).jpg",
+      "source_url": "https://upload.wikimedia.org/wikipedia/commons/0/0d/US-B%26L-Consols-4%25-%245000-1877_%28Specimen_face_only%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "license": "Public domain",
+      "artist": "National Museum of American History",
+      "query": "banknote engraving specimen",
+      "status": "pending"
+    },
+    {
+      "id": 9,
+      "file": "09-us-b-l-consols-4-20000-1877-specimen-face-only-j.jpg",
+      "title": "US-B&L-Consols-4%-$20000-1877 (Specimen face only)",
+      "page_url": "https://commons.wikimedia.org/wiki/File:US-B%26L-Consols-4%25-$20000-1877_(Specimen_face_only).jpg",
+      "source_url": "https://upload.wikimedia.org/wikipedia/commons/8/8a/US-B%26L-Consols-4%25-%2420000-1877_%28Specimen_face_only%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "license": "Public domain",
+      "artist": "National Museum of American History",
+      "query": "banknote engraving specimen",
+      "status": "pending"
+    },
+    {
+      "id": 10,
+      "file": "10-us-b-l-consols-4-500-1877-specimen-jpg.jpg",
+      "title": "US-B&L-Consols-4%-$500-1877 (Specimen)",
+      "page_url": "https://commons.wikimedia.org/wiki/File:US-B%26L-Consols-4%25-$500-1877_(Specimen).jpg",
+      "source_url": "https://upload.wikimedia.org/wikipedia/commons/4/4a/US-B%26L-Consols-4%25-%24500-1877_%28Specimen%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "license": "Public domain",
+      "artist": "National Museum of American History",
+      "query": "banknote engraving specimen",
+      "status": "pending"
+    },
+    {
+      "id": 11,
+      "file": "11-us-b-l-consols-4-5000-1877-specimen-jpg.jpg",
+      "title": "US-B&L-Consols-4%-$5000-1877 (Specimen)",
+      "page_url": "https://commons.wikimedia.org/wiki/File:US-B%26L-Consols-4%25-$5000-1877_(Specimen).jpg",
+      "source_url": "https://upload.wikimedia.org/wikipedia/commons/8/81/US-B%26L-Consols-4%25-%245000-1877_%28Specimen%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "license": "Public domain",
+      "artist": "National Museum of American History",
+      "query": "banknote engraving specimen",
+      "status": "pending"
+    },
+    {
+      "id": 12,
+      "file": "12-us-b-l-consols-4-10000-1877-specimen-jpg.jpg",
+      "title": "US-B&L-Consols-4%-$10000-1877 (Specimen)",
+      "page_url": "https://commons.wikimedia.org/wiki/File:US-B%26L-Consols-4%25-$10000-1877_(Specimen).jpg",
+      "source_url": "https://upload.wikimedia.org/wikipedia/commons/9/9c/US-B%26L-Consols-4%25-%2410000-1877_%28Specimen%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "license": "Public domain",
+      "artist": "National Museum of American History",
+      "query": "banknote engraving specimen",
+      "status": "pending"
+    },
+    {
+      "id": 13,
+      "file": "13-us-b-l-consols-4-20000-1877-specimen-jpg.jpg",
+      "title": "US-B&L-Consols-4%-$20000-1877 (Specimen)",
+      "page_url": "https://commons.wikimedia.org/wiki/File:US-B%26L-Consols-4%25-$20000-1877_(Specimen).jpg",
+      "source_url": "https://upload.wikimedia.org/wikipedia/commons/6/6d/US-B%26L-Consols-4%25-%2420000-1877_%28Specimen%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "license": "Public domain",
+      "artist": "National Museum of American History",
+      "query": "banknote engraving specimen",
+      "status": "pending"
+    },
+    {
+      "id": 14,
+      "file": "14-us-b-l-consols-4-50000-1877-specimen-jpg.jpg",
+      "title": "US-B&L-Consols-4%-$50000-1877 (Specimen)",
+      "page_url": "https://commons.wikimedia.org/wiki/File:US-B%26L-Consols-4%25-$50000-1877_(Specimen).jpg",
+      "source_url": "https://upload.wikimedia.org/wikipedia/commons/7/70/US-B%26L-Consols-4%25-%2450000-1877_%28Specimen%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "license": "Public domain",
+      "artist": "National Museum of American History",
+      "query": "banknote engraving specimen",
+      "status": "pending"
+    }
+  ]
+}
