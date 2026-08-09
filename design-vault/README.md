@@ -22,6 +22,12 @@ The loop is: **brief → hunt → review → approve/reject → filed in folders
      `og:image` + large `<img>` tags). Items are recorded as
      "unknown (personal reference)" license — a private swipe file, not
      cleared for reuse.
+   - `scripts/storyboard.py` breaks a video into key frames at scene cuts
+     (ffmpeg), each frame carrying its timecode — for title sequences, TV
+     interfaces in motion, anything worth studying shot by shot.
+   - **From your phone**: screenshots and videos dropped in the
+     `Design Vault Intake` Google Drive folder get pulled in on request —
+     see [INTAKE.md](INTAKE.md).
    - Anything else (web search, screenshot hunts) is done ad hoc by Claude in a
      session; downloads land in `_inbox` with the same metadata shape.
 3. **Review** — `scripts/vault.py review` builds `review.html`: a numbered gallery
@@ -47,7 +53,9 @@ design-vault/
 │   └── inspiration/
 └── scripts/
     ├── hunt_commons.py       # search + download from Wikimedia Commons
-    └── vault.py              # review gallery + approve/reject resolution
+    ├── hunt_url.py           # pull in a Pinterest board / Are.na channel / any page
+    ├── storyboard.py         # video → key frames with timecodes
+    └── vault.py              # review gallery + approve/reject + tag + browse
 ```
 
 Each collection folder holds the approved images plus an `items.json` catalog —
