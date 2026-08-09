@@ -38,6 +38,43 @@ final class ExportService {
     private let builder = CompositionBuilder()
     private let log = Logger(subsystem: "com.aviashkenazi.streamit", category: "export")
 
+    /// Streaming/podcast delivery targets. Stems are never normalized — they
+    /// are raw material.
+    static let podcastLoudnessTarget = -16.0   // LUFS, Apple Podcasts / RSS
+    static let videoLoudnessTarget = -14.0     // LUFS, YouTube / social
+
+    /// Reads the same key `AppPreferences.normalizeExportLoudness` writes
+    /// (the editor's services deliberately don't depend on the studio hub).
+    private var normalizeLoudness: Bool {
+        UserDefaults.standard.object(forKey: "pref.normalizeExportLoudness") as? Bool ?? true
+    }
+
+    /// Measures a built composition and returns the rebuild options with the
+    /// makeup gain set — or the options unchanged when normalization is off,
+    /// the audio is silent, or it is already within half a dB of target.
+    ///
+    /// The gain is capped so the sample peak stays under −1 dBFS: this is
+    /// normalization, not a limiter, and a quiet-but-peaky recording gets as
+    /// close to target as clipping allows rather than distorted.
+    private func normalizedOptions(_ options: CompositionBuilder.Options,
+                                   result: CompositionBuilder.Result,
+                                   targetLUFS: Double) async -> CompositionBuilder.Options {
+        guard normalizeLoudness else { return options }
+        guard let measurement = try? await LoudnessMeter.measure(composition: result.composition,
+                                                                 audioMix: result.audioMix),
+              let lufs = measurement.integratedLUFS else { return options }
+        var gainDB = targetLUFS - lufs
+        if measurement.samplePeak > 0 {
+            let headroomDB = -1.0 - 20 * log10(measurement.samplePeak)
+            gainDB = min(gainDB, headroomDB)
+        }
+        guard abs(gainDB) > 0.5 else { return options }
+        log.info("Loudness \(String(format: "%.1f", lufs)) LUFS → target \(targetLUFS): applying \(String(format: "%+.1f", gainDB)) dB")
+        var adjusted = options
+        adjusted.masterGainLinear = Float(pow(10, gainDB / 20))
+        return adjusted
+    }
+
     private var exportsDirectory: URL {
         let url = FileManager.default.urls(for: .moviesDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Streamit/Exports", isDirectory: true)
@@ -51,7 +88,17 @@ final class ExportService {
         switch target {
         case .audioMaster(let aac):
             run(job: Job(title: "Audio master")) { [builder, exportsDirectory] job in
-                let result = try await builder.build(project: project)
+                var options = CompositionBuilder.Options()
+                var result = try await builder.build(project: project, options: options)
+                // Measure, then rebuild with the makeup gain — the second
+                // build is cheap (no rendering happens until export).
+                let normalized = await self.normalizedOptions(options,
+                                                              result: result,
+                                                              targetLUFS: Self.podcastLoudnessTarget)
+                if normalized.masterGainLinear != options.masterGainLinear {
+                    options = normalized
+                    result = try await builder.build(project: project, options: options)
+                }
                 let ext = aac ? "m4a" : "wav"
                 let url = exportsDirectory.appendingPathComponent("\(project.name) master.\(ext)")
                 try await Self.exportAudio(composition: result.composition,
@@ -86,7 +133,17 @@ final class ExportService {
                 var options = CompositionBuilder.Options()
                 options.renderSize = CGSize(width: width, height: height)
                 options.burnCaptions = burnCaptions
-                let result = try await builder.build(project: project, options: options)
+                // The brand kit's watermark rides on every video export (the
+                // preview stays clean). Nil when the kit has none set.
+                options.watermark = CompositionBuilder.WatermarkContext(kit: BrandKitStore().load())
+                var result = try await builder.build(project: project, options: options)
+                let normalized = await self.normalizedOptions(options,
+                                                              result: result,
+                                                              targetLUFS: Self.videoLoudnessTarget)
+                if normalized.masterGainLinear != options.masterGainLinear {
+                    options = normalized
+                    result = try await builder.build(project: project, options: options)
+                }
                 let url = exportsDirectory.appendingPathComponent("\(project.name) \(width)x\(height).mp4")
                 try await Self.exportVideo(composition: result.composition,
                                            audioMix: result.audioMix,

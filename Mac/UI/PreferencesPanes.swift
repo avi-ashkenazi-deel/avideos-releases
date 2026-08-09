@@ -292,6 +292,14 @@ struct AudioPane: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+
+            Section("Editor Exports") {
+                @Bindable var prefs = studio.prefs
+                Toggle("Normalize Loudness On Export", isOn: $prefs.normalizeExportLoudness)
+                Text("Editor exports are measured (EBU R128) and brought to delivery loudness: −16 LUFS for audio masters, −14 LUFS for video. Mix balance is untouched; stems are never normalized.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
         .formStyle(.grouped)
     }

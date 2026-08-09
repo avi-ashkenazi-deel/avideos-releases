@@ -150,6 +150,42 @@ enum VolumeAutomation {
         return result
     }
 
+    /// Multiplies an envelope by a fade-from/to-silence at a span's edges —
+    /// how the music bed enters and leaves. Pointwise multiplication keeps
+    /// every duck in the envelope intact; new breakpoints are interpolated at
+    /// the fade corners so the ramps stay piecewise-linear.
+    static func fadedAtEdges(_ points: [Point],
+                             spanStart: Double,
+                             spanEnd: Double,
+                             fade: Double) -> [Point] {
+        guard fade > 0, spanEnd > spanStart else { return points }
+        let fadeInEnd = min(spanStart + fade, spanEnd)
+        let fadeOutStart = max(spanEnd - fade, spanStart)
+
+        func value(at time: Double) -> Float {
+            // Linear interpolation over the existing envelope.
+            guard let first = points.first else { return 0 }
+            if time <= first.time { return first.volume }
+            for (a, b) in zip(points, points.dropFirst()) where time <= b.time {
+                guard b.time > a.time else { continue }
+                let f = Float((time - a.time) / (b.time - a.time))
+                return a.volume + (b.volume - a.volume) * f
+            }
+            return points.last?.volume ?? 0
+        }
+
+        func factor(at time: Double) -> Float {
+            if time <= spanStart || time >= spanEnd { return 0 }
+            let inF = fade > 0 ? (time - spanStart) / fade : 1
+            let outF = fade > 0 ? (spanEnd - time) / fade : 1
+            return Float(min(1, max(0, min(inF, outF))))
+        }
+
+        var times = Set(points.map(\.time))
+        times.formUnion([spanStart, fadeInEnd, fadeOutStart, spanEnd])
+        return times.sorted().map { Point(time: $0, volume: value(at: $0) * factor(at: $0)) }
+    }
+
     /// Emits the envelope as ramps. Non-overlapping by construction, because
     /// every ramp spans one gap between consecutive breakpoints.
     static func apply(_ points: [Point],

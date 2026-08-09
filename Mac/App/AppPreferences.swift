@@ -68,6 +68,15 @@ final class AppPreferences {
         didSet { defaults.set(palettesStayVisibleInBackground, forKey: "pref.palettesStayVisible") }
     }
 
+    // MARK: Editor / export
+
+    /// Normalize editor exports to delivery loudness (−16 LUFS audio master,
+    /// −14 LUFS video). ExportService reads the same key directly — the
+    /// editor's services don't depend on the studio hub.
+    var normalizeExportLoudness: Bool {
+        didSet { defaults.set(normalizeExportLoudness, forKey: "pref.normalizeExportLoudness") }
+    }
+
     // MARK: Guests / call-ins
 
     /// Off (the default) is the call-in posture: a joining caller waits in
@@ -90,5 +99,6 @@ final class AppPreferences {
         showCameraSwitcher = defaults.object(forKey: "pref.showCameraSwitcher") as? Bool ?? true
         palettesStayVisibleInBackground = defaults.bool(forKey: "pref.palettesStayVisible")
         guestsStartOnAir = defaults.bool(forKey: "pref.guestsStartOnAir")
+        normalizeExportLoudness = defaults.object(forKey: "pref.normalizeExportLoudness") as? Bool ?? true
     }
 }

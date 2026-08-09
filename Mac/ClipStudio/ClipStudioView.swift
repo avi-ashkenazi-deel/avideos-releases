@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import AVFoundation   // per-track aspect probe for smart reframe
 import UniformTypeIdentifiers
 import Observation
 import os
@@ -412,7 +413,7 @@ struct ClipStudioView: View {
                         Spacer()
                         Button("Save Brand Kit") { model.saveBrandKit() }
                     }
-                    Text("The watermark and stingers are stored with the kit; applying them at render time is not wired into the exporter yet.")
+                    Text("The watermark is burned into every video export, and the stingers become a new project's default intro and outro.")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
@@ -669,9 +670,14 @@ final class ClipStudioModel {
     var errorMessage: String?
     var analyzeProgress: Double = 0
 
-    /// Source aspect assumed when computing crop windows. Host and guest
-    /// masters are 16:9 by design; a per-track probe is the refinement.
-    private let assumedSourceAspect = 16.0 / 9.0
+    /// Probed source aspect per track id, filled during the scene-analysis
+    /// pass (crop paths already require analysis first, so probing there
+    /// costs nothing extra). Fallback for an unprobed track stays 16:9 —
+    /// host and guest masters are 16:9 by design; this exists for imported
+    /// phone footage and 4:3 sources, which used to reframe with wrong
+    /// crop geometry.
+    private var sourceAspects: [String: Double] = [:]
+    private let fallbackSourceAspect = 16.0 / 9.0
 
     private let suggester = ClipSuggester()
     private let momentSearch = MomentSearch()
@@ -732,8 +738,25 @@ final class ClipStudioModel {
             self.sceneIndex = try await self.analyzer.analyze(tracks: tracks) { fraction in
                 Task { @MainActor in self.analyzeProgress = fraction }
             }
+            // Real per-track aspects, so a portrait phone master or a 4:3
+            // source reframes with the right crop geometry.
+            for track in tracks where track.kind == .video {
+                self.sourceAspects[track.id] = await Self.probedAspect(url: track.url)
+            }
             self.analyzeProgress = 1
         }
+    }
+
+    /// width / height as displayed (preferredTransform applied), or nil when
+    /// the file can't be read.
+    private static func probedAspect(url: URL) async -> Double? {
+        let asset = AVURLAsset(url: url)
+        guard let track = try? await asset.loadTracks(withMediaType: .video).first,
+              let (size, transform) = try? await track.load(.naturalSize, .preferredTransform)
+        else { return nil }
+        let rect = CGRect(origin: .zero, size: size).applying(transform)
+        guard abs(rect.height) > 0 else { return nil }
+        return abs(rect.width) / abs(rect.height)
     }
 
     /// Crop path per participant for a target aspect. Empty when the session
@@ -746,7 +769,7 @@ final class ClipStudioModel {
             guard let faces = index.faceSamples[track.id], !faces.isEmpty else { continue }
             paths[track.participantId] = SmartReframer.cropPath(
                 faces: faces,
-                sourceAspect: assumedSourceAspect,
+                sourceAspect: sourceAspects[track.id] ?? fallbackSourceAspect,
                 config: SmartReframer.Config(targetAspect: aspect.ratio))
         }
         return paths

@@ -30,6 +30,37 @@ trimmed length, a progress fill sweeping the row, and a gear popover editing
 in/out points (`SoundPad.trimStart/trimEnd`, Optional for settings-decode
 compatibility; `SoundPadPlayer` slices the pre-decoded buffer at fire time).
 
+Eighteenth pass — the editor's delivery gaps, in four moves, per "Ok let's
+fix these" plus multicam. (1) **Brand kit finished**: the watermark is now
+actually rendered — `CompositionBuilder.WatermarkContext` decodes the kit's
+image once and `LayoutVideoCompositor` draws it topmost (above captions) on
+every video export, previews staying clean; and a brand-new project seeds
+its intro/outro from the kit's stingers on first open only (reopened
+projects keep the user's word). The smart-reframe 16:9 assumption is gone —
+per-track aspects are probed during scene analysis — and exports render at
+the fastest source's frame rate instead of a hardcoded 30. (2) **Loudness
+normalization**: a self-contained BS.1770 meter (`LoudnessMeter`,
+K-weighting biquads + 400 ms gated blocks, measured through the export's own
+AVAssetReaderAudioMixOutput so the number describes the actual file) drives
+a measure-then-rebuild in ExportService — audio masters land at −16 LUFS,
+video at −14, gain applied multiplicatively to every source so the mix
+balance is untouched, capped so the sample peak stays under −1 dBFS (it is
+normalization, not a limiter). Off-switch in Preferences → Audio; stems are
+never touched. (3) **Music bed**: `EditProject.musicBed` (Optional — the
+settings-decode rule) loops a file under the conversation, fades at both
+edges (`VolumeAutomation.fadedAtEdges`, pointwise multiply so ducks
+survive), and ducks under speech using merged transcript word spans as
+anticipatory duck windows — no transcript, no ducking, and the row says so.
+(4) **Multicam**: `AudioAligner` cross-correlates energy envelopes
+(vDSP_conv, zero-mean, 20 ms hop, template = the external file's most
+energetic minute) to set a second camera's `sourceOffset` from one "Sync by
+Audio" click, refusing with a peak-to-sidelobe confidence gate rather than
+guessing; and a "Cut to" angle strip above the timeline drops
+full-screen-this-camera layout cues at the playhead, replacing a cue within
+50 ms instead of stacking. New pure-logic tests: loudness gating, edge
+fades, and offset recovery from synthetic envelopes (`EditorAudioTests`).
+F-488…F-499.
+
 Seventeenth pass — **call-ins**, per "i want to get calls in". The guest
 system could already take a browser caller (any device, invite link, no
 app), but anyone opening the link landed straight on the program. Now

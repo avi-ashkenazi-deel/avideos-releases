@@ -184,6 +184,13 @@ Known gaps in this pass — do not report:
 - [ ] With headphones off on both ends: no echo (guest never hears themselves — mix-minus).
 - [ ] Record Take → guest's tab shows REC + upload %; kill the guest tab mid-take, reopen → recording resumes, at most ~5s lost.
 - [ ] Call-in gate: a joining caller shows "waiting" in the Guests palette and is absent from the program and inaudible, but hears the show; Put On Air adds them to the tiles and unmutes them, and their page flips "off air" → ON AIR; clicking again pulls them back without disconnecting.
+
+## Editor: delivery polish and multicam
+Full detail in docs/FEATURE_CHECKLIST.md, F-488…F-499.
+- [ ] Export a video with a brand-kit watermark set: logo top-right at the kit's opacity, above the captions; the preview shows no watermark.
+- [ ] Export an audio master and check it in a LUFS meter: ≈−16 integrated; a video export ≈−14; toggle off in Preferences → Audio and the level stays raw.
+- [ ] Add a music bed, transcribe, play: music fades in, sits under speech, swells in pauses, fades out at the end. ⌘Z removes it.
+- [ ] Film a minute on a second camera (phone) while recording, import it, **Sync by Audio** → clap lines up; the Cut to strip switches angles at the playhead.
 - [ ] Sessions library: Download & Import All → aligned .movs; two-device clap within ~30ms at minute 0 and minute 30.
 
 ## Teleprompter

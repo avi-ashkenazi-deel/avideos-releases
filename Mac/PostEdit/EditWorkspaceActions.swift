@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import AVFoundation   // stinger duration probe for bookend defaults
 
 /// EditWorkspaceView's verbs: the async AI actions (transcribe, cleanup, take
 /// selection, clips, chapters) and the undo system every edit routes through.
@@ -14,6 +15,10 @@ extension EditWorkspaceView {
         if project.edl.clips.isEmpty {
             let duration = project.tracks.map(\.duration).max() ?? 0
             project.edl = .initial(sourceDuration: duration)
+            // First-ever open of this project: the brand kit's stingers seed
+            // the intro/outro. Only here — a reopened project (clips exist)
+            // keeps whatever the user did, including deleting them.
+            await applyBrandKitBookendDefaults()
         }
         for track in project.tracks {
             waveforms.ensurePeaks(for: track)
@@ -25,6 +30,22 @@ extension EditWorkspaceView {
         }
         refreshDerived()
         await preview.rebuild(project: project)
+    }
+
+    /// Seeds a brand-new project's bookends from the brand kit's stingers.
+    /// The whole file, trimmed later like any bookend; a stinger that can't
+    /// be read is skipped silently (the kit editor is where that surfaces).
+    private func applyBrandKitBookendDefaults() async {
+        guard project.bookends == nil else { return }
+        let kit = BrandKitStore().load()
+        func bookend(from media: MediaReference?) async -> BookendClip? {
+            guard let media, let url = media.resolve() else { return nil }
+            let asset = AVURLAsset(url: url)
+            guard let duration = try? await asset.load(.duration).seconds, duration > 0 else { return nil }
+            return BookendClip(media: media, sourceRange: 0...duration)
+        }
+        if let intro = await bookend(from: kit.introStinger) { project.setIntro(intro) }
+        if let outro = await bookend(from: kit.outroStinger) { project.setOutro(outro) }
     }
 
     func transcribe() async {
@@ -151,6 +172,7 @@ extension EditWorkspaceView {
         var overlays: [OverlayClip]?
         var trackMix: [String: TrackMix]?
         var cropPaths: [String: [CropKeyframe]]?
+        var musicBed: MusicBed?
     }
 
     var currentSnapshot: EditSnapshot {
@@ -160,7 +182,8 @@ extension EditWorkspaceView {
                      captions: project.captions,
                      overlays: project.overlays,
                      trackMix: project.trackMix,
-                     cropPaths: project.cropPaths)
+                     cropPaths: project.cropPaths,
+                     musicBed: project.musicBed)
     }
 
     /// Every timeline/transcript/cleanup gesture goes through here, so one ⌘Z
@@ -197,6 +220,7 @@ extension EditWorkspaceView {
         project.overlays = snapshot.overlays
         project.trackMix = snapshot.trackMix
         project.cropPaths = snapshot.cropPaths
+        project.musicBed = snapshot.musicBed
         projectChanged()
     }
 

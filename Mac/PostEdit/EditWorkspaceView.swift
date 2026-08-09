@@ -122,6 +122,9 @@ struct EditWorkspaceView: View {
                 bookendRow("Intro", clip: project.bookends?.intro) { project.setIntro($0) }
                 bookendRow("Outro", clip: project.bookends?.outro) { project.setOutro($0) }
             }
+            Section("Music Bed") {
+                musicBedRow
+            }
             if !project.externalTrackGroups.isEmpty {
                 Section("Extra Media") {
                     ForEach(project.externalTrackGroups, id: \.participantID) { group in
@@ -159,7 +162,65 @@ struct EditWorkspaceView: View {
 
     // MARK: - Timeline
 
+    /// Every full-screen-able picture source, in tiling order: participants
+    /// first, then synced extra cameras — the multicam angle list.
+    private var angles: [(participantId: String, name: String)] {
+        project.videoTracks.map { track in
+            let name = project.isExternal(track.id)
+                ? (project.externalSettings(for: track.id)?.label ?? track.participantName)
+                : track.participantName
+            return (track.participantId, name)
+        }
+    }
+
+    /// Multicam cutting: one button per camera, a cut at the playhead. Only
+    /// appears once there is something to cut between.
+    @ViewBuilder
+    private var angleStrip: some View {
+        let list = angles
+        if list.count > 1 {
+            HStack(spacing: 6) {
+                Text("Cut to").font(.caption2).foregroundStyle(.secondary)
+                ForEach(Array(list.enumerated()), id: \.element.participantId) { index, angle in
+                    Button {
+                        cutToAngle(angle.participantId)
+                    } label: {
+                        Text("\(index + 1) · \(angle.name)")
+                            .font(.caption2)
+                            .lineLimit(1)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .help("Cut to \(angle.name) at the playhead")
+                }
+                Spacer()
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+        }
+    }
+
+    /// Drops a full-screen layout cue for this camera at the playhead —
+    /// multicam angle cutting. Cues within 50 ms of the playhead are replaced
+    /// rather than stacked, so re-cutting a moment doesn't accrete cues.
+    private func cutToAngle(_ participantId: String) {
+        let sourceTime = project.edl.mapTimelineToSource(preview.playheadSeconds)
+        performEdit {
+            project.layoutCues.removeAll { abs($0.atTime - sourceTime) < 0.05 }
+            project.layoutCues.append(LayoutCue(atTime: sourceTime,
+                                                layout: .fullScreen(participantId: participantId)))
+            project.layoutCues.sort { $0.atTime < $1.atTime }
+        }
+    }
+
     private var verticalTimeline: some View {
+        VStack(spacing: 0) {
+            angleStrip
+            timelineBody
+        }
+    }
+
+    private var timelineBody: some View {
         VerticalTimelineView(
             viewModel: timelineVM,
             project: project,
@@ -450,6 +511,61 @@ struct EditWorkspaceView: View {
         }
     }
 
+    /// Background music under the whole conversation, ducked beneath speech.
+    @ViewBuilder
+    private var musicBedRow: some View {
+        if let bed = project.musicBed {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Image(systemName: "music.note").foregroundStyle(.secondary)
+                    Text(bed.media.displayName)
+                        .font(.caption)
+                        .lineLimit(1)
+                    Spacer()
+                    Button("Remove") { performEdit { project.musicBed = nil } }
+                        .buttonStyle(.link).font(.caption2)
+                }
+                HStack(spacing: 6) {
+                    Text("Level").font(.caption2).foregroundStyle(.secondary)
+                    Slider(value: Binding(
+                        get: { project.musicBed?.gainDB ?? -18 },
+                        set: { value in performEdit(gesture: "bed-gain") { project.musicBed?.gainDB = value } }
+                    ), in: -36...0, onEditingChanged: { if !$0 { endGesture() } })
+                    Text(String(format: "%.0f dB", bed.gainDB))
+                        .font(.caption2.monospacedDigit())
+                        .frame(width: 44, alignment: .trailing)
+                }
+                Toggle("Duck under speech", isOn: Binding(
+                    get: { (project.musicBed?.duckAmountDB ?? 0) > 0 },
+                    set: { on in performEdit { project.musicBed?.duckAmountDB = on ? 12 : 0 } }
+                ))
+                .font(.caption)
+                if bed.duckAmountDB > 0, project.transcript == nil {
+                    Text("Ducking follows the transcript — transcribe the session to enable it.")
+                        .font(.caption2)
+                        .foregroundStyle(.orange)
+                }
+            }
+        } else {
+            Button {
+                chooseMusicBed()
+            } label: {
+                Label("Add Music Bed…", systemImage: "music.note")
+            }
+            .buttonStyle(.borderless)
+            .font(.caption)
+        }
+    }
+
+    private func chooseMusicBed() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.audio]
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        performEdit {
+            project.musicBed = MusicBed(media: MediaReference(url: url))
+        }
+    }
+
     private func chooseBookend(_ set: @escaping (BookendClip?) -> Void) {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = Self.externalMediaTypes
@@ -501,6 +617,15 @@ struct EditWorkspaceView: View {
                     .font(.caption2.monospacedDigit())
                 Button("+0.5s") { nudgeExternal(group, by: 0.5) }
                     .buttonStyle(.borderless).font(.caption2)
+                Spacer()
+                // Multicam: line this camera's soundtrack up against the
+                // session automatically. Needs the clip to have audio.
+                Button("Sync by Audio") { syncExternalByAudio(group) }
+                    .buttonStyle(.borderless).font(.caption2)
+                    .disabled(group.audioTrack == nil)
+                    .help(group.audioTrack == nil
+                          ? "This clip has no soundtrack to match"
+                          : "Match this clip's soundtrack against the session to set the offset")
             }
             .help("Shifts this clip against the conversation")
 
@@ -525,6 +650,34 @@ struct EditWorkspaceView: View {
         performEdit {
             project.setSourceOffset(group.sourceOffset + delta,
                                     forParticipant: group.participantID)
+        }
+    }
+
+    /// Multicam sync: cross-correlate this clip's soundtrack against the
+    /// first participant's audio and set the offset from the match.
+    private func syncExternalByAudio(_ group: EditProject.ExternalGroup) {
+        guard let externalURL = (group.audioTrack ?? group.videoTrack)?.url else { return }
+        // The reference is the session's own sound: the first participant
+        // audio track that isn't itself external.
+        guard let reference = project.tracks.first(where: {
+            $0.kind == .audio && !project.isExternal($0.id)
+        }) else {
+            errorMessage = "No session audio to sync against."
+            return
+        }
+        busyMessage = "Syncing \(group.label) by audio…"
+        Task {
+            defer { busyMessage = nil }
+            do {
+                let alignment = try await AudioAligner.align(externalURL: externalURL,
+                                                             referenceURL: reference.url)
+                performEdit {
+                    project.setSourceOffset(alignment.sourceOffset,
+                                            forParticipant: group.participantID)
+                }
+            } catch {
+                errorMessage = error.localizedDescription
+            }
         }
     }
 

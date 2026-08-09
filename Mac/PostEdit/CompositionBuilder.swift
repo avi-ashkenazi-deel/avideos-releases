@@ -2,6 +2,7 @@ import Foundation
 import AVFoundation
 import CoreImage
 import CoreMedia
+import ImageIO   // watermark decode (WatermarkContext)
 import os.log
 
 /// Turns an `EditProject` (EDL + layout cues + captions) into playable /
@@ -42,8 +43,40 @@ final class CompositionBuilder {
         /// Without this, a stem would silently acquire cutaway audio, because
         /// the stems path copies the whole project.
         var includesExternalMedia: Bool = true
+        /// Brand-kit watermark, drawn topmost (above captions). Export-only:
+        /// ExportService resolves the kit's image; the preview stays clean.
+        var watermark: WatermarkContext? = nil
+        /// Loudness-normalization makeup gain, applied multiplicatively to
+        /// EVERY audio source (participants, cutaways, bookends) so the mix
+        /// balance is untouched. ExportService measures a first build with
+        /// `LoudnessMeter`, then rebuilds with this set. 1 = off.
+        var masterGainLinear: Float = 1
 
         init() {}
+    }
+
+    /// A resolved watermark, ready for the compositor: the decoded image plus
+    /// the kit's placement. `@unchecked Sendable` is safe — CGImage is
+    /// immutable and every field is a value.
+    struct WatermarkContext: @unchecked Sendable {
+        let image: CGImage
+        /// Unit position of the watermark's CENTER, y-down like the document.
+        let position: CGPoint
+        let opacity: Double
+        /// Fraction of the output width.
+        let width: Double
+
+        /// Builds from the brand kit, decoding the image; nil when the kit
+        /// has no watermark or the file can't be read.
+        init?(kit: BrandKit) {
+            guard let url = kit.watermark.media?.resolve(),
+                  let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+                  let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else { return nil }
+            self.image = image
+            self.position = kit.watermark.position
+            self.opacity = kit.watermark.opacity
+            self.width = kit.watermark.width
+        }
     }
 
     struct Result {
@@ -90,6 +123,7 @@ final class CompositionBuilder {
         var videoTrackParticipants: [CMPersistentTrackID: String] = [:]
         var transforms: [CMPersistentTrackID: CGAffineTransform] = [:]
         var bookendTrackIDs: [CMPersistentTrackID: ProgramBookendSlot] = [:]
+        var maxSourceFrameRate = 0.0
         var joinTimes: [Double] = []   // timeline seconds of every internal join
         do {
             var acc = 0.0
@@ -111,7 +145,8 @@ final class CompositionBuilder {
                                                          into: composition,
                                                          includeVideo: options.includeVideo,
                                                          timelineOffset: options.includesExternalMedia
-                                                            ? project.programOffset : 0)
+                                                            ? project.programOffset : 0,
+                                                         masterGain: options.masterGainLinear)
         }
         let ducks = options.includesExternalMedia
             ? Self.duckWindows(for: project.sortedOverlays, inserted: inserted)
@@ -123,9 +158,21 @@ final class CompositionBuilder {
 
         if options.includesExternalMedia, project.hasBookends {
             let placed = try await Self.insertBookends(project, into: composition,
-                                                       includeVideo: options.includeVideo)
+                                                       includeVideo: options.includeVideo,
+                                                       masterGain: options.masterGainLinear)
             mixParameters.append(contentsOf: placed.audioParameters)
             bookendTrackIDs = placed.videoTrackIDs
+        }
+
+        // The music bed sits under the conversation (not the bookends — an
+        // intro stinger is usually music already). A mix decision, so stems
+        // skip it with the cutaways.
+        if options.includesExternalMedia, let bed = project.musicBed,
+           let bedParameters = try await Self.insertMusicBed(bed,
+                                                             project: project,
+                                                             into: composition,
+                                                             masterGain: options.masterGainLinear) {
+            mixParameters.append(bedParameters)
         }
 
         for track in project.tracks {
@@ -148,6 +195,12 @@ final class CompositionBuilder {
                 let transform = try await sourceTrack.load(.preferredTransform)
                 compTrack.preferredTransform = transform
                 videoTrackParticipants[compTrack.trackID] = track.participantId
+                // The composition renders at the fastest source's rate (was
+                // pinned to 30 fps, silently resampling 60 fps program
+                // recordings and 24 fps film-look clips).
+                if let fps = try? await sourceTrack.load(.nominalFrameRate), fps > 0 {
+                    maxSourceFrameRate = max(maxSourceFrameRate, Double(fps))
+                }
                 // Carried to the compositor because it reads raw buffers via
                 // `sourceFrame(byTrackID:)` and AVFoundation does not pre-apply
                 // the transform for a custom compositor. Participant cameras
@@ -177,7 +230,7 @@ final class CompositionBuilder {
                     : project.linearGain(for: track.id)
                 mixParameters.append(Self.audioParameters(for: compTrack,
                                                           joins: joinTimes,
-                                                          gain: gain,
+                                                          gain: gain * options.masterGainLinear,
                                                           ducks: ducks,
                                                           duration: project.editedDuration))
             }
@@ -195,7 +248,9 @@ final class CompositionBuilder {
                 transforms: transforms,
                 bookendTrackIDs: bookendTrackIDs,
                 renderSize: options.renderSize ?? Self.defaultRenderSize(for: project),
-                burnCaptions: options.burnCaptions)
+                frameRate: maxSourceFrameRate,
+                burnCaptions: options.burnCaptions,
+                watermark: options.watermark)
         }
 
         return Result(composition: composition,
@@ -227,7 +282,8 @@ final class CompositionBuilder {
     /// the participants' placement.
     private static func insertBookends(_ project: EditProject,
                                        into composition: AVMutableComposition,
-                                       includeVideo: Bool) async throws -> PlacedBookends {
+                                       includeVideo: Bool,
+                                       masterGain: Float = 1) async throws -> PlacedBookends {
         var placed = PlacedBookends()
         let slots: [(ProgramBookendSlot, BookendClip?, Double)] = [
             (.intro, project.bookends?.intro, 0),
@@ -260,11 +316,93 @@ final class CompositionBuilder {
                    withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid) {
                 try? compTrack.insertTimeRange(sourceRange, of: sourceAudio, at: start)
                 let params = AVMutableAudioMixInputParameters(track: compTrack)
-                params.setVolume(clip.audio.linearGain, at: .zero)
+                params.setVolume(clip.audio.linearGain * masterGain, at: .zero)
                 placed.audioParameters.append(params)
             }
         }
         return placed
+    }
+
+    // MARK: - Music bed
+
+    /// Lays the bed's audio under the conversation: looped (or ended early)
+    /// across the edited duration, faded at both edges, ducked under speech.
+    private static func insertMusicBed(_ bed: MusicBed,
+                                       project: EditProject,
+                                       into composition: AVMutableComposition,
+                                       masterGain: Float) async throws -> AVMutableAudioMixInputParameters? {
+        guard let url = bed.media.resolve() else {
+            logger.warning("Music bed missing: \(bed.media.displayName, privacy: .public)")
+            return nil
+        }
+        let asset = AVURLAsset(url: url, options: [AVURLAssetPreferPreciseDurationAndTimingKey: true])
+        guard let sourceTrack = try await asset.loadTracks(withMediaType: .audio).first else {
+            logger.warning("Music bed has no audio track: \(bed.media.displayName, privacy: .public)")
+            return nil
+        }
+        let fileDuration = try await asset.load(.duration).seconds
+        guard fileDuration > 0 else { return nil }
+
+        let bedStart = project.programOffset
+        let bedLength = project.editedDuration
+        guard bedLength > 0,
+              let compTrack = composition.addMutableTrack(withMediaType: .audio,
+                                                          preferredTrackID: kCMPersistentTrackID_Invalid)
+        else { return nil }
+
+        // Tile the file across the span; a non-looping bed just ends early.
+        var cursor = 0.0
+        repeat {
+            let take = min(fileDuration, bedLength - cursor)
+            guard take > 0.05 else { break }
+            try compTrack.insertTimeRange(
+                CMTimeRange(start: .zero,
+                            duration: CMTime(seconds: take, preferredTimescale: timescale)),
+                of: sourceTrack,
+                at: CMTime(seconds: bedStart + cursor, preferredTimescale: timescale))
+            cursor += take
+        } while bed.loops && cursor < bedLength
+
+        // Ducks come from the transcript's word spans — anticipatory, like
+        // cutaway ducking. No transcript means no ducking, just the bed level.
+        let ducks = speechDuckWindows(project: project, amountDB: bed.duckAmountDB)
+        let base = bed.linearGain * masterGain
+        var points = VolumeAutomation.envelope(base: base,
+                                               joins: [],
+                                               ducks: ducks,
+                                               crossfadeDuration: 0,
+                                               duration: bedStart + bedLength)
+        points = VolumeAutomation.fadedAtEdges(points,
+                                               spanStart: bedStart,
+                                               spanEnd: bedStart + min(cursor, bedLength),
+                                               fade: bed.fadeSeconds)
+        let params = AVMutableAudioMixInputParameters(track: compTrack)
+        VolumeAutomation.apply(points, to: params, timescale: timescale)
+        return params
+    }
+
+    /// Merged speech spans (program time) as duck windows for the music bed.
+    /// Gaps under 0.8 s stay ducked — pumping between sentences is worse than
+    /// staying down through a breath.
+    static func speechDuckWindows(project: EditProject,
+                                  amountDB: Double) -> [VolumeAutomation.DuckWindow] {
+        guard amountDB > 0, let transcript = project.transcript else { return [] }
+        let offset = project.programOffset
+        let settings = DuckSettings(amountDB: amountDB, attack: 0.35, release: 0.7)
+
+        var spans: [(start: Double, end: Double)] = []
+        for entry in transcript.enabledWords(edl: project.edl) {
+            let start = entry.timelineStart + offset
+            let end = start + entry.word.duration
+            if let last = spans.last, start - last.end < 0.8 {
+                spans[spans.count - 1].end = max(last.end, end)
+            } else {
+                spans.append((start, end))
+            }
+        }
+        return spans.map {
+            VolumeAutomation.DuckWindow(start: $0.start, end: $0.end, settings: settings)
+        }
     }
 
     // MARK: - Overlays (B-roll)
@@ -293,7 +431,8 @@ final class CompositionBuilder {
     private static func insertOverlayMedia(_ overlays: [OverlayClip],
                                            into composition: AVMutableComposition,
                                            includeVideo: Bool,
-                                           timelineOffset: Double) async throws -> [InsertedOverlay] {
+                                           timelineOffset: Double,
+                                           masterGain: Float = 1) async throws -> [InsertedOverlay] {
         var inserted: [InsertedOverlay] = []
 
         for overlay in overlays {
@@ -350,12 +489,13 @@ final class CompositionBuilder {
                     // own edges the same short fade a cut boundary gets — via
                     // the shared envelope, so there is one ramp emitter.
                     let start = programStart
+                    let level = audio.linearGain * masterGain
                     let params = AVMutableAudioMixInputParameters(track: audioTrack)
                     VolumeAutomation.apply([
                         .init(time: start, volume: 0),
-                        .init(time: start + crossfadeDuration, volume: audio.linearGain),
+                        .init(time: start + crossfadeDuration, volume: level),
                         .init(time: start + max(take - crossfadeDuration, crossfadeDuration),
-                              volume: audio.linearGain),
+                              volume: level),
                         .init(time: start + take, volume: 0),
                     ], to: params, timescale: timescale)
                     audioParameters = params
@@ -431,11 +571,16 @@ final class CompositionBuilder {
                                              transforms: [CMPersistentTrackID: CGAffineTransform],
                                              bookendTrackIDs: [CMPersistentTrackID: ProgramBookendSlot],
                                              renderSize: CGSize,
-                                             burnCaptions: Bool) -> AVMutableVideoComposition {
+                                             frameRate: Double,
+                                             burnCaptions: Bool,
+                                             watermark: WatermarkContext?) -> AVMutableVideoComposition {
         let videoComposition = AVMutableVideoComposition()
         videoComposition.customVideoCompositorClass = LayoutVideoCompositor.self
         videoComposition.renderSize = renderSize
-        videoComposition.frameDuration = CMTime(value: 1, timescale: 30)
+        // Follow the fastest source, clamped to sane bounds; 30 when nothing
+        // reported a rate (stills-only or unreadable).
+        let fps = frameRate > 0 ? min(max(frameRate.rounded(), 24), 60) : 30
+        videoComposition.frameDuration = CMTime(value: 1, timescale: CMTimeScale(fps))
 
         let duration = project.editedDuration
         // Cues are source-anchored; the composition runs on the edited
@@ -524,7 +669,8 @@ final class CompositionBuilder {
                 captionContext: captionContext,
                 cropPaths: project.cropPaths ?? [:],
                 overlaysByTrackID: activeOverlayTracks,
-                transformByTrackID: transforms)
+                transformByTrackID: transforms,
+                watermark: watermark)
             instructions.append(instruction)
         }
 
@@ -597,6 +743,8 @@ final class LayoutCompositionInstruction: NSObject, AVVideoCompositionInstructio
     /// Non-identity `preferredTransform` per track. Empty for the usual case
     /// of landscape participant cameras.
     let transformByTrackID: [CMPersistentTrackID: CGAffineTransform]
+    /// Brand-kit watermark, drawn topmost. Export-only (nil in previews).
+    let watermark: CompositionBuilder.WatermarkContext?
 
     init(timeRange: CMTimeRange,
          layout: ProgramLayout,
@@ -606,7 +754,8 @@ final class LayoutCompositionInstruction: NSObject, AVVideoCompositionInstructio
          captionContext: CaptionRenderContext?,
          cropPaths: [String: [CropKeyframe]] = [:],
          overlaysByTrackID: [CMPersistentTrackID: OverlayClip] = [:],
-         transformByTrackID: [CMPersistentTrackID: CGAffineTransform] = [:]) {
+         transformByTrackID: [CMPersistentTrackID: CGAffineTransform] = [:],
+         watermark: CompositionBuilder.WatermarkContext? = nil) {
         self.timeRange = timeRange
         self.layout = layout
         self.participantByTrackID = participantByTrackID
@@ -616,6 +765,7 @@ final class LayoutCompositionInstruction: NSObject, AVVideoCompositionInstructio
         self.cropPaths = cropPaths
         self.overlaysByTrackID = overlaysByTrackID
         self.transformByTrackID = transformByTrackID
+        self.watermark = watermark
         // Overlay tracks must be requested too, or `sourceFrame(byTrackID:)`
         // returns nothing for them and the cutaway silently never appears.
         self.requiredSourceTrackIDs = (Array(participantByTrackID.keys)
@@ -763,6 +913,30 @@ final class LayoutVideoCompositor: NSObject, AVVideoCompositing {
                                                style: captions.style,
                                                canvasSize: size) {
             image = overlay.composited(over: image)
+        }
+
+        // Brand-kit watermark, topmost — above captions on purpose: a logo
+        // half-hidden behind a subtitle line reads as a rendering bug.
+        if let watermark = instruction.watermark {
+            var mark = CIImage(cgImage: watermark.image)
+            let markExtent = mark.extent
+            if markExtent.width > 0, markExtent.height > 0 {
+                let targetWidth = canvas.width * watermark.width
+                let scale = targetWidth / markExtent.width
+                mark = mark.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+                // Kit position is the unit CENTER, y-down; CoreImage is y-up.
+                let center = CGPoint(x: canvas.width * watermark.position.x,
+                                     y: canvas.height * (1 - watermark.position.y))
+                mark = mark.transformed(by: CGAffineTransform(
+                    translationX: center.x - mark.extent.width / 2 - mark.extent.minX,
+                    y: center.y - mark.extent.height / 2 - mark.extent.minY))
+                if watermark.opacity < 1 {
+                    mark = mark.applyingFilter("CIColorMatrix", parameters: [
+                        "inputAVector": CIVector(x: 0, y: 0, z: 0, w: watermark.opacity),
+                    ])
+                }
+                image = mark.composited(over: image)
+            }
         }
 
         ciContext.render(image, to: output, bounds: canvas, colorSpace: CGColorSpaceCreateDeviceRGB())

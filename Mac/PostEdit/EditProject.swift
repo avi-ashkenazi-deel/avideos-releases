@@ -638,6 +638,24 @@ struct TrackMix: Codable, Sendable, Equatable {
 
 // MARK: - EditProject
 
+/// Background music under the conversation: loops (or ends early) across the
+/// edited duration, fades at both ends, and ducks beneath speech — the duck
+/// windows come from the transcript's word spans, so it needs a transcript to
+/// duck (without one it plays at its set level throughout).
+struct MusicBed: Codable, Sendable, Equatable {
+    var media: MediaReference
+    /// Beds sit well under speech even before ducking.
+    var gainDB: Double = -18
+    /// Extra attenuation while someone is talking; 0 disables ducking.
+    var duckAmountDB: Double = 12
+    /// Repeat the file to cover the conversation (off: it just ends).
+    var loops: Bool = true
+    /// Fade in/out at the conversation's edges.
+    var fadeSeconds: Double = 2
+
+    var linearGain: Float { Float(pow(10, gainDB / 20)) }
+}
+
 struct EditProject: Codable, Sendable, Identifiable, Equatable {
     static let currentSchemaVersion = 1
 
@@ -667,6 +685,9 @@ struct EditProject: Codable, Sendable, Identifiable, Equatable {
     var trackMix: [String: TrackMix]?
     /// B-roll cutaways over the conversation, in edited-timeline seconds.
     var overlays: [OverlayClip]?
+    /// A music track laid under the whole conversation, auto-ducked beneath
+    /// speech. Optional — projects saved before it existed decode unchanged.
+    var musicBed: MusicBed?
     var schemaVersion: Int
 
     /// `edl` defaults to a fresh full-length EDL derived from the tracks, so

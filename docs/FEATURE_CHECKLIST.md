@@ -1,6 +1,6 @@
 # streamit — full feature checklist
 
-All 487 user-facing features, each with a stable ID so you can report
+All 499 user-facing features, each with a stable ID so you can report
 back precisely ("F-42 fails"). Ordered so you can work top to bottom: each
 section only depends on the ones above it.
 
@@ -241,6 +241,24 @@ replays just the entrance, which is the quick way to compare them.
 - [ ] **F-485** Clicking again pulls them off air without disconnecting them; the badge follows. **[net] [2nd device]**
 - [ ] **F-486** "New callers wait off air" toggled off restores walk-right-in guests. **[net] [2nd device]**
 - [ ] **F-487** The palette's Mute is disabled for waiting callers (off air is already silent) and works normally on air. **[net] [2nd device]**
+
+## AB. Editor: delivery polish (brand, loudness, music bed)
+
+- [ ] **F-488** The brand kit's watermark is burned into every video export at its kit position/size/opacity, above captions; the preview stays clean. **[offline]**
+- [ ] **F-489** A brand-new project opens with the kit's intro/outro stingers as its bookends; reopened projects keep whatever you did, including deleting them. **[offline]**
+- [ ] **F-490** A portrait phone master reframes with correct crop geometry after scene analysis (the 16:9 assumption is gone). **[offline]**
+- [ ] **F-491** Exports render at the fastest source's frame rate (60 fps program recording → 60 fps export; 24 stays 24), clamped 24–60. **[offline]**
+- [ ] **F-492** Exports measure and normalize loudness: an audio master lands at ≈−16 LUFS, a video at ≈−14 (check with any LUFS meter); Preferences → Audio can turn it off; a peaky-but-quiet mix stops short of clipping instead of distorting. **[offline]**
+- [ ] **F-493** Add a music bed (tracks pane): it loops under the whole conversation, fades in/out at the edges, plays in the preview and the export, and ⌘Z removes it. **[offline]**
+- [ ] **F-494** With a transcript, the bed ducks under speech and comes back up in pauses; without one, the row explains ducking needs a transcript. **[offline]**
+- [ ] **F-495** Stems contain no music bed and are not loudness-normalized. **[offline]**
+
+## AC. Editor: multicam
+
+- [ ] **F-496** Import a second camera's file → **Sync by Audio** sets its offset from the soundtracks; a clap or speech overlap lines up frame-close (±20 ms class). **[offline]**
+- [ ] **F-497** Sync against non-overlapping audio reports "no confident match" instead of silently guessing. **[offline]**
+- [ ] **F-498** With 2+ cameras, a **Cut to** strip appears above the timeline; clicking an angle cuts the program to it at the playhead. **[offline]**
+- [ ] **F-499** Re-cutting at the same playhead replaces the cue instead of stacking cues. **[offline]**
 
 ## N. Remote guests
 
