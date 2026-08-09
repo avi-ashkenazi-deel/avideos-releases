@@ -464,6 +464,35 @@ async function join() {
       showError(`Recorder (${e.detail.kind}): ${e.detail.message}`, true);
       sendData({ type: "record-error", participantId, message: e.detail.message });
     });
+    // The screen lane records locally at full quality whenever a share runs
+    // during a take — its manifest patches mirror the camera's.
+    recorder.addEventListener("screen-started", (e) => {
+      const d = e.detail;
+      postManifest({
+        track: {
+          participantId,
+          takeId: d.takeId,
+          kind: "screen",
+          anchor: d.anchor,
+          mimeType: d.mimeType,
+          width: d.width,
+          height: d.height,
+        },
+      }).catch(() => {});
+    });
+    recorder.addEventListener("screen-stopped", (e) => {
+      const d = e.detail;
+      postManifest({
+        track: {
+          participantId,
+          takeId: d.takeId,
+          kind: "screen",
+          chunkCount: d.track.chunkCount,
+          chunkTimeline: d.track.chunkTimeline,
+          finalized: true,
+        },
+      }).catch(() => {});
+    });
 
     hide(els.prejoin);
     show(els.call);
@@ -523,11 +552,15 @@ els.camBtn.addEventListener("click", async () => {
 });
 
 /** Reflect the actual publish state — the browser's own "Stop sharing" bar
- * can end the share without us, so always read back from the participant. */
+ * can end the share without us, so always read back from the participant.
+ * Also hands the live screen track to the local recorder: mid-take, a share
+ * starting/ending starts/finalizes the full-quality "screen" recording. */
 function refreshScreenButton() {
   const on = room?.localParticipant.isScreenShareEnabled === true;
   els.screenBtn.classList.toggle("on", on);
   els.screenBtn.textContent = on ? "Stop sharing" : "Share screen";
+  const pub = room?.localParticipant.getTrackPublication(Track.Source.ScreenShare);
+  recorder?.setScreenTrack(on ? (pub?.track?.mediaStreamTrack ?? null) : null);
 }
 
 els.screenBtn.addEventListener("click", async () => {

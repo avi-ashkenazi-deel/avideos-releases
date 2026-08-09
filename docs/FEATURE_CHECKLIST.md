@@ -1,6 +1,6 @@
 # streamit — full feature checklist
 
-All 506 user-facing features, each with a stable ID so you can report
+All 510 user-facing features, each with a stable ID so you can report
 back precisely ("F-42 fails"). Ordered so you can work top to bottom: each
 section only depends on the ones above it.
 
@@ -269,6 +269,13 @@ replays just the entrance, which is the quick way to compare them.
 - [ ] **F-504** Right-click the guest in the palette → "Add <name>'s Screen as Tile" places the screen on any scene; the inspector's source picker also lists "<name>'s Screen". **[net] [2nd device]**
 - [ ] **F-505** An off-air caller's screen never reaches the program (same gate as their camera). **[net] [2nd device]**
 - [ ] **F-506** Known gap, don't report: screen-share TAB AUDIO is not mixed in v1 — the guest's mic carries the sound. **[not built]**
+
+### Local recording of the shared screen (podcast mode)
+
+- [ ] **F-507** Sharing during a take records the screen LOCALLY at full quality: a third chunk lane ("screen") uploads alongside audio/video in the guest's upload strip. **[net] [2nd device]**
+- [ ] **F-508** Starting/stopping the share mid-take yields a partial screen track whose own anchor aligns it — the import places it at the right session time, not at zero. **[net] [2nd device] [ffmpeg]**
+- [ ] **F-509** After import, "<name>'s Screen" appears as its own video lane in the editor and in the multicam **Cut to** strip, in sync with everyone. **[net] [2nd device] [ffmpeg]**
+- [ ] **F-510** Stopping the take while a share is running finalizes the screen track with the others (chunk count matches, meta.json present). **[net] [2nd device]**
 
 ## N. Remote guests
 

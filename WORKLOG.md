@@ -61,6 +61,24 @@ full-screen-this-camera layout cues at the playhead, replacing a cue within
 fades, and offset recovery from synthetic envelopes (`EditorAudioTests`).
 F-488…F-499.
 
+Twentieth pass — **the shared screen records on the guest's machine too**,
+clarifying "record the video on the person's computer" → the guest video
+share. `LocalRecorder` grew a third, *dynamic* lane: `setScreenTrack(...)`
+hands it the live share track, and mid-take that starts/finalizes a
+"screen" MediaRecorder on the spot — shares start and stop mid-take, so
+unlike audio/video this lane records its own anchor per start and rides
+the same IndexedDB → R2 chunk pipeline (`stop()` now iterates whatever
+lanes exist, and the meta.json emission collapsed into one `_finishKind`).
+guest.js feeds the track from the same `refreshScreenButton` that tracks
+the browser's real publish state, and posts the screen lane's manifest
+patches on the new "screen-started"/"screen-stopped" recorder events. Mac
+side: `TrackKind.screen`; import encodes it exactly like video, and the
+mid-take start needs nothing new — the aligner's anchor-vs-take-start
+offset already becomes the `-itsoffset` head delay. The imported track
+lands as a video lane with a synthetic participant ("<name>'s Screen"), so
+tiles, waveform-less rows, and the multicam "Cut to" strip all work
+without the editor learning a third media kind. F-507…F-510.
+
 Nineteenth pass — **guest screen share**. The guest page gets a Share
 screen button (`setScreenShareEnabled`; the button reflects the real
 publish state via LocalTrackPublished/Unpublished, because the browser's

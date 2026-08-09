@@ -159,7 +159,8 @@ struct SessionLibraryView: View {
             ?? track.participantId
 
         return HStack {
-            Image(systemName: track.kind == .video ? "video" : "waveform")
+            Image(systemName: track.kind == .video ? "video"
+                  : track.kind == .screen ? "rectangle.inset.filled" : "waveform")
                 .foregroundStyle(.secondary)
                 .frame(width: 20)
             VStack(alignment: .leading, spacing: 1) {

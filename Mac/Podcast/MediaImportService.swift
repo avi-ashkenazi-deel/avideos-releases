@@ -94,7 +94,8 @@ final class MediaImportService {
                 args += ["-ar", "48000"]
             }
             args += ["-c:a", "pcm_s16le", "-vn"]
-        case .video:
+        case .video, .screen:
+            // A guest's shared screen is just another video master.
             if abs(alignment.rateFactor - 1.0) > 1e-6 {
                 // Scale frame PTS by the drift factor.
                 args += ["-vf", String(format: "setpts=PTS*%.8f", 1.0 / alignment.rateFactor)]
@@ -115,10 +116,15 @@ final class MediaImportService {
         let asset = AVURLAsset(url: output)
         let duration = (try? await asset.load(.duration).seconds) ?? 0
 
+        // A screen track lands in the editor as a VIDEO lane of its own —
+        // synthetic participant id, so it gets its own tiles, its own row,
+        // and a spot in the multicam "Cut to" strip, without any editor code
+        // learning a third media kind.
+        let isScreen = track.kind == .screen
         return EditTrack(id: "\(track.participantId)-\(takeId)-\(track.kind.rawValue)",
-                         participantId: track.participantId,
-                         participantName: participantName,
-                         kind: track.kind,
+                         participantId: isScreen ? "\(track.participantId)-screen" : track.participantId,
+                         participantName: isScreen ? "\(participantName)'s Screen" : participantName,
+                         kind: isScreen ? .video : track.kind,
                          url: output,
                          duration: duration)
     }

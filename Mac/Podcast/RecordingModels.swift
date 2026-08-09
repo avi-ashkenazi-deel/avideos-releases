@@ -8,6 +8,11 @@ import Foundation
 enum TrackKind: String, Codable, Sendable {
     case audio
     case video
+    /// A guest's shared screen, recorded locally at full quality whenever a
+    /// share runs during a take. Can start/stop mid-take (shares do); its
+    /// anchor makes it alignable like any other track. Imports as a video
+    /// lane of its own ("<name>'s Screen") so it joins the angle strip.
+    case screen
 }
 
 enum ParticipantRole: String, Codable, Sendable {
