@@ -53,6 +53,7 @@ timecode, so the approved storyboard stays ordered. Tune `--threshold` down
 | pttrns | The original mobile-UI directory is dead (the domain is now an unrelated blog) — relics via `hunt_url.py pttrns.com --wayback`, run locally |
 | layers.so / layers.to | Fully client-rendered + gated — no scrape route; screenshot to Drive |
 | Generic web page | `hunt_url.py` — og:image + large images |
+| Live rendered UI (component galleries, landing pages, dashboards) | `hunt_screenshot.py <url>` — headless-Chromium capture, sliced into review-sized sections (`--whole` for one full-page shot, `--paths /,/pricing` for multi-page) |
 | YouTube | Claude can try `yt-dlp` in-session for the video (datacenter IPs are often blocked — the Drive drop is the reliable path). Thumbnails always work: `https://img.youtube.com/vi/<id>/maxresdefault.jpg` |
 | Instagram / X / TikTok | Login-walled against scraping — screenshot or screen-record to Drive |
 

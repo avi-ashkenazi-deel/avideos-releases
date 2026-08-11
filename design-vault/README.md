@@ -54,6 +54,7 @@ design-vault/
 └── scripts/
     ├── hunt_commons.py       # search + download from Wikimedia Commons
     ├── hunt_url.py           # pull in a Pinterest board / Are.na channel / any page
+    ├── hunt_screenshot.py    # capture live rendered UI as sliced screenshots
     ├── storyboard.py         # video → key frames with timecodes
     └── vault.py              # review gallery + approve/reject + tag + browse
 ```
