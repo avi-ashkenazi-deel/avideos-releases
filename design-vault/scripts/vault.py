@@ -270,8 +270,10 @@ def cmd_browse(args) -> int:
             else:
                 img = html.escape(str(catalog_path.parent.relative_to(VAULT) / entry["file"]))
             chips = "".join(f'<span class="chip">{html.escape(t)}</span>' for t in tags)
+            haystack = " ".join([entry.get("title", ""), " ".join(tags),
+                                 entry.get("artist", ""), collection, str(year or "")]).lower()
             cards.append(f"""
-      <figure data-decade="{decade}" data-tags="{html.escape(' '.join(tags))}">
+      <figure data-decade="{decade}" data-search="{html.escape(haystack)}">
         <span class="year">{year or '—'}</span>{'<span class="vid">▶ video</span>' if is_video(entry["file"]) else ''}
         {media_tag(img, entry['file'], html.escape(entry.get('title', '')), args.embed)}
         <figcaption>
@@ -298,6 +300,10 @@ def cmd_browse(args) -> int:
          background: #16171a; color: #e9e7e2; }}
   h1 {{ font-size: 1.3rem; font-weight: 600; margin: 0 0 .25rem; }}
   .sub {{ color: #9b978f; margin: 0 0 1.2rem; }}
+  #q {{ display: block; width: min(48ch, 100%); margin: 0 0 .8rem; padding: .55rem .9rem;
+       font: inherit; color: #e9e7e2; background: #1f2024; border: 1px solid #2c2d33;
+       border-radius: 8px; outline: none; }}
+  #q:focus {{ border-color: #d8c96a; }}
   #filters {{ display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 1rem; }}
   .decade {{ background: #1f2024; color: #e9e7e2; border: 1px solid #2c2d33; border-radius: 99px;
             padding: 4px 14px; cursor: pointer; font: inherit; font-size: .82rem;
@@ -325,16 +331,28 @@ def cmd_browse(args) -> int:
   section:not(:has(figure:not(.hide))) {{ display: none; }}
 </style>
 <h1>Design Vault — {total} items in the library</h1>
-<p class="sub">Filter by decade; click a filter again to clear it.</p>
+<p class="sub">Search anything — title, tag, collection, who shared it, year. Decade chips stack on top;
+click a chip again to clear it.</p>
+<input id="q" type="search" placeholder="try: swiss-style · fabrizia · fintech · 1959 · currency"
+       autocomplete="off">
 <div id="filters">{chips}</div>
 {''.join(sections) if sections else '<p>Library is empty — approve some inbox batches first.</p>'}
 <script>
   let active = null;
+  const q = document.getElementById('q');
+  const apply = () => {{
+    const terms = q.value.toLowerCase().split(/\\s+/).filter(Boolean);
+    document.querySelectorAll('figure').forEach(f => {{
+      const hitDecade = active === null || f.dataset.decade === active;
+      const hitSearch = terms.every(t => f.dataset.search.includes(t));
+      f.classList.toggle('hide', !(hitDecade && hitSearch));
+    }});
+  }};
+  q.addEventListener('input', apply);
   document.querySelectorAll('.decade').forEach(btn => btn.addEventListener('click', () => {{
     active = active === btn.dataset.decade ? null : btn.dataset.decade;
     document.querySelectorAll('.decade').forEach(b => b.classList.toggle('on', b.dataset.decade === active));
-    document.querySelectorAll('figure').forEach(f =>
-      f.classList.toggle('hide', active !== null && f.dataset.decade !== active));
+    apply();
   }}));
 </script>
 """)
