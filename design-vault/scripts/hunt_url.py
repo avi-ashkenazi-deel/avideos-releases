@@ -96,6 +96,33 @@ def pins_from_arena(url: str, count: int) -> list:
     return out
 
 
+def pins_from_x(url: str, count: int) -> list:
+    """Media from a single X/Twitter post via the fxtwitter API (no login)."""
+    m = re.search(r"(?:x|twitter)\.com/[^/]+/status/(\d+)", url)
+    if not m:
+        sys.exit("Give an X post URL, e.g. x.com/<user>/status/<id>")
+    data = json.loads(fetch(f"https://api.fxtwitter.com/status/{m.group(1)}"))
+    tweet = data.get("tweet") or {}
+    if not tweet:
+        sys.exit(f"fxtwitter returned no tweet: {data.get('message')}")
+    author = tweet.get("author", {}).get("name", "")
+    text = strip_tags(tweet.get("text", "")).replace("\n", " ")[:90]
+    ts = tweet.get("created_timestamp")
+    from datetime import datetime, timezone
+    year = datetime.fromtimestamp(ts, tz=timezone.utc).year if ts else None
+    out = []
+    for media in tweet.get("media", {}).get("all", [])[:count]:
+        out.append({
+            "title": f"{author} — {text}" if text else author,
+            "page_url": tweet.get("url") or url,
+            "image_url": media.get("url"),
+            "fallback_url": media.get("thumbnail_url"),
+            "artist": author,
+            "year": year,
+        })
+    return out
+
+
 def pins_from_flickr(url: str, count: int) -> list:
     m = re.search(r"tags/([^/?]+)", url) or re.search(r"[?&]tags=([^&]+)", url)
     if not m:
@@ -241,7 +268,9 @@ def main() -> int:
 
     host = urllib.parse.urlparse(args.url if "//" in args.url
                                  else f"https://{args.url}").netloc.lower()
-    if "pinterest." in host:
+    if re.search(r"(^|\.)(x|twitter)\.com$", host):
+        candidates, source = pins_from_x(args.url, args.count), "x"
+    elif "pinterest." in host:
         candidates, source = pins_from_pinterest(args.url, args.count), "pinterest"
     elif "are.na" in host:
         candidates, source = pins_from_arena(args.url, args.count), "arena"
@@ -263,7 +292,10 @@ def main() -> int:
     batch_dir = VAULT / "_inbox" / args.collection / batch
     batch_dir.mkdir(parents=True, exist_ok=True)
 
-    items, n = [], 0
+    # Re-running into the same batch appends (lets a loop pool many URLs into one batch)
+    manifest_path = batch_dir / "items.json"
+    items = json.loads(manifest_path.read_text())["items"] if manifest_path.exists() else []
+    n = len(items)
     for cand in candidates:
         blob = None
         for attempt in filter(None, (cand["image_url"], cand["fallback_url"])):
@@ -296,7 +328,7 @@ def main() -> int:
     if not items:
         print("Nothing survived the size filter.", file=sys.stderr)
         return 1
-    (batch_dir / "items.json").write_text(
+    manifest_path.write_text(
         json.dumps({"collection": args.collection, "batch": batch, "source": source,
                     "items": items}, indent=2, ensure_ascii=False))
     print(f"\nStaged {len(items)} candidates in _inbox/{args.collection}/{batch}")

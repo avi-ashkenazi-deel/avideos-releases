@@ -28,10 +28,35 @@ def load_batches():
         yield manifest_path, json.loads(manifest_path.read_text())
 
 
+VIDEO_EXTS = {".mp4", ".mov", ".webm", ".m4v"}
+
+
+def is_video(fname: str) -> bool:
+    return Path(fname).suffix.lower() in VIDEO_EXTS
+
+
+def media_tag(src: str, fname: str, alt: str, embedded: bool) -> str:
+    if is_video(fname) and not embedded:
+        return f'<video src="{src}" controls muted loop playsinline></video>'
+    return f'<img src="{src}" loading="lazy" alt="{alt}">'
+
+
 def embed_thumb(path: Path, max_px: int = 520) -> str:
-    """Return a data: URI thumbnail so review.html is fully self-contained."""
+    """Return a data: URI thumbnail so review.html is fully self-contained.
+
+    Videos get their first frame (via ffmpeg) as a poster image.
+    """
+    import subprocess
+    import tempfile
     from PIL import Image  # only needed for --embed
-    img = Image.open(path)
+    if is_video(path.name):
+        with tempfile.NamedTemporaryFile(suffix=".png") as tmp:
+            subprocess.run(["ffmpeg", "-y", "-i", str(path), "-frames:v", "1", tmp.name],
+                           capture_output=True)
+            img = Image.open(tmp.name)
+            img.load()
+    else:
+        img = Image.open(path)
     img.thumbnail((max_px, max_px))
     buf = io.BytesIO()
     img.convert("RGB").save(buf, "JPEG", quality=72)
@@ -54,10 +79,11 @@ def cmd_review(args) -> int:
                 img = embed_thumb(manifest_path.parent / item["file"])
             else:
                 img = html.escape(str(batch_rel / item["file"]))
+            badge = '<span class="vid">▶ video</span>' if is_video(item["file"]) else ""
             cards.append(f"""
       <figure data-id="{item['id']}" tabindex="0">
-        <div class="num">{item['id']}</div>
-        <img src="{img}" loading="lazy" alt="{html.escape(item['title'])}">
+        <div class="num">{item['id']}</div>{badge}
+        {media_tag(img, item['file'], html.escape(item['title']), args.embed)}
         <figcaption>
           <strong>{html.escape(item['title'])}</strong>
           <span class="meta"><span class="lic">{html.escape(item['license'])}</span>
@@ -96,7 +122,10 @@ def cmd_review(args) -> int:
   figure.keep::after {{ content: "KEEP"; position: absolute; top: 8px; right: 8px; background: #d8c96a;
                        color: #16171a; font-size: .7rem; font-weight: 700; letter-spacing: .06em;
                        padding: 3px 8px; border-radius: 4px; }}
-  figure img {{ width: 100%; height: 215px; object-fit: contain; background: #0c0d0f; display: block; }}
+  figure img, figure video {{ width: 100%; height: 215px; object-fit: contain; background: #0c0d0f; display: block; }}
+  .vid {{ position: absolute; top: 8px; right: 8px; background: #16171a; color: #e9e7e2;
+         font-size: .7rem; padding: 3px 8px; border-radius: 4px; }}
+  figure.keep .vid {{ right: 62px; }}
   .num {{ position: absolute; top: 8px; left: 8px; background: #55565c; color: #16171a;
          font-weight: 700; border-radius: 4px; padding: 1px 8px; font-variant-numeric: tabular-nums; }}
   figcaption {{ padding: .6rem .8rem .7rem; font-size: .78rem; display: grid; gap: 3px; }}
@@ -243,8 +272,8 @@ def cmd_browse(args) -> int:
             chips = "".join(f'<span class="chip">{html.escape(t)}</span>' for t in tags)
             cards.append(f"""
       <figure data-decade="{decade}" data-tags="{html.escape(' '.join(tags))}">
-        <span class="year">{year or '—'}</span>
-        <img src="{img}" loading="lazy" alt="{html.escape(entry.get('title', ''))}">
+        <span class="year">{year or '—'}</span>{'<span class="vid">▶ video</span>' if is_video(entry["file"]) else ''}
+        {media_tag(img, entry['file'], html.escape(entry.get('title', '')), args.embed)}
         <figcaption>
           <strong>{html.escape(entry.get('title', ''))}</strong>
           <span class="chips">{chips}</span>
@@ -280,7 +309,9 @@ def cmd_browse(args) -> int:
   .grid {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; }}
   figure {{ margin: 0; background: #1f2024; border-radius: 6px; overflow: hidden; position: relative; }}
   figure.hide {{ display: none; }}
-  figure img {{ width: 100%; height: 215px; object-fit: contain; background: #0c0d0f; display: block; }}
+  figure img, figure video {{ width: 100%; height: 215px; object-fit: contain; background: #0c0d0f; display: block; }}
+  .vid {{ position: absolute; top: 8px; right: 8px; background: #16171a; color: #e9e7e2;
+         font-size: .7rem; padding: 3px 8px; border-radius: 4px; }}
   .year {{ position: absolute; top: 8px; left: 8px; background: #16171a; color: #d8c96a;
           border-radius: 4px; padding: 1px 8px; font-weight: 600; font-size: .8rem;
           font-variant-numeric: tabular-nums; }}

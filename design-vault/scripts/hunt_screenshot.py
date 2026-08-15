@@ -94,7 +94,10 @@ def main() -> int:
     batch_dir = VAULT / "_inbox" / args.collection / batch
     batch_dir.mkdir(parents=True, exist_ok=True)
 
-    items, n = [], 0
+    # Re-running into the same batch appends (lets a loop pool many sites into one batch)
+    manifest_path = batch_dir / "items.json"
+    items = json.loads(manifest_path.read_text())["items"] if manifest_path.exists() else []
+    n = len(items)
     year = int(date.today().strftime("%Y"))
     with tempfile.TemporaryDirectory() as td:
         for path in paths:
@@ -123,7 +126,7 @@ def main() -> int:
 
     if not items:
         sys.exit("Nothing captured.")
-    (batch_dir / "items.json").write_text(
+    manifest_path.write_text(
         json.dumps({"collection": args.collection, "batch": batch,
                     "source": "screenshot", "items": items}, indent=2, ensure_ascii=False))
     print(f"\nStaged {len(items)} captures in _inbox/{args.collection}/{batch}")
