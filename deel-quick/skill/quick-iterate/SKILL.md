@@ -26,7 +26,10 @@ maintain.
 1. Read the file and the metadata comment. Surface any warnings it lists
    (skipped stylesheets, placeholdered iframes/canvas) so the designer knows
    what's missing before they share.
-2. Verify self-containment (see `references/sanitize-checklist.md`). The
+2. Verify self-containment: when Node is available, run
+   `node deel-quick/tools/verify-capture.js <file>` (from the Deel Quick repo)
+   and fix every finding; otherwise apply `references/sanitize-checklist.md`
+   manually. The
    artifact CSP blocks every external request, so any leftover `http(s)://`
    reference in `src`, `href`, `srcset`, or CSS `url(...)` will 404-hole the
    page. Only `#...`, `data:`, and claude.ai artifact URLs are allowed.

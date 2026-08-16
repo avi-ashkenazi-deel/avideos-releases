@@ -44,7 +44,7 @@ Full workflow with conventions: `docs/WORKFLOW.md`.
 | `extension/` | Chrome MV3 extension — the capture pipeline. Plain JS, no build step. |
 | `skill/quick-iterate/` | The Claude skill that sanitizes, publishes, and iterates. |
 | `snippet/deel-quick-snippet.js` | The capture pipeline as a paste-into-DevTools snippet (generated). |
-| `docs/` | Install, workflow, troubleshooting. |
+| `docs/` | Install, workflow, troubleshooting, and the M0 validation run sheet (`docs/M0-TEST.md` — run this first). |
 | `tools/` | `make-snippet.sh` (regenerates the snippet), `make-icons.py` (generates the extension icons — run once after cloning). |
 
 ## Extension permissions (and why)
