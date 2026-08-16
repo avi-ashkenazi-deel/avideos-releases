@@ -1,0 +1,93 @@
+:root {
+  --ink: #12261e;
+  --muted: #5f736a;
+  --accent: #15357a;
+  --accent-ink: #ffffff;
+  --surface: #ffffff;
+  --line: #e2e8e4;
+  --warn: #9a4b00;
+}
+
+* { box-sizing: border-box; margin: 0; }
+
+body {
+  width: 340px;
+  font: 13px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  color: var(--ink);
+  background: var(--surface);
+}
+
+header {
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+h1 { font-size: 15px; }
+.tagline { color: var(--muted); font-size: 12px; }
+
+main { padding: 14px 16px 16px; display: grid; gap: 10px; }
+
+label { font-weight: 600; font-size: 12px; }
+.optional { font-weight: 400; color: var(--muted); }
+
+textarea {
+  width: 100%;
+  resize: vertical;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font: inherit;
+}
+
+.check {
+  font-weight: 400;
+  display: flex;
+  gap: 7px;
+  align-items: flex-start;
+  color: var(--muted);
+}
+
+button {
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+button:hover { filter: brightness(1.1); }
+button.secondary {
+  background: transparent;
+  color: var(--accent);
+  border: 1px solid var(--line);
+}
+
+.hint { color: var(--muted); font-size: 12px; }
+.mono { font-family: ui-monospace, monospace; font-size: 11px; word-break: break-all; }
+
+.bar {
+  height: 6px;
+  background: var(--line);
+  border-radius: 3px;
+  overflow: hidden;
+}
+#bar-fill {
+  height: 100%;
+  width: 5%;
+  background: var(--accent);
+  transition: width 0.3s;
+}
+#phase-label { margin-top: 8px; color: var(--muted); }
+
+#ledger { width: 100%; border-collapse: collapse; font-size: 12px; }
+#ledger td { padding: 2px 0; }
+#ledger td:last-child { text-align: right; font-family: ui-monospace, monospace; }
+#ledger tr.total td { border-top: 1px solid var(--line); font-weight: 600; }
+
+#warnings { padding-left: 16px; color: var(--warn); font-size: 12px; }
+#warnings:empty { display: none; }
+
+.row { display: flex; gap: 8px; }
+.row button { flex: 1; }
