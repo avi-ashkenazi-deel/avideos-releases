@@ -42,28 +42,49 @@ final class TranscriptEditModel {
         // their sequence position. Three consequences, all intended:
         //   - the transcript reads in the order the episode plays, so moving a
         //     segment moves its text;
-        //   - cut words stay inline, struck through, where they were cut —
-        //     which is what makes them clickable to recover;
+        //   - a CUT collapses to one small ⌫-marker where the words were —
+        //     deleted must read as deleted (struck-through words in place read
+        //     as "delete didn't work"; first live test said exactly that).
+        //     Clicking the marker restores the cut.
         //   - a duplicated moment appears twice, because it is spoken twice.
         // Words covered by no segment at all (hard-removed) simply don't
         // appear: that material is no longer part of the project.
         for clip in edl.clips {
-            let isCut = !clip.enabled
+            let indices = transcript.wordIndices(inSourceRange: clip.sourceRange)
 
-            for index in transcript.wordIndices(inSourceRange: clip.sourceRange) {
+            if !clip.enabled {
+                // One compact, clickable marker for the whole cut. Registered
+                // as a display on the cut's first word so the existing
+                // click-to-recover path works unchanged. A cut with no words
+                // (pure silence) gets no marker — there is nothing to read.
+                guard let firstIndex = indices.first else { continue }
+                let count = indices.count
+                let text = "[✂ \(count)] "
+                let attributes: [NSAttributedString.Key: Any] = [
+                    .font: NSFont.systemFont(ofSize: 11),
+                    .foregroundColor: NSColor.tertiaryLabelColor,
+                    .toolTip: count == 1 ? "1 word cut — click to restore"
+                                         : "\(count) words cut — click to restore",
+                ]
+                let range = NSRange(location: result.length, length: (text as NSString).length)
+                result.append(NSAttributedString(string: text, attributes: attributes))
+                newDisplays.append(WordDisplay(word: transcript.words[firstIndex],
+                                               index: firstIndex, isCut: true,
+                                               clipID: clip.id, characterRange: range))
+                continue
+            }
+
+            for index in indices {
                 let word = transcript.words[index]
                 let midTime = (word.start + word.end) / 2
 
                 let hue = trackHues[word.trackId] ?? 0
                 let speakerColor = NSColor(hue: hue, saturation: 0.55, brightness: 0.9, alpha: 1)
 
-                var attributes: [NSAttributedString.Key: Any] = [.font: font]
-                if isCut {
-                    attributes[.foregroundColor] = NSColor.tertiaryLabelColor
-                    attributes[.strikethroughStyle] = NSUnderlineStyle.single.rawValue
-                } else {
-                    attributes[.foregroundColor] = speakerColor
-                }
+                var attributes: [NSAttributedString.Key: Any] = [
+                    .font: font,
+                    .foregroundColor: speakerColor,
+                ]
                 if let playheadSource, midTime >= playheadSource - 0.25, midTime <= playheadSource + 0.25 {
                     attributes[.backgroundColor] = NSColor.selectedTextBackgroundColor
                 }
@@ -73,7 +94,7 @@ final class TranscriptEditModel {
                 // `text.count` counts Characters and drifts on emoji/accents.
                 let range = NSRange(location: result.length, length: (text as NSString).length)
                 result.append(NSAttributedString(string: text, attributes: attributes))
-                newDisplays.append(WordDisplay(word: word, index: index, isCut: isCut,
+                newDisplays.append(WordDisplay(word: word, index: index, isCut: false,
                                                clipID: clip.id, characterRange: range))
             }
         }

@@ -276,7 +276,15 @@ extension EditWorkspaceView {
         guard let snapper else { return range }
         let start = snapper.snap(range.lowerBound)
         let end = snapper.snap(range.upperBound)
-        return end > start ? start...end : range
+        guard end > start else { return range }
+        let snapped = start...end
+        // Snapping exists to land the cut's EDGES in silence — it must never
+        // snap the cut away from the selection. Deleting one short word can
+        // pull both edges toward the same pause, leaving a range that misses
+        // the word's midpoint entirely — the "deleted" word survives the cut
+        // (words map to clips by midpoint).
+        let mid = (range.lowerBound + range.upperBound) / 2
+        return snapped.contains(mid) ? snapped : range
     }
 
     func timeString(_ seconds: Double) -> String {
