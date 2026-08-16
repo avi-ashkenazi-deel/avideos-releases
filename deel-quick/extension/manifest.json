@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "Deel Quick",
+  "version": "0.1.0",
+  "description": "Capture the current Deel screen as a self-contained HTML prototype for fast iteration with Claude.",
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "permissions": ["activeTab", "scripting"],
+  "host_permissions": [
+    "https://app.deel.com/*",
+    "https://*.deel.com/*",
+    "https://*.letsdeel.com/*",
+    "https://*.deel-assets.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  }
+}
