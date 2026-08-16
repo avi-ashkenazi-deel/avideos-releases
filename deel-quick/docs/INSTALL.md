@@ -7,10 +7,19 @@ skill (publishes and iterates in Claude). ~5 minutes.
 
 1. Get this folder onto your machine (clone the repo, or download the
    `deel-quick/` directory).
-2. Open `chrome://extensions` in Chrome.
-3. Toggle **Developer mode** on (top right).
-4. Click **Load unpacked** and select the `deel-quick/extension/` folder.
-5. Pin it: puzzle-piece icon in the toolbar → pin **Deel Quick** (⚡).
+2. First time only — generate the toolbar icons (they're built, not stored
+   in git):
+
+   ```bash
+   python3 deel-quick/tools/make-icons.py
+   ```
+
+   (If someone hands you the folder as a zip with `extension/icons/*.png`
+   already present, skip this.)
+3. Open `chrome://extensions` in Chrome.
+4. Toggle **Developer mode** on (top right).
+5. Click **Load unpacked** and select the `deel-quick/extension/` folder.
+6. Pin it: puzzle-piece icon in the toolbar → pin **Deel Quick** (⚡).
 
 Chrome may show a "developer mode extensions" reminder on restart — expected
 for unpacked extensions; click through it.

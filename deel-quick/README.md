@@ -23,8 +23,10 @@ No deployment. No infra. It's just there.
 
 ## 5-minute quickstart
 
-1. **Install the extension**: `chrome://extensions` → enable *Developer mode* →
-   *Load unpacked* → select the `extension/` folder. (Details: `docs/INSTALL.md`.)
+1. **Install the extension**: generate the icons once
+   (`python3 tools/make-icons.py` — they're built, not stored in git), then
+   `chrome://extensions` → enable *Developer mode* → *Load unpacked* → select
+   the `extension/` folder. (Details: `docs/INSTALL.md`.)
 2. **Install the skill**: copy `skill/quick-iterate/` into your Claude skills
    (see `docs/INSTALL.md` for claude.ai / Claude Code / Cowork paths).
 3. On any Deel screen: click the ⚡ Deel Quick icon → optionally type what you
@@ -43,7 +45,7 @@ Full workflow with conventions: `docs/WORKFLOW.md`.
 | `skill/quick-iterate/` | The Claude skill that sanitizes, publishes, and iterates. |
 | `snippet/deel-quick-snippet.js` | The capture pipeline as a paste-into-DevTools snippet (generated). |
 | `docs/` | Install, workflow, troubleshooting. |
-| `tools/` | `make-snippet.sh` (regenerates the snippet), `make-icons.py` (regenerates icons). |
+| `tools/` | `make-snippet.sh` (regenerates the snippet), `make-icons.py` (generates the extension icons — run once after cloning). |
 
 ## Extension permissions (and why)
 
