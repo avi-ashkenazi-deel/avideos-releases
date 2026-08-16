@@ -41,7 +41,7 @@ def media_tag(src: str, fname: str, alt: str, embedded: bool) -> str:
     return f'<img src="{src}" loading="lazy" alt="{alt}">'
 
 
-def embed_thumb(path: Path, max_px: int = 520) -> str:
+def embed_thumb(path: Path, max_px: int = 400, quality: int = 68) -> str:
     """Return a data: URI thumbnail so review.html is fully self-contained.
 
     Videos get their first frame (via ffmpeg) as a poster image.
@@ -59,7 +59,7 @@ def embed_thumb(path: Path, max_px: int = 520) -> str:
         img = Image.open(path)
     img.thumbnail((max_px, max_px))
     buf = io.BytesIO()
-    img.convert("RGB").save(buf, "JPEG", quality=72)
+    img.convert("RGB").save(buf, "JPEG", quality=quality)
     return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
 
 
@@ -250,6 +250,8 @@ def cmd_tag(args) -> int:
 
 def cmd_browse(args) -> int:
     """Render browse.html — the approved library, filterable by decade and tag."""
+    only = {c.strip() for c in (args.only or "").split(",") if c.strip()}
+    exclude = {c.strip() for c in (args.exclude or "").split(",") if c.strip()}
     sections = []
     decades = set()
     total = 0
@@ -258,6 +260,8 @@ def cmd_browse(args) -> int:
         if not catalog:
             continue
         collection = catalog_path.parent.name
+        if (only and collection not in only) or collection in exclude:
+            continue
         cards = []
         for entry in sorted(catalog, key=lambda e: (e.get("year") or 9999, e["file"])):
             total += 1
@@ -266,7 +270,8 @@ def cmd_browse(args) -> int:
             decades.add(decade)
             tags = entry.get("tags", [])
             if args.embed:
-                img = embed_thumb(catalog_path.parent / entry["file"])
+                img = embed_thumb(catalog_path.parent / entry["file"],
+                                  args.thumb_px, args.thumb_q)
             else:
                 img = html.escape(str(catalog_path.parent.relative_to(VAULT) / entry["file"]))
             chips = "".join(f'<span class="chip">{html.escape(t)}</span>' for t in tags)
@@ -292,8 +297,9 @@ def cmd_browse(args) -> int:
 
     chips = "".join(f'<button class="decade" data-decade="{d}">{d}</button>'
                     for d in sorted(decades, key=lambda d: (d == "undated", d)))
-    out = VAULT / "browse.html"
-    out.write_text(f"""<title>Design Vault — library ({total} items)</title>
+    out = VAULT / args.out
+    title = args.title or "Design Vault — library"
+    out.write_text(f"""<title>{html.escape(title)} ({total} items)</title>
 <style>
   body {{ font: 15px/1.55 "Avenir Next", "Segoe UI", system-ui, sans-serif;
          margin: 0; padding: 2.5rem clamp(1rem, 4vw, 3.5rem) 4rem;
@@ -330,7 +336,7 @@ def cmd_browse(args) -> int:
   a {{ color: #7ab8ff; text-decoration: none; }} a:hover {{ text-decoration: underline; }}
   section:not(:has(figure:not(.hide))) {{ display: none; }}
 </style>
-<h1>Design Vault — {total} items in the library</h1>
+<h1>{html.escape(title)} — {total} items</h1>
 <p class="sub">Search anything — title, tag, collection, who shared it, year. Decade chips stack on top;
 click a chip again to clear it.</p>
 <input id="q" type="search" placeholder="try: swiss-style · fabrizia · fintech · 1959 · currency"
@@ -418,6 +424,12 @@ def main() -> int:
     bp = sub.add_parser("browse")
     bp.add_argument("--embed", action="store_true",
                     help="inline images as data URIs (self-contained gallery)")
+    bp.add_argument("--only", default="", help="comma-separated collections to include")
+    bp.add_argument("--exclude", default="", help="comma-separated collections to leave out")
+    bp.add_argument("--out", default="browse.html", help="output file name")
+    bp.add_argument("--title", default="", help="page title")
+    bp.add_argument("--thumb-px", type=int, default=400, help="embedded thumbnail max size")
+    bp.add_argument("--thumb-q", type=int, default=68, help="embedded thumbnail JPEG quality")
     sub.add_parser("db")
     args = ap.parse_args()
     return {"review": cmd_review, "resolve": cmd_resolve, "tag": cmd_tag,
