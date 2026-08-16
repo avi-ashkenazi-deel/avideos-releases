@@ -600,6 +600,9 @@ struct EditWorkspaceView: View {
                 set(BookendClip(media: MediaReference(url: url),
                                 sourceRange: 0...probe.duration))
             }
+            // Park the player at the very top so pressing play shows the new
+            // bookend immediately — proof it landed.
+            preview.returnToProgramStart()
         }
     }
 
@@ -876,6 +879,17 @@ struct EditWorkspaceView: View {
                     .keyboardShortcut(.rightArrow, modifiers: [])
                     .help("Step one frame forward (→)")
 
+                // The playhead clock is edited time, which pins at 0:00 while
+                // an intro plays — say so instead of looking frozen.
+                if case .intro(let remaining) = preview.bookendPhase {
+                    Text("Intro · \(timeString(remaining))")
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.orange)
+                } else if preview.bookendPhase == .outro {
+                    Text("Outro")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                }
                 Text(timeString(preview.playheadSeconds) + " / " + timeString(project.editedDuration))
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)

@@ -40,8 +40,21 @@ final class PreviewPlayer {
     private(set) var playheadSeconds: Double = 0
     /// Intro length of the project this item was built from.
     private var programOffset: Double = 0
+    /// Edited length of the project this item was built from (for detecting
+    /// the outro phase).
+    private var editedDuration: Double = 0
     private(set) var isPlaying = false
     private(set) var buildError: String?
+
+    /// Which bookend the player is inside, if any. The playhead clock is in
+    /// EDITED time, which pins at 0:00 through the whole intro — without this
+    /// the transport looks frozen while an intro plays, which reads as
+    /// "adding an intro did nothing" (first live test said exactly that).
+    enum BookendPhase: Equatable {
+        case intro(remaining: Double)
+        case outro
+    }
+    private(set) var bookendPhase: BookendPhase?
 
     private let builder = CompositionBuilder()
     private let observer: TimeObserverBox
@@ -62,8 +75,17 @@ final class PreviewPlayer {
         ) { [weak self] time in
             Task { @MainActor [weak self] in
                 guard let self else { return }
-                self.playheadSeconds = max(0, time.seconds - self.programOffset)
+                let raw = time.seconds
+                self.playheadSeconds = max(0, raw - self.programOffset)
                 self.isPlaying = self.player.rate != 0
+                if self.programOffset > 0.01, raw < self.programOffset {
+                    self.bookendPhase = .intro(remaining: self.programOffset - raw)
+                } else if self.editedDuration > 0,
+                          raw > self.programOffset + self.editedDuration + 0.05 {
+                    self.bookendPhase = .outro
+                } else {
+                    self.bookendPhase = nil
+                }
             }
         }
     }
@@ -82,6 +104,7 @@ final class PreviewPlayer {
         do {
             let result = try await builder.build(project: project)
             programOffset = project.programOffset
+            editedDuration = project.editedDuration
             let item = AVPlayerItem(asset: result.composition)
             item.audioMix = result.audioMix
             item.videoComposition = result.videoComposition
@@ -121,5 +144,13 @@ final class PreviewPlayer {
 
     func stepFrame(forward: Bool) {
         player.currentItem?.step(byCount: forward ? 1 : -1)
+    }
+
+    /// Jumps to PROGRAM zero — the top of the intro, before edited time
+    /// begins. `seek(to: 0)` can't get here (it maps edited→program), and
+    /// "watch my new intro" is the whole point of this call.
+    func returnToProgramStart() {
+        player.seek(to: .zero, toleranceBefore: .zero, toleranceAfter: .zero)
+        playheadSeconds = 0
     }
 }
