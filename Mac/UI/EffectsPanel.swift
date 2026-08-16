@@ -134,6 +134,46 @@ struct EffectsPanel: View {
                 }
                 .pickerStyle(.segmented)
 
+                // Per-mode controls. Color mode used to hard-code near-black
+                // with NO picker ("no way to select the background color"),
+                // and a chosen image/video had no visible confirmation.
+                switch params.background {
+                case .blur(let radius):
+                    LabeledSlider(label: "Blur",
+                                  value: Binding(get: { radius },
+                                                 set: { var p = params; p.background = .blur(radius: $0); update(.virtualBackground(p)) }),
+                                  range: 0...1)
+                case .color(let color):
+                    ColorPicker("Background Color", selection: Binding(
+                        get: { color.swiftUIColor },
+                        set: { var p = params; p.background = .color(RGBAColor($0)); update(.virtualBackground(p)) }
+                    ))
+                case .image(let media):
+                    HStack {
+                        Text(media.displayName)
+                            .font(.caption)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                        Spacer()
+                        Button("Choose…") {
+                            pickMedia(images: true) { var p = params; p.background = .image($0); update(.virtualBackground(p)) }
+                        }
+                        .font(.caption)
+                    }
+                case .video(let media):
+                    HStack {
+                        Text(media.displayName)
+                            .font(.caption)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                        Spacer()
+                        Button("Choose…") {
+                            pickMedia(images: false) { var p = params; p.background = .video($0); update(.virtualBackground(p)) }
+                        }
+                        .font(.caption)
+                    }
+                }
+
                 LabeledSlider(label: "Edge Soft",
                               value: Binding(get: { params.edgeSoftness },
                                              set: { var p = params; p.edgeSoftness = $0; update(.virtualBackground(p)) }),

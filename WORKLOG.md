@@ -61,6 +61,28 @@ full-screen-this-camera layout cues at the playhead, replacing a cue within
 fades, and offset recovery from synthetic envelopes (`EditorAudioTests`).
 F-488…F-499.
 
+Twenty-second pass — second live test round, seven reports in one batch.
+**Palette windows stole every in-content drag**:
+`isMovableByWindowBackground = true` meant any drag not on a native control
+moved the window — the inspector's 3D tilt pad dragged the palette instead
+of tilting, and the Overlays list couldn't drag-reorder. Off; the title bar
+still drags. **Virtual Background finally has per-mode controls**: Color
+mode was hard-coded near-black with no picker ("no way to select the
+background color") — now a ColorPicker, Blur gets a radius slider, and a
+chosen image/video shows its filename with a Choose… button so picking one
+visibly lands. **Settings fields save as you type**: the guest Worker URL
+only persisted on Return — the one key nobody presses in a URL field — so
+"I can't edit anything in settings"; both it and the Claude key now save
+onChange with a green checkmark confirming the stored value. **Editor
+timeline: zoom and filmstrips.** ⌘= / ⌘− zoom in strict-time mode
+(pointsPerSecond clamped 4–400), and segment blocks now draw
+Premiere-style filmstrips — 58 pt tiles, each sampling `ThumbnailStore` at
+its own source time — instead of a single stretched poster. **Bookends are
+now a thing on the timeline**: fixed orange cap rows above/below the
+timeline body show "Intro — <file> · 0:07" with play-from-top and Clear;
+previously a set intro was invisible outside the transport label ("I see
+it when I add it but then… I don't see it as a thing").
+
 Twenty-first pass — first editor test round, and the build-staleness trap.
 Avi's screenshots showed no Pause button and no REC timer — both shipped
 that afternoon — and no Music Bed section: **the binary was v0.3.0 (19),

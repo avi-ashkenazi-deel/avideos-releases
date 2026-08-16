@@ -355,10 +355,20 @@ private struct GeneralSettingsView: View {
     var body: some View {
         Form {
             Section("Session Server") {
-                TextField("Worker URL (https://…workers.dev)", text: $workerURLText)
-                    .onSubmit {
-                        studio.workerBaseURL = URL(string: workerURLText)
+                HStack {
+                    TextField("Worker URL (https://…workers.dev)", text: $workerURLText)
+                        // Save as you type, not only on Return — pasting a URL
+                        // and closing the window used to store NOTHING, so the
+                        // Interview palette kept saying "set the URL first".
+                        .onChange(of: workerURLText) { _, new in
+                            studio.workerBaseURL = URL(string: new.trimmingCharacters(in: .whitespaces))
+                        }
+                    if studio.workerBaseURL != nil {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                            .help("URL saved — the Interview palette can start sessions")
                     }
+                }
                 Text("The Cloudflare Worker that hosts guest sessions and recording uploads — see infra/worker/README.md.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -367,6 +377,7 @@ private struct GeneralSettingsView: View {
             Section("AI") {
                 HStack {
                     SecureField("Claude API key (sk-ant-…)", text: $claudeKey)
+                        .onChange(of: claudeKey) { _, _ in saveClaudeKey() }
                         .onSubmit { saveClaudeKey() }
                     // An explicit Save beside the field: pasting a key and
                     // closing the window used to save NOTHING (storage only

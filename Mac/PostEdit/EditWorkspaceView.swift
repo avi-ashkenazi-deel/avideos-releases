@@ -224,8 +224,57 @@ struct EditWorkspaceView: View {
     private var verticalTimeline: some View {
         VStack(spacing: 0) {
             angleStrip
+            if let intro = project.bookends?.intro {
+                bookendCap("Intro", clip: intro, icon: "arrow.right.to.line") {
+                    performEdit { project.setIntro(nil) }
+                }
+                Divider()
+            }
             timelineBody
+            if let outro = project.bookends?.outro {
+                Divider()
+                bookendCap("Outro", clip: outro, icon: "arrow.left.to.line") {
+                    performEdit { project.setOutro(nil) }
+                }
+            }
         }
+    }
+
+    /// A fixed cap above/below the timeline for the intro/outro. Bookends live
+    /// outside edited time — the ruler can't show them — so without these rows
+    /// a set intro is invisible the moment the chooser closes ("I see it when I
+    /// add it but then… I don't see it as a thing").
+    private func bookendCap(_ label: String,
+                            clip: BookendClip,
+                            icon: String,
+                            clear: @escaping () -> Void) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.caption2)
+                .foregroundStyle(.orange)
+            Text("\(label) — \(clip.media.displayName)")
+                .font(.caption2)
+                .lineLimit(1)
+                .truncationMode(.middle)
+            Text(timeString(clip.duration))
+                .font(.caption2.monospacedDigit())
+                .foregroundStyle(.secondary)
+            Spacer()
+            Button {
+                preview.returnToProgramStart()
+            } label: {
+                Image(systemName: "play.circle")
+            }
+            .buttonStyle(.borderless)
+            .controlSize(.small)
+            .help("Jump to the top of the program (plays the \(label.lowercased()) when bookends are enabled in the transport)")
+            Button("Clear", action: clear)
+                .buttonStyle(.link)
+                .font(.caption2)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(Color.orange.opacity(0.08))
     }
 
     private var timelineBody: some View {

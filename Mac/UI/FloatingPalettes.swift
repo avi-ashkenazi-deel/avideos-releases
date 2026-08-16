@@ -135,7 +135,11 @@ private struct PaletteWindowConfigurator: NSViewRepresentable {
             guard let window = view.window else { return }
             window.level = .floating
             window.hidesOnDeactivate = !staysVisibleInBackground
-            window.isMovableByWindowBackground = true
+            // NOT movable by background: it stole every in-content drag that
+            // isn't on a native control — the inspector's 3D tilt pad dragged
+            // the window instead of tilting, and the Overlays list couldn't
+            // reorder. The title bar still drags the palette.
+            window.isMovableByWindowBackground = false
             window.titlebarAppearsTransparent = true
             window.standardWindowButton(.miniaturizeButton)?.isHidden = true
             window.standardWindowButton(.zoomButton)?.isHidden = true

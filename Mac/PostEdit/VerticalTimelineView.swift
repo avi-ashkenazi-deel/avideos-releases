@@ -164,16 +164,30 @@ struct VerticalTimelineView: View {
             if layout.clip.enabled {
                 context.fill(Path(roundedRect: rect, cornerRadius: 5),
                              with: .color(.accentColor.opacity(0.28)))
-                if let poster = posterImage(for: layout), rect.height > 26 {
-                    // "Every box has a preview": the poster fills the top of
-                    // the block. Drawn in its own layer because clipping is a
-                    // mutating operation on the context.
-                    let posterRect = CGRect(x: rect.minX, y: rect.minY,
-                                            width: rect.width,
-                                            height: min(rect.height, 58))
+                if rect.height > 26,
+                   let videoTrack = project.tracks.first(where: { $0.kind == .video }) {
+                    // Premiere-style filmstrip: a frame tile every ~58pt down
+                    // the block, each showing the moment it sits beside — not
+                    // one poster with a wall of blue under it. Frames arrive
+                    // async (the store re-invalidates the canvas), so tall
+                    // blocks fill in over a second or two.
+                    let tileHeight: CGFloat = 58
                     context.drawLayer { layer in
-                        layer.clip(to: Path(roundedRect: posterRect, cornerRadius: 5))
-                        layer.draw(Image(nsImage: poster), in: posterRect)
+                        layer.clip(to: Path(roundedRect: rect, cornerRadius: 5))
+                        var tileY = rect.minY
+                        while tileY < rect.maxY - 4 {
+                            let height = min(tileHeight, rect.maxY - tileY)
+                            let fraction = layout.height > 0
+                                ? Double((tileY - rect.minY) / layout.height) : 0
+                            let sourceTime = layout.clip.sourceRange.lowerBound
+                                + fraction * layout.clip.duration
+                            if let frame = thumbnails.image(for: videoTrack, at: sourceTime) {
+                                layer.draw(Image(nsImage: frame),
+                                           in: CGRect(x: rect.minX, y: tileY,
+                                                      width: rect.width, height: height))
+                            }
+                            tileY += tileHeight
+                        }
                     }
                 }
             } else {
@@ -358,11 +372,6 @@ struct VerticalTimelineView: View {
 
     private func sourceTime(forTimeline time: Double, in layout: SegmentLayout) -> Double {
         layout.clip.sourceRange.lowerBound + (time - layout.timelineStart)
-    }
-
-    private func posterImage(for layout: SegmentLayout) -> NSImage? {
-        guard let videoTrack = project.tracks.first(where: { $0.kind == .video }) else { return nil }
-        return thumbnails.image(for: videoTrack, at: layout.clip.sourceRange.lowerBound)
     }
 
     // MARK: - Lane geometry
@@ -589,7 +598,11 @@ struct VerticalTimelineView: View {
             if viewModel.mode == .uniformTime {
                 HStack(spacing: 4) {
                     Button { viewModel.zoom(by: 0.7) } label: { Image(systemName: "minus.magnifyingglass") }
+                        .keyboardShortcut("-", modifiers: [.command])
+                        .help("Zoom out (⌘−)")
                     Button { viewModel.zoom(by: 1.4) } label: { Image(systemName: "plus.magnifyingglass") }
+                        .keyboardShortcut("=", modifiers: [.command])
+                        .help("Zoom in (⌘+)")
                 }
                 .buttonStyle(.borderless)
             }
