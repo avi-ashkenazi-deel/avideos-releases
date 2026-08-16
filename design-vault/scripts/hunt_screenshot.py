@@ -26,25 +26,48 @@ from pathlib import Path
 from hunt_commons import slugify
 
 VAULT = Path(__file__).resolve().parent.parent
-CHROMIUM = shutil.which("chromium") or "/opt/pw-browsers/chromium"
+CHROMIUM = "/opt/pw-browsers/chromium" if Path("/opt/pw-browsers/chromium").exists() \
+    else shutil.which("chromium")
 # The PQ-disable + TLS1.2 cap keep Chromium's handshake compatible with MITM
 # egress proxies (certs still verified); harmless on a normal network.
-CHROME_FLAGS = ["--headless", "--disable-gpu", "--no-sandbox", "--hide-scrollbars",
-                "--disable-features=PostQuantumKyber,UseMLKEM",
-                "--ssl-version-max=tls1.2",
-                "--user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"]
+CHROME_ARGS = ["--disable-features=PostQuantumKyber,UseMLKEM", "--ssl-version-max=tls1.2"]
+UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+      "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36")
 
 
-def capture(url: str, out: Path, width: int, height: int, budget_ms: int) -> bool:
+def capture(url: str, out: Path, width: int, height: int, settle_ms: int) -> bool:
+    """Full-page screenshot at a normal viewport, so 100vh heroes stay hero-sized.
+
+    Scrolls through the page first to trigger lazy-loaded content, then shoots
+    the full page in one image.
+    """
     import os
-    flags = list(CHROME_FLAGS)
-    if os.environ.get("HTTPS_PROXY"):
-        flags.append(f"--proxy-server={os.environ['HTTPS_PROXY']}")
-    cmd = [CHROMIUM, *flags, f"--window-size={width},{height}",
-           f"--virtual-time-budget={budget_ms}", f"--screenshot={out}", url]
-    p = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
-    return out.exists() and out.stat().st_size > 0 or (print(p.stderr[-400:], file=sys.stderr) and False)
+    from playwright.sync_api import sync_playwright
+    try:
+        with sync_playwright() as p:
+            proxy = ({"server": os.environ["HTTPS_PROXY"]}
+                     if os.environ.get("HTTPS_PROXY") else None)
+            browser = p.chromium.launch(executable_path=CHROMIUM, headless=True,
+                                        proxy=proxy, args=CHROME_ARGS)
+            page = browser.new_page(viewport={"width": width, "height": height},
+                                    user_agent=UA)
+            page.goto(url, wait_until="load", timeout=60000)
+            page.wait_for_timeout(settle_ms)
+            page.evaluate("""async () => {           // walk the page to fire lazy loads
+                const step = window.innerHeight;
+                for (let y = 0; y < document.body.scrollHeight; y += step) {
+                    window.scrollTo(0, y);
+                    await new Promise(r => setTimeout(r, 250));
+                }
+                window.scrollTo(0, 0);
+            }""")
+            page.wait_for_timeout(800)
+            page.screenshot(path=str(out), full_page=True)
+            browser.close()
+    except Exception as e:
+        print(f"  {type(e).__name__}: {str(e).splitlines()[0][:160]}", file=sys.stderr)
+        return False
+    return out.exists() and out.stat().st_size > 0
 
 
 def trim_and_slice(png: Path, slice_h: int, whole: bool) -> list:
@@ -79,11 +102,11 @@ def main() -> int:
     ap.add_argument("--batch", help="batch name (default: <date>-<host>)")
     ap.add_argument("--tags", default="")
     ap.add_argument("--width", type=int, default=1440)
-    ap.add_argument("--capture-height", type=int, default=9000,
-                    help="max page height captured before blank-trim")
+    ap.add_argument("--viewport-height", type=int, default=900,
+                    help="browser viewport height (100vh sections render at this size)")
     ap.add_argument("--slice-height", type=int, default=1000)
     ap.add_argument("--whole", action="store_true", help="one full-page image, no slicing")
-    ap.add_argument("--budget", type=int, default=12000, help="JS settle time (virtual ms)")
+    ap.add_argument("--budget", type=int, default=2500, help="post-load settle time (ms)")
     args = ap.parse_args()
     tags = [t.strip() for t in args.tags.split(",") if t.strip()]
 
@@ -104,7 +127,7 @@ def main() -> int:
             page_url = urllib.parse.urlunparse((base.scheme, host, path, "", base.query, ""))
             raw = Path(td) / f"{slugify(path) or 'root'}.png"
             print(f"capturing {page_url} …")
-            if not capture(page_url, raw, args.width, args.capture_height, args.budget):
+            if not capture(page_url, raw, args.width, args.viewport_height, args.budget):
                 print(f"  capture failed for {page_url}", file=sys.stderr)
                 continue
             pieces = trim_and_slice(raw, args.slice_height, args.whole)
