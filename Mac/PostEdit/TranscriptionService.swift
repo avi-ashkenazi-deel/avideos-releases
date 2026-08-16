@@ -50,11 +50,16 @@ final class TranscriptionService {
     }
 }
 
-/// WhisperKit adapter. Model: large-v3-turbo (best quality/speed on Apple
-/// silicon), automatic download on first use; `base` fallback for old or
-/// low-RAM machines.
+/// WhisperKit adapter. Model names must match folder names in the
+/// argmaxinc/whisperkit-coreml repo — "large-v3-turbo" does NOT exist there
+/// (first live test failed on exactly that); the turbo release is
+/// "large-v3-v20240930_turbo". Automatic download on first use; falls back
+/// down the chain when a model is missing or the machine can't take it.
 final class WhisperKitEngine: TranscriptionEngine {
-    var modelName = "large-v3-turbo"
+    var modelName = "large-v3-v20240930_turbo"
+    /// Tried in order after `modelName` fails: the 632 MB compressed turbo,
+    /// then base (small, always present, runs anywhere).
+    var fallbackModelNames = ["large-v3-v20240930_turbo_632MB", "base"]
     private let log = Logger(subsystem: "com.aviashkenazi.streamit", category: "whisper")
 
     func transcribe(audioURL: URL,
@@ -65,7 +70,25 @@ final class WhisperKitEngine: TranscriptionEngine {
         // with DecodingOptions(wordTimestamps: true), results carrying
         // segments[].words[] with .word/.start/.end/.probability.
         #if canImport(WhisperKit)
-        let whisper = try await WhisperKit(model: modelName)
+        var whisper: WhisperKit?
+        var lastError: Error?
+        for candidate in [modelName] + fallbackModelNames {
+            do {
+                whisper = try await WhisperKit(model: candidate)
+                if candidate != modelName {
+                    log.warning("Transcribing with fallback model \(candidate, privacy: .public)")
+                }
+                break
+            } catch {
+                lastError = error
+                log.warning("Model \(candidate, privacy: .public) unavailable: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+        guard let whisper else {
+            throw lastError ?? NSError(domain: "WhisperKitEngine", code: 2, userInfo: [
+                NSLocalizedDescriptionKey: "No Whisper model could be loaded",
+            ])
+        }
         onProgress(0.1)
         let results = try await whisper.transcribe(
             audioPath: audioURL.path,

@@ -52,14 +52,19 @@ struct EditWorkspaceView: View {
         // vertical, so the two can be read against each other.
         HSplitView {
             trackListPane
-                .frame(minWidth: 180, maxWidth: 260)
+                .frame(minWidth: 180, maxWidth: 260, maxHeight: .infinity)
             transcriptPane
-                .frame(minWidth: 280)
+                .frame(minWidth: 280, maxHeight: .infinity)
             verticalTimeline
-                .frame(minWidth: 300, idealWidth: 380)
+                .frame(minWidth: 300, idealWidth: 380, maxHeight: .infinity)
             previewPane
-                .frame(minWidth: 340)
+                .frame(minWidth: 340, maxHeight: .infinity)
         }
+        // Fill the window. Without the explicit max frame the AppKit-backed
+        // HSplitView settled on its children's ideal height and floated as a
+        // centered band in a sea of empty window — the editor's first real
+        // render found this.
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .toolbar { toolbarContent }
         .navigationTitle(project.name)
         .task { await initialLoad() }
@@ -571,8 +576,18 @@ struct EditWorkspaceView: View {
         panel.allowedContentTypes = Self.externalMediaTypes
         guard panel.runModal() == .OK, let url = panel.url else { return }
         Task {
-            guard case .ready(let probe) = await mediaImporter.probe(url), probe.duration > 0 else {
-                errorMessage = "\(url.lastPathComponent) can't be used as an intro or outro."
+            let outcome = await mediaImporter.probe(url)
+            guard case .ready(let probe) = outcome, probe.duration > 0 else {
+                // Say WHY, not just "can't" — the difference between a codec
+                // problem and a zero-length file is the whole diagnosis.
+                switch outcome {
+                case .needsTranscode(let reason), .unreadable(let reason):
+                    errorMessage = "\(url.lastPathComponent) can't be an intro/outro: \(reason)"
+                case .protectedContent:
+                    errorMessage = "\(url.lastPathComponent) is DRM-protected."
+                default:
+                    errorMessage = "\(url.lastPathComponent) has no playable media."
+                }
                 return
             }
             // sourceRange is stored rather than probed later: programOffset is
@@ -892,9 +907,15 @@ struct EditWorkspaceView: View {
     private func layoutButton(_ name: String, _ layout: ProgramLayout) -> some View {
         Button(name) {
             let source = project.edl.mapTimelineToSource(preview.playheadSeconds)
-            project.layoutCues.append(LayoutCue(atTime: source, layout: layout))
-            project.layoutCues.sort { $0.atTime < $1.atTime }
-            projectChanged()
+            // REPLACE a cue already at this moment instead of stacking a
+            // twin: two cues with equal atTime resolve by sort order, which
+            // is not stable — on a fresh project (default cue at 0) the new
+            // layout literally won a coin flip. Undoable like every edit.
+            performEdit {
+                project.layoutCues.removeAll { abs($0.atTime - source) < 0.05 }
+                project.layoutCues.append(LayoutCue(atTime: source, layout: layout))
+                project.layoutCues.sort { $0.atTime < $1.atTime }
+            }
         }
     }
 

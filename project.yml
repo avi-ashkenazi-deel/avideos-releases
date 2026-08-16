@@ -47,8 +47,8 @@ packages:
 settings:
   base:
     SWIFT_VERSION: "5.9"
-    MARKETING_VERSION: "0.3.0"
-    CURRENT_PROJECT_VERSION: "19"
+    MARKETING_VERSION: "0.4.0"
+    CURRENT_PROJECT_VERSION: "21"
     DEVELOPMENT_TEAM: "" # <- set your team id here or in Xcode signing.
 
 targets:

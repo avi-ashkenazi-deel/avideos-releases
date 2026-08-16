@@ -61,6 +61,28 @@ full-screen-this-camera layout cues at the playhead, replacing a cue within
 fades, and offset recovery from synthetic envelopes (`EditorAudioTests`).
 F-488…F-499.
 
+Twenty-first pass — first editor test round, and the build-staleness trap.
+Avi's screenshots showed no Pause button and no REC timer — both shipped
+that afternoon — and no Music Bed section: **the binary was v0.3.0 (19),
+compiled before four pushed commits**. The build stamp did its job
+(compile time visible), but a version that never changes can't distinguish
+commits — bumped to 0.4.0 (21) and it will move every push from now on.
+Real bugs found regardless of staleness: **transcription could never have
+worked** — the WhisperKit model was requested as "large-v3-turbo", a name
+that does not exist in argmaxinc/whisperkit-coreml (the turbo release is
+"large-v3-v20240930_turbo"); fixed, with a fallback chain (632 MB
+compressed turbo, then base) so a failed download degrades instead of
+dying. **The Layout menu was a coin flip on a fresh project**: it appended
+a cue at the playhead's source time, and two cues with equal atTime
+resolve by unstable sort order — a fresh project already has a cue at 0,
+so clicking a layout at the top of the video randomly won or lost against
+it. Now it replaces any cue within 50 ms and routes through performEdit
+(it also bypassed undo). **The editor rendered as a centered band** — the
+AppKit-backed HSplitView settled on its children's ideal height on its
+first real render; explicit max-frame fill on the split view and each
+pane. Bookend refusals now say why (codec vs DRM vs empty) instead of a
+generic "can't".
+
 Twentieth pass — **the shared screen records on the guest's machine too**,
 clarifying "record the video on the person's computer" → the guest video
 share. `LocalRecorder` grew a third, *dynamic* lane: `setScreenTrack(...)`
