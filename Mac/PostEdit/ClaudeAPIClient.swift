@@ -15,7 +15,7 @@ final class ClaudeAPIClient {
 
         var errorDescription: String? {
             switch self {
-            case .missingAPIKey: "Add your Claude API key in Settings → AI."
+            case .missingAPIKey: "Add your Claude API key in Settings → General → AI (get one at console.anthropic.com), then press Save."
             case .refusal: "Claude declined this request."
             case .httpError(let code, let body): "Claude API error \(code): \(body)"
             case .emptyResponse: "Claude returned no content."

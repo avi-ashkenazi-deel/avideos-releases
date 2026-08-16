@@ -345,6 +345,12 @@ private struct GeneralSettingsView: View {
     @Environment(StudioController.self) private var studio
     @State private var workerURLText = ""
     @State private var claudeKey = ""
+    @State private var claudeKeySaved = false
+
+    private func saveClaudeKey() {
+        ClaudeAPIClient.storeAPIKey(claudeKey)
+        claudeKeySaved = !claudeKey.isEmpty
+    }
 
     var body: some View {
         Form {
@@ -359,11 +365,21 @@ private struct GeneralSettingsView: View {
             }
 
             Section("AI") {
-                SecureField("Claude API key", text: $claudeKey)
-                    .onSubmit {
-                        ClaudeAPIClient.storeAPIKey(claudeKey)
+                HStack {
+                    SecureField("Claude API key (sk-ant-…)", text: $claudeKey)
+                        .onSubmit { saveClaudeKey() }
+                    // An explicit Save beside the field: pasting a key and
+                    // closing the window used to save NOTHING (storage only
+                    // ran on Return), which reads as "the key doesn't work".
+                    Button("Save") { saveClaudeKey() }
+                        .disabled(claudeKey.isEmpty)
+                    if claudeKeySaved {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                            .help("A key is saved in the Keychain")
                     }
-                Text("Powers AI take selection, clip suggestions, chapters, and moment search. Stored in the Keychain.")
+                }
+                Text("Powers AI take selection, clip suggestions, chapters, and moment search. Get a key at console.anthropic.com → API Keys. Stored in the Keychain, never in files.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -397,6 +413,7 @@ private struct GeneralSettingsView: View {
         .onAppear {
             workerURLText = studio.workerBaseURL?.absoluteString ?? ""
             claudeKey = ClaudeAPIClient.storedAPIKey() ?? ""
+            claudeKeySaved = !claudeKey.isEmpty
         }
     }
 }
