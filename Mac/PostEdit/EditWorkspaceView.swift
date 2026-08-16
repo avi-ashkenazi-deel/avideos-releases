@@ -151,10 +151,13 @@ struct EditWorkspaceView: View {
             } header: {
                 Text("Media")
             } footer: {
-                if project.binItems.isEmpty {
-                    Text("Import a clip once, then use it as many times as you like.")
-                        .font(.caption2)
-                }
+                // The bin is a shelf, not the mix — first live test read a
+                // song sitting here as "music that doesn't play". Name the
+                // action.
+                Text(project.binItems.isEmpty
+                     ? "A shelf for reusable clips: import once, use anywhere."
+                     : "Right-click an item to insert it as a cutaway or add it as an extra track — the shelf itself doesn't play.")
+                    .font(.caption2)
             }
             Section("Stats") {
                 LabeledContent("Source", value: timeString(project.sourceDuration))
