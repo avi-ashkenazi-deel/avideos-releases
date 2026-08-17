@@ -21,18 +21,31 @@ struct ProgramPreviewView: NSViewRepresentable {
     func makeNSView(context: Context) -> MTKView {
         let view = MTKView(frame: .zero, device: device)
         view.colorPixelFormat = .bgra8Unorm
-        view.preferredFramesPerSecond = max(1, framesPerSecond)
         view.delegate = context.coordinator
         view.layer?.backgroundColor = NSColor.black.cgColor
+        // MTKView's built-in pacing stalls whenever the main run loop sits in
+        // event-tracking mode — which is the entire length of any SwiftUI
+        // drag. The render engine kept compositing (Zoom saw the tilt live),
+        // but the preview froze until mouse-up, so the inspector's 3D pad
+        // looked like it "reacts after I stop dragging". Pace redraw from a
+        // main-queue DispatchSourceTimer instead: GCD main-queue drains run
+        // in the common run-loop modes, tracking included (SidechainDucker
+        // leans on the same behavior for its 60 Hz gain ramp).
+        // verify on Mac: needsDisplay-driven MTKView redraw fires during an
+        // inspector gimbal drag and during canvas element drags.
+        view.isPaused = true
+        view.enableSetNeedsDisplay = true
+        context.coordinator.startRedrawClock(view: view, fps: max(1, framesPerSecond))
         return view
     }
 
     func updateNSView(_ nsView: MTKView, context: Context) {
         // Follow a project frame-rate change without rebuilding the view.
-        let target = max(1, framesPerSecond)
-        if nsView.preferredFramesPerSecond != target {
-            nsView.preferredFramesPerSecond = target
-        }
+        context.coordinator.startRedrawClock(view: nsView, fps: max(1, framesPerSecond))
+    }
+
+    static func dismantleNSView(_ nsView: MTKView, coordinator: Renderer) {
+        coordinator.stopRedrawClock()
     }
 
     final class Renderer: NSObject, MTKViewDelegate {
@@ -67,6 +80,33 @@ struct ProgramPreviewView: NSViewRepresentable {
                 self.pipeline = try? device.makeRenderPipelineState(descriptor: desc)
             }
             super.init()
+        }
+
+        // MARK: Redraw pacing (see makeNSView for why not MTKView's own loop)
+
+        private var redrawTimer: DispatchSourceTimer?
+        private var redrawFPS = 0
+        private weak var redrawView: MTKView?
+
+        func startRedrawClock(view: MTKView, fps: Int) {
+            guard fps != redrawFPS || redrawView !== view || redrawTimer == nil else { return }
+            redrawView = view
+            redrawFPS = fps
+            redrawTimer?.cancel()
+            let timer = DispatchSource.makeTimerSource(queue: .main)
+            timer.schedule(deadline: .now(),
+                           repeating: 1.0 / Double(fps),
+                           leeway: .milliseconds(2))
+            timer.setEventHandler { [weak self] in
+                self?.redrawView?.needsDisplay = true
+            }
+            redrawTimer = timer
+            timer.resume()
+        }
+
+        func stopRedrawClock() {
+            redrawTimer?.cancel()
+            redrawTimer = nil
         }
 
         func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {}

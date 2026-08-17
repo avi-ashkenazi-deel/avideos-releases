@@ -16,11 +16,13 @@ struct InspectorView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            header
             Picker("", selection: $tab) {
                 ForEach(Tab.allCases, id: \.self) { Text($0.rawValue) }
             }
             .pickerStyle(.segmented)
-            .padding(10)
+            .padding(.horizontal, 10)
+            .padding(.bottom, 10)
 
             ScrollView {
                 switch tab {
@@ -29,9 +31,44 @@ struct InspectorView: View {
                 case .animate: animateTab
                 }
             }
+        }
+    }
 
-            Divider()
-            addElementBar
+    /// Always says WHAT is being inspected — the palette floats free of the
+    /// canvas, so without a name it reads as controls for nothing.
+    /// (The add-element bar that used to sit at the bottom is gone: creating
+    /// a new overlay while inspecting an existing one made no sense here;
+    /// adding lives in the Overlays palette.)
+    private var header: some View {
+        HStack(spacing: 6) {
+            Image(systemName: selectedElement.map(Self.kindIcon) ?? "square.dashed")
+                .foregroundStyle(.secondary)
+            Text(headerTitle)
+                .font(.headline)
+                .lineLimit(1)
+                .truncationMode(.middle)
+            Spacer()
+        }
+        .padding(.horizontal, 12)
+        .padding(.top, 10)
+        .padding(.bottom, 6)
+    }
+
+    private var headerTitle: String {
+        if let element = selectedElement { return element.name }
+        if let scene = studio.activeScene { return "Scene — \(scene.name)" }
+        return "Nothing selected"
+    }
+
+    static func kindIcon(_ element: Element) -> String {
+        switch element.kind {
+        case .text: "textformat"
+        case .shape: "square.on.circle"
+        case .image: "photo"
+        case .video: "film"
+        case .web: "globe"
+        case .source: "camera"
+        case .timer: "timer"
         }
     }
 
@@ -118,13 +155,13 @@ struct InspectorView: View {
                 Divider()
                 ContentUnavailableView("No element selected",
                                        systemImage: "square.dashed",
-                                       description: Text("Click an element on the canvas, or add one below."))
+                                       description: Text("Click an element on the canvas, or add one from the Overlays palette."))
             }
             .padding(12)
         } else {
             ContentUnavailableView("No element selected",
                                    systemImage: "square.dashed",
-                                   description: Text("Click an element on the canvas, or add one below."))
+                                   description: Text("Click an element on the canvas, or add one from the Overlays palette."))
                 .padding(.top, 30)
         }
     }
@@ -569,15 +606,6 @@ struct InspectorView: View {
             ContentUnavailableView("Select an element", systemImage: "sparkles")
                 .padding(.top, 30)
         }
-    }
-
-    // MARK: - Add-element bar
-
-    private var addElementBar: some View {
-        // Element creation lives on StudioController — the overlays palette
-        // shares the same factories.
-        AddElementButtons()
-            .padding(8)
     }
 
     // MARK: - Binding helpers

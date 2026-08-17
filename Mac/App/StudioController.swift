@@ -55,6 +55,14 @@ final class StudioController {
     /// scene; nil otherwise so timer-less scenes pay nothing.
     private var timerTick: DispatchSourceTimer?
     var selectedElementID: UUID?
+    /// Screen rect of the selected element's canvas box, reported by the
+    /// canvas overlay. The inspector palette parks itself beside it so the
+    /// controls hover near the thing being edited. Runtime-only.
+    var selectedElementScreenRect: CGRect?
+    /// Bumped by every explicit "inspect this" (canvas pencil, Overlays gear)
+    /// so an already-open inspector re-parks next to the element even when
+    /// the selection didn't change.
+    var inspectorSummonNonce = 0
     var mode: Mode = .live
 
     /// Worker/base configuration (Settings).

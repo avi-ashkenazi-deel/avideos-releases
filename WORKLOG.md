@@ -61,6 +61,25 @@ full-screen-this-camera layout cues at the playhead, replacing a cue within
 fades, and offset recovery from synthetic envelopes (`EditorAudioTests`).
 F-488…F-499.
 
+Twenty-third pass — third live round: the 3D pad tilted only after
+mouse-up. The model, plan and Metal render were all live — MTKView's own
+pacing is what stalls while the main run loop sits in event-tracking mode,
+i.e. for the whole length of any SwiftUI drag, so the preview froze
+mid-gesture (Zoom would have shown the tilt moving). The preview now paces
+itself from a main-queue DispatchSourceTimer (GCD main-queue drains run in
+the common run-loop modes, tracking included — the ducker's trick) with
+`isPaused` + `enableSetNeedsDisplay`. The White/Green/Black effect buttons
+gained a "Test Screens" title and a caption saying what they're for (green
+= keying setup, white/black = lighting checks) — they read as mystery color
+swatches. Inspector rework per "it needs to hover close to the object":
+a persistent header always names the selected element (icon + name), the
+add-element icon bar is gone (creating a new overlay while inspecting an
+existing one made no sense; adding lives in the Overlays palette), and the
+palette now PARKS ITSELF beside the selected element — the canvas overlay
+reports the selection's screen rect, and the window repositions on
+selection change or an explicit pencil/gear summon, top-aligned, right of
+the element (left when there's no room), never chasing a drag.
+
 Twenty-second pass — second live test round, seven reports in one batch.
 **Palette windows stole every in-content drag**:
 `isMovableByWindowBackground = true` meant any drag not on a native control

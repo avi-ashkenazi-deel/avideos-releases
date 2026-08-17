@@ -35,10 +35,21 @@ struct EffectsPanel: View {
     // MARK: - Utility screens (mutually exclusive)
 
     private var utilityScreens: some View {
-        HStack {
-            utilityButton("White", spec: .whiteScreen)
-            utilityButton("Green", spec: .greenScreen)
-            utilityButton("Black", spec: .blackScreen)
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Test Screens")
+                .font(.subheadline.bold())
+                .foregroundStyle(.secondary)
+            HStack {
+                utilityButton("White", spec: .whiteScreen)
+                utilityButton("Green", spec: .greenScreen)
+                utilityButton("Black", spec: .blackScreen)
+            }
+            // These read as mystery color buttons without a word of intent
+            // ("I don't understand what the effect color does").
+            Text("Replaces this picture with a solid card — Green to line up a chroma key, White or Black to check lighting. Click again to turn it off.")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 

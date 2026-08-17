@@ -28,6 +28,12 @@ struct CanvasEditorOverlay: View {
                    !element.isLocked {
                     SelectionChrome(element: element, canvas: transform)
                 }
+
+                // Reports the selection's screen rect so the inspector
+                // palette can park itself next to the element.
+                SelectionAnchorReporter(elementID: studio.selectedElementID,
+                                        localRect: selectedLocalRect(transform: transform))
+                    .allowsHitTesting(false)
             }
             .focusable()
             .focusEffectDisabled()
@@ -48,6 +54,12 @@ struct CanvasEditorOverlay: View {
                 }
             }
         }
+    }
+
+    private func selectedLocalRect(transform: CanvasTransform) -> CGRect? {
+        guard let id = studio.selectedElementID,
+              let element = studio.findElement(id: id) else { return nil }
+        return transform.viewRect(for: element.transform)
     }
 
     /// Top-down z-order hit test with rotation-aware point-in-rect.
@@ -133,6 +145,7 @@ private struct SelectionChrome: View {
             // text styling.
             Button {
                 studio.selectedElementID = element.id
+                studio.inspectorSummonNonce += 1
                 openWindow(id: "palette", value: PaletteKind.inspector)
             } label: {
                 Image(systemName: "pencil")
@@ -212,5 +225,43 @@ private struct SelectionChrome: View {
                 studio.updateElement(element)
             }
             .onEnded { _ in dragStart = nil }
+    }
+}
+
+/// Converts the selected element's overlay-local rect to SCREEN coordinates
+/// and hands it to StudioController, so the inspector palette can position
+/// itself next to the element being edited. An invisible NSView is the only
+/// clean way to reach the hosting window for the coordinate conversion.
+private struct SelectionAnchorReporter: NSViewRepresentable {
+    @Environment(StudioController.self) private var studio
+    let elementID: UUID?
+    let localRect: CGRect?
+
+    func makeNSView(context: Context) -> NSView { NSView() }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        let studio = studio
+        // Deferred: writing observable state mid-view-update is illegal.
+        DispatchQueue.main.async {
+            guard elementID != nil,
+                  let localRect,
+                  let window = nsView.window else {
+                if studio.selectedElementScreenRect != nil {
+                    studio.selectedElementScreenRect = nil
+                }
+                return
+            }
+            // SwiftUI hands us a y-down rect; the (unflipped) NSView converts
+            // y-up. Flip within our own bounds first.
+            let flipped = CGRect(x: localRect.minX,
+                                 y: nsView.bounds.height - localRect.maxY,
+                                 width: localRect.width,
+                                 height: localRect.height)
+            let inWindow = nsView.convert(flipped, to: nil)
+            let onScreen = window.convertToScreen(inWindow)
+            if studio.selectedElementScreenRect != onScreen {
+                studio.selectedElementScreenRect = onScreen
+            }
+        }
     }
 }

@@ -82,13 +82,68 @@ struct PaletteWindowContent: View {
     @Environment(\.openWindow) private var openWindow
     @Environment(StudioController.self) private var studio
 
+    /// The palette's NSWindow once the configurator resolves it — the
+    /// inspector needs it to park itself next to the selected element.
+    @State private var paletteWindow: NSWindow?
+    /// A park is owed: the anchor rect is written asynchronously by the
+    /// canvas reporter, so after a selection change the first rect update
+    /// re-parks precisely, then following stops (no chasing during drags).
+    @State private var followNextRectUpdate = false
+
     var body: some View {
         content
             .frame(width: kind.width)
             .navigationTitle(kind.title)
             .background(PaletteWindowConfigurator(
                 kind: kind,
-                staysVisibleInBackground: studio.prefs.palettesStayVisibleInBackground))
+                staysVisibleInBackground: studio.prefs.palettesStayVisibleInBackground,
+                windowResolved: { paletteWindow = $0 }))
+            // The inspector hovers next to whatever is being edited — on
+            // selection change, on an explicit summon (pencil / gear), and
+            // when the window first opens. Other palettes stay put.
+            .onChange(of: inspectorAnchorKey) { _, _ in
+                guard kind == .inspector else { return }
+                parkNearSelection()
+                followNextRectUpdate = true
+            }
+            .onChange(of: kind == .inspector ? studio.selectedElementScreenRect : nil) { _, _ in
+                guard kind == .inspector, followNextRectUpdate else { return }
+                followNextRectUpdate = false
+                parkNearSelection()
+            }
+            .onChange(of: paletteWindow) { _, _ in
+                guard kind == .inspector else { return }
+                parkNearSelection()
+            }
+    }
+
+    /// Changes when the selection changes or the inspector is summoned again
+    /// for the same element; constant for every other palette.
+    private var inspectorAnchorKey: String {
+        guard kind == .inspector, let id = studio.selectedElementID else { return "" }
+        return "\(id.uuidString)#\(studio.inspectorSummonNonce)"
+    }
+
+    /// Parks the window beside the selected element's screen rect: to its
+    /// right when there is room, otherwise its left, top-aligned, clamped to
+    /// the screen's visible frame.
+    private func parkNearSelection() {
+        guard studio.selectedElementID != nil,
+              let anchor = studio.selectedElementScreenRect,
+              let window = paletteWindow,
+              let screen = window.screen ?? NSScreen.main else { return }
+        let gap: CGFloat = 16
+        let size = window.frame.size
+        let visible = screen.visibleFrame
+        var x = anchor.maxX + gap
+        if x + size.width > visible.maxX {
+            x = anchor.minX - gap - size.width
+        }
+        // Screen coords are y-up; align the window's TOP with the element's.
+        var y = anchor.maxY - size.height
+        x = min(max(x, visible.minX), max(visible.maxX - size.width, visible.minX))
+        y = min(max(y, visible.minY), max(visible.maxY - size.height, visible.minY))
+        window.setFrameOrigin(NSPoint(x: x, y: y))
     }
 
     @ViewBuilder
@@ -127,6 +182,10 @@ private struct PaletteWindowConfigurator: NSViewRepresentable {
     /// "Keep Utility Windows In Front" preference — palettes normally hide
     /// panel-style when the app deactivates.
     var staysVisibleInBackground: Bool
+    /// Hands the resolved NSWindow back to the SwiftUI side — the inspector
+    /// parks itself next to the selected element and needs the window to
+    /// move it.
+    var windowResolved: (NSWindow) -> Void
 
     func makeNSView(context: Context) -> NSView {
         let view = NSView()
@@ -145,6 +204,7 @@ private struct PaletteWindowConfigurator: NSViewRepresentable {
             window.standardWindowButton(.zoomButton)?.isHidden = true
             window.collectionBehavior.insert(.fullScreenAuxiliary)
             window.setFrameAutosaveName("palette-\(kind.rawValue)")
+            windowResolved(window)
         }
         return view
     }
@@ -232,6 +292,7 @@ struct OverlaysPalette: View {
                                    toggleEye: { studio.toggleElementVisibility(id: element.id) },
                                    inspect: {
                                        studio.selectedElementID = element.id
+                                       studio.inspectorSummonNonce += 1
                                        openInspector()
                                    },
                                    remove: { studio.removeElement(id: element.id) },
