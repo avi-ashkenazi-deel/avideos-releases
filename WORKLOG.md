@@ -61,6 +61,37 @@ full-screen-this-camera layout cues at the playhead, replacing a cue within
 fades, and offset recovery from synthetic envelopes (`EditorAudioTests`).
 F-488…F-499.
 
+Twenty-fourth pass — the editor grows up a level, plus rehearsal feeds.
+**Auto-transcription, two-speed**: opening a session with no transcript
+starts transcription on its own — a quick `base`-model pass lands a usable
+transcript in seconds, the turbo model then replaces it wholesale (safe:
+cuts live in the EDL as source times, not in the transcript), and with a
+Claude key stored a **punctuation polish** runs last — Claude gets numbered
+words and returns index+replacement corrections, validated so letters can
+never change, only case and attached punctuation; timings untouched by
+construction (`PunctuationPolisher`, sonnet-tier, structured output).
+**Cuts are visible and movable**: every join between timeline blocks draws
+a dark seam with a scissors mark, and a selected block moves with plain
+↑/↓ — iMovie's swap-places, routed through `edl.move` + performEdit so one
+⌘Z per press. **Intro playback**: the cap's ▶ now PLAYS from program zero
+(it only seeked — "doesn't do anything"); the black-intro render got the
+full treatment — every silent skip in `insertBookends` now logs why
+(unresolvable media, no video track, insert failure), bookends carry their
+`preferredTransform` like cutaways, and the compositor reports once per
+lane when a required track never delivers a frame, so the next black intro
+names its cause in Console. **Music clips, plural**: dropping an AUDIO file
+on the timeline now creates a music clip on the lane (green, ♪) — audible
+at −12 dB, dipping under speech via the music bed's exact duck engine
+(`ExternalAudio.duckUnderSpeechDB`, Optional per the settings-decode rule),
+faded at its edges, trimmed/moved/removed like any block, as many as the
+edit wants; the bed stays for whole-episode underscore. The overlay
+inspector gained the "Dip under speech (music)" toggle (mutually exclusive
+with "Duck the conversation"). **Rehearse Layouts** (Interview palette):
+1–3 `DemoGuestSource` test cards — tinted, named, animated so a frozen
+feed is obvious — registered under real `.guest(identity:)` keys, so
+interview grids, tiles and magic move run the exact multi-person paths
+with nobody on the call. F-511…F-518.
+
 Twenty-third pass — third live round: the 3D pad tilted only after
 mouse-up. The model, plan and Metal render were all live — MTKView's own
 pacing is what stalls while the main run loop sits in event-tracking mode,

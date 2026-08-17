@@ -208,6 +208,21 @@ struct VerticalTimelineView: View {
                              at: CGPoint(x: rect.minX + 5, y: rect.maxY - 8), anchor: .leading)
             }
         }
+
+        // Every join between blocks is an edit point. Without a seam the
+        // blocks blur into one strip and the cuts are invisible.
+        for (upper, lower) in zip(layouts, layouts.dropFirst())
+        where upper.clip.enabled && lower.clip.enabled {
+            let y = lower.minY
+            var seam = Path()
+            seam.move(to: CGPoint(x: x, y: y))
+            seam.addLine(to: CGPoint(x: x + clipColumnWidth, y: y))
+            context.stroke(seam, with: .color(.black.opacity(0.9)), lineWidth: 2)
+            context.draw(Text(Image(systemName: "scissors"))
+                            .font(.system(size: 8))
+                            .foregroundStyle(.white.opacity(0.9)),
+                         at: CGPoint(x: x + clipColumnWidth - 9, y: y), anchor: .center)
+        }
     }
 
     /// One column per audio participant, waveform running downward.
@@ -275,13 +290,17 @@ struct VerticalTimelineView: View {
             let rect = CGRect(x: x, y: top, width: overlayColumnWidth,
                               height: max(bottom - top, 4))
             let isSelected = overlay.id == viewModel.selectedOverlayID
+            // Music clips (audio-only) read green with a note; picture
+            // cutaways stay purple.
+            let isMusic = project.overlayIsAudioOnly(overlay)
+            let tint: Color = isMusic ? .green : .purple
             context.fill(Path(roundedRect: rect, cornerRadius: 5),
-                         with: .color(.purple.opacity(0.45)))
+                         with: .color(tint.opacity(0.45)))
             context.stroke(Path(roundedRect: rect, cornerRadius: 5),
-                           with: .color(isSelected ? .white : .purple.opacity(0.8)),
+                           with: .color(isSelected ? .white : tint.opacity(0.8)),
                            lineWidth: isSelected ? 2 : 0.5)
             if rect.height > 14 {
-                context.draw(Text(overlay.media.displayName)
+                context.draw(Text("\(isMusic ? "♪ " : "")\(overlay.media.displayName)")
                                 .font(.system(size: 8))
                                 .foregroundStyle(.white),
                              at: CGPoint(x: rect.minX + 4, y: rect.minY + 8), anchor: .leading)
@@ -573,6 +592,14 @@ struct VerticalTimelineView: View {
         onSelectClip(hit?.clip.id)
     }
 
+    /// Swaps the selected segment with its neighbour (delta ±1) — the
+    /// arrow-key reordering. `move` removes first, so index+1 lands the clip
+    /// after its former next neighbour.
+    private func nudgeSelected(_ clipID: UUID, by delta: Int) {
+        guard let index = project.edl.clips.firstIndex(where: { $0.id == clipID }) else { return }
+        onMoveClip(clipID, index + delta)
+    }
+
     /// Sequence position a drop at `y` corresponds to.
     private func dropIndex(forY y: CGFloat) -> Int {
         let layouts = segmentLayouts()
@@ -637,6 +664,24 @@ struct VerticalTimelineView: View {
                 .font(.caption)
                 .keyboardShortcut(.delete, modifiers: [])
                 .help("Cut the selected segment, or restore it (Delete)")
+
+                // iMovie-style reordering: select a block, arrow it up or
+                // down to swap places with its neighbour. The buttons only
+                // exist while a clip is selected, so bare arrows never steal
+                // scrolling otherwise.
+                HStack(spacing: 4) {
+                    Button { nudgeSelected(clipID, by: -1) } label: {
+                        Image(systemName: "arrow.up")
+                    }
+                    .keyboardShortcut(.upArrow, modifiers: [])
+                    .help("Move this segment earlier (up arrow)")
+                    Button { nudgeSelected(clipID, by: 1) } label: {
+                        Image(systemName: "arrow.down")
+                    }
+                    .keyboardShortcut(.downArrow, modifiers: [])
+                    .help("Move this segment later (down arrow)")
+                }
+                .buttonStyle(.borderless)
             }
         }
         .padding(6)

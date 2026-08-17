@@ -153,4 +153,12 @@ final class PreviewPlayer {
         player.seek(to: .zero, toleranceBefore: .zero, toleranceAfter: .zero)
         playheadSeconds = 0
     }
+
+    /// The bookend cap's play button: jump to program zero AND roll. Seeking
+    /// alone looked like the button "doesn't do anything" — the playhead was
+    /// usually already at the top.
+    func playFromProgramStart() {
+        returnToProgramStart()
+        player.play()
+    }
 }

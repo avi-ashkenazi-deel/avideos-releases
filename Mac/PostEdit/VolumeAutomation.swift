@@ -24,6 +24,11 @@ struct ExternalAudio: Codable, Sendable, Equatable {
     var gainDB: Double
     /// nil ⇒ play it without touching the conversation.
     var ducking: DuckSettings?
+    /// The opposite direction from `ducking`: THIS clip dips under the
+    /// conversation's speech (music-clip behavior, same engine as the music
+    /// bed). Positive dB of attenuation; nil ⇒ off. Optional for the
+    /// settings-decode rule — old documents lack the key.
+    var duckUnderSpeechDB: Double? = nil
 
     static let silent = ExternalAudio(isEnabled: false, gainDB: 0, ducking: nil)
 

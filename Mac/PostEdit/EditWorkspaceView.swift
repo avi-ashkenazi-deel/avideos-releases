@@ -261,13 +261,13 @@ struct EditWorkspaceView: View {
                 .foregroundStyle(.secondary)
             Spacer()
             Button {
-                preview.returnToProgramStart()
+                preview.playFromProgramStart()
             } label: {
                 Image(systemName: "play.circle")
             }
             .buttonStyle(.borderless)
             .controlSize(.small)
-            .help("Jump to the top of the program (plays the \(label.lowercased()) when bookends are enabled in the transport)")
+            .help("Play from the very top of the program, \(label.lowercased()) included")
             Button("Clear", action: clear)
                 .buttonStyle(.link)
                 .font(.caption2)
@@ -473,13 +473,6 @@ struct EditWorkspaceView: View {
             await ingest(urls: [url])   // handles conversion, DRM and failure
             return
         }
-        // Audio-only lands as a bin item rather than an invisible cutaway.
-        guard probe.hasVideo else {
-            addToBin(url: url, probe: probe, converted: false)
-            errorMessage = "\(url.lastPathComponent) has no picture, so it's in Media rather than on the B-roll lane."
-            return
-        }
-
         let remaining = project.editedDuration - time
         guard remaining > EditDecisionList.minimumClipDuration else {
             errorMessage = "There's no room at the end of the program. Drop it earlier, or use it as an outro."
@@ -492,8 +485,18 @@ struct EditWorkspaceView: View {
                                           duration: probe.duration,
                                           hasVideo: probe.hasVideo,
                                           hasAudio: probe.hasAudio))
-            project.addOverlay(OverlayClip(media: reference,
-                                           timelineRange: time...(time + length)))
+            var clip = OverlayClip(media: reference,
+                                   timelineRange: time...(time + length))
+            if !probe.hasVideo {
+                // An audio file on the lane IS a music clip: audible, sitting
+                // under the conversation, dipping beneath speech. Place as
+                // many as the edit wants; trim and move them like any block.
+                clip.audio = ExternalAudio(isEnabled: true,
+                                           gainDB: -12,
+                                           ducking: nil,
+                                           duckUnderSpeechDB: 12)
+            }
+            project.addOverlay(clip)
         }
         if probe.duration > length {
             errorMessage = String(format: "Trimmed to fit the program (%.1fs of %.1fs used).",
@@ -533,8 +536,16 @@ struct EditWorkspaceView: View {
         }
         let length = item.duration > 0 ? min(item.duration, remaining) : min(5, remaining)
         performEdit {
-            project.addOverlay(OverlayClip(media: item.media,
-                                           timelineRange: start...(start + length)))
+            var clip = OverlayClip(media: item.media,
+                                   timelineRange: start...(start + length))
+            if !item.hasVideo {
+                // Same music-clip defaults as a direct drop.
+                clip.audio = ExternalAudio(isEnabled: true,
+                                           gainDB: -12,
+                                           ducking: nil,
+                                           duckUnderSpeechDB: 12)
+            }
+            project.addOverlay(clip)
         }
         if item.duration > length {
             errorMessage = String(format: "Trimmed to fit the program (%.1fs of %.1fs used).",

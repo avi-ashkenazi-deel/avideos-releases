@@ -60,6 +60,16 @@ final class WhisperKitEngine: TranscriptionEngine {
     /// Tried in order after `modelName` fails: the 632 MB compressed turbo,
     /// then base (small, always present, runs anywhere).
     var fallbackModelNames = ["large-v3-v20240930_turbo_632MB", "base"]
+
+    /// The fast first-pass engine: `base` is ~150 MB and transcribes several
+    /// times faster than turbo, so a usable transcript lands in seconds while
+    /// the quality pass follows behind.
+    static func quick() -> WhisperKitEngine {
+        let engine = WhisperKitEngine()
+        engine.modelName = "base"
+        engine.fallbackModelNames = ["tiny"]
+        return engine
+    }
     private let log = Logger(subsystem: "com.aviashkenazi.streamit", category: "whisper")
 
     func transcribe(audioURL: URL,

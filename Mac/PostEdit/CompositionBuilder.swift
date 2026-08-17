@@ -146,7 +146,8 @@ final class CompositionBuilder {
                                                          includeVideo: options.includeVideo,
                                                          timelineOffset: options.includesExternalMedia
                                                             ? project.programOffset : 0,
-                                                         masterGain: options.masterGainLinear)
+                                                         masterGain: options.masterGainLinear,
+                                                         speechDucks: { Self.speechDuckWindows(project: project, amountDB: $0) })
         }
         let ducks = options.includesExternalMedia
             ? Self.duckWindows(for: project.sortedOverlays, inserted: inserted)
@@ -162,6 +163,7 @@ final class CompositionBuilder {
                                                        masterGain: options.masterGainLinear)
             mixParameters.append(contentsOf: placed.audioParameters)
             bookendTrackIDs = placed.videoTrackIDs
+            transforms.merge(placed.videoTransforms) { current, _ in current }
         }
 
         // The music bed sits under the conversation (not the bookends — an
@@ -274,6 +276,9 @@ final class CompositionBuilder {
 
     private struct PlacedBookends {
         var videoTrackIDs: [CMPersistentTrackID: ProgramBookendSlot] = [:]
+        /// Non-identity preferredTransforms — a phone-shot portrait intro must
+        /// rotate upright exactly like a portrait cutaway does.
+        var videoTransforms: [CMPersistentTrackID: CGAffineTransform] = [:]
         var audioParameters: [AVMutableAudioMixInputParameters] = []
     }
 
@@ -291,33 +296,57 @@ final class CompositionBuilder {
         ]
 
         for (slot, clip, at) in slots {
-            guard let clip, let url = clip.media.resolve() else { continue }
+            guard let clip else { continue }
+            // Every skip is LOUD: a silently missing intro renders the whole
+            // span black with nothing to explain why.
+            guard let url = clip.media.resolve() else {
+                logger.error("bookend \(slot.rawValue, privacy: .public) skipped: media does not resolve (\(clip.media.displayName, privacy: .public))")
+                continue
+            }
             let asset = AVURLAsset(url: url, options: [AVURLAssetPreferPreciseDurationAndTimingKey: true])
             let assetDuration = try await asset.load(.duration).seconds
             let take = min(clip.duration, max(0, assetDuration - clip.sourceRange.lowerBound))
-            guard take > 0 else { continue }
+            guard take > 0 else {
+                logger.error("bookend \(slot.rawValue, privacy: .public) skipped: zero playable duration")
+                continue
+            }
 
             let sourceRange = CMTimeRange(
                 start: CMTime(seconds: clip.sourceRange.lowerBound, preferredTimescale: timescale),
                 duration: CMTime(seconds: take, preferredTimescale: timescale))
             let start = CMTime(seconds: at, preferredTimescale: timescale)
 
-            if includeVideo,
-               let sourceVideo = try await asset.loadTracks(withMediaType: .video).first,
-               let compTrack = composition.addMutableTrack(
-                   withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid) {
-                compTrack.preferredTransform = sourceVideo.preferredTransform
-                try? compTrack.insertTimeRange(sourceRange, of: sourceVideo, at: start)
-                placed.videoTrackIDs[compTrack.trackID] = slot
+            if includeVideo {
+                if let sourceVideo = try await asset.loadTracks(withMediaType: .video).first,
+                   let compTrack = composition.addMutableTrack(
+                       withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid) {
+                    let transform = (try? await sourceVideo.load(.preferredTransform)) ?? .identity
+                    compTrack.preferredTransform = transform
+                    do {
+                        try compTrack.insertTimeRange(sourceRange, of: sourceVideo, at: start)
+                        placed.videoTrackIDs[compTrack.trackID] = slot
+                        if !transform.isIdentity {
+                            placed.videoTransforms[compTrack.trackID] = transform
+                        }
+                    } catch {
+                        logger.error("bookend \(slot.rawValue, privacy: .public) video insert failed: \(error.localizedDescription, privacy: .public)")
+                    }
+                } else {
+                    logger.error("bookend \(slot.rawValue, privacy: .public): file has no video track (\(url.lastPathComponent, privacy: .public))")
+                }
             }
             if clip.audio.isEnabled,
                let sourceAudio = try await asset.loadTracks(withMediaType: .audio).first,
                let compTrack = composition.addMutableTrack(
                    withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid) {
-                try? compTrack.insertTimeRange(sourceRange, of: sourceAudio, at: start)
-                let params = AVMutableAudioMixInputParameters(track: compTrack)
-                params.setVolume(clip.audio.linearGain * masterGain, at: .zero)
-                placed.audioParameters.append(params)
+                do {
+                    try compTrack.insertTimeRange(sourceRange, of: sourceAudio, at: start)
+                    let params = AVMutableAudioMixInputParameters(track: compTrack)
+                    params.setVolume(clip.audio.linearGain * masterGain, at: .zero)
+                    placed.audioParameters.append(params)
+                } catch {
+                    logger.error("bookend \(slot.rawValue, privacy: .public) audio insert failed: \(error.localizedDescription, privacy: .public)")
+                }
             }
         }
         return placed
@@ -432,7 +461,8 @@ final class CompositionBuilder {
                                            into composition: AVMutableComposition,
                                            includeVideo: Bool,
                                            timelineOffset: Double,
-                                           masterGain: Float = 1) async throws -> [InsertedOverlay] {
+                                           masterGain: Float = 1,
+                                           speechDucks: (Double) -> [VolumeAutomation.DuckWindow] = { _ in [] }) async throws -> [InsertedOverlay] {
         var inserted: [InsertedOverlay] = []
 
         for overlay in overlays {
@@ -485,19 +515,35 @@ final class CompositionBuilder {
                    withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid) {
                 do {
                     try audioTrack.insertTimeRange(sourceRange, of: sourceAudio, at: at)
-                    // Butt-joining against silence clicks, so give the clip's
-                    // own edges the same short fade a cut boundary gets — via
-                    // the shared envelope, so there is one ramp emitter.
                     let start = programStart
                     let level = audio.linearGain * masterGain
                     let params = AVMutableAudioMixInputParameters(track: audioTrack)
-                    VolumeAutomation.apply([
-                        .init(time: start, volume: 0),
-                        .init(time: start + crossfadeDuration, volume: level),
-                        .init(time: start + max(take - crossfadeDuration, crossfadeDuration),
-                              volume: level),
-                        .init(time: start + take, volume: 0),
-                    ], to: params, timescale: timescale)
+                    if let duckDB = audio.duckUnderSpeechDB, duckDB > 0 {
+                        // Music-clip behavior: THIS clip dips under speech,
+                        // same engine as the music bed, faded at its edges.
+                        var points = VolumeAutomation.envelope(
+                            base: level,
+                            joins: [],
+                            ducks: speechDucks(duckDB),
+                            crossfadeDuration: 0,
+                            duration: start + take)
+                        points = VolumeAutomation.fadedAtEdges(points,
+                                                               spanStart: start,
+                                                               spanEnd: start + take,
+                                                               fade: 0.35)
+                        VolumeAutomation.apply(points, to: params, timescale: timescale)
+                    } else {
+                        // Butt-joining against silence clicks, so give the
+                        // clip's own edges the same short fade a cut boundary
+                        // gets — via the shared envelope, one ramp emitter.
+                        VolumeAutomation.apply([
+                            .init(time: start, volume: 0),
+                            .init(time: start + crossfadeDuration, volume: level),
+                            .init(time: start + max(take - crossfadeDuration, crossfadeDuration),
+                                  volume: level),
+                            .init(time: start + take, volume: 0),
+                        ], to: params, timescale: timescale)
+                    }
                     audioParameters = params
                 } catch {
                     Self.logger.error("B-roll audio insert failed: \(error.localizedDescription, privacy: .public)")
@@ -691,7 +737,8 @@ final class CompositionBuilder {
                 participantByTrackID: [trackID: lane],
                 participantOrder: [lane],
                 speakerTimeline: [],
-                captionContext: nil))
+                captionContext: nil,
+                transformByTrackID: transforms.filter { $0.key == trackID }))
         }
         instructions.sort { $0.timeRange.start < $1.timeRange.start }
         videoComposition.instructions = instructions
@@ -797,6 +844,8 @@ final class LayoutVideoCompositor: NSObject, AVVideoCompositing {
                                                 .name: "PostEditCompositor"])
     private var renderContext: AVVideoCompositionRenderContext?
     private var shouldCancel = false
+    /// Lanes that have already been reported as frame-starved (renderQueue).
+    private var starvedLanes: Set<String> = []
 
     // `[String: any Sendable]` is what the macOS 26 SDK declares. Older SDKs
     // used `[String: Any]`; if this ever has to build against one, both
@@ -860,7 +909,15 @@ final class LayoutVideoCompositor: NSObject, AVVideoCompositing {
         // Collect the current frame per participant.
         var frames: [String: CIImage] = [:]
         for (trackID, participantId) in instruction.participantByTrackID {
-            guard let pixelBuffer = request.sourceFrame(byTrackID: trackID) else { continue }
+            guard let pixelBuffer = request.sourceFrame(byTrackID: trackID) else {
+                // Once per lane, not per frame: a lane that never delivers
+                // (e.g. an intro that decodes to nothing) otherwise renders
+                // silent black with no trail to follow.
+                if starvedLanes.insert(participantId).inserted {
+                    Self.logger.error("no source frame for lane \(participantId, privacy: .public) (track \(trackID)) at \(time, format: .fixed(precision: 2))s")
+                }
+                continue
+            }
             var image = CIImage(cvPixelBuffer: pixelBuffer)
             if let transform = instruction.transformByTrackID[trackID] {
                 // Rotate a portrait or otherwise transformed source upright

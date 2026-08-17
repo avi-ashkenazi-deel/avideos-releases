@@ -30,6 +30,15 @@ extension EditWorkspaceView {
         }
         refreshDerived()
         await preview.rebuild(project: project)
+
+        // Auto-transcribe on open: the transcript drives text editing,
+        // cleanup, captions, ducking and clips — nobody should have to
+        // remember a button. The quick pass lands in seconds; quality
+        // improves in place behind it.
+        if project.transcript == nil,
+           project.tracks.contains(where: { $0.kind == .audio }) {
+            Task { await transcribe(auto: true) }
+        }
     }
 
     /// Seeds a brand-new project's bookends from the brand kit's stingers.
@@ -48,19 +57,50 @@ extension EditWorkspaceView {
         if let outro = await bookend(from: kit.outroStinger) { project.setOutro(outro) }
     }
 
-    func transcribe() async {
+    /// Two passes plus a polish: a quick `base`-model pass makes the
+    /// transcript usable in seconds, the full-quality model then replaces it
+    /// wholesale (safe — cuts live in the EDL as source times, not in the
+    /// transcript), and Claude fixes punctuation when a key is stored.
+    /// `auto` runs on editor open; its failures go to the status line, not
+    /// an alert — nobody asked for anything.
+    func transcribe(auto: Bool = false) async {
+        guard !isTranscribing else { return }
         isTranscribing = true
         defer { isTranscribing = false }
         do {
-            let service = TranscriptionService()
-            project.transcript = try await service.transcribe(tracks: project.tracks) { name, fraction in
+            let quick = TranscriptionService(engine: WhisperKitEngine.quick())
+            transcribeStatus = "Transcribing (quick pass)…"
+            project.transcript = try await quick.transcribe(tracks: project.tracks) { name, fraction in
                 Task { @MainActor in
-                    transcribeStatus = "Transcribing \(name)… \(Int(fraction * 100))%"
+                    transcribeStatus = "Quick pass — \(name)… \(Int(fraction * 100))%"
                 }
             }
             projectChanged()
+
+            let best = TranscriptionService()
+            var transcript = try await best.transcribe(tracks: project.tracks) { name, fraction in
+                Task { @MainActor in
+                    transcribeStatus = "Improving quality — \(name)… \(Int(fraction * 100))%"
+                }
+            }
+
+            if let key = ClaudeAPIClient.storedAPIKey(), !key.isEmpty {
+                transcribeStatus = "Polishing punctuation…"
+                // Cosmetic pass — a network hiccup must never cost the
+                // transcript itself.
+                if let polished = try? await PunctuationPolisher().polish(transcript) {
+                    transcript = polished.transcript
+                }
+            }
+            project.transcript = transcript
+            projectChanged()
+            transcribeStatus = ""
         } catch {
-            errorMessage = error.localizedDescription
+            if auto {
+                transcribeStatus = "Transcription failed: \(error.localizedDescription)"
+            } else {
+                errorMessage = error.localizedDescription
+            }
         }
     }
 

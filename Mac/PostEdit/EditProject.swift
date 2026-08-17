@@ -771,6 +771,17 @@ struct EditProject: Codable, Sendable, Identifiable, Equatable {
         (overlays ?? []).sorted { $0.timelineRange.lowerBound < $1.timelineRange.lowerBound }
     }
 
+    /// True when a lane clip is a MUSIC clip — audio with no picture. The bin
+    /// caches the probe, so this never opens the file; an overlay placed
+    /// before the bin existed falls back to its file extension.
+    func overlayIsAudioOnly(_ overlay: OverlayClip) -> Bool {
+        if let item = mediaBin?.first(where: { $0.media.path == overlay.media.path }) {
+            return !item.hasVideo && item.hasAudio
+        }
+        let ext = (overlay.media.path as NSString).pathExtension.lowercased()
+        return ["mp3", "m4a", "wav", "aac", "aif", "aiff", "flac", "caf", "ogg"].contains(ext)
+    }
+
     mutating func addOverlay(_ overlay: OverlayClip) {
         var all = overlays ?? []
         all.append(overlay)

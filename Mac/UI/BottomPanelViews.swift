@@ -295,8 +295,36 @@ struct GuestsPanelView: View {
                     connectedSection(guests)
                 }
             }
+            Divider()
+            rehearsalSection
         }
         .padding(10)
+    }
+
+    /// Fake feeds for designing layouts alone: animated test cards under the
+    /// same guest keys real callers use, so switching to an Interview scene
+    /// shows exactly what two or three people will look like.
+    private var rehearsalSection: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Rehearse Layouts")
+                .font(.caption.bold())
+                .foregroundStyle(.secondary)
+            Picker("Demo guests", selection: Binding(
+                get: { studio.demoGuestCount },
+                set: { studio.setDemoGuests(count: $0) }
+            )) {
+                Text("Off").tag(0)
+                Text("1").tag(1)
+                Text("2").tag(2)
+                Text("3").tag(3)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            Text("Adds animated stand-in feeds so you can see and design multi-person scenes without anyone on the call. Switch to an Interview scene to see the grid.")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 
     private func startSection(_ guests: GuestSessionController) -> some View {

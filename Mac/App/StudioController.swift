@@ -63,6 +63,49 @@ final class StudioController {
     /// so an already-open inspector re-parks next to the element even when
     /// the selection didn't change.
     var inspectorSummonNonce = 0
+
+    /// Synthetic guests (0–3) for rehearsing multi-person layouts with nobody
+    /// on the call. Their descriptors merge into every plan compile and
+    /// `DemoGuestSource` test cards feed their tiles, so interview grids and
+    /// guest tiles run the exact code paths a real call would.
+    private(set) var demoGuestCount = 0
+
+    private static let demoGuestNames = ["Alex (demo)", "Sam (demo)", "Noa (demo)"]
+
+    var demoGuestDescriptors: [GuestDescriptor] {
+        (0..<demoGuestCount).map {
+            GuestDescriptor(identity: "demo-\($0 + 1)",
+                            displayName: Self.demoGuestNames[$0])
+        }
+    }
+
+    /// Everything the plan compiler should see as "a guest": the real on-air
+    /// callers plus any rehearsal stand-ins.
+    var renderGuestDescriptors: [GuestDescriptor] {
+        (guests?.onAirDescriptors ?? []) + demoGuestDescriptors
+    }
+
+    func setDemoGuests(count: Int) {
+        let clamped = min(max(count, 0), 3)
+        guard clamped != demoGuestCount else { return }
+        if let registry = sourceRegistry, let engine = renderEngine {
+            if clamped > demoGuestCount {
+                for index in demoGuestCount..<clamped {
+                    registry.register(DemoGuestSource(
+                        identity: "demo-\(index + 1)",
+                        name: Self.demoGuestNames[index],
+                        hue: CGFloat(index) * 0.31 + 0.55,
+                        metalDevice: engine.device))
+                }
+            } else {
+                for index in clamped..<demoGuestCount {
+                    registry.unregister(key: .guest(identity: "demo-\(index + 1)"))
+                }
+            }
+        }
+        demoGuestCount = clamped
+        recompileAndPublish()
+    }
     var mode: Mode = .live
 
     /// Worker/base configuration (Settings).
@@ -244,7 +287,7 @@ final class StudioController {
         cleanupFinishedExits()
         let plan = RenderPlanCompiler.compile(project: project,
                                               scene: scene,
-                                              guests: guests?.onAirDescriptors ?? [],
+                                              guests: renderGuestDescriptors,
                                               elementAnimations: elementAnimations,
                                               timerTexts: currentTimerTexts(scene: scene))
         engine.publish(plan: plan)
@@ -264,7 +307,7 @@ final class StudioController {
         // Freeze the outgoing scene's last look for its palette tile.
         captureActiveSceneThumbnail()
 
-        let guestList = guests?.onAirDescriptors ?? []
+        let guestList = renderGuestDescriptors
         let fromPlan = RenderPlanCompiler.compile(project: project, scene: fromScene,
                                                   guests: guestList,
                                                   elementAnimations: elementAnimations,
@@ -575,7 +618,7 @@ final class StudioController {
             return
         }
 
-        let guestList = guests?.onAirDescriptors ?? []
+        let guestList = renderGuestDescriptors
         let fromPlan = RenderPlanCompiler.compile(project: project, scene: scene,
                                                   guests: guestList,
                                                   elementAnimations: elementAnimations,

@@ -169,8 +169,11 @@ struct OverlayInspectorView: View {
                     var audio = current
                     audio.isEnabled = newValue
                     // Turning audio on without ducking usually means the
-                    // conversation talks over it, so default to ducking.
-                    if newValue, audio.ducking == nil { audio.ducking = .standard }
+                    // conversation talks over it, so default to ducking —
+                    // unless this is a music clip already dipping under speech.
+                    if newValue, audio.ducking == nil, audio.duckUnderSpeechDB == nil {
+                        audio.ducking = .standard
+                    }
                     updated.audio = audio
                     onChange(updated)
                     onCommit()
@@ -220,6 +223,40 @@ struct OverlayInspectorView: View {
                             .font(.caption.monospacedDigit()).frame(width: 60, alignment: .trailing)
                     }
                     Text("The conversation drops while this clip plays, easing down just before it starts.")
+                        .font(.caption2).foregroundStyle(.secondary)
+                }
+
+                // The opposite direction — music-clip behavior. Both can be
+                // off (clip and conversation coexist at full level); having
+                // both ON would fight, so switching this on turns that off.
+                Toggle("Dip under speech (music)", isOn: Binding(
+                    get: { current.duckUnderSpeechDB != nil },
+                    set: { newValue in
+                        var updated = overlay
+                        var audio = current
+                        audio.duckUnderSpeechDB = newValue ? 12 : nil
+                        if newValue { audio.ducking = nil }
+                        updated.audio = audio
+                        onChange(updated)
+                        onCommit()
+                    }))
+
+                if let dip = current.duckUnderSpeechDB {
+                    HStack {
+                        Slider(value: Binding(
+                            get: { dip },
+                            set: { newValue in
+                                var updated = overlay
+                                var audio = current
+                                audio.duckUnderSpeechDB = newValue
+                                updated.audio = audio
+                                onChange(updated)
+                            }), in: 0...24,
+                            onEditingChanged: { if !$0 { onCommit() } })
+                        Text(String(format: "−%.0f dB", dip))
+                            .font(.caption.monospacedDigit()).frame(width: 60, alignment: .trailing)
+                    }
+                    Text("This clip drops while people speak — background-music behavior. Needs a transcript.")
                         .font(.caption2).foregroundStyle(.secondary)
                 }
             }

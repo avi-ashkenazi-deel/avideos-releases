@@ -1,6 +1,6 @@
 # streamit — full feature checklist
 
-All 510 user-facing features, each with a stable ID so you can report
+All 518 user-facing features, each with a stable ID so you can report
 back precisely ("F-42 fails"). Ordered so you can work top to bottom: each
 section only depends on the ones above it.
 
@@ -276,6 +276,17 @@ replays just the entrance, which is the quick way to compare them.
 - [ ] **F-508** Starting/stopping the share mid-take yields a partial screen track whose own anchor aligns it — the import places it at the right session time, not at zero. **[net] [2nd device] [ffmpeg]**
 - [ ] **F-509** After import, "<name>'s Screen" appears as its own video lane in the editor and in the multicam **Cut to** strip, in sync with everyone. **[net] [2nd device] [ffmpeg]**
 - [ ] **F-510** Stopping the take while a share is running finalizes the screen track with the others (chunk count matches, meta.json present). **[net] [2nd device]**
+
+### Round-4 additions (editor + rehearsal)
+
+- [ ] **F-511** Opening a session with no transcript auto-starts transcription; a quick-pass transcript appears in seconds, then improves in place ("Improving quality…"), no button needed.
+- [ ] **F-512** With a Claude key stored, punctuation/capitalization is polished after the quality pass — word timings and word letters never change.
+- [ ] **F-513** Timeline joins between blocks draw a dark seam with a scissors mark — every cut is visible.
+- [ ] **F-514** Select a timeline block, press up/down arrow: it swaps places with its neighbour (iMovie-style), one ⌘Z per move.
+- [ ] **F-515** The intro/outro cap's play button plays from the very top (intro included) — not just seeks.
+- [ ] **F-516** Dropping an AUDIO file on the timeline creates a green ♪ music clip: audible, −12 dB, dipping under speech; several can coexist, trim/move like any block.
+- [ ] **F-517** The overlay inspector's "Dip under speech (music)" toggle works on any clip with audio, opposite of "Duck the conversation".
+- [ ] **F-518** Interview palette → Rehearse Layouts: 1–3 animated demo feeds fill interview grids/tiles with nobody on the call; Off removes them.
 
 ## N. Remote guests
 
