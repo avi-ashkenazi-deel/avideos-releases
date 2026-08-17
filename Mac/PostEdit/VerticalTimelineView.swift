@@ -622,6 +622,17 @@ struct VerticalTimelineView: View {
             .frame(width: 110)
             .help("Line the timeline up with the transcript, or with the clock")
 
+            // One line saying what the toggle DOES — the two words alone
+            // didn't land ("i don't understand how i use the time / text").
+            Text(viewModel.mode == .textAligned
+                 ? "Blocks line up with the transcript text"
+                 : "Blocks sized by duration; zoom with ⌘＋/⌘−")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+                .frame(width: 110)
+                .fixedSize(horizontal: false, vertical: true)
+                .multilineTextAlignment(.center)
+
             if viewModel.mode == .uniformTime {
                 HStack(spacing: 4) {
                     Button { viewModel.zoom(by: 0.7) } label: { Image(systemName: "minus.magnifyingglass") }

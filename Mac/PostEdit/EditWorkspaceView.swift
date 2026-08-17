@@ -156,7 +156,7 @@ struct EditWorkspaceView: View {
                 // action.
                 Text(project.binItems.isEmpty
                      ? "A shelf for reusable clips: import once, use anywhere."
-                     : "Right-click an item to insert it as a cutaway or add it as an extra track — the shelf itself doesn't play.")
+                     : "The shelf itself doesn't play — use a row's buttons: insert it over the video at the playhead, or add it as an extra camera angle.")
                     .font(.caption2)
             }
             Section("Stats") {
@@ -374,6 +374,25 @@ struct EditWorkspaceView: View {
                 .foregroundStyle(.secondary)
             }
             Spacer()
+            // The two things you DO with a shelf item, as visible buttons —
+            // context-menu-only actions read as "extra media that does
+            // nothing" (live test said exactly that).
+            Button {
+                insertCutaway(from: item)
+            } label: {
+                Image(systemName: item.hasVideo ? "photo.badge.plus" : "music.note.list")
+            }
+            .buttonStyle(.borderless)
+            .help(item.hasVideo ? "Insert as a cutaway at the playhead"
+                                : "Insert as a music clip at the playhead")
+            Button {
+                addExtraTrack(from: item)
+            } label: {
+                Image(systemName: "video.badge.plus")
+            }
+            .buttonStyle(.borderless)
+            .disabled(!item.hasVideo && !item.hasAudio)
+            .help("Add as an extra camera angle (its own lane, cut with the Cut-to strip)")
         }
         .contextMenu {
             Button("Insert as Cutaway at Playhead") { insertCutaway(from: item) }
@@ -867,6 +886,8 @@ struct EditWorkspaceView: View {
                 }
             } else {
                 TranscriptEditorView(model: transcriptModel,
+                                     playheadSource: project.edl.mapTimelineToSource(preview.playheadSeconds),
+                                     isPlaying: preview.isPlaying,
                                      onSeek: { source in
                                          if let timeline = project.edl.mapSourceToTimeline(source) {
                                              preview.seek(to: timeline)

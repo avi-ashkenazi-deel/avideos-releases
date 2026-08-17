@@ -1,6 +1,6 @@
 # streamit — full feature checklist
 
-All 518 user-facing features, each with a stable ID so you can report
+All 523 user-facing features, each with a stable ID so you can report
 back precisely ("F-42 fails"). Ordered so you can work top to bottom: each
 section only depends on the ones above it.
 
@@ -287,6 +287,11 @@ replays just the entrance, which is the quick way to compare them.
 - [ ] **F-516** Dropping an AUDIO file on the timeline creates a green ♪ music clip: audible, −12 dB, dipping under speech; several can coexist, trim/move like any block.
 - [ ] **F-517** The overlay inspector's "Dip under speech (music)" toggle works on any clip with audio, opposite of "Duck the conversation".
 - [ ] **F-518** Interview palette → Rehearse Layouts: 1–3 animated demo feeds fill interview grids/tiles with nobody on the call; Off removes them.
+- [ ] **F-519** The transcript breaks into paragraphs (speaker changes and real pauses); multi-speaker sessions label paragraphs with the speaker's name.
+- [ ] **F-520** During playback the spoken word highlights in the transcript and the text scrolls to follow it.
+- [ ] **F-521** Highlighting words in the transcript seeks the video to that moment.
+- [ ] **F-522** Alternating faint washes in the transcript mark where one clip ends and the next begins (matching the timeline's scissors seams).
+- [ ] **F-523** Media shelf rows have visible buttons: insert at playhead (cutaway/music) and add as extra angle; Text/Time toggle carries an explanatory caption.
 
 ## N. Remote guests
 

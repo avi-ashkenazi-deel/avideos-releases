@@ -21,7 +21,9 @@ final class TranscriptEditModel {
     private(set) var attributed = NSAttributedString()
     private var trackHues: [String: Double] = [:]
 
-    func rebuild(transcript: Transcript?, edl: EditDecisionList, playheadSource: Double?) {
+    func rebuild(transcript: Transcript?,
+                 edl: EditDecisionList,
+                 trackNames: [String: String] = [:]) {
         guard let transcript else {
             displays = []
             attributed = NSAttributedString(string: "Transcribe the session to edit as text.")
@@ -38,6 +40,30 @@ final class TranscriptEditModel {
         var newDisplays: [WordDisplay] = []
         let font = NSFont.systemFont(ofSize: 15)
 
+        // Paragraphs: Whisper returns one unbroken stream, but the word
+        // timings and per-word speaker are enough to break it locally —
+        // a new paragraph on every speaker change, on any real pause, and
+        // (so a monologue doesn't run forever) at the first natural pause
+        // once a paragraph has grown long. Speaker names label paragraphs
+        // when the session has more than one voice.
+        let showSpeakers = trackIDs.count > 1
+        var previousWord: Word?
+        var paragraphLength = 0
+
+        func breakParagraph(before word: Word) {
+            if previousWord != nil {
+                result.append(NSAttributedString(string: "\n\n", attributes: [.font: font]))
+            }
+            paragraphLength = 0
+            if showSpeakers, previousWord?.trackId != word.trackId {
+                let name = trackNames[word.trackId] ?? "Speaker"
+                result.append(NSAttributedString(string: name + "\n", attributes: [
+                    .font: NSFont.systemFont(ofSize: 11, weight: .semibold),
+                    .foregroundColor: NSColor.secondaryLabelColor,
+                ]))
+            }
+        }
+
         // Walk the EDL **in program order**, including disabled segments at
         // their sequence position. Three consequences, all intended:
         //   - the transcript reads in the order the episode plays, so moving a
@@ -49,6 +75,11 @@ final class TranscriptEditModel {
         //   - a duplicated moment appears twice, because it is spoken twice.
         // Words covered by no segment at all (hard-removed) simply don't
         // appear: that material is no longer part of the project.
+        // Alternating faint tint per enabled clip, so where one block of the
+        // program ends and the next begins is visible IN THE TEXT, not only
+        // on the timeline.
+        var enabledOrdinal = 0
+
         for clip in edl.clips {
             let indices = transcript.wordIndices(inSourceRange: clip.sourceRange)
 
@@ -74,9 +105,19 @@ final class TranscriptEditModel {
                 continue
             }
 
+            enabledOrdinal += 1
             for index in indices {
                 let word = transcript.words[index]
-                let midTime = (word.start + word.end) / 2
+
+                let pause = previousWord.map { word.start - $0.end } ?? 0
+                if previousWord == nil
+                    || word.trackId != previousWord?.trackId
+                    || pause >= 2.0
+                    || (paragraphLength > 450 && pause >= 0.75) {
+                    breakParagraph(before: word)
+                }
+                previousWord = word
+                paragraphLength += word.text.count + 1
 
                 let hue = trackHues[word.trackId] ?? 0
                 let speakerColor = NSColor(hue: hue, saturation: 0.55, brightness: 0.9, alpha: 1)
@@ -85,8 +126,11 @@ final class TranscriptEditModel {
                     .font: font,
                     .foregroundColor: speakerColor,
                 ]
-                if let playheadSource, midTime >= playheadSource - 0.25, midTime <= playheadSource + 0.25 {
-                    attributes[.backgroundColor] = NSColor.selectedTextBackgroundColor
+                // Every second clip carries a faint wash; the seam between
+                // washes is a cut. (The playhead highlight is a temporary
+                // attribute laid over this, applied by the view.)
+                if enabledOrdinal.isMultiple(of: 2) {
+                    attributes[.backgroundColor] = NSColor.labelColor.withAlphaComponent(0.07)
                 }
 
                 let text = word.text + " "
@@ -116,6 +160,10 @@ final class TranscriptEditModel {
 /// word to recover its clip, select + Delete to cut the words (snapped).
 struct TranscriptEditorView: NSViewRepresentable {
     let model: TranscriptEditModel
+    /// Playhead in SOURCE seconds — the word under it highlights live, and
+    /// while playing the text scrolls to keep it on screen.
+    var playheadSource: Double?
+    var isPlaying: Bool = false
     var onSeek: (Double) -> Void
     var onDeleteWords: (ClosedRange<Double>) -> Void
     var onRecoverClip: (UUID) -> Void
@@ -158,14 +206,24 @@ struct TranscriptEditorView: NSViewRepresentable {
         if textView.textStorage?.string != model.attributed.string
             || context.coordinator.lastRenderedVersion != model.attributed.hash {
             let selection = textView.selectedRanges
+            // Programmatic — the selection-restores below must not read as
+            // the user highlighting text (which seeks the video).
+            context.coordinator.isApplyingProgrammaticChange = true
             textView.textStorage?.setAttributedString(model.attributed)
             textView.selectedRanges = selection
+            context.coordinator.isApplyingProgrammaticChange = false
             context.coordinator.lastRenderedVersion = model.attributed.hash
+            // Character ranges may have shifted; the old highlight range is
+            // meaningless against the new string.
+            context.coordinator.lastHighlightRange = nil
             didRelayout = true
         }
         if didRelayout {
             context.coordinator.publishWordGeometry(from: textView)
         }
+        context.coordinator.updatePlayhead(textView: textView,
+                                           source: playheadSource,
+                                           follow: isPlaying)
     }
 
     static func dismantleNSView(_ nsView: NSScrollView, coordinator: Coordinator) {
@@ -176,10 +234,58 @@ struct TranscriptEditorView: NSViewRepresentable {
         var parent: TranscriptEditorView
         weak var textView: NSTextView?
         var lastRenderedVersion: Int = 0
+        var lastHighlightRange: NSRange?
+        /// True while updateNSView swaps the string / restores selection, so
+        /// the selection-change delegate can tell user highlights from ours.
+        var isApplyingProgrammaticChange = false
         private var keyMonitor: Any?
 
         init(_ parent: TranscriptEditorView) {
             self.parent = parent
+        }
+
+        /// Live playhead highlight as a TEMPORARY attribute — rebuilding the
+        /// whole attributed string 30 times a second would be unusable. While
+        /// playing, the text scrolls to keep the spoken word on screen.
+        @MainActor
+        func updatePlayhead(textView: NSTextView, source: Double?, follow: Bool) {
+            guard let layoutManager = textView.layoutManager else { return }
+            var newRange: NSRange?
+            if let source {
+                newRange = parent.model.displays.first(where: {
+                    !$0.isCut && source >= $0.word.start && source <= $0.word.end
+                })?.characterRange
+            }
+            guard newRange != lastHighlightRange else { return }
+            let length = textView.textStorage?.length ?? 0
+            if let old = lastHighlightRange, NSMaxRange(old) <= length {
+                layoutManager.removeTemporaryAttribute(.backgroundColor, forCharacterRange: old)
+            }
+            if let new = newRange, NSMaxRange(new) <= length {
+                layoutManager.addTemporaryAttribute(.backgroundColor,
+                                                    value: NSColor.selectedTextBackgroundColor,
+                                                    forCharacterRange: new)
+                if follow {
+                    textView.scrollRangeToVisible(new)
+                }
+            }
+            lastHighlightRange = newRange
+        }
+
+        /// Highlighting words shows that moment in the video: seek (paused)
+        /// to the first selected word. Programmatic selection restores are
+        /// filtered out above.
+        func textViewDidChangeSelection(_ notification: Notification) {
+            MainActor.assumeIsolated {
+                guard !isApplyingProgrammaticChange,
+                      let textView,
+                      textView.window?.firstResponder === textView else { return }
+                let selection = textView.selectedRange()
+                guard selection.length > 0,
+                      let first = parent.model.displays(inCharacterRange: selection)
+                          .first(where: { !$0.isCut }) else { return }
+                parent.onSeek(first.word.start)
+            }
         }
 
         // AppKit delivers gesture actions on the main thread, and the model

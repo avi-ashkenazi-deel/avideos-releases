@@ -61,6 +61,27 @@ full-screen-this-camera layout cues at the playhead, replacing a cue within
 fades, and offset recovery from synthetic envelopes (`EditorAudioTests`).
 F-488…F-499.
 
+Twenty-fifth pass — the transcript becomes a place you can live in.
+**Paragraphs**: Whisper returns one unbroken stream ("can the normal
+transcription do paragraphs?") but word timings + per-word speaker are
+enough to break it locally, no AI — a new paragraph on every speaker
+change, any pause ≥ 2 s, and the first natural pause once a paragraph
+passes ~450 characters. Multi-speaker sessions label each paragraph with
+the speaker's name. (True diarization inside ONE audio file is a
+different, big feature — with per-person recordings, speaker = track and
+it's already exact.) **Follow-along**: the word being spoken highlights
+live (a TEMPORARY attribute — rebuilding the string 30×/s would be
+unusable) and while playing the text scrolls to keep it on screen.
+**Highlight-to-see**: selecting words seeks the video to the selection's
+first word, with programmatic selection-restores filtered so rebuilds
+don't seek. **Clips visible in the text**: every second enabled clip
+carries a faint wash, so the seam between washes IS a cut, matching the
+timeline's new scissors seams. **Media shelf grew hands**: each row now
+has visible buttons — insert over the video at the playhead (cutaway /
+music clip) and add as an extra camera angle — instead of context-menu-
+only actions that read as "extra media that does nothing". The Text/Time
+toggle explains itself with a caption line. F-519…F-523.
+
 Twenty-fourth pass — the editor grows up a level, plus rehearsal feeds.
 **Auto-transcription, two-speed**: opening a session with no transcript
 starts transcription on its own — a quick `base`-model pass lands a usable

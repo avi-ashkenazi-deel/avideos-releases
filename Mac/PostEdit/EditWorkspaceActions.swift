@@ -305,7 +305,8 @@ extension EditWorkspaceView {
     func refreshDerived() {
         transcriptModel.rebuild(transcript: project.transcript,
                                 edl: project.edl,
-                                playheadSource: project.edl.mapTimelineToSource(preview.playheadSeconds))
+                                trackNames: Dictionary(uniqueKeysWithValues:
+                                    project.tracks.map { ($0.id, $0.participantName) }))
     }
 
     func persist() {
