@@ -48,7 +48,7 @@ settings:
   base:
     SWIFT_VERSION: "5.9"
     MARKETING_VERSION: "0.4.0"
-    CURRENT_PROJECT_VERSION: "25"
+    CURRENT_PROJECT_VERSION: "26"
     DEVELOPMENT_TEAM: "" # <- set your team id here or in Xcode signing.
 
 targets:

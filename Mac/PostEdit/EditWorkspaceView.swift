@@ -26,6 +26,8 @@ struct EditWorkspaceView: View {
     @State var isTranscribing = false
     @State var transcribeStatus = ""
     @State var busyMessage: String?
+    /// Which Media-shelf item's audition popover is open, if any.
+    @State private var auditionItemID: UUID?
     @State var proposals: [ClaudeTakeSelector.SectionProposal] = []
     @State var showingProposals = false
     @State var clipSuggestions: [ClipSuggestion] = []
@@ -352,6 +354,9 @@ struct EditWorkspaceView: View {
     @ViewBuilder
     private func binRow(_ item: MediaBinItem) -> some View {
         HStack(spacing: 6) {
+            // Click anywhere on the row: preview first, decide after —
+            // hover-scrub for video, waveform + audition for audio, in/out
+            // points that carry into the insert.
             Image(systemName: item.isStill ? "photo"
                   : item.hasVideo ? "film" : "waveform")
                 .foregroundStyle(.secondary)
@@ -393,6 +398,31 @@ struct EditWorkspaceView: View {
             .buttonStyle(.borderless)
             .disabled(!item.hasVideo && !item.hasAudio)
             .help("Add as an extra camera angle (its own lane, cut with the Cut-to strip)")
+        }
+        .contentShape(Rectangle())
+        .onTapGesture { auditionItemID = item.id }
+        // Rows drag straight onto the timeline — the same drop path a file
+        // from Finder takes (the bin dedupes, so nothing doubles up).
+        .onDrag {
+            if let url = item.media.resolve() {
+                return NSItemProvider(contentsOf: url) ?? NSItemProvider()
+            }
+            return NSItemProvider()
+        }
+        .popover(isPresented: Binding(
+            get: { auditionItemID == item.id },
+            set: { if !$0 { auditionItemID = nil } }
+        ), arrowEdge: .trailing) {
+            MediaAuditionView(item: item,
+                              waveforms: waveforms,
+                              onInsert: { range in
+                                  auditionItemID = nil
+                                  insertCutaway(from: item, sourceRange: range)
+                              },
+                              onAddAngle: {
+                                  auditionItemID = nil
+                                  addExtraTrack(from: item)
+                              })
         }
         .contextMenu {
             Button("Insert as Cutaway at Playhead") { insertCutaway(from: item) }
@@ -547,16 +577,25 @@ struct EditWorkspaceView: View {
     /// Puts a bin item on the overlay lane at the playhead, trimmed to fit
     /// whatever room is left.
     private func insertCutaway(from item: MediaBinItem) {
+        insertCutaway(from: item,
+                      sourceRange: 0...(item.duration > 0 ? item.duration : 5))
+    }
+
+    /// The ranged variant the audition popover feeds: play THIS slice of the
+    /// file (its in/out points), starting at the playhead.
+    private func insertCutaway(from item: MediaBinItem, sourceRange: ClosedRange<Double>) {
         let start = preview.playheadSeconds
         let remaining = project.editedDuration - start
         guard remaining > EditDecisionList.minimumClipDuration else {
             errorMessage = "There's no room at the end of the program. Drop it earlier."
             return
         }
-        let length = item.duration > 0 ? min(item.duration, remaining) : min(5, remaining)
+        let wanted = max(sourceRange.upperBound - sourceRange.lowerBound, 0.1)
+        let length = min(wanted, remaining)
         performEdit {
             var clip = OverlayClip(media: item.media,
-                                   timelineRange: start...(start + length))
+                                   timelineRange: start...(start + length),
+                                   sourceStart: sourceRange.lowerBound)
             if !item.hasVideo {
                 // Same music-clip defaults as a direct drop.
                 clip.audio = ExternalAudio(isEnabled: true,
@@ -566,9 +605,9 @@ struct EditWorkspaceView: View {
             }
             project.addOverlay(clip)
         }
-        if item.duration > length {
+        if wanted > length {
             errorMessage = String(format: "Trimmed to fit the program (%.1fs of %.1fs used).",
-                                  length, item.duration)
+                                  length, wanted)
         }
     }
 

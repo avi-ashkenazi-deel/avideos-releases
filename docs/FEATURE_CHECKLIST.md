@@ -1,6 +1,6 @@
 # streamit — full feature checklist
 
-All 523 user-facing features, each with a stable ID so you can report
+All 526 user-facing features, each with a stable ID so you can report
 back precisely ("F-42 fails"). Ordered so you can work top to bottom: each
 section only depends on the ones above it.
 
@@ -292,6 +292,9 @@ replays just the entrance, which is the quick way to compare them.
 - [ ] **F-521** Highlighting words in the transcript seeks the video to that moment.
 - [ ] **F-522** Alternating faint washes in the transcript mark where one clip ends and the next begins (matching the timeline's scissors seams).
 - [ ] **F-523** Media shelf rows have visible buttons: insert at playhead (cutaway/music) and add as extra angle; Text/Time toggle carries an explanatory caption.
+- [ ] **F-524** Clicking a shelf row opens a preview popover: video hover-scrubs (the frame follows the pointer, Premiere-style); audio shows its waveform with a play-the-range audition.
+- [ ] **F-525** In/out handles in the popover choose where the media starts and ends; "Insert at Playhead" places exactly that slice (music starts at the chorus you picked).
+- [ ] **F-526** Shelf rows drag directly onto the timeline, landing like a file dropped from Finder.
 
 ## N. Remote guests
 

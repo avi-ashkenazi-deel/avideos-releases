@@ -61,6 +61,21 @@ full-screen-this-camera layout cues at the playhead, replacing a cue within
 fades, and offset recovery from synthetic envelopes (`EditorAudioTests`).
 F-488…F-499.
 
+Twenty-sixth pass — the Media shelf answers "what IS this file" before it
+goes anywhere. Clicking a shelf row opens an **audition popover**
+(`MediaAuditionView`): video gets a Premiere-style hover scrub — the frame
+under the pointer, live, quantized to ~120 buckets so a fast mouse doesn't
+queue hundreds of decodes, loose tolerance because frame-exactness is the
+timeline's job — and audio gets its waveform (`WaveformStore`'s URL entry,
+cached in Caches, never beside someone's music library) with draggable
+in/out handles and a play-the-range audition (AVPlayer + boundary
+observer). The chosen in/out carries into **Insert at Playhead**, so a
+music track can start at the chorus (`OverlayClip.sourceStart` — the field
+existed since stage 4, this is its first authoring surface). Shelf rows
+also drag straight onto the timeline now, taking the same drop path a
+Finder file does (the bin dedupes by path so nothing doubles up).
+F-524…F-526.
+
 Twenty-fifth pass — the transcript becomes a place you can live in.
 **Paragraphs**: Whisper returns one unbroken stream ("can the normal
 transcription do paragraphs?") but word timings + per-word speaker are
