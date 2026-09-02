@@ -8,7 +8,9 @@
     "artist": "Pittigrilli",
     "query": "wristwatch dial",
     "year": null,
-    "tags": [],
+    "tags": [
+      "gray"
+    ],
     "batch": "2026-08-09-watch-dials"
   },
   {
@@ -20,7 +22,11 @@
     "artist": "Jamin",
     "query": "wristwatch dial",
     "year": null,
-    "tags": [],
+    "tags": [
+      "black",
+      "gray",
+      "orange"
+    ],
     "batch": "2026-08-09-watch-dials"
   },
   {
@@ -32,7 +38,10 @@
     "artist": "Pittigrilli",
     "query": "wristwatch dial",
     "year": null,
-    "tags": [],
+    "tags": [
+      "black",
+      "orange"
+    ],
     "batch": "2026-08-09-watch-dials"
   },
   {
@@ -44,7 +53,10 @@
     "artist": "Pittigrilli",
     "query": "wristwatch dial",
     "year": null,
-    "tags": [],
+    "tags": [
+      "black",
+      "orange"
+    ],
     "batch": "2026-08-09-watch-dials"
   },
   {
@@ -56,7 +68,10 @@
     "artist": "Alesili",
     "query": "wristwatch dial",
     "year": null,
-    "tags": [],
+    "tags": [
+      "gray",
+      "orange"
+    ],
     "batch": "2026-08-09-watch-dials"
   },
   {
@@ -68,7 +83,9 @@
     "artist": "A S M Jobaer",
     "query": "wristwatch dial",
     "year": null,
-    "tags": [],
+    "tags": [
+      "orange"
+    ],
     "batch": "2026-08-09-watch-dials"
   },
   {
@@ -80,7 +97,9 @@
     "artist": "A S M Jobaer",
     "query": "wristwatch dial",
     "year": null,
-    "tags": [],
+    "tags": [
+      "green"
+    ],
     "batch": "2026-08-09-watch-dials"
   },
   {
@@ -92,7 +111,9 @@
     "artist": "A S M Jobaer",
     "query": "wristwatch dial",
     "year": null,
-    "tags": [],
+    "tags": [
+      "blue"
+    ],
     "batch": "2026-08-09-watch-dials"
   },
   {
@@ -104,7 +125,10 @@
     "artist": "A S M Jobaer",
     "query": "wristwatch dial",
     "year": null,
-    "tags": [],
+    "tags": [
+      "gray",
+      "blue"
+    ],
     "batch": "2026-08-09-watch-dials"
   },
   {
@@ -116,7 +140,10 @@
     "artist": "gcardinal from Norway",
     "query": "wristwatch dial",
     "year": null,
-    "tags": [],
+    "tags": [
+      "black",
+      "gray"
+    ],
     "batch": "2026-08-09-watch-dials"
   }
 ]

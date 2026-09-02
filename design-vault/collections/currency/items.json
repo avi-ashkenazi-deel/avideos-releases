@@ -8,7 +8,9 @@
     "artist": "Jacob Bagges and Son (Printers) for Sveriges Riksbank, in part anonymous, in part Max Mirowsky (Svea)",
     "query": "banknote engraving specimen",
     "year": 1909,
-    "tags": [],
+    "tags": [
+      "orange"
+    ],
     "batch": "2026-08-09-banknote-design"
   },
   {
@@ -20,7 +22,9 @@
     "artist": "Bank of Canada.",
     "query": "banknote engraving specimen",
     "year": 1954,
-    "tags": [],
+    "tags": [
+      "blue"
+    ],
     "batch": "2026-08-09-banknote-design"
   },
   {
@@ -32,7 +36,10 @@
     "artist": "Bank of Canada.",
     "query": "banknote engraving specimen",
     "year": 1954,
-    "tags": [],
+    "tags": [
+      "gray",
+      "purple"
+    ],
     "batch": "2026-08-09-banknote-design"
   },
   {
@@ -44,7 +51,10 @@
     "artist": "El Banco Mercantil de Yucatán, engraving &amp; design Thomas F. Morris II (d. 1898) of the Homer Lee Bank Note Company.",
     "query": "banknote engraving specimen",
     "year": null,
-    "tags": [],
+    "tags": [
+      "cyan",
+      "white"
+    ],
     "batch": "2026-08-09-banknote-design"
   },
   {
@@ -56,7 +66,11 @@
     "artist": "El Banco Mercantil de Yucatán, engraving &amp; design Thomas F. Morris II (d. 1898) of the Homer Lee Bank Note Company.",
     "query": "banknote engraving specimen",
     "year": null,
-    "tags": [],
+    "tags": [
+      "white",
+      "gray",
+      "cyan"
+    ],
     "batch": "2026-08-09-banknote-design"
   },
   {
@@ -68,7 +82,11 @@
     "artist": "National Museum of American History",
     "query": "banknote engraving specimen",
     "year": 1882,
-    "tags": [],
+    "tags": [
+      "white",
+      "gray",
+      "orange"
+    ],
     "batch": "2026-08-09-banknote-design"
   },
   {
@@ -80,7 +98,11 @@
     "artist": "National Museum of American History",
     "query": "banknote engraving specimen",
     "year": 1882,
-    "tags": [],
+    "tags": [
+      "gray",
+      "white",
+      "orange"
+    ],
     "batch": "2026-08-09-banknote-design"
   },
   {
@@ -92,7 +114,10 @@
     "artist": "National Museum of American History",
     "query": "banknote engraving specimen",
     "year": 1877,
-    "tags": [],
+    "tags": [
+      "gray",
+      "white"
+    ],
     "batch": "2026-08-09-banknote-design"
   },
   {
@@ -104,7 +129,10 @@
     "artist": "National Museum of American History",
     "query": "banknote engraving specimen",
     "year": 1877,
-    "tags": [],
+    "tags": [
+      "gray",
+      "white"
+    ],
     "batch": "2026-08-09-banknote-design"
   },
   {
@@ -116,7 +144,11 @@
     "artist": "National Museum of American History",
     "query": "banknote engraving specimen",
     "year": 1877,
-    "tags": [],
+    "tags": [
+      "white",
+      "gray",
+      "orange"
+    ],
     "batch": "2026-08-09-banknote-design"
   },
   {
@@ -128,7 +160,11 @@
     "artist": "National Museum of American History",
     "query": "banknote engraving specimen",
     "year": 1877,
-    "tags": [],
+    "tags": [
+      "white",
+      "gray",
+      "orange"
+    ],
     "batch": "2026-08-09-banknote-design"
   },
   {
@@ -140,7 +176,11 @@
     "artist": "National Museum of American History",
     "query": "banknote engraving specimen",
     "year": 1877,
-    "tags": [],
+    "tags": [
+      "white",
+      "gray",
+      "orange"
+    ],
     "batch": "2026-08-09-banknote-design"
   },
   {
@@ -152,7 +192,11 @@
     "artist": "National Museum of American History",
     "query": "banknote engraving specimen",
     "year": 1877,
-    "tags": [],
+    "tags": [
+      "white",
+      "gray",
+      "orange"
+    ],
     "batch": "2026-08-09-banknote-design"
   },
   {
@@ -164,7 +208,11 @@
     "artist": "National Museum of American History",
     "query": "banknote engraving specimen",
     "year": 1877,
-    "tags": [],
+    "tags": [
+      "white",
+      "gray",
+      "orange"
+    ],
     "batch": "2026-08-09-banknote-design"
   },
   {
@@ -176,7 +224,10 @@
     "artist": "Wolfmann",
     "query": "Norwegian krone banknote",
     "year": 1945,
-    "tags": [],
+    "tags": [
+      "orange",
+      "yellow"
+    ],
     "batch": "2026-08-09-norwegian-krone"
   },
   {
@@ -188,7 +239,10 @@
     "artist": "Wolfmann",
     "query": "Norwegian krone banknote",
     "year": 1943,
-    "tags": [],
+    "tags": [
+      "red",
+      "gray"
+    ],
     "batch": "2026-08-09-norwegian-krone"
   },
   {
@@ -200,7 +254,10 @@
     "artist": "Wolfmann",
     "query": "Norwegian krone banknote",
     "year": null,
-    "tags": [],
+    "tags": [
+      "yellow",
+      "orange"
+    ],
     "batch": "2026-08-09-norwegian-krone"
   },
   {
@@ -212,7 +269,10 @@
     "artist": "Wolfmann",
     "query": "Norwegian krone banknote",
     "year": 1942,
-    "tags": [],
+    "tags": [
+      "gray",
+      "yellow"
+    ],
     "batch": "2026-08-09-norwegian-krone"
   },
   {
@@ -224,7 +284,10 @@
     "artist": "Wolfmann",
     "query": "Norwegian krone banknote",
     "year": 2020,
-    "tags": [],
+    "tags": [
+      "gray",
+      "yellow"
+    ],
     "batch": "2026-08-09-norwegian-krone"
   },
   {
@@ -236,7 +299,10 @@
     "artist": "Wolfmann",
     "query": "Norwegian krone banknote",
     "year": 2020,
-    "tags": [],
+    "tags": [
+      "white",
+      "orange"
+    ],
     "batch": "2026-08-09-norwegian-krone"
   },
   {
@@ -248,7 +314,10 @@
     "artist": "Wolfmann",
     "query": "Norwegian krone banknote",
     "year": 2020,
-    "tags": [],
+    "tags": [
+      "white",
+      "orange"
+    ],
     "batch": "2026-08-09-norwegian-krone"
   },
   {
@@ -260,7 +329,10 @@
     "artist": "Wolfmann",
     "query": "Norwegian krone banknote",
     "year": 2020,
-    "tags": [],
+    "tags": [
+      "gray",
+      "orange"
+    ],
     "batch": "2026-08-09-norwegian-krone"
   }
 ]

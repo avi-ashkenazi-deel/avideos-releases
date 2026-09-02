@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Design Vault</title>
+<style>
+  :root { --bg:#16171a; --card:#1f2024; --line:#2c2d33; --ink:#e9e7e2; --dim:#9b978f; --gold:#d8c96a; }
+  body { font:15px/1.55 "Avenir Next","Segoe UI",system-ui,sans-serif; margin:0;
+         background:var(--bg); color:var(--ink); }
+  header { position:sticky; top:0; z-index:5; background:var(--bg); border-bottom:1px solid var(--line);
+           padding:.9rem clamp(1rem,3vw,2.2rem); display:flex; flex-wrap:wrap; gap:.7rem; align-items:center; }
+  h1 { font-size:1.05rem; margin:0 1rem 0 0; font-weight:600; }
+  h1 .count { color:var(--dim); font-weight:400; font-variant-numeric:tabular-nums; }
+  #q { flex:1 1 260px; max-width:46ch; padding:.5rem .9rem; font:inherit; color:var(--ink);
+       background:var(--card); border:1px solid var(--line); border-radius:8px; outline:none; }
+  #q:focus { border-color:var(--gold); }
+  button { font:inherit; cursor:pointer; background:var(--card); color:var(--ink);
+           border:1px solid var(--line); border-radius:8px; padding:.45rem .9rem; }
+  button:hover { border-color:var(--gold); }
+  #chips { padding:.7rem clamp(1rem,3vw,2.2rem) 0; display:flex; flex-wrap:wrap; gap:6px; }
+  .chip { font-size:.8rem; padding:3px 12px; border-radius:99px; }
+  .chip.on { background:var(--gold); color:var(--bg); border-color:var(--gold); font-weight:600; }
+  .chip.color i { display:inline-block; width:.7em; height:.7em; border-radius:50%; margin-right:.45em;
+                  border:1px solid rgba(255,255,255,.25); }
+  main { padding:1rem clamp(1rem,3vw,2.2rem) 5rem; }
+  #grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(235px,1fr)); gap:14px; }
+  figure { margin:0; background:var(--card); border-radius:6px; overflow:hidden; position:relative; }
+  figure img, figure video { width:100%; height:215px; object-fit:contain; background:#0c0d0f; display:block; }
+  figcaption { padding:.55rem .8rem .65rem; font-size:.78rem; display:grid; gap:3px; }
+  figcaption strong { font-weight:600; overflow-wrap:anywhere; }
+  .meta { display:flex; justify-content:space-between; gap:.5rem; color:var(--dim); }
+  .meta a { color:#7ab8ff; text-decoration:none; }
+  .pin { position:absolute; top:8px; right:8px; opacity:0; transition:opacity .12s;
+         background:var(--bg); border-radius:6px; padding:2px 9px; font-size:.85rem; }
+  figure:hover .pin { opacity:1; }
+  figure.pinned .pin { opacity:1; background:var(--gold); color:var(--bg); font-weight:700; }
+  aside { position:fixed; right:0; top:0; bottom:0; width:270px; background:var(--card);
+          border-left:1px solid var(--line); padding:1rem; transform:translateX(100%);
+          transition:transform .18s; z-index:9; overflow-y:auto; }
+  aside.open { transform:none; }
+  aside h2 { font-size:.85rem; text-transform:uppercase; letter-spacing:.08em; margin:.2rem 0 .8rem; }
+  .board { padding:.5rem .7rem; border:1px solid var(--line); border-radius:8px; margin-bottom:.5rem;
+           cursor:pointer; display:flex; justify-content:space-between; gap:.5rem; }
+  .board.on { border-color:var(--gold); }
+  .board .n { color:var(--dim); font-variant-numeric:tabular-nums; }
+  #synclog { position:fixed; left:1rem; bottom:1rem; max-width:46rem; background:var(--card);
+             border:1px solid var(--line); border-radius:8px; padding:.7rem 1rem; font:12px/1.5 ui-monospace,monospace;
+             white-space:pre-wrap; display:none; z-index:9; }
+</style>
+<header>
+  <h1>Design Vault <span class="count" id="count"></span></h1>
+  <input id="q" type="search" placeholder='try: red logos · fabrizia motion · 1959' autocomplete="off">
+  <button id="boardsBtn">Boards</button>
+  <button id="syncBtn">Sync</button>
+</header>
+<div id="chips"></div>
+<main><div id="grid"></div></main>
+<aside id="panel">
+  <h2>Boards</h2>
+  <div id="boardlist"></div>
+  <button id="newBoard" style="width:100%">＋ New board</button>
+  <p style="color:var(--dim);font-size:.78rem">Select a board, then click ＋ on any card to pin it.
+  Boards live in boards.json and travel with the repo.</p>
+</aside>
+<div id="synclog"></div>
+<script>
+const COLORS = {red:"#d84a4a",orange:"#e08a3c",yellow:"#e0c53c",green:"#57a45e",cyan:"#4fb8c4",
+                blue:"#5479d6",purple:"#8b5fc9",pink:"#d668a8",black:"#111",white:"#eee",gray:"#8a8a8a"};
+let items = [], boards = [], activeBoard = null, activeColl = null, activeColor = null;
+
+const $ = id => document.getElementById(id);
+const norm = s => (s||"").toLowerCase();
+
+function haystack(it){ return norm([it.title,it.tags,it.artist,it.collection,it.year].join(" ")); }
+
+function render(){
+  const terms = norm($("q").value).split(/\s+/).filter(Boolean);
+  const shown = items.filter(it =>
+    (!activeColl || it.collection===activeColl) &&
+    (!activeColor || (","+it.tags+",").includes(","+activeColor+",")) &&
+    terms.every(t => haystack(it).includes(t)));
+  $("count").textContent = `${shown.length} / ${items.length}`;
+  const board = boards.find(b=>b.id===activeBoard);
+  $("grid").innerHTML = shown.slice(0,400).map(it=>{
+    const src = "/" + it.file.split("/").map(encodeURIComponent).join("/");
+    const vid = /\.(mp4|mov|webm|m4v)$/i.test(it.file);
+    const media = vid ? `<video src="${src}" muted loop playsinline onmouseover="this.play()" onmouseout="this.pause()"></video>`
+                      : `<img src="${src}" loading="lazy" alt="">`;
+    const pinned = board && board.items.some(r=>r.file===it.file && r.collection===it.collection);
+    return `<figure class="${pinned?'pinned':''}" data-c="${it.collection}" data-f="${it.file}">
+      ${media}
+      <span class="pin" title="pin to board">＋</span>
+      <figcaption><strong>${it.title||""}</strong>
+        <span class="meta"><span>${it.collection}${it.year?" · "+it.year:""}</span>
+        ${it.page_url?`<a href="${it.page_url}" target="_blank" rel="noopener">source ↗</a>`:""}</span>
+      </figcaption></figure>`;
+  }).join("");
+  if(shown.length>400) $("grid").insertAdjacentHTML("beforeend",
+    `<p style="color:var(--dim)">…and ${shown.length-400} more — narrow the search.</p>`);
+}
+
+function renderChips(){
+  const colls = [...new Set(items.map(i=>i.collection))].sort();
+  $("chips").innerHTML =
+    colls.map(c=>`<button class="chip coll ${c===activeColl?'on':''}" data-c="${c}">${c}</button>`).join("") +
+    Object.entries(COLORS).map(([n,hex])=>
+      `<button class="chip color ${n===activeColor?'on':''}" data-k="${n}"><i style="background:${hex}"></i>${n}</button>`).join("");
+}
+
+function renderBoards(){
+  $("boardlist").innerHTML = boards.map(b=>
+    `<div class="board ${b.id===activeBoard?'on':''}" data-b="${b.id}">
+       <span>${b.name}</span><span class="n">${b.items.length}</span></div>`).join("")
+    || `<p style="color:var(--dim);font-size:.8rem">No boards yet.</p>`;
+}
+
+async function api(path, body){
+  const r = await fetch(path, body?{method:"POST",body:JSON.stringify(body)}:{});
+  return r.json();
+}
+
+document.addEventListener("click", async e=>{
+  const coll = e.target.closest(".chip.coll");
+  if(coll){ activeColl = activeColl===coll.dataset.c?null:coll.dataset.c; renderChips(); render(); return; }
+  const col = e.target.closest(".chip.color");
+  if(col){ activeColor = activeColor===col.dataset.k?null:col.dataset.k; renderChips(); render(); return; }
+  const bd = e.target.closest(".board");
+  if(bd){ activeBoard = activeBoard===bd.dataset.b?null:bd.dataset.b; renderBoards(); render(); return; }
+  if(e.target.classList.contains("pin")){
+    if(!activeBoard){ $("panel").classList.add("open"); return; }
+    const f = e.target.closest("figure");
+    await api("/api/boards/toggle",{board:activeBoard,collection:f.dataset.c,file:f.dataset.f});
+    boards = (await api("/api/boards")).boards; renderBoards(); render(); return;
+  }
+});
+$("q").addEventListener("input", render);
+$("boardsBtn").onclick = ()=> $("panel").classList.toggle("open");
+$("newBoard").onclick = async ()=>{
+  const name = prompt("Board name"); if(!name) return;
+  await api("/api/boards/create",{name});
+  boards = (await api("/api/boards")).boards; renderBoards();
+};
+$("syncBtn").onclick = async ()=>{
+  $("syncBtn").textContent = "Syncing…";
+  const r = await api("/api/sync",{});
+  $("synclog").style.display = "block"; $("synclog").textContent = r.log;
+  setTimeout(()=> $("synclog").style.display="none", 8000);
+  $("syncBtn").textContent = "Sync";
+  items = await api("/api/library"); renderChips(); render();
+};
+
+(async ()=>{
+  [items, boards] = [await api("/api/library"), (await api("/api/boards")).boards];
+  renderChips(); renderBoards(); render();
+})();
+</script>
+</html>

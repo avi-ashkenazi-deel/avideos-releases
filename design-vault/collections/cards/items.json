@@ -8,7 +8,10 @@
     "artist": "Valentin de Boulogne",
     "query": "playing card design",
     "year": null,
-    "tags": [],
+    "tags": [
+      "orange",
+      "black"
+    ],
     "batch": "2026-08-09-playing-cards"
   },
   {
@@ -20,7 +23,10 @@
     "artist": "Adolf Jossifowitsch Charlemagne",
     "query": "playing card design",
     "year": null,
-    "tags": [],
+    "tags": [
+      "white",
+      "green"
+    ],
     "batch": "2026-08-09-playing-cards"
   },
   {
@@ -32,7 +38,10 @@
     "artist": "Unknown artistUnknown artist",
     "query": "playing card design",
     "year": 1855,
-    "tags": [],
+    "tags": [
+      "yellow",
+      "orange"
+    ],
     "batch": "2026-08-09-playing-cards"
   },
   {
@@ -44,7 +53,9 @@
     "artist": "",
     "query": "playing card design",
     "year": 1868,
-    "tags": [],
+    "tags": [
+      "orange"
+    ],
     "batch": "2026-08-09-playing-cards"
   },
   {
@@ -56,7 +67,10 @@
     "artist": "",
     "query": "playing card design",
     "year": 1896,
-    "tags": [],
+    "tags": [
+      "white",
+      "orange"
+    ],
     "batch": "2026-08-09-playing-cards"
   },
   {
@@ -68,7 +82,10 @@
     "artist": "",
     "query": "playing card design",
     "year": 1896,
-    "tags": [],
+    "tags": [
+      "white",
+      "gray"
+    ],
     "batch": "2026-08-09-playing-cards"
   },
   {
@@ -80,7 +97,10 @@
     "artist": "Unknown artistUnknown artist",
     "query": "playing card design",
     "year": null,
-    "tags": [],
+    "tags": [
+      "yellow",
+      "orange"
+    ],
     "batch": "2026-08-09-playing-cards"
   },
   {
@@ -92,7 +112,10 @@
     "artist": "Unknown artistUnknown artist",
     "query": "playing card design",
     "year": null,
-    "tags": [],
+    "tags": [
+      "yellow",
+      "orange"
+    ],
     "batch": "2026-08-09-playing-cards"
   },
   {
@@ -104,7 +127,10 @@
     "artist": "Unknown artistUnknown artist",
     "query": "playing card design",
     "year": null,
-    "tags": [],
+    "tags": [
+      "orange",
+      "yellow"
+    ],
     "batch": "2026-08-09-playing-cards"
   },
   {
@@ -116,7 +142,10 @@
     "artist": "Unknown artistUnknown artist",
     "query": "playing card design",
     "year": null,
-    "tags": [],
+    "tags": [
+      "orange",
+      "yellow"
+    ],
     "batch": "2026-08-09-playing-cards"
   }
 ]

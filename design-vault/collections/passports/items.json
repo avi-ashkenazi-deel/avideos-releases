@@ -8,7 +8,9 @@
     "artist": "Albert Poliakoff",
     "query": "passport cover",
     "year": 1988,
-    "tags": [],
+    "tags": [
+      "red"
+    ],
     "batch": "2026-08-09-passport-covers"
   },
   {
@@ -20,7 +22,9 @@
     "artist": "CrabeXBug ; Aryanto Andriamanantena",
     "query": "passport cover",
     "year": 2013,
-    "tags": [],
+    "tags": [
+      "red"
+    ],
     "batch": "2026-08-09-passport-covers"
   },
   {
@@ -32,7 +36,9 @@
     "artist": "Albert Poliakoff",
     "query": "passport cover",
     "year": null,
-    "tags": [],
+    "tags": [
+      "red"
+    ],
     "batch": "2026-08-09-passport-covers"
   },
   {
@@ -44,7 +50,9 @@
     "artist": "The National Police of the Netherlands",
     "query": "passport cover",
     "year": 2022,
-    "tags": [],
+    "tags": [
+      "red"
+    ],
     "batch": "2026-08-09-passport-covers"
   },
   {
@@ -56,7 +64,9 @@
     "artist": "AndyJWD",
     "query": "passport cover",
     "year": 1952,
-    "tags": [],
+    "tags": [
+      "cyan"
+    ],
     "batch": "2026-08-09-passport-covers"
   },
   {
@@ -68,7 +78,9 @@
     "artist": "Abdulrahman.Abbadi96",
     "query": "passport cover",
     "year": null,
-    "tags": [],
+    "tags": [
+      "blue"
+    ],
     "batch": "2026-08-09-passport-covers"
   },
   {
@@ -80,7 +92,9 @@
     "artist": "STAR-PASS — A European Citizens' Initiative",
     "query": "passport cover",
     "year": null,
-    "tags": [],
+    "tags": [
+      "blue"
+    ],
     "batch": "2026-08-09-passport-covers"
   },
   {
@@ -92,7 +106,9 @@
     "artist": "VictiniFan360",
     "query": "passport cover",
     "year": 2023,
-    "tags": [],
+    "tags": [
+      "white"
+    ],
     "batch": "2026-08-09-passport-covers"
   },
   {
@@ -104,7 +120,10 @@
     "artist": "Kadadeakd",
     "query": "passport cover",
     "year": null,
-    "tags": [],
+    "tags": [
+      "red",
+      "orange"
+    ],
     "batch": "2026-08-09-passport-covers"
   },
   {
@@ -116,7 +135,10 @@
     "artist": "Siirski",
     "query": "passport cover",
     "year": null,
-    "tags": [],
+    "tags": [
+      "black",
+      "orange"
+    ],
     "batch": "2026-08-09-passport-covers"
   },
   {
@@ -128,7 +150,10 @@
     "artist": "design: Polish Ministry of Internal Affairs and Administration, scanned by Radosław Botev",
     "query": "passport cover",
     "year": 2001,
-    "tags": [],
+    "tags": [
+      "black",
+      "blue"
+    ],
     "batch": "2026-08-09-passport-covers"
   },
   {
@@ -140,7 +165,9 @@
     "artist": "The MK",
     "query": "passport cover",
     "year": null,
-    "tags": [],
+    "tags": [
+      "blue"
+    ],
     "batch": "2026-08-09-passport-covers"
   },
   {
@@ -152,7 +179,9 @@
     "artist": "Mauritania",
     "query": "passport cover",
     "year": null,
-    "tags": [],
+    "tags": [
+      "green"
+    ],
     "batch": "2026-08-09-passport-covers"
   },
   {
@@ -164,7 +193,9 @@
     "artist": "ElliotHewitt",
     "query": "passport cover",
     "year": null,
-    "tags": [],
+    "tags": [
+      "blue"
+    ],
     "batch": "2026-08-09-passport-covers"
   }
 ]

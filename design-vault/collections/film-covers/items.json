@@ -8,7 +8,10 @@
     "artist": "Cleveland : A.B.C. Co. (poster publisher)",
     "query": "film poster",
     "year": null,
-    "tags": [],
+    "tags": [
+      "orange",
+      "yellow"
+    ],
     "batch": "2026-08-09-film-posters"
   },
   {
@@ -20,7 +23,9 @@
     "artist": "Adam Cuerden",
     "query": "film poster",
     "year": 1933,
-    "tags": [],
+    "tags": [
+      "orange"
+    ],
     "batch": "2026-08-09-film-posters"
   },
   {
@@ -32,7 +37,10 @@
     "artist": "The National Ptg. &amp; Eng. Co. (Chicago, New York, St. Louis), restored by Adam Cuerden",
     "query": "film poster",
     "year": 1913,
-    "tags": [],
+    "tags": [
+      "red",
+      "orange"
+    ],
     "batch": "2026-08-09-film-posters"
   },
   {
@@ -44,7 +52,10 @@
     "artist": "Karoly Grosz",
     "query": "film poster",
     "year": 1932,
-    "tags": [],
+    "tags": [
+      "blue",
+      "orange"
+    ],
     "batch": "2026-08-09-film-posters"
   },
   {
@@ -56,7 +67,10 @@
     "artist": "Cândido Aragonez de Faria",
     "query": "film poster",
     "year": 1908,
-    "tags": [],
+    "tags": [
+      "orange",
+      "yellow"
+    ],
     "batch": "2026-08-09-film-posters"
   },
   {
@@ -68,7 +82,9 @@
     "artist": "United Artists",
     "query": "film poster",
     "year": 1940,
-    "tags": [],
+    "tags": [
+      "yellow"
+    ],
     "batch": "2026-08-09-film-posters"
   },
   {
@@ -80,7 +96,10 @@
     "artist": "Roger Kastel",
     "query": "film poster",
     "year": null,
-    "tags": [],
+    "tags": [
+      "black",
+      "cyan"
+    ],
     "batch": "2026-08-09-film-posters"
   },
   {
@@ -92,7 +111,10 @@
     "artist": "Adam Cuerden",
     "query": "film poster",
     "year": 1913,
-    "tags": [],
+    "tags": [
+      "orange",
+      "yellow"
+    ],
     "batch": "2026-08-09-film-posters"
   },
   {
@@ -104,7 +126,10 @@
     "artist": "Employee(s) of Pathé",
     "query": "film poster",
     "year": 1925,
-    "tags": [],
+    "tags": [
+      "yellow",
+      "orange"
+    ],
     "batch": "2026-08-09-film-posters"
   },
   {
@@ -116,7 +141,10 @@
     "artist": "Studio Virc",
     "query": "film poster",
     "year": null,
-    "tags": [],
+    "tags": [
+      "red",
+      "blue"
+    ],
     "batch": "2026-08-09-film-posters"
   },
   {
@@ -128,7 +156,9 @@
     "artist": "Movie studio which produced the film",
     "query": "film poster",
     "year": null,
-    "tags": [],
+    "tags": [
+      "orange"
+    ],
     "batch": "2026-08-09-film-posters"
   },
   {
@@ -140,7 +170,11 @@
     "artist": "JammyKH",
     "query": "film poster",
     "year": null,
-    "tags": [],
+    "tags": [
+      "gray",
+      "black",
+      "yellow"
+    ],
     "batch": "2026-08-09-film-posters"
   }
 ]

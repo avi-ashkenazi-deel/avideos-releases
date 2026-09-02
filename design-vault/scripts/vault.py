@@ -366,6 +366,75 @@ click a chip again to clear it.</p>
     return 0
 
 
+COLOR_NAMES = {"red", "orange", "yellow", "green", "cyan", "blue", "purple",
+               "pink", "black", "white", "gray"}
+
+
+def color_buckets(path: Path):
+    """Dominant color names for an image (or a video's first frame)."""
+    import colorsys
+    import subprocess
+    import tempfile
+    from PIL import Image
+    if is_video(path.name):
+        with tempfile.NamedTemporaryFile(suffix=".png") as tmp:
+            subprocess.run(["ffmpeg", "-y", "-i", str(path), "-frames:v", "1", tmp.name],
+                           capture_output=True)
+            img = Image.open(tmp.name)
+            img.load()
+    else:
+        img = Image.open(path)
+    img = img.convert("RGB")
+    img.thumbnail((64, 64))
+    counts = {}
+    pixels = list(img.getdata())
+    for r, g, b in pixels:
+        h, s, v = colorsys.rgb_to_hsv(r / 255, g / 255, b / 255)
+        if v < 0.16:
+            name = "black"
+        elif s < 0.15:
+            name = "white" if v > 0.82 else "gray"
+        else:
+            deg = h * 360
+            name = ("red" if deg < 15 or deg >= 345 else "orange" if deg < 42 else
+                    "yellow" if deg < 70 else "green" if deg < 165 else
+                    "cyan" if deg < 200 else "blue" if deg < 258 else
+                    "purple" if deg < 290 else "pink")
+        counts[name] = counts.get(name, 0) + 1
+    total = len(pixels) or 1
+    ranked = sorted(counts.items(), key=lambda kv: -kv[1])
+    out = [n for n, c in ranked[:2] if c / total >= 0.22]
+    chroma = [(n, c) for n, c in ranked if n not in ("black", "white", "gray")]
+    if chroma and chroma[0][1] / total >= 0.10 and chroma[0][0] not in out:
+        out.append(chroma[0][0])  # the leading chromatic color always counts
+    return out or [ranked[0][0]]
+
+
+def cmd_colors(_args) -> int:
+    """Backfill dominant-color tags on every catalog entry that lacks them."""
+    done = skipped = failed = 0
+    for catalog_path in sorted(COLLECTIONS.glob("*/items.json")):
+        catalog = json.loads(catalog_path.read_text())
+        changed = False
+        for entry in catalog:
+            tags = entry.get("tags", [])
+            if COLOR_NAMES & set(tags):
+                skipped += 1
+                continue
+            try:
+                entry["tags"] = tags + color_buckets(catalog_path.parent / entry["file"])
+                changed = True
+                done += 1
+            except Exception:
+                failed += 1
+        if changed:
+            catalog_path.write_text(json.dumps(catalog, indent=2, ensure_ascii=False))
+        print(f"  {catalog_path.parent.name}: analyzed")
+    print(f"colored {done}, already-tagged {skipped}, failed {failed}")
+    cmd_db(None)
+    return 0
+
+
 def cmd_db(_args) -> int:
     """Consolidate every collection catalog into vault.db (SQLite) for offline use."""
     import sqlite3
@@ -431,9 +500,10 @@ def main() -> int:
     bp.add_argument("--thumb-px", type=int, default=400, help="embedded thumbnail max size")
     bp.add_argument("--thumb-q", type=int, default=68, help="embedded thumbnail JPEG quality")
     sub.add_parser("db")
+    sub.add_parser("colors")
     args = ap.parse_args()
     return {"review": cmd_review, "resolve": cmd_resolve, "tag": cmd_tag,
-            "browse": cmd_browse, "db": cmd_db}[args.cmd](args)
+            "browse": cmd_browse, "db": cmd_db, "colors": cmd_colors}[args.cmd](args)
 
 
 if __name__ == "__main__":

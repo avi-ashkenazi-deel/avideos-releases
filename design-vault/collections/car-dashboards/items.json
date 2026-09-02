@@ -8,7 +8,10 @@
     "artist": "Palauenc05",
     "query": "car instrument cluster",
     "year": 1957,
-    "tags": [],
+    "tags": [
+      "gray",
+      "red"
+    ],
     "batch": "2026-08-09-instrument-clusters"
   },
   {
@@ -20,7 +23,9 @@
     "artist": "Artyom Svetlov",
     "query": "car instrument cluster",
     "year": 2012,
-    "tags": [],
+    "tags": [
+      "black"
+    ],
     "batch": "2026-08-09-instrument-clusters"
   },
   {
@@ -32,7 +37,10 @@
     "artist": "Vjdeep",
     "query": "car instrument cluster",
     "year": null,
-    "tags": [],
+    "tags": [
+      "gray",
+      "black"
+    ],
     "batch": "2026-08-09-instrument-clusters"
   },
   {
@@ -44,7 +52,9 @@
     "artist": "Vjdeep",
     "query": "car instrument cluster",
     "year": 2008,
-    "tags": [],
+    "tags": [
+      "gray"
+    ],
     "batch": "2026-08-09-instrument-clusters"
   },
   {
@@ -56,7 +66,10 @@
     "artist": "Motokoka",
     "query": "car instrument cluster",
     "year": null,
-    "tags": [],
+    "tags": [
+      "gray",
+      "black"
+    ],
     "batch": "2026-08-09-instrument-clusters"
   },
   {
@@ -68,7 +81,10 @@
     "artist": "Andrepoiy",
     "query": "car instrument cluster",
     "year": null,
-    "tags": [],
+    "tags": [
+      "black",
+      "blue"
+    ],
     "batch": "2026-08-09-instrument-clusters"
   },
   {
@@ -80,7 +96,9 @@
     "artist": "Ivan Radic",
     "query": "car instrument cluster",
     "year": null,
-    "tags": [],
+    "tags": [
+      "black"
+    ],
     "batch": "2026-08-09-instrument-clusters"
   },
   {
@@ -92,7 +110,10 @@
     "artist": "Vjdeep",
     "query": "car instrument cluster",
     "year": null,
-    "tags": [],
+    "tags": [
+      "gray",
+      "black"
+    ],
     "batch": "2026-08-09-instrument-clusters"
   },
   {
@@ -104,7 +125,9 @@
     "artist": "Wikisympathisant",
     "query": "car instrument cluster",
     "year": 2024,
-    "tags": [],
+    "tags": [
+      "orange"
+    ],
     "batch": "2026-08-09-instrument-clusters"
   },
   {
@@ -116,7 +139,10 @@
     "artist": "Marek Ślusarczyk (Tupungato) Photo portfolio",
     "query": "car instrument cluster",
     "year": null,
-    "tags": [],
+    "tags": [
+      "gray",
+      "yellow"
+    ],
     "batch": "2026-08-09-instrument-clusters"
   }
 ]

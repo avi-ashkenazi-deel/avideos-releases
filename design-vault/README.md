@@ -3,6 +3,19 @@
 A curated, reviewable collection of design reference: logos, posters, passports,
 currency, interface design, and general inspiration. Everything lives in folders
 in this repo, with metadata (source, license, why it was picked) next to every image.
+Where it's headed (multi-user hive brain, shared boards, AI search): [VISION.md](VISION.md).
+
+## The app
+
+```bash
+git clone <this repo> && cd <repo> && git checkout claude/design-asset-collection-f97tdi
+python3 design-vault/app/serve.py     # → http://localhost:5177
+```
+
+Search across everything ("red logos", "fabrizia motion", "1959"), filter by
+collection and dominant color, hover-play videos, pin items to boards
+(boards.json — travels with the repo), and hit **Sync** to git pull + push
+without leaving the UI.
 
 ## How it works
 
