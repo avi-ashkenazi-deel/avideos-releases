@@ -1,0 +1,893 @@
+<title>Deel Design</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..600;1,9..144,300..600&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Outfit:wght@700&display=swap">
+<style>
+  /* ─────────────────────────────────────────────────────────────
+     Deel Design — homepage prototype
+     Single committed dark theme: "the purity of black", violet-biased.
+     ───────────────────────────────────────────────────────────── */
+  :root {
+    color-scheme: dark;
+    --void:    #06050a;
+    --nebula:  #0e0a1c;
+    --surface: #130f24;
+    --surface-2: #1a1430;
+    --line:    rgba(196, 181, 253, 0.14);
+    --line-strong: rgba(196, 181, 253, 0.28);
+    --violet:  #3b1e7a;
+    --purple:  #8b5cf6;
+    --lilac:   #c4b5fd;
+    --glass:   #dde6ff;
+    --text:    #f2effa;
+    --muted:   #a49dc2;
+    --dim:     #6f6890;
+
+    --ff-display: 'Fraunces', 'Iowan Old Style', Georgia, serif;
+    --ff-body:    'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --ff-mono:    'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+    --ff-logo:    'Outfit', 'Inter', system-ui, sans-serif;
+
+    --w: 1200px;
+    --gutter: clamp(16px, 4vw, 48px);
+    --radius: 18px;
+    --radius-sm: 10px;
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--void);
+    color: var(--text);
+    font-family: var(--ff-body);
+    font-size: 16px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+  a { color: inherit; text-decoration: none; }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  :focus-visible { outline: 2px solid var(--lilac); outline-offset: 3px; border-radius: 6px; }
+  img, video, canvas { max-width: 100%; }
+
+  .wrap { width: min(var(--w), 100% - 2 * var(--gutter)); margin-inline: auto; }
+
+  /* ── Type scale ─────────────────────────────────────────────── */
+  .eyebrow {
+    font-family: var(--ff-mono);
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--lilac);
+    display: inline-flex; align-items: center; gap: 10px;
+  }
+  .eyebrow::before { content: ""; width: 18px; height: 1px; background: var(--lilac); opacity: .7; }
+  h1, h2, h3 { margin: 0; font-weight: 400; text-wrap: balance; }
+  .display {
+    font-family: var(--ff-display);
+    font-variation-settings: 'opsz' 144;
+    letter-spacing: -0.02em;
+    line-height: 1.0;
+  }
+  .display em { font-style: italic; font-weight: 300; color: var(--glass); }
+  .lede { color: var(--muted); max-width: 34rem; font-size: clamp(16px, 1.25vw, 18px); }
+  .section-head { display: grid; gap: 18px; margin-bottom: clamp(36px, 5vw, 64px); }
+  .section-head h2 { font-size: clamp(34px, 5vw, 60px); }
+
+  section { padding-block: clamp(72px, 10vw, 140px); position: relative; }
+
+  /* ── Buttons ────────────────────────────────────────────────── */
+  .btn {
+    display: inline-flex; align-items: center; gap: 10px;
+    padding: 12px 18px 12px 20px;
+    border-radius: 999px;
+    border: 1px solid var(--line-strong);
+    background: rgba(255,255,255,0.04);
+    font-weight: 500; font-size: 15px;
+    transition: background .2s, border-color .2s, transform .2s;
+    pointer-events: auto;
+  }
+  .btn:hover { background: rgba(196,181,253,0.10); border-color: var(--lilac); transform: translateY(-1px); }
+  .btn .arrow {
+    width: 26px; height: 26px; border-radius: 50%;
+    display: grid; place-items: center;
+    background: var(--text); color: var(--void);
+  }
+  .btn.primary { background: var(--text); color: var(--void); border-color: var(--text); }
+  .btn.primary:hover { background: #fff; }
+  .btn.primary .arrow { background: var(--void); color: var(--text); }
+  .btn.ghost { border-color: transparent; background: transparent; color: var(--muted); }
+  .btn.ghost:hover { color: var(--text); background: rgba(255,255,255,0.04); }
+
+  /* ── Nav ────────────────────────────────────────────────────── */
+  .nav {
+    position: sticky; top: 0; z-index: 50;
+    padding-block: 14px;
+    backdrop-filter: blur(14px) saturate(1.2);
+    -webkit-backdrop-filter: blur(14px) saturate(1.2);
+    background: linear-gradient(to bottom, rgba(6,5,10,0.85), rgba(6,5,10,0.45));
+    border-bottom: 1px solid rgba(196,181,253,0.06);
+  }
+  .nav .wrap { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+  .logo { display: inline-flex; align-items: baseline; gap: 6px; font-family: var(--ff-logo); font-weight: 700; font-size: 26px; letter-spacing: -0.03em; }
+  .logo .dot { color: var(--purple); }
+  .logo small { font-family: var(--ff-body); font-weight: 500; font-size: 13px; color: var(--muted); letter-spacing: 0.02em; margin-left: 4px; }
+  .pill {
+    display: flex; gap: 4px; padding: 5px;
+    border-radius: 999px;
+    background: linear-gradient(var(--nebula), var(--nebula)) padding-box,
+                linear-gradient(120deg, rgba(139,92,246,.7), rgba(196,181,253,.15), rgba(139,92,246,.7)) border-box;
+    border: 1px solid transparent;
+  }
+  .pill a { padding: 9px 16px; border-radius: 999px; font-size: 14px; font-weight: 500; color: var(--muted); transition: color .2s, background .2s; }
+  .pill a:hover { color: var(--text); background: rgba(196,181,253,0.08); }
+  @media (max-width: 760px) { .pill { display: none; } }
+
+  /* ── Hero ───────────────────────────────────────────────────── */
+  .hero {
+    padding-block: 0;
+    min-height: clamp(560px, 86vh, 920px);
+    display: grid; align-items: center;
+    overflow: hidden;
+    background:
+      radial-gradient(60% 50% at 62% 45%, rgba(91, 59, 190, 0.28), transparent 70%),
+      radial-gradient(35% 40% at 30% 80%, rgba(59, 30, 122, 0.25), transparent 70%),
+      radial-gradient(30% 30% at 85% 15%, rgba(139, 92, 246, 0.12), transparent 70%),
+      var(--void);
+  }
+  .hero canvas#stage { position: absolute; inset: 0; width: 100%; height: 100%; display: block; z-index: 1; }
+  .hero .wrap { position: relative; z-index: 2; pointer-events: none; padding-block: clamp(64px, 9vw, 120px); }
+  .hero-copy { display: grid; gap: 28px; max-width: 46rem; }
+  .hero h1 { font-size: clamp(44px, 7.6vw, 108px); }
+  .hero h1 .ln { display: block; }
+  .hero h1 .ln.rule { display: flex; align-items: center; gap: clamp(16px, 3vw, 40px); }
+  .hero h1 .ln.rule::after { content: ""; flex: 0 0 clamp(80px, 12vw, 200px); height: 1px; background: var(--glass); opacity: .6; }
+  .hero-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  .hero-hint { font-family: var(--ff-mono); font-size: 12px; color: var(--dim); letter-spacing: 0.06em; }
+  .hero-hint b { color: var(--lilac); font-weight: 500; }
+
+  /* Place tooltip that follows a landmark */
+  .pin {
+    position: absolute; z-index: 3; pointer-events: none;
+    transform: translate(-50%, -100%);
+    opacity: 0; transition: opacity .25s;
+  }
+  .pin.show { opacity: 1; }
+  .pin .dot {
+    position: absolute; left: 50%; bottom: -5px; transform: translateX(-50%);
+    width: 9px; height: 9px; border-radius: 50%;
+    background: var(--glass); box-shadow: 0 0 0 4px rgba(221,230,255,0.18), 0 0 18px rgba(196,181,253,0.9);
+  }
+  .pin .leader { width: 1px; height: 44px; margin: 0 auto; background: linear-gradient(to top, var(--glass), transparent); }
+  .pin .card {
+    min-width: 230px; max-width: 280px;
+    padding: 12px 14px;
+    border-radius: 12px;
+    background: rgba(14, 10, 28, 0.82);
+    border: 1px solid var(--line-strong);
+    backdrop-filter: blur(10px);
+    display: grid; gap: 4px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+  }
+  .pin .place { font-family: var(--ff-display); font-size: 18px; line-height: 1.15; }
+  .pin .city { color: var(--muted); font-size: 13px; }
+  .pin .coords { font-family: var(--ff-mono); font-size: 11px; color: var(--lilac); letter-spacing: 0.04em; }
+  .pin .who { margin-top: 6px; padding-top: 8px; border-top: 1px solid var(--line); font-size: 13px; display: flex; gap: 8px; align-items: center; }
+  .pin .who i { width: 8px; height: 8px; border-radius: 50%; background: var(--purple); box-shadow: 0 0 10px var(--purple); flex: none; }
+  .pin .who b { font-weight: 500; }
+  .pin .who span { color: var(--muted); }
+
+  /* Cities ticker (stands in for "As featured in") */
+  .ticker {
+    position: relative; z-index: 2;
+    border-top: 1px solid var(--line);
+    padding-block: 18px;
+    background: rgba(6,5,10,0.6);
+    display: flex; align-items: center; gap: 24px;
+    overflow: hidden;
+  }
+  .ticker .label { flex: none; font-family: var(--ff-mono); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--dim); padding-left: var(--gutter); }
+  .ticker .mask { flex: 1; min-width: 0; overflow: hidden; -webkit-mask-image: linear-gradient(to right, transparent, #000 8%, #000 92%, transparent); mask-image: linear-gradient(to right, transparent, #000 8%, #000 92%, transparent); }
+  .ticker .track { display: flex; gap: 48px; width: max-content; white-space: nowrap; animation: slide 60s linear infinite; }
+  .ticker .track span { font-family: var(--ff-display); font-size: 20px; color: var(--muted); }
+  .ticker .track span::after { content: "·"; margin-left: 48px; color: var(--purple); }
+  @keyframes slide { to { transform: translateX(-50%); } }
+
+  /* ── Bento ──────────────────────────────────────────────────── */
+  .bento {
+    display: grid;
+    grid-template-columns: repeat(12, 1fr);
+    grid-auto-rows: minmax(120px, auto);
+    gap: 14px;
+  }
+  .tile {
+    grid-column: span 12;
+    position: relative; overflow: hidden;
+    border-radius: var(--radius);
+    background: linear-gradient(160deg, var(--surface-2), var(--nebula));
+    border: 1px solid var(--line);
+    display: flex; flex-direction: column;
+    min-height: 240px;
+    transition: transform .3s, border-color .3s;
+  }
+  .tile:hover { transform: translateY(-3px); border-color: var(--line-strong); }
+  .tile .media { flex: 1; position: relative; overflow: hidden; min-height: 150px; }
+  .tile .meta { padding: 16px 18px 18px; display: grid; gap: 6px; border-top: 1px solid var(--line); background: rgba(6,5,10,0.35); }
+  .tile .meta h3 { font-size: 17px; font-weight: 500; letter-spacing: -0.01em; }
+  .tile .meta p { margin: 0; color: var(--muted); font-size: 14px; }
+  .tag {
+    position: absolute; top: 14px; left: 14px; z-index: 2;
+    font-family: var(--ff-mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
+    padding: 5px 9px; border-radius: 999px;
+    background: rgba(6,5,10,0.6); border: 1px solid var(--line-strong); color: var(--lilac);
+    backdrop-filter: blur(6px);
+  }
+  .tag.live { color: #b9f2d0; border-color: rgba(185,242,208,0.35); }
+  @media (min-width: 760px) {
+    .t1 { grid-column: 1 / 8;  grid-row: 1 / 3; }
+    .t2 { grid-column: 8 / 13; grid-row: 1 / 2; }
+    .t3 { grid-column: 8 / 11; grid-row: 2 / 3; }
+    .t4 { grid-column: 11 / 13; grid-row: 2 / 3; }
+    .t5 { grid-column: 1 / 5;  grid-row: 3 / 4; }
+    .t6 { grid-column: 5 / 10; grid-row: 3 / 4; }
+    .t7 { grid-column: 10 / 13; grid-row: 3 / 4; }
+  }
+
+  /* t1 — Deel AI: a conversation that resolves itself */
+  .chat { position: absolute; inset: 0; padding: 56px 24px 20px; display: grid; align-content: end; gap: 10px; }
+  .bubble { max-width: 78%; padding: 10px 14px; border-radius: 14px; font-size: 14px; line-height: 1.4; }
+  .bubble.you { justify-self: end; background: rgba(255,255,255,0.08); border: 1px solid var(--line); border-bottom-right-radius: 4px; }
+  .bubble.ai  { background: linear-gradient(135deg, rgba(139,92,246,0.35), rgba(59,30,122,0.35)); border: 1px solid rgba(196,181,253,0.25); border-bottom-left-radius: 4px; }
+  .bubble.ai .act { display: inline-flex; gap: 6px; align-items: center; margin-top: 8px; padding: 6px 10px; border-radius: 8px; background: rgba(6,5,10,0.5); font-family: var(--ff-mono); font-size: 11px; color: #b9f2d0; letter-spacing: .04em; }
+  .bubble.ai .act::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: #b9f2d0; box-shadow: 0 0 8px #b9f2d0; animation: blink 1.6s infinite; }
+  @keyframes blink { 50% { opacity: .3; } }
+  .chat .glow { position: absolute; inset: auto -20% -40% -20%; height: 70%; background: radial-gradient(closest-side, rgba(139,92,246,0.35), transparent); pointer-events: none; }
+
+  /* t2 — Brand: the mark, repeated as a pattern */
+  .marks { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 0; overflow: hidden; }
+  .marks span { font-family: var(--ff-logo); font-weight: 700; font-size: 150px; letter-spacing: -0.06em; line-height: 1; color: transparent; -webkit-text-stroke: 1px rgba(196,181,253,0.35); }
+  .marks span:nth-child(2) { color: var(--glass); -webkit-text-stroke: 0; text-shadow: 0 0 40px rgba(221,230,255,0.45); }
+  .marks span:nth-child(2) i { color: var(--purple); font-style: normal; }
+
+  /* t3 — Design system: tokens */
+  .swatches { position: absolute; inset: 0; padding: 50px 18px 14px; display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; align-content: end; }
+  .swatches b { display: block; aspect-ratio: 1; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08); }
+  .swatches small { grid-column: 1 / -1; font-family: var(--ff-mono); font-size: 11px; color: var(--dim); }
+
+  /* t4 — Payroll: a run that lands on time */
+  .bars { position: absolute; inset: 0; padding: 50px 18px 16px; display: flex; align-items: flex-end; gap: 6px; }
+  .bars b { flex: 1; border-radius: 4px 4px 2px 2px; background: linear-gradient(to top, var(--violet), var(--purple)); animation: grow 2.4s ease-in-out infinite alternate; transform-origin: bottom; }
+  .bars b:nth-child(odd) { animation-delay: -1.2s; }
+  @keyframes grow { from { transform: scaleY(0.55); } to { transform: scaleY(1); } }
+
+  /* t5 — Mobile */
+  .phone { position: absolute; left: 50%; bottom: -20px; transform: translateX(-50%); width: 170px; height: 220px; border-radius: 26px 26px 0 0; border: 1px solid var(--line-strong); background: var(--void); padding: 18px 12px; display: grid; gap: 8px; align-content: start; box-shadow: 0 -20px 60px rgba(139,92,246,0.2); }
+  .phone i { display: block; height: 10px; border-radius: 5px; background: rgba(255,255,255,0.08); }
+  .phone i:first-child { width: 60%; height: 14px; background: rgba(196,181,253,0.35); }
+  .phone i:nth-child(4) { width: 70%; }
+  .phone i.cta { height: 28px; border-radius: 8px; background: var(--text); margin-top: 6px; }
+
+  /* t6 — Video / GIF slot */
+  .vid { position: absolute; inset: 0; background: linear-gradient(120deg, #1a1035, #2a1660 40%, #0e0a1c); }
+  .vid::before { content: ""; position: absolute; inset: 0; background: radial-gradient(40% 60% at 70% 40%, rgba(196,181,253,0.35), transparent), radial-gradient(30% 40% at 25% 70%, rgba(139,92,246,0.5), transparent); animation: drift 12s ease-in-out infinite alternate; }
+  @keyframes drift { to { transform: translate(-6%, 4%) scale(1.08); } }
+  .vid .play { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 56px; height: 56px; border-radius: 50%; background: rgba(255,255,255,0.92); display: grid; place-items: center; color: var(--void); box-shadow: 0 10px 40px rgba(0,0,0,0.5); }
+  .vid .bar { position: absolute; left: 16px; right: 16px; bottom: 14px; height: 3px; background: rgba(255,255,255,0.15); border-radius: 2px; overflow: hidden; }
+  .vid .bar::after { content: ""; position: absolute; inset: 0; width: 38%; background: var(--glass); }
+
+  /* t7 — Motion */
+  .rings { position: absolute; inset: 0; display: grid; place-items: center; }
+  .rings i { position: absolute; width: 60px; height: 60px; border-radius: 50%; border: 1px solid var(--lilac); animation: ring 3.2s ease-out infinite; }
+  .rings i:nth-child(2) { animation-delay: 1.07s; }
+  .rings i:nth-child(3) { animation-delay: 2.13s; }
+  @keyframes ring { from { transform: scale(.4); opacity: .9; } to { transform: scale(3.2); opacity: 0; } }
+  .rings b { width: 14px; height: 14px; border-radius: 50%; background: var(--glass); box-shadow: 0 0 30px var(--glass); }
+
+  /* ── Life: photo sphere ─────────────────────────────────────── */
+  .life { background: linear-gradient(to bottom, var(--void), var(--nebula) 50%, var(--void)); }
+  .life .grid2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: clamp(28px, 5vw, 72px); align-items: center; }
+  @media (max-width: 900px) { .life .grid2 { grid-template-columns: 1fr; } }
+  .life .section-head { margin-bottom: 0; }
+  .facts { display: grid; gap: 14px; margin-top: 28px; }
+  .fact { display: flex; gap: 14px; align-items: baseline; border-top: 1px solid var(--line); padding-top: 12px; }
+  .fact b { font-family: var(--ff-display); font-size: 28px; font-weight: 300; min-width: 4.5rem; font-variant-numeric: tabular-nums; }
+  .fact span { color: var(--muted); font-size: 14px; }
+
+  .orb { --r: 340px; --cw: 190px; --ch: 132px; position: relative; height: 560px; perspective: 1400px; -webkit-mask-image: radial-gradient(closest-side, #000 60%, transparent 100%); mask-image: radial-gradient(closest-side, #000 60%, transparent 100%); }
+  @media (max-width: 900px) { .orb { --r: 230px; --cw: 140px; --ch: 96px; height: 440px; } }
+  @media (max-width: 480px) { .orb { --r: 170px; --cw: 110px; --ch: 76px; height: 360px; } }
+  .orb-inner { position: absolute; left: 50%; top: 50%; width: 0; height: 0; transform-style: preserve-3d; animation: spin 80s linear infinite; }
+  .orb:hover .orb-inner { animation-play-state: paused; }
+  @keyframes spin { to { transform: rotateY(360deg); } }
+  .ph {
+    position: absolute; width: var(--cw); height: var(--ch);
+    left: calc(var(--cw) / -2); top: calc(var(--ch) / -2);
+    transform: rotateY(var(--ry)) rotateX(var(--rx)) translateZ(var(--r));
+    backface-visibility: hidden; -webkit-backface-visibility: hidden;
+    border-radius: 10px; overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.12);
+    background: var(--g, linear-gradient(135deg, #3b1e7a, #8b5cf6));
+    box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+  }
+  .ph::before { content: ""; position: absolute; inset: 0; background: repeating-linear-gradient(0deg, rgba(255,255,255,0.025) 0 1px, transparent 1px 3px); mix-blend-mode: overlay; }
+  .ph figcaption { position: absolute; left: 0; right: 0; bottom: 0; padding: 8px 10px; font-size: 11px; color: var(--text); background: linear-gradient(to top, rgba(6,5,10,0.85), transparent); font-family: var(--ff-mono); letter-spacing: 0.02em; }
+  .ph .cam { position: absolute; top: 8px; right: 8px; width: 16px; height: 12px; border: 1px solid rgba(255,255,255,0.5); border-radius: 3px; }
+  .ph .cam::after { content: ""; position: absolute; left: 4px; top: 2px; width: 6px; height: 6px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.5); }
+
+  /* ── People ─────────────────────────────────────────────────── */
+  .features { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 40px; }
+  @media (max-width: 1000px) { .features { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 560px)  { .features { grid-template-columns: 1fr; } }
+  .feature {
+    display: grid; grid-template-rows: auto 1fr auto; gap: 14px;
+    padding: 18px; min-height: 300px;
+    border-radius: var(--radius); border: 1px solid var(--line);
+    background: linear-gradient(160deg, var(--surface-2), var(--nebula));
+    transition: transform .3s, border-color .3s;
+  }
+  .feature:hover { transform: translateY(-3px); border-color: var(--line-strong); }
+  .feature .kind { display: flex; justify-content: space-between; align-items: center; font-family: var(--ff-mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--lilac); }
+  .feature .kind span:last-child { color: var(--dim); }
+  .feature h3 { font-family: var(--ff-display); font-size: 24px; line-height: 1.15; letter-spacing: -0.01em; align-self: start; }
+  .feature .by { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--muted); }
+  .avatar { width: 30px; height: 30px; border-radius: 50%; background: var(--g, linear-gradient(135deg, var(--violet), var(--purple))); border: 1px solid rgba(255,255,255,0.15); flex: none; display: grid; place-items: center; font-size: 11px; font-weight: 600; color: var(--text); }
+
+  .toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 18px; }
+  .search { flex: 1 1 260px; display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 999px; border: 1px solid var(--line-strong); background: rgba(255,255,255,0.03); }
+  .search input { flex: 1; background: none; border: 0; color: var(--text); font: inherit; font-size: 15px; outline: none; min-width: 0; }
+  .search input::placeholder { color: var(--dim); }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { padding: 8px 12px; border-radius: 999px; border: 1px solid var(--line); background: transparent; color: var(--muted); font-size: 13px; }
+  .chip[aria-pressed="true"] { background: var(--text); color: var(--void); border-color: var(--text); }
+
+  .list { display: grid; border-top: 1px solid var(--line); }
+  .row { display: grid; grid-template-columns: 110px 1fr auto auto; gap: 18px; align-items: center; padding: 16px 6px; border-bottom: 1px solid var(--line); transition: background .2s; }
+  .row:hover { background: rgba(196,181,253,0.04); }
+  .row .k { font-family: var(--ff-mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--lilac); }
+  .row .t { font-size: 16px; font-weight: 500; }
+  .row .t small { display: block; font-weight: 400; color: var(--muted); font-size: 13px; margin-top: 2px; }
+  .row .d { font-family: var(--ff-mono); font-size: 12px; color: var(--dim); font-variant-numeric: tabular-nums; }
+  .row .go { color: var(--dim); }
+  .row[hidden] { display: none; }
+  .empty { padding: 32px 6px; color: var(--dim); text-align: center; font-size: 14px; }
+  @media (max-width: 640px) { .row { grid-template-columns: 1fr auto; } .row .k, .row .d { display: none; } }
+
+  /* ── Join ───────────────────────────────────────────────────── */
+  .join { text-align: center; overflow: hidden; }
+  .join::before { content: ""; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 1100px; height: 1100px; max-width: 200vw; border-radius: 50%; background: radial-gradient(closest-side, rgba(139,92,246,0.22), rgba(59,30,122,0.08) 50%, transparent); pointer-events: none; }
+  .join .wrap { position: relative; display: grid; gap: 26px; justify-items: center; }
+  .join h2 { font-size: clamp(38px, 6vw, 84px); max-width: 16ch; }
+  .join p { margin: 0; color: var(--muted); max-width: 36rem; }
+  .join .fine { font-family: var(--ff-mono); font-size: 12px; color: var(--dim); letter-spacing: 0.04em; }
+
+  footer { border-top: 1px solid var(--line); padding-block: 28px; color: var(--dim); font-size: 13px; }
+  footer .wrap { display: flex; flex-wrap: wrap; gap: 12px 28px; justify-content: space-between; align-items: center; }
+  footer .note { font-family: var(--ff-mono); font-size: 11px; letter-spacing: .04em; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .orb-inner, .ticker .track, .bars b, .rings i, .vid::before, .bubble.ai .act::before { animation: none !important; }
+    html { scroll-behavior: auto; }
+  }
+</style>
+
+<!-- ── Nav ─────────────────────────────────────────────────── -->
+<header class="nav">
+  <div class="wrap">
+    <a class="logo" href="#top" aria-label="Deel Design home">d<span class="dot">.</span><small>design</small></a>
+    <nav class="pill" aria-label="Sections">
+      <a href="#work">Work</a>
+      <a href="#life">Life</a>
+      <a href="#people">People</a>
+      <a href="#principles">Principles</a>
+    </nav>
+    <a class="btn" href="#join">Join us <span class="arrow" aria-hidden="true">↗</span></a>
+  </div>
+</header>
+
+<!-- ── Hero ─────────────────────────────────────────────────── -->
+<section class="hero" id="top" aria-label="Introduction">
+  <canvas id="stage" aria-hidden="true"></canvas>
+
+  <div class="pin" id="pin" role="status" aria-live="polite">
+    <div class="card">
+      <div class="place" id="pin-place">Dry Bridge Market</div>
+      <div class="city" id="pin-city">Tbilisi, Georgia</div>
+      <div class="coords" id="pin-coords">41.69° N, 44.80° E</div>
+      <div class="who"><i></i><b id="pin-name">Nino</b><span id="pin-role">Product Designer, Payroll</span></div>
+    </div>
+    <div class="leader"></div>
+    <div class="dot"></div>
+  </div>
+
+  <div class="wrap">
+    <div class="hero-copy">
+      <span class="eyebrow">Deel Design</span>
+      <h1 class="display">
+        <span class="ln">Made everywhere.</span>
+        <span class="ln rule">Shipped as</span>
+        <span class="ln"><em>one.</em></span>
+      </h1>
+      <p class="lede">We're the team designing how the world gets hired, paid, and managed. Fully remote, fast by default, and spread across every time zone there is. The places drifting behind this text are where we actually live.</p>
+      <div class="hero-actions">
+        <a class="btn primary" href="#work">See what we've shipped <span class="arrow" aria-hidden="true">↗</span></a>
+        <a class="btn ghost" href="#people">Meet the team</a>
+      </div>
+      <p class="hero-hint"><b>Hover a place</b> to see who designs from there. Not the postcard landmarks, just ours.</p>
+    </div>
+  </div>
+</section>
+
+<div class="ticker" aria-label="Cities the team designs from">
+  <span class="label">Designing from</span>
+  <div class="mask"><div class="track" id="ticker-track"></div></div>
+</div>
+
+<!-- ── Work ─────────────────────────────────────────────────── -->
+<section id="work" aria-labelledby="work-h">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow">Work</span>
+      <h2 class="display" id="work-h">Shipped this year, at Deel speed</h2>
+      <p class="lede">A running record of what left the building: product, brand, AI, and the motion in between. Every tile drops in a real GIF or clip when we have it.</p>
+    </div>
+
+    <div class="bento">
+      <article class="tile t1">
+        <span class="tag live">AI · Live</span>
+        <div class="media">
+          <div class="chat">
+            <div class="bubble you">Can you run payroll for the Lisbon team a day early? Public holiday.</div>
+            <div class="bubble ai">Done. I moved the Lisbon run to Tuesday, kept the cutoff for expenses, and flagged one contractor missing a bank detail.<div class="act">payroll.run · lisbon · scheduled</div></div>
+            <div class="glow"></div>
+          </div>
+        </div>
+        <div class="meta"><h3>Deel AI that actually does the thing</h3><p>From chat that explains to an agent that acts. Designing trust for automation inside payroll and HR.</p></div>
+      </article>
+
+      <article class="tile t2">
+        <span class="tag">Brand</span>
+        <div class="media"><div class="marks"><span>d.</span><span>d<i>.</i></span><span>d.</span></div></div>
+        <div class="meta"><h3>A mark that holds up at 12px and 12 meters</h3><p>Refreshing the wordmark system across product, events, and out-of-home.</p></div>
+      </article>
+
+      <article class="tile t3">
+        <span class="tag">System</span>
+        <div class="media">
+          <div class="swatches">
+            <b style="background:#06050a"></b><b style="background:#3b1e7a"></b><b style="background:#8b5cf6"></b><b style="background:#c4b5fd"></b><b style="background:#dde6ff"></b>
+            <small>tokens · 1,240 in use · 3 themes</small>
+          </div>
+        </div>
+        <div class="meta"><h3>Design system, v3</h3><p>Themable tokens, one source of truth, shipped with the code.</p></div>
+      </article>
+
+      <article class="tile t4">
+        <span class="tag">Payroll</span>
+        <div class="media"><div class="bars"><b style="height:40%"></b><b style="height:70%"></b><b style="height:55%"></b><b style="height:90%"></b><b style="height:65%"></b><b style="height:100%"></b></div></div>
+        <div class="meta"><h3>Payroll calendar</h3><p>150 countries, one timeline.</p></div>
+      </article>
+
+      <article class="tile t5">
+        <span class="tag">Mobile</span>
+        <div class="media"><div class="phone"><i></i><i></i><i></i><i></i><i class="cta"></i></div></div>
+        <div class="meta"><h3>Get paid, from your pocket</h3><p>Redesigning the worker app around one question: where's my money?</p></div>
+      </article>
+
+      <article class="tile t6">
+        <span class="tag">Motion · GIF</span>
+        <div class="media"><div class="vid"><div class="play" aria-hidden="true">▶</div><div class="bar"></div></div></div>
+        <div class="meta"><h3>Onboarding, in 12 seconds</h3><p>A clip slot. Drop in the real capture, keep it short, let it loop.</p></div>
+      </article>
+
+      <article class="tile t7">
+        <span class="tag">Motion</span>
+        <div class="media"><div class="rings"><i></i><i></i><i></i><b></b></div></div>
+        <div class="meta"><h3>Motion principles</h3><p>Purposeful, quick, never decorative.</p></div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ── Life ─────────────────────────────────────────────────── -->
+<section class="life" id="life" aria-labelledby="life-h">
+  <div class="wrap grid2">
+    <div>
+      <div class="section-head">
+        <span class="eyebrow">Life</span>
+        <h2 class="display" id="life-h">Remote, and <em>together</em></h2>
+        <p class="lede">No headquarters. A few offsites a year, a lot of good desks, and a team that shows up for each other across 14 hours of time difference. These photos are the real ones, curated, not staged.</p>
+      </div>
+      <div class="facts">
+        <div class="fact"><b>0</b><span>Offices. We design where we live.</span></div>
+        <div class="fact"><b>14 h</b><span>Widest time difference between two teammates.</span></div>
+        <div class="fact"><b>3×</b><span>Offsites a year. The rest is on calls, on purpose.</span></div>
+      </div>
+    </div>
+    <div class="orb" aria-label="Rotating team photos">
+      <div class="orb-inner" id="orb"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ── People ───────────────────────────────────────────────── -->
+<section id="people" aria-labelledby="people-h">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow">People</span>
+      <h2 class="display" id="people-h">The designers, in their own words</h2>
+      <p class="lede">Not thought leadership. A problem someone solved, what the pace taught them, how a promotion actually happened. Short, honest, and mostly unedited.</p>
+    </div>
+
+    <div class="features" id="features"></div>
+
+    <div class="toolbar">
+      <label class="search" for="people-search">
+        <span aria-hidden="true">⌕</span>
+        <input id="people-search" type="search" placeholder="Search stories, people, or topics" autocomplete="off">
+      </label>
+      <div class="chips" role="group" aria-label="Filter by format" id="chips">
+        <button class="chip" data-kind="all" aria-pressed="true">All</button>
+        <button class="chip" data-kind="Article" aria-pressed="false">Articles</button>
+        <button class="chip" data-kind="Video" aria-pressed="false">Videos</button>
+        <button class="chip" data-kind="Interview" aria-pressed="false">Interviews</button>
+        <button class="chip" data-kind="Newsletter" aria-pressed="false">Newsletter</button>
+      </div>
+    </div>
+    <div class="list" id="list"></div>
+    <div class="empty" id="empty" hidden>Nothing matches that yet. Try a name, a product area, or a city.</div>
+  </div>
+</section>
+
+<!-- ── Principles teaser ────────────────────────────────────── -->
+<section id="principles" aria-labelledby="principles-h" style="padding-top:0">
+  <div class="wrap">
+    <div class="section-head" style="margin-bottom:0">
+      <span class="eyebrow">Principles</span>
+      <h2 class="display" id="principles-h" style="font-size:clamp(28px,3.6vw,44px)">Speed is a material, not an excuse. <em>Five more where that came from.</em></h2>
+      <div><a class="btn" href="#">Read the principles <span class="arrow" aria-hidden="true">↗</span></a></div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Join ─────────────────────────────────────────────────── -->
+<section class="join" id="join" aria-labelledby="join-h">
+  <div class="wrap">
+    <span class="eyebrow">Join us</span>
+    <h2 class="display" id="join-h">Come design the way the world <em>works</em></h2>
+    <p>We hire designers who get energized by real complexity and don't mind that it ships next week. Wherever you are is already the right place.</p>
+    <a class="btn primary" href="https://www.deel.com/careers/" target="_blank" rel="noopener">See open design roles <span class="arrow" aria-hidden="true">↗</span></a>
+    <span class="fine">Opens Deel careers, filtered to design</span>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <span class="logo" style="font-size:20px">d<span class="dot">.</span><small>design</small></span>
+    <span class="note">Prototype · people, places, and stories shown are sample data</span>
+    <a href="https://www.deel.com" target="_blank" rel="noopener">deel.com</a>
+  </div>
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function () {
+  'use strict';
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* ── Sample data ──────────────────────────────────────────────
+     Real, deliberately un-postcard places. People are placeholders
+     until the team fills in their own. */
+  const PLACES = [
+    { place: 'Dry Bridge Market',        city: 'Tbilisi, Georgia',         lat: 41.6938,  lon: 44.8015,  name: 'Nino',    role: 'Product Designer, Payroll',        kind: 'market' },
+    { place: 'Elevador da Bica',         city: 'Lisbon, Portugal',         lat: 38.7104,  lon: -9.1461,  name: 'Tiago',   role: 'Staff Designer, Platform',         kind: 'lift' },
+    { place: 'Metrocable Line K',        city: 'Medellín, Colombia',       lat: 6.2966,   lon: -75.5573, name: 'Ana',     role: 'Product Designer, Contractors',    kind: 'lift' },
+    { place: "Wendy's Secret Garden",    city: 'Sydney, Australia',        lat: -33.8433, lon: 151.2077, name: 'Priya',   role: 'Content Designer',                 kind: 'dome' },
+    { place: 'Trấn Quốc Pagoda',         city: 'Hanoi, Vietnam',           lat: 21.0480,  lon: 105.8366, name: 'Linh',    role: 'Product Designer, Mobile',         kind: 'tower' },
+    { place: 'Mercado de Antón Martín',  city: 'Madrid, Spain',            lat: 40.4118,  lon: -3.6996,  name: 'Lucía',   role: 'Brand Designer',                   kind: 'market' },
+    { place: 'Angel of Užupis',          city: 'Vilnius, Lithuania',       lat: 54.6817,  lon: 25.2963,  name: 'Rokas',   role: 'Design Engineer',                  kind: 'tower' },
+    { place: 'Cerro Otto chairlift',     city: 'Bariloche, Argentina',     lat: -41.1420, lon: -71.3690, name: 'Sofía',   role: 'Product Designer, EOR',            kind: 'lift' },
+    { place: 'Kigamboni ferry',          city: 'Dar es Salaam, Tanzania',  lat: -6.8235,  lon: 39.2957,  name: 'Amani',   role: 'Product Designer, Payments',       kind: 'pier' },
+    { place: 'Christianshavn canal',     city: 'Copenhagen, Denmark',      lat: 55.6730,  lon: 12.5940,  name: 'Mads',    role: 'Design Manager',                   kind: 'bridge' },
+    { place: 'Reading Power Station',    city: 'Tel Aviv, Israel',         lat: 32.1030,  lon: 34.7830,  name: 'Noa',     role: 'Principal Designer',               kind: 'tower' },
+    { place: 'Lekki–Ikoyi Link Bridge',  city: 'Lagos, Nigeria',           lat: 6.4455,   lon: 3.4479,   name: 'Tobi',    role: 'Product Designer, Onboarding',     kind: 'bridge' },
+    { place: 'Leslie Street Spit',       city: 'Toronto, Canada',          lat: 43.6167,  lon: -79.3400, name: 'Maya',    role: 'Research Lead',                    kind: 'lighthouse' },
+    { place: 'Kładka Bernatka',          city: 'Kraków, Poland',           lat: 50.0503,  lon: 19.9440,  name: 'Kasia',   role: 'Product Designer, HR',             kind: 'bridge' },
+    { place: 'Escolta Street',           city: 'Manila, Philippines',      lat: 14.5978,  lon: 120.9784, name: 'Miguel',  role: 'Product Designer, Deel IT',        kind: 'market' },
+    { place: 'Minhocão at dusk',         city: 'São Paulo, Brazil',        lat: -23.5400, lon: -46.6540, name: 'Rafa',    role: 'Motion Designer',                  kind: 'pier' }
+  ];
+
+  const PHOTOS = [
+    ['Lisbon offsite · Mar 2026', 'linear-gradient(135deg,#2a1660,#8b5cf6)'],
+    ["Ana's balcony desk · Medellín", 'linear-gradient(135deg,#3b1e7a,#c4b5fd)'],
+    ['Sunrise standup · Tbilisi', 'linear-gradient(135deg,#4c1d95,#f0abfc)'],
+    ['Whiteboard, day 2 · Lisbon', 'linear-gradient(135deg,#1e1b4b,#6366f1)'],
+    ['Late call, good light · Sydney', 'linear-gradient(135deg,#312e81,#a78bfa)'],
+    ['Crit on the roof · Tel Aviv', 'linear-gradient(135deg,#581c87,#e9d5ff)'],
+    ['Kasia + Rokas, first meet · Kraków', 'linear-gradient(135deg,#2e1065,#818cf8)'],
+    ['Coffee at the market · Madrid', 'linear-gradient(135deg,#3b0764,#c084fc)'],
+    ['Team dinner · Lisbon', 'linear-gradient(135deg,#1e1b4b,#8b5cf6)'],
+    ['Rafa filming B-roll · São Paulo', 'linear-gradient(135deg,#4a1d96,#ddd6fe)'],
+    ['Ferry commute · Dar es Salaam', 'linear-gradient(135deg,#312e81,#c4b5fd)'],
+    ['Ship day, 02:14 · Hanoi', 'linear-gradient(135deg,#0f0a2e,#7c3aed)'],
+    ['Walking 1:1 · Copenhagen', 'linear-gradient(135deg,#3b1e7a,#93c5fd)'],
+    ['Noa, whiteboard, sunset', 'linear-gradient(135deg,#2a1660,#f5d0fe)']
+  ];
+
+  const STORIES = [
+    { kind: 'Interview',  title: 'From senior to staff in 14 months', sub: 'Tiago on what actually changed, and what didn\'t', who: 'Tiago', date: '2026-08-21', featured: true },
+    { kind: 'Article',    title: 'The payroll edge case that taught me to design for fear', sub: 'Nino · Payroll', who: 'Nino', date: '2026-08-04', featured: true },
+    { kind: 'Video',      title: 'Designing the "where\'s my money" moment', sub: '9 min · Ana walks through the contractor payout redesign', who: 'Ana', date: '2026-07-16', featured: true },
+    { kind: 'Newsletter', title: 'Deel Design Digest, issue 14', sub: 'What shipped, who joined, one thing we got wrong', who: 'Mads', date: '2026-09-01', featured: true },
+    { kind: 'Article',    title: 'Invoices for 150 countries, one template', sub: 'Kasia · HR', who: 'Kasia', date: '2026-06-30' },
+    { kind: 'Video',      title: 'A week at Deel speed, unedited', sub: '6 min · Linh, Mobile', who: 'Linh', date: '2026-06-12' },
+    { kind: 'Interview',  title: 'Why I left an agency to design payroll', sub: 'Lucía, Brand', who: 'Lucía', date: '2026-05-27' },
+    { kind: 'Article',    title: 'Opinions over options: how we cut 40 settings', sub: 'Noa · Platform', who: 'Noa', date: '2026-05-09' },
+    { kind: 'Newsletter', title: 'Deel Design Digest, issue 13', sub: 'Offsite notes and the v3 token migration', who: 'Mads', date: '2026-05-01' },
+    { kind: 'Video',      title: 'Shipping motion without a motion team', sub: '4 min · Rafa', who: 'Rafa', date: '2026-04-18' },
+    { kind: 'Article',    title: 'Research at the speed of a sprint', sub: 'Maya · Research', who: 'Maya', date: '2026-04-02' },
+    { kind: 'Interview',  title: 'Designing from a ferry, most mornings', sub: 'Amani, Payments', who: 'Amani', date: '2026-03-14' }
+  ];
+
+  /* ── Ticker ─────────────────────────────────────────────────── */
+  const track = document.getElementById('ticker-track');
+  const cities = PLACES.map(p => p.city.split(',')[0]);
+  track.innerHTML = [...cities, ...cities].map(c => `<span>${c}</span>`).join('');
+
+  /* ── Photo sphere ───────────────────────────────────────────── */
+  const orb = document.getElementById('orb');
+  const rows = [-28, 0, 28];
+  PHOTOS.forEach((p, i) => {
+    const row = rows[i % rows.length];
+    const perRow = Math.ceil(PHOTOS.length / rows.length);
+    const idx = Math.floor(i / rows.length);
+    const ry = (360 / perRow) * idx + (row === 0 ? 0 : 360 / perRow / 2);
+    const fig = document.createElement('figure');
+    fig.className = 'ph';
+    fig.style.setProperty('--ry', ry + 'deg');
+    fig.style.setProperty('--rx', row + 'deg');
+    fig.style.setProperty('--g', p[1]);
+    fig.style.margin = '0';
+    fig.innerHTML = `<span class="cam" aria-hidden="true"></span><figcaption>${p[0]}</figcaption>`;
+    orb.appendChild(fig);
+  });
+
+  /* ── People ─────────────────────────────────────────────────── */
+  const features = document.getElementById('features');
+  const list = document.getElementById('list');
+  const empty = document.getElementById('empty');
+  const initials = n => n.slice(0, 2).toUpperCase();
+  const grad = i => `linear-gradient(135deg, hsl(${255 + (i * 37) % 60} 60% 30%), hsl(${265 + (i * 53) % 50} 80% 70%))`;
+  const fmt = d => new Date(d + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+
+  STORIES.filter(s => s.featured).forEach((s, i) => {
+    const el = document.createElement('a');
+    el.className = 'feature'; el.href = '#';
+    el.innerHTML = `<div class="kind"><span>${s.kind}</span><span>${fmt(s.date)}</span></div><h3>${s.title}</h3><div class="by"><span class="avatar" style="--g:${grad(i)}">${initials(s.who)}</span>${s.sub}</div>`;
+    features.appendChild(el);
+  });
+
+  STORIES.forEach((s, i) => {
+    const el = document.createElement('a');
+    el.className = 'row'; el.href = '#';
+    el.dataset.kind = s.kind;
+    el.dataset.text = (s.title + ' ' + s.sub + ' ' + s.who + ' ' + s.kind).toLowerCase();
+    el.innerHTML = `<span class="k">${s.kind}</span><span class="t">${s.title}<small>${s.sub}</small></span><span class="d">${fmt(s.date)}</span><span class="go" aria-hidden="true">↗</span>`;
+    list.appendChild(el);
+  });
+
+  const search = document.getElementById('people-search');
+  const chips = document.getElementById('chips');
+  let kind = 'all';
+  function filter() {
+    const q = search.value.trim().toLowerCase();
+    let shown = 0;
+    list.querySelectorAll('.row').forEach(r => {
+      const ok = (kind === 'all' || r.dataset.kind === kind) && (!q || r.dataset.text.includes(q));
+      r.hidden = !ok; if (ok) shown++;
+    });
+    empty.hidden = shown > 0;
+  }
+  search.addEventListener('input', filter);
+  chips.addEventListener('click', e => {
+    const b = e.target.closest('.chip'); if (!b) return;
+    kind = b.dataset.kind;
+    chips.querySelectorAll('.chip').forEach(c => c.setAttribute('aria-pressed', String(c === b)));
+    filter();
+  });
+
+  /* ── Hero: glass d. + orbiting places (three.js r128) ───────── */
+  const canvas = document.getElementById('stage');
+  const hero = canvas.parentElement;
+  const pin = document.getElementById('pin');
+  const pinEls = { place: 'pin-place', city: 'pin-city', coords: 'pin-coords', name: 'pin-name', role: 'pin-role' };
+  for (const k in pinEls) pinEls[k] = document.getElementById(pinEls[k]);
+
+  if (!window.THREE) { pin.remove(); return; }
+
+  const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, powerPreference: 'high-performance' });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.setClearColor(0x000000, 0);
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 200);
+  const CENTER = new THREE.Vector3(1.6, 0.2, 0);
+  const R = 6.4;
+
+  /* Stars: two depths, two temperatures */
+  function stars(count, spread, size, color, opacity) {
+    const g = new THREE.BufferGeometry();
+    const pos = new Float32Array(count * 3);
+    for (let i = 0; i < count; i++) {
+      const u = Math.random() * 2 - 1, th = Math.random() * Math.PI * 2, rr = Math.sqrt(1 - u * u);
+      const d = spread * (0.5 + Math.random() * 0.5);
+      pos.set([rr * Math.cos(th) * d, u * d, rr * Math.sin(th) * d - 6], i * 3);
+    }
+    g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    const m = new THREE.PointsMaterial({ size, color, transparent: true, opacity, sizeAttenuation: true, depthWrite: false });
+    const p = new THREE.Points(g, m); scene.add(p); return p;
+  }
+  const starsA = stars(900, 60, 0.06, 0xdde6ff, 0.75);
+  const starsB = stars(500, 45, 0.09, 0xc4b5fd, 0.45);
+
+  /* The glass d. : drawn once to a 2D canvas, mounted as an additive plane at the orbit's centre */
+  function glyphTexture() {
+    const S = 2048, c = document.createElement('canvas'); c.width = c.height = S;
+    const ctx = c.getContext('2d');
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = "700 1500px Outfit, 'Inter', 'Helvetica Neue', Arial, sans-serif";
+    const x = S / 2, y = S / 2 + 90, T = 'd.';
+    ctx.save(); ctx.shadowColor = 'rgba(139,92,246,0.75)'; ctx.shadowBlur = 160; ctx.fillStyle = 'rgba(139,92,246,0.30)'; ctx.fillText(T, x, y); ctx.restore();
+    for (let i = 18; i > 0; i -= 3) { ctx.strokeStyle = 'rgba(120,110,220,0.07)'; ctx.lineWidth = 5; ctx.strokeText(T, x + i, y + i); }
+    const g = ctx.createLinearGradient(x - 700, y - 700, x + 700, y + 700);
+    g.addColorStop(0, 'rgba(221,230,255,0.17)'); g.addColorStop(0.5, 'rgba(139,92,246,0.07)'); g.addColorStop(1, 'rgba(60,30,120,0.12)');
+    ctx.fillStyle = g; ctx.fillText(T, x, y);
+    const sg = ctx.createLinearGradient(x - 700, y - 700, x + 700, y + 700);
+    sg.addColorStop(0, 'rgba(255,255,255,0.9)'); sg.addColorStop(0.35, 'rgba(196,181,253,0.35)'); sg.addColorStop(0.7, 'rgba(139,92,246,0.18)'); sg.addColorStop(1, 'rgba(255,255,255,0.65)');
+    ctx.strokeStyle = sg; ctx.lineWidth = 8; ctx.strokeText(T, x, y);
+    ctx.strokeStyle = 'rgba(255,255,255,0.2)'; ctx.lineWidth = 2; ctx.strokeText(T, x - 5, y - 5);
+    const tex = new THREE.CanvasTexture(c); tex.anisotropy = 4; return tex;
+  }
+  let glyph = null;
+  function mountGlyph() {
+    const mat = new THREE.MeshBasicMaterial({ map: glyphTexture(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+    glyph = new THREE.Mesh(new THREE.PlaneGeometry(10.5, 10.5), mat);
+    glyph.position.copy(CENTER); scene.add(glyph);
+  }
+  const fontReady = (document.fonts && document.fonts.load) ? document.fonts.load('700 200px Outfit') : Promise.resolve();
+  Promise.race([fontReady, new Promise(r => setTimeout(r, 1800))]).then(mountGlyph, mountGlyph);
+
+  /* Landmarks: low-poly holograms, standing on a globe you never see */
+  function shape(kind, fill, edge) {
+    const g = new THREE.Group();
+    const add = (geo, x, y, z, rx, ry, rz) => {
+      const m = new THREE.Mesh(geo, fill); m.position.set(x, y, z); m.rotation.set(rx || 0, ry || 0, rz || 0); g.add(m);
+      const e = new THREE.LineSegments(new THREE.EdgesGeometry(geo, 20), edge); e.position.copy(m.position); e.rotation.copy(m.rotation); g.add(e);
+    };
+    switch (kind) {
+      case 'tower':      add(new THREE.BoxGeometry(0.34, 1.3, 0.34), 0, 0.65, 0); add(new THREE.ConeGeometry(0.3, 0.5, 4), 0, 1.55, 0, 0, Math.PI / 4); break;
+      case 'bridge':     add(new THREE.BoxGeometry(0.14, 0.9, 0.14), -0.7, 0.45, 0); add(new THREE.BoxGeometry(0.14, 0.9, 0.14), 0.7, 0.45, 0);
+                         add(new THREE.BoxGeometry(1.9, 0.07, 0.3), 0, 0.9, 0); add(new THREE.TorusGeometry(0.7, 0.035, 5, 20, Math.PI), 0, 0.9, 0); break;
+      case 'dome':       add(new THREE.CylinderGeometry(0.5, 0.56, 0.55, 8), 0, 0.28, 0); add(new THREE.SphereGeometry(0.5, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), 0, 0.55, 0); break;
+      case 'pier':       add(new THREE.BoxGeometry(2.0, 0.07, 0.36), 0, 0.5, 0); [-0.8, -0.27, 0.27, 0.8].forEach(px => add(new THREE.CylinderGeometry(0.04, 0.04, 0.5, 5), px, 0.25, 0)); break;
+      case 'market':     add(new THREE.BoxGeometry(1.2, 0.55, 0.8), 0, 0.28, 0); add(new THREE.CylinderGeometry(0, 0.92, 0.5, 4), 0, 0.8, 0, 0, Math.PI / 4); break;
+      case 'lift':       add(new THREE.CylinderGeometry(0.02, 0.02, 2.0, 4), 0, 0.9, 0, 0, 0, 1.05); add(new THREE.BoxGeometry(0.28, 0.32, 0.22), 0.35, 0.55, 0);
+                         add(new THREE.BoxGeometry(0.1, 0.6, 0.1), -0.85, 0.3, 0); break;
+      default:           add(new THREE.CylinderGeometry(0.16, 0.28, 1.25, 8), 0, 0.62, 0); add(new THREE.BoxGeometry(0.3, 0.22, 0.3), 0, 1.35, 0); break;
+    }
+    g.scale.setScalar(0.55);
+    return g;
+  }
+
+  const orbit = new THREE.Group(); orbit.position.copy(CENTER); orbit.rotation.x = 0.32; scene.add(orbit);
+  const marks = [], hitTargets = [];
+  const GOLD = Math.PI * (3 - Math.sqrt(5));
+  PLACES.forEach((p, i) => {
+    const n = PLACES.length;
+    const y = (1 - ((i + 0.5) / n) * 2) * 0.86, r = Math.sqrt(1 - y * y), t = GOLD * i;
+    const normal = new THREE.Vector3(Math.cos(t) * r, y, Math.sin(t) * r);
+    const fill = new THREE.MeshBasicMaterial({ color: 0x7c5cff, transparent: true, opacity: 0.16, depthWrite: false });
+    const edge = new THREE.LineBasicMaterial({ color: 0xc4b5fd, transparent: true, opacity: 0.9 });
+    const lm = shape(p.kind, fill, edge);
+    lm.position.copy(normal).multiplyScalar(R);
+    lm.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), normal);
+    const hit = new THREE.Mesh(new THREE.SphereGeometry(1.0, 8, 6), new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false }));
+    hit.position.y = 0.5; lm.add(hit); hit.userData.index = i;
+    orbit.add(lm); marks.push({ lm, fill, edge, data: p, depth: 0 }); hitTargets.push(hit);
+  });
+
+  /* Layout */
+  let W = 1, H = 1;
+  function resize() {
+    W = hero.clientWidth; H = hero.clientHeight;
+    renderer.setSize(W, H, false);
+    camera.aspect = W / H;
+    const fit = Math.min(1, camera.aspect / 1.1);
+    camera.position.set(0, 0, 15.5 / fit);
+    camera.lookAt(CENTER.x * 0.6, 0.2, 0);
+    camera.updateProjectionMatrix();
+  }
+  resize(); window.addEventListener('resize', resize);
+
+  /* Hover + auto-feature */
+  const ray = new THREE.Raycaster(), mouse = new THREE.Vector2(9, 9);
+  let hovered = -1, featured = 0, lastAuto = 0, userIdle = 0, activeIndex = -1;
+  canvas.addEventListener('pointermove', e => {
+    const b = canvas.getBoundingClientRect();
+    mouse.set(((e.clientX - b.left) / b.width) * 2 - 1, -((e.clientY - b.top) / b.height) * 2 + 1);
+    userIdle = performance.now();
+  });
+  canvas.addEventListener('pointerleave', () => { mouse.set(9, 9); hovered = -1; });
+  canvas.addEventListener('click', () => { if (hovered >= 0) featured = hovered; });
+
+  function showPin(i) {
+    if (i === activeIndex) return;
+    activeIndex = i;
+    const d = marks[i].data;
+    pinEls.place.textContent = d.place; pinEls.city.textContent = d.city;
+    pinEls.coords.textContent = `${Math.abs(d.lat).toFixed(2)}° ${d.lat >= 0 ? 'N' : 'S'}, ${Math.abs(d.lon).toFixed(2)}° ${d.lon >= 0 ? 'E' : 'W'}`;
+    pinEls.name.textContent = d.name; pinEls.role.textContent = d.role;
+    pin.classList.add('show');
+  }
+
+  const tmp = new THREE.Vector3();
+  let visible = true;
+  new IntersectionObserver(es => { visible = es[0].isIntersecting; }, { threshold: 0 }).observe(hero);
+
+  let t0 = performance.now();
+  function frame(now) {
+    requestAnimationFrame(frame);
+    if (!visible) return;
+    const dt = Math.min(0.05, (now - t0) / 1000); t0 = now;
+    const speed = reduceMotion ? 0 : 1;
+
+    orbit.rotation.y += 0.09 * dt * speed;
+    orbit.rotation.x = 0.32 + Math.sin(now * 0.00012) * 0.06 * speed;
+    starsA.rotation.y += 0.004 * dt * speed; starsB.rotation.y -= 0.006 * dt * speed;
+    if (glyph) { glyph.rotation.y = Math.sin(now * 0.00025) * 0.12 * speed; glyph.rotation.x = Math.cos(now * 0.0002) * 0.05 * speed; }
+
+    /* depth fade: front hemisphere bright, back hemisphere a whisper */
+    let frontMost = -1, frontZ = -Infinity;
+    marks.forEach((m, i) => {
+      m.lm.getWorldPosition(tmp);
+      const dz = (tmp.z - CENTER.z) / R;
+      m.depth = dz;
+      const f = Math.pow((dz + 1) / 2, 1.6);
+      const boost = i === activeIndex ? 1.0 : 0;
+      m.edge.opacity = 0.12 + 0.88 * f + boost * 0.1;
+      m.fill.opacity = 0.05 + 0.18 * f + boost * 0.12;
+      m.edge.color.setHex(i === activeIndex ? 0xffffff : 0xc4b5fd);
+      const s = (0.5 + 0.12 * f) * (i === activeIndex ? 1.25 : 1);
+      m.lm.scale.setScalar(s);
+      if (dz > frontZ) { frontZ = dz; frontMost = i; }
+    });
+
+    /* hover */
+    hovered = -1;
+    if (mouse.x < 5) {
+      ray.setFromCamera(mouse, camera);
+      const hits = ray.intersectObjects(hitTargets, false);
+      for (const h of hits) { const i = h.object.userData.index; if (marks[i].depth > -0.15) { hovered = i; break; } }
+    }
+    canvas.style.cursor = hovered >= 0 ? 'pointer' : 'default';
+
+    /* auto feature the front-most place when idle */
+    if (hovered >= 0) { showPin(hovered); lastAuto = now; }
+    else {
+      if (now - lastAuto > 4200 || activeIndex < 0 || marks[activeIndex].depth < -0.1) {
+        featured = frontMost; lastAuto = now;
+      }
+      if (featured >= 0) showPin(featured);
+    }
+
+    /* place the DOM pin over the active landmark */
+    if (activeIndex >= 0) {
+      marks[activeIndex].lm.getWorldPosition(tmp); tmp.y += 0.7; tmp.project(camera);
+      const px = (tmp.x * 0.5 + 0.5) * W, py = (-tmp.y * 0.5 + 0.5) * H;
+      pin.style.left = Math.max(140, Math.min(W - 140, px)) + 'px';
+      pin.style.top = Math.max(150, py) + 'px';
+    }
+
+    renderer.render(scene, camera);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
