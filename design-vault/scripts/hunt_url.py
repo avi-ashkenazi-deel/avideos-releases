@@ -232,6 +232,49 @@ def pins_from_wayback(url: str, count: int) -> list:
     return out
 
 
+VIDEO_HOSTS = ("instagram.com", "tiktok.com", "youtube.com", "youtu.be", "vimeo.com",
+               "linkedin.com", "threads.net", "facebook.com")
+
+
+def pins_from_video(url: str, count: int) -> list:
+    """Full video from Instagram / TikTok / YouTube / Vimeo etc. via yt-dlp.
+
+    Platforms bot-wall datacenter IPs, so this is a local-run adapter (run from
+    your own machine; add --cookies-from-browser in YTDLP_ARGS if a site insists).
+    """
+    import os
+    import shutil
+    import subprocess
+    import tempfile
+    if not shutil.which("yt-dlp"):
+        sys.exit("yt-dlp not installed — pip install yt-dlp")
+    tmp = Path(tempfile.mkdtemp(prefix="vault-ytdlp-"))
+    cmd = ["yt-dlp", "-q", "--no-warnings", "--no-playlist",
+           "-f", "bv*[height<=1080]+ba/b[height<=1080]/b", "--merge-output-format", "mp4",
+           "--print-json", "-o", str(tmp / "%(id)s.%(ext)s"),
+           *os.environ.get("YTDLP_ARGS", "").split(), url]
+    p = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+    if p.returncode != 0 or not p.stdout.strip():
+        err = p.stderr.strip().splitlines()[-1][:200] if p.stderr.strip() else "no output"
+        hint = (" — the platform blocked this IP; run from local Claude Code, or set "
+                "YTDLP_ARGS='--cookies-from-browser chrome'"
+                if any(k in p.stderr.lower() for k in ("bot", "login", "sign in")) else "")
+        sys.exit(f"yt-dlp failed: {err}{hint}")
+    meta = json.loads(p.stdout.strip().splitlines()[-1])
+    files = [f for f in tmp.iterdir() if f.suffix in (".mp4", ".webm", ".mov", ".mkv")]
+    if not files:
+        sys.exit("yt-dlp reported success but produced no video file")
+    up = meta.get("upload_date") or ""
+    return [{
+        "title": strip_tags(meta.get("title") or meta.get("description") or meta.get("id", ""))[:110],
+        "page_url": meta.get("webpage_url") or url,
+        "image_url": None, "fallback_url": None,
+        "local_path": files[0],
+        "artist": meta.get("uploader") or meta.get("channel") or "",
+        "year": int(up[:4]) if up[:4].isdigit() else None,
+    }]
+
+
 def pins_from_page(url: str, count: int) -> list:
     page = fetch(url).decode("utf-8", "replace")
     found, seen = [], set()
@@ -270,6 +313,8 @@ def main() -> int:
                                  else f"https://{args.url}").netloc.lower()
     if re.search(r"(^|\.)(x|twitter)\.com$", host):
         candidates, source = pins_from_x(args.url, args.count), "x"
+    elif any(host == h or host.endswith("." + h) for h in VIDEO_HOSTS):
+        candidates, source = pins_from_video(args.url, args.count), "video"
     elif "pinterest." in host:
         candidates, source = pins_from_pinterest(args.url, args.count), "pinterest"
     elif "are.na" in host:
@@ -298,17 +343,25 @@ def main() -> int:
     n = len(items)
     for cand in candidates:
         blob = None
-        for attempt in filter(None, (cand["image_url"], cand["fallback_url"])):
-            try:
-                blob = fetch(attempt)
-                cand["image_url"] = attempt
-                break
-            except Exception:
-                continue
+        ext_override = None
+        if cand.get("local_path"):  # already downloaded (yt-dlp)
+            local = Path(cand["local_path"])
+            blob = local.read_bytes()
+            ext_override = local.suffix
+            cand["image_url"] = cand["page_url"]
+            local.unlink(missing_ok=True)
+        else:
+            for attempt in filter(None, (cand["image_url"], cand["fallback_url"])):
+                try:
+                    blob = fetch(attempt)
+                    cand["image_url"] = attempt
+                    break
+                except Exception:
+                    continue
         if blob is None or len(blob) < args.min_bytes:
             continue
         n += 1
-        ext = Path(urllib.parse.urlparse(cand["image_url"]).path).suffix or ".jpg"
+        ext = ext_override or Path(urllib.parse.urlparse(cand["image_url"]).path).suffix or ".jpg"
         fname = f"{n:02d}-{slugify(cand['title'])}{ext}"
         (batch_dir / fname).write_bytes(blob)
         if cand.get("year"):

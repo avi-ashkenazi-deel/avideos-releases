@@ -21,6 +21,27 @@ boards, and AI-native search. This file is the map from today's repo to that.
 - **Provenance forever** — every file keeps source, license, sharer, year, no
   matter whose bucket or board it lands in.
 
+## Front end — modeled on Spark
+
+[get-spark.io](https://get-spark.io) is the reference for the product shape:
+
+- **Drop any link → saved in seconds.** One ＋ Add entry point that accepts
+  X, Pinterest, Instagram, TikTok, YouTube, Vimeo, any page — and *gets the
+  full video*, not a thumbnail. (`app/serve.py` → `/api/add`, live.)
+- **Save from anywhere.** Share sheet → Slack channel or Drive folder today;
+  Chrome extension and Instagram-DM-to-library in the hosted phase.
+- **Library is image-first.** Dense grid, no captions until hover, videos
+  hover-play with real poster frames. Sidebar: Library · Inbox · Frames ·
+  Favorites · Collections · Boards. (live)
+- **AI on arrival.** Thumbnails + color tags now; vision tagging,
+  transcription, and embeddings next — then search "understands design
+  language, not filenames".
+- **Boards are a canvas, not a list.** Spark mixes references, notes and
+  scripts on one shareable canvas and exports moodboards to decks. Ours are
+  reference lists today; canvas + export is the board roadmap.
+- **Review stays ours.** Spark auto-files; we keep the Inbox keep/drop step —
+  the hive only gets what a human chose.
+
 ## Phases
 
 | Phase | What | Status |

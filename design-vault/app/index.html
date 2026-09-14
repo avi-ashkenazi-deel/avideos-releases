@@ -4,154 +4,280 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Design Vault</title>
 <style>
-  :root { --bg:#16171a; --card:#1f2024; --line:#2c2d33; --ink:#e9e7e2; --dim:#9b978f; --gold:#d8c96a; }
-  body { font:15px/1.55 "Avenir Next","Segoe UI",system-ui,sans-serif; margin:0;
-         background:var(--bg); color:var(--ink); }
-  header { position:sticky; top:0; z-index:5; background:var(--bg); border-bottom:1px solid var(--line);
-           padding:.9rem clamp(1rem,3vw,2.2rem); display:flex; flex-wrap:wrap; gap:.7rem; align-items:center; }
-  h1 { font-size:1.05rem; margin:0 1rem 0 0; font-weight:600; }
-  h1 .count { color:var(--dim); font-weight:400; font-variant-numeric:tabular-nums; }
-  #q { flex:1 1 260px; max-width:46ch; padding:.5rem .9rem; font:inherit; color:var(--ink);
-       background:var(--card); border:1px solid var(--line); border-radius:8px; outline:none; }
+  :root { --bg:#0f1012; --panel:#16171a; --card:#1c1d21; --line:#26272d; --ink:#ecebe6; --dim:#8f8c85; --gold:#d8c96a; }
+  * { box-sizing:border-box; }
+  body { font:14px/1.5 "Avenir Next","Segoe UI",system-ui,sans-serif; margin:0; background:var(--bg); color:var(--ink);
+         display:grid; grid-template-columns:220px 1fr; min-height:100vh; }
+  nav { background:var(--panel); border-right:1px solid var(--line); padding:1.1rem .9rem; position:sticky; top:0;
+        height:100vh; display:flex; flex-direction:column; gap:.2rem; }
+  nav .brand { font-weight:700; font-size:1.05rem; letter-spacing:.01em; padding:0 .6rem .9rem; }
+  nav .brand small { display:block; color:var(--dim); font-weight:400; font-size:.75rem; }
+  nav button.nav { all:unset; cursor:pointer; padding:.45rem .7rem; border-radius:7px; color:var(--ink);
+                   display:flex; justify-content:space-between; gap:.5rem; }
+  nav button.nav:hover { background:var(--card); }
+  nav button.nav.on { background:var(--card); color:var(--gold); font-weight:600; }
+  nav button.nav .n { color:var(--dim); font-variant-numeric:tabular-nums; font-size:.78rem; }
+  nav h4 { margin:1rem .7rem .3rem; font-size:.68rem; text-transform:uppercase; letter-spacing:.1em; color:var(--dim); font-weight:600; }
+  nav .sub button.nav { font-size:.86rem; padding:.3rem .7rem; }
+  nav .foot { margin-top:auto; display:grid; gap:.4rem; }
+  .btn { font:inherit; cursor:pointer; background:var(--card); color:var(--ink); border:1px solid var(--line);
+         border-radius:8px; padding:.5rem .9rem; }
+  .btn:hover { border-color:var(--gold); }
+  .btn.primary { background:var(--gold); color:var(--bg); border-color:var(--gold); font-weight:700; }
+  main { padding:1rem 1.4rem 5rem; min-width:0; }
+  .top { display:flex; gap:.7rem; align-items:center; flex-wrap:wrap; margin-bottom:.8rem; position:sticky; top:0;
+         background:var(--bg); padding:.5rem 0 .6rem; z-index:3; }
+  .top h1 { font-size:1rem; margin:0 .5rem 0 0; font-weight:600; }
+  .top h1 .n { color:var(--dim); font-weight:400; font-variant-numeric:tabular-nums; }
+  #q { flex:1 1 240px; max-width:44ch; padding:.5rem .9rem; font:inherit; color:var(--ink); background:var(--card);
+       border:1px solid var(--line); border-radius:8px; outline:none; }
   #q:focus { border-color:var(--gold); }
-  button { font:inherit; cursor:pointer; background:var(--card); color:var(--ink);
-           border:1px solid var(--line); border-radius:8px; padding:.45rem .9rem; }
-  button:hover { border-color:var(--gold); }
-  #chips { padding:.7rem clamp(1rem,3vw,2.2rem) 0; display:flex; flex-wrap:wrap; gap:6px; }
-  .chip { font-size:.8rem; padding:3px 12px; border-radius:99px; }
+  #colors { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:1rem; }
+  .chip { font:inherit; font-size:.78rem; padding:3px 11px; border-radius:99px; background:var(--card); color:var(--ink);
+          border:1px solid var(--line); cursor:pointer; }
   .chip.on { background:var(--gold); color:var(--bg); border-color:var(--gold); font-weight:600; }
-  .chip.color i { display:inline-block; width:.7em; height:.7em; border-radius:50%; margin-right:.45em;
-                  border:1px solid rgba(255,255,255,.25); }
-  main { padding:1rem clamp(1rem,3vw,2.2rem) 5rem; }
-  #grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(235px,1fr)); gap:14px; }
-  figure { margin:0; background:var(--card); border-radius:6px; overflow:hidden; position:relative; }
-  figure img, figure video { width:100%; height:215px; object-fit:contain; background:#0c0d0f; display:block; }
-  figcaption { padding:.55rem .8rem .65rem; font-size:.78rem; display:grid; gap:3px; }
-  figcaption strong { font-weight:600; overflow-wrap:anywhere; }
-  .meta { display:flex; justify-content:space-between; gap:.5rem; color:var(--dim); }
-  .meta a { color:#7ab8ff; text-decoration:none; }
-  .pin { position:absolute; top:8px; right:8px; opacity:0; transition:opacity .12s;
-         background:var(--bg); border-radius:6px; padding:2px 9px; font-size:.85rem; }
-  figure:hover .pin { opacity:1; }
-  figure.pinned .pin { opacity:1; background:var(--gold); color:var(--bg); font-weight:700; }
-  aside { position:fixed; right:0; top:0; bottom:0; width:270px; background:var(--card);
-          border-left:1px solid var(--line); padding:1rem; transform:translateX(100%);
-          transition:transform .18s; z-index:9; overflow-y:auto; }
+  .chip i { display:inline-block; width:.65em; height:.65em; border-radius:50%; margin-right:.4em; border:1px solid rgba(255,255,255,.2); }
+  #grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:10px; }
+  figure { margin:0; position:relative; border-radius:8px; overflow:hidden; background:var(--card); aspect-ratio:1; }
+  figure img, figure video { width:100%; height:100%; object-fit:cover; display:block; }
+  figure .ov { position:absolute; inset:auto 0 0 0; padding:.55rem .7rem; font-size:.75rem;
+               background:linear-gradient(transparent, rgba(0,0,0,.82)); opacity:0; transition:opacity .15s;
+               display:grid; gap:2px; }
+  figure:hover .ov { opacity:1; }
+  figure .ov strong { font-weight:600; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+  figure .ov span { color:#bbb; display:flex; justify-content:space-between; }
+  figure .ov a { color:#8fc0ff; text-decoration:none; }
+  .act { position:absolute; top:8px; right:8px; display:flex; gap:6px; opacity:0; transition:opacity .15s; }
+  figure:hover .act, figure.pinned .act, figure.keep .act, figure.drop .act { opacity:1; }
+  .act button { all:unset; cursor:pointer; background:rgba(15,16,18,.85); color:var(--ink); border-radius:6px;
+                padding:2px 9px; font-size:.9rem; }
+  figure.pinned .act .pin { background:var(--gold); color:var(--bg); font-weight:700; }
+  figure.keep { outline:3px solid var(--gold); }
+  figure.drop { opacity:.35; }
+  figure.keep .act .k, figure.drop .act .d { background:var(--gold); color:var(--bg); font-weight:700; }
+  .vid { position:absolute; top:8px; left:8px; background:rgba(15,16,18,.8); font-size:.68rem; padding:2px 7px; border-radius:5px; }
+  .batchhead { display:flex; justify-content:space-between; align-items:center; margin:1.2rem 0 .6rem; gap:.6rem; flex-wrap:wrap; }
+  .batchhead h3 { margin:0; font-size:.9rem; font-weight:600; }
+  .batchhead .r { display:flex; gap:.4rem; }
+  .empty { color:var(--dim); padding:3rem 0; text-align:center; }
+  dialog { background:var(--panel); color:var(--ink); border:1px solid var(--line); border-radius:12px; padding:1.3rem;
+           width:min(560px, 92vw); }
+  dialog::backdrop { background:rgba(0,0,0,.6); }
+  dialog h2 { margin:0 0 .3rem; font-size:1.05rem; }
+  dialog p { color:var(--dim); margin:0 0 1rem; font-size:.85rem; }
+  dialog label { display:grid; gap:.3rem; font-size:.78rem; color:var(--dim); margin-bottom:.8rem; }
+  dialog input, dialog select { font:inherit; color:var(--ink); background:var(--card); border:1px solid var(--line);
+                                border-radius:8px; padding:.5rem .8rem; }
+  dialog .row { display:grid; grid-template-columns:1fr 1fr; gap:.8rem; }
+  dialog .foot { display:flex; justify-content:flex-end; gap:.5rem; margin-top:.4rem; }
+  #log { position:fixed; left:240px; bottom:1rem; right:1.4rem; max-height:40vh; overflow:auto; background:var(--panel);
+         border:1px solid var(--line); border-radius:8px; padding:.7rem 1rem; font:12px/1.5 ui-monospace,monospace;
+         white-space:pre-wrap; display:none; z-index:9; }
+  aside { position:fixed; right:0; top:0; bottom:0; width:280px; background:var(--panel); border-left:1px solid var(--line);
+          padding:1rem; transform:translateX(100%); transition:transform .18s; z-index:8; overflow-y:auto; }
   aside.open { transform:none; }
-  aside h2 { font-size:.85rem; text-transform:uppercase; letter-spacing:.08em; margin:.2rem 0 .8rem; }
-  .board { padding:.5rem .7rem; border:1px solid var(--line); border-radius:8px; margin-bottom:.5rem;
-           cursor:pointer; display:flex; justify-content:space-between; gap:.5rem; }
-  .board.on { border-color:var(--gold); }
-  .board .n { color:var(--dim); font-variant-numeric:tabular-nums; }
-  #synclog { position:fixed; left:1rem; bottom:1rem; max-width:46rem; background:var(--card);
-             border:1px solid var(--line); border-radius:8px; padding:.7rem 1rem; font:12px/1.5 ui-monospace,monospace;
-             white-space:pre-wrap; display:none; z-index:9; }
+  aside h2 { font-size:.8rem; text-transform:uppercase; letter-spacing:.08em; margin:.2rem 0 .8rem; color:var(--dim); }
+  .board { padding:.5rem .7rem; border:1px solid var(--line); border-radius:8px; margin-bottom:.5rem; cursor:pointer;
+           display:flex; justify-content:space-between; }
+  .board.on { border-color:var(--gold); color:var(--gold); }
 </style>
-<header>
-  <h1>Design Vault <span class="count" id="count"></span></h1>
-  <input id="q" type="search" placeholder='try: red logos · fabrizia motion · 1959' autocomplete="off">
-  <button id="boardsBtn">Boards</button>
-  <button id="syncBtn">Sync</button>
-</header>
-<div id="chips"></div>
-<main><div id="grid"></div></main>
+
+<nav>
+  <div class="brand">Design Vault<small id="wsname">Avi's hive · local</small></div>
+  <button class="nav on" data-view="library">Library <span class="n" id="nLib"></span></button>
+  <button class="nav" data-view="inbox">Inbox <span class="n" id="nInbox"></span></button>
+  <button class="nav" data-view="frames">Frames <span class="n" id="nFrames"></span></button>
+  <button class="nav" data-view="favorites">Favorites <span class="n" id="nFav"></span></button>
+  <h4>Collections</h4>
+  <div class="sub" id="collnav"></div>
+  <h4>Boards</h4>
+  <div class="sub" id="boardnav"></div>
+  <div class="foot">
+    <button class="btn primary" id="addBtn">＋ Add link</button>
+    <button class="btn" id="syncBtn">Sync</button>
+  </div>
+</nav>
+
+<main>
+  <div class="top">
+    <h1 id="title">Library <span class="n" id="count"></span></h1>
+    <input id="q" type="search" placeholder="search: red logos · fabrizia motion · 1959" autocomplete="off">
+  </div>
+  <div id="colors"></div>
+  <div id="grid"></div>
+</main>
+
 <aside id="panel">
   <h2>Boards</h2>
   <div id="boardlist"></div>
-  <button id="newBoard" style="width:100%">＋ New board</button>
-  <p style="color:var(--dim);font-size:.78rem">Select a board, then click ＋ on any card to pin it.
-  Boards live in boards.json and travel with the repo.</p>
+  <button class="btn" id="newBoard" style="width:100%">＋ New board</button>
+  <p style="color:var(--dim);font-size:.78rem">Select a board, then ＋ on any card pins it. Boards live in boards.json and travel with the repo.</p>
 </aside>
-<div id="synclog"></div>
+
+<dialog id="addDlg">
+  <h2>Add from a link</h2>
+  <p>Drop any URL. X posts, Pinterest boards, Flickr, Instagram / TikTok / YouTube / Vimeo videos, or any web page
+     (captured as a full-page screenshot). It lands in your Inbox for review.</p>
+  <form method="dialog" id="addForm">
+    <label>URL <input id="addUrl" placeholder="https://www.instagram.com/reel/…" required autofocus></label>
+    <div class="row">
+      <label>Collection <select id="addColl"></select></label>
+      <label>Tags <input id="addTags" placeholder="motion, fintech"></label>
+    </div>
+    <div class="foot">
+      <button class="btn" value="cancel">Cancel</button>
+      <button class="btn primary" id="addGo" value="go">Add</button>
+    </div>
+  </form>
+</dialog>
+<div id="log"></div>
+
 <script>
-const COLORS = {red:"#d84a4a",orange:"#e08a3c",yellow:"#e0c53c",green:"#57a45e",cyan:"#4fb8c4",
-                blue:"#5479d6",purple:"#8b5fc9",pink:"#d668a8",black:"#111",white:"#eee",gray:"#8a8a8a"};
-let items = [], boards = [], activeBoard = null, activeColl = null, activeColor = null;
-
+const COLORS = {red:"#d84a4a",orange:"#e08a3c",yellow:"#e0c53c",green:"#57a45e",cyan:"#4fb8c4",blue:"#5479d6",
+                purple:"#8b5fc9",pink:"#d668a8",black:"#111",white:"#eee",gray:"#8a8a8a"};
 const $ = id => document.getElementById(id);
-const norm = s => (s||"").toLowerCase();
+const norm = s => (s||"").toString().toLowerCase();
+const isVid = f => /\.(mp4|mov|webm|m4v)$/i.test(f);
+const src = f => "/" + f.split("/").map(encodeURIComponent).join("/");
+const thumb = f => "/thumb/" + f.split("/").map(encodeURIComponent).join("/");
+const media = f => isVid(f)
+  ? `<span class="vid">▶</span><video src="${src(f)}" poster="${thumb(f)}" preload="none" muted loop playsinline onmouseover="this.play()" onmouseout="this.pause()"></video>`
+  : `<img src="${src(f)}" loading="lazy" alt="">`;
+let items=[], inboxItems=[], boards=[], colls=[];
+let view="library", activeColl=null, activeColor=null, activeBoard=null;
+const decisions = {};   // inbox: `${batch}#${id}` -> "keep" | "drop"
 
-function haystack(it){ return norm([it.title,it.tags,it.artist,it.collection,it.year].join(" ")); }
+const api = async (p, body) => (await fetch(p, body ? {method:"POST", body:JSON.stringify(body)} : {})).json();
+const showLog = t => { $("log").style.display="block"; $("log").textContent=t; setTimeout(()=>$("log").style.display="none", 12000); };
+
+async function load(){
+  [items, inboxItems, colls] = await Promise.all([api("/api/library"), api("/api/inbox"), api("/api/collections")]);
+  boards = (await api("/api/boards")).boards;
+  $("nLib").textContent = items.length; $("nInbox").textContent = inboxItems.length || "";
+  $("nFrames").textContent = items.filter(i=>i.collection==="storyboards").length || "";
+  $("addColl").innerHTML = colls.map(c=>`<option ${c==="inspiration"?"selected":""}>${c}</option>`).join("");
+  renderNav(); renderColors(); render();
+}
+
+function renderNav(){
+  const counts = {}; items.forEach(i=>counts[i.collection]=(counts[i.collection]||0)+1);
+  $("collnav").innerHTML = colls.map(c=>`<button class="nav ${view==="library"&&activeColl===c?"on":""}" data-coll="${c}">
+      ${c}<span class="n">${counts[c]||""}</span></button>`).join("");
+  $("boardnav").innerHTML = boards.map(b=>`<button class="nav ${view==="board"&&activeBoard===b.id?"on":""}" data-board="${b.id}">
+      ${b.name}<span class="n">${b.items.length}</span></button>`).join("");
+  document.querySelectorAll("nav button[data-view]").forEach(b=>b.classList.toggle("on", b.dataset.view===view));
+  const fav = boards.find(b=>b.name.toLowerCase()==="favorites");
+  $("nFav").textContent = fav ? fav.items.length : "";
+  $("boardlist").innerHTML = boards.map(b=>`<div class="board ${b.id===activeBoard?"on":""}" data-b="${b.id}">
+      <span>${b.name}</span><span>${b.items.length}</span></div>`).join("") || `<p style="color:var(--dim)">No boards yet.</p>`;
+}
+
+function renderColors(){
+  $("colors").innerHTML = Object.entries(COLORS).map(([n,hex])=>
+    `<button class="chip ${n===activeColor?"on":""}" data-k="${n}"><i style="background:${hex}"></i>${n}</button>`).join("");
+}
+
+function hay(it){ return norm([it.title,it.tags,it.artist,it.collection,it.year].join(" ")); }
+
+function currentSet(){
+  if(view==="inbox") return inboxItems;
+  let set = items;
+  if(view==="frames") set = items.filter(i=>i.collection==="storyboards");
+  if(view==="favorites"){ const f = boards.find(b=>b.name.toLowerCase()==="favorites"); set = f ? items.filter(i=>f.items.some(r=>r.file===i.file)) : []; }
+  if(view==="board"){ const b = boards.find(b=>b.id===activeBoard); set = b ? items.filter(i=>b.items.some(r=>r.file===i.file)) : []; }
+  if(view==="library" && activeColl) set = set.filter(i=>i.collection===activeColl);
+  return set;
+}
 
 function render(){
   const terms = norm($("q").value).split(/\s+/).filter(Boolean);
-  const shown = items.filter(it =>
-    (!activeColl || it.collection===activeColl) &&
-    (!activeColor || (","+it.tags+",").includes(","+activeColor+",")) &&
-    terms.every(t => haystack(it).includes(t)));
-  $("count").textContent = `${shown.length} / ${items.length}`;
-  const board = boards.find(b=>b.id===activeBoard);
-  $("grid").innerHTML = shown.slice(0,400).map(it=>{
-    const src = "/" + it.file.split("/").map(encodeURIComponent).join("/");
-    const vid = /\.(mp4|mov|webm|m4v)$/i.test(it.file);
-    const media = vid ? `<video src="${src}" muted loop playsinline onmouseover="this.play()" onmouseout="this.pause()"></video>`
-                      : `<img src="${src}" loading="lazy" alt="">`;
-    const pinned = board && board.items.some(r=>r.file===it.file && r.collection===it.collection);
-    return `<figure class="${pinned?'pinned':''}" data-c="${it.collection}" data-f="${it.file}">
-      ${media}
-      <span class="pin" title="pin to board">＋</span>
-      <figcaption><strong>${it.title||""}</strong>
-        <span class="meta"><span>${it.collection}${it.year?" · "+it.year:""}</span>
-        ${it.page_url?`<a href="${it.page_url}" target="_blank" rel="noopener">source ↗</a>`:""}</span>
-      </figcaption></figure>`;
-  }).join("");
-  if(shown.length>400) $("grid").insertAdjacentHTML("beforeend",
-    `<p style="color:var(--dim)">…and ${shown.length-400} more — narrow the search.</p>`);
-}
+  const shown = currentSet().filter(it =>
+    (!activeColor || (","+it.tags+",").includes(","+activeColor+",")) && terms.every(t=>hay(it).includes(t)));
+  const label = {library: activeColl || "Library", inbox:"Inbox", frames:"Frames", favorites:"Favorites",
+                 board: (boards.find(b=>b.id===activeBoard)||{}).name}[view] || view;
+  $("title").innerHTML = `${label} <span class="n" id="count">${shown.length}</span>`;
+  $("colors").style.display = view==="inbox" ? "none" : "flex";
+  const pinBoard = boards.find(b=>b.id===activeBoard);
 
-function renderChips(){
-  const colls = [...new Set(items.map(i=>i.collection))].sort();
-  $("chips").innerHTML =
-    colls.map(c=>`<button class="chip coll ${c===activeColl?'on':''}" data-c="${c}">${c}</button>`).join("") +
-    Object.entries(COLORS).map(([n,hex])=>
-      `<button class="chip color ${n===activeColor?'on':''}" data-k="${n}"><i style="background:${hex}"></i>${n}</button>`).join("");
-}
+  if(view==="inbox"){
+    if(!shown.length){ $("grid").innerHTML = `<p class="empty">Inbox is empty. Add a link, or hunt from a session.</p>`; return; }
+    const groups = {}; shown.forEach(it=>(groups[it.batch]=groups[it.batch]||[]).push(it));
+    $("grid").style.display="block";
+    $("grid").innerHTML = Object.entries(groups).map(([batch, its])=>`
+      <div class="batchhead"><h3>${batch} <span style="color:var(--dim);font-weight:400">${its.length} pending</span></h3>
+        <div class="r"><button class="btn" data-all="${batch}">Keep all</button>
+        <button class="btn primary" data-apply="${batch}">Apply decisions</button></div></div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px">
+      ${its.map(it=>{ const k = decisions[batch+"#"+it.id];
+        return `<figure class="${k||""}" data-batch="${batch}" data-id="${it.id}">
+          ${media(it.file)}
+          <div class="act"><button class="k" title="keep">✓</button><button class="d" title="drop">✕</button></div>
+          <div class="ov"><strong>${it.title||""}</strong><span><em>${it.tags}</em>${it.page_url?`<a href="${it.page_url}" target="_blank">source ↗</a>`:""}</span></div>
+        </figure>`;}).join("")}</div>`).join("");
+    return;
+  }
 
-function renderBoards(){
-  $("boardlist").innerHTML = boards.map(b=>
-    `<div class="board ${b.id===activeBoard?'on':''}" data-b="${b.id}">
-       <span>${b.name}</span><span class="n">${b.items.length}</span></div>`).join("")
-    || `<p style="color:var(--dim);font-size:.8rem">No boards yet.</p>`;
-}
-
-async function api(path, body){
-  const r = await fetch(path, body?{method:"POST",body:JSON.stringify(body)}:{});
-  return r.json();
+  $("grid").style.display="grid";
+  $("grid").innerHTML = shown.slice(0,500).map(it=>{
+    const pinned = pinBoard && pinBoard.items.some(r=>r.file===it.file);
+    return `<figure class="${pinned?"pinned":""}" data-c="${it.collection}" data-f="${it.file}">
+      ${media(it.file)}
+      <div class="act"><button class="pin" title="pin to board">＋</button></div>
+      <div class="ov"><strong>${it.title||""}</strong>
+        <span>${it.collection}${it.year?" · "+it.year:""}${it.page_url?`<a href="${it.page_url}" target="_blank">source ↗</a>`:""}</span></div>
+    </figure>`;}).join("") || `<p class="empty">Nothing here yet.</p>`;
+  if(shown.length>500) $("grid").insertAdjacentHTML("beforeend", `<p class="empty">…${shown.length-500} more — narrow the search.</p>`);
 }
 
 document.addEventListener("click", async e=>{
-  const coll = e.target.closest(".chip.coll");
-  if(coll){ activeColl = activeColl===coll.dataset.c?null:coll.dataset.c; renderChips(); render(); return; }
-  const col = e.target.closest(".chip.color");
-  if(col){ activeColor = activeColor===col.dataset.k?null:col.dataset.k; renderChips(); render(); return; }
-  const bd = e.target.closest(".board");
-  if(bd){ activeBoard = activeBoard===bd.dataset.b?null:bd.dataset.b; renderBoards(); render(); return; }
-  if(e.target.classList.contains("pin")){
+  const t = e.target;
+  const nv = t.closest("nav button[data-view]"); if(nv){ view=nv.dataset.view; activeColl=null; renderNav(); render(); return; }
+  const nc = t.closest("nav button[data-coll]"); if(nc){ view="library"; activeColl = activeColl===nc.dataset.coll?null:nc.dataset.coll; renderNav(); render(); return; }
+  const nb = t.closest("nav button[data-board]"); if(nb){ view="board"; activeBoard=nb.dataset.board; renderNav(); render(); return; }
+  const chip = t.closest(".chip"); if(chip){ activeColor = activeColor===chip.dataset.k?null:chip.dataset.k; renderColors(); render(); return; }
+  const bd = t.closest(".board"); if(bd){ activeBoard = activeBoard===bd.dataset.b?null:bd.dataset.b; renderNav(); render(); return; }
+  if(t.classList.contains("pin")){
     if(!activeBoard){ $("panel").classList.add("open"); return; }
-    const f = e.target.closest("figure");
-    await api("/api/boards/toggle",{board:activeBoard,collection:f.dataset.c,file:f.dataset.f});
-    boards = (await api("/api/boards")).boards; renderBoards(); render(); return;
+    const f = t.closest("figure");
+    await api("/api/boards/toggle", {board:activeBoard, collection:f.dataset.c, file:f.dataset.f});
+    boards = (await api("/api/boards")).boards; renderNav(); render(); return;
   }
+  if(t.classList.contains("k") || t.classList.contains("d")){
+    const f = t.closest("figure"); const key = f.dataset.batch+"#"+f.dataset.id;
+    const want = t.classList.contains("k") ? "keep" : "drop";
+    decisions[key] = decisions[key]===want ? undefined : want; render(); return;
+  }
+  if(t.dataset.all){ inboxItems.filter(i=>i.batch===t.dataset.all).forEach(i=>decisions[t.dataset.all+"#"+i.id]="keep"); render(); return; }
+  if(t.dataset.apply){
+    const batch = t.dataset.apply;
+    const its = inboxItems.filter(i=>i.batch===batch);
+    const keep = its.filter(i=>decisions[batch+"#"+i.id]==="keep").map(i=>i.id);
+    const dropped = its.filter(i=>decisions[batch+"#"+i.id]==="drop").length;
+    const undecided = its.length - keep.length - dropped;
+    const rest = undecided ? (confirm(`${undecided} undecided — drop them too?`) ? "reject" : "pending") : "reject";
+    t.textContent = "Applying…";
+    const r = await api("/api/resolve", {batch, keep, rest});
+    showLog(r.log); await load(); return;
+  }
+  if(t.closest("#panel")===null && t.id!=="addBtn" && !t.closest("dialog")) {}
 });
-$("q").addEventListener("input", render);
-$("boardsBtn").onclick = ()=> $("panel").classList.toggle("open");
-$("newBoard").onclick = async ()=>{
-  const name = prompt("Board name"); if(!name) return;
-  await api("/api/boards/create",{name});
-  boards = (await api("/api/boards")).boards; renderBoards();
-};
-$("syncBtn").onclick = async ()=>{
-  $("syncBtn").textContent = "Syncing…";
-  const r = await api("/api/sync",{});
-  $("synclog").style.display = "block"; $("synclog").textContent = r.log;
-  setTimeout(()=> $("synclog").style.display="none", 8000);
-  $("syncBtn").textContent = "Sync";
-  items = await api("/api/library"); renderChips(); render();
-};
 
-(async ()=>{
-  [items, boards] = [await api("/api/library"), (await api("/api/boards")).boards];
-  renderChips(); renderBoards(); render();
-})();
+$("q").addEventListener("input", render);
+$("addBtn").onclick = ()=> $("addDlg").showModal();
+$("addForm").addEventListener("submit", async e=>{
+  if(e.submitter && e.submitter.value!=="go") return;
+  e.preventDefault();
+  $("addGo").textContent = "Fetching…"; $("addGo").disabled = true;
+  const r = await api("/api/add", {url:$("addUrl").value, collection:$("addColl").value, tags:$("addTags").value});
+  $("addGo").textContent = "Add"; $("addGo").disabled = false;
+  $("addDlg").close(); showLog(r.log);
+  if(r.ok){ $("addUrl").value=""; view="inbox"; await load(); }
+});
+$("newBoard").onclick = async ()=>{ const name = prompt("Board name"); if(!name) return;
+  await api("/api/boards/create",{name}); boards=(await api("/api/boards")).boards; renderNav(); };
+document.querySelector('nav button[data-view="favorites"]').addEventListener("dblclick", ()=>$("panel").classList.toggle("open"));
+$("syncBtn").onclick = async ()=>{ $("syncBtn").textContent="Syncing…"; const r = await api("/api/sync",{}); showLog(r.log);
+  $("syncBtn").textContent="Sync"; await load(); };
+load();
 </script>
 </html>

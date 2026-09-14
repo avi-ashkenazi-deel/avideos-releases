@@ -12,10 +12,13 @@ git clone <this repo> && cd <repo> && git checkout claude/design-asset-collectio
 python3 design-vault/app/serve.py     # → http://localhost:5177
 ```
 
-Search across everything ("red logos", "fabrizia motion", "1959"), filter by
-collection and dominant color, hover-play videos, pin items to boards
-(boards.json — travels with the repo), and hit **Sync** to git pull + push
-without leaving the UI.
+Modeled on [Spark](https://get-spark.io): **＋ Add link** swallows any URL
+(X, Pinterest, Flickr, Instagram/TikTok/YouTube/Vimeo video, or any page as a
+full-page capture) and stages it in the in-app **Inbox**, where you keep/drop
+per item. Search across everything ("red logos", "fabrizia motion", "1959"),
+filter by collection and dominant color, hover-play videos, pin items to
+boards (boards.json — travels with the repo), and hit **Sync** to commit,
+pull and push without leaving the UI.
 
 ## How it works
 

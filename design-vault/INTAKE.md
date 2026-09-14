@@ -1,6 +1,26 @@
 # Mobile intake — screenshots & videos into the vault
 
-The phone-to-vault bridge is Google Drive. Claude's sessions can read your
+## Send it from Instagram (or anywhere) — the Spark move
+
+The app models [Spark](https://get-spark.io): *drop any link, it's in your
+library in seconds*. Three routes, fastest first:
+
+1. **Share sheet → Slack.** From Instagram / TikTok / X / YouTube, tap Share →
+   Slack → post to a private channel **#vault-inbox** (create it once). That
+   channel is a queue Claude reads: *"process inbox"* in a session pulls every
+   link, runs the right hunter (video platforms via yt-dlp — full video, like
+   Spark), and stages results for review. Same mechanism already harvests
+   #design-candy. Files attached in Slack can't be fetched, links can.
+2. **Share sheet → Save to Drive** (`Design Vault Intake` folder) for
+   screenshots and screen recordings. Details below.
+3. **On your Mac: the app's ＋ Add link** (`app/serve.py`) — paste a URL,
+   pick a collection, it lands in the in-app Inbox. Instagram/TikTok/YouTube
+   downloads work from a residential IP (they bot-wall cloud IPs).
+
+Spark's *Instagram DM → library* trick (DM a reel to a bot account) needs a
+Meta app + webhook server — planned for the hosted phase (see VISION.md).
+
+The phone-to-vault bridge for **files** is Google Drive. Claude's sessions can read your
 Drive, so anything you drop in one folder becomes vault material.
 
 ## One-time setup
