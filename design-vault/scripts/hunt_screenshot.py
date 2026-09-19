@@ -107,8 +107,13 @@ def main() -> int:
     ap.add_argument("--slice-height", type=int, default=1000)
     ap.add_argument("--whole", action="store_true", help="one full-page image, no slicing")
     ap.add_argument("--budget", type=int, default=2500, help="post-load settle time (ms)")
+    ap.add_argument("--mobile", action="store_true",
+                    help="also capture a 390px-wide mobile pass (Inspo-style desktop + mobile pair)")
     args = ap.parse_args()
     tags = [t.strip() for t in args.tags.split(",") if t.strip()]
+    passes = [(args.width, args.viewport_height, "")]
+    if args.mobile:
+        passes.append((390, 844, "-mobile"))
 
     base = urllib.parse.urlparse(args.url)
     host = base.netloc
@@ -124,26 +129,28 @@ def main() -> int:
     year = int(date.today().strftime("%Y"))
     with tempfile.TemporaryDirectory() as td:
         for path in paths:
+          for width, vh, dev_suffix in passes:
             page_url = urllib.parse.urlunparse((base.scheme, host, path, "", base.query, ""))
-            raw = Path(td) / f"{slugify(path) or 'root'}.png"
-            print(f"capturing {page_url} …")
-            if not capture(page_url, raw, args.width, args.viewport_height, args.budget):
+            raw = Path(td) / f"{slugify(path) or 'root'}{dev_suffix}.png"
+            print(f"capturing {page_url} at {width}px …")
+            if not capture(page_url, raw, width, vh, args.budget):
                 print(f"  capture failed for {page_url}", file=sys.stderr)
                 continue
             pieces = trim_and_slice(raw, args.slice_height, args.whole)
             page_slug = slugify(f"{host}{path}", 40)
             for i, piece in enumerate(pieces, 1):
                 n += 1
-                suffix = "" if args.whole else f"-s{i:02d}"
+                suffix = ("" if args.whole else f"-s{i:02d}") + dev_suffix
                 fname = f"{n:02d}-{page_slug}{suffix}.png"
                 piece.save(batch_dir / fname, "PNG", optimize=True)
                 items.append({
                     "id": n, "file": fname,
-                    "title": f"{host}{path}" + ("" if args.whole else f" — section {i}"),
-                    "year": year, "tags": tags,
+                    "title": f"{host}{path}" + ("" if args.whole else f" — section {i}")
+                             + (" (mobile)" if dev_suffix else ""),
+                    "year": year, "tags": tags + (["mobile"] if dev_suffix else ["desktop"]),
                     "page_url": page_url, "source_url": page_url,
                     "license": "unknown (personal reference)", "artist": host,
-                    "query": f"screenshot {args.width}px", "status": "pending",
+                    "query": f"screenshot {width}px", "status": "pending",
                 })
                 print(f"  {fname} ({piece.width}x{piece.height})")
 

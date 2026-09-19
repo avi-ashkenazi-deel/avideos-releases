@@ -42,6 +42,29 @@ boards, and AI-native search. This file is the map from today's repo to that.
 - **Review stays ours.** Spark auto-files; we keep the Inbox keep/drop step —
   the hive only gets what a human chose.
 
+## Learned from Inspo (inspomcp.dev)
+
+Inspo proved the second interface: **the library as tools for agents.** Their
+pitch — *"agents have tools but not taste"* — is the hive brain's pitch too.
+What we took, and what's ours:
+
+- **MCP server over the catalog** (`mcp/server.py`, live): `recommend(brief)`,
+  `search`, `get_item` (real pixels to a vision model), `find_similar`,
+  `get_filters`, boards. Same read-only stance as Inspo, plus one write tool
+  (`annotate`) so agents enrich the hive instead of only consuming it.
+- **Baked-in guidance**: Inspo ships hero/spacing rules with every response
+  because they kill the two most common AI-built-UI failures. Ours ride in
+  `recommend()` too; they'll become per-collection rules (motion, type, print).
+- **Desktop + mobile pairs**: `hunt_screenshot.py --mobile` captures both.
+- **DESIGN.md per item**: Inspo extracts fonts, CSS variables and type ramps
+  from the DOM. Our `notes` field is the seed; the DOM-extraction pass on live
+  captures is the next step for interface-design items.
+- **Not theirs**: Inspo is a public archive of websites. The vault is a
+  *private, curated, multi-medium* hive — passports, banknotes, motion clips,
+  a team's Slack candy — with provenance and human review. Inspo is a great
+  complementary source: `claude mcp add --transport http inspo https://inspomcp.dev/api/mcp`
+  alongside ours gives an agent both the web's taste and yours.
+
 ## Phases
 
 | Phase | What | Status |

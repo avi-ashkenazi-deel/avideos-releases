@@ -78,6 +78,22 @@ design-vault/
 Each collection folder holds the approved images plus an `items.json` catalog —
 so the provenance of every file survives even after the inbox batch is gone.
 
+## Use it from your coding agent (MCP)
+
+Modeled on [inspomcp.dev](https://inspomcp.dev): the vault is also an MCP server, so
+Claude Code / Cursor / Claude Desktop can consult your references *before* writing UI.
+
+```bash
+pip3 install mcp pillow
+claude mcp add design-vault -- python3 ~/design-vault/design-vault/mcp/server.py
+```
+
+Tools: `recommend(brief)` (start here — exemplars + palette lean + composition guidance),
+`search(query, collection, color, tag)`, `get_item(file)` (returns the actual image),
+`find_similar(file)`, `get_filters()`, `list_boards()` / `get_board(name)`, and
+`annotate(file, notes)` — the one write tool, so an agent with vision can leave a
+DESIGN.md-style note on an item and the hive gets smarter with use.
+
 ## Tagging & years
 
 Tagging is a first-class part of the catalog — every item carries a `year` (the

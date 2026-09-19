@@ -452,6 +452,7 @@ def cmd_db(_args) -> int:
             artist     TEXT,
             batch      TEXT,
             timecode   TEXT,            -- storyboard frames only
+            notes      TEXT,            -- DESIGN.md-style annotation (agent- or human-written)
             page_url   TEXT,
             source_url TEXT
         );
@@ -462,11 +463,11 @@ def cmd_db(_args) -> int:
     for catalog_path in sorted(COLLECTIONS.glob("*/items.json")):
         collection = catalog_path.parent.name
         for e in json.loads(catalog_path.read_text()):
-            con.execute("INSERT INTO items VALUES (?,?,?,?,?,?,?,?,?,?,?)", (
+            con.execute("INSERT INTO items VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", (
                 collection, f"collections/{collection}/{e['file']}",
                 e.get("title"), e.get("year"), ",".join(e.get("tags", [])),
                 e.get("license"), e.get("artist"), e.get("batch"),
-                e.get("timecode"), e.get("page_url"), e.get("source_url")))
+                e.get("timecode"), e.get("notes"), e.get("page_url"), e.get("source_url")))
             total += 1
     con.commit()
     con.close()
