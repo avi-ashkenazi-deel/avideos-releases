@@ -37,9 +37,12 @@
           border:1px solid var(--line); cursor:pointer; }
   .chip.on { background:var(--gold); color:var(--bg); border-color:var(--gold); font-weight:600; }
   .chip i { display:inline-block; width:.65em; height:.65em; border-radius:50%; margin-right:.4em; border:1px solid rgba(255,255,255,.2); }
-  #grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:10px; }
-  figure { margin:0; position:relative; border-radius:8px; overflow:hidden; background:var(--card); aspect-ratio:1; }
-  figure img, figure video { width:100%; height:100%; object-fit:cover; display:block; }
+  #grid { columns: 5 210px; column-gap: 10px; }
+  #grid > figure { break-inside: avoid; margin: 0 0 10px; }
+  figure { margin:0; position:relative; border-radius:8px; overflow:hidden; background:var(--card); cursor:zoom-in; }
+  figure img, figure video { width:100%; height:auto; display:block; min-height:80px; }
+  .inbox-grid figure img, .inbox-grid figure video { aspect-ratio:1; object-fit:cover; }
+  .inbox-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:10px; }
   figure .ov { position:absolute; inset:auto 0 0 0; padding:.55rem .7rem; font-size:.75rem;
                background:linear-gradient(transparent, rgba(0,0,0,.82)); opacity:0; transition:opacity .15s;
                display:grid; gap:2px; }
@@ -80,6 +83,27 @@
   .board { padding:.5rem .7rem; border:1px solid var(--line); border-radius:8px; margin-bottom:.5rem; cursor:pointer;
            display:flex; justify-content:space-between; }
   .board.on { border-color:var(--gold); color:var(--gold); }
+  /* lightbox */
+  #lb { width:min(1280px,96vw); max-height:94vh; padding:0; overflow:hidden; }
+  #lb .wrap { display:grid; grid-template-columns:1fr 320px; max-height:94vh; }
+  #lb .stage { background:#000; display:flex; align-items:center; justify-content:center; min-height:420px; position:relative; }
+  #lb .stage img, #lb .stage video { max-width:100%; max-height:94vh; object-fit:contain; }
+  #lb .nav { position:absolute; top:50%; transform:translateY(-50%); background:rgba(15,16,18,.7); color:var(--ink);
+             border:0; border-radius:50%; width:40px; height:40px; font-size:1.2rem; cursor:pointer; }
+  #lb .nav.prev { left:10px; } #lb .nav.next { right:10px; }
+  #lb .side { padding:1.1rem 1.1rem 1.3rem; overflow-y:auto; display:grid; gap:.8rem; align-content:start; font-size:.84rem; }
+  #lb .side input, #lb .side textarea { width:100%; font:inherit; color:var(--ink); background:var(--card); border:1px solid var(--line);
+                                       border-radius:7px; padding:.45rem .7rem; }
+  #lb .side textarea { min-height:90px; resize:vertical; }
+  #lb .side label { display:grid; gap:.25rem; color:var(--dim); font-size:.72rem; text-transform:uppercase; letter-spacing:.06em; }
+  #lb .tags { display:flex; flex-wrap:wrap; gap:5px; }
+  #lb .tags .t { background:var(--card); border:1px solid var(--line); border-radius:99px; padding:2px 9px; font-size:.76rem; cursor:pointer;
+                 text-transform:none; letter-spacing:0; color:var(--ink); }
+  #lb .side label input, #lb .side label textarea { text-transform:none; letter-spacing:0; }
+  #lb .tags .t:hover { border-color:#d84a4a; text-decoration:line-through; }
+  #lb .meta { color:var(--dim); font-size:.78rem; display:grid; gap:2px; }
+  #lb .row { display:flex; gap:.5rem; flex-wrap:wrap; }
+  #lb .close { position:absolute; top:10px; right:10px; z-index:2; }
 </style>
 
 <nav>
@@ -130,6 +154,26 @@
     </div>
   </form>
 </dialog>
+<dialog id="lb">
+  <div class="wrap">
+    <div class="stage" id="lbStage">
+      <button class="nav prev" id="lbPrev">‹</button><button class="nav next" id="lbNext">›</button>
+    </div>
+    <div class="side">
+      <label>Title <input id="lbTitle"></label>
+      <div class="meta" id="lbMeta"></div>
+      <label>Year <input id="lbYear" placeholder="e.g. 1957" inputmode="numeric"></label>
+      <label>Tags <div class="tags" id="lbTags"></div><input id="lbTagAdd" placeholder="add tag, press Enter"></label>
+      <label>Notes <textarea id="lbNotes" placeholder="What makes this work — type, grid, palette roles, motion…"></textarea></label>
+      <div class="row">
+        <button class="btn primary" id="lbSave">Save</button>
+        <button class="btn" id="lbPin">＋ Board</button>
+        <a class="btn" id="lbSrc" target="_blank" rel="noopener" style="text-decoration:none">Source ↗</a>
+        <button class="btn" id="lbClose">Close</button>
+      </div>
+    </div>
+  </div>
+</dialog>
 <div id="log"></div>
 
 <script>
@@ -143,7 +187,7 @@ const thumb = f => "/thumb/" + f.split("/").map(encodeURIComponent).join("/");
 const media = f => isVid(f)
   ? `<span class="vid">▶</span><video src="${src(f)}" poster="${thumb(f)}" preload="none" muted loop playsinline onmouseover="this.play()" onmouseout="this.pause()"></video>`
   : `<img src="${src(f)}" loading="lazy" alt="">`;
-let items=[], inboxItems=[], boards=[], colls=[];
+let items=[], inboxItems=[], boards=[], colls=[], lastShown=[], lbIndex=-1, lbTags=[];
 let view="library", activeColl=null, activeColor=null, activeBoard=null;
 const decisions = {};   // inbox: `${batch}#${id}` -> "keep" | "drop"
 
@@ -202,12 +246,12 @@ function render(){
   if(view==="inbox"){
     if(!shown.length){ $("grid").innerHTML = `<p class="empty">Inbox is empty. Add a link, or hunt from a session.</p>`; return; }
     const groups = {}; shown.forEach(it=>(groups[it.batch]=groups[it.batch]||[]).push(it));
-    $("grid").style.display="block";
+    $("grid").style.display="block"; $("grid").style.columns="auto";
     $("grid").innerHTML = Object.entries(groups).map(([batch, its])=>`
       <div class="batchhead"><h3>${batch} <span style="color:var(--dim);font-weight:400">${its.length} pending</span></h3>
         <div class="r"><button class="btn" data-all="${batch}">Keep all</button>
         <button class="btn primary" data-apply="${batch}">Apply decisions</button></div></div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px">
+      <div class="inbox-grid">
       ${its.map(it=>{ const k = decisions[batch+"#"+it.id];
         return `<figure class="${k||""}" data-batch="${batch}" data-id="${it.id}">
           ${media(it.file)}
@@ -217,10 +261,11 @@ function render(){
     return;
   }
 
-  $("grid").style.display="grid";
-  $("grid").innerHTML = shown.slice(0,500).map(it=>{
+  $("grid").style.display="block"; $("grid").style.columns="";
+  lastShown = shown;
+  $("grid").innerHTML = shown.slice(0,500).map((it,i)=>{
     const pinned = pinBoard && pinBoard.items.some(r=>r.file===it.file);
-    return `<figure class="${pinned?"pinned":""}" data-c="${it.collection}" data-f="${it.file}">
+    return `<figure class="${pinned?"pinned":""}" data-c="${it.collection}" data-f="${it.file}" data-i="${i}">
       ${media(it.file)}
       <div class="act"><button class="pin" title="pin to board">＋</button></div>
       <div class="ov"><strong>${it.title||""}</strong>
@@ -263,6 +308,48 @@ document.addEventListener("click", async e=>{
 });
 
 $("q").addEventListener("input", render);
+// ---- lightbox ----
+function openLb(i){
+  const it = lastShown[i]; if(!it) return; lbIndex = i;
+  $("lbStage").querySelectorAll("img,video").forEach(e=>e.remove());
+  $("lbStage").insertAdjacentHTML("afterbegin", isVid(it.file)
+    ? `<video src="${src(it.file)}" poster="${thumb(it.file)}" controls autoplay muted loop playsinline></video>`
+    : `<img src="${src(it.file)}" alt="">`);
+  $("lbTitle").value = it.title||""; $("lbYear").value = it.year||"";
+  $("lbNotes").value = it.notes||"";
+  lbTags = (it.tags||"").split(",").filter(Boolean); renderLbTags();
+  $("lbMeta").innerHTML = `<span>${it.collection}${it.artist?" · "+it.artist:""}</span><span>${it.license||""}</span><span style="word-break:break-all">${it.file.split("/").pop()}</span>`;
+  $("lbSrc").href = it.page_url||"#"; $("lbSrc").style.display = it.page_url?"":"none";
+  if(!$("lb").open) $("lb").showModal();
+}
+function renderLbTags(){ $("lbTags").innerHTML = lbTags.map(t=>`<span class="t" data-t="${t}" title="remove">${t}</span>`).join(""); }
+$("lbTags").addEventListener("click", e=>{ const t=e.target.closest(".t"); if(!t) return; lbTags = lbTags.filter(x=>x!==t.dataset.t); renderLbTags(); });
+$("lbTagAdd").addEventListener("keydown", e=>{ if(e.key==="Enter"){ e.preventDefault(); const v=$("lbTagAdd").value.trim().toLowerCase().replace(/\s+/g,"-");
+  if(v && !lbTags.includes(v)) lbTags.push(v); $("lbTagAdd").value=""; renderLbTags(); }});
+$("lbSave").onclick = async ()=>{
+  const it = lastShown[lbIndex]; if(!it) return;
+  $("lbSave").textContent="Saving…";
+  const r = await api("/api/item/update", {file:it.file, tags:lbTags, year:$("lbYear").value, notes:$("lbNotes").value, title:$("lbTitle").value});
+  $("lbSave").textContent="Save";
+  if(r.ok){ Object.assign(it, {tags:lbTags.join(","), year:r.item.year, notes:r.item.notes, title:r.item.title}); showLog(`Saved ${it.file.split("/").pop()}`); render(); }
+  else showLog(r.log||"save failed");
+};
+$("lbPin").onclick = async ()=>{ const it = lastShown[lbIndex]; if(!it) return;
+  if(!activeBoard){ $("panel").classList.add("open"); showLog("Pick a board first (right panel), then ＋ Board again."); return; }
+  await api("/api/boards/toggle",{board:activeBoard, collection:it.collection, file:it.file});
+  boards=(await api("/api/boards")).boards; renderNav(); render(); showLog("Board updated"); };
+$("lbClose").onclick = ()=> $("lb").close();
+$("lbPrev").onclick = ()=> openLb((lbIndex-1+lastShown.length)%lastShown.length);
+$("lbNext").onclick = ()=> openLb((lbIndex+1)%lastShown.length);
+document.addEventListener("keydown", e=>{
+  if((e.metaKey||e.ctrlKey) && e.key.toLowerCase()==="k"){ e.preventDefault(); $("q").focus(); $("q").select(); return; }
+  if(!$("lb").open || ["INPUT","TEXTAREA"].includes(document.activeElement.tagName)) return;
+  if(e.key==="ArrowLeft") $("lbPrev").click(); if(e.key==="ArrowRight") $("lbNext").click();
+});
+$("grid").addEventListener("click", e=>{
+  if(view==="inbox" || e.target.closest(".act") || e.target.closest("a")) return;
+  const f = e.target.closest("figure[data-i]"); if(f) openLb(+f.dataset.i);
+});
 $("addBtn").onclick = ()=> $("addDlg").showModal();
 $("addForm").addEventListener("submit", async e=>{
   if(e.submitter && e.submitter.value!=="go") return;

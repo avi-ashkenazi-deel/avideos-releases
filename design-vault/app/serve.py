@@ -42,7 +42,7 @@ def library():
     con = sqlite3.connect(VAULT / "vault.db")
     con.row_factory = sqlite3.Row
     rows = [dict(r) for r in con.execute(
-        "SELECT collection, file, title, year, tags, license, artist, page_url, batch FROM items")]
+        "SELECT collection, file, title, year, tags, license, artist, page_url, batch, notes FROM items")]
     con.close()
     return rows
 
@@ -154,6 +154,30 @@ class Handler(SimpleHTTPRequestHandler):
             if code == 0 and keep:
                 run([sys.executable, str(SCRIPTS / "vault.py"), "colors"])
             return self.send_json({"ok": code == 0, "log": log[-2000:]})
+
+        if self.path == "/api/item/update":
+            # Edit tags / year / notes / title on one library item, persist to its catalog, rebuild db
+            file = body.get("file", "")
+            m = re.match(r"collections/([a-z0-9-]+)/(.+)$", file)
+            if not m:
+                return self.send_json({"ok": False, "log": "bad file path"}, 400)
+            coll, base = m.group(1), m.group(2)
+            catalog_path = VAULT / "collections" / coll / "items.json"
+            catalog = json.loads(catalog_path.read_text())
+            hit = next((e for e in catalog if e["file"] == base), None)
+            if not hit:
+                return self.send_json({"ok": False, "log": "item not in catalog"}, 404)
+            if "tags" in body:
+                hit["tags"] = [t.strip() for t in body["tags"] if t.strip()]
+            if "year" in body:
+                hit["year"] = int(body["year"]) if str(body["year"]).strip().isdigit() else None
+            if "notes" in body:
+                hit["notes"] = body["notes"].strip()
+            if "title" in body and body["title"].strip():
+                hit["title"] = body["title"].strip()
+            catalog_path.write_text(json.dumps(catalog, indent=2, ensure_ascii=False))
+            run([sys.executable, str(SCRIPTS / "vault.py"), "db"], timeout=120)
+            return self.send_json({"ok": True, "item": hit})
 
         data = load_boards()
         if self.path == "/api/boards/create":
