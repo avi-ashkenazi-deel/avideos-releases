@@ -1,0 +1,61 @@
+#!/bin/bash
+# Design Vault.app — first run downloads the library, then every launch
+# starts the local server (if needed) and opens the vault in its own window.
+
+VAULT_HOME="$HOME/design-vault"
+REPO="https://github.com/avi-ashkenazi-deel/avideos-releases.git"
+BRANCH="claude/design-asset-collection-f97tdi"
+PORT=5177
+URL="http://localhost:$PORT"
+LOG="$HOME/Library/Logs/DesignVault.log"
+export PATH="/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin:/opt/homebrew/bin:$PATH"
+
+say()  { osascript -e "display dialog \"$1\" buttons {\"OK\"} default button 1 with title \"Design Vault\" with icon note" >/dev/null 2>&1; }
+ask()  { osascript -e "button returned of (display dialog \"$1\" buttons {\"Cancel\", \"$2\"} default button 2 with title \"Design Vault\" with icon note)" 2>/dev/null; }
+note() { osascript -e "display notification \"$1\" with title \"Design Vault\"" >/dev/null 2>&1; }
+
+# 0. Apple's command line tools provide git and python3.
+if ! xcode-select -p >/dev/null 2>&1; then
+  say "Design Vault needs Apple's free command line tools (git and Python). Click Install in the next window. When it finishes, open Design Vault again."
+  xcode-select --install >/dev/null 2>&1
+  exit 0
+fi
+
+# 1. First run: download the library.
+if [ ! -d "$VAULT_HOME/.git" ]; then
+  [ "$(ask "Welcome. Design Vault will download your library (about 1 GB) into a design-vault folder in your home folder. This happens once." "Download")" = "Download" ] || exit 0
+  note "Downloading your library. This can take a few minutes."
+  if ! GIT_TERMINAL_PROMPT=0 git clone -q --branch "$BRANCH" "$REPO" "$VAULT_HOME" >>"$LOG" 2>&1; then
+    rm -rf "$VAULT_HOME"
+    # Private repo and no saved GitHub login: run the download in Terminal so GitHub can ask you to sign in.
+    say "GitHub needs you to sign in. A Terminal window will open and ask for your GitHub username and a token. When it says Done, open Design Vault again."
+    osascript -e "tell application \"Terminal\" to activate" \
+              -e "tell application \"Terminal\" to do script \"git clone --branch $BRANCH $REPO '$VAULT_HOME' && echo && echo 'Done. You can close this window and open Design Vault again.'\"" >/dev/null
+    exit 0
+  fi
+fi
+
+APPDIR="$VAULT_HOME/design-vault"
+
+# 2. Start the server unless it is already running.
+if ! lsof -iTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1; then
+  (cd "$APPDIR" && nohup python3 app/serve.py "$PORT" >>"$LOG" 2>&1 &)
+  for _ in $(seq 1 40); do
+    curl -s -o /dev/null "$URL/api/collections" && break
+    sleep 0.25
+  done
+  if ! curl -s -o /dev/null "$URL/api/collections"; then
+    say "The vault did not start. Details are in ~/Library/Logs/DesignVault.log."
+    exit 1
+  fi
+  # Quietly fetch anything new in the background (only if GitHub login is saved).
+  (GIT_TERMINAL_PROMPT=0 git -C "$VAULT_HOME" pull -q --ff-only >>"$LOG" 2>&1 &)
+fi
+
+# 3. Open in its own window: Chrome/Arc/Edge app mode if present, else the default browser.
+for b in "Google Chrome" "Arc" "Microsoft Edge" "Brave Browser"; do
+  if [ -d "/Applications/$b.app" ]; then
+    open -na "$b" --args --app="$URL" && exit 0
+  fi
+done
+open "$URL"

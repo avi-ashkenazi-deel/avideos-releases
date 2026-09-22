@@ -7,6 +7,13 @@ Where it's headed (multi-user hive brain, shared boards, AI search): [VISION.md]
 
 ## The app
 
+**Easiest: the Mac app.** Open `Design Vault.dmg`, drag Design Vault to
+Applications, double-click it. The first launch downloads the library into
+`~/design-vault`; after that it opens straight into the vault in its own window.
+Rebuild the DMG with `design-vault/packaging/build_dmg.sh`.
+
+**By hand:**
+
 ```bash
 git clone <this repo> && cd <repo> && git checkout claude/design-asset-collection-f97tdi
 python3 design-vault/app/serve.py     # → http://localhost:5177
