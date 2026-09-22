@@ -7,6 +7,14 @@ struct SceneListView: View {
     @Environment(StudioController.self) private var studio
     /// "list" or "grid" — window furniture, remembered across launches.
     @AppStorage("scenesDisplayMode") private var displayMode = "list"
+    @State private var searchText = ""
+
+    /// Scenes matching the search box (all of them when it's empty).
+    private var visibleScenes: [SceneModel] {
+        let query = searchText.trimmingCharacters(in: .whitespaces)
+        guard !query.isEmpty else { return studio.project.scenes }
+        return studio.project.scenes.filter { $0.name.localizedCaseInsensitiveContains(query) }
+    }
 
     var body: some View {
         Group {
@@ -17,13 +25,19 @@ struct SceneListView: View {
             }
         }
         .safeAreaInset(edge: .top) {
-            Picker("", selection: $displayMode) {
-                Image(systemName: "list.bullet").tag("list")
-                Image(systemName: "square.grid.2x2").tag("grid")
+            HStack(spacing: 8) {
+                Picker("", selection: $displayMode) {
+                    Image(systemName: "list.bullet").tag("list")
+                    Image(systemName: "square.grid.2x2").tag("grid")
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .frame(width: 90)
+                TextField("Search scenes", text: $searchText)
+                    .textFieldStyle(.roundedBorder)
+                    .controlSize(.small)
             }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .frame(width: 90)
+            .padding(.horizontal, 8)
             .padding(.vertical, 6)
         }
         .safeAreaInset(edge: .bottom) {
@@ -62,7 +76,7 @@ struct SceneListView: View {
             // No "Scenes" section header: the list lives in a palette window
             // whose title bar already says Scenes.
             Section {
-                ForEach(studio.project.scenes) { scene in
+                ForEach(visibleScenes) { scene in
                     SceneRow(scene: scene,
                              isActive: scene.id == studio.project.activeSceneID,
                              thumbnail: studio.sceneThumbnails[scene.id])
@@ -70,6 +84,9 @@ struct SceneListView: View {
                         .contextMenu { sceneContextMenu(scene) }
                 }
                 .onMove { from, to in
+                    // Reordering a FILTERED list would scramble the real
+                    // order; only move when every scene is showing.
+                    guard searchText.isEmpty else { return }
                     studio.project.scenes.move(fromOffsets: from, toOffset: to)
                 }
             }
@@ -81,7 +98,7 @@ struct SceneListView: View {
     private var sceneGrid: some View {
         ScrollView {
             LazyVStack(spacing: 14) {
-                ForEach(studio.project.scenes) { scene in
+                ForEach(visibleScenes) { scene in
                     let isActive = scene.id == studio.project.activeSceneID
                     Button {
                         studio.switchScene(to: scene.id)
@@ -161,6 +178,39 @@ struct SceneListView: View {
         // binding it here too would fire twice.
         Button("Duplicate") { studio.duplicateScene(id: scene.id) }
         Button("Rename…") { renameTarget = scene }
+        if case .movie(let config) = scene.kind {
+            // A pre-roll that hands off by itself when the movie ends.
+            Menu("When the Movie Ends") {
+                Button {
+                    var updated = scene
+                    updated.kind = .movie(MovieSceneConfig(media: config.media, loops: config.loops,
+                                                           volume: config.volume, endSceneID: nil))
+                    replace(scene: updated)
+                } label: {
+                    if config.endSceneID == nil {
+                        Label("Stay on This Scene", systemImage: "checkmark")
+                    } else {
+                        Text("Stay on This Scene")
+                    }
+                }
+                Divider()
+                ForEach(studio.project.scenes.filter { $0.id != scene.id }) { target in
+                    Button {
+                        var updated = scene
+                        updated.kind = .movie(MovieSceneConfig(media: config.media, loops: config.loops,
+                                                               volume: config.volume, endSceneID: target.id))
+                        replace(scene: updated)
+                    } label: {
+                        if config.endSceneID == target.id {
+                            Label("Switch to \(target.name)", systemImage: "checkmark")
+                        } else {
+                            Text("Switch to \(target.name)")
+                        }
+                    }
+                }
+            }
+            .disabled(config.loops)
+        }
         Button("Delete", role: .destructive) {
             studio.removeScene(id: scene.id)
         }

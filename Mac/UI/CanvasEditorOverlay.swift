@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Transparent direct-manipulation layer over the Metal preview: hit-testing,
 /// selection chrome, drag-to-move, handle-resize, and rotation. Mutates the
@@ -38,6 +39,40 @@ struct CanvasEditorOverlay: View {
             .focusable()
             .focusEffectDisabled()
             .focused($canvasFocused)
+            // Drop a picture/movie file onto the canvas: onto an existing
+            // image/video element it REPLACES that element's media in place
+            // (same box, same animation); onto empty canvas it adds a new
+            // element where it landed.
+            .onDrop(of: [.fileURL], isTargeted: nil) { providers, location in
+                guard let provider = providers.first else { return false }
+                _ = provider.loadObject(ofClass: URL.self) { url, _ in
+                    guard let url else { return }
+                    Task { @MainActor in
+                        if let hit = hitTest(at: location, transform: transform),
+                           studio.replaceElementMedia(id: hit, url: url) {
+                            return
+                        }
+                        let type = UTType(filenameExtension: url.pathExtension)
+                        let unit = transform.toUnit(location)
+                        if type?.conforms(to: .image) == true {
+                            studio.addImageElement(url: url)
+                            // Land it where it was dropped. (Video adds
+                            // async after probing its size, so it keeps the
+                            // default placement — the selection would
+                            // still be the previous element here.)
+                            if let id = studio.selectedElementID,
+                               var added = studio.findElement(id: id) {
+                                added.transform.center = CGPoint(x: min(max(unit.x, 0), 1),
+                                                                 y: min(max(unit.y, 0), 1))
+                                studio.updateElement(added)
+                            }
+                        } else if type?.conforms(to: .movie) == true {
+                            studio.addVideoElement(url: url)
+                        }
+                    }
+                }
+                return true
+            }
             .onDeleteCommand {
                 // Delete on the canvas HIDES (exit animation, recoverable
                 // from the Overlays palette). Only the palette's remove

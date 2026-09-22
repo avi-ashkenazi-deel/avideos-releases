@@ -7,6 +7,7 @@ import CoreVideo
 import ImageIO
 import Metal
 import Observation
+import UniformTypeIdentifiers
 import os
 
 /// The app's live-mode hub: owns every subsystem, compiles render plans from
@@ -51,9 +52,20 @@ final class StudioController {
     /// Internal (not private) because the element factories live in
     /// StudioControllerElements.swift and `private` is file-scoped.
     var timerStarts: [UUID: Date] = [:]
+    /// Timers whose end-scene handoff already fired this run; cleared when
+    /// the timer restarts or is re-shown.
+    private var firedTimerIDs: Set<UUID> = []
     /// 1 Hz recompile while a visible timer element exists in the active
     /// scene; nil otherwise so timer-less scenes pay nothing.
     private var timerTick: DispatchSourceTimer?
+
+    /// True while the mic strip is muted AND the microphone hears speech —
+    /// the "you're talking on mute" moment. Computed from the capture
+    /// engine's pre-mute level, so no OS support is needed.
+    private(set) var isSpeakingWhileMuted = false
+    private var mutedSpeechTimer: DispatchSourceTimer?
+    private var mutedSpeechLoudTicks = 0
+    private var mutedSpeechQuietTicks = 0
     var selectedElementID: UUID?
     /// Screen rect of the selected element's canvas box, reported by the
     /// canvas overlay. The inspector palette parks itself beside it so the
@@ -200,6 +212,38 @@ final class StudioController {
         midi.start(audio: audio)
         virtualCamera.connectSinkIfNeeded()
         startThumbnailTimer()
+        startMutedSpeechMonitor()
+    }
+
+    /// 5 Hz: speech on a muted mic for ~0.8 s raises the banner; ~2 s of
+    /// quiet (or unmuting) lowers it. Cheap — one lock-guarded level read.
+    private func startMutedSpeechMonitor() {
+        guard mutedSpeechTimer == nil else { return }
+        let timer = DispatchSource.makeTimerSource(queue: .main)
+        timer.schedule(deadline: .now() + 1, repeating: 0.2)
+        timer.setEventHandler { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                let muted = self.audio.isMuted(.mic)
+                let loud = self.audio.levels(for: .mic).rms > 0.02
+                if muted && loud {
+                    self.mutedSpeechLoudTicks += 1
+                    self.mutedSpeechQuietTicks = 0
+                } else {
+                    self.mutedSpeechQuietTicks += 1
+                    if self.mutedSpeechQuietTicks >= 2 { self.mutedSpeechLoudTicks = 0 }
+                }
+                let shouldWarn = muted && self.mutedSpeechLoudTicks >= 4
+                let shouldClear = !muted || self.mutedSpeechQuietTicks >= 10
+                if shouldWarn, !self.isSpeakingWhileMuted {
+                    self.isSpeakingWhileMuted = true
+                } else if shouldClear, self.isSpeakingWhileMuted {
+                    self.isSpeakingWhileMuted = false
+                }
+            }
+        }
+        timer.resume()
+        mutedSpeechTimer = timer
     }
 
     private func wireSubsystems() {
@@ -372,6 +416,18 @@ final class StudioController {
             let source = MovieSource(key: key, url: url, loops: config.loops,
                                      muted: true, metalDevice: engine.device,
                                      autoplay: prefs.autoPlayMovies)
+            // End-of-movie handoff. Read the config FRESH at fire time — the
+            // user may have picked the end scene after the movie started.
+            let sceneID = scene.id
+            source.onPlaybackEnded = { [weak self] in
+                guard let self,
+                      let current = self.project.scenes.first(where: { $0.id == sceneID }),
+                      case .movie(let fresh) = current.kind,
+                      let target = fresh.endSceneID,
+                      target != self.project.activeSceneID,
+                      self.project.activeSceneID == sceneID else { return }
+                self.switchScene(to: target)
+            }
             registry.register(source)
             if let player = source.avPlayer {
                 audio.attachMoviePlayer(player)
@@ -413,12 +469,28 @@ final class StudioController {
     // MARK: - Countdown timers
 
     /// Remaining-time strings for the scene's timer elements, for the plan.
+    /// Also where a finished countdown hands off to its end scene — once,
+    /// tracked in `firedTimerIDs` so the 1 Hz tick can't re-fire it.
     private func currentTimerTexts(scene: SceneModel) -> [UUID: String] {
         var texts: [UUID: String] = [:]
+        var handoff: UUID?
         for element in scene.elements {
             guard case .timer(let timer) = element.kind else { continue }
             let elapsed = timerStarts[element.id].map { Date().timeIntervalSince($0) } ?? 0
-            texts[element.id] = TimerContent.formatted(timer.durationSeconds - elapsed)
+            let remaining = timer.durationSeconds - elapsed
+            texts[element.id] = TimerContent.formatted(remaining)
+            if remaining <= 0, element.isVisible,
+               let target = timer.endSceneID,
+               target != project.activeSceneID,
+               !firedTimerIDs.contains(element.id) {
+                firedTimerIDs.insert(element.id)
+                handoff = target
+            }
+        }
+        if let handoff {
+            // Deferred: we're inside a plan compile; switching mid-compile
+            // would recurse into another.
+            Task { @MainActor [weak self] in self?.switchScene(to: handoff) }
         }
         return texts
     }
@@ -448,6 +520,7 @@ final class StudioController {
     /// Starts the countdown over (also what showing a hidden timer does).
     func restartTimer(id: UUID) {
         timerStarts[id] = Date()
+        firedTimerIDs.remove(id)
         recompileAndPublish()
     }
 
@@ -686,6 +759,48 @@ final class StudioController {
         }
     }
 
+    /// Ecamm's "Resize To Fit Canvas": as large as the canvas allows while
+    /// keeping the element's current aspect, centered, un-rotated.
+    func resizeElementToFitCanvas(id: UUID) {
+        guard var element = findElement(id: id) else { return }
+        let canvas = project.canvasSize
+        let t = element.transform
+        let pixelAspect = (t.size.width * canvas.width) / max(t.size.height * canvas.height, 1)
+        let canvasAspect = canvas.width / max(canvas.height, 1)
+        var size = CGSize(width: 1, height: 1)
+        if pixelAspect >= canvasAspect {
+            size.height = (canvas.width / pixelAspect) / canvas.height
+        } else {
+            size.width = (canvas.height * pixelAspect) / canvas.width
+        }
+        element.transform.size = size
+        element.transform.center = CGPoint(x: 0.5, y: 0.5)
+        element.transform.rotation = 0
+        updateElement(element)
+    }
+
+    /// Drop a file onto an existing picture element to swap its media in
+    /// place — same box, same animation, new content. Returns false when the
+    /// element isn't an image/video or the file's type doesn't match.
+    @discardableResult
+    func replaceElementMedia(id: UUID, url: URL) -> Bool {
+        guard var element = findElement(id: id) else { return false }
+        let type = UTType(filenameExtension: url.pathExtension)
+        switch element.kind {
+        case .image where type?.conforms(to: .image) == true:
+            element.kind = .image(MediaReference(url: url))
+        case .video(let content) where type?.conforms(to: .movie) == true:
+            element.kind = .video(VideoContent(media: MediaReference(url: url),
+                                               loops: content.loops,
+                                               isMuted: content.isMuted))
+        default:
+            return false
+        }
+        element.name = url.lastPathComponent
+        updateElement(element)
+        return true
+    }
+
     func addElement(_ element: Element) {
         if withActiveScene({ $0.elements.append(element) }) {
             selectedElementID = element.id
@@ -777,6 +892,11 @@ final class StudioController {
             // is never what a host means.
             if case .timer = element.kind {
                 timerStarts[id] = Date()
+                firedTimerIDs.remove(id)
+            }
+            // A whoosh/sting bound to the overlay plays as it enters.
+            if let padID = element.appearSoundPadID {
+                audio.firePad(id: padID)
             }
         }
         updateElement(element)   // triggers recompile via project.didSet

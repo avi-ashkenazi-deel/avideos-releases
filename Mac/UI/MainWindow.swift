@@ -51,6 +51,25 @@ private struct StudioLayout: View {
             }
             .padding(10)
         }
+        .overlay(alignment: .top) {
+            // "Speaking while muted" — computed from the mic's pre-mute level,
+            // so it needs no OS support. Sits where the eye already is.
+            if studio.isSpeakingWhileMuted {
+                HStack(spacing: 10) {
+                    Image(systemName: "mic.slash.fill")
+                    Text("You're muted").font(.headline)
+                    Button("Unmute") { studio.audio.setMuted(false, for: .mic) }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.small)
+                }
+                .padding(.horizontal, 16).padding(.vertical, 10)
+                .background(Color.red.opacity(0.85), in: Capsule())
+                .foregroundStyle(.white)
+                .padding(.top, 56)
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .animation(.easeInOut(duration: 0.25), value: studio.isSpeakingWhileMuted)
         .overlay(alignment: .bottom) {
             VStack(spacing: 10) {
                 if studio.activeSceneIsCamera && studio.prefs.showCameraSwitcher {

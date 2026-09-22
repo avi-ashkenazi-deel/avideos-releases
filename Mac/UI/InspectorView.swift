@@ -136,6 +136,10 @@ struct InspectorView: View {
                     Button(element.isVisible ? "Hide (animated)" : "Show (animated)") {
                         studio.toggleElementVisibility(id: element.id)
                     }
+                    Button("Fit Canvas") {
+                        studio.resizeElementToFitCanvas(id: element.id)
+                    }
+                    .help("As large as the canvas allows, keeping the shape, centered")
                     Spacer()
                     Button(role: .destructive) {
                         studio.removeElement(id: element.id)
@@ -407,6 +411,22 @@ struct InspectorView: View {
             Button("Restart Countdown") {
                 studio.restartTimer(id: element.id)
             }
+            // "3… 2… 1… and we're live": hand off to a scene at zero.
+            Picker("When it ends", selection: Binding(
+                get: { content.endSceneID },
+                set: { newValue in
+                    var updated = element
+                    var timer = content
+                    timer.endSceneID = newValue
+                    updated.kind = .timer(timer)
+                    studio.updateElement(updated)
+                }
+            )) {
+                Text("Stay at 0:00").tag(UUID?.none)
+                ForEach(studio.project.scenes) { scene in
+                    Text("Switch to \(scene.name)").tag(UUID?.some(scene.id))
+                }
+            }
         }
     }
 
@@ -586,6 +606,21 @@ struct InspectorView: View {
                 Text("Exit plays the same animation reversed.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+
+                // A sound bound to the entrance — whoosh on a lower third.
+                Picker("Sound on appear", selection: Binding(
+                    get: { element.appearSoundPadID },
+                    set: { newValue in
+                        var updated = element
+                        updated.appearSoundPadID = newValue
+                        studio.updateElement(updated)
+                    }
+                )) {
+                    Text("None").tag(UUID?.none)
+                    ForEach(studio.audio.pads) { pad in
+                        Text(pad.name).tag(UUID?.some(pad.id))
+                    }
+                }
 
                 HStack {
                     // Replays the entry alone — the fast way to compare styles.

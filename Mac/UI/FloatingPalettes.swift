@@ -264,15 +264,26 @@ struct OverlaysPalette: View {
     /// `onDeleteCommand` below — and never fires while a rename field or the
     /// canvas has focus instead.
     @FocusState private var listFocused: Bool
+    @State private var searchText = ""
 
     private var elements: [Element] {
-        studio.project.activeScene?.elements ?? []
+        let all = studio.project.activeScene?.elements ?? []
+        let query = searchText.trimmingCharacters(in: .whitespaces)
+        guard !query.isEmpty else { return all }
+        return all.filter { $0.name.localizedCaseInsensitiveContains(query) }
     }
 
     var body: some View {
         VStack(spacing: 0) {
+            TextField("Search overlays", text: $searchText)
+                .textFieldStyle(.roundedBorder)
+                .controlSize(.small)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
             if elements.isEmpty {
-                Text("No overlays in this scene yet — add one below.")
+                Text(searchText.isEmpty
+                     ? "No overlays in this scene yet — add one below."
+                     : "Nothing matches “\(searchText)”.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, minHeight: 90)
@@ -295,11 +306,15 @@ struct OverlaysPalette: View {
                                        studio.inspectorSummonNonce += 1
                                        openInspector()
                                    },
+                                   fitCanvas: { studio.resizeElementToFitCanvas(id: element.id) },
                                    remove: { studio.removeElement(id: element.id) },
                                    copy: { studio.copyElement(id: element.id) },
                                    cut: { studio.cutElement(id: element.id) })
                     }
                     .onMove { displayFrom, displayTo in
+                        // Reordering a FILTERED list would scramble z-order;
+                        // only move when every layer is showing.
+                        guard searchText.isEmpty else { return }
                         let count = elements.count
                         let arrayFrom = IndexSet(displayFrom.map { count - 1 - $0 })
                         let arrayTo = count - displayTo
@@ -345,6 +360,7 @@ private struct OverlayRow: View {
     let select: () -> Void
     let toggleEye: () -> Void
     let inspect: () -> Void
+    let fitCanvas: () -> Void
     let remove: () -> Void
     let copy: () -> Void
     let cut: () -> Void
@@ -394,6 +410,7 @@ private struct OverlayRow: View {
         .listRowBackground(isSelected ? Color.accentColor.opacity(0.25) : Color.clear)
         .contextMenu {
             Button("Inspect", action: inspect)
+            Button("Resize to Fit Canvas", action: fitCanvas)
             Button("Copy", action: copy)
             Button("Cut", action: cut)
             Button("Remove", role: .destructive, action: remove)
@@ -404,6 +421,8 @@ private struct OverlayRow: View {
 /// The add-element row, shared by the overlays palette and the inspector.
 struct AddElementButtons: View {
     @Environment(StudioController.self) private var studio
+    @State private var askingForQRURL = false
+    @State private var qrURLText = "https://"
 
     var body: some View {
         HStack {
@@ -421,6 +440,8 @@ struct AddElementButtons: View {
                 .help("New Countdown Overlay")
             Button { studio.addWebElement() } label: { Image(systemName: "globe") }
                 .help("New Browser Overlay")
+            Button { askingForQRURL = true } label: { Image(systemName: "qrcode") }
+                .help("New QR Code Overlay")
             // One click, one camera overlay — no menu. Which device it shows
             // is an inspector decision, made after placing it (asked for
             // explicitly: "just have a camera icon there, no dropdown").
@@ -430,6 +451,13 @@ struct AddElementButtons: View {
             .help("New Camera Overlay")
         }
         .buttonStyle(.borderless)
+        .alert("QR Code Overlay", isPresented: $askingForQRURL) {
+            TextField("https://…", text: $qrURLText)
+            Button("Add") { studio.addQRCodeElement(urlString: qrURLText) }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("The link (or any text) the code should open.")
+        }
     }
 
     private func addMedia(images: Bool) {
@@ -444,45 +472,82 @@ struct AddElementButtons: View {
     }
 }
 
-// MARK: - Sound effects palette (rows, not tiles)
+// MARK: - Sound effects palette (rows, or a pad grid)
 
 /// One line per sound: play/stop, name, length, a progress fill while
-/// sounding, and a trim editor for in/out points behind the gear.
+/// sounding, and a trim editor for in/out points behind the gear. Or, in
+/// grid mode, a SOUND PAD: colored tiles with optional artwork, one tap
+/// each — the Stream-Deck-on-screen look.
 struct SoundEffectsPalette: View {
     @Environment(StudioController.self) private var studio
+    /// "list" or "grid" — window furniture, remembered across launches.
+    @AppStorage("soundsDisplayMode") private var displayMode = "list"
+    @State private var searchText = ""
 
     private var audio: AudioEngineController { studio.audio }
 
+    /// Pads matching the search box (all of them when it's empty).
+    private var visiblePads: [SoundPad] {
+        let query = searchText.trimmingCharacters(in: .whitespaces)
+        guard !query.isEmpty else { return audio.pads }
+        return audio.pads.filter { $0.name.localizedCaseInsensitiveContains(query) }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
+            HStack(spacing: 8) {
+                Picker("", selection: $displayMode) {
+                    Image(systemName: "list.bullet").tag("list")
+                    Image(systemName: "square.grid.3x3.fill").tag("grid")
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .frame(width: 90)
+                TextField("Search sounds", text: $searchText)
+                    .textFieldStyle(.roundedBorder)
+                    .controlSize(.small)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+
             if audio.pads.isEmpty {
                 Text("Drop audio files here, or add one below.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, minHeight: 80)
+            } else if displayMode == "grid" {
+                padGrid
             } else {
                 ScrollView {
                     LazyVStack(spacing: 2) {
                         // Top-level sounds first, then one disclosure per
                         // folder — folders exist only through their members.
-                        ForEach(audio.pads.filter { $0.folder == nil }) { pad in
-                            SoundEffectRow(pad: pad)
-                        }
-                        ForEach(audio.padFolders, id: \.self) { folder in
-                            DisclosureGroup {
-                                ForEach(audio.pads.filter { $0.folder == folder }) { pad in
-                                    SoundEffectRow(pad: pad)
-                                }
-                            } label: {
-                                Label(folder, systemImage: "folder.fill")
-                                    .font(.caption.weight(.medium))
+                        // A search flattens the folders: you asked for a
+                        // name, not a place.
+                        if searchText.isEmpty {
+                            ForEach(visiblePads.filter { $0.folder == nil }) { pad in
+                                SoundEffectRow(pad: pad)
                             }
-                            .padding(.horizontal, 4)
+                            ForEach(audio.padFolders, id: \.self) { folder in
+                                DisclosureGroup {
+                                    ForEach(visiblePads.filter { $0.folder == folder }) { pad in
+                                        SoundEffectRow(pad: pad)
+                                    }
+                                } label: {
+                                    Label(folder, systemImage: "folder.fill")
+                                        .font(.caption.weight(.medium))
+                                }
+                                .padding(.horizontal, 4)
+                            }
+                        } else {
+                            ForEach(visiblePads) { pad in
+                                SoundEffectRow(pad: pad)
+                            }
                         }
                     }
                     .padding(6)
                 }
-                .frame(height: min(340, max(90, CGFloat(audio.pads.count + audio.padFolders.count) * 34 + 16)))
+                .frame(height: min(340, max(90, CGFloat(visiblePads.count + audio.padFolders.count) * 34 + 16)))
             }
 
             Divider()
@@ -515,10 +580,126 @@ struct SoundEffectsPalette: View {
             for provider in providers {
                 _ = provider.loadObject(ofClass: URL.self) { url, _ in
                     guard let url else { return }
+                    // Only audio lands as a new pad here; a picture dropped on
+                    // the palette body (not a tile) is ignored rather than
+                    // becoming a silent pad.
+                    guard UTType(filenameExtension: url.pathExtension)?.conforms(to: .audio) == true
+                    else { return }
                     Task { @MainActor in audio.addPad(fileURL: url) }
                 }
             }
             return true
+        }
+    }
+}
+
+extension SoundEffectsPalette {
+    /// The pad grid: adaptive tiles, search-filtered, folders flattened
+    /// (a grid is a performance surface — every pad one tap away).
+    var padGrid: some View {
+        ScrollView {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 84, maximum: 120), spacing: 8)],
+                      spacing: 8) {
+                ForEach(visiblePads) { pad in
+                    SoundPadTile(pad: pad)
+                }
+            }
+            .padding(8)
+        }
+        .frame(height: min(360, max(110, CGFloat((visiblePads.count + 2) / 3) * 96 + 16)))
+    }
+}
+
+/// One tile of the pad grid: the pad's color, its artwork when it has any,
+/// name at the foot, a sweep while sounding. Tap fires/stops; drop a picture
+/// on it to set the artwork.
+private struct SoundPadTile: View {
+    @Environment(StudioController.self) private var studio
+    let pad: SoundPad
+
+    @State private var isDropTarget = false
+    @State private var isRenaming = false
+    @State private var renameText = ""
+
+    private var audio: AudioEngineController { studio.audio }
+    private var progress: Double? { audio.padProgress[pad.id] }
+
+    var body: some View {
+        Button {
+            audio.playPad(pad)
+        } label: {
+            ZStack(alignment: .bottom) {
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(Color(hex: pad.colorHex).opacity(progress != nil ? 1 : 0.75))
+                if let path = pad.imagePath, let image = NSImage(contentsOfFile: path) {
+                    Image(nsImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                        .opacity(0.9)
+                }
+                // Playback sweep across the tile.
+                if let progress {
+                    GeometryReader { geo in
+                        Rectangle()
+                            .fill(.white.opacity(0.35))
+                            .frame(width: geo.size.width * progress)
+                    }
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                }
+                Text(pad.name)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.center)
+                    .padding(4)
+                    .frame(maxWidth: .infinity)
+                    .background(.black.opacity(0.45))
+                    .clipShape(UnevenRoundedRectangle(bottomLeadingRadius: 10, bottomTrailingRadius: 10))
+            }
+            .aspectRatio(1, contentMode: .fit)
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .strokeBorder(isDropTarget ? Color.white : .white.opacity(0.12),
+                                  lineWidth: isDropTarget ? 2 : 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .help(pad.name)
+        .onDrop(of: [.fileURL], isTargeted: $isDropTarget) { providers in
+            guard let provider = providers.first else { return false }
+            _ = provider.loadObject(ofClass: URL.self) { url, _ in
+                guard let url,
+                      UTType(filenameExtension: url.pathExtension)?.conforms(to: .image) == true
+                else { return }
+                Task { @MainActor in audio.setPadImage(id: pad.id, url: url) }
+            }
+            return true
+        }
+        .contextMenu {
+            Button("Rename…") {
+                renameText = pad.name
+                isRenaming = true
+            }
+            Menu("Color") {
+                ForEach(SoundPad.palette, id: \.self) { hex in
+                    Button {
+                        audio.setPadColor(id: pad.id, hex: hex)
+                    } label: {
+                        Label(hex == pad.colorHex ? "● current" : "●", systemImage: "circle.fill")
+                            .foregroundStyle(Color(hex: hex))
+                    }
+                }
+            }
+            if pad.imagePath != nil {
+                Button("Remove Artwork") { audio.setPadImage(id: pad.id, url: nil) }
+            }
+            Button("Remove", role: .destructive) { audio.removePad(id: pad.id) }
+        }
+        .alert("Rename Sound", isPresented: $isRenaming) {
+            TextField("Name", text: $renameText)
+            Button("Rename") { audio.renamePad(id: pad.id, to: renameText) }
+            Button("Cancel", role: .cancel) {}
         }
     }
 }

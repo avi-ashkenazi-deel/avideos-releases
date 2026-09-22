@@ -1,5 +1,6 @@
 import AppKit
 import AVFoundation
+import CoreImage
 import ImageIO
 
 /// Element factories — the add-row in the Overlays palette and the inspector.
@@ -10,6 +11,44 @@ extension StudioController {
 
     // MARK: - Element factories (inspector add-bar + overlays palette)
 
+    /// A QR code overlay. Rendered once to a PNG in Application Support and
+    /// added as an ordinary image element — no new element kind, so every
+    /// switch over `ElementKind` (compiler, inspector, palette icons, magic
+    /// move) keeps working unchanged. Re-adding with a new URL makes a new
+    /// file; the old one stays valid for any scene still using it.
+    func addQRCodeElement(urlString: String) {
+        let trimmed = urlString.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty,
+              let data = trimmed.data(using: .utf8),
+              let filter = CIFilter(name: "CIQRCodeGenerator") else { return }
+        filter.setValue(data, forKey: "inputMessage")
+        filter.setValue("M", forKey: "inputCorrectionLevel")
+        guard let small = filter.outputImage else { return }
+        // Quiet zone + crisp scale-up: ~1024 px on the long side.
+        let scale = 1024 / max(small.extent.width, 1)
+        let image = small.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+
+        let directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("Streamit/QR", isDirectory: true)
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let digest = String(UInt64(bitPattern: Int64(trimmed.hashValue)), radix: 36)
+        let url = directory.appendingPathComponent("qr-\(digest).png")
+
+        let context = CIContext()
+        guard let colorSpace = CGColorSpace(name: CGColorSpace.sRGB),
+              (try? context.writePNGRepresentation(of: image, to: url,
+                                                   format: .RGBA8,
+                                                   colorSpace: colorSpace)) != nil
+        else { return }
+
+        var element = Element(name: "QR · \(URL(string: trimmed)?.host ?? trimmed)",
+                              kind: .image(MediaReference(url: url)),
+                              transform: ElementTransform(center: CGPoint(x: 0.85, y: 0.78),
+                                                          size: CGSize(width: 0.14, height: 0.14 * (project.canvasSize.width / max(project.canvasSize.height, 1)))),
+                              entryAnimation: .styled(.fade))
+        element.cornerRadius = 0.04
+        addElement(element)
+    }
     func addTextElement() {
         addElement(Element(name: "Text",
                            kind: .text(TextContent(string: "Your text")),

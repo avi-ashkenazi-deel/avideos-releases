@@ -409,6 +409,30 @@ final class AudioEngineController {
         Array(Set(pads.compactMap(\.folder))).sorted()
     }
 
+    /// Artwork for the pad-grid tile; nil clears it.
+    func setPadImage(id: UUID, url: URL?) {
+        guard let index = pads.firstIndex(where: { $0.id == id }) else { return }
+        pads[index].imagePath = url?.path
+        settings.pads = pads
+        persist()
+    }
+
+    /// Tile color, from the shared palette.
+    func setPadColor(id: UUID, hex: String) {
+        guard let index = pads.firstIndex(where: { $0.id == id }) else { return }
+        pads[index].colorHex = hex
+        settings.pads = pads
+        persist()
+    }
+
+    /// Fires a pad from an overlay's "sound on appear" — always a fresh
+    /// start, never the toggle-to-stop the manual button does.
+    func firePad(id: UUID) {
+        guard let pad = pads.first(where: { $0.id == id }), let padPlayer else { return }
+        if padPlayer.isPlaying(pad.id) { padPlayer.stop(padID: pad.id) }
+        padPlayer.play(pad)
+    }
+
     /// Sets a pad's in/out points (seconds; nil = full file). Applies from
     /// the next fire — a sounding pad keeps its already-scheduled slice.
     func setPadTrim(id: UUID, start: Double?, end: Double?) {

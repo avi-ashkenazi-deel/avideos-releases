@@ -151,6 +151,41 @@ struct StudioCommands: Commands {
 
             Divider()
 
+            // Window layouts: named sets of palette + studio frames. Lives
+            // here rather than the Window menu so it sits beside the other
+            // studio-wide actions and its shortcuts are discoverable.
+            Button("Save Window Layout…") {
+                WindowLayoutStore.shared.openPalette = { openWindow(id: "palette", value: $0) }
+                if let name = WindowLayoutStore.promptForLayoutName() {
+                    WindowLayoutStore.shared.save(name: name)
+                }
+            }
+            Menu("Restore Window Layout") {
+                if WindowLayoutStore.shared.names.isEmpty {
+                    Text("No saved layouts").foregroundStyle(.secondary)
+                }
+                ForEach(WindowLayoutStore.shared.names, id: \.self) { name in
+                    Button(name) {
+                        WindowLayoutStore.shared.openPalette = { openWindow(id: "palette", value: $0) }
+                        WindowLayoutStore.shared.restore(name: name)
+                    }
+                }
+                if !WindowLayoutStore.shared.names.isEmpty {
+                    Divider()
+                    Menu("Delete Layout") {
+                        ForEach(WindowLayoutStore.shared.names, id: \.self) { name in
+                            Button(name) { WindowLayoutStore.shared.delete(name: name) }
+                        }
+                    }
+                }
+            }
+            Button("Move All Windows to Next Display") {
+                WindowLayoutStore.shared.moveAllWindowsToNextDisplay()
+            }
+            .disabled(NSScreen.screens.count < 2)
+
+            Divider()
+
             Button(studio.isRecording ? "Stop Recording" : "Start Recording") {
                 studio.toggleRecording()
             }

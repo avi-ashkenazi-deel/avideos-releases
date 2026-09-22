@@ -1,6 +1,6 @@
 # streamit — full feature checklist
 
-All 526 user-facing features, each with a stable ID so you can report
+All 534 user-facing features, each with a stable ID so you can report
 back precisely ("F-42 fails"). Ordered so you can work top to bottom: each
 section only depends on the ones above it.
 
@@ -295,6 +295,17 @@ replays just the entrance, which is the quick way to compare them.
 - [ ] **F-524** Clicking a shelf row opens a preview popover: video hover-scrubs (the frame follows the pointer, Premiere-style); audio shows its waveform with a play-the-range audition.
 - [ ] **F-525** In/out handles in the popover choose where the media starts and ends; "Insert at Playhead" places exactly that slice (music starts at the chorus you picked).
 - [ ] **F-526** Shelf rows drag directly onto the timeline, landing like a file dropped from Finder.
+
+### Ecamm-update parity (live mode)
+
+- [ ] **F-527** Mute the mic and talk: within a second a red "You're muted" banner appears on the preview with an Unmute button; it clears when you unmute or go quiet.
+- [ ] **F-528** Scenes, Overlays and Sound Effects palettes each have a search field; drag-reorder is disabled while a filter is active.
+- [ ] **F-529** Inspector → Animate → "Sound on appear": the chosen pad fires when the overlay is shown.
+- [ ] **F-530** Overlays add-row → QR icon → enter a link: a QR code image element appears (scannable from the program output).
+- [ ] **F-531** Sound Effects palette grid mode: colored tiles, tap to fire/stop, drop a picture on a tile for artwork, right-click for color/rename/remove artwork.
+- [ ] **F-532** Studio menu → Save Window Layout… / Restore / Delete; Move All Windows to Next Display keeps each window's relative position.
+- [ ] **F-533** Movie scene right-click → "When the Movie Ends → Switch to …" hands off when a non-looping movie finishes; a countdown's "When it ends" picker does the same at 0:00, once.
+- [ ] **F-534** "Fit Canvas" (inspector / Overlays row menu) sizes an element to the canvas keeping its shape; dropping a picture or movie onto an image/video element replaces its media in place; onto empty canvas adds a new element at the drop point.
 
 ## N. Remote guests
 

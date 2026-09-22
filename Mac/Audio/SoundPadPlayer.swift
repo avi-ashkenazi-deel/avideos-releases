@@ -20,6 +20,9 @@ struct SoundPad: Identifiable, Codable, Hashable {
     /// User folder in the sound-effects list ("FX", "Beds"…); nil = top
     /// level. Same Optional-for-decode-compat rule as the trim fields.
     var folder: String?
+    /// Artwork for the grid ("sound pad") view — a picture dropped onto the
+    /// tile. Path only: the app is unsandboxed. Same Optional rule.
+    var imagePath: String?
 
     init(url: URL, hotkeyIndex: Int? = nil) {
         self.id = UUID()

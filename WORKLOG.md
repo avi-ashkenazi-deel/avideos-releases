@@ -61,6 +61,35 @@ full-screen-this-camera layout cues at the playhead, replacing a cue within
 fades, and offset recovery from synthetic envelopes (`EditorAudioTests`).
 F-488…F-499.
 
+Twenty-seventh pass — the cheap half of the Ecamm-update triage, eight
+items. **"You're muted"** banner: a 5 Hz check of the mic capture's
+PRE-mute level against the strip's mute flag — ~0.8 s of speech on a muted
+mic raises a red capsule with an Unmute button, ~2 s of quiet lowers it;
+no OS support needed (Ecamm's needs macOS 26). **Search** fields on the
+Scenes, Overlays and Sound Effects palettes (reorder disabled while
+filtered — moving a filtered list would scramble the real order; a sound
+search flattens folders). **Sound on appear**: `Element.appearSoundPadID`
+(Optional) — the Animate tab binds a pad that fires as the overlay enters
+(`firePad`, always a fresh start, never the manual button's toggle-to-stop).
+**QR code overlay**: rendered once via CIQRCodeGenerator to a PNG in
+Application Support and added as an ordinary image element — no new
+ElementKind, so every exhaustive switch (compiler, icons, magic move)
+stays untouched. **Sound pad grid**: the Sound Effects palette gets a
+list/grid toggle; tiles carry the pad's color, artwork dropped onto the
+tile (`SoundPad.imagePath`, Optional), a playback sweep, and a color menu.
+**Window layouts**: `WindowLayoutStore` snapshots the studio window plus
+every open palette by frame-autosave name; Studio menu → Save / Restore /
+Delete, plus Move All Windows to Next Display (relative placement per
+screen). **End-of-movie and end-of-countdown → switch to a scene**:
+`MovieSceneConfig.endSceneID` (context menu on the scene, disabled while
+looping; the config is re-read at fire time) and `TimerContent.endSceneID`
+(inspector picker; fired once per run via `firedTimerIDs`, deferred out of
+the plan compile). **Fit Canvas + drop-to-replace**: as-large-as-fits
+keeping aspect, centered, un-rotated (inspector button + Overlays row
+menu); dropping a picture/movie on an image/video element swaps its media
+in place, on empty canvas it adds a new element where it landed.
+F-527…F-534.
+
 Twenty-sixth pass — the Media shelf answers "what IS this file" before it
 goes anywhere. Clicking a shelf row opens an **audition popover**
 (`MediaAuditionView`): video gets a Premiere-style hover scrub — the frame

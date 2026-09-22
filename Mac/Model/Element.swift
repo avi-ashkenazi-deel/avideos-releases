@@ -23,6 +23,10 @@ struct Element: Codable, Hashable, Sendable, Identifiable {
     /// tiles, shapes alike ("border radius for everything"). nil = the
     /// kind's own default. Optional so old files decode.
     var cornerRadius: Double?
+    /// A sound-effect pad that fires when this element is SHOWN (entry
+    /// animation start) — a whoosh on a lower third, a sting on a title.
+    /// Optional so old files decode.
+    var appearSoundPadID: UUID?
 
     init(id: UUID = UUID(),
          name: String,
@@ -189,6 +193,9 @@ struct TimerContent: Codable, Hashable, Sendable {
     var fontName: String
     /// Point size at 1080p reference, like TextContent.
     var fontSize: Double
+    /// Scene to switch to when the countdown reaches zero ("3…2…1… and
+    /// we're live"). nil = just sit at 0:00. Optional so old files decode.
+    var endSceneID: UUID?
 
     init(durationSeconds: Double = 300,
          fontName: String = "",

@@ -138,11 +138,16 @@ struct MovieSceneConfig: Codable, Hashable, Sendable {
     var loops: Bool
     /// Movie audio routes into the mixer as its own strip.
     var volume: Double
+    /// Scene to switch to when the (non-looping) movie finishes — a pre-roll
+    /// that hands off to the camera by itself. Optional so old files decode.
+    var endSceneID: UUID?
 
-    init(media: MediaReference? = nil, loops: Bool = false, volume: Double = 1) {
+    init(media: MediaReference? = nil, loops: Bool = false, volume: Double = 1,
+         endSceneID: UUID? = nil) {
         self.media = media
         self.loops = loops
         self.volume = volume
+        self.endSceneID = endSceneID
     }
 }
 
