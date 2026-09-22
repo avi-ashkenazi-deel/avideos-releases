@@ -186,6 +186,20 @@ struct StudioCommands: Commands {
 
             Divider()
 
+            // Preview/Program ("studio") mode: scenes stage into a preview
+            // canvas; TAKE puts the staged one on air with its transition.
+            Toggle("Preview / Program Mode", isOn: Binding(
+                get: { studio.studioModeEnabled },
+                set: { studio.studioModeEnabled = $0 }
+            ))
+            .keyboardShortcut("p", modifiers: [.command, .option])
+
+            Button("Take") { studio.take() }
+                .keyboardShortcut(.return, modifiers: [.command])
+                .disabled(!studio.hasPendingTake)
+
+            Divider()
+
             Button(studio.isRecording ? "Stop Recording" : "Start Recording") {
                 studio.toggleRecording()
             }

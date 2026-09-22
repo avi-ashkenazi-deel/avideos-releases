@@ -120,6 +120,88 @@ final class StudioController {
     }
     var mode: Mode = .live
 
+    // MARK: - Preview/Program ("studio") mode
+
+    /// Broadcast-style staging: scenes are SELECTED into a preview canvas,
+    /// edited there, and reach program only on Take. Off, the app behaves as
+    /// before — clicking a scene switches program directly. Persisted.
+    var studioModeEnabled = UserDefaults.standard.bool(forKey: "pref.studioMode") {
+        didSet {
+            UserDefaults.standard.set(studioModeEnabled, forKey: "pref.studioMode")
+            studioModeDidChange()
+        }
+    }
+    /// The staged scene while studio mode is on; nil otherwise.
+    private(set) var previewSceneID: UUID?
+    /// Frames of the staged scene, for the preview canvas.
+    let previewFrameStore = PreviewFrameStore()
+    /// Second compositor on the same device; exists only while staging.
+    private var previewEngine: RenderEngine?
+
+    /// The scene the canvas, inspector and element factories EDIT: the staged
+    /// scene in studio mode, program otherwise. Everything that mutates
+    /// "the active scene" goes through this, so staging edits never touch
+    /// what's on air.
+    var editingSceneID: UUID? {
+        studioModeEnabled ? (previewSceneID ?? project.activeSceneID) : project.activeSceneID
+    }
+
+    /// True when the staged scene differs from program — a Take would change
+    /// what viewers see.
+    var hasPendingTake: Bool {
+        studioModeEnabled && previewSceneID != nil && previewSceneID != project.activeSceneID
+    }
+
+    /// What clicking a scene means: stage it (studio mode) or switch program
+    /// to it (normal mode). Every scene click, hotkey and menu routes here.
+    func selectScene(_ id: UUID) {
+        if studioModeEnabled {
+            guard id != previewSceneID else { return }
+            previewSceneID = id
+            selectedElementID = nil
+            recompileAndPublish()
+        } else {
+            switchScene(to: id)
+        }
+    }
+
+    /// TAKE: program becomes the staged scene, with that scene's transition;
+    /// the preview then holds the OLD program scene (the broadcast-desk swap,
+    /// so Take twice returns you). No-op when nothing is staged.
+    func take() {
+        guard studioModeEnabled,
+              let staged = previewSceneID,
+              staged != project.activeSceneID else { return }
+        let previous = project.activeSceneID
+        switchScene(to: staged)
+        previewSceneID = previous
+        selectedElementID = nil
+        recompileAndPublish()
+    }
+
+    private func studioModeDidChange() {
+        if studioModeEnabled {
+            if previewSceneID == nil { previewSceneID = project.activeSceneID }
+            ensurePreviewEngine()
+        } else {
+            previewEngine?.stop()
+            previewEngine = nil
+            previewSceneID = nil
+        }
+        selectedElementID = nil
+        recompileAndPublish()
+    }
+
+    private func ensurePreviewEngine() {
+        guard studioModeEnabled, previewEngine == nil, hasBooted,
+              let program = renderEngine,
+              let engine = RenderEngine(device: program.device) else { return }
+        engine.sourceTextureProvider = program.sourceTextureProvider
+        engine.addConsumer(previewFrameStore)
+        engine.start(canvasSize: project.canvasSize, fps: project.frameRate)
+        previewEngine = engine
+    }
+
     /// Worker/base configuration (Settings).
     var workerBaseURL: URL? {
         get { UserDefaults.standard.url(forKey: "workerBaseURL") }
@@ -206,6 +288,10 @@ final class StudioController {
         teleprompter.installKeyMonitorsIfNeeded()
         sourceRegistry?.framesPerSecond = project.frameRate
         renderEngine?.start(canvasSize: project.canvasSize, fps: project.frameRate)
+        if studioModeEnabled {
+            if previewSceneID == nil { previewSceneID = project.activeSceneID }
+            ensurePreviewEngine()
+        }
         recompileAndPublish()
         audio.start()
         // After audio, since every MIDI action lands on the audio facade.
@@ -313,6 +399,7 @@ final class StudioController {
 
     func shutdown() {
         renderEngine?.stop()
+        previewEngine?.stop()
         sourceRegistry?.stopAll()
         audio.shutdown()
         if recorder.isRecording {
@@ -323,9 +410,17 @@ final class StudioController {
 
     // MARK: - Plan compilation
 
-    var activeScene: SceneModel? { project.activeScene }
+    /// The scene being EDITED (see `editingSceneID`): the staged preview scene
+    /// in studio mode, program otherwise. Program itself is always
+    /// `project.activeScene`.
+    var activeScene: SceneModel? {
+        project.scenes.first { $0.id == editingSceneID }
+    }
 
-    /// Rebuilds the plan for the active scene and hands it to the renderer.
+    /// Rebuilds the plan for the active scene and hands it to the renderer —
+    /// and, in studio mode, the staged scene's plan to the preview engine.
+    /// Sources are activated for the UNION so the staged scene's camera or
+    /// movie is already running when Take comes.
     func recompileAndPublish() {
         guard let engine = renderEngine, let scene = project.activeScene else { return }
         cleanupFinishedExits()
@@ -337,8 +432,26 @@ final class StudioController {
         engine.publish(plan: plan)
         updateTimerTick(scene: scene)
         ensureScenePrimarySources(for: scene)
-        sourceRegistry?.activate(keys: SourceRegistry.keys(in: plan))
+        var keys = SourceRegistry.keys(in: plan)
         syncWebPageSizes(scene: scene)
+
+        if studioModeEnabled, let previewEngine,
+           let staged = activeScene, staged.id != scene.id {
+            let stagedPlan = RenderPlanCompiler.compile(project: project,
+                                                        scene: staged,
+                                                        guests: renderGuestDescriptors,
+                                                        elementAnimations: elementAnimations,
+                                                        timerTexts: currentTimerTexts(scene: staged))
+            previewEngine.publish(plan: stagedPlan)
+            ensureScenePrimarySources(for: staged)
+            keys.formUnion(SourceRegistry.keys(in: stagedPlan))
+            syncWebPageSizes(scene: staged)
+        } else if let previewEngine {
+            // Staged == program: mirror it, so the preview canvas is never
+            // stale or black.
+            previewEngine.publish(plan: plan)
+        }
+        sourceRegistry?.activate(keys: keys)
     }
 
     /// Switches scenes with the configured transition (magic move by default).
@@ -388,20 +501,21 @@ final class StudioController {
     /// can walk the rundown without leaving Zoom.
     func advanceScene(by offset: Int) {
         guard !project.scenes.isEmpty else { return }
-        let currentIndex = project.activeSceneID
+        // In studio mode the rundown walks the STAGED scene; Take is separate.
+        let currentIndex = editingSceneID
             .flatMap { id in project.scenes.firstIndex { $0.id == id } } ?? 0
         let count = project.scenes.count
         // Positive modulo: -1 from index 0 must land on the last scene.
         let nextIndex = ((currentIndex + offset) % count + count) % count
         guard nextIndex != currentIndex else { return }
-        switchScene(to: project.scenes[nextIndex].id)
+        selectScene(project.scenes[nextIndex].id)
     }
 
     /// Switches to the scene bound to ⌘N (explicit bindings win, the rest
     /// number by sidebar position — see `Project.sceneShortcuts`).
     func switchToScene(number: Int) {
         guard let match = project.sceneShortcuts.first(where: { $0.number == number }) else { return }
-        switchScene(to: match.scene.id)
+        selectScene(match.scene.id)
     }
 
     /// Movie scenes and picker-based screen scenes need concrete sources the
@@ -617,6 +731,7 @@ final class StudioController {
         project.frameRate = fps
         sourceRegistry?.framesPerSecond = fps
         renderEngine?.reconfigure(canvasSize: size, fps: fps)
+        previewEngine?.reconfigure(canvasSize: size, fps: fps)
 
         if fpsChanged, let registry = sourceRegistry {
             // Screen sources capture their frame rate at creation; drop them
@@ -742,14 +857,14 @@ final class StudioController {
     /// here now.
     @discardableResult
     private func withActiveScene(_ body: (inout SceneModel) -> Void) -> Bool {
-        guard let index = project.scenes.firstIndex(where: { $0.id == project.activeSceneID })
+        guard let index = project.scenes.firstIndex(where: { $0.id == editingSceneID })
         else { return false }
         body(&project.scenes[index])
         return true
     }
 
     func findElement(id: UUID) -> Element? {
-        project.activeScene?.elements.first { $0.id == id }
+        activeScene?.elements.first { $0.id == id }
     }
 
     func updateElement(_ element: Element) {
@@ -958,6 +1073,9 @@ final class StudioController {
         project.scenes.removeAll { $0.id == id }
         if project.activeSceneID == id {
             project.activeSceneID = project.scenes.first?.id
+        }
+        if previewSceneID == id {
+            previewSceneID = project.activeSceneID
         }
     }
 

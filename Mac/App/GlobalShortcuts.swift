@@ -38,6 +38,9 @@ extension KeyboardShortcuts.Name {
                                 default: .init(.rightArrow, modifiers: [.control, .option]))
     static let previousScene = Self("previousScene",
                                     default: .init(.leftArrow, modifiers: [.control, .option]))
+    /// Studio mode's TAKE from anywhere — Zoom frontmost included.
+    static let takeScene = Self("takeScene",
+                                default: .init(.return, modifiers: [.control, .option]))
     static let toggleTeleprompter = Self("toggleTeleprompter",
                                          default: .init(.t, modifiers: [.control, .option]))
     static let prompterPlayPause = Self("prompterPlayPause",
@@ -117,6 +120,7 @@ final class GlobalShortcutRegistrar {
         bind(.toggleMicMute, studio) { $0.audio.toggleMute(for: .mic) }
         bind(.nextScene, studio) { $0.advanceScene(by: 1) }
         bind(.previousScene, studio) { $0.advanceScene(by: -1) }
+        bind(.takeScene, studio) { $0.take() }
         bind(.toggleTeleprompter, studio) { $0.teleprompter.toggleVisible() }
         bind(.prompterPlayPause, studio) { $0.teleprompter.togglePlay() }
         bind(.musicPlayPause, studio) { $0.audio.musicPlayPause() }

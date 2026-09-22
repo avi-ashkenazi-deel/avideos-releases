@@ -38,8 +38,16 @@ final class RenderEngine {
     private(set) var renderedFrames: Int = 0
 
     init?() {
-        guard let device = MTLCreateSystemDefaultDevice(),
-              let compositor = Compositor(device: device),
+        guard let device = MTLCreateSystemDefaultDevice() else { return nil }
+        self.init(device: device)
+    }
+
+    /// A second engine on the SAME device — the studio-mode preview canvas,
+    /// which composites the staged scene while this engine's twin keeps
+    /// feeding program to the recorder and the virtual camera. Source
+    /// textures are shared (Metal reads are safe across queues).
+    init?(device: MTLDevice) {
+        guard let compositor = Compositor(device: device),
               let pool = PixelBufferPool(device: device) else { return nil }
         self.device = device
         self.compositor = compositor

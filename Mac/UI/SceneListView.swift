@@ -70,15 +70,18 @@ struct SceneListView: View {
 
     private var sceneList: some View {
         List(selection: Binding(
-            get: { studio.project.activeSceneID },
-            set: { id in if let id { studio.switchScene(to: id) } }
+            get: { studio.editingSceneID },
+            set: { id in if let id { studio.selectScene(id) } }
         )) {
             // No "Scenes" section header: the list lives in a palette window
             // whose title bar already says Scenes.
             Section {
                 ForEach(visibleScenes) { scene in
                     SceneRow(scene: scene,
-                             isActive: scene.id == studio.project.activeSceneID,
+                             isActive: scene.id == studio.editingSceneID,
+                             isProgram: studio.studioModeEnabled
+                                && scene.id == studio.project.activeSceneID
+                                && scene.id != studio.editingSceneID,
                              thumbnail: studio.sceneThumbnails[scene.id])
                         .tag(scene.id)
                         .contextMenu { sceneContextMenu(scene) }
@@ -94,14 +97,17 @@ struct SceneListView: View {
     }
 
     /// Ecamm's tile mode: one big preview per scene, green border on the
-    /// live one, name below.
+    /// selected (staged) one, red on program when studio mode has them
+    /// apart, name below.
     private var sceneGrid: some View {
         ScrollView {
             LazyVStack(spacing: 14) {
                 ForEach(visibleScenes) { scene in
-                    let isActive = scene.id == studio.project.activeSceneID
+                    let isActive = scene.id == studio.editingSceneID
+                    let isProgram = studio.studioModeEnabled
+                        && scene.id == studio.project.activeSceneID && !isActive
                     Button {
-                        studio.switchScene(to: scene.id)
+                        studio.selectScene(scene.id)
                     } label: {
                         VStack(spacing: 4) {
                             SceneThumbnail(image: studio.sceneThumbnails[scene.id],
@@ -111,8 +117,10 @@ struct SceneListView: View {
                                 .clipShape(RoundedRectangle(cornerRadius: 6))
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 6)
-                                        .strokeBorder(isActive ? Color.green : .white.opacity(0.15),
-                                                      lineWidth: isActive ? 2.5 : 1)
+                                        .strokeBorder(isActive ? Color.green
+                                                      : isProgram ? Color.red
+                                                      : .white.opacity(0.15),
+                                                      lineWidth: (isActive || isProgram) ? 2.5 : 1)
                                 )
                             HStack(spacing: 6) {
                                 Text(scene.name)
@@ -283,7 +291,10 @@ struct SceneThumbnail: View {
 private struct SceneRow: View {
     @Environment(StudioController.self) private var studio
     let scene: SceneModel
+    /// Selected — staged in studio mode, on air otherwise.
     let isActive: Bool
+    /// On air while a DIFFERENT scene is staged (studio mode only) — red.
+    var isProgram: Bool = false
     let thumbnail: CGImage?
 
     var body: some View {
@@ -293,8 +304,10 @@ private struct SceneRow: View {
                 .clipShape(RoundedRectangle(cornerRadius: 4))
                 .overlay(
                     RoundedRectangle(cornerRadius: 4)
-                        .strokeBorder(isActive ? Color.green : .white.opacity(0.12),
-                                      lineWidth: isActive ? 1.5 : 1)
+                        .strokeBorder(isActive ? Color.green
+                                      : isProgram ? Color.red
+                                      : .white.opacity(0.12),
+                                      lineWidth: (isActive || isProgram) ? 1.5 : 1)
                 )
             VStack(alignment: .leading, spacing: 1) {
                 Text(scene.name)

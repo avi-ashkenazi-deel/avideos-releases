@@ -33,6 +33,7 @@ struct ShortcutsSettingsView: View {
                 KeyboardShortcuts.Recorder("Mute / unmute microphone:", name: .toggleMicMute)
                 KeyboardShortcuts.Recorder("Next scene:", name: .nextScene)
                 KeyboardShortcuts.Recorder("Previous scene:", name: .previousScene)
+                KeyboardShortcuts.Recorder("Take (Preview → Program):", name: .takeScene)
                 KeyboardShortcuts.Recorder("Show / hide teleprompter:", name: .toggleTeleprompter)
                 KeyboardShortcuts.Recorder("Prompter play / pause:", name: .prompterPlayPause)
                 KeyboardShortcuts.Recorder("Music play / pause:", name: .musicPlayPause)

@@ -1,6 +1,6 @@
 # streamit — full feature checklist
 
-All 534 user-facing features, each with a stable ID so you can report
+All 538 user-facing features, each with a stable ID so you can report
 back precisely ("F-42 fails"). Ordered so you can work top to bottom: each
 section only depends on the ones above it.
 
@@ -306,6 +306,13 @@ replays just the entrance, which is the quick way to compare them.
 - [ ] **F-532** Studio menu → Save Window Layout… / Restore / Delete; Move All Windows to Next Display keeps each window's relative position.
 - [ ] **F-533** Movie scene right-click → "When the Movie Ends → Switch to …" hands off when a non-looping movie finishes; a countdown's "When it ends" picker does the same at 0:00, once.
 - [ ] **F-534** "Fit Canvas" (inspector / Overlays row menu) sizes an element to the canvas keeping its shape; dropping a picture or movie onto an image/video element replaces its media in place; onto empty canvas adds a new element at the drop point.
+
+### Preview/Program mode
+
+- [ ] **F-535** Studio menu → Preview / Program Mode (⌥⌘P): the canvas splits into PREVIEW (green) and PROGRAM (red) with a TAKE button between; the virtual camera and recording keep showing PROGRAM.
+- [ ] **F-536** Clicking a scene (palette, popup, ⌘N, next/previous) stages it in PREVIEW; program does not change. Editing overlays in PREVIEW never affects PROGRAM.
+- [ ] **F-537** TAKE (button, ⌘↩, or global ⌃⌥↩) puts the staged scene on air with its transition; PREVIEW then shows the previous program scene, so a second Take returns.
+- [ ] **F-538** Scenes palette outlines the staged scene green and the on-air scene red when they differ; turning the mode off restores click-to-switch behavior.
 
 ## N. Remote guests
 

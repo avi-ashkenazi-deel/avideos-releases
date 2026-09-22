@@ -95,9 +95,31 @@ private struct StudioLayout: View {
     }
 
     private var canvas: some View {
+        Group {
+            if studio.studioModeEnabled {
+                // Broadcast desk: PREVIEW (staged, editable) on the left,
+                // PROGRAM (on air, read-only) on the right, TAKE between.
+                HStack(spacing: 0) {
+                    editableCanvas(store: studio.previewFrameStore)
+                        .overlay(alignment: .topTrailing) { canvasBadge("PREVIEW", color: .green) }
+                    takeColumn
+                    programMonitor
+                        .overlay(alignment: .topTrailing) { canvasBadge("PROGRAM", color: .red) }
+                }
+            } else {
+                editableCanvas(store: studio.previewStore)
+            }
+        }
+        .background(Color.black)
+        .ignoresSafeArea()
+    }
+
+    /// The canvas you edit: the frame store plus the direct-manipulation
+    /// overlay. In studio mode this shows the STAGED scene.
+    private func editableCanvas(store: PreviewFrameStore) -> some View {
         ZStack {
             if let engine = studio.renderEngine {
-                ProgramPreviewView(previewStore: studio.previewStore,
+                ProgramPreviewView(previewStore: store,
                                    device: engine.device,
                                    framesPerSecond: studio.project.frameRate)
             } else {
@@ -106,8 +128,59 @@ private struct StudioLayout: View {
             CanvasEditorOverlay()
         }
         .coordinateSpace(name: "canvas")
-        .background(Color.black)
-        .ignoresSafeArea()
+    }
+
+    /// What's on air. Display only — nothing here is clickable, so a stray
+    /// drag can never nudge a live overlay.
+    private var programMonitor: some View {
+        Group {
+            if let engine = studio.renderEngine {
+                ProgramPreviewView(previewStore: studio.previewStore,
+                                   device: engine.device,
+                                   framesPerSecond: studio.project.frameRate)
+            } else {
+                Color.black
+            }
+        }
+        .allowsHitTesting(false)
+    }
+
+    private func canvasBadge(_ text: String, color: Color) -> some View {
+        Text(text)
+            .font(.caption2.weight(.heavy))
+            .padding(.horizontal, 8).padding(.vertical, 4)
+            .background(color.opacity(0.85), in: Capsule())
+            .foregroundStyle(.white)
+            .padding(10)
+    }
+
+    /// TAKE: the staged scene goes to program with its transition. Disabled
+    /// (dim) when preview already equals program.
+    private var takeColumn: some View {
+        VStack(spacing: 8) {
+            Spacer()
+            Button {
+                studio.take()
+            } label: {
+                VStack(spacing: 2) {
+                    Text("TAKE").font(.headline.weight(.heavy))
+                    Text("⌘↩").font(.caption2).opacity(0.7)
+                }
+                .frame(width: 64, height: 56)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(studio.hasPendingTake ? .red : .gray)
+            .disabled(!studio.hasPendingTake)
+            .help("Put the staged scene on air (with its transition)")
+            if let staged = studio.activeScene {
+                Text(staged.transitionStyle.displayName)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+        }
+        .frame(width: 84)
+        .background(Color.black.opacity(0.6))
     }
 
     /// Scene name + menu, sitting on the video like Ecamm's scene dropdown:
@@ -123,10 +196,12 @@ private struct StudioLayout: View {
 
             ForEach(studio.project.scenes) { scene in
                 Button {
-                    studio.switchScene(to: scene.id)
+                    studio.selectScene(scene.id)
                 } label: {
-                    if scene.id == studio.project.activeSceneID {
+                    if scene.id == studio.editingSceneID {
                         Label(scene.name, systemImage: "checkmark")
+                    } else if studio.studioModeEnabled, scene.id == studio.project.activeSceneID {
+                        Label(scene.name, systemImage: "dot.radiowaves.left.and.right")
                     } else {
                         Text(scene.name)
                     }
@@ -135,8 +210,20 @@ private struct StudioLayout: View {
                 // ones that fire while the popup is closed.
                 .modifier(SceneShortcutBadge(number: studio.project.shortcutNumber(for: scene.id)))
             }
+
+            Divider()
+
+            Toggle("Preview / Program Mode", isOn: Binding(
+                get: { studio.studioModeEnabled },
+                set: { studio.studioModeEnabled = $0 }
+            ))
         } label: {
             HStack(spacing: 6) {
+                if studio.studioModeEnabled {
+                    Text("PREVIEW")
+                        .font(.caption2.weight(.heavy))
+                        .foregroundStyle(.green)
+                }
                 Text(studio.activeScene?.name ?? "No Scene")
                     .font(.callout.weight(.semibold))
                 Image(systemName: "chevron.down")

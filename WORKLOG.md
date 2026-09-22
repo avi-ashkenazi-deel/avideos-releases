@@ -61,6 +61,30 @@ full-screen-this-camera layout cues at the playhead, replacing a cue within
 fades, and offset recovery from synthetic envelopes (`EditorAudioTests`).
 F-488…F-499.
 
+Twenty-eighth pass — **Preview/Program mode** (the top big item from the
+Ecamm triage). Studio menu → Preview / Program Mode (⌥⌘P) splits the
+canvas into PREVIEW (green, the staged scene, fully editable) and PROGRAM
+(red, on air, hit-testing off so a stray drag can never nudge a live
+overlay) with a TAKE button between (⌘↩; global ⌃⌥↩ so it works from
+Zoom). The design is one routing seam: `editingSceneID` — the staged scene
+in studio mode, program otherwise — and every mutation of "the active
+scene" (`withActiveScene`, `findElement`, the inspector's `activeScene`,
+the element factories, the canvas overlay's hit test) reads it, while
+`recompileAndPublish` and `switchScene` keep reading `project.activeScene`
+for program. Staging edits therefore never touch air by construction.
+Rendering: a SECOND `RenderEngine` on the same Metal device
+(`init?(device:)`) composites the staged plan into `previewFrameStore`;
+sources are activated for the UNION of both plans so the staged scene's
+camera or movie is already running when Take comes, and when staged ==
+program the preview mirrors the program plan (never black). TAKE reuses
+`switchScene` — the staged scene's own transition, magic move included —
+then the preview takes the OLD program scene (the broadcast-desk swap, so
+Take twice returns you). Scene clicks, ⌘N, next/previous (which now walk
+the staged scene) all route through `selectScene`; the Scenes palette
+outlines the staged scene green and program red when they differ; the
+scene popup shows a PREVIEW tag and an on-air glyph. Off, everything
+behaves exactly as before. F-535…F-538.
+
 Twenty-seventh pass — the cheap half of the Ecamm-update triage, eight
 items. **"You're muted"** banner: a 5 Hz check of the mic capture's
 PRE-mute level against the strip's mute flag — ~0.8 s of speech on a muted
