@@ -63,6 +63,16 @@ struct StreamitApp: App {
         }
         .windowResizability(.contentSize)
 
+        // The Multiview: preview + program + every camera/guest + meters, in
+        // its own resizable window — for a second display, typically.
+        Window("Multiview", id: "multiview") {
+            MultiviewView()
+                .environment(studio)
+                .environment(studio.audio)
+        }
+        .windowResizability(.contentMinSize)
+        .defaultSize(width: 1280, height: 760)
+
         Settings {
             SettingsView()
                 .environment(studio)
@@ -148,6 +158,23 @@ struct StudioCommands: Commands {
                 openWindow(id: "palette", value: PaletteKind.scenes)
             }
             .keyboardShortcut("\\", modifiers: [.command])
+
+            Button("Show Multiview") {
+                openWindow(id: "multiview")
+            }
+            .keyboardShortcut("m", modifiers: [.command, .option])
+
+            Menu("Multiview Full Screen on Display") {
+                ForEach(Array(NSScreen.screens.enumerated()), id: \.offset) { index, screen in
+                    Button(screen.localizedName.isEmpty ? "Display \(index + 1)" : screen.localizedName) {
+                        openWindow(id: "multiview")
+                        // Give the window a beat to exist if it was closed.
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            Multiview.send(toScreen: screen)
+                        }
+                    }
+                }
+            }
 
             Divider()
 

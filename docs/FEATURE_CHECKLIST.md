@@ -1,6 +1,6 @@
 # streamit — full feature checklist
 
-All 538 user-facing features, each with a stable ID so you can report
+All 541 user-facing features, each with a stable ID so you can report
 back precisely ("F-42 fails"). Ordered so you can work top to bottom: each
 section only depends on the ones above it.
 
@@ -313,6 +313,12 @@ replays just the entrance, which is the quick way to compare them.
 - [ ] **F-536** Clicking a scene (palette, popup, ⌘N, next/previous) stages it in PREVIEW; program does not change. Editing overlays in PREVIEW never affects PROGRAM.
 - [ ] **F-537** TAKE (button, ⌘↩, or global ⌃⌥↩) puts the staged scene on air with its transition; PREVIEW then shows the previous program scene, so a second Take returns.
 - [ ] **F-538** Scenes palette outlines the staged scene green and the on-air scene red when they differ; turning the mode off restores click-to-switch behavior.
+
+### Multiview
+
+- [ ] **F-539** Studio menu → Show Multiview (⌥⌘M): a resizable window with PROGRAM (and PREVIEW in studio mode) on top, one live tile per camera and per guest/shared screen below, and a level meter per mixer strip along the bottom.
+- [ ] **F-540** The program camera's tile is framed red with ON AIR; guest tiles show ON AIR or WAITING from their green-room state; demo guests appear while Rehearse Layouts is on; muted strips show red.
+- [ ] **F-541** Studio menu → Multiview Full Screen on Display → pick a screen: the Multiview moves there and goes full screen; the green button or Esc brings it back.
 
 ## N. Remote guests
 

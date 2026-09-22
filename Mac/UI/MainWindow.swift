@@ -359,8 +359,10 @@ private struct StudioLayout: View {
 /// the program feed is unaffected.
 /// verify on Mac: some virtual cameras refuse a second session; their tile
 /// stays dark but still switches.
-private struct CameraThumbnailView: NSViewRepresentable {
+struct CameraThumbnailView: NSViewRepresentable {
     let deviceUniqueID: String
+    /// `.low` for the 76pt strip tiles; the Multiview asks for more.
+    var preset: AVCaptureSession.Preset = .low
 
     final class PreviewView: NSView {
         var session: AVCaptureSession?
@@ -384,8 +386,8 @@ private struct CameraThumbnailView: NSViewRepresentable {
         guard let device = AVCaptureDevice(uniqueID: deviceUniqueID),
               let input = try? AVCaptureDeviceInput(device: device) else { return view }
         let session = AVCaptureSession()
-        if session.canSetSessionPreset(.low) {
-            session.sessionPreset = .low   // it's a 76pt tile
+        if session.canSetSessionPreset(preset) {
+            session.sessionPreset = preset
         }
         guard session.canAddInput(input) else { return view }
         session.addInput(input)

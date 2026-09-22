@@ -61,6 +61,21 @@ full-screen-this-camera layout cues at the playhead, replacing a cue within
 fades, and offset recovery from synthetic envelopes (`EditorAudioTests`).
 F-488…F-499.
 
+Twenty-ninth pass — **Multiview**. Its own resizable window (Studio menu →
+Show Multiview, ⌥⌘M): PREVIEW (in studio mode) and PROGRAM across the top
+with colored frames and scene names; a tile per camera (the camera strip's
+`CameraThumbnailView`, un-privated and given a preset parameter — `.medium`
+here, `.low` for the 76 pt strip) with an ON AIR frame on the program
+camera; a tile per guest and per shared screen (`SourceMonitorView`, an
+MTKView that draws the registry's latest texture for a `SourceKey` with the
+program preview's shader, paced at 15 fps by a main-queue timer), ON AIR /
+WAITING badges from the green-room state, rehearsal stand-ins included;
+and one `StripMeter` per mixer strip along the bottom, red when muted.
+Nothing is clickable on purpose — a multiview is glanced at while the hands
+stay on the studio window. "Multiview Full Screen on Display…" lists every
+screen: the window moves there and enters native full screen, so it
+survives Space switches. F-539…F-541.
+
 Twenty-eighth pass — **Preview/Program mode** (the top big item from the
 Ecamm triage). Studio menu → Preview / Program Mode (⌥⌘P) splits the
 canvas into PREVIEW (green, the staged scene, fully editable) and PROGRAM
