@@ -1,0 +1,2325 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Layout Engine</title>
+<meta name="description" content="Structured randomization for brand layouts: give it a prompt and your brand assets, get 180 on-grid variations to scan and compare.">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,300..800&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Fraunces:opsz,wght@9..144,300..900&family=Manrope:wght@400;500;700;800&family=Schibsted+Grotesk:wght@400;500;700;900&family=Instrument+Serif:ital@0;1&display=swap">
+<style>
+/* Layout concept: a dark instrument panel. Left rail holds the rules (brand kit, content, grid),
+   the top bar holds the brief, and the canvas is a pixel-grid field where variations land as cards. */
+:root {
+  --bg: #0d0d10;
+  --bg-grid: #15151a;
+  --panel: #14141a;
+  --panel-2: #1b1b22;
+  --line: #26262f;
+  --line-2: #33333e;
+  --fg: #ecebf0;
+  --fg-2: #a9a8b4;
+  --fg-3: #6f6e7c;
+  --accent: #d8c9a3;      /* warm parchment: reads on dark, stays out of the brand palettes' way */
+  --accent-ink: #14120c;
+  --good: #7fcf9a;
+  --warn: #e0a85a;
+  --danger: #e07a7a;
+  --font-ui: "Schibsted Grotesk", "Inter", system-ui, -apple-system, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --r: 6px;
+  --r-lg: 12px;
+  --side: 340px;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 14px/1.45 var(--font-ui);
+  -webkit-font-smoothing: antialiased;
+}
+button, input, select, textarea { font: inherit; color: inherit; }
+h1, h2, h3 { margin: 0; font-weight: 600; text-wrap: balance; }
+h2 { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--fg-2); }
+h3 { font-size: 18px; }
+p { margin: 0 0 .75em; }
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.small { font-size: 12px; }
+.hint { color: var(--fg-3); font-size: 12px; font-weight: 400; }
+[hidden] { display: none !important; }
+
+.app {
+  display: grid;
+  grid-template-columns: var(--side) 1fr;
+  grid-template-rows: auto 1fr;
+  grid-template-areas: "top top" "side main";
+  height: 100%;
+}
+.topbar {
+  grid-area: top;
+  display: flex; align-items: center; gap: 16px;
+  padding: 10px 16px;
+  padding-top: calc(10px + env(safe-area-inset-top, 0px));
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+  position: sticky; top: 0; z-index: 5;
+}
+.brandmark { display: flex; align-items: center; gap: 10px; white-space: nowrap; min-width: var(--side); }
+.brandmark .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px rgba(216,201,163,.15); }
+.brandmark .name { font-weight: 700; letter-spacing: -.01em; }
+.brandmark .tag { color: var(--fg-3); font-family: var(--font-mono); font-size: 12px; }
+.promptbar { flex: 1; display: flex; gap: 8px; min-width: 0; }
+.promptbar input {
+  flex: 1; min-width: 0;
+  background: var(--bg); border: 1px solid var(--line-2); border-radius: var(--r);
+  padding: 10px 12px; color: var(--fg);
+}
+.promptbar input:focus, .input:focus, .select:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-color: var(--accent); }
+.topbar-right { display: flex; gap: 8px; }
+
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 9px 14px; border-radius: var(--r); border: 1px solid var(--line-2);
+  background: var(--panel-2); color: var(--fg); cursor: pointer; white-space: nowrap;
+}
+.btn:hover { border-color: var(--fg-3); }
+.btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.btn:disabled { opacity: .45; cursor: default; }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+.btn.primary:hover { filter: brightness(1.05); }
+.btn.ghost { background: transparent; border-color: transparent; color: var(--fg-2); }
+.btn.ghost:hover { color: var(--fg); border-color: var(--line-2); }
+.btn.small { padding: 6px 10px; font-size: 12.5px; }
+.btn.icon { padding: 6px 9px; }
+.btn.file { position: relative; }
+.btn.active { border-color: var(--accent); color: var(--accent); }
+
+.sidebar {
+  grid-area: side;
+  overflow-y: auto; border-right: 1px solid var(--line); background: var(--panel);
+  padding-bottom: 40px;
+}
+.panel { padding: 16px; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 12px; }
+.panel-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.field > label, .field label:first-child { font-size: 12px; color: var(--fg-2); display: flex; justify-content: space-between; gap: 8px; }
+.field.two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.field.three { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+.field.two > div, .field.three > div { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.input, .select {
+  width: 100%; background: var(--bg); border: 1px solid var(--line-2); border-radius: var(--r);
+  padding: 8px 10px; color: var(--fg); min-width: 0;
+}
+textarea.input { resize: vertical; line-height: 1.4; }
+.select { appearance: none; -webkit-appearance: none; padding-right: 26px;
+  background-image: linear-gradient(45deg, transparent 50%, var(--fg-3) 50%), linear-gradient(135deg, var(--fg-3) 50%, transparent 50%);
+  background-position: calc(100% - 14px) 55%, calc(100% - 9px) 55%; background-size: 5px 5px; background-repeat: no-repeat; }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.grow { flex: 1; }
+.stack { display: flex; flex-direction: column; gap: 6px; }
+.check { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--fg-2); cursor: pointer; }
+.check input { accent-color: var(--accent); }
+.inline { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--fg-2); }
+.inline .select { width: auto; padding: 6px 26px 6px 8px; font-size: 12.5px; }
+.colorpick { width: 36px; height: 34px; padding: 2px; border: 1px solid var(--line-2); border-radius: var(--r); background: var(--bg); }
+
+.logo-row { display: flex; gap: 12px; align-items: center; }
+.logo-preview {
+  width: 96px; height: 56px; flex: none; border-radius: var(--r); border: 1px solid var(--line-2);
+  background: repeating-conic-gradient(#20202a 0 25%, #191921 0 50%) 0 0 / 12px 12px;
+  display: grid; place-items: center; padding: 8px; overflow: hidden;
+}
+.logo-preview svg, .logo-preview img { max-width: 100%; max-height: 100%; }
+.logo-preview .wordmark { font-weight: 700; letter-spacing: -.03em; font-size: 22px; }
+
+.swatches { display: flex; flex-wrap: wrap; gap: 6px; }
+.swatch {
+  display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px 4px 4px;
+  border: 1px solid var(--line-2); border-radius: 999px; background: var(--bg); cursor: pointer; font-size: 12px;
+}
+.swatch .chip { width: 18px; height: 18px; border-radius: 50%; border: 1px solid rgba(255,255,255,.12); }
+.swatch .role { color: var(--fg-3); font-family: var(--font-mono); font-size: 11px; }
+.swatch .x { color: var(--fg-3); padding: 0 2px; }
+.swatch .x:hover { color: var(--danger); }
+.swatches.mini .swatch { padding: 3px; }
+.extracted { display: flex; flex-direction: column; gap: 6px; }
+
+.images { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.thumb { position: relative; aspect-ratio: 1; border-radius: var(--r); overflow: hidden; border: 1px solid var(--line-2); background: var(--bg); }
+.thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.thumb .x { position: absolute; top: 2px; right: 2px; background: rgba(0,0,0,.6); border: 0; color: #fff; border-radius: 4px; width: 20px; height: 20px; cursor: pointer; font-size: 12px; line-height: 20px; padding: 0; }
+.thumb .ph { position: absolute; left: 0; right: 0; bottom: 0; font-size: 9px; text-align: center; background: rgba(0,0,0,.55); color: #ddd; padding: 2px; letter-spacing: .04em; text-transform: uppercase; }
+
+.main {
+  grid-area: main; min-width: 0; overflow-y: auto; position: relative;
+  background-color: var(--bg);
+  background-image: linear-gradient(var(--bg-grid) 1px, transparent 1px), linear-gradient(90deg, var(--bg-grid) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+.controls {
+  position: sticky; top: 0; z-index: 3;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  padding: 10px 16px; background: rgba(13,13,16,.85); backdrop-filter: blur(8px); border-bottom: 1px solid var(--line);
+}
+.controls-right { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip-btn {
+  padding: 6px 10px; border-radius: 999px; border: 1px solid var(--line-2); background: var(--panel-2);
+  color: var(--fg-2); cursor: pointer; font-size: 12.5px;
+}
+.chip-btn.on { border-color: var(--accent); color: var(--accent); background: rgba(216,201,163,.08); }
+.chip-btn .ratio { color: var(--fg-3); font-family: var(--font-mono); font-size: 11px; margin-left: 4px; }
+
+.readout { padding: 10px 16px 0; color: var(--fg-2); font-size: 12.5px; display: flex; gap: 14px; flex-wrap: wrap; min-height: 18px; }
+.readout b { color: var(--fg); font-weight: 600; }
+.readout .k { color: var(--fg-3); }
+
+.gallery {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 14px;
+  padding: 16px; align-items: start;
+}
+.card {
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-lg); overflow: hidden;
+  cursor: pointer; transition: border-color .15s, transform .15s; position: relative;
+}
+.card:hover { border-color: var(--fg-3); }
+.card.selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.card .canvas { display: grid; place-items: center; background: var(--bg-grid); padding: 10px; }
+.card .canvas svg { width: 100%; height: auto; display: block; border-radius: 3px; box-shadow: 0 4px 24px rgba(0,0,0,.45); }
+.card .meta { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; font-size: 11.5px; color: var(--fg-3); font-family: var(--font-mono); }
+.card .meta .arch { color: var(--fg-2); }
+.card .fav { position: absolute; top: 8px; right: 8px; background: rgba(0,0,0,.55); border: 0; color: #fff; border-radius: 6px; width: 26px; height: 26px; cursor: pointer; opacity: 0; transition: opacity .15s; }
+.card:hover .fav, .card .fav.on { opacity: 1; }
+.card .fav.on { color: var(--accent); }
+.card .pick { position: absolute; top: 8px; left: 8px; width: 18px; height: 18px; accent-color: var(--accent); opacity: 0; }
+.card:hover .pick, .card .pick:checked { opacity: 1; }
+
+.empty { display: grid; place-items: center; padding: 60px 24px; color: var(--fg-2); }
+.empty-inner { max-width: 48ch; text-align: center; }
+.empty .big { font-size: 20px; color: var(--fg); }
+
+.modal { position: fixed; inset: 0; z-index: 20; background: rgba(0,0,0,.6); display: grid; place-items: center; padding: 20px; }
+.modal-inner { background: var(--panel); border: 1px solid var(--line-2); border-radius: var(--r-lg); max-width: min(1200px, 100%); max-height: 100%; overflow: auto; }
+.modal-inner.detail { display: grid; grid-template-columns: 1fr 360px; width: min(1200px, 100%); height: min(820px, 100%); }
+.detail-preview { display: grid; place-items: center; padding: 24px; background: var(--bg-grid); min-width: 0; overflow: hidden; }
+.detail-preview svg { max-width: 100%; max-height: 100%; width: auto; height: auto; box-shadow: 0 12px 60px rgba(0,0,0,.6); border-radius: 4px; }
+.detail-side { padding: 18px; display: flex; flex-direction: column; gap: 14px; overflow-y: auto; border-left: 1px solid var(--line); }
+.detail-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; padding: 0; }
+.detail-actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.specs { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0; font-size: 12.5px; }
+.specs dt { color: var(--fg-3); }
+.specs dd { margin: 0; font-family: var(--font-mono); color: var(--fg-2); word-break: break-word; }
+.family { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
+.family .fam { flex: none; width: 120px; cursor: pointer; border: 1px solid var(--line-2); border-radius: var(--r); padding: 6px; background: var(--bg-grid); }
+.family .fam svg { width: 100%; height: auto; display: block; }
+.family .fam .lbl { font-size: 10px; color: var(--fg-3); font-family: var(--font-mono); margin-top: 4px; }
+details.json summary { cursor: pointer; color: var(--fg-2); font-size: 12.5px; }
+details.json pre { font-size: 11px; line-height: 1.45; background: var(--bg); border: 1px solid var(--line); border-radius: var(--r); padding: 10px; overflow: auto; max-height: 260px; margin: 8px 0 0; }
+
+.modal-inner.compare { width: min(1400px, 100%); padding: 18px; }
+.compare-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-top: 12px; }
+.compare-grid .item { background: var(--bg-grid); padding: 12px; border-radius: var(--r); }
+.compare-grid .item svg { width: 100%; height: auto; display: block; }
+.compare-grid .item .lbl { font-family: var(--font-mono); font-size: 11px; color: var(--fg-3); margin-top: 6px; }
+
+.modal-inner.about, .modal-inner.settings { width: min(720px, 100%); padding: 22px; }
+.prose { max-width: 66ch; color: var(--fg-2); font-size: 14.5px; line-height: 1.55; }
+.prose h4 { color: var(--fg); margin: 18px 0 6px; font-size: 14px; letter-spacing: .04em; text-transform: uppercase; }
+.prose ul { padding-left: 18px; margin: 0 0 .75em; }
+.prose li { margin-bottom: 4px; }
+.prose code { font-family: var(--font-mono); font-size: 12.5px; background: var(--bg); padding: 1px 5px; border-radius: 4px; }
+.prose .field { margin: 12px 0; }
+
+.toast { position: fixed; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); left: 50%; transform: translateX(-50%); background: var(--fg); color: var(--bg); padding: 10px 16px; border-radius: 999px; z-index: 30; font-weight: 500; box-shadow: 0 8px 30px rgba(0,0,0,.5); }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+@media (max-width: 960px) {
+  .app { grid-template-columns: 1fr; grid-template-areas: "top" "side" "main"; grid-template-rows: auto auto 1fr; }
+  .brandmark { min-width: 0; }
+  .brandmark .tag { display: none; }
+  .sidebar { border-right: 0; border-bottom: 1px solid var(--line); max-height: 50vh; }
+  .modal-inner.detail { grid-template-columns: 1fr; height: auto; }
+  .detail-side { border-left: 0; border-top: 1px solid var(--line); }
+}
+@media (max-width: 640px) {
+  .topbar { flex-wrap: wrap; gap: 10px; }
+  .promptbar { order: 3; flex: 1 1 100%; min-width: 0; }
+  .promptbar input { flex: 1 1 0; min-width: 0; width: 0; }
+  .promptbar .btn { flex: none; padding-inline: 10px; }
+  .topbar-right { margin-left: auto; }
+  .gallery { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); padding: 12px; gap: 10px; }
+  .field.three { grid-template-columns: 1fr 1fr; }
+}
+
+</style>
+</head>
+<body>
+
+<div id="app" class="app">
+  <header class="topbar">
+    <div class="brandmark">
+      <span class="dot"></span>
+      <span class="name">Layout Engine</span>
+      <span class="tag">structured randomization</span>
+    </div>
+    <form id="promptForm" class="promptbar" autocomplete="off">
+      <input id="prompt" name="prompt" type="text" spellcheck="false"
+        placeholder='Describe what you need, e.g. "36 bold image-led square posts for Deel Payroll, dark, with a CTA"'>
+      <button id="generateBtn" type="submit" class="btn primary">Generate</button>
+    </form>
+    <div class="topbar-right">
+      <button id="aboutBtn" class="btn ghost" type="button">Why this works</button>
+      <button id="settingsBtn" class="btn ghost" type="button" title="Interpreter settings">Settings</button>
+    </div>
+  </header>
+
+  <aside class="sidebar" id="sidebar">
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Brand kit</h2>
+        <select id="presetSelect" class="select" aria-label="Brand preset"></select>
+      </div>
+      <div class="field">
+        <label for="brandName">Name</label>
+        <input id="brandName" type="text" class="input">
+      </div>
+      <div class="field">
+        <label>Logo</label>
+        <div class="logo-row">
+          <div id="logoPreview" class="logo-preview" title="Logo preview"></div>
+          <div class="stack">
+            <label class="btn small file">Upload SVG or PNG<input id="logoFile" type="file" accept=".svg,image/svg+xml,image/png,image/jpeg,image/webp" hidden></label>
+            <label class="check"><input id="logoMono" type="checkbox" checked> Recolor SVG to allowed logo colors</label>
+          </div>
+        </div>
+      </div>
+      <div class="field">
+        <label>Colors <span class="hint">click a swatch to change its role</span></label>
+        <div id="colorList" class="swatches"></div>
+        <div class="row">
+          <input id="newColor" type="color" value="#5938B8" class="colorpick" aria-label="New color">
+          <input id="newColorName" type="text" class="input grow" placeholder="Name (optional)">
+          <button id="addColorBtn" class="btn small" type="button">Add</button>
+        </div>
+        <div id="extracted" class="extracted" hidden>
+          <span class="hint">From your images:</span>
+          <div id="extractedSwatches" class="swatches mini"></div>
+        </div>
+      </div>
+      <div class="field two">
+        <div>
+          <label for="displayFont">Display font</label>
+          <select id="displayFont" class="select"></select>
+        </div>
+        <div>
+          <label for="bodyFont">Body font</label>
+          <select id="bodyFont" class="select"></select>
+        </div>
+      </div>
+      <div class="field">
+        <label class="btn small file">Upload a font file (woff2, ttf, otf)<input id="fontFile" type="file" accept=".woff2,.woff,.ttf,.otf" hidden></label>
+        <span id="fontStatus" class="hint"></span>
+      </div>
+      <div class="field">
+        <label>Images <span class="hint">photos, renders, product shots</span></label>
+        <div id="imageList" class="images"></div>
+        <label class="btn small file">Add images<input id="imageFiles" type="file" accept="image/*" multiple hidden></label>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><h2>Content</h2></div>
+      <div class="field"><label for="eyebrow">Eyebrow</label><input id="eyebrow" class="input" type="text"></div>
+      <div class="field"><label for="headline">Headline</label><textarea id="headline" class="input" rows="2"></textarea></div>
+      <div class="field"><label for="subhead">Subhead</label><textarea id="subhead" class="input" rows="2"></textarea></div>
+      <div class="field"><label for="body">Body</label><textarea id="body" class="input" rows="3"></textarea></div>
+      <div class="field two">
+        <div><label for="cta">CTA</label><input id="cta" class="input" type="text"></div>
+        <div><label for="stat">Stat</label><input id="stat" class="input" type="text" placeholder="150+"></div>
+      </div>
+      <div class="field"><label for="footer">Footer / URL</label><input id="footer" class="input" type="text"></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><h2>Grid rules</h2></div>
+      <div class="field three">
+        <div><label for="unit">Pixel grid</label><select id="unit" class="select"><option>4</option><option selected>8</option><option>12</option><option>16</option></select></div>
+        <div><label for="margin">Safe space</label><select id="margin" class="select"><option value="0.04">4%</option><option value="0.06" selected>6%</option><option value="0.08">8%</option><option value="0.1">10%</option></select></div>
+        <div><label for="gutter">Gutter</label><select id="gutter" class="select"><option value="2">2u</option><option value="3" selected>3u</option><option value="4">4u</option></select></div>
+      </div>
+      <div class="field two">
+        <div><label for="radius">Corner radius</label><select id="radius" class="select"><option value="0">Sharp</option><option value="1" selected>Soft</option><option value="3">Round</option></select></div>
+        <div><label for="shapes">Brand shapes</label><select id="shapes" class="select"><option value="on" selected>Allowed</option><option value="off">Off</option></select></div>
+      </div>
+      <label class="check"><input id="showGrid" type="checkbox"> Show grid on cards</label>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><h2>Brand kit JSON</h2></div>
+      <div class="row">
+        <button id="exportBrandBtn" class="btn small" type="button">Download</button>
+        <label class="btn small file">Load<input id="importBrand" type="file" accept="application/json,.json" hidden></label>
+        <button id="copyBrandBtn" class="btn small" type="button">Copy</button>
+      </div>
+      <p class="hint">The kit is the contract: any design system that can be described this way can run through the engine.</p>
+    </section>
+  </aside>
+
+  <main class="main" id="main">
+    <div class="controls">
+      <div class="chips" id="formatChips" aria-label="Formats"></div>
+      <div class="controls-right">
+        <label class="inline">Count
+          <select id="count" class="select">
+            <option>24</option><option>48</option><option selected>96</option><option>180</option><option>360</option>
+          </select>
+        </label>
+        <label class="inline">Sort
+          <select id="sort" class="select">
+            <option value="seed">Seed</option>
+            <option value="whitespace">Most whitespace</option>
+            <option value="density">Densest</option>
+            <option value="balance">Most balanced</option>
+            <option value="archetype">By archetype</option>
+          </select>
+        </label>
+        <label class="inline">Filter
+          <select id="filterArch" class="select"><option value="">All archetypes</option></select>
+        </label>
+        <label class="check"><input id="favOnly" type="checkbox"> Favorites</label>
+        <button id="compareBtn" class="btn small" type="button" disabled>Compare (0)</button>
+        <button id="exportFavBtn" class="btn small" type="button" disabled>Export favorites</button>
+      </div>
+    </div>
+    <div id="readout" class="readout"></div>
+    <div id="gallery" class="gallery" aria-live="polite"></div>
+    <div id="empty" class="empty">
+      <div class="empty-inner">
+        <p class="big">Type a brief above, or just press Generate.</p>
+        <p>The engine only plays inside the rules on the left: a column grid, a pixel grid, safe space, approved color pairs, and the logo's clear zone. Everything else is randomized, then checked.</p>
+      </div>
+    </div>
+  </main>
+
+  <div id="detail" class="modal" hidden>
+    <div class="modal-inner detail">
+      <div class="detail-preview" id="detailPreview"></div>
+      <div class="detail-side">
+        <div class="detail-head">
+          <div>
+            <div class="mono" id="detailId"></div>
+            <h3 id="detailTitle"></h3>
+          </div>
+          <button class="btn ghost icon" id="detailClose" type="button" aria-label="Close">✕</button>
+        </div>
+        <div class="detail-actions">
+          <button class="btn small" id="detailFav" type="button">★ Favorite</button>
+          <button class="btn small" id="detailMore" type="button">Variations of this</button>
+          <button class="btn small" id="detailFamily" type="button">Same idea, every format</button>
+          <label class="check"><input id="detailGrid" type="checkbox"> Grid</label>
+        </div>
+        <div class="detail-actions">
+          <button class="btn small" id="detailPng" type="button">PNG</button>
+          <button class="btn small" id="detailSvg" type="button">SVG</button>
+          <button class="btn small" id="detailJson" type="button">JSON</button>
+          <button class="btn small" id="detailCopySvg" type="button">Copy SVG</button>
+        </div>
+        <dl class="specs" id="detailSpecs"></dl>
+        <div id="familyStrip" class="family"></div>
+        <details class="json">
+          <summary>Layout spec (the future edit surface)</summary>
+          <pre id="detailJsonView" class="mono"></pre>
+        </details>
+      </div>
+    </div>
+  </div>
+
+  <div id="compare" class="modal" hidden>
+    <div class="modal-inner compare">
+      <div class="detail-head">
+        <h3>Compare</h3>
+        <button class="btn ghost icon" id="compareClose" type="button" aria-label="Close">✕</button>
+      </div>
+      <div id="compareGrid" class="compare-grid"></div>
+    </div>
+  </div>
+
+  <div id="about" class="modal" hidden>
+    <div class="modal-inner about">
+      <div class="detail-head">
+        <h3>Why structured randomization</h3>
+        <button class="btn ghost icon" id="aboutClose" type="button" aria-label="Close">✕</button>
+      </div>
+      <div class="prose" id="aboutBody"></div>
+    </div>
+  </div>
+
+  <div id="settings" class="modal" hidden>
+    <div class="modal-inner settings">
+      <div class="detail-head">
+        <h3>Prompt interpreter</h3>
+        <button class="btn ghost icon" id="settingsClose" type="button" aria-label="Close">✕</button>
+      </div>
+      <div class="prose">
+        <p>By default the brief is read by a built-in rule parser (formats, mood, emphasis, count, quoted copy, brand color names). Optionally, let Claude read the brief and turn it into the same constraint JSON. The key stays in this browser only and is sent straight to Anthropic.</p>
+        <div class="field"><label for="apiKey">Anthropic API key</label><input id="apiKey" class="input" type="password" placeholder="sk-ant-..." autocomplete="off"></div>
+        <label class="check"><input id="useClaude" type="checkbox"> Use Claude to interpret the brief</label>
+        <p class="hint">Runs when the page is served locally or from your own host. Published read-only copies block outbound requests, so the rule parser is used there.</p>
+        <div id="interpretLog" class="mono small"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" hidden></div>
+</div>
+
+<script>
+/* js/rng.js */
+/* Seeded randomness. Every variation is reproducible from (seed, intent, brand). */
+const RNG = (() => {
+  function make(seed) {
+    let a = seed >>> 0;
+    const next = () => {
+      a |= 0; a = (a + 0x6D2B79F5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+    return {
+      next,
+      int(min, max) { return min + Math.floor(next() * (max - min + 1)); },
+      pick(arr) { return arr[Math.floor(next() * arr.length)]; },
+      chance(p) { return next() < p; },
+      // items: [{v, w}] -> v
+      weighted(items) {
+        const total = items.reduce((s, i) => s + (i.w || 0), 0);
+        let r = next() * total;
+        for (const it of items) { r -= (it.w || 0); if (r <= 0) return it.v; }
+        return items[items.length - 1].v;
+      },
+      shuffle(arr) {
+        const a = arr.slice();
+        for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(next() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+        return a;
+      },
+    };
+  }
+  function hashStr(s) {
+    let h = 2166136261;
+    for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+    return h >>> 0;
+  }
+  return { make, hashStr };
+})();
+
+/* js/color.js */
+/* Color utilities: parsing, contrast (WCAG 2.x), mixing, palette extraction from images. */
+const Color = (() => {
+  const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+  function hexToRgb(hex) {
+    let h = String(hex || '').trim().replace('#', '');
+    if (h.length === 3) h = h.split('').map(c => c + c).join('');
+    if (!/^[0-9a-fA-F]{6}$/.test(h)) return { r: 0, g: 0, b: 0 };
+    const n = parseInt(h, 16);
+    return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+  }
+  function rgbToHex({ r, g, b }) {
+    return '#' + [r, g, b].map(v => clamp(Math.round(v), 0, 255).toString(16).padStart(2, '0')).join('').toUpperCase();
+  }
+  function normalize(hex) { return rgbToHex(hexToRgb(hex)); }
+  function luminance(hex) {
+    const { r, g, b } = hexToRgb(hex);
+    const f = v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+    return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+  }
+  function contrast(a, b) {
+    const la = luminance(a), lb = luminance(b);
+    const [hi, lo] = la > lb ? [la, lb] : [lb, la];
+    return (hi + 0.05) / (lo + 0.05);
+  }
+  function isDark(hex) { return luminance(hex) < 0.35; }
+  function mix(a, b, t) {
+    const A = hexToRgb(a), B = hexToRgb(b);
+    return rgbToHex({ r: A.r + (B.r - A.r) * t, g: A.g + (B.g - A.g) * t, b: A.b + (B.b - A.b) * t });
+  }
+  function withAlpha(hex, alpha) {
+    const { r, g, b } = hexToRgb(hex);
+    return `rgba(${r},${g},${b},${alpha})`;
+  }
+  function saturation(hex) {
+    const { r, g, b } = hexToRgb(hex);
+    const mx = Math.max(r, g, b) / 255, mn = Math.min(r, g, b) / 255;
+    return mx === 0 ? 0 : (mx - mn) / mx;
+  }
+  // Best readable foreground for a background from a candidate list; falls back to black/white.
+  function bestForeground(bg, candidates, minRatio = 4.5) {
+    const ok = candidates.filter(c => contrast(bg, c) >= minRatio).sort((a, b) => contrast(bg, b) - contrast(bg, a));
+    if (ok.length) return ok;
+    return [contrast(bg, '#FFFFFF') >= contrast(bg, '#000000') ? '#FFFFFF' : '#000000'];
+  }
+  // Quantize an <img> to a handful of dominant colors (skips near-greys and extremes).
+  function extractPalette(img, max = 6) {
+    const c = document.createElement('canvas');
+    const w = 48, h = Math.max(1, Math.round(48 * img.naturalHeight / img.naturalWidth));
+    c.width = w; c.height = h;
+    const ctx = c.getContext('2d');
+    ctx.drawImage(img, 0, 0, w, h);
+    const data = ctx.getImageData(0, 0, w, h).data;
+    const buckets = new Map();
+    for (let i = 0; i < data.length; i += 4) {
+      if (data[i + 3] < 128) continue;
+      const r = data[i], g = data[i + 1], b = data[i + 2];
+      const key = ((r >> 4) << 8) | ((g >> 4) << 4) | (b >> 4);
+      const e = buckets.get(key) || { n: 0, r: 0, g: 0, b: 0 };
+      e.n++; e.r += r; e.g += g; e.b += b;
+      buckets.set(key, e);
+    }
+    const list = [...buckets.values()].map(e => ({ n: e.n, hex: rgbToHex({ r: e.r / e.n, g: e.g / e.n, b: e.b / e.n }) }));
+    list.sort((a, b) => b.n - a.n);
+    const out = [];
+    for (const item of list) {
+      const lum = luminance(item.hex), sat = saturation(item.hex);
+      if (lum > 0.95 || lum < 0.02) continue;
+      if (sat < 0.12 && out.length > 1) continue;
+      if (out.some(o => distance(o.hex, item.hex) < 60)) continue;
+      out.push(item);
+      if (out.length >= max) break;
+    }
+    return out.map(o => o.hex);
+  }
+  function distance(a, b) {
+    const A = hexToRgb(a), B = hexToRgb(b);
+    return Math.sqrt((A.r - B.r) ** 2 + (A.g - B.g) ** 2 + (A.b - B.b) ** 2);
+  }
+  // Luminance map of an image: grid of {mean, std} used for content-aware text placement.
+  function luminanceMap(img, gx = 6, gy = 6) {
+    const c = document.createElement('canvas');
+    c.width = gx * 8; c.height = gy * 8;
+    const ctx = c.getContext('2d');
+    ctx.drawImage(img, 0, 0, c.width, c.height);
+    const d = ctx.getImageData(0, 0, c.width, c.height).data;
+    const cells = [];
+    for (let y = 0; y < gy; y++) for (let x = 0; x < gx; x++) {
+      let s = 0, s2 = 0, n = 0;
+      for (let yy = 0; yy < 8; yy++) for (let xx = 0; xx < 8; xx++) {
+        const i = (((y * 8 + yy) * c.width) + (x * 8 + xx)) * 4;
+        const l = (0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]) / 255;
+        s += l; s2 += l * l; n++;
+      }
+      const mean = s / n;
+      cells.push({ x, y, mean, std: Math.sqrt(Math.max(0, s2 / n - mean * mean)) });
+    }
+    return { gx, gy, cells };
+  }
+  return { hexToRgb, rgbToHex, normalize, luminance, contrast, isDark, mix, withAlpha, saturation, bestForeground, extractPalette, distance, luminanceMap };
+})();
+
+/* js/brand.js */
+/* Brand kits: the contract between a design system and the engine.
+   A kit is plain JSON, so any design system that can be described this way can be run through the engine. */
+const Brand = (() => {
+  const FONTS = {
+    'Bricolage Grotesque': { css: '"Bricolage Grotesque", "Inter", system-ui, sans-serif', weights: [300, 400, 500, 600, 700, 800], kind: 'display', note: 'stand-in for Bagoss (humanist, has width axis)' },
+    'Inter':               { css: '"Inter", system-ui, -apple-system, sans-serif', weights: [400, 500, 600, 700], kind: 'body' },
+    'Fraunces':            { css: '"Fraunces", Georgia, serif', weights: [300, 400, 500, 600, 700, 900], kind: 'display' },
+    'Manrope':             { css: '"Manrope", system-ui, sans-serif', weights: [400, 500, 700, 800], kind: 'both' },
+    'Schibsted Grotesk':   { css: '"Schibsted Grotesk", system-ui, sans-serif', weights: [400, 500, 700, 900], kind: 'both' },
+    'Instrument Serif':    { css: '"Instrument Serif", Georgia, serif', weights: [400], kind: 'display' },
+    'IBM Plex Mono':       { css: '"IBM Plex Mono", ui-monospace, monospace', weights: [400, 500], kind: 'both' },
+  };
+  const customFonts = {}; // name -> {css, weights, buffer, mime}
+
+  function fontCss(name) { return (FONTS[name] || customFonts[name] || { css: `"${name}", sans-serif` }).css; }
+  function fontWeights(name) { return (FONTS[name] || customFonts[name] || { weights: [400, 700] }).weights; }
+  function allFontNames() { return [...Object.keys(FONTS), ...Object.keys(customFonts)]; }
+
+  // Roles: core (can be a background or a big field), accent (small pops, CTAs), background (calm grounds), neutral (text-only)
+  const PRESETS = {
+    deel: {
+      name: 'Deel',
+      note: 'Core palette and type roles from the Deel Brand Guidelines (2026). Hex values were read from the PDF; confirm against the Figma library before production use.',
+      colors: [
+        { name: 'Acai',       hex: '#5938B8', role: 'core' },
+        { name: 'Blueberry',  hex: '#004999', role: 'core' },
+        { name: 'Deelberry',  hex: '#201147', role: 'background' },
+        { name: 'Slate',      hex: '#191A25', role: 'background' },
+        { name: 'Smoothie',   hex: '#C4B1F7', role: 'accent' },
+        { name: 'Seltzer',    hex: '#B1D8FF', role: 'accent' },
+        { name: 'Tangelo',    hex: '#ED5E2C', role: 'accent' },
+        { name: 'Cornbread',  hex: '#FFCF26', role: 'accent' },
+        { name: 'Latte',      hex: '#FEF0D9', role: 'background' },
+        { name: 'White',      hex: '#FFFFFF', role: 'background' },
+        { name: 'Black',      hex: '#000000', role: 'neutral' },
+      ],
+      logo: { kind: 'wordmark', text: 'deel.', allowedColors: ['#5938B8', '#000000', '#FFFFFF'], monochrome: true, clearZone: 1.0, minPx: 20 },
+      fonts: { display: 'Bricolage Grotesque', body: 'Inter', displayWeight: 600, bodyWeight: 400, headlineCase: 'sentence', tracking: -0.025 },
+      grid: { unit: 8, marginRatio: 0.06, gutterUnits: 3, radius: 1 },
+      shapes: ['circle', 'pill', 'quarter'],
+      content: {
+        eyebrow: 'Deel Global Payroll',
+        headline: 'Run payroll in 150+ countries from one platform',
+        subhead: 'Owned infrastructure, 2,000+ local experts, and AI that takes action inside your workflows.',
+        body: 'Consolidate vendors, close payroll faster, and keep every entity compliant without adding headcount.',
+        cta: 'Book a demo',
+        stat: '150+',
+        footer: 'deel.com',
+      },
+    },
+    mono: {
+      name: 'Editorial Mono',
+      note: 'A neutral, type-led kit to show the engine is design-system agnostic.',
+      colors: [
+        { name: 'Ink',    hex: '#111111', role: 'core' },
+        { name: 'Paper',  hex: '#F3EFE6', role: 'background' },
+        { name: 'Signal', hex: '#D64526', role: 'accent' },
+        { name: 'Stone',  hex: '#C9C2B4', role: 'accent' },
+        { name: 'White',  hex: '#FFFFFF', role: 'background' },
+      ],
+      logo: { kind: 'wordmark', text: 'FOLIO', allowedColors: ['#111111', '#FFFFFF', '#D64526'], monochrome: true, clearZone: 1.0, minPx: 20 },
+      fonts: { display: 'Fraunces', body: 'Manrope', displayWeight: 500, bodyWeight: 400, headlineCase: 'sentence', tracking: -0.02 },
+      grid: { unit: 8, marginRatio: 0.08, gutterUnits: 2, radius: 0 },
+      shapes: [],
+      content: {
+        eyebrow: 'Issue 14',
+        headline: 'The quiet return of the printed annual report',
+        subhead: 'Why finance teams are putting their numbers back on paper.',
+        body: 'A 12-page reading on the design of trust, from typography to binding.',
+        cta: 'Read the issue',
+        stat: '12',
+        footer: 'folio.studio',
+      },
+    },
+    pastel: {
+      name: 'Sprout',
+      note: 'A playful kit with rounded shapes and bright grounds.',
+      colors: [
+        { name: 'Moss',   hex: '#1F5A3C', role: 'core' },
+        { name: 'Lime',   hex: '#C5F35A', role: 'accent' },
+        { name: 'Peach',  hex: '#FFC8A2', role: 'background' },
+        { name: 'Cream',  hex: '#FFF7E6', role: 'background' },
+        { name: 'Plum',   hex: '#3A1F4A', role: 'core' },
+        { name: 'White',  hex: '#FFFFFF', role: 'background' },
+      ],
+      logo: { kind: 'wordmark', text: 'sprout', allowedColors: ['#1F5A3C', '#FFFFFF', '#3A1F4A'], monochrome: true, clearZone: 1.0, minPx: 20 },
+      fonts: { display: 'Schibsted Grotesk', body: 'Manrope', displayWeight: 900, bodyWeight: 500, headlineCase: 'sentence', tracking: -0.03 },
+      grid: { unit: 8, marginRatio: 0.06, gutterUnits: 3, radius: 3 },
+      shapes: ['circle', 'pill', 'blob'],
+      content: {
+        eyebrow: 'New',
+        headline: 'Plants that forgive you',
+        subhead: 'Low-light, low-effort greenery delivered monthly.',
+        body: 'Pick a plan, skip a month whenever, cancel in two taps.',
+        cta: 'Start for $12',
+        stat: '3 min',
+        footer: 'sprout.plants',
+      },
+    },
+  };
+
+  function clone(o) { return JSON.parse(JSON.stringify(o)); }
+  function fromPreset(id) { const p = clone(PRESETS[id] || PRESETS.deel); p.presetId = id; return p; }
+
+  // Approved color pairs for a kit: backgrounds with readable foregrounds and accents.
+  function pairs(kit) {
+    const colors = kit.colors.map(c => ({ ...c, hex: Color.normalize(c.hex) }));
+    const bgs = colors.filter(c => c.role === 'core' || c.role === 'background');
+    const out = [];
+    for (const bg of bgs) {
+      const fgs = colors.filter(c => c.hex !== bg.hex && Color.contrast(bg.hex, c.hex) >= 4.5).map(c => c.hex);
+      const fgFallback = Color.bestForeground(bg.hex, fgs, 4.5);
+      const accents = colors.filter(c => c.hex !== bg.hex && (c.role === 'accent' || c.role === 'core') && Color.contrast(bg.hex, c.hex) >= 3).map(c => c.hex);
+      const fields = colors.filter(c => c.hex !== bg.hex && (c.role === 'core' || c.role === 'accent') && Color.contrast(bg.hex, c.hex) >= 1.6).map(c => c.hex);
+      out.push({ bg: bg.hex, bgName: bg.name, bgRole: bg.role, fgs: fgFallback, accents: accents.length ? accents : fgFallback, fields, dark: Color.isDark(bg.hex) });
+    }
+    return out;
+  }
+
+  // Logo handling ------------------------------------------------------------
+  // kit.logo: {kind:'wordmark'|'svg'|'image', text?, svg?, dataUrl?, aspect, allowedColors, monochrome}
+  function parseSvg(svgText) {
+    const doc = new DOMParser().parseFromString(svgText, 'image/svg+xml');
+    const svg = doc.documentElement;
+    if (!svg || svg.nodeName.toLowerCase() !== 'svg') return null;
+    let vb = (svg.getAttribute('viewBox') || '').split(/[\s,]+/).map(Number).filter(n => !isNaN(n));
+    let w = parseFloat(svg.getAttribute('width')), h = parseFloat(svg.getAttribute('height'));
+    if (vb.length !== 4) vb = [0, 0, w || 100, h || 40];
+    const aspect = vb[2] / vb[3];
+    // Strip scripts and external refs for safety.
+    doc.querySelectorAll('script, foreignObject').forEach(n => n.remove());
+    const inner = svg.innerHTML;
+    return { viewBox: vb.join(' '), aspect, inner };
+  }
+  // Return inner SVG markup recolored to `color` when monochrome is on.
+  function logoInner(kit, color) {
+    const l = kit.logo;
+    if (l.kind !== 'svg' || !l.svg) return '';
+    if (!l.monochrome) return l.svg.inner;
+    let s = l.svg.inner;
+    s = s.replace(/\sfill="(?!none)[^"]*"/g, ` fill="${color}"`);
+    s = s.replace(/\sstroke="(?!none)[^"]*"/g, ` stroke="${color}"`);
+    s = s.replace(/fill:\s*(?!none)[^;"']+/g, `fill:${color}`);
+    s = s.replace(/stroke:\s*(?!none)[^;"']+/g, `stroke:${color}`);
+    s = s.replace(/<(path|rect|circle|ellipse|polygon|polyline|g)(?![^>]*\sfill=)([^>]*)>/g, (m, tag, rest) => rest.includes('fill:') ? m : `<${tag} fill="${color}"${rest}>`);
+    return s;
+  }
+  // Pick a logo color allowed by the brand for a given background.
+  function logoColorFor(kit, bg) {
+    const allowed = (kit.logo.allowedColors || []).map(Color.normalize);
+    const ok = allowed.filter(c => Color.contrast(bg, c) >= 3).sort((a, b) => Color.contrast(bg, b) - Color.contrast(bg, a));
+    if (ok.length) return ok;
+    return [Color.contrast(bg, '#FFFFFF') > Color.contrast(bg, '#000000') ? '#FFFFFF' : '#000000'];
+  }
+
+  // Demo imagery: soft 3D-primitive renders (placeholders until real photos are dropped in).
+  function makeDemoImage(seed, palette, w = 1200, h = 1200) {
+    const rng = RNG.make(seed);
+    const c = document.createElement('canvas'); c.width = w; c.height = h;
+    const ctx = c.getContext('2d');
+    const bgA = rng.pick(palette), bgB = rng.pick(palette);
+    const g = ctx.createLinearGradient(0, 0, w, h);
+    g.addColorStop(0, Color.mix(bgA, '#FFFFFF', 0.55)); g.addColorStop(1, Color.mix(bgB, '#000000', 0.15));
+    ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+    const n = rng.int(2, 4);
+    for (let i = 0; i < n; i++) {
+      const r = w * (0.12 + rng.next() * 0.22);
+      const x = w * (0.15 + rng.next() * 0.7), y = h * (0.2 + rng.next() * 0.6);
+      const col = rng.pick(palette);
+      const rg = ctx.createRadialGradient(x - r * 0.35, y - r * 0.4, r * 0.1, x, y, r);
+      rg.addColorStop(0, Color.mix(col, '#FFFFFF', 0.55)); rg.addColorStop(0.7, col); rg.addColorStop(1, Color.mix(col, '#000000', 0.35));
+      ctx.save();
+      ctx.shadowColor = 'rgba(0,0,0,.25)'; ctx.shadowBlur = r * 0.5; ctx.shadowOffsetY = r * 0.2;
+      ctx.fillStyle = rg;
+      if (rng.chance(0.5)) { ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); }
+      else { const rr = r * 0.25; ctx.beginPath(); ctx.roundRect(x - r, y - r * 0.7, r * 2, r * 1.4, rr); ctx.fill(); }
+      ctx.restore();
+    }
+    // brush stroke overlay
+    ctx.globalAlpha = 0.25; ctx.strokeStyle = '#FFFFFF'; ctx.lineWidth = w * 0.02; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(w * 0.1, h * 0.8); ctx.bezierCurveTo(w * 0.4, h * 0.6, w * 0.6, h * 0.95, w * 0.9, h * 0.7); ctx.stroke();
+    ctx.globalAlpha = 1;
+    return c.toDataURL('image/jpeg', 0.86);
+  }
+
+  // Serialize a kit for download (logo image data included; fonts by name only).
+  function serialize(kit) {
+    const k = clone(kit);
+    delete k.presetId;
+    return JSON.stringify(k, null, 2);
+  }
+
+  return { FONTS, customFonts, fontCss, fontWeights, allFontNames, PRESETS, fromPreset, pairs, parseSvg, logoInner, logoColorFor, makeDemoImage, serialize, clone };
+})();
+
+/* js/grid.js */
+/* Formats and the grid: columns, rows, gutters, safe space, all on a pixel grid. */
+const Grid = (() => {
+  const FORMATS = [
+    { id: 'square',   name: 'Square post',   w: 1080, h: 1080, cols: 12, ratio: '1:1',    tags: ['instagram', 'ig', 'square', 'squares', 'feed', 'carousel', 'grid post'] },
+    { id: 'story',    name: 'Story / Reel',  w: 1080, h: 1920, cols: 6,  ratio: '9:16',   tags: ['story', 'stories', 'reel', 'reels', 'tiktok', 'vertical', 'portrait', 'shorts'], safe: { top: 250, bottom: 320 } },
+    { id: 'linkedin', name: 'LinkedIn post', w: 1200, h: 628,  cols: 12, ratio: '1.91:1', tags: ['linkedin', 'link', 'og', 'open graph', 'facebook'] },
+    { id: 'x',        name: 'X post',        w: 1600, h: 900,  cols: 12, ratio: '16:9',   tags: ['x post', 'twitter', 'tweet', 'x'] },
+    { id: 'slide',    name: 'Slide',         w: 1920, h: 1080, cols: 12, ratio: '16:9',   tags: ['slide', 'slides', 'deck', 'presentation', 'keynote', 'pitch', 'widescreen'] },
+    { id: 'portrait', name: 'Portrait 4:5',  w: 1080, h: 1350, cols: 8,  ratio: '4:5',    tags: ['portrait', '4:5', 'feed portrait'] },
+    { id: 'poster',   name: 'Poster A',      w: 1240, h: 1754, cols: 8,  ratio: '1:1.41', tags: ['poster', 'a4', 'a3', 'print', 'flyer', 'one-pager', 'one pager'] },
+    { id: 'banner',   name: 'Wide banner',   w: 2400, h: 800,  cols: 16, ratio: '3:1',    tags: ['banner', 'billboard', 'header', 'email header', 'cover', 'hero', 'wide', 'leaderboard'] },
+  ];
+  const byId = Object.fromEntries(FORMATS.map(f => [f.id, f]));
+
+  // Compute a modular grid for a format under the brand's grid rules.
+  // Everything lands on integer pixels; cells are multiples of the pixel unit.
+  function compute(format, rules) {
+    const unit = rules.unit || 8;
+    const gutter = (rules.gutterUnits || 3) * unit;
+    const minDim = Math.min(format.w, format.h);
+    let margin = Math.round((rules.marginRatio || 0.06) * minDim / unit) * unit;
+    const cols = format.cols;
+    // Columns
+    let contentW = format.w - 2 * margin - (cols - 1) * gutter;
+    let cw = Math.floor(contentW / (cols * unit)) * unit;
+    let leftover = contentW - cw * cols;
+    const mx = margin + Math.floor(leftover / 2);
+    // Rows: same module vertically, count chosen to fill height
+    let rows = Math.max(3, Math.round(cols * (format.h - 2 * margin) / (format.w - 2 * margin)));
+    let contentH = format.h - 2 * margin - (rows - 1) * gutter;
+    let rh = Math.floor(contentH / (rows * unit)) * unit;
+    while (rh < unit * 3 && rows > 3) { rows--; contentH = format.h - 2 * margin - (rows - 1) * gutter; rh = Math.floor(contentH / (rows * unit)) * unit; }
+    leftover = contentH - rh * rows;
+    const my = margin + Math.floor(leftover / 2);
+    const safe = { top: format.safe ? Math.max(my, format.safe.top) : my, bottom: format.safe ? Math.max(my, format.safe.bottom) : my, left: mx, right: mx };
+    // Rows that fall in platform-reserved zones are unusable for text/logo.
+    const rowY = r => my + r * (rh + gutter);
+    const firstRow = [...Array(rows).keys()].find(r => rowY(r) >= safe.top) ?? 0;
+    let lastRow = rows - 1;
+    while (lastRow > firstRow && rowY(lastRow) + rh > format.h - safe.bottom) lastRow--;
+    return { unit, gutter, cols, rows, cw, rh, mx, my, w: format.w, h: format.h, safe, firstRow, lastRow, usableRows: lastRow - firstRow + 1 };
+  }
+  // Rect (px) for a span of cells.
+  function rect(g, c0, r0, cspan, rspan) {
+    return {
+      x: g.mx + c0 * (g.cw + g.gutter),
+      y: g.my + r0 * (g.rh + g.gutter),
+      w: cspan * g.cw + (cspan - 1) * g.gutter,
+      h: rspan * g.rh + (rspan - 1) * g.gutter,
+    };
+  }
+  const snap = (v, unit) => Math.round(v / unit) * unit;
+  function detectFormats(text) {
+    const t = ' ' + text.toLowerCase() + ' ';
+    const found = [];
+    for (const f of FORMATS) for (const tag of f.tags) {
+      if (t.includes(' ' + tag + ' ') || t.includes(' ' + tag + 's ') || t.includes(' ' + tag + ',')) { found.push(f.id); break; }
+    }
+    if (/\b(all|every) (formats?|sizes?|channels?)\b/.test(t)) return FORMATS.map(f => f.id);
+    return [...new Set(found)];
+  }
+  return { FORMATS, byId, compute, rect, snap, detectFormats };
+})();
+
+/* js/text.js */
+/* Text measurement and fitting with a canvas. Fonts must be loaded before measuring. */
+const Text = (() => {
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  const cache = new Map();
+  function fontString(f) { return `${f.style || 'normal'} ${f.weight} ${f.size}px ${quote(f.family)}`; }
+  function quote(fam) { return fam.split(',').map(s => s.trim()).map(s => /^[a-zA-Z0-9-]+$/.test(s) ? s : `"${s.replace(/"/g, '')}"`).join(', '); }
+  function width(str, f) {
+    const key = fontString(f) + '|' + (f.letterSpacing || 0) + '|' + str;
+    let w = cache.get(key);
+    if (w == null) {
+      ctx.font = fontString(f);
+      w = ctx.measureText(str).width + (f.letterSpacing || 0) * f.size * Math.max(0, str.length - 1);
+      cache.set(key, w);
+    }
+    return w;
+  }
+  // Greedy word wrap. Returns lines or null if a single word cannot fit.
+  function wrap(str, f, maxWidth) {
+    const paragraphs = String(str || '').replace(/\r/g, '').split('\n');
+    const lines = [];
+    for (const p of paragraphs) {
+      const words = p.split(/\s+/).filter(Boolean);
+      if (!words.length) { lines.push(''); continue; }
+      let line = '';
+      for (const w of words) {
+        const test = line ? line + ' ' + w : w;
+        if (width(test, f) <= maxWidth) line = test;
+        else {
+          if (!line) { if (width(w, f) > maxWidth) return null; line = w; continue; }
+          lines.push(line); line = w;
+          if (width(w, f) > maxWidth) return null;
+        }
+      }
+      lines.push(line);
+    }
+    return lines;
+  }
+  // Fit text into a box by stepping the size down. Returns {size, lines, height} or null.
+  function fit(str, f, maxWidth, maxHeight, opts = {}) {
+    const minSize = opts.minSize || 12, step = opts.step || 2, maxLines = opts.maxLines || 99, lh = f.lineHeight || 1.2;
+    let size = f.size;
+    while (size >= minSize) {
+      const ff = { ...f, size };
+      const lines = wrap(str, ff, maxWidth);
+      if (lines && lines.length <= maxLines) {
+        const height = lines.length * size * lh;
+        if (height <= maxHeight) return { size, lines, height, lineHeight: lh };
+      }
+      size -= step;
+    }
+    return null;
+  }
+  function transform(str, mode) {
+    if (mode === 'upper') return String(str).toUpperCase();
+    if (mode === 'lower') return String(str).toLowerCase();
+    return String(str);
+  }
+  function clearCache() { cache.clear(); }
+  return { width, wrap, fit, fontString, transform, clearCache, quote };
+})();
+
+/* js/engine.js */
+/* The engine: structured randomization.
+   Every variation is built from (seed, intent, brand kit, assets, format). The model of chance only chooses
+   among moves the rules allow: which cells a block spans, which approved color pair, which type step, which anchor.
+   Anything that breaks a rule (overflowing text, text off the safe area, unreadable contrast) is rejected. */
+const Engine = (() => {
+  const H_LEVELS = [0.055, 0.07, 0.09, 0.115, 0.145, 0.18];
+  const ARCHETYPES = ['type-led', 'split', 'full-bleed', 'poster', 'mosaic', 'color-block', 'editorial', 'stat'];
+  const ARCH_LABEL = {
+    'type-led': 'Type-led', 'split': 'Split', 'full-bleed': 'Full-bleed image', 'poster': 'Framed image',
+    'mosaic': 'Mosaic', 'color-block': 'Color blocks', 'editorial': 'Editorial', 'stat': 'Statement stat',
+  };
+
+  const snap = (v, u) => Math.round(v / u) * u;
+  const snapFont = (v, unit) => { const s = Math.max(2, unit / 4); return Math.max(10, Math.round(v / s) * s); };
+  const inter = (a, b) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+  const grow = (r, m) => ({ x: r.x - m, y: r.y - m, w: r.w + 2 * m, h: r.h + 2 * m });
+  const area = r => Math.max(0, r.w) * Math.max(0, r.h);
+  const nearestWeight = (name, w) => { const ws = Brand.fontWeights(name); return ws.reduce((b, x) => Math.abs(x - w) < Math.abs(b - w) ? x : b, ws[0]); };
+
+  function typeSet(kit, g, level) {
+    const minDim = Math.min(g.w, g.h);
+    const disp = kit.fonts.display, body = kit.fonts.body;
+    const tall = g.h / g.w;
+    const bodySize = snapFont(minDim * (tall > 1.4 ? 0.028 : 0.024), g.unit);
+    const dw = nearestWeight(disp, kit.fonts.displayWeight || 600);
+    const bw = nearestWeight(body, kit.fonts.bodyWeight || 400);
+    const bwMed = nearestWeight(body, 600);
+    return {
+      level,
+      headline: { family: Brand.fontCss(disp), weight: dw, size: snapFont(minDim * H_LEVELS[level], g.unit), lineHeight: 1.0 + (5 - level) * 0.025, letterSpacing: kit.fonts.tracking ?? -0.02, transform: kit.fonts.headlineCase === 'upper' ? 'upper' : 'none' },
+      subhead: { family: Brand.fontCss(body), weight: nearestWeight(body, 500), size: snapFont(bodySize * 1.3, g.unit), lineHeight: 1.3, letterSpacing: -0.005 },
+      body:    { family: Brand.fontCss(body), weight: bw, size: bodySize, lineHeight: 1.42, letterSpacing: 0 },
+      eyebrow: { family: Brand.fontCss(body), weight: bwMed, size: snapFont(bodySize * 0.82, g.unit), lineHeight: 1.2, letterSpacing: 0.1, transform: 'upper' },
+      cta:     { family: Brand.fontCss(body), weight: bwMed, size: snapFont(bodySize * 1.0, g.unit), lineHeight: 1.2, letterSpacing: 0 },
+      stat:    { family: Brand.fontCss(disp), weight: dw, size: snapFont(minDim * Math.min(0.4, H_LEVELS[level] * 2.4), g.unit), lineHeight: 0.92, letterSpacing: -0.045 },
+      footer:  { family: Brand.fontCss(body), weight: nearestWeight(body, 500), size: snapFont(bodySize * 0.8, g.unit), lineHeight: 1.2, letterSpacing: 0.02 },
+      wordmark:{ family: Brand.fontCss(disp), weight: nearestWeight(disp, 700), letterSpacing: -0.04 },
+    };
+  }
+
+  // Logo aspect ratio (w/h) for any logo kind.
+  function logoAspect(kit, ts) {
+    const l = kit.logo;
+    if (l.kind === 'svg' && l.svg) return l.svg.aspect || 3;
+    if (l.kind === 'image' && l.aspect) return l.aspect;
+    const w = Text.width(l.text || 'brand', { ...ts.wordmark, size: 100 });
+    return w / 74; // cap-height box of a 100px wordmark is about 74px
+  }
+
+  // ---- Stack builder --------------------------------------------------------
+  // items: [{kind:'text'|'button'|'rule'|'logo', role, text, font, fill, maxLines, gap, minSize}]
+  function buildStack(items, region, align, valign, g) {
+    const blocks = []; let total = 0;
+    for (const it of items) {
+      if (it.kind === 'button') {
+        const tw = Text.width(it.text, it.font);
+        const bw = Math.min(region.w, snap(tw + it.font.size * 2.6, g.unit));
+        const bh = snap(it.font.size * 2.7, g.unit);
+        if (tw + it.font.size * 1.2 > region.w) return null;
+        blocks.push({ ...it, w: bw, h: bh }); total += bh; continue;
+      }
+      if (it.kind === 'rule') { const h = it.h || Math.max(2, g.unit / 4); blocks.push({ ...it, w: Math.min(region.w, it.w || snap(region.w * 0.25, g.unit)), h }); total += h; continue; }
+      if (it.kind === 'logo') { const h = it.h; const w = Math.min(region.w, snap(h * it.aspect, g.unit)); blocks.push({ ...it, w, h }); total += h; continue; }
+      const text = Text.transform(it.text, it.font.transform);
+      const f = Text.fit(text, it.font, region.w, region.h, { minSize: it.minSize || Math.max(10, it.font.size * 0.62), step: Math.max(2, g.unit / 4), maxLines: it.maxLines || 12 });
+      if (!f) return null;
+      const lineW = Math.max(...f.lines.map(l => Text.width(l, { ...it.font, size: f.size })));
+      blocks.push({ ...it, kind: 'text', lines: f.lines, font: { ...it.font, size: f.size }, h: snap(f.height, g.unit / 2) || f.height, w: region.w, inkW: Math.min(region.w, lineW) });
+      total += blocks[blocks.length - 1].h;
+    }
+    for (let i = 0; i < blocks.length - 1; i++) total += blocks[i].gap || 0;
+    if (total > region.h + 0.5) return null;
+    let y = valign === 'top' ? region.y : valign === 'bottom' ? region.y + region.h - total : region.y + (region.h - total) / 2;
+    y = Math.max(region.y, Math.min(region.y + region.h - total, snap(y, g.unit)));
+    for (const b of blocks) {
+      b.y = y; b.align = align; b.x = region.x;
+      if (b.kind !== 'text') {
+        if (align === 'center') b.x = snap(region.x + (region.w - b.w) / 2, 1);
+        else if (align === 'right') b.x = region.x + region.w - b.w;
+      }
+      y += b.h + (b.gap || 0);
+    }
+    return { blocks, total, y0: blocks[0].y, y1: y - (blocks[blocks.length - 1].gap || 0) };
+  }
+  // Ink rect of a text stack (what other things must avoid).
+  function inkRect(stack, region, align) {
+    let x0 = region.x + region.w, x1 = region.x;
+    for (const b of stack.blocks) {
+      let w = b.kind === 'text' ? b.inkW : b.w, x;
+      if (b.kind === 'text') x = align === 'center' ? region.x + (region.w - w) / 2 : align === 'right' ? region.x + region.w - w : region.x;
+      else x = b.x;
+      x0 = Math.min(x0, x); x1 = Math.max(x1, x + w);
+    }
+    return { x: x0, y: stack.y0, w: x1 - x0, h: stack.y1 - stack.y0 };
+  }
+
+  // ---- Content selection ----------------------------------------------------
+  function pickItems(ctx, opts = {}) {
+    const { rng, ts, content, intent, pal, g } = ctx;
+    const d = intent.density; const P = d === 'dense' ? [0.7, 0.9, 0.7, 0.8] : d === 'sparse' ? [0.25, 0.3, 0.05, 0.3] : [0.5, 0.6, 0.25, 0.55];
+    const items = [];
+    const gap = k => snap(k, g.unit);
+    if (opts.logoInStack) items.push({ kind: 'logo', role: 'logo', h: opts.logoH, aspect: opts.logoAspect, fill: opts.logoColor, gap: gap(ts.headline.size * 0.6) });
+    if (content.eyebrow && intent.includeEyebrow !== false && rng.chance(opts.eyebrow ?? P[0])) items.push({ kind: 'text', role: 'eyebrow', text: content.eyebrow, font: ts.eyebrow, fill: pal.accentText, maxLines: 1, gap: gap(ts.headline.size * 0.4) });
+    if (opts.stat) items.push({ kind: 'text', role: 'stat', text: content.stat, font: ts.stat, fill: opts.statFill || pal.fg, maxLines: 1, gap: gap(ts.stat.size * 0.12), minSize: ts.stat.size * 0.5 });
+    items.push({ kind: 'text', role: 'headline', text: content.headline, font: opts.headlineFont || ts.headline, fill: pal.fg, maxLines: opts.headlineMaxLines || (opts.stat ? 3 : 5), gap: gap(ts.subhead.size * 0.9) });
+    if (content.subhead && intent.includeSubhead !== false && rng.chance(opts.subhead ?? P[1])) items.push({ kind: 'text', role: 'subhead', text: content.subhead, font: ts.subhead, fill: pal.fg2, maxLines: 4, gap: gap(ts.body.size * 0.9) });
+    if (content.body && intent.includeBody !== false && rng.chance(opts.body ?? P[2])) items.push({ kind: 'text', role: 'body', text: content.body, font: ts.body, fill: pal.fg2, maxLines: 6, gap: gap(ts.body.size * 1.2) });
+    if (content.cta && intent.includeCta !== false && rng.chance(opts.cta ?? P[3])) {
+      const asButton = rng.chance(0.7);
+      if (asButton) items.push({ kind: 'button', role: 'cta', text: content.cta, font: ts.cta, fill: pal.accent, color: pal.onAccent, radius: ctx.radius(ts.cta.size * 1.35) });
+      else items.push({ kind: 'text', role: 'cta', text: content.cta + '  →', font: { ...ts.cta, weight: ts.eyebrow.weight }, fill: pal.accentText, maxLines: 1 });
+    }
+    // gap of last item is irrelevant
+    return items;
+  }
+
+  // ---- Palette ----------------------------------------------------------------
+  function choosePalette(ctx) {
+    const { rng, kit, intent } = ctx;
+    let pairs = Brand.pairs(kit);
+    if (!pairs.length) return null;
+    const hinted = intent.colorHints && intent.colorHints.length ? pairs.filter(p => intent.colorHints.includes(p.bg)) : [];
+    let pool = hinted.length ? hinted : pairs;
+    if (intent.dark > 0.5) { const d = pool.filter(p => p.dark); if (d.length) pool = d; }
+    if (intent.dark < -0.5) { const l = pool.filter(p => !p.dark); if (l.length) pool = l; }
+    const pair = rng.weighted(pool.map(p => ({ v: p, w: p.bgRole === 'background' ? (intent.loud > 0.6 ? 1 : 2) : (intent.loud > 0.4 ? 2.2 : 1) })));
+    const fg = pair.fgs[0];
+    const fgAlt = pair.fgs.length > 1 && rng.chance(0.3) ? pair.fgs[1] : fg;
+    let accent = rng.pick(pair.accents);
+    if (intent.colorHints && intent.colorHints.length) { const a = pair.accents.filter(x => intent.colorHints.includes(x) && x !== pair.bg); if (a.length) accent = rng.pick(a); }
+    const onAccent = Color.contrast(accent, '#FFFFFF') >= Color.contrast(accent, '#000000') ? '#FFFFFF' : '#000000';
+    const accentText = Color.contrast(pair.bg, accent) >= 4.5 ? accent : fg;
+    const fields = pair.fields.filter(f => f !== accent);
+    return { bg: pair.bg, bgName: pair.bgName, fg: fgAlt, fg2: Color.mix(fg, pair.bg, 0.12), accent, onAccent, accentText, fields: fields.length ? fields : pair.fields, dark: pair.dark, pair };
+  }
+
+  // ---- Logo placement -----------------------------------------------------------
+  function placeLogo(ctx, avoid, prefer, ground) {
+    const { g, kit, rng, ts, intent } = ctx;
+    if (intent.includeLogo === false) return null;
+    const minDim = Math.min(g.w, g.h);
+    const h = snap(minDim * (0.03 + (intent.loud || 0.5) * 0.02), g.unit);
+    const aspect = logoAspect(kit, ts);
+    const w = snap(h * aspect, 1);
+    const clear = h * (kit.logo.clearZone ?? 1);
+    const s = g.safe;
+    const spots = {
+      TL: { x: g.mx, y: s.top }, TR: { x: g.w - g.mx - w, y: s.top }, TC: { x: (g.w - w) / 2, y: s.top },
+      BL: { x: g.mx, y: g.h - s.bottom - h }, BR: { x: g.w - g.mx - w, y: g.h - s.bottom - h }, BC: { x: (g.w - w) / 2, y: g.h - s.bottom - h },
+    };
+    const order = [...(prefer || []), 'TL', 'BL', 'TR', 'BR', 'TC', 'BC'].filter((v, i, a) => a.indexOf(v) === i);
+    const ok = order.filter(k => { const r = { ...spots[k], w, h }; return !avoid.some(a => inter(grow(r, clear), a)); });
+    if (!ok.length) return null;
+    const k = rng.weighted(ok.map((v, i) => ({ v, w: Math.max(1, 4 - i) })));
+    const bg = ground ? ground(spots[k].x + w / 2, spots[k].y + h / 2) : ctx.pal.bg;
+    const color = Brand.logoColorFor(kit, bg)[0];
+    return { kind: 'logo', x: Math.round(spots[k].x), y: spots[k].y, w, h, fill: color, spot: k };
+  }
+  function footerBlock(ctx, avoid, logo) {
+    const { g, rng, ts, content, pal } = ctx;
+    if (!content.footer || !rng.chance(0.35)) return null;
+    const font = ts.footer; const w = Text.width(content.footer, font); const h = font.size * 1.2;
+    const s = g.safe;
+    const cands = [{ x: g.w - g.mx - w, y: g.h - s.bottom - h, align: 'right' }, { x: g.mx, y: g.h - s.bottom - h, align: 'left' }, { x: g.w - g.mx - w, y: s.top, align: 'right' }];
+    for (const c of cands) {
+      const r = { x: c.x, y: c.y, w, h };
+      if (logo && inter(grow(r, logo.h), logo)) continue;
+      if (avoid.some(a => inter(grow(r, g.unit), a))) continue;
+      return { kind: 'text', role: 'footer', x: c.x, y: c.y, w, h, inkW: w, lines: [content.footer], font, fill: pal.fg2, align: 'left' };
+    }
+    return null;
+  }
+
+  // ---- Shapes -----------------------------------------------------------------
+  function addShape(ctx, avoid, colorPool) {
+    const { g, rng, kit } = ctx;
+    if (!kit.shapes || !kit.shapes.length || !colorPool.length) return null;
+    const shape = rng.pick(kit.shapes);
+    for (let t = 0; t < 14; t++) {
+      const cs = rng.int(2, Math.max(2, Math.floor(g.cols * 0.5)));
+      const rs = shape === 'pill' ? Math.max(1, Math.round(cs / 3)) : cs;
+      const c0 = rng.int(-1, g.cols - 1), r0 = rng.int(-1, g.rows - 1);
+      const r = Grid.rect(g, c0, r0, cs, rs);
+      if (shape === 'circle' || shape === 'blob') r.h = r.w; // square cell box
+      if (r.x + r.w < g.unit * 4 || r.y + r.h < g.unit * 4 || r.x > g.w - g.unit * 4 || r.y > g.h - g.unit * 4) continue; // mostly off canvas
+      if (avoid.some(a => inter(r, grow(a, g.gutter)))) continue;
+      return { kind: 'shape', shape, x: r.x, y: r.y, w: r.w, h: r.h, fill: rng.pick(colorPool), rot: shape === 'quarter' ? rng.int(0, 3) * 90 : 0 };
+    }
+    return null;
+  }
+
+  // ---- Images -----------------------------------------------------------------
+  const FOCALS = ['xMinYMin', 'xMidYMin', 'xMaxYMin', 'xMinYMid', 'xMidYMid', 'xMaxYMid', 'xMinYMax', 'xMidYMax', 'xMaxYMax'];
+  function imageBlock(ctx, r, asset, radius) {
+    const { rng } = ctx;
+    return { kind: 'image', x: r.x, y: r.y, w: r.w, h: r.h, asset: asset.id, focal: rng.weighted(FOCALS.map(f => ({ v: f, w: f === 'xMidYMid' ? 4 : 1 }))), radius: radius || 0 };
+  }
+  function pickImage(ctx, exclude = []) {
+    const imgs = ctx.assets.images.filter(i => !exclude.includes(i.id));
+    return imgs.length ? ctx.rng.pick(imgs) : null;
+  }
+
+  // ---- Archetypes ----------------------------------------------------------------
+  // Each returns {blocks, meta} or null. `ctx.R` = usable rows, `ctx.r0` = first usable row.
+  const A = {};
+
+  A['type-led'] = ctx => {
+    const { g, rng, pal, ts, intent } = ctx;
+    const C = g.cols, R = ctx.R;
+    const spans = [C, C, C - 2, Math.round(C * 0.75), Math.round(C * 0.66)].filter(s => s >= 3);
+    const cs = rng.pick(spans);
+    const align = cs === C ? rng.weighted([{ v: 'left', w: 3 }, { v: 'center', w: 2 }]) : rng.weighted([{ v: 'left', w: 4 }, { v: 'center', w: 1 }, { v: 'right', w: 1 }]);
+    const c0 = align === 'center' ? Math.floor((C - cs) / 2) : align === 'right' ? C - cs : rng.chance(0.75) ? 0 : Math.min(C - cs, 1);
+    const valign = rng.weighted([{ v: 'top', w: 2 }, { v: 'center', w: 2 }, { v: 'bottom', w: 3 }]);
+    const logoInStack = rng.chance(0.3);
+    const logoH = snap(Math.min(g.w, g.h) * 0.045, g.unit);
+    // Reserve a row for the logo when it sits at the opposite end.
+    const reserve = logoInStack ? 0 : 1;
+    const rowStart = valign === 'top' ? ctx.r0 : ctx.r0 + reserve;
+    const rowCount = Math.max(2, R - (valign === 'center' ? 2 * reserve : reserve));
+    const region = Grid.rect(g, c0, rowStart, cs, rowCount);
+    const items = pickItems(ctx, { logoInStack, logoH, logoAspect: logoAspect(ctx.kit, ts), logoColor: Brand.logoColorFor(ctx.kit, pal.bg)[0] });
+    const stack = buildStack(items, region, align, valign, g);
+    if (!stack) return null;
+    const ink = inkRect(stack, region, align);
+    const blocks = [...stack.blocks];
+    const avoid = [ink];
+    let logo = null;
+    if (!logoInStack) {
+      const prefer = valign === 'top' ? (align === 'right' ? ['BR', 'BL'] : ['BL', 'BR']) : valign === 'bottom' ? (align === 'right' ? ['TR', 'TL'] : ['TL', 'TR']) : (align === 'left' ? ['TL', 'BL', 'TR'] : ['TR', 'BR']);
+      logo = placeLogo(ctx, avoid, prefer);
+      if (logo) { blocks.push(logo); avoid.push(logo); }
+    }
+    const foot = footerBlock(ctx, avoid, logo); if (foot) blocks.push(foot);
+    if (rng.chance(intent.loud > 0.5 ? 0.5 : 0.3)) { const s = addShape(ctx, [...avoid, ...(foot ? [foot] : [])], pal.fields); if (s) blocks.unshift(s); }
+    return { blocks, meta: { align, valign, span: cs } };
+  };
+
+  A['split'] = ctx => {
+    const { g, rng, pal, ts, fmt } = ctx;
+    const C = g.cols, R = ctx.R;
+    const portrait = g.h > g.w * 1.15;
+    const vertical = portrait ? rng.chance(0.15) : g.w > g.h * 1.3 ? true : rng.chance(0.6);
+    const img = pickImage(ctx);
+    const radius = ctx.radius(g.unit * 2);
+    const inset = rng.chance(0.3);
+    const blocks = []; let region, align, valign, prefer;
+    if (vertical) {
+      const k = rng.pick([Math.round(C / 3), Math.round(C / 2), Math.round(C * 0.58), Math.round(C * 0.42)].filter(x => x >= 3 && C - x >= 3));
+      const imgLeft = rng.chance(0.55);
+      const imgCols = imgLeft ? [0, k] : [C - k, k];
+      const txtCols = imgLeft ? [k, C - k] : [0, C - k];
+      let r;
+      if (inset) r = Grid.rect(g, imgCols[0], ctx.r0, imgCols[1], R);
+      else { const cellR = Grid.rect(g, imgCols[0], 0, imgCols[1], g.rows); r = imgLeft ? { x: 0, y: 0, w: cellR.x + cellR.w + g.gutter / 2, h: g.h } : { x: cellR.x - g.gutter / 2, y: 0, w: g.w - cellR.x + g.gutter / 2, h: g.h }; }
+      blocks.push(img ? imageBlock(ctx, r, img, inset ? radius : 0) : { kind: 'field', ...r, fill: rng.pick(pal.fields.length ? pal.fields : [pal.accent]), radius: inset ? radius : 0 });
+      align = 'left'; valign = rng.weighted([{ v: 'center', w: 2 }, { v: 'bottom', w: 2 }, { v: 'top', w: 1 }]);
+      const rowStart = valign === 'top' ? ctx.r0 : ctx.r0 + 1;
+      region = Grid.rect(g, txtCols[0], rowStart, txtCols[1], Math.max(2, R - (valign === 'center' ? 2 : 1)));
+      prefer = imgLeft ? (valign === 'top' ? ['BR', 'BL'] : ['TR', 'TL']) : (valign === 'top' ? ['BL', 'BR'] : ['TL', 'TR']);
+    } else {
+      const k = rng.pick([Math.round(R / 2), Math.round(R * 0.6), Math.round(R * 0.4)].filter(x => x >= 2 && R - x >= 2));
+      if (!k) return null;
+      const imgTop = rng.chance(0.6);
+      const imgRows = imgTop ? [ctx.r0, k] : [ctx.r0 + R - k, k];
+      const txtRows = imgTop ? [ctx.r0 + k, R - k] : [ctx.r0, R - k];
+      let r;
+      if (inset) r = Grid.rect(g, 0, imgRows[0], C, imgRows[1]);
+      else { const cellR = Grid.rect(g, 0, imgRows[0], C, imgRows[1]); r = imgTop ? { x: 0, y: 0, w: g.w, h: cellR.y + cellR.h + g.gutter / 2 } : { x: 0, y: cellR.y - g.gutter / 2, w: g.w, h: g.h - cellR.y + g.gutter / 2 }; }
+      blocks.push(img ? imageBlock(ctx, r, img, inset ? radius : 0) : { kind: 'field', ...r, fill: rng.pick(pal.fields.length ? pal.fields : [pal.accent]), radius: inset ? radius : 0 });
+      align = rng.weighted([{ v: 'left', w: 3 }, { v: 'center', w: 1 }]);
+      valign = imgTop ? rng.pick(['top', 'bottom']) : rng.pick(['top', 'bottom']);
+      // leave one row for logo on the text side, at the far end from the image
+      const logoRow = imgTop ? 'bottom' : 'top';
+      const rowStart = logoRow === 'top' ? txtRows[0] + 1 : txtRows[0];
+      region = Grid.rect(g, 0, rowStart, C, Math.max(1, txtRows[1] - 1));
+      prefer = imgTop ? ['BL', 'BR'] : ['TL', 'TR'];
+      if (txtRows[1] - 1 < 1) return null;
+    }
+    const items = pickItems(ctx, {});
+    const stack = buildStack(items, region, align, valign, g);
+    if (!stack) return null;
+    blocks.push(...stack.blocks);
+    const avoid = [inkRect(stack, region, align), blocks[0]];
+    const logo = placeLogo(ctx, avoid, prefer, (x, y) => inter({ x, y, w: 1, h: 1 }, blocks[0]) ? (img ? '#777777' : blocks[0].fill) : pal.bg);
+    if (logo && (!inter(logo, blocks[0]) || !img)) { blocks.push(logo); avoid.push(logo); }
+    const foot = footerBlock(ctx, avoid, logo); if (foot && !inter(foot, blocks[0])) blocks.push(foot);
+    return { blocks, meta: { vertical, inset, align, valign } };
+  };
+
+  A['full-bleed'] = ctx => {
+    const { g, rng, pal, ts, kit } = ctx;
+    const img = pickImage(ctx);
+    if (!img) return A['color-block'](ctx);
+    const C = g.cols, R = ctx.R;
+    const blocks = [imageBlock(ctx, { x: 0, y: 0, w: g.w, h: g.h }, img, 0)];
+    // Content-aware anchor: score the 3x3 anchors by luminance variance in the image map.
+    const lum = img.lum;
+    const cs = rng.pick([Math.round(C * 0.5), Math.round(C * 0.66), Math.round(C * 0.8), C].filter(x => x >= 3));
+    const rs = Math.max(2, Math.round(R * rng.pick([0.45, 0.55, 0.65])));
+    const anchors = [];
+    for (const ax of ['left', 'center', 'right']) for (const ay of ['top', 'center', 'bottom']) {
+      const c0 = ax === 'left' ? 0 : ax === 'center' ? Math.floor((C - cs) / 2) : C - cs;
+      const r0 = ay === 'top' ? ctx.r0 : ay === 'center' ? ctx.r0 + Math.floor((R - rs) / 2) : ctx.r0 + R - rs;
+      const region = Grid.rect(g, c0, r0, cs, rs);
+      let mean = 0.5, std = 0.2;
+      if (lum) {
+        const cells = lum.cells.filter(c => { const cx = (c.x + 0.5) / lum.gx * g.w, cy = (c.y + 0.5) / lum.gy * g.h; return cx >= region.x && cx <= region.x + region.w && cy >= region.y && cy <= region.y + region.h; });
+        if (cells.length) { mean = cells.reduce((s, c) => s + c.mean, 0) / cells.length; const m2 = cells.reduce((s, c) => s + c.mean * c.mean, 0) / cells.length; std = Math.sqrt(Math.max(0, m2 - mean * mean)) + cells.reduce((s, c) => s + c.std, 0) / cells.length; }
+      }
+      anchors.push({ ax, ay, region, mean, std, score: 1 / (0.05 + std) });
+    }
+    const a = rng.weighted(anchors.map(x => ({ v: x, w: x.score })));
+    const align = a.ax, valign = a.ay;
+    // Treatment: gradient scrim, solid panel, or bare text when the area is calm.
+    const calm = a.std < 0.12;
+    const treatment = calm && rng.chance(0.6) ? 'none' : rng.weighted([{ v: 'scrim', w: 3 }, { v: 'panel', w: 2 }]);
+    const light = treatment === 'panel' ? !pal.dark : a.mean < 0.5;
+    const textFill = treatment === 'panel' ? pal.fg : light ? '#FFFFFF' : (kit.colors.find(c => c.role === 'neutral' || Color.isDark(c.hex)) || { hex: '#111111' }).hex;
+    const localPal = treatment === 'panel' ? pal : { ...pal, fg: textFill, fg2: Color.mix(textFill, light ? '#000000' : '#FFFFFF', 0.12), accentText: Color.contrast(light ? '#222222' : '#DDDDDD', pal.accent) >= 3 ? pal.accent : textFill };
+    const pad = treatment === 'panel' ? g.unit * 4 : 0;
+    const region = { x: a.region.x + pad, y: a.region.y + pad, w: a.region.w - 2 * pad, h: a.region.h - 2 * pad };
+    const items = pickItems({ ...ctx, pal: localPal }, { body: 0.1 });
+    const stack = buildStack(items, region, align, valign, g);
+    if (!stack) return null;
+    const ink = inkRect(stack, region, align);
+    if (treatment === 'scrim') {
+      const dir = valign === 'bottom' ? 'up' : valign === 'top' ? 'down' : align === 'left' ? 'right' : align === 'right' ? 'left' : 'up';
+      const scrimColor = light ? '#000000' : '#FFFFFF';
+      let r;
+      if (dir === 'up') r = { x: 0, y: Math.max(0, ink.y - g.h * 0.25), w: g.w, h: g.h - Math.max(0, ink.y - g.h * 0.25) };
+      else if (dir === 'down') r = { x: 0, y: 0, w: g.w, h: Math.min(g.h, ink.y + ink.h + g.h * 0.25) };
+      else if (dir === 'right') r = { x: 0, y: 0, w: Math.min(g.w, ink.x + ink.w + g.w * 0.25), h: g.h };
+      else r = { x: Math.max(0, ink.x - g.w * 0.25), y: 0, w: g.w - Math.max(0, ink.x - g.w * 0.25), h: g.h };
+      blocks.push({ kind: 'scrim', ...r, fill: scrimColor, dir, alpha: 0.78 });
+    } else if (treatment === 'panel') {
+      const pr = grow({ x: align === 'center' ? ink.x : region.x, y: stack.y0, w: align === 'center' ? ink.w : ink.w, h: stack.y1 - stack.y0 }, pad);
+      blocks.push({ kind: 'field', x: snap(pr.x, 1), y: snap(pr.y, 1), w: snap(pr.w, 1), h: snap(pr.h, 1), fill: pal.bg, radius: ctx.radius(g.unit * 2), alpha: 0.94 });
+    }
+    blocks.push(...stack.blocks);
+    const avoid = [ink];
+    const logoColor = treatment === 'panel' ? null : (light ? '#FFFFFF' : '#000000');
+    const logo = placeLogo(ctx, avoid, valign === 'top' ? ['BL', 'BR'] : ['TL', 'TR'], () => light ? '#333333' : '#DDDDDD');
+    if (logo) {
+      if (logoColor) { const allowed = (kit.logo.allowedColors || []).map(Color.normalize); logo.fill = allowed.includes(logoColor) ? logoColor : logo.fill; }
+      blocks.push(logo);
+      // a soft scrim behind the logo when it sits on a busy corner
+      if (treatment !== 'none') blocks.splice(1, 0, { kind: 'scrim', x: 0, y: logo.y < g.h / 2 ? 0 : g.h * 0.75, w: g.w, h: g.h * 0.25, fill: light ? '#000000' : '#FFFFFF', dir: logo.y < g.h / 2 ? 'down' : 'up', alpha: 0.35 });
+    }
+    return { blocks, meta: { anchor: a.ax + '-' + a.ay, treatment, overlay: true } };
+  };
+
+  A['poster'] = ctx => {
+    const { g, rng, pal } = ctx;
+    const C = g.cols, R = ctx.R;
+    const img = pickImage(ctx);
+    const radius = ctx.radius(g.unit * 2);
+    const blocks = [];
+    const textBelow = rng.chance(0.6);
+    const imgRows = Math.max(2, Math.round(R * rng.pick([0.5, 0.58, 0.66])));
+    const txtRows = R - imgRows;
+    if (txtRows < 2) return null;
+    const partial = rng.chance(0.35) && C >= 8;
+    const imgCols = partial ? Math.round(C * rng.pick([0.66, 0.75])) : C;
+    const imgC0 = partial ? (rng.chance(0.5) ? 0 : C - imgCols) : 0;
+    const ir = Grid.rect(g, imgC0, textBelow ? ctx.r0 : ctx.r0 + txtRows, imgCols, imgRows);
+    blocks.push(img ? imageBlock(ctx, ir, img, radius) : { kind: 'field', ...ir, fill: rng.pick(pal.fields.length ? pal.fields : [pal.accent]), radius });
+    const align = rng.weighted([{ v: 'left', w: 4 }, { v: 'center', w: 1 }]);
+    const cs = align === 'center' ? C : rng.pick([C, C, Math.round(C * 0.75)]);
+    const c0 = align === 'center' ? 0 : partial && imgC0 === 0 && rng.chance(0.5) ? 0 : 0;
+    // Text rows exclude one row for logo/footer at the outer edge.
+    const rowStart = textBelow ? ctx.r0 + imgRows : ctx.r0 + 1;
+    const rowCount = Math.max(1, txtRows - 1);
+    const region = Grid.rect(g, c0, rowStart, cs, rowCount);
+    const valign = textBelow ? 'top' : 'bottom';
+    const items = pickItems(ctx, { body: 0.15 });
+    const stack = buildStack(items, region, align, valign, g);
+    if (!stack) return null;
+    blocks.push(...stack.blocks);
+    const avoid = [inkRect(stack, region, align), ir];
+    const logo = placeLogo(ctx, avoid, textBelow ? ['BL', 'BR'] : ['TL', 'TR']);
+    if (logo && !inter(logo, ir)) { blocks.push(logo); avoid.push(logo); }
+    const foot = footerBlock(ctx, avoid, logo); if (foot && !inter(foot, ir)) blocks.push(foot);
+    return { blocks, meta: { textBelow, partial } };
+  };
+
+  A['mosaic'] = ctx => {
+    const { g, rng, pal } = ctx;
+    const C = g.cols, R = ctx.R;
+    const imgs = ctx.assets.images;
+    if (imgs.length < 1) return null;
+    const radius = ctx.radius(g.unit * 2);
+    const blocks = [];
+    const tileRows = Math.max(2, Math.round(R * rng.pick([0.5, 0.6])));
+    const txtRows = R - tileRows;
+    if (txtRows < 2) return null;
+    const top = rng.chance(0.5);
+    const tr0 = top ? ctx.r0 : ctx.r0 + txtRows;
+    const pattern = rng.pick(['2', '3', '1+2', '4']);
+    const tiles = [];
+    if (pattern === '2') { const k = Math.round(C / 2); tiles.push(Grid.rect(g, 0, tr0, k, tileRows), Grid.rect(g, k, tr0, C - k, tileRows)); }
+    else if (pattern === '3' && C >= 9) { const k = Math.floor(C / 3); tiles.push(Grid.rect(g, 0, tr0, k, tileRows), Grid.rect(g, k, tr0, k, tileRows), Grid.rect(g, 2 * k, tr0, C - 2 * k, tileRows)); }
+    else if (pattern === '4' && tileRows >= 4) { const k = Math.round(C / 2), h = Math.floor(tileRows / 2); tiles.push(Grid.rect(g, 0, tr0, k, h), Grid.rect(g, k, tr0, C - k, h), Grid.rect(g, 0, tr0 + h, k, tileRows - h), Grid.rect(g, k, tr0 + h, C - k, tileRows - h)); }
+    else { const k = Math.round(C * 0.6), h = Math.floor(tileRows / 2); if (h < 1) return null; tiles.push(Grid.rect(g, 0, tr0, k, tileRows), Grid.rect(g, k, tr0, C - k, h), Grid.rect(g, k, tr0 + h, C - k, tileRows - h)); }
+    const order = rng.shuffle(imgs);
+    tiles.forEach((t, i) => {
+      const im = order[i % order.length];
+      if (i < order.length || rng.chance(0.5)) blocks.push(imageBlock(ctx, t, im, radius));
+      else blocks.push({ kind: 'field', ...t, fill: rng.pick(pal.fields.length ? pal.fields : [pal.accent]), radius });
+    });
+    const align = rng.weighted([{ v: 'left', w: 3 }, { v: 'center', w: 1 }]);
+    const rowStart = top ? ctx.r0 + tileRows : ctx.r0 + 1;
+    const region = Grid.rect(g, 0, rowStart, C, Math.max(1, txtRows - 1));
+    const items = pickItems(ctx, { body: 0.1, subhead: 0.5 });
+    const valign = txtRows > 3 ? rng.weighted([{ v: top ? 'top' : 'bottom', w: 2 }, { v: 'center', w: 2 }, { v: top ? 'bottom' : 'top', w: 1 }]) : (top ? 'top' : 'bottom');
+    const stack = buildStack(items, region, align, valign, g);
+    if (!stack) return null;
+    blocks.push(...stack.blocks);
+    const avoid = [inkRect(stack, region, align), ...tiles];
+    const logo = placeLogo(ctx, avoid, top ? ['BL', 'BR'] : ['TL', 'TR']);
+    if (logo && !tiles.some(t => inter(logo, t))) blocks.push(logo);
+    return { blocks, meta: { pattern, top } };
+  };
+
+  A['color-block'] = ctx => {
+    const { g, rng, pal, kit } = ctx;
+    const C = g.cols, R = ctx.R;
+    const fields = pal.fields.length ? pal.fields : [pal.accent];
+    const pattern = rng.pick(['band-top', 'band-bottom', 'column-left', 'column-right', 'corner', 'stripes']);
+    const blocks = [];
+    let region, align = rng.weighted([{ v: 'left', w: 4 }, { v: 'center', w: 1 }]), valign, textOnField = false, fieldFill = rng.pick(fields), prefer;
+    const bleed = rng.chance(0.6);
+    const radius = bleed ? 0 : ctx.radius(g.unit * 2);
+    const B = (c0, r0, cs, rs) => { const r = Grid.rect(g, c0, r0, cs, rs); if (!bleed) return r; return { x: c0 === 0 ? 0 : r.x, y: r0 === 0 ? 0 : r.y, w: (c0 === 0 ? r.x : 0) + r.w + (c0 + cs === C ? g.w - (r.x + r.w) : 0), h: (r0 === 0 ? r.y : 0) + r.h + (r0 + rs === g.rows ? g.h - (r.y + r.h) : 0) }; };
+    const img = rng.chance(0.4) ? pickImage(ctx) : null;
+    if (pattern === 'band-top' || pattern === 'band-bottom') {
+      const k = Math.max(2, Math.round(g.rows * rng.pick([0.35, 0.45, 0.55])));
+      const r0 = pattern === 'band-top' ? 0 : g.rows - k;
+      const f = B(0, r0, C, k);
+      blocks.push(img ? imageBlock(ctx, f, img, radius) : { kind: 'field', ...f, fill: fieldFill, radius });
+      textOnField = !img && rng.chance(0.4);
+      const rowsFree = pattern === 'band-top' ? [Math.max(ctx.r0, k), ctx.r0 + R - Math.max(ctx.r0, k)] : [ctx.r0, Math.min(ctx.r0 + R, g.rows - k) - ctx.r0];
+      const rowsOn = pattern === 'band-top' ? [ctx.r0, Math.min(k, ctx.r0 + R) - ctx.r0] : [Math.max(ctx.r0, g.rows - k), ctx.r0 + R - Math.max(ctx.r0, g.rows - k)];
+      const rows = textOnField ? rowsOn : rowsFree;
+      if (rows[1] < 2) return null;
+      valign = pattern === 'band-top' ? (textOnField ? 'top' : 'bottom') : (textOnField ? 'bottom' : 'top');
+      const rowStart = valign === 'top' ? rows[0] : rows[0] + 1; const rowCount = Math.max(1, rows[1] - 1);
+      region = Grid.rect(g, 0, rowStart, rng.pick([C, C, Math.round(C * 0.75)]), rowCount);
+      prefer = valign === 'top' ? ['BL', 'BR'] : ['TL', 'TR'];
+    } else if (pattern === 'column-left' || pattern === 'column-right') {
+      const k = Math.max(2, Math.round(C * rng.pick([0.33, 0.42, 0.5])));
+      const c0 = pattern === 'column-left' ? 0 : C - k;
+      const f = B(c0, 0, k, g.rows);
+      blocks.push(img ? imageBlock(ctx, f, img, radius) : { kind: 'field', ...f, fill: fieldFill, radius });
+      textOnField = !img && rng.chance(0.3);
+      const cols = textOnField ? [c0, k] : (pattern === 'column-left' ? [k, C - k] : [0, C - k]);
+      if (cols[1] < 3) return null;
+      valign = rng.pick(['top', 'bottom', 'center']);
+      const rowStart = valign === 'top' ? ctx.r0 : ctx.r0 + 1;
+      region = Grid.rect(g, cols[0], rowStart, cols[1], Math.max(2, R - (valign === 'center' ? 2 : 1)));
+      prefer = pattern === 'column-left' && !textOnField ? (valign === 'top' ? ['BR', 'BL'] : ['TR', 'TL']) : (valign === 'top' ? ['BL', 'BR'] : ['TL', 'TR']);
+    } else if (pattern === 'corner') {
+      const kc = Math.max(2, Math.round(C * rng.pick([0.4, 0.5, 0.6]))), kr = Math.max(2, Math.round(g.rows * rng.pick([0.4, 0.5, 0.6])));
+      const right = rng.chance(0.5), bottom = rng.chance(0.6);
+      const f = B(right ? C - kc : 0, bottom ? g.rows - kr : 0, kc, kr);
+      blocks.push(img ? imageBlock(ctx, f, img, radius) : { kind: 'field', ...f, fill: fieldFill, radius });
+      if (rng.chance(0.5)) { const f2 = B(right ? 0 : C - Math.max(2, C - kc), bottom ? 0 : g.rows - Math.max(2, g.rows - kr), Math.max(2, C - kc), Math.max(2, g.rows - kr)); if (!inter(f2, f)) blocks.push({ kind: 'field', ...f2, fill: rng.pick(fields.filter(x => x !== fieldFill).concat([pal.accent])), radius, alpha: 1 }); }
+      // Text in the opposite band (rows not covered by the corner field)
+      const rowsFree = bottom ? [ctx.r0, Math.min(ctx.r0 + R, g.rows - kr) - ctx.r0] : [Math.max(ctx.r0, kr), ctx.r0 + R - Math.max(ctx.r0, kr)];
+      if (rowsFree[1] < 2) return null;
+      valign = bottom ? 'top' : 'bottom';
+      const rowStart = valign === 'top' ? rowsFree[0] + 1 : rowsFree[0];
+      region = Grid.rect(g, 0, rowStart, Math.max(3, Math.round(C * 0.75)), Math.max(1, rowsFree[1] - 1));
+      align = 'left';
+      prefer = bottom ? ['TL', 'TR'] : ['BL', 'BR'];
+      if (blocks.length > 1) blocks.length = 1;
+    } else { // stripes: 2-3 vertical column bands in field colors, text on top-left region
+      const n = rng.int(2, 3); let c = 0; const widths = [];
+      for (let i = 0; i < n; i++) { const w = i === n - 1 ? C - c : Math.max(1, Math.round(C / n)); widths.push([c, w]); c += w; }
+      const pool = rng.shuffle([pal.bg, ...fields, pal.accent]);
+      widths.forEach(([c0, w], i) => { if (pool[i % pool.length] !== pal.bg) blocks.push({ kind: 'field', ...B(c0, 0, w, g.rows), fill: pool[i % pool.length], radius }); });
+      textOnField = true; fieldFill = null;
+      valign = rng.pick(['top', 'bottom']);
+      const rowStart = valign === 'top' ? ctx.r0 : ctx.r0 + 1;
+      region = Grid.rect(g, 0, rowStart, C, Math.max(2, R - 1));
+      align = 'left';
+      prefer = valign === 'top' ? ['BL', 'BR'] : ['TL', 'TR'];
+    }
+    // Foreground on the field when text sits on it.
+    let localPal = pal;
+    if (textOnField) {
+      const ground = fieldFill || pal.bg;
+      const fg = Color.bestForeground(ground, kit.colors.map(c => Color.normalize(c.hex)), 4.5)[0];
+      const accent = Color.contrast(ground, pal.accent) >= 3 ? pal.accent : fg;
+      localPal = { ...pal, fg, fg2: Color.mix(fg, ground, 0.12), accentText: Color.contrast(ground, accent) >= 4.5 ? accent : fg, accent: accent === fg ? pal.accent : accent, onAccent: Color.contrast(accent === fg ? pal.accent : accent, '#FFFFFF') >= Color.contrast(accent === fg ? pal.accent : accent, '#000000') ? '#FFFFFF' : '#000000' };
+    }
+    const items = pickItems({ ...ctx, pal: localPal }, {});
+    const stack = buildStack(items, region, align, valign, g);
+    if (!stack) return null;
+    blocks.push(...stack.blocks);
+    const ink = inkRect(stack, region, align);
+    const avoid = [ink, ...blocks.filter(b => b.kind === 'image')];
+    const logo = placeLogo(ctx, avoid, prefer, (x, y) => { const f = blocks.filter(b => b.kind === 'field').reverse().find(b => inter({ x, y, w: 1, h: 1 }, b)); return f ? f.fill : pal.bg; });
+    if (logo && !blocks.some(b => b.kind === 'image' && inter(logo, b))) { blocks.push(logo); avoid.push(logo); }
+    const foot = footerBlock(ctx, avoid, logo); if (foot) blocks.push(foot);
+    if (rng.chance(0.35)) { const s = addShape(ctx, [...avoid, ...blocks.filter(b => b.kind === 'field')], [pal.accent, ...fields]); if (s) blocks.splice(blocks.findIndex(b => b.kind === 'text'), 0, s); }
+    return { blocks, meta: { pattern, textOnField, bleed } };
+  };
+
+  A['editorial'] = ctx => {
+    const { g, rng, pal, ts } = ctx;
+    const C = g.cols, R = ctx.R;
+    const cs = Math.max(3, Math.round(C * rng.pick([0.4, 0.5, 0.58])));
+    const right = rng.chance(0.4);
+    const c0 = right ? C - cs : rng.pick([0, 0, 1]);
+    const valign = rng.weighted([{ v: 'top', w: 2 }, { v: 'center', w: 2 }, { v: 'bottom', w: 3 }]);
+    const rowStart = valign === 'top' ? ctx.r0 + 1 : ctx.r0 + 1;
+    const region = Grid.rect(g, c0, rowStart, cs, Math.max(2, R - 2));
+    const quiet = { ...ts.headline, size: snapFont(ts.headline.size * 0.8, g.unit), weight: nearestWeight(ctx.kit.fonts.display, (ctx.kit.fonts.displayWeight || 600) - 100) };
+    const items = [{ kind: 'rule', role: 'rule', w: snap(region.w * 0.3, g.unit), fill: pal.accentText, gap: snap(ts.body.size * 1.2, g.unit) }, ...pickItems(ctx, { eyebrow: 0.7, subhead: 0.5, body: 0.6, cta: 0.35, headlineFont: quiet })];
+    const stack = buildStack(items, region, 'left', valign, g);
+    if (!stack) return null;
+    const blocks = [...stack.blocks];
+    const ink = inkRect(stack, region, 'left');
+    const avoid = [ink];
+    // small image or stat in the opposite corner
+    const img = rng.chance(0.55) ? pickImage(ctx) : null;
+    if (img) {
+      const ics = Math.max(2, Math.round(C * rng.pick([0.25, 0.33]))), irs = Math.max(2, Math.round(R * rng.pick([0.25, 0.33])));
+      const ic0 = right ? 0 : C - ics; const ir0 = valign === 'bottom' ? ctx.r0 : ctx.r0 + R - irs;
+      const r = Grid.rect(g, ic0, ir0, ics, irs);
+      if (!inter(grow(r, g.gutter), ink)) { blocks.unshift(imageBlock(ctx, r, img, ctx.radius(g.unit * 2))); avoid.push(r); }
+    }
+    const logo = placeLogo(ctx, avoid, right ? ['TL', 'BL'] : ['TR', 'BR', 'TL']);
+    if (logo) { blocks.push(logo); avoid.push(logo); }
+    const foot = footerBlock(ctx, avoid, logo); if (foot) blocks.push(foot);
+    return { blocks, meta: { right, valign, span: cs } };
+  };
+
+  A['stat'] = ctx => {
+    const { g, rng, pal, ts, content } = ctx;
+    if (!content.stat) return null;
+    const C = g.cols, R = ctx.R;
+    const align = rng.weighted([{ v: 'left', w: 3 }, { v: 'center', w: 2 }]);
+    const cs = align === 'center' ? C : rng.pick([C, Math.round(C * 0.8)]);
+    const c0 = align === 'center' ? 0 : 0;
+    const valign = rng.pick(['center', 'bottom', 'top']);
+    const rowStart = valign === 'top' ? ctx.r0 : ctx.r0 + 1;
+    const region = Grid.rect(g, c0, rowStart, cs, Math.max(2, R - (valign === 'center' ? 2 : 1)));
+    const statFill = rng.chance(0.5) ? pal.accentText : pal.fg;
+    const items = pickItems(ctx, { stat: true, statFill, eyebrow: 0.3, subhead: 0.35, body: 0.05, cta: 0.4, headlineFont: { ...ts.subhead, size: snapFont(ts.subhead.size * 1.15, g.unit), weight: nearestWeight(ctx.kit.fonts.body, 500) }, headlineMaxLines: 3 });
+    const stack = buildStack(items, region, align, valign, g);
+    if (!stack) return null;
+    const blocks = [...stack.blocks];
+    const ink = inkRect(stack, region, align);
+    const avoid = [ink];
+    const logo = placeLogo(ctx, avoid, valign === 'top' ? ['BL', 'BR'] : ['TL', 'TR']);
+    if (logo) { blocks.push(logo); avoid.push(logo); }
+    const foot = footerBlock(ctx, avoid, logo); if (foot) blocks.push(foot);
+    if (rng.chance(0.45)) { const s = addShape(ctx, avoid, pal.fields); if (s) blocks.unshift(s); }
+    return { blocks, meta: { align, valign } };
+  };
+
+  // ---- Validation and metrics ------------------------------------------------------
+  function validate(layout, g) {
+    const texts = layout.blocks.filter(b => b.kind === 'text' || b.kind === 'button' || b.kind === 'logo');
+    const s = g.safe;
+    for (const t of texts) {
+      const r = { x: t.x, y: t.y, w: t.kind === 'text' ? (t.inkW || t.w) : t.w, h: t.h };
+      if (t.kind === 'text' && t.align === 'center') r.x = t.x + (t.w - r.w) / 2;
+      if (t.kind === 'text' && t.align === 'right') r.x = t.x + t.w - r.w;
+      if (r.x < s.left - 1 || r.y < s.top - 1 || r.x + r.w > g.w - s.right + 1 || r.y + r.h > g.h - s.bottom + 1) return 'outside safe area: ' + t.role;
+      for (const o of texts) if (o !== t) {
+        const ro = { x: o.x, y: o.y, w: o.kind === 'text' ? (o.inkW || o.w) : o.w, h: o.h };
+        if (o.kind === 'text' && o.align === 'center') ro.x = o.x + (o.w - ro.w) / 2;
+        if (o.kind === 'text' && o.align === 'right') ro.x = o.x + o.w - ro.w;
+        if (inter(r, ro)) return 'overlap: ' + t.role + '/' + o.role;
+      }
+      // What lies under the text? Images need a scrim/panel; fields need contrast.
+      const cx = r.x + r.w / 2, cy = r.y + r.h / 2;
+      const under = layout.blocks.filter(b => ['image', 'field', 'scrim', 'shape'].includes(b.kind) && inter({ x: cx, y: cy, w: 1, h: 1 }, b));
+      const topImage = under.filter(b => b.kind === 'image').pop();
+      const topField = under.filter(b => b.kind === 'field').pop();
+      const shape = under.filter(b => b.kind === 'shape').pop();
+      if (shape && inter(r, shape) && t.kind !== 'button') return 'text on shape: ' + t.role;
+      if (topImage && !(under.some(b => b.kind === 'scrim') || (topField && layout.blocks.indexOf(topField) > layout.blocks.indexOf(topImage))) && !layout.meta.overlay) return 'text on image without treatment: ' + t.role;
+      if (topField && !topImage && t.kind === 'text' && t.fill && Color.contrast(topField.fill, t.fill) < (t.role === 'headline' || t.role === 'stat' ? 3 : 4.5) && !topField.alpha) return 'low contrast on field: ' + t.role;
+    }
+    return null;
+  }
+  function metrics(layout, g) {
+    const total = g.w * g.h;
+    let ink = 0, sx = 0, sy = 0, sw = 0, textInk = 0;
+    for (const b of layout.blocks) {
+      if (b.kind === 'scrim') continue;
+      const r = { x: b.x, y: b.y, w: b.kind === 'text' ? (b.inkW || b.w) : b.w, h: b.h };
+      const a = Math.min(total, area({ x: Math.max(0, r.x), y: Math.max(0, r.y), w: Math.min(g.w, r.x + r.w) - Math.max(0, r.x), h: Math.min(g.h, r.y + r.h) - Math.max(0, r.y) }));
+      if (b.kind === 'text' || b.kind === 'button' || b.kind === 'logo') { textInk += a; sx += (r.x + r.w / 2) * a; sy += (r.y + r.h / 2) * a; sw += a; }
+      else if (b.kind === 'image' || b.kind === 'field') { sx += (r.x + r.w / 2) * a * 0.3; sy += (r.y + r.h / 2) * a * 0.3; sw += a * 0.3; }
+      ink += a;
+    }
+    const whitespace = Math.max(0, 1 - Math.min(1, ink / total));
+    const density = Math.min(1, textInk / total * 3);
+    const balance = sw ? 1 - Math.min(1, Math.hypot(sx / sw - g.w / 2, sy / sw - g.h / 2) / Math.hypot(g.w / 2, g.h / 2)) : 0.5;
+    return { whitespace: +whitespace.toFixed(3), density: +density.toFixed(3), balance: +balance.toFixed(3) };
+  }
+  function signature(layout, g) {
+    const cell = v => Math.round(v / (g.cw + g.gutter));
+    return layout.archetype + '|' + layout.format.id + '|' + layout.palette.bg + layout.palette.fg + '|' + layout.blocks.map(b => (b.kind[0]) + (b.role ? b.role[0] : '') + cell(b.x) + ',' + cell(b.y) + ',' + cell(b.w) + ',' + cell(b.h) + (b.kind === 'text' ? '/' + b.lines.length + ':' + b.font.size : '')).join(';');
+  }
+
+  // ---- Public API --------------------------------------------------------------------
+  function archetypeWeights(intent, assets, content) {
+    const n = assets.images.length;
+    const e = intent.emphasis;
+    let w = e === 'image'
+      ? { 'full-bleed': 3, split: 3, poster: 2.2, mosaic: n >= 2 ? 2 : 0.3, 'color-block': 1, 'type-led': 0.5, editorial: 0.6, stat: 0.4 }
+      : e === 'type'
+        ? { 'type-led': 3, 'color-block': 2.5, editorial: 2, stat: 1.6, split: 1, poster: 0.5, 'full-bleed': 0.3, mosaic: 0.15 }
+        : { 'type-led': 2, split: 2, poster: 1.5, 'full-bleed': 1.5, 'color-block': 2, editorial: 1.5, mosaic: n >= 2 ? 1 : 0.2, stat: 1 };
+    if (!n) { w['full-bleed'] = 0; w.mosaic = 0; w.poster *= 0.6; w.split *= 0.7; }
+    if (!content.stat) w.stat = 0;
+    if (intent.archetypes && intent.archetypes.length) for (const k of Object.keys(w)) if (!intent.archetypes.includes(k)) w[k] = 0;
+    return w;
+  }
+
+  function generate({ intent, kit, assets, format, seed, archetype: forced }) {
+    const rng = RNG.make(seed);
+    const g = Grid.compute(format, kit.grid);
+    const content = { ...kit.content, ...(intent.content || {}) };
+    if (!content.headline) return null;
+    const radiusLevel = kit.grid.radius ?? 1;
+    const ctx = { rng, g, kit, assets, intent, content, fmt: format, R: g.usableRows, r0: g.firstRow, radius: v => radiusLevel === 0 ? 0 : radiusLevel >= 3 ? Math.round(v * 4) : Math.round(v) };
+    const pal = choosePalette(ctx);
+    if (!pal) return null;
+    ctx.pal = pal;
+    // Type level from loudness, then step down if text refuses to fit.
+    const loud = intent.loud ?? 0.5;
+    const center = Math.round(loud * (H_LEVELS.length - 1));
+    let level = Math.max(0, Math.min(H_LEVELS.length - 1, center + rng.int(-1, 1)));
+    const weights = archetypeWeights(intent, assets, content);
+    const items = Object.entries(weights).filter(([, w]) => w > 0).map(([v, w]) => ({ v, w }));
+    if (!items.length) return null;
+    const archetype = forced && weights[forced] !== undefined ? forced : rng.weighted(items);
+    for (let tries = 0; tries < 3; tries++) {
+      ctx.ts = typeSet(kit, g, Math.max(0, level - tries));
+      const sub = RNG.make(seed ^ (tries * 0x9E3779B9));
+      const localCtx = { ...ctx, rng: sub };
+      const res = A[archetype](localCtx);
+      if (!res) continue;
+      const layout = {
+        id: null, seed, archetype, archetypeLabel: ARCH_LABEL[archetype], format: { id: format.id, name: format.name, w: format.w, h: format.h },
+        grid: { unit: g.unit, gutter: g.gutter, cols: g.cols, rows: g.rows, cw: g.cw, rh: g.rh, mx: g.mx, my: g.my, safe: g.safe },
+        palette: { bg: pal.bg, bgName: pal.bgName, fg: pal.fg, accent: pal.accent },
+        type: { level: ctx.ts.level, headline: ctx.ts.headline.size, body: ctx.ts.body.size, display: kit.fonts.display, body_font: kit.fonts.body },
+        brand: kit.name, blocks: res.blocks, meta: res.meta || {},
+      };
+      const hl = res.blocks.find(b => b.role === 'headline'); if (hl && hl.fill) layout.palette.fg = hl.fill;
+      const bad = validate(layout, g);
+      if (bad) { layout.rejected = bad; continue; }
+      layout.metrics = metrics(layout, g);
+      layout.signature = signature(layout, g);
+      layout.id = archetype.slice(0, 2).toUpperCase() + '-' + format.id.slice(0, 2).toUpperCase() + '-' + seed.toString(36);
+      return layout;
+    }
+    return null;
+  }
+
+  // Generate a set: round-robin across formats, dedup by signature, cap attempts.
+  function generateMany({ intent, kit, assets, formats, count, seedBase, onProgress }) {
+    const out = []; const seen = new Set(); const rejections = {};
+    let attempts = 0; const maxAttempts = count * 12;
+    let seed = seedBase >>> 0;
+    while (out.length < count && attempts < maxAttempts) {
+      const format = formats[attempts % formats.length];
+      seed = (seed + 0x9E3779B9) >>> 0;
+      attempts++;
+      const L = generate({ intent, kit, assets, format, seed });
+      if (!L) continue;
+      if (seen.has(L.signature)) continue;
+      seen.add(L.signature); out.push(L);
+      if (onProgress && out.length % 12 === 0) onProgress(out.length);
+    }
+    return { layouts: out, attempts };
+  }
+
+  return { generate, generateMany, ARCHETYPES, ARCH_LABEL, H_LEVELS, typeSet, logoAspect };
+})();
+
+/* js/render.js */
+/* Layout spec -> SVG. Also PNG export with fonts and images embedded. */
+const Render = (() => {
+  const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  const n = v => Math.round(v * 100) / 100;
+
+  function textEl(b) {
+    const f = b.font;
+    const anchor = b.align === 'center' ? 'middle' : b.align === 'right' ? 'end' : 'start';
+    const x = b.align === 'center' ? b.x + b.w / 2 : b.align === 'right' ? b.x + b.w : b.x;
+    const lh = f.size * (f.lineHeight || 1.2);
+    const first = b.y + f.size * 0.78 + (lh - f.size) / 2;
+    const ls = f.letterSpacing ? ` letter-spacing="${n(f.letterSpacing * f.size)}"` : '';
+    const spans = b.lines.map((line, i) => `<tspan x="${n(x)}" y="${n(first + i * lh)}">${esc(line)}</tspan>`).join('');
+    return `<text font-family='${Text.quote(f.family).replace(/'/g, '')}' font-size="${f.size}" font-weight="${f.weight}" fill="${b.fill}" text-anchor="${anchor}"${ls}>${spans}</text>`;
+  }
+  function logoEl(b, kit) {
+    const l = kit.logo;
+    if (l.kind === 'svg' && l.svg) return `<svg x="${n(b.x)}" y="${n(b.y)}" width="${n(b.w)}" height="${n(b.h)}" viewBox="${l.svg.viewBox}" preserveAspectRatio="xMidYMid meet" overflow="visible">${Brand.logoInner(kit, b.fill)}</svg>`;
+    if (l.kind === 'image' && l.dataUrl) return `<image x="${n(b.x)}" y="${n(b.y)}" width="${n(b.w)}" height="${n(b.h)}" href="${l.dataUrl}" preserveAspectRatio="xMidYMid meet"/>`;
+    const size = b.h / 0.74;
+    const fam = Brand.fontCss(kit.fonts.display);
+    return `<text x="${n(b.x)}" y="${n(b.y + b.h)}" font-family='${Text.quote(fam).replace(/'/g, '')}' font-size="${n(size)}" font-weight="700" letter-spacing="${n(-0.04 * size)}" fill="${b.fill}">${esc(l.text || kit.name)}</text>`;
+  }
+  function shapeEl(b) {
+    if (b.shape === 'circle' || b.shape === 'blob') return `<circle cx="${n(b.x + b.w / 2)}" cy="${n(b.y + b.h / 2)}" r="${n(Math.min(b.w, b.h) / 2)}" fill="${b.fill}"/>`;
+    if (b.shape === 'pill') return `<rect x="${n(b.x)}" y="${n(b.y)}" width="${n(b.w)}" height="${n(b.h)}" rx="${n(Math.min(b.w, b.h) / 2)}" fill="${b.fill}"/>`;
+    // quarter circle
+    const r = Math.min(b.w, b.h);
+    const d = `M ${n(b.x)} ${n(b.y + r)} A ${n(r)} ${n(r)} 0 0 1 ${n(b.x + r)} ${n(b.y)} L ${n(b.x + r)} ${n(b.y + r)} Z`;
+    return `<path d="${d}" fill="${b.fill}" transform="rotate(${b.rot || 0} ${n(b.x + r / 2)} ${n(b.y + r / 2)})"/>`;
+  }
+
+  // opts: {showGrid, assets, kit, forExport (use data URLs), width (px attr)}
+  function toSVG(layout, opts) {
+    const { kit, assets } = opts;
+    const W = layout.format.w, H = layout.format.h;
+    const defs = []; const parts = [];
+    let clipId = 0, gradId = 0;
+    const uid = layout.id || 'l';
+    parts.push(`<rect width="${W}" height="${H}" fill="${layout.palette.bg}"/>`);
+    for (const b of layout.blocks) {
+      if (b.kind === 'field') {
+        parts.push(`<rect x="${n(b.x)}" y="${n(b.y)}" width="${n(b.w)}" height="${n(b.h)}" rx="${b.radius || 0}" fill="${b.fill}"${b.alpha != null && b.alpha < 1 ? ` fill-opacity="${b.alpha}"` : ''}/>`);
+      } else if (b.kind === 'image') {
+        const a = assets.images.find(i => i.id === b.asset);
+        const href = a ? (opts.forExport ? a.dataUrl : a.url) : '';
+        let clip = '';
+        if (b.radius) { const id = `${uid}-c${clipId++}`; defs.push(`<clipPath id="${id}"><rect x="${n(b.x)}" y="${n(b.y)}" width="${n(b.w)}" height="${n(b.h)}" rx="${b.radius}"/></clipPath>`); clip = ` clip-path="url(#${id})"`; }
+        if (!a) parts.push(`<rect x="${n(b.x)}" y="${n(b.y)}" width="${n(b.w)}" height="${n(b.h)}" rx="${b.radius || 0}" fill="#888"/>`);
+        else parts.push(`<image x="${n(b.x)}" y="${n(b.y)}" width="${n(b.w)}" height="${n(b.h)}" href="${href}" preserveAspectRatio="${b.focal || 'xMidYMid'} slice"${clip}/>`);
+      } else if (b.kind === 'scrim') {
+        const id = `${uid}-g${gradId++}`;
+        const dir = b.dir || 'up';
+        const c = dir === 'up' ? ['0', '0', '0', '1'] : dir === 'down' ? ['0', '1', '0', '0'] : dir === 'right' ? ['1', '0', '0', '0'] : ['0', '0', '1', '0'];
+        defs.push(`<linearGradient id="${id}" x1="${c[0]}" y1="${c[1]}" x2="${c[2]}" y2="${c[3]}"><stop offset="0" stop-color="${b.fill}" stop-opacity="0"/><stop offset="0.55" stop-color="${b.fill}" stop-opacity="${(b.alpha || 0.7) * 0.75}"/><stop offset="1" stop-color="${b.fill}" stop-opacity="${b.alpha || 0.7}"/></linearGradient>`);
+        parts.push(`<rect x="${n(b.x)}" y="${n(b.y)}" width="${n(b.w)}" height="${n(b.h)}" fill="url(#${id})"/>`);
+      } else if (b.kind === 'shape') parts.push(shapeEl(b));
+      else if (b.kind === 'rule') parts.push(`<rect x="${n(b.x)}" y="${n(b.y)}" width="${n(b.w)}" height="${n(b.h)}" fill="${b.fill}"/>`);
+      else if (b.kind === 'button') {
+        const f = b.font;
+        parts.push(`<rect x="${n(b.x)}" y="${n(b.y)}" width="${n(b.w)}" height="${n(b.h)}" rx="${b.radius || 0}" fill="${b.fill}"/>`);
+        parts.push(`<text x="${n(b.x + b.w / 2)}" y="${n(b.y + b.h / 2 + f.size * 0.35)}" font-family='${Text.quote(f.family).replace(/'/g, '')}' font-size="${f.size}" font-weight="${f.weight}" fill="${b.color}" text-anchor="middle">${esc(b.text)}</text>`);
+      } else if (b.kind === 'text') parts.push(textEl(b));
+      else if (b.kind === 'logo') parts.push(logoEl(b, kit));
+    }
+    if (opts.showGrid) parts.push(gridOverlay(layout));
+    const attrs = opts.width ? ` width="${opts.width}"` : ` width="${W}" height="${H}"`;
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}"${attrs} data-id="${layout.id}">${opts.fontStyle ? `<defs><style>${opts.fontStyle}</style></defs>` : ''}${defs.length ? `<defs>${defs.join('')}</defs>` : ''}${parts.join('')}</svg>`;
+  }
+
+  function gridOverlay(layout) {
+    const g = layout.grid, W = layout.format.w, H = layout.format.h;
+    const out = [];
+    const col = '#FF3B8D';
+    // pixel grid (every 4 units to stay legible)
+    const step = g.unit * 4;
+    let px = '';
+    for (let x = 0; x <= W; x += step) px += `M${x} 0V${H}`;
+    for (let y = 0; y <= H; y += step) px += `M0 ${y}H${W}`;
+    out.push(`<path d="${px}" stroke="${col}" stroke-opacity="0.12" stroke-width="1" fill="none"/>`);
+    for (let c = 0; c < g.cols; c++) { const x = g.mx + c * (g.cw + g.gutter); out.push(`<rect x="${x}" y="0" width="${g.cw}" height="${H}" fill="${col}" fill-opacity="0.09"/>`); }
+    for (let r = 0; r < g.rows; r++) { const y = g.my + r * (g.rh + g.gutter); out.push(`<rect x="0" y="${y}" width="${W}" height="${g.rh}" fill="${col}" fill-opacity="0.05"/>`); }
+    // safe area
+    out.push(`<rect x="${g.safe.left}" y="${g.safe.top}" width="${W - g.safe.left - g.safe.right}" height="${H - g.safe.top - g.safe.bottom}" fill="none" stroke="${col}" stroke-width="2" stroke-dasharray="8 8"/>`);
+    return `<g pointer-events="none">${out.join('')}</g>`;
+  }
+
+  // ---- Export ------------------------------------------------------------------------
+  const fontCache = new Map();
+  async function fontFaceCss(families) {
+    const out = [];
+    for (const fam of families) {
+      if (Brand.customFonts[fam]) {
+        const cf = Brand.customFonts[fam];
+        if (cf.dataUrl) out.push(`@font-face{font-family:"${fam}";src:url(${cf.dataUrl});font-weight:100 900;}`);
+        continue;
+      }
+      if (!Brand.FONTS[fam]) continue;
+      if (fontCache.has(fam)) { out.push(fontCache.get(fam)); continue; }
+      try {
+        const spec = { 'Bricolage Grotesque': 'Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,300..800', 'Inter': 'Inter:wght@400;500;600;700', 'IBM Plex Mono': 'IBM+Plex+Mono:wght@400;500', 'Fraunces': 'Fraunces:opsz,wght@9..144,300..900', 'Manrope': 'Manrope:wght@400;500;700;800', 'Schibsted Grotesk': 'Schibsted+Grotesk:wght@400;500;700;900', 'Instrument Serif': 'Instrument+Serif:ital@0;1' }[fam];
+        const css = await (await fetch(`https://fonts.googleapis.com/css2?family=${spec}&display=swap`)).text();
+        const urls = [...new Set([...css.matchAll(/url\((https:[^)]+)\)/g)].map(m => m[1]))];
+        let inlined = css;
+        for (const u of urls) {
+          const buf = await (await fetch(u)).arrayBuffer();
+          const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
+          inlined = inlined.split(u).join(`data:font/woff2;base64,${b64}`);
+        }
+        fontCache.set(fam, inlined); out.push(inlined);
+      } catch (e) { console.warn('font embed failed', fam, e); }
+    }
+    return out.join('\n');
+  }
+  async function exportSVG(layout, opts) {
+    const fams = [opts.kit.fonts.display, opts.kit.fonts.body];
+    const fontStyle = await fontFaceCss(fams);
+    return toSVG(layout, { ...opts, forExport: true, fontStyle, showGrid: false });
+  }
+  async function exportPNG(layout, opts, scale = 1) {
+    const svg = await exportSVG(layout, opts);
+    const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    try {
+      const img = new Image();
+      await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = url; });
+      const c = document.createElement('canvas'); c.width = layout.format.w * scale; c.height = layout.format.h * scale;
+      const ctx = c.getContext('2d'); ctx.drawImage(img, 0, 0, c.width, c.height);
+      return await new Promise(res => c.toBlob(res, 'image/png'));
+    } finally { URL.revokeObjectURL(url); }
+  }
+  function download(blob, name) {
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  }
+  return { toSVG, gridOverlay, exportSVG, exportPNG, download, fontFaceCss };
+})();
+
+/* js/prompt.js */
+/* Brief -> intent. A rule parser that runs everywhere, plus an optional Claude interpreter that emits the same JSON. */
+const Prompt = (() => {
+  const INTENT_SCHEMA = {
+    type: 'object', additionalProperties: false,
+    properties: {
+      formats: { type: 'array', items: { type: 'string', enum: Grid.FORMATS.map(f => f.id) } },
+      count: { type: 'integer' },
+      loud: { type: 'number', description: '0 quiet/minimal .. 1 loud/bold type scale' },
+      dark: { type: 'number', description: '-1 prefer light grounds, 0 no preference, 1 prefer dark grounds' },
+      emphasis: { type: 'string', enum: ['image', 'type', 'balanced'] },
+      density: { type: 'string', enum: ['sparse', 'medium', 'dense'] },
+      archetypes: { type: 'array', items: { type: 'string', enum: Engine.ARCHETYPES } },
+      includeLogo: { type: 'boolean' }, includeCta: { type: 'boolean' }, includeBody: { type: 'boolean' }, includeSubhead: { type: 'boolean' }, includeEyebrow: { type: 'boolean' },
+      colorHints: { type: 'array', items: { type: 'string' }, description: 'brand color names mentioned' },
+      content: { type: 'object', additionalProperties: false, properties: { headline: { type: 'string' }, subhead: { type: 'string' }, body: { type: 'string' }, cta: { type: 'string' }, eyebrow: { type: 'string' }, stat: { type: 'string' } } },
+      summary: { type: 'string', description: 'one line: how the brief was read' },
+    },
+    required: ['formats', 'count', 'loud', 'dark', 'emphasis', 'density', 'archetypes', 'includeLogo', 'includeCta', 'includeBody', 'includeSubhead', 'includeEyebrow', 'colorHints', 'content', 'summary'],
+  };
+  const DEFAULT = () => ({ formats: ['square'], count: 96, loud: 0.5, dark: 0, emphasis: 'balanced', density: 'medium', archetypes: [], includeLogo: true, includeCta: true, includeBody: true, includeSubhead: true, includeEyebrow: true, colorHints: [], content: {}, summary: '' });
+
+  const has = (t, words) => words.some(w => new RegExp(`(^|[^a-z])${w}([^a-z]|$)`).test(t));
+
+  function parse(text, kit) {
+    const intent = DEFAULT();
+    const raw = String(text || '');
+    const t = raw.toLowerCase();
+    const notes = [];
+    // CTA and stat first, so their quoted values are not mistaken for the headline.
+    const ctaM = raw.match(/\bcta\s*[:=]?\s*["“]?([^"”.,;\n]{2,40}?)["”]?(?=[.,;\n]|$)/i) || raw.match(/\bbutton\s*[:=]\s*["“]?([^"”.,;\n]{2,40}?)["”]?(?=[.,;\n]|$)/i);
+    if (ctaM && !/^(?:yes|no|button|please|and|with)$/i.test(ctaM[1].trim())) intent.content.cta = ctaM[1].trim();
+    const statM = raw.match(/\bstat(?:istic)?\s*[:=]\s*["“]?([^"”,;\n]{1,24})/i)
+      || raw.match(/\bstat(?:istic)?\s+(?:of\s+|is\s+)?["“]?(\d[\d,.]*\s*(?:\+|%|k\b|m\b|x\b|countries|currencies|min\b|hrs?\b|days?\b)?(?:\s+[a-z]+)?)/i)
+      || (has(t, ['stat', 'stats', 'number', 'figure', 'metric']) ? raw.match(/(\d[\d,.]*\s*(?:\+|%|countries|currencies|min\b|hrs?\b|days?\b))/i) : null);
+    if (statM && statM[1] && !/^\d+$/.test(statM[1].trim())) intent.content.stat = statM[1].trim().replace(/["”]$/, '');
+    // quoted copy
+    const quotes = [...raw.matchAll(/["“”']([^"“”']{3,140})["“”']/g)].map(m => m[1].trim()).filter(q => q !== intent.content.cta && q !== intent.content.stat);
+    if (quotes[0]) { intent.content.headline = quotes[0]; notes.push('headline from quotes'); }
+    if (quotes[1]) intent.content.subhead = quotes[1];
+    // formats
+    const fm = Grid.detectFormats(t); if (fm.length) { intent.formats = fm; intent.formatsExplicit = true; notes.push('formats: ' + fm.join(', ')); }
+    // count
+    const cm = t.match(/\b(\d{1,3})\s*(variations?|options?|layouts?|versions?|ideas?|iterations?|directions?|cards?|posts?|slides?|takes?|concepts?|routes?)\b/) || t.match(/(?<![:x×\d.,])\b(\d{2,3})\b(?!\s*(%|\+|px|countries|currencies|:|x|×|\d))/);
+    if (cm) { const c = parseInt(cm[1], 10); if (c >= 4 && c <= 500) { intent.count = c; intent.countExplicit = true; notes.push(c + ' variations'); } }
+    // mood
+    if (has(t, ['loud', 'bold', 'big', 'huge', 'massive', 'punchy', 'shout', 'statement', 'impact', 'oversized'])) intent.loud = 0.85;
+    if (has(t, ['quiet', 'minimal', 'minimalist', 'calm', 'subtle', 'understated', 'elegant', 'refined', 'whisper', 'small type'])) { intent.loud = 0.2; intent.density = 'sparse'; }
+    if (has(t, ['dark', 'night', 'moody', 'black', 'dark mode'])) intent.dark = 1;
+    if (has(t, ['light', 'bright', 'white', 'airy', 'clean', 'paper'])) intent.dark = -1;
+    if (has(t, ['sparse', 'whitespace', 'white space', 'breathing room', 'lots of space', 'headline only', 'just the headline', 'only headline'])) intent.density = 'sparse';
+    if (has(t, ['dense', 'busy', 'packed', 'detailed', 'informative', 'lots of copy', 'more copy', 'full copy'])) intent.density = 'dense';
+    // emphasis
+    if (has(t, ['image-led', 'image led', 'photo', 'photos', 'photography', 'imagery', 'picture', 'hero image', 'visual', 'full-bleed', 'full bleed', 'render', 'product shot'])) intent.emphasis = 'image';
+    if (has(t, ['type-led', 'type led', 'typographic', 'typography', 'text-led', 'text led', 'wordy', 'copy-led', 'type only', 'no image', 'no images', 'no photos', 'without images'])) intent.emphasis = 'type';
+    // archetypes
+    const arch = [];
+    if (has(t, ['full-bleed', 'full bleed', 'overlay'])) arch.push('full-bleed');
+    if (has(t, ['split', 'half and half', 'side by side', 'two halves'])) arch.push('split');
+    if (has(t, ['mosaic', 'collage', 'grid of images', 'image grid', 'tiles'])) arch.push('mosaic');
+    if (has(t, ['color block', 'colour block', 'color blocks', 'colour blocks', 'blocks', 'bauhaus', 'geometric'])) arch.push('color-block');
+    if (has(t, ['editorial', 'magazine', 'article', 'long copy'])) arch.push('editorial');
+    if (has(t, ['stat', 'stats', 'number', 'figure', 'metric', 'data point'])) arch.push('stat');
+    if (has(t, ['poster', 'framed', 'framed image'])) arch.push('poster');
+    if (has(t, ['type-led', 'typographic', 'headline only', 'pure type'])) arch.push('type-led');
+    if (arch.length) { intent.archetypes = [...new Set(arch)]; notes.push('archetypes: ' + intent.archetypes.join(', ')); }
+    // inclusions
+    if (has(t, ['no logo', 'without logo', 'logoless'])) intent.includeLogo = false;
+    if (has(t, ['no cta', 'without cta', 'no button', 'no call to action'])) intent.includeCta = false;
+    if (has(t, ['with a cta', 'with cta', 'add a cta', 'button'])) intent.includeCta = true;
+    if (has(t, ['no body', 'without body', 'no paragraph', 'headline only', 'just the headline'])) { intent.includeBody = false; if (has(t, ['headline only', 'just the headline'])) { intent.includeSubhead = false; intent.includeEyebrow = false; } }
+    // brand color names
+    for (const c of (kit?.colors || [])) { if (c.name && has(t, [c.name.toLowerCase()])) intent.colorHints.push(Color.normalize(c.hex)); }
+    if (intent.colorHints.length) notes.push('colors: ' + intent.colorHints.length);
+    intent.summary = notes.length ? notes.join(' · ') : 'defaults';
+    return intent;
+  }
+
+  // Optional: ask Claude to turn the brief into the same constraint JSON.
+  async function interpret(text, kit, apiKey) {
+    const brandSummary = {
+      name: kit.name,
+      colors: kit.colors.map(c => `${c.name} ${Color.normalize(c.hex)} (${c.role})`),
+      formats: Grid.FORMATS.map(f => `${f.id}: ${f.name} ${f.w}x${f.h}`),
+      archetypes: Engine.ARCHETYPES,
+      currentContent: kit.content,
+    };
+    const system = `You turn a creative brief into layout-engine constraints. Read the brief and the brand facts, then return JSON that follows the schema exactly.
+Rules: pick formats only from the list (default ["square"]); count 12..360 (default 96); loud 0..1; dark -1..1; emphasis image|type|balanced; density sparse|medium|dense;
+archetypes: leave empty unless the brief clearly asks for a composition family; colorHints must be hex values copied from the brand colors list when the brief names a brand color;
+content: only fields the brief explicitly supplies (quoted copy, a CTA, a stat), otherwise leave them out. summary: one short line on how you read the brief.`;
+    const body = {
+      model: 'claude-opus-5-5', max_tokens: 2048,
+      betas: undefined,
+      system,
+      messages: [{ role: 'user', content: `Brief:\n${text}\n\nBrand facts:\n${JSON.stringify(brandSummary, null, 1)}` }],
+      output_config: { effort: 'low', format: { type: 'json_schema', schema: INTENT_SCHEMA } },
+    };
+    delete body.betas;
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) throw new Error(`Claude request failed (${res.status}): ${(await res.text()).slice(0, 300)}`);
+    const data = await res.json();
+    if (data.stop_reason === 'refusal') throw new Error('Claude declined this brief.');
+    const textBlock = (data.content || []).find(b => b.type === 'text');
+    if (!textBlock) throw new Error('No text in response');
+    const parsed = JSON.parse(textBlock.text);
+    const intent = { ...DEFAULT(), ...parsed, content: Object.fromEntries(Object.entries(parsed.content || {}).filter(([, v]) => v)) };
+    intent.count = Math.max(12, Math.min(360, intent.count || 96));
+    if (!intent.formats?.length) intent.formats = ['square'];
+    intent.formatsExplicit = true; intent.countExplicit = intent.count !== 96;
+    return intent;
+  }
+  return { parse, interpret, INTENT_SCHEMA, DEFAULT };
+})();
+
+/* js/app.js */
+/* UI wiring. State lives here; the engine and renderer are pure. */
+(() => {
+  const $ = id => document.getElementById(id);
+  const state = {
+    kit: null, assets: { images: [] }, layouts: [], favs: new Set(), picks: new Set(),
+    formats: ['square'], showGrid: false, lastPrompt: null, intent: Prompt.DEFAULT(), seedBase: 1, detail: null, busy: false,
+  };
+  const LS = { get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch { return d; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { } } };
+  let imgSeq = 1;
+
+  // ---- Toast ---------------------------------------------------------------------
+  let toastT;
+  function toast(msg) { const t = $('toast'); t.textContent = msg; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => t.hidden = true, 2600); }
+
+  // ---- Brand kit form -------------------------------------------------------------
+  function fillFontSelects() {
+    for (const sel of [$('displayFont'), $('bodyFont')]) {
+      const cur = sel.value;
+      sel.innerHTML = Brand.allFontNames().map(n => `<option>${n}</option>`).join('');
+      if (cur) sel.value = cur;
+    }
+  }
+  function loadKit(kit) {
+    state.kit = kit;
+    $('brandName').value = kit.name;
+    $('displayFont').value = kit.fonts.display; $('bodyFont').value = kit.fonts.body;
+    for (const k of ['eyebrow', 'headline', 'subhead', 'body', 'cta', 'stat', 'footer']) $(k).value = kit.content[k] || '';
+    $('unit').value = String(kit.grid.unit); $('margin').value = String(kit.grid.marginRatio); $('gutter').value = String(kit.grid.gutterUnits);
+    $('radius').value = String(kit.grid.radius ?? 1); $('shapes').value = kit.shapes && kit.shapes.length ? 'on' : 'off';
+    $('logoMono').checked = kit.logo.monochrome !== false;
+    renderColors(); renderLogo();
+  }
+  function readKit() {
+    const k = state.kit;
+    k.name = $('brandName').value.trim() || k.name;
+    k.fonts.display = $('displayFont').value; k.fonts.body = $('bodyFont').value;
+    for (const f of ['eyebrow', 'headline', 'subhead', 'body', 'cta', 'stat', 'footer']) k.content[f] = $(f).value.trim();
+    k.grid.unit = +$('unit').value; k.grid.marginRatio = +$('margin').value; k.grid.gutterUnits = +$('gutter').value; k.grid.radius = +$('radius').value;
+    if ($('shapes').value === 'off') k.shapes = []; else if (!k.shapes || !k.shapes.length) k.shapes = ['circle', 'pill', 'quarter'];
+    k.logo.monochrome = $('logoMono').checked;
+    if (k.logo.kind === 'wordmark') k.logo.text = k.logo.text || k.name.toLowerCase();
+    persistKit();
+    return k;
+  }
+  function persistKit() { const s = Brand.serialize(state.kit); if (s.length < 800000) LS.set('lg.kit', state.kit); LS.set('lg.preset', state.kit.presetId || ''); }
+  const ROLES = ['core', 'accent', 'background', 'neutral'];
+  function renderColors() {
+    $('colorList').innerHTML = state.kit.colors.map((c, i) =>
+      `<span class="swatch" data-i="${i}" title="${c.hex} · click to change role"><span class="chip" style="background:${c.hex}"></span>${c.name || c.hex}<span class="role">${c.role}</span><span class="x" data-x="${i}" title="Remove">✕</span></span>`).join('');
+  }
+  $('colorList').addEventListener('click', e => {
+    const x = e.target.closest('[data-x]'); const s = e.target.closest('.swatch');
+    if (x) { state.kit.colors.splice(+x.dataset.x, 1); renderColors(); persistKit(); return; }
+    if (s) { const c = state.kit.colors[+s.dataset.i]; c.role = ROLES[(ROLES.indexOf(c.role) + 1) % ROLES.length]; renderColors(); persistKit(); }
+  });
+  $('addColorBtn').addEventListener('click', () => {
+    const hex = Color.normalize($('newColor').value); const name = $('newColorName').value.trim() || hex;
+    state.kit.colors.push({ name, hex, role: 'accent' }); $('newColorName').value = ''; renderColors(); persistKit();
+  });
+  $('extractedSwatches').addEventListener('click', e => {
+    const s = e.target.closest('.swatch'); if (!s) return;
+    const hex = s.dataset.hex; if (state.kit.colors.some(c => Color.normalize(c.hex) === hex)) return toast('Already in the kit');
+    state.kit.colors.push({ name: 'From image', hex, role: 'accent' }); renderColors(); persistKit(); toast('Added ' + hex);
+  });
+  function renderLogo() {
+    const l = state.kit.logo; const el = $('logoPreview');
+    if (l.kind === 'svg' && l.svg) el.innerHTML = `<svg viewBox="${l.svg.viewBox}" width="100%" height="100%">${Brand.logoInner(state.kit, '#ECEBF0')}</svg>`;
+    else if (l.kind === 'image' && l.dataUrl) el.innerHTML = `<img src="${l.dataUrl}" alt="logo">`;
+    else el.innerHTML = `<span class="wordmark" style="font-family:${Brand.fontCss(state.kit.fonts.display)}">${l.text || state.kit.name}</span>`;
+  }
+  $('logoFile').addEventListener('change', async e => {
+    const f = e.target.files[0]; if (!f) return;
+    if (f.type.includes('svg') || f.name.endsWith('.svg')) {
+      const svg = Brand.parseSvg(await f.text()); if (!svg) return toast('Could not read that SVG');
+      state.kit.logo = { ...state.kit.logo, kind: 'svg', svg, monochrome: $('logoMono').checked };
+    } else {
+      const dataUrl = await readAsDataURL(f); const im = await loadImage(dataUrl);
+      state.kit.logo = { ...state.kit.logo, kind: 'image', dataUrl, aspect: im.naturalWidth / im.naturalHeight };
+    }
+    renderLogo(); persistKit(); toast('Logo updated'); e.target.value = '';
+  });
+  $('logoMono').addEventListener('change', () => { state.kit.logo.monochrome = $('logoMono').checked; renderLogo(); persistKit(); });
+  $('displayFont').addEventListener('change', () => { readKit(); renderLogo(); });
+  $('bodyFont').addEventListener('change', readKit);
+  $('brandName').addEventListener('change', () => { readKit(); if (state.kit.logo.kind === 'wordmark') { state.kit.logo.text = state.kit.name.toLowerCase(); renderLogo(); } });
+  for (const id of ['eyebrow', 'headline', 'subhead', 'body', 'cta', 'stat', 'footer', 'unit', 'margin', 'gutter', 'radius', 'shapes']) $(id).addEventListener('change', readKit);
+
+  $('fontFile').addEventListener('change', async e => {
+    const f = e.target.files[0]; if (!f) return;
+    const name = f.name.replace(/\.[^.]+$/, '').replace(/[-_]/g, ' ');
+    try {
+      const buf = await f.arrayBuffer();
+      const face = new FontFace(name, buf); await face.load(); document.fonts.add(face);
+      const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
+      const mime = f.name.endsWith('.woff2') ? 'font/woff2' : f.name.endsWith('.woff') ? 'font/woff' : f.name.endsWith('.otf') ? 'font/otf' : 'font/ttf';
+      Brand.customFonts[name] = { css: `"${name}", sans-serif`, weights: [300, 400, 500, 600, 700, 800, 900], dataUrl: `data:${mime};base64,${b64}` };
+      fillFontSelects(); $('displayFont').value = name; readKit(); renderLogo(); Text.clearCache();
+      $('fontStatus').textContent = `Loaded "${name}" as the display font.`;
+    } catch (err) { $('fontStatus').textContent = 'Could not load that font file.'; console.warn(err); }
+    e.target.value = '';
+  });
+
+  // ---- Presets --------------------------------------------------------------------
+  function fillPresets() {
+    $('presetSelect').innerHTML = Object.entries(Brand.PRESETS).map(([id, p]) => `<option value="${id}">${p.name}</option>`).join('') + '<option value="__custom">Custom (loaded)</option>';
+  }
+  $('presetSelect').addEventListener('change', async e => {
+    const id = e.target.value; if (id === '__custom') return;
+    loadKit(Brand.fromPreset(id)); $('presetSelect').value = id;
+    await ensureDemoImages(true); persistKit(); Text.clearCache();
+  });
+
+  // ---- Images -------------------------------------------------------------------------
+  const readAsDataURL = f => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(f); });
+  const loadImage = src => new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = src; });
+  async function addImage(dataUrl, name, placeholder = false) {
+    const im = await loadImage(dataUrl);
+    const blob = await (await fetch(dataUrl)).blob();
+    const asset = { id: 'img' + (imgSeq++), name, url: URL.createObjectURL(blob), dataUrl, w: im.naturalWidth, h: im.naturalHeight, lum: Color.luminanceMap(im), placeholder, palette: Color.extractPalette(im) };
+    state.assets.images.push(asset); renderImages();
+    return asset;
+  }
+  function renderImages() {
+    $('imageList').innerHTML = state.assets.images.map(a => `<div class="thumb" title="${a.name}"><img src="${a.url}" alt=""><button class="x" data-rm="${a.id}" title="Remove">✕</button>${a.placeholder ? '<span class="ph">placeholder</span>' : ''}</div>`).join('');
+    const real = state.assets.images.filter(a => !a.placeholder);
+    const pal = [...new Set(real.flatMap(a => a.palette))].slice(0, 8);
+    $('extracted').hidden = !pal.length;
+    $('extractedSwatches').innerHTML = pal.map(h => `<span class="swatch" data-hex="${h}" title="Add ${h} to the kit"><span class="chip" style="background:${h}"></span></span>`).join('');
+  }
+  $('imageList').addEventListener('click', e => {
+    const b = e.target.closest('[data-rm]'); if (!b) return;
+    const i = state.assets.images.findIndex(a => a.id === b.dataset.rm); if (i >= 0) { URL.revokeObjectURL(state.assets.images[i].url); state.assets.images.splice(i, 1); renderImages(); }
+  });
+  $('imageFiles').addEventListener('change', async e => {
+    const files = [...e.target.files]; if (!files.length) return;
+    // Real photos replace the placeholders.
+    const ph = state.assets.images.filter(a => a.placeholder); for (const a of ph) URL.revokeObjectURL(a.url);
+    state.assets.images = state.assets.images.filter(a => !a.placeholder);
+    for (const f of files) { try { await addImage(await readAsDataURL(f), f.name); } catch (err) { console.warn(err); } }
+    toast(`${files.length} image${files.length > 1 ? 's' : ''} added`); e.target.value = '';
+  });
+  async function ensureDemoImages(force) {
+    if (!force && state.assets.images.length) return;
+    if (state.assets.images.some(a => !a.placeholder)) return;
+    for (const a of state.assets.images) URL.revokeObjectURL(a.url);
+    state.assets.images = [];
+    const pal = state.kit.colors.filter(c => c.role !== 'neutral').map(c => c.hex);
+    for (let i = 0; i < 3; i++) await addImage(Brand.makeDemoImage(1000 + i * 7 + RNG.hashStr(state.kit.name), pal, 1200, i === 1 ? 800 : 1200), 'placeholder ' + (i + 1), true);
+  }
+
+  // ---- Formats chips --------------------------------------------------------------------
+  function renderChips() {
+    $('formatChips').innerHTML = Grid.FORMATS.map(f => `<button type="button" class="chip-btn ${state.formats.includes(f.id) ? 'on' : ''}" data-f="${f.id}">${f.name}<span class="ratio">${f.ratio}</span></button>`).join('');
+  }
+  $('formatChips').addEventListener('click', e => {
+    const b = e.target.closest('[data-f]'); if (!b) return;
+    const id = b.dataset.f;
+    if (state.formats.includes(id)) { if (state.formats.length > 1) state.formats = state.formats.filter(x => x !== id); }
+    else state.formats.push(id);
+    renderChips();
+  });
+
+  // ---- Generation -----------------------------------------------------------------------
+  async function loadFonts(kit) {
+    const fams = [kit.fonts.display, kit.fonts.body];
+    const loads = [];
+    for (const fam of fams) for (const w of Brand.fontWeights(fam)) loads.push(document.fonts.load(`${w} 40px "${fam}"`).catch(() => { }));
+    await Promise.all(loads);
+    Text.clearCache();
+  }
+  async function resolveIntent(text) {
+    const kit = state.kit;
+    let intent;
+    const useClaude = $('useClaude').checked && $('apiKey').value.trim();
+    if (useClaude) {
+      try { intent = await Prompt.interpret(text, kit, $('apiKey').value.trim()); $('interpretLog').textContent = 'Claude: ' + intent.summary; intent.source = 'claude'; }
+      catch (err) { $('interpretLog').textContent = 'Claude failed, used the rule parser. ' + err.message; toast('Claude interpreter failed, used rules'); }
+    }
+    if (!intent) { intent = Prompt.parse(text, kit); intent.source = 'rules'; }
+    return intent;
+  }
+  async function generate(text, opts = {}) {
+    if (state.busy) return;
+    state.busy = true; $('generateBtn').disabled = true; $('generateBtn').textContent = 'Reading brief…';
+    try {
+      const kit = readKit();
+      await ensureDemoImages(false);
+      await loadFonts(kit);
+      let intent = opts.intent;
+      if (!intent) {
+        intent = await resolveIntent(text);
+        const promptChanged = text !== state.lastPrompt;
+        if (promptChanged) {
+          if (intent.formatsExplicit && intent.formats?.length) { state.formats = intent.formats.slice(); renderChips(); }
+          if (intent.countExplicit && intent.count) $('count').value = String([24, 48, 96, 180, 360].reduce((b, c) => Math.abs(c - intent.count) < Math.abs(b - intent.count) ? c : b, 96));
+          state.lastPrompt = text;
+        }
+        intent.formats = state.formats.slice();
+        intent.count = +$('count').value;
+        state.intent = intent;
+      }
+      LS.set('lg.prompt', text);
+      const formats = intent.formats.map(id => Grid.byId[id]).filter(Boolean);
+      const count = intent.count;
+      $('generateBtn').textContent = 'Generating…';
+      const t0 = performance.now();
+      const seen = new Set(opts.append ? state.layouts.map(l => l.signature) : []);
+      const out = []; let attempts = 0; let seed = (opts.seedBase ?? (state.seedBase = (state.seedBase * 1664525 + 1013904223) >>> 0)) >>> 0;
+      const rejected = {};
+      const maxAttempts = count * 14;
+      while (out.length < count && attempts < maxAttempts) {
+        const format = formats[attempts % formats.length];
+        seed = (seed + 0x9E3779B9) >>> 0; attempts++;
+        const L = Engine.generate({ intent, kit, assets: state.assets, format, seed, archetype: opts.archetype });
+        if (!L) { rejected.none = (rejected.none || 0) + 1; continue; }
+        if (seen.has(L.signature)) { rejected.dup = (rejected.dup || 0) + 1; continue; }
+        seen.add(L.signature); out.push(L);
+        if (out.length % 16 === 0) { $('generateBtn').textContent = `Generating… ${out.length}`; await new Promise(r => setTimeout(r, 0)); }
+      }
+      const ms = Math.round(performance.now() - t0);
+      if (opts.append) state.layouts = [...out, ...state.layouts]; else { state.layouts = out; state.picks.clear(); }
+      renderReadout(intent, out.length, attempts, ms, formats);
+      renderGallery();
+      if (!out.length) toast('Nothing passed the rules. Try shorter copy or a bigger safe space.');
+      else if (opts.append) toast(`${out.length} variations added`);
+      $('main').scrollTop = 0;
+    } finally { state.busy = false; $('generateBtn').disabled = false; $('generateBtn').textContent = 'Generate'; }
+  }
+  function renderReadout(intent, made, attempts, ms, formats) {
+    const arch = {}; for (const l of state.layouts) arch[l.archetypeLabel] = (arch[l.archetypeLabel] || 0) + 1;
+    $('readout').innerHTML = [
+      `<span><span class="k">brief read by</span> <b>${intent.source === 'claude' ? 'Claude' : 'rules'}</b>${intent.summary ? ` · ${escapeHtml(intent.summary)}` : ''}</span>`,
+      `<span><span class="k">formats</span> <b>${formats.map(f => f.name).join(', ')}</b></span>`,
+      `<span><span class="k">emphasis</span> <b>${intent.emphasis}</b> · <span class="k">density</span> <b>${intent.density}</b> · <span class="k">loud</span> <b>${Math.round(intent.loud * 100)}%</b></span>`,
+      `<span><span class="k">kept</span> <b>${made}</b> <span class="k">of ${attempts} attempts in ${ms} ms</span></span>`,
+      `<span class="k">${Object.entries(arch).map(([k, v]) => `${k} ${v}`).join(' · ')}</span>`,
+    ].join('');
+    const sel = $('filterArch'); const cur = sel.value;
+    sel.innerHTML = '<option value="">All archetypes</option>' + Object.keys(arch).sort().map(k => `<option>${k}</option>`).join('');
+    sel.value = cur && arch[cur] ? cur : '';
+  }
+  const escapeHtml = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+  // ---- Gallery ---------------------------------------------------------------------------
+  function visibleLayouts() {
+    let list = state.layouts.slice();
+    const f = $('filterArch').value; if (f) list = list.filter(l => l.archetypeLabel === f);
+    if ($('favOnly').checked) list = list.filter(l => state.favs.has(l.id));
+    const s = $('sort').value;
+    if (s === 'whitespace') list.sort((a, b) => b.metrics.whitespace - a.metrics.whitespace);
+    else if (s === 'density') list.sort((a, b) => b.metrics.density - a.metrics.density);
+    else if (s === 'balance') list.sort((a, b) => b.metrics.balance - a.metrics.balance);
+    else if (s === 'archetype') list.sort((a, b) => a.archetype.localeCompare(b.archetype) || a.seed - b.seed);
+    return list;
+  }
+  function cardSVG(l) { return Render.toSVG(l, { kit: state.kit, assets: state.assets, showGrid: state.showGrid, width: 480 }); }
+  function renderGallery() {
+    const list = visibleLayouts();
+    $('empty').hidden = state.layouts.length > 0;
+    const frag = document.createDocumentFragment();
+    for (const l of list) {
+      const card = document.createElement('div'); card.className = 'card' + (state.picks.has(l.id) ? ' selected' : ''); card.dataset.id = l.id;
+      card.innerHTML = `<div class="canvas">${cardSVG(l)}</div><div class="meta"><span class="arch">${l.archetypeLabel}</span><span>${l.format.name} · ${l.id}</span></div><button class="fav ${state.favs.has(l.id) ? 'on' : ''}" data-fav="${l.id}" title="Favorite">★</button><input class="pick" type="checkbox" data-pick="${l.id}" ${state.picks.has(l.id) ? 'checked' : ''} title="Pick for compare" aria-label="Pick for compare">`;
+      frag.appendChild(card);
+    }
+    $('gallery').replaceChildren(frag);
+    updateBars();
+  }
+  function updateBars() {
+    $('compareBtn').textContent = `Compare (${state.picks.size})`; $('compareBtn').disabled = state.picks.size < 2;
+    $('exportFavBtn').disabled = !state.favs.size; $('exportFavBtn').textContent = state.favs.size ? `Export favorites (${state.favs.size})` : 'Export favorites';
+  }
+  $('gallery').addEventListener('click', e => {
+    const fav = e.target.closest('[data-fav]'); if (fav) { toggleFav(fav.dataset.fav); return; }
+    const pick = e.target.closest('[data-pick]'); if (pick) { if (pick.checked) state.picks.add(pick.dataset.pick); else state.picks.delete(pick.dataset.pick); pick.closest('.card').classList.toggle('selected', pick.checked); updateBars(); return; }
+    const card = e.target.closest('.card'); if (card) openDetail(card.dataset.id);
+  });
+  function toggleFav(id) {
+    if (state.favs.has(id)) state.favs.delete(id); else state.favs.add(id);
+    document.querySelectorAll(`[data-fav="${id}"]`).forEach(b => b.classList.toggle('on', state.favs.has(id)));
+    if (state.detail && state.detail.id === id) $('detailFav').classList.toggle('active', state.favs.has(id));
+    updateBars();
+  }
+  for (const id of ['sort', 'filterArch', 'favOnly']) $(id).addEventListener('change', renderGallery);
+  $('showGrid').addEventListener('change', () => { state.showGrid = $('showGrid').checked; renderGallery(); });
+
+  // ---- Detail --------------------------------------------------------------------------
+  function findLayout(id) { return state.layouts.find(l => l.id === id) || state.family?.find(l => l.id === id); }
+  function openDetail(id) {
+    const l = findLayout(id); if (!l) return;
+    state.detail = l; state.family = null;
+    $('detailGrid').checked = state.showGrid;
+    renderDetail();
+    $('detail').hidden = false;
+  }
+  function renderDetail() {
+    const l = state.detail; if (!l) return;
+    $('detailPreview').innerHTML = Render.toSVG(l, { kit: state.kit, assets: state.assets, showGrid: $('detailGrid').checked, width: 1000 });
+    $('detailId').textContent = `${l.id} · seed ${l.seed}`;
+    $('detailTitle').textContent = `${l.archetypeLabel} · ${l.format.name}`;
+    $('detailFav').classList.toggle('active', state.favs.has(l.id));
+    const g = l.grid;
+    const meta = Object.entries(l.meta || {}).filter(([k]) => k !== 'overlay').map(([k, v]) => `${k}: ${v}`).join(', ');
+    const rows = [
+      ['Canvas', `${l.format.w} × ${l.format.h}`],
+      ['Grid', `${g.cols} cols × ${g.rows} rows · cell ${g.cw}×${g.rh} · gutter ${g.gutter} · unit ${g.unit}px`],
+      ['Safe space', `${g.safe.left} / ${g.safe.top} / ${g.safe.right} / ${g.safe.bottom}`],
+      ['Palette', `${l.palette.bgName} ${l.palette.bg} · text ${l.palette.fg} · accent ${l.palette.accent}`],
+      ['Type', `${l.type.display} ${l.type.headline}px headline · ${l.type.body_font} ${l.type.body}px body · step ${l.type.level + 1}/6`],
+      ['Elements', l.blocks.map(b => b.role || b.kind).join(', ')],
+      ['Moves', meta || '—'],
+      ['Metrics', `whitespace ${Math.round(l.metrics.whitespace * 100)}% · density ${Math.round(l.metrics.density * 100)}% · balance ${Math.round(l.metrics.balance * 100)}%`],
+    ];
+    $('detailSpecs').innerHTML = rows.map(([k, v]) => `<dt>${k}</dt><dd>${escapeHtml(v)}</dd>`).join('');
+    $('detailJsonView').textContent = JSON.stringify(stripForJson(l), null, 1);
+    $('familyStrip').innerHTML = '';
+  }
+  function stripForJson(l) {
+    const c = JSON.parse(JSON.stringify(l)); delete c.signature; delete c.rejected;
+    for (const b of c.blocks) { delete b.gap; delete b.maxLines; delete b.minSize; if (b.kind === 'text') { b.font = { family: b.font.family, size: b.font.size, weight: b.font.weight, lineHeight: b.font.lineHeight, letterSpacing: b.font.letterSpacing }; } }
+    return c;
+  }
+  $('detailClose').addEventListener('click', () => { $('detail').hidden = true; state.detail = null; });
+  $('detailGrid').addEventListener('change', renderDetail);
+  $('detailFav').addEventListener('click', () => state.detail && toggleFav(state.detail.id));
+  $('detailMore').addEventListener('click', async () => {
+    const l = state.detail; if (!l) return;
+    $('detail').hidden = true;
+    const intent = { ...state.intent, formats: [l.format.id], count: 24, colorHints: [l.palette.bg, l.palette.accent], archetypes: [l.archetype] };
+    await generate($('prompt').value, { intent, append: true, archetype: l.archetype, seedBase: (l.seed * 7 + 13) >>> 0 });
+  });
+  $('detailFamily').addEventListener('click', () => {
+    const l = state.detail; if (!l) return;
+    const fam = [];
+    for (const f of Grid.FORMATS) {
+      if (f.id === l.format.id) { fam.push(l); continue; }
+      let L = null;
+      for (let k = 0; k < 6 && !L; k++) L = Engine.generate({ intent: { ...state.intent, colorHints: [l.palette.bg, l.palette.accent] }, kit: state.kit, assets: state.assets, format: f, seed: (l.seed + k * 0x9E3779B9) >>> 0, archetype: l.archetype });
+      if (L) fam.push(L);
+    }
+    state.family = fam;
+    $('familyStrip').innerHTML = fam.map(x => `<div class="fam" data-id="${x.id}">${Render.toSVG(x, { kit: state.kit, assets: state.assets, width: 240 })}<div class="lbl">${x.format.name}</div></div>`).join('');
+  });
+  $('familyStrip').addEventListener('click', e => {
+    const f = e.target.closest('[data-id]'); if (!f) return;
+    const l = state.family?.find(x => x.id === f.dataset.id); if (!l) return;
+    if (!state.layouts.some(x => x.id === l.id)) { state.layouts.unshift(l); renderGallery(); }
+    const keep = state.family; state.detail = l; renderDetail(); state.family = keep;
+    $('familyStrip').innerHTML = keep.map(x => `<div class="fam" data-id="${x.id}">${Render.toSVG(x, { kit: state.kit, assets: state.assets, width: 240 })}<div class="lbl">${x.format.name}</div></div>`).join('');
+  });
+  async function withBusy(btn, fn) { const t = btn.textContent; btn.disabled = true; btn.textContent = '…'; try { await fn(); } catch (e) { console.warn(e); toast('Export failed: ' + e.message); } finally { btn.disabled = false; btn.textContent = t; } }
+  $('detailPng').addEventListener('click', e => withBusy(e.target, async () => { const l = state.detail; const blob = await Render.exportPNG(l, { kit: state.kit, assets: state.assets }); Render.download(blob, `${slug(state.kit.name)}-${l.id}.png`); toast('PNG saved (if downloads are allowed here)'); }));
+  $('detailSvg').addEventListener('click', e => withBusy(e.target, async () => { const l = state.detail; const svg = await Render.exportSVG(l, { kit: state.kit, assets: state.assets }); Render.download(new Blob([svg], { type: 'image/svg+xml' }), `${slug(state.kit.name)}-${l.id}.svg`); }));
+  $('detailJson').addEventListener('click', e => withBusy(e.target, async () => { const l = state.detail; Render.download(new Blob([JSON.stringify(stripForJson(l), null, 2)], { type: 'application/json' }), `${slug(state.kit.name)}-${l.id}.json`); }));
+  $('detailCopySvg').addEventListener('click', e => withBusy(e.target, async () => { const svg = await Render.exportSVG(state.detail, { kit: state.kit, assets: state.assets }); await copyText(svg); toast('SVG copied'); }));
+  const slug = s => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'brand';
+  async function copyText(text) {
+    try { await navigator.clipboard.writeText(text); }
+    catch { const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); } finally { ta.remove(); } }
+  }
+
+  // ---- Compare -----------------------------------------------------------------------------
+  $('compareBtn').addEventListener('click', () => {
+    const list = state.layouts.filter(l => state.picks.has(l.id)).slice(0, 8);
+    $('compareGrid').innerHTML = list.map(l => `<div class="item">${Render.toSVG(l, { kit: state.kit, assets: state.assets, showGrid: state.showGrid, width: 600 })}<div class="lbl">${l.archetypeLabel} · ${l.format.name} · ${l.id}</div></div>`).join('');
+    $('compare').hidden = false;
+  });
+  $('compareClose').addEventListener('click', () => $('compare').hidden = true);
+  $('exportFavBtn').addEventListener('click', e => withBusy(e.target, async () => {
+    const list = state.layouts.filter(l => state.favs.has(l.id));
+    for (const l of list) { const blob = await Render.exportPNG(l, { kit: state.kit, assets: state.assets }); Render.download(blob, `${slug(state.kit.name)}-${l.id}.png`); await new Promise(r => setTimeout(r, 350)); }
+    toast(`${list.length} PNG${list.length > 1 ? 's' : ''} exported`);
+  }));
+
+  // ---- Brand JSON ----------------------------------------------------------------------------
+  $('exportBrandBtn').addEventListener('click', () => Render.download(new Blob([Brand.serialize(readKit())], { type: 'application/json' }), `${slug(state.kit.name)}-brand-kit.json`));
+  $('copyBrandBtn').addEventListener('click', async () => { await copyText(Brand.serialize(readKit())); toast('Brand kit JSON copied'); });
+  $('importBrand').addEventListener('change', async e => {
+    const f = e.target.files[0]; if (!f) return;
+    try { const kit = JSON.parse(await f.text()); if (!kit.colors || !kit.fonts) throw new Error('missing colors/fonts'); kit.presetId = '__custom'; kit.content = kit.content || {}; kit.grid = kit.grid || { unit: 8, marginRatio: 0.06, gutterUnits: 3, radius: 1 }; kit.logo = kit.logo || { kind: 'wordmark', text: kit.name, allowedColors: [], monochrome: true }; fillFontSelects(); loadKit(kit); $('presetSelect').value = '__custom'; await ensureDemoImages(true); toast('Brand kit loaded'); }
+    catch (err) { toast('Could not load that kit: ' + err.message); }
+    e.target.value = '';
+  });
+
+  // ---- Modals: about + settings ------------------------------------------------------------------
+  $('aboutBtn').addEventListener('click', () => $('about').hidden = false);
+  $('aboutClose').addEventListener('click', () => $('about').hidden = true);
+  $('settingsBtn').addEventListener('click', () => $('settings').hidden = false);
+  $('settingsClose').addEventListener('click', () => { LS.set('lg.apiKey', $('apiKey').value); LS.set('lg.useClaude', $('useClaude').checked); $('settings').hidden = true; });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') for (const id of ['detail', 'compare', 'about', 'settings']) $(id).hidden = true; });
+  for (const id of ['detail', 'compare', 'about', 'settings']) $(id).addEventListener('click', e => { if (e.target === $(id)) $(id).hidden = true; });
+  $('aboutBody').innerHTML = `
+    <p>Most AI design tools pick a template or paint pixels. This engine does neither. It takes the rules a design system already has (a column grid, a pixel grid, safe space, approved color pairs, the logo's clear zone, a type scale) and lets chance move only inside them. The result is not one answer but a field of valid answers you can scan, compare, and choose from. The design decision stays with the designer; the engine removes the blank canvas and the manual iteration.</p>
+    <h4>How a variation is made</h4>
+    <ul>
+      <li><b>Brief → constraints.</b> The prompt becomes a small JSON intent: formats, count, loudness, light or dark, image-led or type-led, density, any quoted copy, any brand color you named.</li>
+      <li><b>Grid.</b> Each format gets a modular grid from the kit's rules. Cells are multiples of the pixel unit. Platform-reserved zones (story UI) are excluded from usable rows.</li>
+      <li><b>Moves.</b> A seeded random generator picks a composition family (type-led, split, full-bleed, framed image, mosaic, color blocks, editorial, stat), a column span, an anchor, a type step, an approved color pair, a crop, a shape.</li>
+      <li><b>Checks.</b> Text is measured and must fit its cells. Nothing textual may leave the safe area or overlap. Text on a photo needs a scrim or a panel, chosen from the image's own luminance map. Text on a color field needs WCAG contrast. Duplicates are dropped.</li>
+      <li><b>Output.</b> Every survivor is an SVG plus a JSON spec, so the same layout can be edited, re-rendered in another format, or pushed to Figma later.</li>
+    </ul>
+    <h4>Where this sits in the landscape</h4>
+    <ul>
+      <li><b>Pitch, Beautiful.ai, Gamma, Tome</b> generate decks by choosing from smart templates and reflowing content. Strong inside their editors, closed to your own grid and rules.</li>
+      <li><b>Canva Magic Design, Adobe Express, Microsoft Designer</b> return 8 to 12 template-based options from a prompt and a brand kit. Wide reach, template-shaped output.</li>
+      <li><b>Figma Make, Framer, Relume</b> generate UI and web layouts from prompts using real components. Product surfaces, not brand comms.</li>
+      <li><b>Research</b> (LayoutPrompter, PosterLlama, COLE, CreatiPoster, LayoutGPT) treats layout as structured generation: an LLM emits boxes in JSON or HTML under content-aware constraints. This prototype follows that idea with explicit rules instead of a trained model, so it runs anywhere and is auditable.</li>
+    </ul>
+    <h4>What it is not yet</h4>
+    <p>Visual generation only. Editing, Figma export, and per-design-system connectors come next. The layout JSON is written so those can be added without changing the engine.</p>`;
+
+  // ---- Init --------------------------------------------------------------------------------------
+  async function init() {
+    fillPresets(); fillFontSelects();
+    const savedKit = LS.get('lg.kit', null); const savedPreset = LS.get('lg.preset', 'deel');
+    if (savedKit && savedKit.colors && savedKit.fonts) { loadKit(savedKit); $('presetSelect').value = savedKit.presetId && Brand.PRESETS[savedKit.presetId] ? savedKit.presetId : '__custom'; }
+    else { loadKit(Brand.fromPreset(savedPreset in Brand.PRESETS ? savedPreset : 'deel')); $('presetSelect').value = state.kit.presetId; }
+    renderChips();
+    $('apiKey').value = LS.get('lg.apiKey', ''); $('useClaude').checked = !!LS.get('lg.useClaude', false);
+    $('prompt').value = LS.get('lg.prompt', '');
+    $('promptForm').addEventListener('submit', e => { e.preventDefault(); generate($('prompt').value); });
+    await ensureDemoImages(false);
+    // First frame: a working state, not an empty shell.
+    if (!$('prompt').value) $('prompt').value = 'Launch posts for Deel Global Payroll, bold, image-led, square and story';
+    await generate($('prompt').value);
+  }
+  init();
+})();
+
+</script>
+</body>
+</html>

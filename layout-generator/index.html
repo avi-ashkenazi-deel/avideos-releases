@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Layout Engine</title>
+<meta name="description" content="Structured randomization for brand layouts: give it a prompt and your brand assets, get 180 on-grid variations to scan and compare.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,300..800&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Fraunces:opsz,wght@9..144,300..900&family=Manrope:wght@400;500;700;800&family=Schibsted+Grotesk:wght@400;500;700;900&family=Instrument+Serif:ital@0;1&display=swap">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<!--APP-->
+<div id="app" class="app">
+  <header class="topbar">
+    <div class="brandmark">
+      <span class="dot"></span>
+      <span class="name">Layout Engine</span>
+      <span class="tag">structured randomization</span>
+    </div>
+    <form id="promptForm" class="promptbar" autocomplete="off">
+      <input id="prompt" name="prompt" type="text" spellcheck="false"
+        placeholder='Describe what you need, e.g. "36 bold image-led square posts for Deel Payroll, dark, with a CTA"'>
+      <button id="generateBtn" type="submit" class="btn primary">Generate</button>
+    </form>
+    <div class="topbar-right">
+      <button id="aboutBtn" class="btn ghost" type="button">Why this works</button>
+      <button id="settingsBtn" class="btn ghost" type="button" title="Interpreter settings">Settings</button>
+    </div>
+  </header>
+
+  <aside class="sidebar" id="sidebar">
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Brand kit</h2>
+        <select id="presetSelect" class="select" aria-label="Brand preset"></select>
+      </div>
+      <div class="field">
+        <label for="brandName">Name</label>
+        <input id="brandName" type="text" class="input">
+      </div>
+      <div class="field">
+        <label>Logo</label>
+        <div class="logo-row">
+          <div id="logoPreview" class="logo-preview" title="Logo preview"></div>
+          <div class="stack">
+            <label class="btn small file">Upload SVG or PNG<input id="logoFile" type="file" accept=".svg,image/svg+xml,image/png,image/jpeg,image/webp" hidden></label>
+            <label class="check"><input id="logoMono" type="checkbox" checked> Recolor SVG to allowed logo colors</label>
+          </div>
+        </div>
+      </div>
+      <div class="field">
+        <label>Colors <span class="hint">click a swatch to change its role</span></label>
+        <div id="colorList" class="swatches"></div>
+        <div class="row">
+          <input id="newColor" type="color" value="#5938B8" class="colorpick" aria-label="New color">
+          <input id="newColorName" type="text" class="input grow" placeholder="Name (optional)">
+          <button id="addColorBtn" class="btn small" type="button">Add</button>
+        </div>
+        <div id="extracted" class="extracted" hidden>
+          <span class="hint">From your images:</span>
+          <div id="extractedSwatches" class="swatches mini"></div>
+        </div>
+      </div>
+      <div class="field two">
+        <div>
+          <label for="displayFont">Display font</label>
+          <select id="displayFont" class="select"></select>
+        </div>
+        <div>
+          <label for="bodyFont">Body font</label>
+          <select id="bodyFont" class="select"></select>
+        </div>
+      </div>
+      <div class="field">
+        <label class="btn small file">Upload a font file (woff2, ttf, otf)<input id="fontFile" type="file" accept=".woff2,.woff,.ttf,.otf" hidden></label>
+        <span id="fontStatus" class="hint"></span>
+      </div>
+      <div class="field">
+        <label>Images <span class="hint">photos, renders, product shots</span></label>
+        <div id="imageList" class="images"></div>
+        <label class="btn small file">Add images<input id="imageFiles" type="file" accept="image/*" multiple hidden></label>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><h2>Content</h2></div>
+      <div class="field"><label for="eyebrow">Eyebrow</label><input id="eyebrow" class="input" type="text"></div>
+      <div class="field"><label for="headline">Headline</label><textarea id="headline" class="input" rows="2"></textarea></div>
+      <div class="field"><label for="subhead">Subhead</label><textarea id="subhead" class="input" rows="2"></textarea></div>
+      <div class="field"><label for="body">Body</label><textarea id="body" class="input" rows="3"></textarea></div>
+      <div class="field two">
+        <div><label for="cta">CTA</label><input id="cta" class="input" type="text"></div>
+        <div><label for="stat">Stat</label><input id="stat" class="input" type="text" placeholder="150+"></div>
+      </div>
+      <div class="field"><label for="footer">Footer / URL</label><input id="footer" class="input" type="text"></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><h2>Grid rules</h2></div>
+      <div class="field three">
+        <div><label for="unit">Pixel grid</label><select id="unit" class="select"><option>4</option><option selected>8</option><option>12</option><option>16</option></select></div>
+        <div><label for="margin">Safe space</label><select id="margin" class="select"><option value="0.04">4%</option><option value="0.06" selected>6%</option><option value="0.08">8%</option><option value="0.1">10%</option></select></div>
+        <div><label for="gutter">Gutter</label><select id="gutter" class="select"><option value="2">2u</option><option value="3" selected>3u</option><option value="4">4u</option></select></div>
+      </div>
+      <div class="field two">
+        <div><label for="radius">Corner radius</label><select id="radius" class="select"><option value="0">Sharp</option><option value="1" selected>Soft</option><option value="3">Round</option></select></div>
+        <div><label for="shapes">Brand shapes</label><select id="shapes" class="select"><option value="on" selected>Allowed</option><option value="off">Off</option></select></div>
+      </div>
+      <label class="check"><input id="showGrid" type="checkbox"> Show grid on cards</label>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><h2>Brand kit JSON</h2></div>
+      <div class="row">
+        <button id="exportBrandBtn" class="btn small" type="button">Download</button>
+        <label class="btn small file">Load<input id="importBrand" type="file" accept="application/json,.json" hidden></label>
+        <button id="copyBrandBtn" class="btn small" type="button">Copy</button>
+      </div>
+      <p class="hint">The kit is the contract: any design system that can be described this way can run through the engine.</p>
+    </section>
+  </aside>
+
+  <main class="main" id="main">
+    <div class="controls">
+      <div class="chips" id="formatChips" aria-label="Formats"></div>
+      <div class="controls-right">
+        <label class="inline">Count
+          <select id="count" class="select">
+            <option>24</option><option>48</option><option selected>96</option><option>180</option><option>360</option>
+          </select>
+        </label>
+        <label class="inline">Sort
+          <select id="sort" class="select">
+            <option value="seed">Seed</option>
+            <option value="whitespace">Most whitespace</option>
+            <option value="density">Densest</option>
+            <option value="balance">Most balanced</option>
+            <option value="archetype">By archetype</option>
+          </select>
+        </label>
+        <label class="inline">Filter
+          <select id="filterArch" class="select"><option value="">All archetypes</option></select>
+        </label>
+        <label class="check"><input id="favOnly" type="checkbox"> Favorites</label>
+        <button id="compareBtn" class="btn small" type="button" disabled>Compare (0)</button>
+        <button id="exportFavBtn" class="btn small" type="button" disabled>Export favorites</button>
+      </div>
+    </div>
+    <div id="readout" class="readout"></div>
+    <div id="gallery" class="gallery" aria-live="polite"></div>
+    <div id="empty" class="empty">
+      <div class="empty-inner">
+        <p class="big">Type a brief above, or just press Generate.</p>
+        <p>The engine only plays inside the rules on the left: a column grid, a pixel grid, safe space, approved color pairs, and the logo's clear zone. Everything else is randomized, then checked.</p>
+      </div>
+    </div>
+  </main>
+
+  <div id="detail" class="modal" hidden>
+    <div class="modal-inner detail">
+      <div class="detail-preview" id="detailPreview"></div>
+      <div class="detail-side">
+        <div class="detail-head">
+          <div>
+            <div class="mono" id="detailId"></div>
+            <h3 id="detailTitle"></h3>
+          </div>
+          <button class="btn ghost icon" id="detailClose" type="button" aria-label="Close">✕</button>
+        </div>
+        <div class="detail-actions">
+          <button class="btn small" id="detailFav" type="button">★ Favorite</button>
+          <button class="btn small" id="detailMore" type="button">Variations of this</button>
+          <button class="btn small" id="detailFamily" type="button">Same idea, every format</button>
+          <label class="check"><input id="detailGrid" type="checkbox"> Grid</label>
+        </div>
+        <div class="detail-actions">
+          <button class="btn small" id="detailPng" type="button">PNG</button>
+          <button class="btn small" id="detailSvg" type="button">SVG</button>
+          <button class="btn small" id="detailJson" type="button">JSON</button>
+          <button class="btn small" id="detailCopySvg" type="button">Copy SVG</button>
+        </div>
+        <dl class="specs" id="detailSpecs"></dl>
+        <div id="familyStrip" class="family"></div>
+        <details class="json">
+          <summary>Layout spec (the future edit surface)</summary>
+          <pre id="detailJsonView" class="mono"></pre>
+        </details>
+      </div>
+    </div>
+  </div>
+
+  <div id="compare" class="modal" hidden>
+    <div class="modal-inner compare">
+      <div class="detail-head">
+        <h3>Compare</h3>
+        <button class="btn ghost icon" id="compareClose" type="button" aria-label="Close">✕</button>
+      </div>
+      <div id="compareGrid" class="compare-grid"></div>
+    </div>
+  </div>
+
+  <div id="about" class="modal" hidden>
+    <div class="modal-inner about">
+      <div class="detail-head">
+        <h3>Why structured randomization</h3>
+        <button class="btn ghost icon" id="aboutClose" type="button" aria-label="Close">✕</button>
+      </div>
+      <div class="prose" id="aboutBody"></div>
+    </div>
+  </div>
+
+  <div id="settings" class="modal" hidden>
+    <div class="modal-inner settings">
+      <div class="detail-head">
+        <h3>Prompt interpreter</h3>
+        <button class="btn ghost icon" id="settingsClose" type="button" aria-label="Close">✕</button>
+      </div>
+      <div class="prose">
+        <p>By default the brief is read by a built-in rule parser (formats, mood, emphasis, count, quoted copy, brand color names). Optionally, let Claude read the brief and turn it into the same constraint JSON. The key stays in this browser only and is sent straight to Anthropic.</p>
+        <div class="field"><label for="apiKey">Anthropic API key</label><input id="apiKey" class="input" type="password" placeholder="sk-ant-..." autocomplete="off"></div>
+        <label class="check"><input id="useClaude" type="checkbox"> Use Claude to interpret the brief</label>
+        <p class="hint">Runs when the page is served locally or from your own host. Published read-only copies block outbound requests, so the rule parser is used there.</p>
+        <div id="interpretLog" class="mono small"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" hidden></div>
+</div>
+<!--/APP-->
+<script src="js/rng.js"></script>
+<script src="js/color.js"></script>
+<script src="js/brand.js"></script>
+<script src="js/grid.js"></script>
+<script src="js/text.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/render.js"></script>
+<script src="js/prompt.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
