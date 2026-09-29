@@ -84,6 +84,6 @@ docs/landscape.md   research: how other tools generate layouts
 
 ## Known limits
 
-- Exports need a normal browser context. Published read-only copies block downloads; use "Copy SVG" there or run locally.
+- In the published copy, exports go through the viewer's save prompt and PNGs use fallback fonts (font files cannot be fetched there). Run locally for exact type.
 - The Claude interpreter calls Anthropic directly from the browser with your key. It is off by default and never used in published copies.
 - Hex values in the Deel preset were read from the guidelines PDF. Confirm against the Figma library before production use.

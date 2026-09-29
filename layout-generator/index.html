@@ -221,7 +221,7 @@
         <p>By default the brief is read by a built-in rule parser (formats, mood, emphasis, count, quoted copy, brand color names). Optionally, let Claude read the brief and turn it into the same constraint JSON. The key stays in this browser only and is sent straight to Anthropic.</p>
         <div class="field"><label for="apiKey">Anthropic API key</label><input id="apiKey" class="input" type="password" placeholder="sk-ant-..." autocomplete="off"></div>
         <label class="check"><input id="useClaude" type="checkbox"> Use Claude to interpret the brief</label>
-        <p class="hint">Runs when the page is served locally or from your own host. Published read-only copies block outbound requests, so the rule parser is used there.</p>
+        <p class="hint">Runs when the page is served locally or from your own host. Published copies block outbound requests, so the rule parser is used there.</p>
         <div id="interpretLog" class="mono small"></div>
       </div>
     </div>

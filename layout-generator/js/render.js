@@ -87,8 +87,22 @@ const Render = (() => {
 
   // ---- Export ------------------------------------------------------------------------
   const fontCache = new Map();
+  const GOOGLE_SPECS = { 'Bricolage Grotesque': 'Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,300..800', 'Inter': 'Inter:wght@400;500;600;700', 'IBM Plex Mono': 'IBM+Plex+Mono:wght@400;500', 'Fraunces': 'Fraunces:opsz,wght@9..144,300..900', 'Manrope': 'Manrope:wght@400;500;700;800', 'Schibsted Grotesk': 'Schibsted+Grotesk:wght@400;500;700;900', 'Instrument Serif': 'Instrument+Serif:ital@0;1' };
+  let lastEmbedFailed = false;
+  function bufToBase64(buf) {
+    const bytes = new Uint8Array(buf); let bin = '';
+    for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    return btoa(bin);
+  }
+  // Keep only the Latin subsets of a Google Fonts stylesheet (the rest can be a megabyte of Cyrillic and Vietnamese).
+  function latinOnly(css) {
+    const blocks = css.match(/@font-face\s*{[^}]*}/g) || [];
+    const keep = blocks.filter(b => !/unicode-range/.test(b) || /U\+0000-00FF/.test(b) || /U\+0100-02BA|U\+0100-02AF/.test(b));
+    return keep.join('\n');
+  }
   async function fontFaceCss(families) {
     const out = [];
+    lastEmbedFailed = false;
     for (const fam of families) {
       if (Brand.customFonts[fam]) {
         const cf = Brand.customFonts[fam];
@@ -97,21 +111,26 @@ const Render = (() => {
       }
       if (!Brand.FONTS[fam]) continue;
       if (fontCache.has(fam)) { out.push(fontCache.get(fam)); continue; }
+      const spec = GOOGLE_SPECS[fam];
       try {
-        const spec = { 'Bricolage Grotesque': 'Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,300..800', 'Inter': 'Inter:wght@400;500;600;700', 'IBM Plex Mono': 'IBM+Plex+Mono:wght@400;500', 'Fraunces': 'Fraunces:opsz,wght@9..144,300..900', 'Manrope': 'Manrope:wght@400;500;700;800', 'Schibsted Grotesk': 'Schibsted+Grotesk:wght@400;500;700;900', 'Instrument Serif': 'Instrument+Serif:ital@0;1' }[fam];
-        const css = await (await fetch(`https://fonts.googleapis.com/css2?family=${spec}&display=swap`)).text();
+        const css = latinOnly(await (await fetch(`https://fonts.googleapis.com/css2?family=${spec}&display=swap`)).text());
         const urls = [...new Set([...css.matchAll(/url\((https:[^)]+)\)/g)].map(m => m[1]))];
+        if (!urls.length) throw new Error('no font urls');
         let inlined = css;
         for (const u of urls) {
-          const buf = await (await fetch(u)).arrayBuffer();
-          const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
-          inlined = inlined.split(u).join(`data:font/woff2;base64,${b64}`);
+          const res = await fetch(u); if (!res.ok) throw new Error('font fetch ' + res.status);
+          inlined = inlined.split(u).join(`data:font/woff2;base64,${bufToBase64(await res.arrayBuffer())}`);
         }
         fontCache.set(fam, inlined); out.push(inlined);
-      } catch (e) { console.warn('font embed failed', fam, e); }
+      } catch (e) {
+        // Fetch is blocked in some hosts (published copies). Fall back to a stylesheet import so the SVG still loads the face in a browser.
+        lastEmbedFailed = true;
+        out.push(`@import url("https://fonts.googleapis.com/css2?family=${spec}&display=swap");`);
+      }
     }
     return out.join('\n');
   }
+  function fontsEmbedded() { return !lastEmbedFailed; }
   async function exportSVG(layout, opts) {
     const fams = [opts.kit.fonts.display, opts.kit.fonts.body];
     const fontStyle = await fontFaceCss(fams);
@@ -129,9 +148,24 @@ const Render = (() => {
       return await new Promise(res => c.toBlob(res, 'image/png'));
     } finally { URL.revokeObjectURL(url); }
   }
-  function download(blob, name) {
+  // Published copies hand files to the viewer through the host's download capability (the viewer confirms each save);
+  // anywhere else a plain anchor works. Resolves true when a file was offered, false when the viewer declined.
+  let hostDownloads; // undefined = not asked yet, null = unavailable
+  async function hostDl() {
+    if (hostDownloads !== undefined) return hostDownloads;
+    try { hostDownloads = (window.claude && typeof window.claude.use === 'function') ? await window.claude.use('downloads') : null; }
+    catch { hostDownloads = null; }
+    return hostDownloads;
+  }
+  async function download(blob, name) {
+    const host = await hostDl();
+    if (host) {
+      try { await host.save({ filename: name, data: blob }); return true; }
+      catch (e) { if (e && e.code === 'declined') return false; throw new Error(e && e.message ? e.message : 'save failed'); }
+    }
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click();
     setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+    return true;
   }
-  return { toSVG, gridOverlay, exportSVG, exportPNG, download, fontFaceCss };
+  return { toSVG, gridOverlay, exportSVG, exportPNG, download, fontFaceCss, fontsEmbedded, bufToBase64 };
 })();

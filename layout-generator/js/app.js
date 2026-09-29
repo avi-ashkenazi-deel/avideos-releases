@@ -91,7 +91,7 @@
     try {
       const buf = await f.arrayBuffer();
       const face = new FontFace(name, buf); await face.load(); document.fonts.add(face);
-      const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
+      const b64 = Render.bufToBase64(buf);
       const mime = f.name.endsWith('.woff2') ? 'font/woff2' : f.name.endsWith('.woff') ? 'font/woff' : f.name.endsWith('.otf') ? 'font/otf' : 'font/ttf';
       Brand.customFonts[name] = { css: `"${name}", sans-serif`, weights: [300, 400, 500, 600, 700, 800, 900], dataUrl: `data:${mime};base64,${b64}` };
       fillFontSelects(); $('displayFont').value = name; readKit(); renderLogo(); Text.clearCache();
@@ -349,9 +349,9 @@
     $('familyStrip').innerHTML = keep.map(x => `<div class="fam" data-id="${x.id}">${Render.toSVG(x, { kit: state.kit, assets: state.assets, width: 240 })}<div class="lbl">${x.format.name}</div></div>`).join('');
   });
   async function withBusy(btn, fn) { const t = btn.textContent; btn.disabled = true; btn.textContent = '…'; try { await fn(); } catch (e) { console.warn(e); toast('Export failed: ' + e.message); } finally { btn.disabled = false; btn.textContent = t; } }
-  $('detailPng').addEventListener('click', e => withBusy(e.target, async () => { const l = state.detail; const blob = await Render.exportPNG(l, { kit: state.kit, assets: state.assets }); Render.download(blob, `${slug(state.kit.name)}-${l.id}.png`); toast('PNG saved (if downloads are allowed here)'); }));
-  $('detailSvg').addEventListener('click', e => withBusy(e.target, async () => { const l = state.detail; const svg = await Render.exportSVG(l, { kit: state.kit, assets: state.assets }); Render.download(new Blob([svg], { type: 'image/svg+xml' }), `${slug(state.kit.name)}-${l.id}.svg`); }));
-  $('detailJson').addEventListener('click', e => withBusy(e.target, async () => { const l = state.detail; Render.download(new Blob([JSON.stringify(stripForJson(l), null, 2)], { type: 'application/json' }), `${slug(state.kit.name)}-${l.id}.json`); }));
+  $('detailPng').addEventListener('click', e => withBusy(e.target, async () => { const l = state.detail; const blob = await Render.exportPNG(l, { kit: state.kit, assets: state.assets }); if (await Render.download(blob, `${slug(state.kit.name)}-${l.id}.png`)) toast(Render.fontsEmbedded() ? 'PNG saved' : 'PNG saved with fallback fonts (run locally for exact type)'); }));
+  $('detailSvg').addEventListener('click', e => withBusy(e.target, async () => { const l = state.detail; const svg = await Render.exportSVG(l, { kit: state.kit, assets: state.assets }); if (await Render.download(new Blob([svg], { type: 'image/svg+xml' }), `${slug(state.kit.name)}-${l.id}.svg`)) toast('SVG saved'); }));
+  $('detailJson').addEventListener('click', e => withBusy(e.target, async () => { const l = state.detail; if (await Render.download(new Blob([JSON.stringify(stripForJson(l), null, 2)], { type: 'application/json' }), `${slug(state.kit.name)}-${l.id}.json`)) toast('JSON saved'); }));
   $('detailCopySvg').addEventListener('click', e => withBusy(e.target, async () => { const svg = await Render.exportSVG(state.detail, { kit: state.kit, assets: state.assets }); await copyText(svg); toast('SVG copied'); }));
   const slug = s => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'brand';
   async function copyText(text) {
@@ -368,12 +368,13 @@
   $('compareClose').addEventListener('click', () => $('compare').hidden = true);
   $('exportFavBtn').addEventListener('click', e => withBusy(e.target, async () => {
     const list = state.layouts.filter(l => state.favs.has(l.id));
-    for (const l of list) { const blob = await Render.exportPNG(l, { kit: state.kit, assets: state.assets }); Render.download(blob, `${slug(state.kit.name)}-${l.id}.png`); await new Promise(r => setTimeout(r, 350)); }
-    toast(`${list.length} PNG${list.length > 1 ? 's' : ''} exported`);
+    let n = 0;
+    for (const l of list) { const blob = await Render.exportPNG(l, { kit: state.kit, assets: state.assets }); if (!(await Render.download(blob, `${slug(state.kit.name)}-${l.id}.png`))) break; n++; await new Promise(r => setTimeout(r, 350)); }
+    if (n) toast(`${n} PNG${n > 1 ? 's' : ''} exported`);
   }));
 
   // ---- Brand JSON ----------------------------------------------------------------------------
-  $('exportBrandBtn').addEventListener('click', () => Render.download(new Blob([Brand.serialize(readKit())], { type: 'application/json' }), `${slug(state.kit.name)}-brand-kit.json`));
+  $('exportBrandBtn').addEventListener('click', e => withBusy(e.target, async () => { if (await Render.download(new Blob([Brand.serialize(readKit())], { type: 'application/json' }), `${slug(state.kit.name)}-brand-kit.json`)) toast('Brand kit saved'); }));
   $('copyBrandBtn').addEventListener('click', async () => { await copyText(Brand.serialize(readKit())); toast('Brand kit JSON copied'); });
   $('importBrand').addEventListener('change', async e => {
     const f = e.target.files[0]; if (!f) return;
