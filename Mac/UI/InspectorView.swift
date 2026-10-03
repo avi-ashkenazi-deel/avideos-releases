@@ -132,6 +132,10 @@ struct InspectorView: View {
                     WebURLEditor(element: element, content: content)
                 }
 
+                if studio.editOrientation == .vertical {
+                    verticalEditor(element)
+                }
+
                 HStack {
                     Button(element.isVisible ? "Hide (animated)" : "Show (animated)") {
                         studio.toggleElementVisibility(id: element.id)
@@ -499,9 +503,11 @@ struct InspectorView: View {
                     var updated = element
                     updated.tileShape = newShape
                     // The preset rewrites the tile's aspect around its width.
-                    let canvas = studio.project.canvasSize
-                    updated.transform.size.height = updated.transform.size.width
+                    let canvas = studio.editCanvasSize
+                    var transform = studio.editableTransform(of: updated)
+                    transform.size.height = transform.size.width
                         * (canvas.width / canvas.height) / newShape.aspect
+                    studio.setEditableTransform(transform, on: &updated)
                     studio.updateElement(updated)
                 }
             )) {
@@ -660,13 +666,42 @@ struct InspectorView: View {
         )
     }
 
+    /// Vertical-only controls, shown while the canvas is on V.
+    private func verticalEditor(_ element: Element) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Vertical Layout").font(.headline)
+            Toggle("Hide in vertical", isOn: Binding(
+                get: { studio.findElement(id: element.id)?.hiddenInVertical ?? false },
+                set: { hidden in
+                    guard var updated = studio.findElement(id: element.id) else { return }
+                    updated.hiddenInVertical = hidden ? true : nil
+                    studio.updateElement(updated)
+                }))
+            HStack {
+                Text(element.verticalTransform == nil
+                     ? "Placed automatically from the horizontal layout."
+                     : "Moved by hand for vertical.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button("Reset") { studio.resetVerticalLayout(id: element.id) }
+                    .disabled(element.verticalTransform == nil)
+                    .help("Back to the automatic vertical placement")
+            }
+        }
+        .padding(8)
+        .background(Color.accentColor.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+    }
+
     private func bindTransform(_ element: Element,
                                _ keyPath: WritableKeyPath<ElementTransform, Double>) -> Binding<Double> {
         Binding(
-            get: { (studio.findElement(id: element.id) ?? element).transform[keyPath: keyPath] },
+            get: { studio.editableTransform(of: studio.findElement(id: element.id) ?? element)[keyPath: keyPath] },
             set: { newValue in
                 guard var updated = studio.findElement(id: element.id) else { return }
-                updated.transform[keyPath: keyPath] = newValue
+                var transform = studio.editableTransform(of: updated)
+                transform[keyPath: keyPath] = newValue
+                studio.setEditableTransform(transform, on: &updated)
                 studio.updateElement(updated)
             }
         )
@@ -677,10 +712,12 @@ struct InspectorView: View {
     private func bindTransformCG(_ element: Element,
                                  _ keyPath: WritableKeyPath<ElementTransform, CGFloat>) -> Binding<Double> {
         Binding(
-            get: { Double((studio.findElement(id: element.id) ?? element).transform[keyPath: keyPath]) },
+            get: { Double(studio.editableTransform(of: studio.findElement(id: element.id) ?? element)[keyPath: keyPath]) },
             set: { newValue in
                 guard var updated = studio.findElement(id: element.id) else { return }
-                updated.transform[keyPath: keyPath] = CGFloat(newValue)
+                var transform = studio.editableTransform(of: updated)
+                transform[keyPath: keyPath] = CGFloat(newValue)
+                studio.setEditableTransform(transform, on: &updated)
                 studio.updateElement(updated)
             }
         )

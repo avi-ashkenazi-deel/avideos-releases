@@ -61,6 +61,48 @@ full-screen-this-camera layout cues at the playhead, replacing a cue within
 fades, and offset recovery from synthetic envelopes (`EditorAudioTests`).
 F-488…F-499.
 
+Thirtieth pass — **Go live: multistream, horizontal + vertical at once,
+and live comments the host features by hand**. Direct from the Mac, no
+relay. The picture is encoded once per (shape, quality) with VideoToolbox
+(H.264 High, real-time, no B-frames, 2 s GOP) and the program audio once with
+AAC-LC 160 kbps; every destination's `RTMPPublisher` subscribes to the shared
+compressed streams, so five destinations cost two hardware encodes. The RTMP
+stack is our own (`Mac/Streaming/`): AMF0, chunk writer/reader with extended
+timestamps, FLV tag bodies, `rtmp(s)://` URL parsing (all unit-tested at the
+byte level), and a Network.framework publisher with the C0/C1/C2 handshake,
+connect → releaseStream/FCPublish → createStream → publish, metadata plus
+sequence headers, a 2-second backpressure rule that drops video to the next
+keyframe and keeps audio, and reconnect with backoff. Program audio became a
+multicast tap (`AudioGraph.addProgramConsumer`) so the recorder, the stream
+encoder and the vertical recorder each get their own feed.
+Destinations (`StreamDestination`, keys in the Keychain) are edited in
+Settings → Streaming; the Go Live sheet (⇧⌘L) ticks them, shows the upload
+estimate, and becomes the live control room with per-destination state,
+kbps, stop/start mid-show and End Stream. YouTube can also go live through
+the connected account (`GoogleOAuth`, PKCE, `youtube.force-ssl`):
+`YouTubeLiveService` creates and binds a broadcast + stream with auto
+start/stop and returns the RTMPS ingest and the chat id.
+The **vertical canvas** is a third `RenderEngine` (shared segmentation) that
+compiles the same program scene with `orientation: .vertical`.
+`VerticalAdapter` keeps each element's pixel aspect (1.6× width share, capped,
+clamped into a title-safe band clear of phone UI), text and strokes scale
+with their box via `RenderItem.textReferenceHeight/strokeReferenceWidth`,
+interview tiles stack. The host overrides any element on the H | V canvas
+switch (⌥⌘V): every transform write (canvas gestures, inspector, Fit Canvas,
+tile shape, drop placement) goes through `editableTransform` /
+`setEditableTransform`, which land in `Element.verticalTransform` and never
+touch the horizontal design; "Hide in vertical" and Reset in the inspector.
+A side monitor, a Multiview tile and "Record a vertical file too" round it out.
+**Comments** (per Avi: "I need a place to see the comments and choose which
+I want to feature on air"): a Comments window (⌥⌘C) merges YouTube Live Chat
+(polled at YouTube's interval) and Twitch IRC (anonymous, over WebSocket),
+with filter chips, search, "N new" when scrolled up, a starred Shortlist,
+a card preview drawn from the same layout math as the renderer, and Feature
+on Air / Hide. `CommentCard` adds the card as the top layer of both canvases
+with a rise-in; nothing is ever featured automatically. LinkedIn, X,
+Instagram and TikTok stream fine but have no readable comments API, and the
+UI says so. Demo Chat rehearses it offline. F-542…F-556.
+
 Twenty-ninth pass — **Multiview**. Its own resizable window (Studio menu →
 Show Multiview, ⌥⌘M): PREVIEW (in studio mode) and PROGRAM across the top
 with colored frames and scene names; a tile per camera (the camera strip's

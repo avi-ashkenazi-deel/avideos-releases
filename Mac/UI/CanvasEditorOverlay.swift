@@ -13,8 +13,10 @@ struct CanvasEditorOverlay: View {
 
     var body: some View {
         GeometryReader { geo in
+            // The canvas being edited: 16:9, or 9:16 when the H|V switch is
+            // on V (moves then land in the element's vertical layout only).
             let transform = CanvasTransform(viewSize: geo.size,
-                                            canvasSize: studio.project.canvasSize)
+                                            canvasSize: studio.editCanvasSize)
             ZStack {
                 // Full-area hit target for click-to-select / click-empty-to-deselect.
                 Color.clear
@@ -62,8 +64,10 @@ struct CanvasEditorOverlay: View {
                             // still be the previous element here.)
                             if let id = studio.selectedElementID,
                                var added = studio.findElement(id: id) {
-                                added.transform.center = CGPoint(x: min(max(unit.x, 0), 1),
-                                                                 y: min(max(unit.y, 0), 1))
+                                var placed = studio.editableTransform(of: added)
+                                placed.center = CGPoint(x: min(max(unit.x, 0), 1),
+                                                        y: min(max(unit.y, 0), 1))
+                                studio.setEditableTransform(placed, on: &added)
                                 studio.updateElement(added)
                             }
                         } else if type?.conforms(to: .movie) == true {
@@ -94,15 +98,17 @@ struct CanvasEditorOverlay: View {
     private func selectedLocalRect(transform: CanvasTransform) -> CGRect? {
         guard let id = studio.selectedElementID,
               let element = studio.findElement(id: id) else { return nil }
-        return transform.viewRect(for: element.transform)
+        return transform.viewRect(for: studio.editableTransform(of: element))
     }
 
     /// Top-down z-order hit test with rotation-aware point-in-rect.
     private func hitTest(at point: CGPoint, transform: CanvasTransform) -> UUID? {
         guard let elements = studio.activeScene?.elements else { return nil }
         let unit = transform.toUnit(point)
+        let vertical = studio.editOrientation == .vertical
         for element in elements.reversed() where element.isVisible && !element.isLocked {
-            let t = element.transform
+            if vertical, element.hiddenInVertical == true { continue }
+            let t = studio.editableTransform(of: element)
             // Rotate the point into the element's local frame.
             let dx = unit.x - t.center.x
             let dy = unit.y - t.center.y
@@ -145,8 +151,11 @@ private struct SelectionChrome: View {
         }
     }
 
+    /// The box on the canvas being edited (horizontal, or vertical).
+    private var current: ElementTransform { studio.editableTransform(of: element) }
+
     var body: some View {
-        let rect = canvas.viewRect(for: element.transform)
+        let rect = canvas.viewRect(for: current)
 
         ZStack {
             // Move gesture on the body.
@@ -194,9 +203,9 @@ private struct SelectionChrome: View {
             .offset(x: -rect.width / 2 - 18)
             .help("Edit this element")
         }
-        .rotationEffect(.radians(element.transform.rotation))
+        .rotationEffect(.radians(current.rotation))
         .position(x: rect.midX, y: rect.midY)
-        .animation(nil, value: element.transform)
+        .animation(nil, value: current)
     }
 
     // Move and resize measure in the CANVAS coordinate space, like the
@@ -207,14 +216,15 @@ private struct SelectionChrome: View {
     private var moveGesture: some Gesture {
         DragGesture(minimumDistance: 1, coordinateSpace: .named("canvas"))
             .onChanged { value in
-                if dragStart == nil { dragStart = element.transform }
+                if dragStart == nil { dragStart = current }
                 guard let start = dragStart else { return }
                 let delta = canvas.toUnitDelta(CGSize(width: value.translation.width,
                                                       height: value.translation.height))
                 var element = element
-                element.transform = start
-                element.transform.center.x = min(max(start.center.x + delta.width, 0), 1)
-                element.transform.center.y = min(max(start.center.y + delta.height, 0), 1)
+                var moved = start
+                moved.center.x = min(max(start.center.x + delta.width, 0), 1)
+                moved.center.y = min(max(start.center.y + delta.height, 0), 1)
+                studio.setEditableTransform(moved, on: &element)
                 studio.updateElement(element)
             }
             .onEnded { _ in dragStart = nil }
@@ -223,7 +233,7 @@ private struct SelectionChrome: View {
     private func resizeGesture(handle: Handle) -> some Gesture {
         DragGesture(minimumDistance: 1, coordinateSpace: .named("canvas"))
             .onChanged { value in
-                if dragStart == nil { dragStart = element.transform }
+                if dragStart == nil { dragStart = current }
                 guard let start = dragStart else { return }
                 let delta = canvas.toUnitDelta(CGSize(width: value.translation.width,
                                                       height: value.translation.height))
@@ -238,7 +248,7 @@ private struct SelectionChrome: View {
                 t.size.height = max(0.02, start.size.height + dh)
                 t.center.x = start.center.x + delta.width * abs(dirX) / 2
                 t.center.y = start.center.y + delta.height * abs(dirY) / 2
-                element.transform = t
+                studio.setEditableTransform(t, on: &element)
                 studio.updateElement(element)
             }
             .onEnded { _ in dragStart = nil }
@@ -247,7 +257,7 @@ private struct SelectionChrome: View {
     private func rotateGesture(rect: CGRect) -> some Gesture {
         DragGesture(minimumDistance: 1, coordinateSpace: .named("canvas"))
             .onChanged { value in
-                if dragStart == nil { dragStart = element.transform }
+                if dragStart == nil { dragStart = current }
                 let center = CGPoint(x: rect.midX, y: rect.midY)
                 let angle = atan2(value.location.y - center.y, value.location.x - center.x) + .pi / 2
                 var element = element
@@ -256,7 +266,9 @@ private struct SelectionChrome: View {
                 let step = Double.pi / 12
                 let nearest = (angle / step).rounded() * step
                 if abs(angle - nearest) < 0.04 { snapped = nearest }
-                element.transform.rotation = snapped
+                var rotated = current
+                rotated.rotation = snapped
+                studio.setEditableTransform(rotated, on: &element)
                 studio.updateElement(element)
             }
             .onEnded { _ in dragStart = nil }

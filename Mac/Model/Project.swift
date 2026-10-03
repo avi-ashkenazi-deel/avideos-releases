@@ -16,6 +16,13 @@ struct Project: Codable, Hashable, Sendable, Identifiable {
     var activeSceneID: UUID?
     /// Default transition when a scene doesn't override.
     var defaultTransitionDuration: TimeInterval
+    /// The vertical (9:16) canvas streamed alongside the main one. nil =
+    /// 1080×1920. Optional so old files decode.
+    var verticalCanvasSize: CGSize?
+
+    var resolvedVerticalCanvasSize: CGSize {
+        verticalCanvasSize ?? CGSize(width: 1080, height: 1920)
+    }
 
     init(id: UUID = UUID(),
          name: String = "Untitled Show",

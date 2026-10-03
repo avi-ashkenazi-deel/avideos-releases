@@ -1,6 +1,6 @@
 # streamit — full feature checklist
 
-All 541 user-facing features, each with a stable ID so you can report
+All 556 user-facing features, each with a stable ID so you can report
 back precisely ("F-42 fails"). Ordered so you can work top to bottom: each
 section only depends on the ones above it.
 
@@ -319,6 +319,26 @@ replays just the entrance, which is the quick way to compare them.
 - [ ] **F-539** Studio menu → Show Multiview (⌥⌘M): a resizable window with PROGRAM (and PREVIEW in studio mode) on top, one live tile per camera and per guest/shared screen below, and a level meter per mixer strip along the bottom.
 - [ ] **F-540** The program camera's tile is framed red with ON AIR; guest tiles show ON AIR or WAITING from their green-room state; demo guests appear while Rehearse Layouts is on; muted strips show red.
 - [ ] **F-541** Studio menu → Multiview Full Screen on Display → pick a screen: the Multiview moves there and goes full screen; the green button or Esc brings it back.
+
+### Going live (multistream, horizontal + vertical)
+
+Needs real stream keys. Use private/unlisted streams. See `docs/DEV_SETUP.md` → "Live streaming".
+
+- [ ] **F-542** Settings → Streaming → Add Destination → YouTube / LinkedIn / X / Twitch / Instagram / TikTok / Custom RTMP: the server URL is prefilled where the platform has one, the key field is secure with a show toggle, Save puts a green check by the key, and the key survives a relaunch (Keychain, not the JSON file).
+- [ ] **F-543** A destination missing its key or with a bad URL shows the reason in orange, in Settings and in the Go Live sheet; it never starts.
+- [ ] **F-544** Go Live (button beside Record, Studio menu, ⇧⌘L) opens the sheet with every ticked destination selected and the total upload estimate; Go Live connects each one and the row goes Connecting… → Live with its kbps.
+- [ ] **F-545** Two destinations at once (e.g. YouTube + Twitch): both platform dashboards show picture and sound in sync; the HUD shows LIVE with the total kbps; the button turns into a red LIVE timer.
+- [ ] **F-546** Stop one destination from its row: the others keep going; Add Destinations starts a new one mid-show; End Stream (with confirmation) stops all.
+- [ ] **F-547** Pull the network for ~10 s while live: rows go Reconnecting (orange, HUD orange), then back to Live without touching anything.
+- [ ] **F-548** A vertical destination (Instagram, TikTok, or YouTube set to Vertical) streams a 9:16 picture at the same time as the horizontal ones.
+- [ ] **F-549** The vertical layout is automatic: lower thirds widen, picture-in-picture keeps its shape, text keeps a sensible size, nothing sits in the bottom fifth where phone apps draw their own buttons; interview guests stack vertically.
+- [ ] **F-550** The H | V switch on the canvas (or ⌥⌘V): on V the canvas becomes 9:16, dragging, resizing, rotating, inspector sliders and Fit Canvas change only the vertical layout; flipping back to H shows the horizontal design untouched.
+- [ ] **F-551** On V, the inspector shows Vertical Layout: "Hide in vertical" removes the element from the 9:16 output only; Reset returns it to the automatic placement.
+- [ ] **F-552** Settings → Streaming → "Show the vertical canvas beside the main one": a small 9:16 monitor appears bottom-right (and a VERTICAL tile in the Multiview); scene transitions play on it too.
+- [ ] **F-553** "Record a vertical file too" (Recording or Streaming settings): a take writes "<name> Vertical.mov" beside the main file, same length, same sound.
+- [ ] **F-554** YouTube account: Settings → Streaming → paste the OAuth client ID → Connect → Google sign-in → the channel name shows. A YouTube destination with "Create the broadcast with my YouTube account" goes live with no key: a new broadcast appears in YouTube Studio with the title and privacy chosen, starts by itself, and ends when you stop. The row offers an "open broadcast" link.
+- [ ] **F-555** Studio → Show Comments (⌥⌘C) while live on YouTube and Twitch: comments from both appear in one feed with platform badge, name, time; Twitch names in their chat colors; MOD/HOST/Super Chat tags. Scrolling up holds the feed still and shows "N new"; filter chips and search narrow it; LinkedIn/X/Instagram/TikTok chips are grey with the reason on hover. Nothing appears on the stream by itself.
+- [ ] **F-556** Select a comment: the preview shows the card exactly as it will appear on H and V. Feature on Air (or ↩) shows it on both canvases with a rise-in; featuring another replaces it; Hide (or Esc) removes it; the comment gets a "shown" tick. Star comments into the Shortlist, drag to reorder, feature from there. Card Options: auto-hide (off by default), hide on scene change (on by default), position, size, colors. Demo Chat rehearses all of this without going live.
 
 ## N. Remote guests
 
@@ -741,6 +761,12 @@ Bringing files that were never part of the session into the edit.
    crop geometry.
 6. **29 `verify on Mac:` markers** across 22 files flag API assumptions made
    without a compiler. `grep -rn "verify on Mac" Mac/ CameraExtension/ driver/`
+7. **Live comments exist only for YouTube and Twitch.** LinkedIn, X,
+   Instagram and TikTok don't let third-party apps read live comments (partner
+   programs or paid API tiers); their chips say so. Streaming to them works.
+8. **Streaming has never touched a real ingest.** The RTMP publisher follows
+   the spec and is unit-tested at the byte level, but each platform's server
+   quirks only show up live. Report the exact row message if one fails.
 
 ## Suggested testing order
 

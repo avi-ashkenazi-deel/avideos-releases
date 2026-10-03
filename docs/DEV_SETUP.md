@@ -292,6 +292,54 @@ content.posting). Tokens are stored in the Keychain after the in-app OAuth
 flow. Instagram's Graph API pulls from public URLs, so v1 documents the
 manual flow.
 
+## Live streaming
+
+Each destination is its own RTMP(S) connection from the Mac; the picture is
+encoded once per shape and quality and shared. Budget about 6.5 Mbps of
+upload per 1080p destination (the Go Live sheet adds it up).
+
+Getting a stream key, per platform:
+
+- **YouTube**: YouTube Studio → Create → Go live → Stream. Copy the stream
+  key; the server is prefilled. Live streaming must be enabled on the channel
+  once (it can take 24 hours). Use Unlisted or Private while testing.
+- **LinkedIn**: create a LinkedIn Live event, choose "Stream with a custom
+  stream key", copy the Stream URL and the key. The member or page must be
+  Live-eligible.
+- **X**: Media Studio → Producer → Sources → create a source, copy its RTMP
+  URL and key. Requires an eligible account.
+- **Twitch**: Creator Dashboard → Settings → Stream → Primary Stream Key.
+  Server is prefilled. Add the channel name to read chat.
+- **Instagram**: on the web, Create → Live video (professional accounts)
+  gives a Stream URL and key valid for that session. Vertical.
+- **TikTok**: LIVE Center / LIVE Studio stream key (LIVE-eligible accounts),
+  server URL plus key. Vertical.
+- **Anything else** (Restream, Kick, an own server): Custom RTMP.
+
+Keys live in the Keychain (service `com.aviashkenazi.streamit.streamkey`,
+one item per destination); the destination list is
+`~/Library/Application Support/streamit/streaming-destinations.json`.
+
+### YouTube account (optional: auto broadcasts + live chat)
+
+1. Google Cloud console → a project → enable **YouTube Data API v3**.
+2. OAuth consent screen: External, add the scope
+   `https://www.googleapis.com/auth/youtube.force-ssl`, add yourself as a
+   test user (the app shows Google's "unverified app" warning until
+   verification).
+3. Credentials → Create OAuth client ID → type **iOS**, bundle ID
+   `com.aviashkenazi.streamit`. No secret is involved (PKCE).
+4. streamit → Settings → Streaming → paste the client ID → Connect YouTube
+   Account. Tokens are stored in the Keychain
+   (`com.aviashkenazi.streamit.google`).
+
+Quota: creating a broadcast costs a few hundred units and chat polling about
+5 per request at YouTube's requested interval (never faster than 5 s); the
+default 10,000/day covers a couple of hours of chat. A pasted-key YouTube
+destination still gets its chat once the account is connected.
+
+Twitch chat needs nothing: it's read anonymously.
+
 ## Release
 
 `scripts/release-mac.sh` — Developer ID signing + notarization. The app is

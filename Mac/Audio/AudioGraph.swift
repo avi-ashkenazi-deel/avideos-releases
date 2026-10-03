@@ -115,6 +115,27 @@ final class AudioGraph {
     /// Program tap consumers beyond the ring (recording).
     let recordingSink = RecordingAudioSink()
 
+    /// Further program-bus consumers (the live-stream AAC encoder). Called
+    /// on the tap thread with the tap's own buffer — copy before keeping it.
+    /// Separate from `recordingSink` so going live never disturbs a take.
+    private var programConsumers: [UUID: (AVAudioPCMBuffer, AVAudioTime) -> Void] = [:]
+    private var programConsumersLock = os_unfair_lock()
+
+    @discardableResult
+    func addProgramConsumer(_ handler: @escaping (AVAudioPCMBuffer, AVAudioTime) -> Void) -> UUID {
+        let id = UUID()
+        os_unfair_lock_lock(&programConsumersLock)
+        programConsumers[id] = handler
+        os_unfair_lock_unlock(&programConsumersLock)
+        return id
+    }
+
+    func removeProgramConsumer(_ id: UUID) {
+        os_unfair_lock_lock(&programConsumersLock)
+        programConsumers.removeValue(forKey: id)
+        os_unfair_lock_unlock(&programConsumersLock)
+    }
+
     // Pre-mix buses that fan multiple players into one strip entry.
     let padsBus = AVAudioMixerNode()
     let musicBus = AVAudioMixerNode()
@@ -321,6 +342,10 @@ final class AudioGraph {
             if self.recordingSink.isAttached {
                 self.recordingSink.ingest(buffer: buffer, time: time)
             }
+            os_unfair_lock_lock(&self.programConsumersLock)
+            let consumers = self.programConsumers.isEmpty ? [] : Array(self.programConsumers.values)
+            os_unfair_lock_unlock(&self.programConsumersLock)
+            for consumer in consumers { consumer(buffer, time) }
             if let data = buffer.floatChannelData {
                 var rms: Float = 0
                 var peak: Float = 0

@@ -274,7 +274,7 @@ final class Compositor {
                                                   fillKind: strokeResolved.fillKind,
                                                   paint: strokeResolved.paint,
                                                   canvasW: canvasW, canvasH: canvasH,
-                                                  strokeWidthPx: Float(stroke.width * Double(canvasW)),
+                                                  strokeWidthPx: Float(stroke.width * (item.strokeReferenceWidth ?? Double(canvasW))),
                                                   time: Float(now.truncatingRemainder(dividingBy: 3600)))
                 if let radius = stroke.cornerRadius {
                     strokeUniforms.cornerRadius = Float(radius)
@@ -345,7 +345,8 @@ final class Compositor {
             let pixelSize = CGSize(width: transform.size.width * canvasSize.width,
                                    height: transform.size.height * canvasSize.height)
             guard let glyphs = textRasterizer.texture(for: text, pixelSize: pixelSize,
-                                                      canvasHeight: canvasSize.height)
+                                                      canvasHeight: item.textReferenceHeight
+                                                          .map { CGFloat($0) } ?? canvasSize.height)
             else { return nil }
             let paint = resolvePaint(fill: colorFill, itemID: item.id, at: time,
                                      sourceTextures: sourceTextures)

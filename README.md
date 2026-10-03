@@ -28,6 +28,8 @@ Two products share this repository and one XcodeGen `project.yml`:
 | MIDI control surface (learn mode, section + pad triggers) | `Mac/MIDI/` |
 | Remote guests (LiveKit) + invite links | `Mac/Guests/`, `web/guest/`, `infra/worker/` |
 | Program recording | `Mac/Recording/` |
+| Go live: multistream RTMP(S) to YouTube/LinkedIn/X/Twitch/Instagram/TikTok, horizontal + vertical at once, YouTube broadcast creation | `Mac/Streaming/`, `Mac/Rendering/VerticalAdapter.swift`, `Mac/UI/GoLiveSheet.swift`, `Mac/UI/StreamingPane.swift` |
+| Live comments (YouTube + Twitch) and the on-air comment card | `Mac/Streaming/Comments/`, `Mac/Rendering/CommentCard.swift`, `Mac/UI/CommentsWindow.swift` |
 | Podcast mode (local 4K recording, chunked upload, drift-aligned import) | `Mac/Podcast/`, `web/guest/recorder.js`, `infra/worker/` |
 | Teleprompter (+ phone remote) | `Mac/Teleprompter/`, `web/guest/prompter.html` |
 | AI editor (transcribe, take selection, cleanup, captions, clips, chapters) | `Mac/PostEdit/` |

@@ -47,6 +47,7 @@ private struct StudioLayout: View {
         .overlay(alignment: .topLeading) {
             HStack(spacing: 10) {
                 sceneSwitcher
+                orientationSwitch
                 StatsHUD()
             }
             .padding(10)
@@ -78,11 +79,15 @@ private struct StudioLayout: View {
                 HStack(spacing: 10) {
                     recordButton
                     if studio.isRecording { pauseButton }
+                    goLiveButton
                 }
             }
             .padding(.bottom, 18)
         }
         .toolbar { toolbarContent }
+        .sheet(isPresented: $studio.showsGoLiveSheet) {
+            GoLiveSheet()
+        }
         .sheet(isPresented: $showingSessionLibrary) {
             SessionLibraryView()
                 .frame(minWidth: 760, minHeight: 480)
@@ -107,8 +112,13 @@ private struct StudioLayout: View {
                         .overlay(alignment: .topTrailing) { canvasBadge("PROGRAM", color: .red) }
                 }
             } else {
-                editableCanvas(store: studio.previewStore)
+                // Editing vertical: the canvas you edit IS the 9:16 one.
+                editableCanvas(store: studio.editOrientation == .vertical
+                               ? studio.verticalFrameStore : studio.previewStore)
             }
+        }
+        .overlay(alignment: .bottomTrailing) {
+            if showsSideMonitor { sideMonitor }
         }
         .background(Color.black)
         .ignoresSafeArea()
@@ -281,6 +291,88 @@ private struct StudioLayout: View {
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
     }
 
+    // MARK: Going live + the vertical canvas
+
+    /// The other orientation, small, in the corner: the vertical program
+    /// while editing horizontal (when it's switched on or a vertical
+    /// destination is live), the horizontal program while editing vertical.
+    private var showsSideMonitor: Bool {
+        studio.editOrientation == .vertical
+            || studio.showsVerticalCanvas
+            || studio.live.needsVerticalCanvas
+    }
+
+    private var sideMonitor: some View {
+        let vertical = studio.editOrientation == .horizontal
+        return Group {
+            if let engine = studio.renderEngine {
+                ProgramPreviewView(previewStore: vertical ? studio.verticalFrameStore : studio.previewStore,
+                                   device: engine.device,
+                                   framesPerSecond: studio.project.frameRate)
+            } else {
+                Color.black
+            }
+        }
+        .aspectRatio(vertical ? 9.0 / 16.0 : 16.0 / 9.0, contentMode: .fit)
+        .frame(width: vertical ? 150 : 300)
+        .clipShape(RoundedRectangle(cornerRadius: 6))
+        .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(.white.opacity(0.35)))
+        .overlay(alignment: .topLeading) {
+            Text(vertical ? "VERTICAL" : "HORIZONTAL")
+                .font(.system(size: 9, weight: .heavy))
+                .padding(.horizontal, 5).padding(.vertical, 2)
+                .background(.black.opacity(0.6), in: Capsule())
+                .foregroundStyle(.white)
+                .padding(5)
+        }
+        .allowsHitTesting(false)
+        .padding(.trailing, 64)   // clear of the palette strip
+        .padding(.bottom, 80)     // clear of Record / Go Live
+    }
+
+    /// H | V: which canvas the handles, inspector and Fit Canvas edit.
+    private var orientationSwitch: some View {
+        Picker("Canvas", selection: Binding(
+            get: { studio.editOrientation },
+            set: { studio.editOrientation = $0 })) {
+            Text("H").tag(StreamOrientation.horizontal)
+            Text("V").tag(StreamOrientation.vertical)
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .frame(width: 70)
+        .help("Edit the horizontal (16:9) or vertical (9:16) layout. Vertical changes never touch the horizontal design.")
+    }
+
+    private var goLiveButton: some View {
+        Button {
+            studio.showsGoLiveSheet = true
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "dot.radiowaves.left.and.right")
+                if studio.live.isLive, let startedAt = studio.live.startedAt {
+                    TimelineView(.periodic(from: .now, by: 1)) { context in
+                        Text("LIVE \(Timecode.clock(context.date.timeIntervalSince(startedAt)))")
+                            .font(.body.weight(.semibold).monospacedDigit())
+                    }
+                } else {
+                    Text("Go Live").font(.body.weight(.semibold))
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 10)
+            .background(studio.live.isLive
+                        ? (studio.live.hasProblem ? Color.orange : Color.red)
+                        : Color.black.opacity(0.55),
+                        in: RoundedRectangle(cornerRadius: 9))
+            .foregroundStyle(.white)
+        }
+        .buttonStyle(.studioTile)
+        .help(studio.live.isLive
+              ? "Streaming. Open the live controls (⇧⌘L)"
+              : "Stream to YouTube, LinkedIn, X, Twitch, Instagram, TikTok… at once (⇧⌘L)")
+    }
+
     private var recordButton: some View {
         Button {
             studio.toggleRecording()
@@ -440,6 +532,8 @@ struct SettingsView: View {
                 .tabItem { Label("Video", systemImage: "video") }
             AudioPane()
                 .tabItem { Label("Audio", systemImage: "speaker.wave.2") }
+            StreamingPane()
+                .tabItem { Label("Streaming", systemImage: "dot.radiowaves.left.and.right") }
             ShortcutsSettingsView()
                 .tabItem { Label("Shortcuts", systemImage: "keyboard") }
             MIDISettingsView()

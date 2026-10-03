@@ -30,6 +30,14 @@ struct MultiviewView: View {
                             label: "PROGRAM",
                             subtitle: studio.project.activeScene?.name,
                             color: .red)
+                    // The 9:16 program, whenever the vertical canvas runs.
+                    if studio.verticalEngine != nil {
+                        monitor(store: studio.verticalFrameStore,
+                                label: "VERTICAL",
+                                subtitle: studio.live.needsVerticalCanvas ? "live" : nil,
+                                color: .purple)
+                            .frame(width: programHeight * 9 / 16)
+                    }
                 }
                 .frame(height: programHeight)
 

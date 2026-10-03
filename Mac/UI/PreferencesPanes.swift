@@ -173,6 +173,11 @@ struct RecordingPane: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
+            Toggle("Record a Vertical File Too", isOn: $prefs.recordVerticalToo)
+            Text("Writes the 9:16 version of the show beside the main take (\"… Vertical.mov\"), with the same sound.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
             Text("Recordings are .mov with 5-second fragments — a crash loses at most the last five seconds.")
                 .font(.caption)
                 .foregroundStyle(.secondary)

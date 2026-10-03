@@ -195,6 +195,16 @@ Full detail in docs/FEATURE_CHECKLIST.md, F-488…F-499.
 - [ ] Film a minute on a second camera (phone) while recording, import it, **Sync by Audio** → clap lines up; the Cut to strip switches angles at the playhead.
 - [ ] Sessions library: Download & Import All → aligned .movs; two-device clap within ~30ms at minute 0 and minute 30.
 
+## Going live (multistream + vertical + comments)
+Full detail in docs/FEATURE_CHECKLIST.md, F-542…F-556.
+- [ ] Settings → Streaming: add YouTube (private stream key) and Twitch; Go Live → both dashboards show picture and sound in sync; HUD shows LIVE + kbps.
+- [ ] Stop Twitch from its row: YouTube keeps going. Pull the network 10 s: rows reconnect by themselves.
+- [ ] Add a vertical destination (YouTube set to Vertical, or Instagram): 9:16 picture streams alongside the horizontal one.
+- [ ] Flip the canvas to V, move a lower third: only the vertical layout changes; Reset puts it back; Hide in vertical removes it from 9:16 only.
+- [ ] Record with "Record a vertical file too": two files, same length.
+- [ ] Connect the YouTube account; a linked YouTube destination goes live with no key and creates its own broadcast.
+- [ ] Comments window (⌥⌘C): YouTube + Twitch comments in one feed; nothing goes on air until Feature on Air; card shows on H and V; Esc hides. Demo Chat works offline.
+
 ## Teleprompter
 - [ ] Toggle prompter (⇧⌘T): floats above everything, scrolls at set WPM, mirrors, click-through works.
 - [ ] Share your screen in Zoom: the prompter is NOT visible in the share, and never in the program.

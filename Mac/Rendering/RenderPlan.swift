@@ -44,6 +44,13 @@ struct RenderItem: Sendable, Identifiable {
     /// Set on the blurred backdrop item that sits behind a
     /// `.blurredBackdrop` primary, so the compositor knows to blur it.
     var isBackdrop: Bool = false
+    /// Vertical canvas only: the canvas height text is sized against, and
+    /// the width stroke widths are sized against. nil = the target canvas
+    /// (today's horizontal behavior). Set from `VerticalAdapter`'s content
+    /// scale so text shrinks/grows with its box instead of ballooning by the
+    /// 1920/1080 height ratio.
+    var textReferenceHeight: Double? = nil
+    var strokeReferenceWidth: Double? = nil
 }
 
 /// What fills the item's quad.
@@ -129,11 +136,16 @@ enum RenderPlanCompiler {
                         scene: SceneModel,
                         guests: [GuestDescriptor],
                         elementAnimations: [UUID: AnimationState],
-                        timerTexts: [UUID: String] = [:]) -> RenderPlan {
+                        timerTexts: [UUID: String] = [:],
+                        orientation: StreamOrientation = .horizontal,
+                        topOverlays: [RenderItem] = []) -> RenderPlan {
         var items: [RenderItem] = []
+        let isVertical = orientation == .vertical
+        let horizontalCanvas = project.canvasSize
+        let verticalCanvas = project.resolvedVerticalCanvasSize
 
         // 1. The scene's primary content fills the canvas underneath overlays.
-        items.append(contentsOf: primaryItems(for: scene, guests: guests))
+        items.append(contentsOf: primaryItems(for: scene, guests: guests, orientation: orientation))
 
         // 2. Overlay elements, bottom → top.
         for element in scene.elements {
@@ -142,14 +154,60 @@ enum RenderPlanCompiler {
             if !element.isVisible {
                 guard case .exiting = state else { continue }
             }
+            if isVertical, element.hiddenInVertical == true { continue }
+
+            var placement = ElementPlacement(transform: element.transform)
+            if isVertical {
+                placement = verticalPlacement(for: element,
+                                              horizontalCanvas: horizontalCanvas,
+                                              verticalCanvas: verticalCanvas)
+            }
             items.append(contentsOf: renderItems(for: element,
                                                  state: state ?? .resting,
-                                                 timerTexts: timerTexts))
+                                                 timerTexts: timerTexts,
+                                                 placement: placement))
         }
 
-        return RenderPlan(canvasSize: project.canvasSize,
+        // 3. Runtime overlays that belong to no scene (a featured comment),
+        // always on top.
+        items.append(contentsOf: topOverlays)
+
+        return RenderPlan(canvasSize: isVertical ? verticalCanvas : horizontalCanvas,
                           items: items,
                           backgroundColor: .black)
+    }
+
+    /// Where an element draws on the canvas being compiled, plus the text /
+    /// stroke reference sizes that keep its content in proportion.
+    struct ElementPlacement {
+        var transform: ElementTransform
+        var textReferenceHeight: Double? = nil
+        var strokeReferenceWidth: Double? = nil
+    }
+
+    /// The host's explicit vertical position when there is one, the
+    /// automatic adaptation otherwise.
+    static func verticalPlacement(for element: Element,
+                                  horizontalCanvas: CGSize,
+                                  verticalCanvas: CGSize) -> ElementPlacement {
+        let transform: ElementTransform
+        let scale: Double
+        if let override = element.verticalTransform {
+            transform = override
+            scale = VerticalAdapter.contentScale(horizontal: element.transform,
+                                                 vertical: override,
+                                                 horizontalCanvas: horizontalCanvas,
+                                                 verticalCanvas: verticalCanvas)
+        } else {
+            let adapted = VerticalAdapter.adapt(element.transform,
+                                                from: horizontalCanvas,
+                                                to: verticalCanvas)
+            transform = adapted.transform
+            scale = adapted.contentScale
+        }
+        return ElementPlacement(transform: transform,
+                         textReferenceHeight: Double(horizontalCanvas.height) * scale,
+                         strokeReferenceWidth: Double(horizontalCanvas.width) * scale)
     }
 
     /// One element usually compiles to one item; a boxed text compiles to a
@@ -172,7 +230,8 @@ enum RenderPlanCompiler {
 
     private static func renderItems(for element: Element,
                                     state: AnimationState,
-                                    timerTexts: [UUID: String]) -> [RenderItem] {
+                                    timerTexts: [UUID: String],
+                                    placement: ElementPlacement) -> [RenderItem] {
         let content: RenderContent
         var mask = MaskShape.rounded(0)
         var background: RenderItem?
@@ -184,7 +243,8 @@ enum RenderPlanCompiler {
                 background = boxItem(for: element,
                                      fill: boxFill,
                                      cornerRadius: text.boxCornerRadius ?? 0.04,
-                                     state: state)
+                                     state: state,
+                                     placement: placement)
             }
         case .timer(let timer):
             // A countdown is text whose string the studio ticks per second.
@@ -221,7 +281,7 @@ enum RenderPlanCompiler {
         var item = RenderItem(id: element.id,
                               transitionKey: element.transitionKey,
                               content: content,
-                              transform: element.transform,
+                              transform: placement.transform,
                               blendMode: element.blendMode,
                               effects: element.effects,
                               // A boxed text's stroke borders the BOX, not the
@@ -230,6 +290,8 @@ enum RenderPlanCompiler {
                               cornerRadius: cornerRadius,
                               entryAnimation: element.entryAnimation,
                               animation: state)
+        item.textReferenceHeight = placement.textReferenceHeight
+        item.strokeReferenceWidth = placement.strokeReferenceWidth
         // A PiP tile covers its frame (a circle mask over letterboxing reads
         // as a bug), and a web overlay's box IS its browser viewport — while
         // the page catches up to a resize, cropping reads as a browser
@@ -255,17 +317,20 @@ enum RenderPlanCompiler {
     private static func boxItem(for element: Element,
                                 fill: Fill,
                                 cornerRadius: Double,
-                                state: AnimationState) -> RenderItem {
-        RenderItem(id: textBoxID(for: element.id),
-                   transitionKey: element.transitionKey + ":box",
-                   content: .fill(fill),
-                   transform: element.transform,
-                   blendMode: element.blendMode,
-                   effects: EffectChain(),
-                   stroke: element.stroke,
-                   cornerRadius: cornerRadius,
-                   entryAnimation: element.entryAnimation,
-                   animation: state)
+                                state: AnimationState,
+                                placement: ElementPlacement) -> RenderItem {
+        var item = RenderItem(id: textBoxID(for: element.id),
+                              transitionKey: element.transitionKey + ":box",
+                              content: .fill(fill),
+                              transform: placement.transform,
+                              blendMode: element.blendMode,
+                              effects: EffectChain(),
+                              stroke: element.stroke,
+                              cornerRadius: cornerRadius,
+                              entryAnimation: element.entryAnimation,
+                              animation: state)
+        item.strokeReferenceWidth = placement.strokeReferenceWidth
+        return item
     }
 
     /// Deterministic sibling id for a text element's box item — stable across
@@ -309,11 +374,17 @@ enum RenderPlanCompiler {
     /// The scene's primary content: one full-canvas item for camera/screen/
     /// movie scenes; a computed tile layout for interview scenes.
     private static func primaryItems(for scene: SceneModel,
-                                     guests: [GuestDescriptor]) -> [RenderItem] {
+                                     guests: [GuestDescriptor],
+                                     orientation: StreamOrientation) -> [RenderItem] {
+        // Vertical may pan the crop differently (center the face in 9:16).
+        let presentation = orientation == .vertical
+            ? (scene.verticalPresentation ?? scene.primaryPresentation)
+            : scene.primaryPresentation
         switch scene.kind {
         case .camera(let config):
             return framedPrimary(scene: scene,
-                                 key: .camera(deviceUniqueID: CameraID(uid: config.deviceUniqueID)))
+                                 key: .camera(deviceUniqueID: CameraID(uid: config.deviceUniqueID)),
+                                 presentation: presentation)
         case .screenShare(let config):
             let key: SourceKey
             switch config.target {
@@ -321,11 +392,13 @@ enum RenderPlanCompiler {
             case .window(let id, _): key = .window(windowID: id)
             case .askEachTime: key = .scenePrimary(sceneID: scene.id)
             }
-            return framedPrimary(scene: scene, key: key)
+            return framedPrimary(scene: scene, key: key, presentation: presentation)
         case .movie:
-            return framedPrimary(scene: scene, key: .scenePrimary(sceneID: scene.id))
+            return framedPrimary(scene: scene, key: .scenePrimary(sceneID: scene.id),
+                                 presentation: presentation)
         case .interview(let config):
-            return interviewItems(scene: scene, config: config, guests: guests)
+            return interviewItems(scene: scene, config: config, guests: guests,
+                                  orientation: orientation)
         }
     }
 
@@ -333,8 +406,9 @@ enum RenderPlanCompiler {
     /// blurred backdrop: a cover-fitted blurred copy underneath, then the
     /// contained sharp copy on top. Expressing it as an extra item keeps the
     /// compositor free of special cases.
-    private static func framedPrimary(scene: SceneModel, key: SourceKey) -> [RenderItem] {
-        let presentation = scene.primaryPresentation.sanitized
+    private static func framedPrimary(scene: SceneModel, key: SourceKey,
+                                      presentation rawPresentation: SourcePresentation) -> [RenderItem] {
+        let presentation = rawPresentation.sanitized
 
         guard presentation.fit == .blurredBackdrop else {
             var item = primaryItem(scene: scene, key: key, transform: .fullCanvas)
@@ -401,7 +475,8 @@ enum RenderPlanCompiler {
     /// between layouts and scenes.
     private static func interviewItems(scene: SceneModel,
                                        config: InterviewSceneConfig,
-                                       guests: [GuestDescriptor]) -> [RenderItem] {
+                                       guests: [GuestDescriptor],
+                                       orientation: StreamOrientation = .horizontal) -> [RenderItem] {
         var tiles: [(key: SourceKey, transitionKey: String, isScreen: Bool)] = []
 
         // A shared screen takes the stage: the spotlight arrangement with the
@@ -421,10 +496,11 @@ enum RenderPlanCompiler {
         }
         guard !tiles.isEmpty else { return [] }
 
-        let frames = sharer != nil
-            ? InterviewLayout.frames(count: tiles.count, style: .spotlight,
-                                     spacing: config.tileSpacing)
-            : InterviewLayout.frames(count: tiles.count, style: config.gridStyle,
+        let style: InterviewSceneConfig.GridStyle = sharer != nil ? .spotlight : config.gridStyle
+        let frames = orientation == .vertical
+            ? InterviewLayout.verticalFrames(count: tiles.count, style: style,
+                                             spacing: config.tileSpacing)
+            : InterviewLayout.frames(count: tiles.count, style: style,
                                      spacing: config.tileSpacing)
         return zip(tiles, frames).map { tile, frame in
             var item = primaryItem(scene: scene,

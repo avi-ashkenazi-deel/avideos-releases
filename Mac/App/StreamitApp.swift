@@ -73,6 +73,15 @@ struct StreamitApp: App {
         .windowResizability(.contentMinSize)
         .defaultSize(width: 1280, height: 760)
 
+        // Live comments from every platform: read, shortlist, and choose
+        // what goes on air. A normal window so it can sit on a second display.
+        Window("Comments", id: "comments") {
+            CommentsWindow()
+                .environment(studio)
+        }
+        .windowResizability(.contentMinSize)
+        .defaultSize(width: 980, height: 680)
+
         Settings {
             SettingsView()
                 .environment(studio)
@@ -164,6 +173,11 @@ struct StudioCommands: Commands {
             }
             .keyboardShortcut("m", modifiers: [.command, .option])
 
+            Button("Show Comments") {
+                openWindow(id: "comments")
+            }
+            .keyboardShortcut("c", modifiers: [.command, .option])
+
             Menu("Multiview Full Screen on Display") {
                 ForEach(Array(NSScreen.screens.enumerated()), id: \.offset) { index, screen in
                     Button(screen.localizedName.isEmpty ? "Display \(index + 1)" : screen.localizedName) {
@@ -224,6 +238,18 @@ struct StudioCommands: Commands {
             Button("Take") { studio.take() }
                 .keyboardShortcut(.return, modifiers: [.command])
                 .disabled(!studio.hasPendingTake)
+
+            Divider()
+
+            Button(studio.live.isLive ? "Live Controls / End Stream…" : "Go Live…") {
+                studio.showsGoLiveSheet = true
+            }
+            .keyboardShortcut("l", modifiers: [.command, .shift])
+
+            Button(studio.editOrientation == .vertical ? "Edit Horizontal Layout" : "Edit Vertical Layout") {
+                studio.editOrientation = studio.editOrientation == .vertical ? .horizontal : .vertical
+            }
+            .keyboardShortcut("v", modifiers: [.command, .option])
 
             Divider()
 

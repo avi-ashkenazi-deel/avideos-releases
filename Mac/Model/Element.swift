@@ -27,6 +27,13 @@ struct Element: Codable, Hashable, Sendable, Identifiable {
     /// animation start) — a whoosh on a lower third, a sting on a title.
     /// Optional so old files decode.
     var appearSoundPadID: UUID?
+    /// Where this element sits on the VERTICAL (9:16) canvas, when the host
+    /// has moved it there. nil = derived automatically by `VerticalAdapter`.
+    /// Optional so old files decode.
+    var verticalTransform: ElementTransform?
+    /// Left out of the vertical canvas entirely (a wide banner that has no
+    /// good 9:16 home). Optional so old files decode.
+    var hiddenInVertical: Bool?
 
     init(id: UUID = UUID(),
          name: String,

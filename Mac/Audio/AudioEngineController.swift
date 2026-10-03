@@ -813,6 +813,19 @@ final class AudioEngineController {
         graph.recordingSink.detach()
     }
 
+    // MARK: - Live streaming
+
+    /// Hands every program-mix buffer to `handler` (tap thread) until
+    /// removed. The live AAC encoder is the consumer.
+    @discardableResult
+    func addProgramAudioConsumer(_ handler: @escaping (AVAudioPCMBuffer, AVAudioTime) -> Void) -> UUID {
+        graph.addProgramConsumer(handler)
+    }
+
+    func removeProgramAudioConsumer(_ id: UUID) {
+        graph.removeProgramConsumer(id)
+    }
+
     // MARK: - Driver
 
     func refreshDriverStatus() {

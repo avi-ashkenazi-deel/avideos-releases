@@ -197,10 +197,119 @@ final class StudioController {
               let program = renderEngine,
               let engine = RenderEngine(device: program.device) else { return }
         engine.sourceTextureProvider = program.sourceTextureProvider
+        engine.compositor.effectRenderer.shareSegmentation(
+            with: program.compositor.effectRenderer.segmentation)
         engine.addConsumer(previewFrameStore)
-        engine.start(canvasSize: project.canvasSize, fps: project.frameRate)
+        engine.start(canvasSize: editCanvasSize, fps: project.frameRate)
         previewEngine = engine
     }
+
+    // MARK: - Live streaming + the vertical canvas
+
+    /// Destinations, encoders and RTMP publishers (see `LiveStreamController`).
+    let live = LiveStreamController()
+    /// Every platform's live chat, the shortlist, and the featured comment
+    /// (see `StudioController+Comments`).
+    let comments = CommentsStore()
+    /// The Go Live sheet (opened from the button, the Studio menu or ⇧⌘L).
+    var showsGoLiveSheet = false
+    /// The card being drawn and its entry state; the one animating out.
+    /// Runtime only — comments are not document content.
+    var commentCard: LiveComment?
+    var commentCardAnimation: AnimationState = .resting
+    var exitingCommentCard: (comment: LiveComment, startSeconds: Double)?
+    /// Frames of the vertical (9:16) program, for its monitor and editing.
+    let verticalFrameStore = PreviewFrameStore()
+    /// Third compositor: the program scene laid out for 9:16. Exists only
+    /// while something needs it (a vertical destination is live, vertical
+    /// recording, the vertical monitor is open, or vertical is being edited).
+    private(set) var verticalEngine: RenderEngine?
+    /// The vertical monitor beside the main canvas (and in the Multiview).
+    var showsVerticalCanvas = UserDefaults.standard.bool(forKey: "pref.showsVerticalCanvas") {
+        didSet {
+            UserDefaults.standard.set(showsVerticalCanvas, forKey: "pref.showsVerticalCanvas")
+            updateVerticalEngineNeed()
+        }
+    }
+    /// Which canvas the editor (canvas handles, inspector, Fit Canvas) is
+    /// moving things on. Vertical edits land in `Element.verticalTransform`
+    /// and never disturb the horizontal design.
+    var editOrientation: StreamOrientation = .horizontal {
+        didSet {
+            guard editOrientation != oldValue else { return }
+            updateVerticalEngineNeed()
+            previewEngine?.reconfigure(canvasSize: editCanvasSize, fps: project.frameRate)
+            recompileAndPublish()
+        }
+    }
+
+    /// The canvas size of whatever is being edited.
+    var editCanvasSize: CGSize {
+        editOrientation == .vertical ? project.resolvedVerticalCanvasSize : project.canvasSize
+    }
+
+    /// An element's box on the canvas being edited — the explicit or
+    /// derived vertical placement when editing vertical.
+    func editableTransform(of element: Element) -> ElementTransform {
+        guard editOrientation == .vertical else { return element.transform }
+        return RenderPlanCompiler.verticalPlacement(for: element,
+                                                    horizontalCanvas: project.canvasSize,
+                                                    verticalCanvas: project.resolvedVerticalCanvasSize).transform
+    }
+
+    /// Writes a moved/resized box back to the right field: the first
+    /// vertical edit materializes an override; horizontal edits are as
+    /// before.
+    func setEditableTransform(_ transform: ElementTransform, on element: inout Element) {
+        if editOrientation == .vertical {
+            element.verticalTransform = transform
+        } else {
+            element.transform = transform
+        }
+    }
+
+    /// Back to the automatic vertical layout for one element.
+    func resetVerticalLayout(id: UUID) {
+        guard var element = findElement(id: id) else { return }
+        element.verticalTransform = nil
+        updateElement(element)
+    }
+
+    private var needsVerticalEngine: Bool {
+        live.needsVerticalCanvas || showsVerticalCanvas || editOrientation == .vertical
+            || verticalRecorder != nil
+    }
+
+    /// The vertical engine, created on demand. Also what the live
+    /// controller asks for when a vertical destination starts.
+    @discardableResult
+    func ensureVerticalEngine() -> RenderEngine? {
+        if let verticalEngine { return verticalEngine }
+        guard hasBooted, let program = renderEngine,
+              let engine = RenderEngine(device: program.device) else { return nil }
+        engine.sourceTextureProvider = program.sourceTextureProvider
+        engine.compositor.effectRenderer.shareSegmentation(
+            with: program.compositor.effectRenderer.segmentation)
+        engine.addConsumer(verticalFrameStore)
+        engine.start(canvasSize: project.resolvedVerticalCanvasSize, fps: project.frameRate)
+        verticalEngine = engine
+        recompileAndPublish()
+        return engine
+    }
+
+    private func updateVerticalEngineNeed() {
+        if needsVerticalEngine {
+            ensureVerticalEngine()
+        } else if let engine = verticalEngine {
+            engine.stop()
+            verticalEngine = nil
+        }
+    }
+
+    /// Records the vertical canvas beside the main take (pref).
+    private var verticalRecorder: ProgramRecorder?
+    private var verticalRecordingSink: RecordingAudioSink?
+    private var verticalAudioConsumerID: UUID?
 
     /// Worker/base configuration (Settings).
     var workerBaseURL: URL? {
@@ -292,6 +401,8 @@ final class StudioController {
             if previewSceneID == nil { previewSceneID = project.activeSceneID }
             ensurePreviewEngine()
         }
+        // The vertical monitor was left on last session.
+        if showsVerticalCanvas { ensureVerticalEngine() }
         recompileAndPublish()
         audio.start()
         // After audio, since every MIDI action lands on the audio facade.
@@ -344,6 +455,19 @@ final class StudioController {
         // while recording).
         engine.addConsumer(previewStore)
         engine.addConsumer(virtualCameraConsumer)
+
+        // Going live: the controller asks for canvases as destinations start.
+        live.audio = audio
+        live.frameRateProvider = { [weak self] in self?.project.frameRate ?? 30 }
+        live.canvasSizeProvider = { [weak self] orientation in
+            guard let self else { return .zero }
+            return orientation == .vertical ? self.project.resolvedVerticalCanvasSize : self.project.canvasSize
+        }
+        live.engineProvider = { [weak self] orientation in
+            orientation == .vertical ? self?.ensureVerticalEngine() : self?.renderEngine
+        }
+        live.onLiveChanged = { [weak self] _ in self?.updateVerticalEngineNeed() }
+        wireLiveComments()
 
         // Camera frames feed segmentation (virtual background/beautify) and
         // the podcast host recorder.
@@ -398,8 +522,10 @@ final class StudioController {
     }
 
     func shutdown() {
+        live.endLive()
         renderEngine?.stop()
         previewEngine?.stop()
+        verticalEngine?.stop()
         sourceRegistry?.stopAll()
         audio.shutdown()
         if recorder.isRecording {
@@ -424,16 +550,33 @@ final class StudioController {
     func recompileAndPublish() {
         guard let engine = renderEngine, let scene = project.activeScene else { return }
         cleanupFinishedExits()
+        let timerTexts = currentTimerTexts(scene: scene)
         let plan = RenderPlanCompiler.compile(project: project,
                                               scene: scene,
                                               guests: renderGuestDescriptors,
                                               elementAnimations: elementAnimations,
-                                              timerTexts: currentTimerTexts(scene: scene))
+                                              timerTexts: timerTexts,
+                                              topOverlays: commentOverlayItems(for: .horizontal))
         engine.publish(plan: plan)
         updateTimerTick(scene: scene)
         ensureScenePrimarySources(for: scene)
         var keys = SourceRegistry.keys(in: plan)
         syncWebPageSizes(scene: scene)
+
+        // The same program scene, laid out for 9:16.
+        var verticalPlan: RenderPlan?
+        if let verticalEngine {
+            let compiled = RenderPlanCompiler.compile(project: project,
+                                                      scene: scene,
+                                                      guests: renderGuestDescriptors,
+                                                      elementAnimations: elementAnimations,
+                                                      timerTexts: timerTexts,
+                                                      orientation: .vertical,
+                                                      topOverlays: commentOverlayItems(for: .vertical))
+            verticalEngine.publish(plan: compiled)
+            keys.formUnion(SourceRegistry.keys(in: compiled))
+            verticalPlan = compiled
+        }
 
         if studioModeEnabled, let previewEngine,
            let staged = activeScene, staged.id != scene.id {
@@ -441,15 +584,16 @@ final class StudioController {
                                                         scene: staged,
                                                         guests: renderGuestDescriptors,
                                                         elementAnimations: elementAnimations,
-                                                        timerTexts: currentTimerTexts(scene: staged))
+                                                        timerTexts: currentTimerTexts(scene: staged),
+                                                        orientation: editOrientation)
             previewEngine.publish(plan: stagedPlan)
             ensureScenePrimarySources(for: staged)
             keys.formUnion(SourceRegistry.keys(in: stagedPlan))
             syncWebPageSizes(scene: staged)
         } else if let previewEngine {
             // Staged == program: mirror it, so the preview canvas is never
-            // stale or black.
-            previewEngine.publish(plan: plan)
+            // stale or black (in the orientation being edited).
+            previewEngine.publish(plan: editOrientation == .vertical ? (verticalPlan ?? plan) : plan)
         }
         sourceRegistry?.activate(keys: keys)
     }
@@ -465,27 +609,56 @@ final class StudioController {
         captureActiveSceneThumbnail()
 
         let guestList = renderGuestDescriptors
+        // A featured comment rides through the switch unless the host asked
+        // for it to clear on scene change.
+        commentSceneWillChange()
+        let fromTexts = currentTimerTexts(scene: fromScene)
+        let toTexts = currentTimerTexts(scene: toScene)
         let fromPlan = RenderPlanCompiler.compile(project: project, scene: fromScene,
                                                   guests: guestList,
                                                   elementAnimations: elementAnimations,
-                                                  timerTexts: currentTimerTexts(scene: fromScene))
+                                                  timerTexts: fromTexts,
+                                                  topOverlays: commentOverlayItems(for: .horizontal))
+        var fromVertical: RenderPlan?
+        if verticalEngine != nil {
+            fromVertical = RenderPlanCompiler.compile(project: project, scene: fromScene,
+                                                      guests: guestList,
+                                                      elementAnimations: elementAnimations,
+                                                      timerTexts: fromTexts,
+                                                      orientation: .vertical,
+                                                      topOverlays: commentOverlayItems(for: .vertical))
+        }
         elementAnimations.removeAll()
         var toProject = project
         toProject.activeSceneID = sceneID
         let toPlan = RenderPlanCompiler.compile(project: toProject, scene: toScene,
                                                 guests: guestList,
                                                 elementAnimations: [:],
-                                                timerTexts: currentTimerTexts(scene: toScene))
+                                                timerTexts: toTexts,
+                                                topOverlays: commentOverlayItems(for: .horizontal))
 
         // Both scenes' sources must run through the transition window.
         ensureScenePrimarySources(for: toScene)
-        let unionKeys = SourceRegistry.keys(in: fromPlan).union(SourceRegistry.keys(in: toPlan))
-        sourceRegistry?.activate(keys: unionKeys)
+        var unionKeys = SourceRegistry.keys(in: fromPlan).union(SourceRegistry.keys(in: toPlan))
 
         let duration = project.defaultTransitionDuration
         engine.beginTransition(from: fromPlan, to: toPlan,
                                style: toScene.transitionStyle,
                                duration: duration)
+        // The vertical canvas makes the same move, laid out for 9:16.
+        if let verticalEngine, let fromVertical {
+            let toVertical = RenderPlanCompiler.compile(project: toProject, scene: toScene,
+                                                        guests: guestList,
+                                                        elementAnimations: [:],
+                                                        timerTexts: toTexts,
+                                                        orientation: .vertical,
+                                                        topOverlays: commentOverlayItems(for: .vertical))
+            unionKeys.formUnion(SourceRegistry.keys(in: toVertical))
+            verticalEngine.beginTransition(from: fromVertical, to: toVertical,
+                                           style: toScene.transitionStyle,
+                                           duration: duration)
+        }
+        sourceRegistry?.activate(keys: unionKeys)
         project.activeSceneID = sceneID   // didSet republishes the resting plan
         teleprompter.sceneDidChange(sceneID: sceneID)
 
@@ -719,8 +892,8 @@ final class StudioController {
     /// itself; this guard is the backstop): an in-flight AVAssetWriter is
     /// pinned to its start dimensions.
     func applyCanvasSettings(size: CGSize, fps: Int) {
-        guard !isRecording else {
-            log.error("Canvas settings change refused while recording")
+        guard !isRecording, !live.isLive else {
+            log.error("Canvas settings change refused while recording or live")
             return
         }
         let sizeChanged = project.canvasSize != size
@@ -878,8 +1051,10 @@ final class StudioController {
     /// keeping the element's current aspect, centered, un-rotated.
     func resizeElementToFitCanvas(id: UUID) {
         guard var element = findElement(id: id) else { return }
-        let canvas = project.canvasSize
-        let t = element.transform
+        // The canvas being edited: fitting on V fills the 9:16 frame and
+        // leaves the horizontal design alone.
+        let canvas = editCanvasSize
+        var t = editableTransform(of: element)
         let pixelAspect = (t.size.width * canvas.width) / max(t.size.height * canvas.height, 1)
         let canvasAspect = canvas.width / max(canvas.height, 1)
         var size = CGSize(width: 1, height: 1)
@@ -888,9 +1063,10 @@ final class StudioController {
         } else {
             size.width = (canvas.height * pixelAspect) / canvas.width
         }
-        element.transform.size = size
-        element.transform.center = CGPoint(x: 0.5, y: 0.5)
-        element.transform.rotation = 0
+        t.size = size
+        t.center = CGPoint(x: 0.5, y: 0.5)
+        t.rotation = 0
+        setEditableTransform(t, on: &element)
         updateElement(element)
     }
 
@@ -1097,6 +1273,7 @@ final class StudioController {
         guard isRecording else { return }
         isRecordingPaused.toggle()
         recorder.setPaused(isRecordingPaused)
+        verticalRecorder?.setPaused(isRecordingPaused)
     }
 
     func toggleRecording() {
@@ -1115,6 +1292,7 @@ final class StudioController {
             }
             audio.stopRecordingSink()
             renderEngine.map { $0.removeConsumer(recorder) }
+            stopVerticalRecording()
         } else if recordingCountdown != nil {
             recordingCountdown = nil   // pressing again cancels the count
         } else if prefs.recordCountdown {
@@ -1145,9 +1323,55 @@ final class StudioController {
             renderEngine?.addConsumer(recorder)
             isRecording = true
             isRecordingPaused = false
+            if prefs.recordVerticalToo { startVerticalRecording() }
         } catch {
             log.error("Couldn't start recording: \(error.localizedDescription)")
         }
+    }
+
+    /// The 9:16 take beside the main one: its own file ("… Vertical"), its
+    /// own audio sink fed from the program mix, the same codec and folder.
+    private func startVerticalRecording() {
+        let vertical = ProgramRecorder()
+        verticalRecorder = vertical   // before ensuring: it's part of the "needs" test
+        guard let engine = ensureVerticalEngine() else {
+            verticalRecorder = nil
+            return
+        }
+        do {
+            try vertical.start(canvasSize: project.resolvedVerticalCanvasSize,
+                               frameRate: project.frameRate,
+                               codec: prefs.recordingCodec,
+                               projectName: project.name + " Vertical",
+                               folderPath: prefs.recordingsFolderPath)
+            let sink = RecordingAudioSink()
+            sink.attach(recorder: vertical)
+            verticalRecordingSink = sink
+            verticalAudioConsumerID = audio.addProgramAudioConsumer { [weak sink] buffer, time in
+                sink?.ingest(buffer: buffer, time: time)
+            }
+            engine.addConsumer(vertical)
+        } catch {
+            log.error("Couldn't start the vertical recording: \(error.localizedDescription)")
+            verticalRecorder = nil
+            updateVerticalEngineNeed()
+        }
+    }
+
+    private func stopVerticalRecording() {
+        guard let vertical = verticalRecorder else { return }
+        verticalEngine?.removeConsumer(vertical)
+        if let verticalAudioConsumerID { audio.removeProgramAudioConsumer(verticalAudioConsumerID) }
+        verticalAudioConsumerID = nil
+        verticalRecordingSink?.detach()
+        verticalRecordingSink = nil
+        vertical.stop { [weak self] url in
+            Task { @MainActor in
+                if let url { self?.log.info("Vertical recording saved: \(url.path)") }
+            }
+        }
+        verticalRecorder = nil
+        updateVerticalEngineNeed()
     }
 
     /// "Bad take" — removes the file that just finished writing.

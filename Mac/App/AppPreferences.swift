@@ -86,7 +86,14 @@ final class AppPreferences {
         didSet { defaults.set(guestsStartOnAir, forKey: "pref.guestsStartOnAir") }
     }
 
+    /// Also record the vertical canvas to its own file while recording
+    /// (Ecamm Pro's dual-format recording).
+    var recordVerticalToo: Bool {
+        didSet { defaults.set(recordVerticalToo, forKey: "pref.recordVerticalToo") }
+    }
+
     init() {
+        recordVerticalToo = defaults.bool(forKey: "pref.recordVerticalToo")
         recordingCodec = defaults.string(forKey: "pref.recordingCodec")
             .flatMap(ProgramRecorder.Codec.init(rawValue:)) ?? .hevc
         recordingsFolderPath = defaults.string(forKey: "pref.recordingsFolder")

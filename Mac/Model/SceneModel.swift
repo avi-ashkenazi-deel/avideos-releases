@@ -20,6 +20,9 @@ struct SceneModel: Codable, Hashable, Sendable, Identifiable {
     /// Explicit ⌘N binding (1…9). nil = numbered by sidebar position after
     /// the explicit picks. User-assignable from the scene's context menu.
     var shortcutNumber: Int?
+    /// Primary-source framing on the VERTICAL canvas — typically a pan so
+    /// the face is centered in the 9:16 crop. nil = same as horizontal.
+    var verticalPresentation: SourcePresentation?
 
     init(id: UUID = UUID(),
          name: String,
@@ -44,6 +47,7 @@ struct SceneModel: Codable, Hashable, Sendable, Identifiable {
     enum CodingKeys: String, CodingKey {
         case id, name, kind, primaryEffects, elements, transitionStyle, primaryPresentation
         case shortcutNumber
+        case verticalPresentation
     }
 
     init(from decoder: Decoder) throws {
@@ -60,6 +64,8 @@ struct SceneModel: Codable, Hashable, Sendable, Identifiable {
                                                                  forKey: .primaryPresentation)
             ?? .default
         self.shortcutNumber = try container.decodeIfPresent(Int.self, forKey: .shortcutNumber)
+        self.verticalPresentation = try container.decodeIfPresent(SourcePresentation.self,
+                                                                  forKey: .verticalPresentation)
     }
 }
 

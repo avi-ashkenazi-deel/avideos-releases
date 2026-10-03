@@ -21,7 +21,16 @@ final class EffectChainRenderer {
 
     /// Camera-scene segmentation masks; the studio wires the camera source's
     /// frames into the provider, effects read the latest mask here.
-    let segmentation: SegmentationProvider
+    private(set) var segmentation: SegmentationProvider
+
+    /// Extra compositors (the vertical canvas, the studio-mode preview) read
+    /// the program's person mask instead of running Vision a second time —
+    /// and instead of getting no mask at all, which is what they had: the
+    /// camera tap only ever feeds the program compositor's provider. Call
+    /// before the engine starts rendering.
+    func shareSegmentation(with provider: SegmentationProvider) {
+        segmentation = provider
+    }
 
     /// Background media textures for virtual background (image/video), keyed
     /// by effect identity — resolved by the source registry on the app side.

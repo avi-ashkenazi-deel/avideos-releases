@@ -631,6 +631,16 @@ struct StatsHUD: View {
                         .foregroundStyle(engine.droppedFrames > 0 ? .orange : .secondary)
                     Text(String(format: "%.1f ms", engine.lastFrameDuration * 1000))
                 }
+                if studio.live.isLive {
+                    let color: Color = studio.live.hasProblem ? .orange : .red
+                    Label("LIVE", systemImage: "dot.radiowaves.left.and.right")
+                        .foregroundStyle(color)
+                        .help(studio.live.hasProblem
+                              ? "A destination is reconnecting or failed. Open Go Live for details."
+                              : "Streaming to \(studio.live.liveDestinationIDs.count) destination(s)")
+                    Text("\(studio.live.totalKilobitsPerSecond) kbps")
+                        .foregroundStyle(color)
+                }
                 if studio.virtualCamera.isStreaming {
                     Label("Virtual Cam", systemImage: "video.fill")
                         .foregroundStyle(.green)
