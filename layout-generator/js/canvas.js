@@ -87,6 +87,31 @@ const Canvas = (() => {
   }
   function duplicateBlock(frame, b, u) { const c = clone(b); c.id = uid(); c.x = snap(c.x + 2 * u, u); c.y = snap(c.y + 2 * u, u); frame.layout.blocks.push(c); return c; }
   function removeBlocks(frame, ids) { frame.layout.blocks = frame.layout.blocks.filter(b => !ids.includes(b.id)); }
+  // Move blocks into another frame and keep their place on the canvas.
+  function transferBlocks(src, dst, blocks, u) {
+    const out = [];
+    for (const b of blocks) {
+      src.layout.blocks = src.layout.blocks.filter(x => x !== b);
+      const wx = src.x + b.x, wy = src.y + b.y;
+      b.x = snap(wx - dst.x, u); b.y = snap(wy - dst.y, u);
+      dst.layout.blocks.push(b); out.push(b);
+    }
+    return out;
+  }
+  // Paste clones into a frame; dx/dy nudge them off their source, and they are kept inside the frame.
+  function pasteBlocks(frame, blocks, opts = {}) {
+    const u = frame.layout.grid.unit; const W = frame.layout.format.w, H = frame.layout.format.h; const out = [];
+    for (const b of blocks) {
+      const c = clone(b); c.id = uid();
+      c.x = snap(c.x + (opts.dx || 0), u); c.y = snap(c.y + (opts.dy || 0), u);
+      c.x = Math.max(0, Math.min(W - Math.min(c.w, W), c.x)); c.y = Math.max(0, Math.min(H - Math.min(c.h, H), c.y));
+      if (c.kind === 'text' || c.kind === 'list') refit(c);
+      frame.layout.blocks.push(c); out.push(c);
+    }
+    return out;
+  }
+  // A format for a frame drawn by hand: columns scale with width, like the built-in formats.
+  function customFormat(w, h) { w = Math.max(64, Math.round(w / 8) * 8); h = Math.max(64, Math.round(h / 8) * 8); return { id: 'custom', name: 'Custom', w, h, cols: Math.max(4, Math.min(12, Math.round(w / 160))) }; }
 
   // ---- Align and distribute (selected blocks within a frame) ---------------------------------
   function align(frame, blocks, mode) {
@@ -198,5 +223,5 @@ const Canvas = (() => {
     };
   }
 
-  return { create, addFrame, blankFrame, frameById, blockById, refit, sourceText, newBlock, moveBlock, resizeBlock, reorder, duplicateBlock, removeBlocks, align, distribute, bounds, applyAutoLayout, isBackground, serialize, deserialize, toLink, fromHash, toHTML, history, snap, uid, clone };
+  return { create, addFrame, blankFrame, frameById, blockById, refit, sourceText, newBlock, moveBlock, resizeBlock, reorder, duplicateBlock, removeBlocks, transferBlocks, pasteBlocks, customFormat, align, distribute, bounds, applyAutoLayout, isBackground, serialize, deserialize, toLink, fromHash, toHTML, history, snap, uid, clone };
 })();

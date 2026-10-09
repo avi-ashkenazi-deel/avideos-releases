@@ -182,14 +182,17 @@
     <div id="canvasView" class="cv" hidden>
       <div class="cv-toolbar">
         <div class="cv-tools" id="cvTools">
-          <button class="on" data-tool="select" title="Select (V)">↖</button>
-          <button data-tool="hand" title="Hand (H)">✋</button>
-          <button data-tool="frame" title="Frame (F)">▢</button>
-          <select id="cvFrameFormat" class="select" hidden aria-label="Frame format"></select>
-          <button data-tool="text" title="Text (T)">T</button>
-          <button data-tool="rect" title="Rectangle (R)">▬</button>
-          <button data-tool="ellipse" title="Ellipse (O)">●</button>
-          <button data-tool="image" title="Image (I)">▣</button>
+          <button class="on" data-tool="select" data-tip="Select · V" aria-label="Select (V)">↖</button>
+          <button data-tool="hand" data-tip="Hand · H or hold space" aria-label="Hand (H)">✋</button>
+          <button data-tool="frame" data-tip="Frame · F · click to place, drag to draw" aria-label="Frame (F)">▢</button>
+          <button data-tool="text" data-tip="Text · T" aria-label="Text (T)">T</button>
+          <button data-tool="rect" data-tip="Rectangle · R" aria-label="Rectangle (R)">▬</button>
+          <button data-tool="ellipse" data-tip="Ellipse · O" aria-label="Ellipse (O)">●</button>
+          <button data-tool="image" data-tip="Image · I" aria-label="Image (I)">▣</button>
+        </div>
+        <div class="cv-newframe">
+          <button id="cvNewFrame" class="btn small" type="button" data-tip="Add a blank frame in view · ⇧N">＋ Frame</button>
+          <select id="cvFrameFormat" class="select" aria-label="Frame format"></select>
         </div>
         <div class="cv-center">
           <button id="cvZoomOut" class="btn small" type="button" title="Zoom out (-)">−</button>
@@ -226,7 +229,7 @@
         <div id="stage" class="cv-stage">
           <div id="world" class="cv-world"></div>
           <svg id="overlay" class="cv-overlay"></svg>
-          <div id="cvEmpty" class="cv-empty" hidden><p class="big">Nothing on the canvas yet.</p><p>Pick layouts in Single or Deck mode and send them here, or press <b>F</b> and click to draw a blank frame.</p></div>
+          <div id="cvEmpty" class="cv-empty" hidden><p class="big">Nothing on the canvas yet.</p><p>Pick layouts in Single or Deck mode and send them here, or add a blank frame with <b>＋ Frame</b> above. Press <b>F</b> and drag to draw one at any size.</p></div>
         </div>
         <aside class="cv-props" id="cvProps"></aside>
       </div>
@@ -301,15 +304,24 @@
   <div id="settings" class="modal" hidden>
     <div class="modal-inner settings">
       <div class="detail-head">
-        <h3>Prompt interpreter</h3>
+        <h3>Settings</h3>
         <button class="btn ghost icon" id="settingsClose" type="button" aria-label="Close">✕</button>
       </div>
       <div class="prose">
+        <h4>Prompt interpreter</h4>
         <p>By default the brief is read by a built-in rule parser (formats, mood, emphasis, count, quoted copy, brand color names). Optionally, let Claude read the brief and turn it into the same constraint JSON. The key stays in this browser only and is sent straight to Anthropic.</p>
         <div class="field"><label for="apiKey">Anthropic API key</label><input id="apiKey" class="input" type="password" placeholder="sk-ant-..." autocomplete="off"></div>
         <label class="check"><input id="useClaude" type="checkbox"> Use Claude to interpret the brief</label>
         <p class="hint">Runs when the page is served locally or from your own host. Published copies block outbound requests, so the rule parser is used there.</p>
         <div id="interpretLog" class="mono small"></div>
+        <h4>Image generation</h4>
+        <p>Image blocks on the canvas can ask a model for a picture that matches the frame's copy and palette. Pick a provider and paste its key; the key stays in this browser and is sent only to that provider.</p>
+        <div class="field three">
+          <div><label for="imgProvider">Provider</label><select id="imgProvider" class="select"><option value="">Off</option></select></div>
+          <div><label for="imgModel">Model</label><select id="imgModel" class="select"></select></div>
+          <div><label for="imgKey">API key</label><input id="imgKey" class="input" type="password" autocomplete="off" placeholder="Key"></div>
+        </div>
+        <p class="hint" id="imgHint">Like the interpreter, this runs locally or from your own host only. Published copies block outbound requests.</p>
       </div>
     </div>
   </div>
@@ -329,6 +341,7 @@
 <script src="js/prompt.js"></script>
 <script src="js/copy.js"></script>
 <script src="js/deck.js"></script>
+<script src="js/imagegen.js"></script>
 <script src="js/canvas.js"></script>
 <script src="js/canvas-ui.js"></script>
 <script src="js/app.js"></script>

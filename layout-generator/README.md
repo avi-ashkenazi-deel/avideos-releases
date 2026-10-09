@@ -50,6 +50,10 @@ Pick layouts in Single mode (tick cards, or favorite them) or pick slides in Dec
 - **Layout (flex).** Turn a frame's auto layout on as a vertical stack or horizontal row with gap, padding, align, justify, and stretch. Content blocks reflow in reading order; backgrounds stay. Drag a block to reorder it.
 - **Code.** Every frame and block shows its JSON. Edit and apply. Export copies a frame as HTML/CSS.
 - **Export.** Frame to PNG or SVG, all frames of one format to an editable PPTX, every frame to PNGs, or the whole canvas to one PNG.
+- **Frames.** ＋ Frame adds a blank frame of the chosen format on a free spot in view (⇧N). The Frame tool (F) places one on click or draws one at any size on drag.
+- **Between frames.** Drag a block onto another frame to move it there (⌥ drag copies first). ⌘C, ⌘X and ⌘V copy, cut and paste blocks or a whole frame; the copy also lands on the system clipboard as JSON, so it pastes into another tab or session.
+- **Palette.** Every color field shows the brand palette as swatches; pick one or type any hex. The pencil opens the palette editor on the canvas panel, where colors can be renamed, re-roled, added or removed, and reset to the preset. Edits feed the generator too.
+- **Images.** An image block has a Generate section: a prompt drafted from the frame's copy and palette, sent to Google Gemini (Gemini 2.5 Flash Image, Imagen 4) or OpenAI (GPT Image 1, DALL·E 3) with a key from Settings. The provider layer in `js/imagegen.js` is where more models plug in. Like the Claude paths, it runs locally or from your own host, not in the published copy.
 - **Share.** Copy link puts the canvas (layout and copy, not images) into the URL hash. Save and Load move the whole canvas as JSON. The canvas also persists in the browser.
 
 ## Copy that fits

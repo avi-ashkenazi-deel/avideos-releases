@@ -478,7 +478,15 @@
   $('aboutBtn').addEventListener('click', () => $('about').hidden = false);
   $('aboutClose').addEventListener('click', () => $('about').hidden = true);
   $('settingsBtn').addEventListener('click', () => $('settings').hidden = false);
-  $('settingsClose').addEventListener('click', () => { LS.set('lg.apiKey', $('apiKey').value); LS.set('lg.useClaude', $('useClaude').checked); $('settings').hidden = true; });
+  $('settingsClose').addEventListener('click', () => { LS.set('lg.apiKey', $('apiKey').value); LS.set('lg.useClaude', $('useClaude').checked); saveImageGen(); $('settings').hidden = true; });
+  // Image generation settings: provider → models, key per provider.
+  $('imgProvider').innerHTML += Object.values(ImageGen.PROVIDERS).map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+  function fillImageModels(provider, model) { const P = ImageGen.PROVIDERS[provider]; $('imgModel').innerHTML = P ? P.models.map(m => `<option value="${m[0]}" ${m[0] === model ? 'selected' : ''}>${m[1]}</option>`).join('') : '<option value="">—</option>'; $('imgModel').disabled = !P; $('imgKey').disabled = !P; $('imgKey').placeholder = P ? P.keyHint : 'Pick a provider first'; $('imgHint').innerHTML = P ? `Keys: <a href="${P.keyUrl}" target="_blank" rel="noopener">${P.keyUrl.replace(/^https?:\/\//, '')}</a>. Runs locally or from your own host only; published copies block outbound requests.` : 'Off. Pick Google Gemini or OpenAI to enable Generate image on canvas image blocks.'; }
+  function loadImageGen() { const s = ImageGen.settings.get(); $('imgProvider').value = s.provider || ''; fillImageModels(s.provider, s.model); $('imgKey').value = s.apiKey || ''; }
+  function saveImageGen() { ImageGen.settings.set({ provider: $('imgProvider').value, model: $('imgModel').value, apiKey: $('imgKey').value.trim() }); }
+  $('imgProvider').addEventListener('change', () => { fillImageModels($('imgProvider').value, ''); saveImageGen(); });
+  $('imgModel').addEventListener('change', saveImageGen); $('imgKey').addEventListener('change', saveImageGen);
+  loadImageGen();
   document.addEventListener('keydown', e => { if (e.key === 'Escape') for (const id of ['detail', 'compare', 'about', 'settings']) $(id).hidden = true; });
   for (const id of ['detail', 'compare', 'about', 'settings']) $(id).addEventListener('click', e => { if (e.target === $(id)) $(id).hidden = true; });
   $('aboutBody').innerHTML = `
@@ -673,6 +681,10 @@
   CanvasUI.init({
     getKit: () => state.kit, getAssets: () => state.assets, toast,
     addImage: async file => { const ph = state.assets.images.filter(a => a.placeholder); for (const a of ph) URL.revokeObjectURL(a.url); state.assets.images = state.assets.images.filter(a => !a.placeholder); const asset = await addImage(await readAsDataURL(file), file.name); return asset; },
+    addImageData: (dataUrl, name) => addImage(dataUrl, name),
+    updateColors: colors => { state.kit.colors = colors.map(c => ({ name: c.name || c.hex, hex: Color.normalize(c.hex), role: c.role || 'accent' })); renderColors(); persistKit(); },
+    resetColors: () => { const preset = Brand.PRESETS[state.kit.presetId]; if (!preset) return false; state.kit.colors = preset.colors.map(c => ({ ...c })); renderColors(); persistKit(); return true; },
+    openSettings: () => { $('settings').hidden = false; $('imgProvider').focus(); },
     download: (blob, name) => Render.download(blob, name),
     renderSVG: (layout, opts) => Render.toSVG(layout, { kit: state.kit, assets: state.assets, showGrid: !!(opts && opts.showGrid) }),
     exportPNG: layout => Render.exportPNG(layout, { kit: state.kit, assets: state.assets }),
