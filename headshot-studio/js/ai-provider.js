@@ -7,7 +7,6 @@
 //    photo the person chose and explains what changed.
 
 import { RETOUCH_LIMITS, TREATMENTS, backgroundLabel } from './policy.js';
-import { ATTIRE } from './prompt.js';
 
 let statusPromise = null;
 
@@ -22,9 +21,10 @@ export function regenStatus() {
   return statusPromise;
 }
 
-// keepCanvas: white where the real head is (face, hair, neck). The self-hosted
-// model regenerates only around it; hosted models ignore it.
-export async function regenerate(canvas, policy, keepCanvas = null) {
+// keepCanvas: white where the person is (minus hands and held objects); the
+// self-hosted model only repaints outside it. clothing: measured color of
+// their top. Hosted models get neither; their prompt covers both.
+export async function regenerate(canvas, policy, keepCanvas = null, clothing = null) {
   // The company background image is not needed for the prompt; keep the request small.
   const slim = { ...policy, background: { ...policy.background, image: null } };
   const res = await fetch('api/generate', {
@@ -33,6 +33,7 @@ export async function regenerate(canvas, policy, keepCanvas = null) {
     body: JSON.stringify({
       image: canvas.toDataURL('image/jpeg', 0.92),
       keep: keepCanvas ? keepCanvas.toDataURL('image/png') : undefined,
+      clothing: clothing || undefined,
       policy: slim,
       n: policy.ai.variations,
     }),
@@ -88,16 +89,18 @@ export const onDeviceProvider = {
     const limit = RETOUCH_LIMITS[policy.retouchLimit]?.max ?? 1;
     const cap = (v) => Math.round(Math.min(v, 100 * limit));
     // A regenerated photo is already studio-lit, so start from neutral sliders.
+    // Flattering light (fill light, under-eyes) is on for every photo. A
+    // regenerated photo is already studio-lit, so it gets less of the rest.
     const params = regenerated ? {
-      brightness: 0, contrast: 0, warmth: 0,
-      smoothing: 0, skinTone: 0, skinLight: 0,
-      eyeBright: 0, eyeClarity: cap(10),
+      brightness: 0, contrast: 0, warmth: 0, fillLight: 30,
+      smoothing: cap(10), skinTone: 0, skinLight: 0,
+      eyeBright: cap(10), eyeClarity: cap(10), underEye: cap(40),
       lipColor: 0,
       zoom: 0, offsetY: 0,
     } : {
-      brightness: 0, contrast: 4, warmth: 0,
+      brightness: 0, contrast: 4, warmth: 0, fillLight: 45,
       smoothing: cap(30), skinTone: 0, skinLight: 0,
-      eyeBright: cap(20), eyeClarity: cap(15),
+      eyeBright: cap(20), eyeClarity: cap(15), underEye: cap(50),
       lipColor: 0,
       zoom: 0, offsetY: 0,
     };
@@ -108,7 +111,7 @@ export const onDeviceProvider = {
         ? 'Test mode: no image model connected, so the photo was not regenerated'
         : `Rebuilt as a studio headshot (${regenerated.model})`);
       if (!regenerated.mock) {
-        notes.push(`Outfit: ${ATTIRE[policy.ai.attire].toLowerCase()}; props and other people removed`);
+        notes.push('Props and other people removed; your own clothes kept');
       }
     }
     if (policy.background.type !== 'original') notes.push(`Background set to ${backgroundLabel(policy.background).toLowerCase()}`);
@@ -116,6 +119,7 @@ export const onDeviceProvider = {
     if (gain > 1.1) notes.push('Brightened the photo');
     else notes.push('Balanced light and contrast');
     if (Math.max(...wb) - Math.min(...wb) > 0.03) notes.push('Corrected the color cast');
+    notes.push('Lifted shadows on the face and brightened under the eyes');
     if (!regenerated) notes.push('Softened skin and brightened eyes, lightly');
 
     const warnings = [];

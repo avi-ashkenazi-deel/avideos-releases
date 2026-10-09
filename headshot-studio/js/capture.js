@@ -14,11 +14,13 @@ const SLIDERS = [
   { group: 'light', key: 'brightness', label: 'Brightness', min: -50, max: 50 },
   { group: 'light', key: 'contrast', label: 'Contrast', min: -50, max: 50 },
   { group: 'light', key: 'warmth', label: 'Warmth', min: -50, max: 50 },
+  { group: 'light', key: 'fillLight', label: 'Fill light on face', min: 0, max: 100 },
   { group: 'skin', key: 'smoothing', label: 'Smooth skin', min: 0, max: 100, limited: true },
   { group: 'skin', key: 'skinTone', label: 'Skin tone · cooler to warmer', min: -50, max: 50, limited: true },
   { group: 'skin', key: 'skinLight', label: 'Skin brightness', min: -50, max: 50, limited: true },
   { group: 'eyes', key: 'eyeBright', label: 'Brighten eyes', min: 0, max: 100, limited: true },
   { group: 'eyes', key: 'eyeClarity', label: 'Eye clarity', min: 0, max: 100, limited: true },
+  { group: 'eyes', key: 'underEye', label: 'Brighten under-eyes', min: 0, max: 100, limited: true },
   { group: 'lips', key: 'lipColor', label: 'Lip color', min: -50, max: 100, limited: true },
   { group: 'framing', key: 'zoom', label: 'Zoom avatar', min: 0, max: 40 },
   { group: 'framing', key: 'offsetY', label: 'Move face up or down', min: -50, max: 50 },
@@ -458,7 +460,7 @@ export class CaptureFlow {
       const cutout = cutoutOnGrey(prep0);
       shot.replaceChildren(coverCopy(cutout, 400, 500));
       await mark('regen');
-      const result = await regenerate(cutout, this.policy, maskCanvas(prep0.masks.head, prep0.W, prep0.H));
+      const result = await regenerate(cutout, this.policy, maskCanvas(prep0.masks.keep, prep0.W, prep0.H), prep0.clothing);
       this.setSession({
         variants: result.images,
         regenInfo: { provider: result.provider, model: result.model, mock: result.mock },

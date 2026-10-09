@@ -26,13 +26,19 @@ Optional: `GEMINI_IMAGE_MODEL` (default `gemini-nano-banana-2.1`),
 `OPENAI_IMAGE_MODEL` (default `gpt-image-2`), `PORT`.
 
 **Self-hosted option** (`local`): no photo leaves your server. It keeps the
-person's real head (face, hair, neck) and regenerates everything else with an
-open-source Stable Diffusion inpainting model (`tools/local_inpaint.py`,
+real person untouched (face, hair, neck and their own clothes) and only
+repaints what doesn't belong (a drink, someone's hand) plus the backdrop, with
+an open-source Stable Diffusion inpainting model (`tools/local_inpaint.py`,
 default `Lykon/dreamshaper-8-inpainting`). Install with
 `pip install torch diffusers transformers accelerate safetensors pillow` and
 point `HEADSHOT_PYTHON` at that Python. About 4 minutes per image on a 4-core
-CPU, a few seconds on a GPU. It follows outfit colors less precisely than the
-hosted models.
+CPU, a few seconds on a GPU. It cannot relight the face; the hosted models can.
+
+**Which model to use**: Gemini (`gemini-nano-banana-2.1`), ideally through
+Vertex AI on the company's Google Cloud. It is built for "change only this"
+edits, so it keeps clothes and face shape best, and costs about $0.034 per
+1K image on the paid tier. OpenAI `gpt-image-2` is the backup to compare
+against; it costs several times more per high-quality image.
 
 Without the server (any static host, e.g. `npx serve headshot-studio`) the app
 still works but only retouches the real photo. Browsers only allow the camera
@@ -53,25 +59,28 @@ CDN on first use.
    holds still. A short burst keeps the frame with the most open eyes.
 3. **AI studio photo**: the person is cut out on the device (the room and
    anyone else in the shot are never uploaded), then an image model rebuilds
-   them as a professional headshot: the outfit the admin chose, studio light,
-   a plain backdrop, and no drinks, props or other people's hands. The prompt
+   them as a professional headshot: their own clothes and face shape kept,
+   flattering studio light (shadows lifted, under-eyes brightened), a plain
+   backdrop, and no drinks, props or other people's hands. The prompt
    is built from the policy (`js/prompt.js`); the server never accepts free
    text from the browser.
 4. **Choose**: the person picks the option that looks most like them, or keeps
    their own photo (retouch only).
 5. **Style**: crop to the company framing, swap in the exact brand
    background, apply the color treatment, and list what changed.
-6. **Retouch**: sliders for light and color, skin (smoothing, tone, brightness),
-   eyes (brighten, clarity), lips (color) and avatar framing. Hold to compare
+6. **Retouch**: sliders for light and color (including fill light on the
+   face), skin (smoothing, tone, brightness), eyes (brighten, clarity,
+   under-eyes), lips (color) and avatar framing. Fill light and under-eye
+   brightening work on the smoothed image, so skin texture stays. Hold to compare
    with the real photo. Live avatar previews at 96, 48 and 32 px.
 7. **Done**: final avatar shown in mock Deel contexts, download PNG/JPG,
    submit for approval.
 
 **Admin (`#admin`)**
 
-- AI studio photo: on or off, outfit (their own top cleaned up, business
-  casual, business formal), expression (keep, relaxed smile), how many options
-  to generate, model connection status, and the exact prompt the model gets.
+- AI studio photo: on or off, expression (keep, relaxed smile), how many
+  options to generate, model connection status, and the exact prompt the model
+  gets. People always keep their own clothes and face shape.
 - Background: studio grey, Deel blue, ink, warm white, sky gradient, blur the
   person's room, keep the room, a custom color, or an uploaded company image.
 - Look: natural, black & white, warm, cool, brand duotone. Brand colors stay

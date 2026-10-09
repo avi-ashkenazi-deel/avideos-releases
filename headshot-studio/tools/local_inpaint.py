@@ -1,8 +1,9 @@
 """Self-hosted regeneration for Headshot Studio.
 
-Keeps the person's real head (face, hair, neck) and regenerates everything
-else as a studio headshot with an open-source inpainting model. Called by
-server.mjs when HEADSHOT_PROVIDER=local.
+Keeps the real person untouched (face, hair, neck and their own clothes) and
+repaints only what doesn't belong (a drink, someone's hand) plus the backdrop,
+with an open-source inpainting model. Called by server.mjs when
+HEADSHOT_PROVIDER=local.
 
   python local_inpaint.py JOB_DIR
   JOB_DIR holds photo.png, keep.png (white = keep) and job.json
@@ -33,7 +34,7 @@ def main(job_dir):
 
     photo = Image.open(os.path.join(job_dir, 'photo.png')).convert('RGB').resize((W, H), Image.LANCZOS)
     keep = Image.open(os.path.join(job_dir, 'keep.png')).convert('L').resize((W, H), Image.LANCZOS)
-    # Repaint everything outside the head, with a slightly widened edge for blending.
+    # Repaint everything outside the person, with a slightly widened edge for blending.
     mask = keep.point(lambda v: 255 - min(255, int(v * 1.6)))
     paste = keep.filter(ImageFilter.GaussianBlur(2))
 

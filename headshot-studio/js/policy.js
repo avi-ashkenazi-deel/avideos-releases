@@ -1,8 +1,6 @@
 // The company photo policy: what the admin decides, what every photo follows.
 // Prototype storage is localStorage; in Deel this would be an org-level setting.
 
-import { ATTIRE } from './prompt.js';
-
 const KEY = 'hs.policy.v1';
 const SUBMISSIONS_KEY = 'hs.submissions.v1';
 
@@ -58,7 +56,7 @@ export const DEFAULT_POLICY = {
   capture: { autoCapture: true, strictness: 'standard', eyesOpen: true },
   // AI regeneration: rebuild the photo as a studio headshot with an image
   // model, then apply the style above. 'off' keeps the real photo.
-  ai: { mode: 'regenerate', attire: 'casual', expression: 'keep', variations: 2 },
+  ai: { mode: 'regenerate', expression: 'keep', variations: 2 },
   requireApproval: true,
 };
 
@@ -113,7 +111,7 @@ export function summarize(policy) {
   const bg = policy.background;
   const swatch = bg.type === 'color' || bg.type === 'studio' || bg.type === 'gradient' ? bg.colors : null;
   const chips = [
-    ...(policy.ai?.mode === 'regenerate' ? [{ icon: 'sparkle', label: 'AI studio photo · ' + ATTIRE[policy.ai.attire] }] : []),
+    ...(policy.ai?.mode === 'regenerate' ? [{ icon: 'sparkle', label: 'AI studio photo' }] : []),
     { icon: 'background', label: backgroundLabel(bg), swatch, image: bg.type === 'image' ? bg.image : null },
     { icon: policy.treatment === 'bw' ? 'contrast' : 'palette', label: TREATMENTS[policy.treatment] },
     { icon: 'shape-' + policy.shape, label: { circle: 'Circle avatar', rounded: 'Rounded avatar', square: 'Square avatar' }[policy.shape] },

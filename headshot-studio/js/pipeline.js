@@ -13,7 +13,28 @@ const IDX = {
   browL: [300, 293, 334, 296, 336, 285, 295, 282, 283, 276],
   lipsOuter: [61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291, 409, 270, 269, 267, 0, 37, 39, 40, 185],
   lipsInner: [78, 95, 88, 178, 87, 14, 317, 402, 318, 324, 308, 415, 310, 311, 312, 13, 82, 81, 80, 191],
+  faceOval: [10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 397, 365, 379, 378, 400, 377, 152, 148, 176, 149, 150, 136, 172, 58, 132, 93, 234, 127, 162, 21, 54, 103, 67, 109],
+  lidR: [33, 7, 163, 144, 145, 153, 154, 155, 133],
+  lidL: [263, 249, 390, 373, 374, 380, 381, 382, 362],
 };
+
+// Names the color of someone's top, so a model can continue the same garment.
+export function colorName(r, g, b) {
+  const max = Math.max(r, g, b) / 255, min = Math.min(r, g, b) / 255;
+  const l = (max + min) / 2;
+  const s = max === min ? 0 : (max - min) / (1 - Math.abs(2 * l - 1));
+  if (l < 0.14) return 'black';
+  if (s < 0.14) return l < 0.32 ? 'charcoal' : l < 0.78 ? 'grey' : 'white';
+  const R = r / 255, G = g / 255, B = b / 255, d = max - min;
+  let h = max === R ? ((G - B) / d) % 6 : max === G ? (B - R) / d + 2 : (R - G) / d + 4;
+  h = (h * 60 + 360) % 360;
+  if (h < 15 || h >= 345) return l < 0.3 ? 'burgundy' : l > 0.72 ? 'pink' : 'red';
+  if (h < 40) return l < 0.38 ? 'brown' : l > 0.72 ? 'beige' : 'orange';
+  if (h < 65) return l < 0.4 ? 'olive' : 'yellow';
+  if (h < 170) return l < 0.3 ? 'olive' : 'green';
+  if (h < 255) return l < 0.3 ? 'navy' : l > 0.7 ? 'light blue' : 'blue';
+  return l > 0.72 ? 'pink' : 'purple';
+}
 
 export function makeCanvas(w, h) {
   const c = document.createElement('canvas');
@@ -249,19 +270,35 @@ export async function prepare(source, framing, onStep = () => {}) {
   for (let i = 0; i < N; i++) skin[i] = Math.max(faceSkin[i], bodySkin[i] * 0.8) * (1 - cut[i]);
   skin = blurChannel(skin, W, H, feather * 0.6, 2);
 
-  // Head mask (face, hair, neck), connected to the chosen face. The
-  // self-hosted model keeps exactly this and regenerates the rest.
+  // What a self-hosted model must keep: the whole person minus hands, arms
+  // and anything they hold. The landmark face outline is added and the mask
+  // grown a little, so the jaw and cheeks are never repainted narrower.
   const hair = up(SEG.hair);
-  let head = new Float32Array(N);
+  const clothes = up(SEG.clothes);
+  const oval = polygonMask(W, H, [{ pts: P(IDX.faceOval), scale: 1.06 }]);
+  let keep = new Float32Array(N);
   for (let y = 0; y < H; y++) {
     for (let x = 0; x < W; x++) {
       const i = y * W + x;
-      let k = Math.max(hair[i], faceSkin[i]);
-      if (y > g.chinY - 5 && y < g.chinY + g.faceH * 0.22 && Math.abs(x - g.cx) < g.faceW * 0.42) k = Math.max(k, bodySkin[i]);
-      head[i] = k > 0.5 ? 1 : 0;
+      const neck = y > g.chinY - 5 && y < g.chinY + g.faceH * 0.35 && Math.abs(x - g.cx) < g.faceW * 0.5;
+      const k = Math.max(hair[i], faceSkin[i], clothes[i], oval[i], neck ? bodySkin[i] : 0);
+      keep[i] = k > 0.5 ? 1 : 0;
     }
   }
-  head = blurChannel(keepConnected(head, W, H, Math.round(lm[1].x * W), Math.round(lm[1].y * H)), W, H, 2, 2);
+  keep = keepConnected(keep, W, H, Math.round(lm[1].x * W), Math.round(lm[1].y * H));
+  const grown = blurChannel(keep, W, H, Math.max(3, g.faceW * 0.025), 1);
+  for (let i = 0; i < N; i++) keep[i] = grown[i] > 0.12 ? 1 : 0;
+  keep = blurChannel(keep, W, H, 2, 2);
+
+  // Flattering light: crescents under each eye, and the face for fill light.
+  const eyeW = Math.hypot(lm[33].x * W - lm[133].x * W, lm[33].y * H - lm[133].y * H);
+  const crescent = (idx) => {
+    const lid = P(idx);
+    const down = (p, k) => ({ x: p.x, y: p.y + eyeW * k });
+    return { pts: [...lid.map((p) => down(p, 0.1)), ...lid.slice().reverse().map((p) => down(p, 0.55))] };
+  };
+  const underEye = blurChannel(polygonMask(W, H, [crescent(IDX.lidR), crescent(IDX.lidL)]), W, H, eyeW * 0.14, 2);
+  const faceFill = blurChannel(faceSkin, W, H, feather, 2);
 
   const eyes = blurChannel(polygonMask(W, H, [{ pts: P(IDX.eyeR), scale: 1.05 }, { pts: P(IDX.eyeL), scale: 1.05 }]), W, H, feather * 0.35, 2);
   const lips = blurChannel(polygonMask(W, H, [{ pts: P(IDX.lipsOuter), scale: 1.0 }, { pts: P(IDX.lipsInner), scale: 1.0, cut: true }]), W, H, feather * 0.5, 2);
@@ -273,6 +310,26 @@ export async function prepare(source, framing, onStep = () => {}) {
   const bgWeight = new Float32Array(N);
   for (let i = 0; i < N; i++) bgWeight[i] = 1 - person[i];
   const roomBlur = blurRGB(base, W, H, 14, bgWeight);
+
+  // Reference skin tone and brightness: the brighter half of the face, on
+  // the smoothed image. Under-eyes move toward it; shadows lift toward it.
+  const skinPx = [];
+  for (let i = 0; i < N; i += 2) {
+    if (faceSkin[i] > 0.7 && underEye[i] < 0.05) skinPx.push(i);
+  }
+  const lumaAt = (i) => 0.3 * smooth[0][i] + 0.59 * smooth[1][i] + 0.11 * smooth[2][i];
+  skinPx.sort((a, b) => lumaAt(a) - lumaAt(b));
+  const bright = skinPx.slice(Math.floor(skinPx.length / 2));
+  const avgOf = (ch) => bright.reduce((t, i) => t + smooth[ch][i], 0) / Math.max(1, bright.length);
+  const skinRef = [avgOf(0), avgOf(1), avgOf(2)];
+  const refL = skinPx.length ? lumaAt(skinPx[Math.floor(skinPx.length * 0.75)]) : 160;
+
+  // Color of their top, so a model can continue the same garment.
+  let cr = 0, cg = 0, cb = 0, cn = 0;
+  for (let i = 0, j = 0; i < N; i++, j += 4) {
+    if (clothes[i] > 0.7) { cr += base[j]; cg += base[j + 1]; cb += base[j + 2]; cn++; }
+  }
+  const clothing = cn > 500 ? colorName(cr / cn, cg / cn, cb / cn) : null;
 
   // Edge clean-up: along the cut-out edge, pixels still carry the old
   // background's color. Swap them for colors from just inside the person.
@@ -297,7 +354,8 @@ export async function prepare(source, framing, onStep = () => {}) {
   g.headTop = headTop;
 
   return {
-    W, H, base, baseClean, smooth, detail, roomBlur, masks: { person, skin, eyes, lips, head }, lm, geometry: g, blendshapes,
+    W, H, base, baseClean, smooth, detail, roomBlur, masks: { person, skin, eyes, lips, keep, underEye, faceFill }, skinRef, refL, clothing,
+    lm, geometry: g, blendshapes,
     original: work,
   };
 }
@@ -342,7 +400,7 @@ export async function drawBackground(ctx, bg, W, H) {
 export const NEUTRAL = {
   brightness: 0, contrast: 0, warmth: 0,
   smoothing: 0, skinTone: 0, skinLight: 0,
-  eyeBright: 0, eyeClarity: 0,
+  eyeBright: 0, eyeClarity: 0, underEye: 0, fillLight: 0,
   lipColor: 0,
   zoom: 0, offsetY: 0,
 };
@@ -381,9 +439,13 @@ export class Renderer {
     const { W, H, smooth, detail, roomBlur, masks } = this.prep;
     const base = this.useMask && this.prep.baseClean ? this.prep.baseClean : this.prep.base;
     const { person, skin, eyes, lips } = masks;
+    const underEye = masks.underEye, faceFill = masks.faceFill;
+    const skinRef = this.prep.skinRef, refL = this.prep.refL;
     const out = this.out.data;
     const p = { ...NEUTRAL, ...params };
     const a = this.auto;
+    const ueAmt = (p.underEye / 100) * 0.75;
+    const fillAmt = (p.fillLight / 100) * 0.85;
 
     const smoothAmt = (p.smoothing / 100) * 0.85;
     const toneR = p.skinTone * 0.32 + p.skinLight * 0.5;
@@ -431,6 +493,20 @@ export class Renderer {
     const bg = [0, 0, 0];
     for (let i = 0, j = 0; i < W * H; i++, j += 4) {
       let r = base[j], g = base[j + 1], b = base[j + 2];
+
+      // Flattering light works on the smoothed (low-frequency) image, so skin
+      // texture stays and only shadows and dark circles change.
+      if (underEye && ueAmt > 0 && underEye[i] > 0.004) {
+        const k = underEye[i] * ueAmt;
+        r += (skinRef[0] - smooth[0][i]) * k; g += (skinRef[1] - smooth[1][i]) * k; b += (skinRef[2] - smooth[2][i]) * k;
+      }
+      if (faceFill && fillAmt > 0 && faceFill[i] > 0.004) {
+        const L = 0.3 * smooth[0][i] + 0.59 * smooth[1][i] + 0.11 * smooth[2][i];
+        if (L < refL) {
+          const f = 1 + ((refL - L) * faceFill[i] * fillAmt) / Math.max(8, L);
+          r *= f; g *= f; b *= f;
+        }
+      }
 
       const sk = skin[i];
       if (sk > 0.004) {
