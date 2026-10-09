@@ -1,24 +1,39 @@
-// The "generate" step. It picks a starting look for the photo and explains
-// what it changed. The person then fine-tunes with sliders.
+// The "generate" step, in two parts:
 //
-// This prototype ships an on-device provider (no server, no upload). To use a
-// generative image model instead (relighting, clothing cleanup, studio
-// re-render), implement the same `generate()` shape against a backend
-// endpoint, for example:
-//
-//   export const remoteProvider = {
-//     id: 'remote',
-//     async generate(prep, policy) {
-//       const blob = await new Promise((r) => prep.original.toBlob(r, 'image/jpeg', 0.92));
-//       const res = await fetch('/api/headshots/generate', { method: 'POST', body: blob,
-//         headers: { 'X-Policy': JSON.stringify(policy) } });
-//       return res.json(); // { auto, params, notes, warnings, imageUrl }
-//     },
-//   };
-//
-// Keep the model behind your own backend so API keys never reach the browser.
+// 1. regenerate(): sends the person (cut out on the device, so bystanders and
+//    the room are never uploaded) to server.mjs, which asks an image model to
+//    rebuild it as a studio headshot following the company policy.
+// 2. onDeviceProvider.generate(): picks starting slider values for whichever
+//    photo the person chose and explains what changed.
 
 import { RETOUCH_LIMITS, TREATMENTS, backgroundLabel } from './policy.js';
+import { ATTIRE } from './prompt.js';
+
+let statusPromise = null;
+
+// { provider, model, mock } when server.mjs has an image model, else null.
+export function regenStatus() {
+  if (!statusPromise) {
+    statusPromise = fetch('api/status')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => (j?.provider ? j : null))
+      .catch(() => null);
+  }
+  return statusPromise;
+}
+
+export async function regenerate(canvas, policy) {
+  // The company background image is not needed for the prompt; keep the request small.
+  const slim = { ...policy, background: { ...policy.background, image: null } };
+  const res = await fetch('api/generate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ image: canvas.toDataURL('image/jpeg', 0.92), policy: slim, n: policy.ai.variations }),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok || !json.images?.length) throw new Error(json.error || `The image model did not return a photo (${res.status}).`);
+  return json;
+}
 
 function percentile(hist, total, p) {
   let acc = 0;
@@ -34,7 +49,8 @@ export const onDeviceProvider = {
   id: 'on-device',
   label: 'On-device enhance',
 
-  async generate(prep, policy) {
+  // regenerated: { model, mock } when the photo came from the image model.
+  async generate(prep, policy, regenerated = null) {
     const { base, masks, W, H, blendshapes } = prep;
     const N = W * H;
 
@@ -64,7 +80,14 @@ export const onDeviceProvider = {
 
     const limit = RETOUCH_LIMITS[policy.retouchLimit]?.max ?? 1;
     const cap = (v) => Math.round(Math.min(v, 100 * limit));
-    const params = {
+    // A regenerated photo is already studio-lit, so start from neutral sliders.
+    const params = regenerated ? {
+      brightness: 0, contrast: 0, warmth: 0,
+      smoothing: 0, skinTone: 0, skinLight: 0,
+      eyeBright: 0, eyeClarity: cap(10),
+      lipColor: 0,
+      zoom: 0, offsetY: 0,
+    } : {
       brightness: 0, contrast: 4, warmth: 0,
       smoothing: cap(30), skinTone: 0, skinLight: 0,
       eyeBright: cap(20), eyeClarity: cap(15),
@@ -73,12 +96,20 @@ export const onDeviceProvider = {
     };
 
     const notes = [];
+    if (regenerated) {
+      notes.push(regenerated.mock
+        ? 'Test mode: no image model connected, so the photo was not regenerated'
+        : `Rebuilt as a studio headshot (${regenerated.model})`);
+      if (!regenerated.mock) {
+        notes.push(`Outfit: ${ATTIRE[policy.ai.attire].toLowerCase()}; props and other people removed`);
+      }
+    }
     if (policy.background.type !== 'original') notes.push(`Background set to ${backgroundLabel(policy.background).toLowerCase()}`);
     if (policy.treatment !== 'natural') notes.push(`${TREATMENTS[policy.treatment]} applied`);
     if (gain > 1.1) notes.push('Brightened the photo');
     else notes.push('Balanced light and contrast');
     if (Math.max(...wb) - Math.min(...wb) > 0.03) notes.push('Corrected the color cast');
-    notes.push('Softened skin and brightened eyes, lightly');
+    if (!regenerated) notes.push('Softened skin and brightened eyes, lightly');
 
     const warnings = [];
     const score = (name) => blendshapes?.categories?.find((c) => c.categoryName === name)?.score ?? 0;

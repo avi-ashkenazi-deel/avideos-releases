@@ -374,3 +374,26 @@ td img { width: 40px; height: 40px; display: block; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
+
+/* ---------- pick a generated option ---------- */
+.pick-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
+.pick-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
+.pick-card {
+  display: flex; flex-direction: column; gap: 0; padding: 0; overflow: hidden; text-align: left;
+  background: var(--paper); border: 1.5px solid var(--divider); border-radius: var(--r-md); cursor: pointer;
+  font: inherit; color: inherit; transition: border-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
+}
+.pick-card:hover { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-lighter); }
+.pick-card img, .pick-original canvas { width: 100%; aspect-ratio: 4 / 5; object-fit: cover; display: block; background: var(--neutral-light); }
+.pick-original { display: block; }
+.pick-label { display: flex; flex-direction: column; padding: 10px 12px; }
+.pick-card--original { border-style: dashed; }
+.pick-card[disabled] { cursor: progress; opacity: 0.6; }
+.pick-card.is-busy { opacity: 1; border-color: var(--primary); position: relative; }
+.pick-card.is-busy::after {
+  content: ""; position: absolute; top: 12px; right: 12px; width: 18px; height: 18px; border-radius: 50%;
+  border: 2.5px solid var(--primary); border-top-color: transparent; animation: spin 700ms linear infinite;
+}
+.prompt-box { margin: 0; padding: 12px 14px; background: var(--neutral-lighter); border: 1px solid var(--divider); border-radius: var(--r); font: 12px/18px ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; color: var(--text-2); max-height: 260px; overflow: auto; }
+details summary { cursor: pointer; font-weight: 500; color: var(--primary); font-size: 13px; }
+details[open] summary { margin-bottom: 8px; }

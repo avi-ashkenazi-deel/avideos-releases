@@ -7,6 +7,8 @@ import {
   savePolicy, resetPolicy, saveSubmissions,
 } from './policy.js';
 import { renderSample } from './sample.js';
+import { ATTIRE, EXPRESSION, buildPrompt } from './prompt.js';
+import { regenStatus } from './ai-provider.js';
 import { composeAvatar, makeCanvas } from './pipeline.js';
 
 const TREAT_SWATCH = {
@@ -78,6 +80,20 @@ export class AdminView {
         </div>
         <div class="admin">
           <div class="settings">
+            <div class="card card-pad">
+              <div class="setting-head">${icon('sparkle', 20)}<div><h3>AI studio photo</h3><p>An image model rebuilds each photo as a professional studio headshot: proper outfit, studio light, no drinks, props or other people. The person picks from a few options, then the style below is applied.</p></div></div>
+              <div class="field"><span class="label">Mode</span>${segHTML('ai.mode', { regenerate: 'On · regenerate as a studio photo', off: 'Off · retouch the real photo' }, p.ai.mode)}</div>
+              ${p.ai.mode === 'regenerate' ? `
+              <div class="row-2">
+                <div class="field"><span class="label">Outfit</span>${segHTML('ai.attire', ATTIRE, p.ai.attire)}</div>
+                <div class="field"><span class="label">Expression</span>${segHTML('ai.expression', EXPRESSION, p.ai.expression)}</div>
+              </div>
+              <div class="field"><span class="label">Options to choose from</span>${segHTML('ai.variations', { 1: '1', 2: '2', 3: '3', 4: '4' }, String(p.ai.variations))}</div>
+              <div class="switch-row" style="padding:0"><span class="caption">Image model</span><span class="chip" id="ai-status">Checking…</span></div>
+              <details><summary>What the model is told</summary><pre class="prompt-box">${esc(buildPrompt(p))}</pre></details>
+              <p class="caption">${icon('shield', 14)} Only the person is sent to the model. The room and anyone else in the shot are removed on their device first.</p>` : ''}
+            </div>
+
             <div class="card card-pad">
               <div class="setting-head">${icon('background', 20)}<div><h3>Background</h3><p>Replaces whatever is behind the person. Brand colors stay exact; photo backgrounds follow the color treatment.</p></div></div>
               <div class="swatches">
@@ -157,6 +173,7 @@ export class AdminView {
 
     this.bind();
     this.refreshPreview();
+    this.showModelStatus();
   }
 
   subsHTML() {
@@ -240,6 +257,7 @@ export class AdminView {
         }
         this.commit((q) => {
           if (key === 'strictness') q.capture.strictness = v;
+          else if (key.startsWith('ai.')) q.ai[key.slice(3)] = key === 'ai.variations' ? Number(v) : v;
           else q[key] = v;
         });
       }));
@@ -263,6 +281,22 @@ export class AdminView {
       saveSubmissions(list);
       this.render();
     }));
+  }
+
+  async showModelStatus() {
+    const chip = this.root.querySelector('#ai-status');
+    if (!chip) return;
+    const st = await regenStatus();
+    if (!st) {
+      chip.className = 'chip chip--warning';
+      chip.textContent = 'Not connected: start server.mjs with an API key';
+    } else if (st.mock) {
+      chip.className = 'chip chip--warning';
+      chip.textContent = 'Test mode: returns photos unchanged';
+    } else {
+      chip.className = 'chip chip--success';
+      chip.textContent = `Connected · ${st.model}`;
+    }
   }
 
   async refreshPreview() {

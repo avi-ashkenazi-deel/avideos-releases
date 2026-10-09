@@ -34,8 +34,8 @@ export function toast(msg) {
   toastTimer = setTimeout(() => { t.hidden = true; }, 2600);
 }
 
-export function stepper(current) {
-  const steps = ['Get ready', 'Take photo', 'Retouch', 'Done'];
+export function stepper(current, withChoose = false) {
+  const steps = withChoose ? ['Get ready', 'Take photo', 'Choose', 'Retouch', 'Done'] : ['Get ready', 'Take photo', 'Retouch', 'Done'];
   return `<ol class="stepper" aria-label="Progress">${steps.map((s, i) => {
     const state = i < current ? 'done' : i === current ? 'current' : 'todo';
     const mark = state === 'done' ? icon('check', 12) : i + 1;

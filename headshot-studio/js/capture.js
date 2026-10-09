@@ -7,7 +7,7 @@ import { RETOUCH_LIMITS, STRICTNESS, EDIT_GROUPS, saveSubmissions } from './poli
 import { getLiveLandmarker, preload } from './vision.js';
 import { Guide, TARGET } from './guidance.js';
 import { prepare, Renderer, composeAvatar, makeCanvas } from './pipeline.js';
-import { onDeviceProvider } from './ai-provider.js';
+import { onDeviceProvider, regenStatus, regenerate } from './ai-provider.js';
 import { renderSample } from './sample.js';
 
 const SLIDERS = [
@@ -28,6 +28,46 @@ const CHECK_ICONS = { face: 'face', distance: 'ruler', position: 'target', head:
 
 const nextFrame = () => new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));
 
+// Fills a w x h canvas with src, cropped to cover.
+function coverCopy(src, w, h) {
+  const c = makeCanvas(w, h);
+  const s = Math.max(w / src.width, h / src.height);
+  c.getContext('2d').drawImage(src, (w - src.width * s) / 2, (h - src.height * s) / 2, src.width * s, src.height * s);
+  return c;
+}
+
+// The person on a plain grey backdrop: what gets sent to the image model.
+function cutoutOnGrey(prep) {
+  const { W, H, masks } = prep;
+  const src = prep.baseClean || prep.base;
+  const c = makeCanvas(W, H);
+  const ctx = c.getContext('2d');
+  const img = ctx.createImageData(W, H);
+  const d = img.data;
+  for (let i = 0, j = 0; i < W * H; i++, j += 4) {
+    const m = masks.person[i];
+    d[j] = src[j] * m + 214 * (1 - m);
+    d[j + 1] = src[j + 1] * m + 217 * (1 - m);
+    d[j + 2] = src[j + 2] * m + 222 * (1 - m);
+    d[j + 3] = 255;
+  }
+  ctx.putImageData(img, 0, 0);
+  return c;
+}
+
+function canvasFromDataUrl(src) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const c = makeCanvas(img.naturalWidth, img.naturalHeight);
+      c.getContext('2d').drawImage(img, 0, 0);
+      resolve(c);
+    };
+    img.onerror = () => reject(new Error('bad-image'));
+    img.src = src;
+  });
+}
+
 export class CaptureFlow {
   constructor(root, state) {
     this.root = root;
@@ -43,6 +83,7 @@ export class CaptureFlow {
     preload(); // warm up the models while the person reads the intro
     const s = this.session;
     if (s?.screen === 'retouch' && s.renderer) this.showRetouch();
+    else if (s?.screen === 'pick' && s.variants) this.showPick();
     else if (s?.screen === 'done' && s.renderer) this.showDone();
     else this.showIntro();
   }
@@ -65,12 +106,14 @@ export class CaptureFlow {
     const name = this.state.name || '';
     this.root.replaceChildren(el(`
       <section>
-        ${stepper(0)}
+        ${stepper(0, this.policy.ai?.mode === 'regenerate')}
         <div class="intro">
           <div class="intro-main card">
             <div class="card-pad">
               <h1>Let's take your profile photo</h1>
-              <p class="lede">Sit in front of your webcam. We'll guide you on distance, light and angle, then style the photo to your company's look. You can fine-tune it before you save.</p>
+              <p class="lede">${p.ai?.mode === 'regenerate'
+                ? 'Sit in front of your webcam. We’ll guide you on distance, light and angle, then turn the shot into a professional studio headshot in your company’s style. You pick the version that looks most like you and can fine-tune it.'
+                : 'Sit in front of your webcam. We’ll guide you on distance, light and angle, then style the photo to your company’s look. You can fine-tune it before you save.'}</p>
               <div class="tips">
                 <div class="tip">${icon('sun', 20)}<strong>Face your light</strong><span>A window or lamp in front of you, not behind.</span></div>
                 <div class="tip">${icon('level', 20)}<strong>Camera at eye level</strong><span>Prop up your laptop so you look straight ahead.</span></div>
@@ -85,7 +128,9 @@ export class CaptureFlow {
                 <label class="btn btn--outlined btn--lg" for="upload">${icon('upload')}Upload a photo</label>
                 <input type="file" id="upload" accept="image/*" hidden>
               </div>
-              <p class="privacy">${icon('shield', 16)}Your photo is processed on this device. Nothing is uploaded until you submit it.</p>
+              <p class="privacy">${icon('shield', 16)}${p.ai?.mode === 'regenerate'
+                ? 'Only you are sent to the image model. The room and anyone else in the shot are removed on this device first.'
+                : 'Your photo is processed on this device. Nothing is uploaded until you submit it.'}</p>
               <div id="cam-error" class="alert alert--warning" hidden></div>
             </div>
           </div>
@@ -130,7 +175,7 @@ export class CaptureFlow {
     this.setSession({ screen: 'camera' });
     this.root.replaceChildren(el(`
       <section>
-        ${stepper(1)}
+        ${stepper(1, this.policy.ai?.mode === 'regenerate')}
         <div class="shoot">
           <div>
             <div class="stage" id="stage">
@@ -348,8 +393,16 @@ export class CaptureFlow {
   // ---------- 3. processing ----------
 
   async process(source) {
-    this.setSession({ screen: 'processing', source });
-    const tasks = [
+    this.setSession({ screen: 'processing', source, variants: null, regenInfo: null, compareWith: null });
+    const st = this.policy.ai?.mode === 'regenerate' ? await regenStatus() : null;
+    const regen = !!st;
+    const tasks = regen ? [
+      ['face', 'Finding you'],
+      ['background', 'Removing the room and anyone else'],
+      ['features', 'Mapping your face'],
+      ['style', 'Preparing the photo'],
+      ['regen', 'Generating your studio photo'],
+    ] : [
       ['face', 'Finding your face'],
       ['background', 'Removing the background'],
       ['features', 'Mapping skin, eyes and lips'],
@@ -358,22 +411,21 @@ export class CaptureFlow {
     ];
     this.root.replaceChildren(el(`
       <section>
-        ${stepper(1)}
+        ${stepper(1, regen)}
         <div class="processing">
           <div class="processing-shot" id="shot"></div>
           <div>
-            <h1>Creating your photo</h1>
-            <p class="lede">This takes a few seconds and happens on your device.</p>
+            <h1>${regen ? 'Creating your studio photo' : 'Creating your photo'}</h1>
+            <p class="lede">${regen
+              ? 'Only you are sent to the image model. The room and anyone else in the shot are removed on your device first. This takes up to a minute.'
+              : 'This takes a few seconds and happens on your device.'}</p>
             <ul class="ptasks" id="ptasks">${tasks.map(([id, label]) => `<li class="ptask" data-id="${id}" data-state="todo"><span class="check-state"></span>${label}</li>`).join('')}</ul>
             <div id="proc-error" hidden style="margin-top:20px"></div>
           </div>
         </div>
       </section>`));
-    const preview = makeCanvas(400, 500);
-    const pctx = preview.getContext('2d');
-    const s = Math.max(400 / source.width, 500 / source.height);
-    pctx.drawImage(source, (400 - source.width * s) / 2, (500 - source.height * s) / 2, source.width * s, source.height * s);
-    this.root.querySelector('#shot').append(preview);
+    const shot = this.root.querySelector('#shot');
+    shot.append(coverCopy(source, 400, 500));
 
     const mark = async (id) => {
       let seen = false;
@@ -384,25 +436,118 @@ export class CaptureFlow {
     };
 
     try {
-      const prep = await prepare(source, this.policy.framing, mark);
-      const renderer = new Renderer(prep);
-      await renderer.setPolicy(this.policy);
-      await mark('ai');
-      const ai = await onDeviceProvider.generate(prep, this.policy);
-      renderer.auto = ai.auto;
-      this.root.querySelectorAll('.ptask').forEach((li) => { li.dataset.state = 'done'; });
-      await nextFrame();
-      this.setSession({ prep, renderer, ai, params: { ...ai.params }, policyStamp: JSON.stringify(this.policy) });
-      this.showRetouch();
+      if (!regen) {
+        await this.finishWith(source, null, mark);
+        return;
+      }
+      // Cut the person out first, so only they are uploaded.
+      const prep0 = await prepare(source, 'headshoulders', mark);
+      const cutout = cutoutOnGrey(prep0);
+      shot.replaceChildren(coverCopy(cutout, 400, 500));
+      await mark('regen');
+      const result = await regenerate(cutout, this.policy);
+      this.setSession({
+        variants: result.images,
+        regenInfo: { provider: result.provider, model: result.model, mock: result.mock },
+        compareWith: prep0.original,
+      });
+      this.showPick();
     } catch (err) {
       console.error(err);
-      const box = this.root.querySelector('#proc-error');
-      box.hidden = false;
-      const noFace = err?.message === 'no-face';
-      box.innerHTML = `<div class="alert alert--warning">${icon('face')}<div><b>${noFace ? 'We couldn’t find a face.' : 'Something went wrong while processing.'}</b> ${noFace ? 'Center your face in the oval and make sure it is well lit.' : 'Check your connection (the face models load from the web) and try again.'}</div></div>
-        <div class="actions" style="margin-top:16px"><button class="btn btn--primary" id="retry">${icon('camera')}Try again</button></div>`;
-      box.querySelector('#retry').addEventListener('click', () => this.showCamera());
+      this.showProcessError(err, regen);
     }
+  }
+
+  showProcessError(err, regen) {
+    const box = this.root.querySelector('#proc-error');
+    if (!box) return;
+    box.hidden = false;
+    const noFace = err?.message === 'no-face';
+    const title = noFace ? 'We couldn’t find a face.' : regen ? 'The studio photo couldn’t be generated.' : 'Something went wrong while processing.';
+    const body = noFace ? 'Center your face in the oval and make sure it is well lit.'
+      : regen ? esc(err?.message || 'The image model did not respond.') + ' You can try again or continue with your own photo.'
+      : 'Check your connection (the face models load from the web) and try again.';
+    box.innerHTML = `<div class="alert alert--warning">${icon('face')}<div><b>${title}</b> ${body}</div></div>
+      <div class="actions" style="margin-top:16px">
+        <button class="btn btn--primary" id="retry">${icon('refresh')}Try again</button>
+        ${regen && !noFace ? `<button class="btn btn--outlined" id="use-own">Use my own photo</button>` : ''}
+        <button class="btn btn--text" id="retake">${icon('camera')}Retake</button>
+      </div>`;
+    box.querySelector('#retry').addEventListener('click', () => (noFace ? this.showCamera() : this.process(this.session.source)));
+    box.querySelector('#retake').addEventListener('click', () => this.showCamera());
+    box.querySelector('#use-own')?.addEventListener('click', () => this.chooseOriginal());
+  }
+
+  // Runs the on-device pipeline on the chosen photo, then opens retouch.
+  async finishWith(photo, regenInfo, mark = async () => {}) {
+    const prep = await prepare(photo, this.policy.framing, mark);
+    const renderer = new Renderer(prep);
+    await renderer.setPolicy(this.policy);
+    await mark('ai');
+    const ai = await onDeviceProvider.generate(prep, this.policy, regenInfo);
+    renderer.auto = ai.auto;
+    this.root.querySelectorAll('.ptask').forEach((li) => { li.dataset.state = 'done'; });
+    await nextFrame();
+    this.setSession({ prep, renderer, ai, params: { ...ai.params }, policyStamp: JSON.stringify(this.policy), chosen: regenInfo ? 'ai' : 'original' });
+    this.showRetouch();
+  }
+
+  // ---------- 3b. pick a generated option ----------
+
+  showPick() {
+    const s = this.session;
+    this.setSession({ screen: 'pick' });
+    const info = s.regenInfo || {};
+    this.root.replaceChildren(el(`
+      <section>
+        ${stepper(2, true)}
+        <div class="pick-head">
+          <div>
+            <h1>Pick the one that looks most like you</h1>
+            <p class="lede">We rebuilt your photo as a studio headshot following your company’s rules. Choose an option, then fine-tune it.</p>
+          </div>
+          <div class="actions">
+            <button class="btn btn--outlined" id="more">${icon('refresh', 16)}New options</button>
+            <button class="btn btn--text" id="retake">${icon('camera', 16)}Retake</button>
+          </div>
+        </div>
+        ${info.mock ? `<div class="alert alert--warning" style="margin-bottom:16px">${icon('sparkle')}<div><b>Test mode.</b> No image model is connected to the server, so these options are your photo unchanged. Start the server with GEMINI_API_KEY or OPENAI_API_KEY to generate real studio photos.</div></div>` : ''}
+        <div class="pick-grid" id="pick-grid">
+          ${s.variants.map((src, i) => `
+            <button type="button" class="pick-card" data-variant="${i}">
+              <img src="${src}" alt="Generated option ${i + 1}">
+              <span class="pick-label"><b>Option ${i + 1}</b><span class="caption">${info.mock ? 'Test mode' : 'AI studio photo'}</span></span>
+            </button>`).join('')}
+          <button type="button" class="pick-card pick-card--original" data-variant="original">
+            <span class="pick-original" id="pick-original"></span>
+            <span class="pick-label"><b>My own photo</b><span class="caption">Retouch only, not regenerated</span></span>
+          </button>
+        </div>
+        <p class="privacy" style="margin-top:16px">${icon('shield', 16)}Generated with ${esc(info.model || 'an image model')}. Only you were sent; the room and anyone else were removed first.</p>
+      </section>`));
+
+    if (s.compareWith) this.root.querySelector('#pick-original').append(coverCopy(s.compareWith, 400, 500));
+    const cards = this.root.querySelectorAll('.pick-card');
+    cards.forEach((card) => card.addEventListener('click', async () => {
+      cards.forEach((c) => { c.disabled = true; });
+      card.classList.add('is-busy');
+      const v = card.dataset.variant;
+      try {
+        if (v === 'original') await this.chooseOriginal();
+        else await this.finishWith(await canvasFromDataUrl(s.variants[Number(v)]), s.regenInfo);
+      } catch (err) {
+        console.error(err);
+        cards.forEach((c) => { c.disabled = false; });
+        card.classList.remove('is-busy');
+        toast(err?.message === 'no-face' ? 'No face found in that option. Pick another one.' : 'That option could not be processed. Pick another one.');
+      }
+    }));
+    this.root.querySelector('#more').addEventListener('click', () => this.process(s.source));
+    this.root.querySelector('#retake').addEventListener('click', () => this.showCamera());
+  }
+
+  chooseOriginal() {
+    return this.finishWith(this.session.source, null);
   }
 
   // ---------- 4. retouch ----------
@@ -433,7 +578,7 @@ export class CaptureFlow {
 
     this.root.replaceChildren(el(`
       <section>
-        ${stepper(2)}
+        ${stepper(s.variants ? 3 : 2, !!s.variants)}
         <div class="retouch">
           <div class="preview-col">
             <div class="canvas-wrap" id="view-wrap"><canvas id="view" width="800" height="1000" aria-label="Your retouched photo"></canvas>
@@ -457,6 +602,7 @@ export class CaptureFlow {
             <div class="panel-section">
               <p class="limit-note">Your company allows <b>${limit.label.toLowerCase()}</b> retouching. ${esc(limit.help)}</p>
               <div class="actions">
+                ${s.variants ? `<button class="btn btn--text" id="back-pick">${icon('arrowLeft', 16)}Other options</button>` : ''}
                 <button class="btn btn--text" id="reset">${icon('refresh', 16)}Reset to suggested</button>
                 <button class="btn btn--text" id="retake">${icon('camera', 16)}Retake</button>
               </div>
@@ -475,7 +621,7 @@ export class CaptureFlow {
     const draw = () => {
       pending = false;
       const portrait = s.renderer.render(s.params);
-      vctx.drawImage(comparing ? s.prep.original : portrait, 0, 0, view.width, view.height);
+      vctx.drawImage(comparing ? (s.compareWith && s.chosen === 'ai' ? s.compareWith : s.prep.original) : portrait, 0, 0, view.width, view.height);
       const av = composeAvatar(portrait, s.prep, p, s.params, 256);
       avatars.replaceChildren(sizedCopy(av, 96), sizedCopy(av, 48), sizedCopy(av, 32));
     };
@@ -508,6 +654,7 @@ export class CaptureFlow {
     });
     this.root.querySelectorAll('#retake, [data-retake]').forEach((b) => b.addEventListener('click', () => this.showCamera()));
     this.root.querySelector('#continue').addEventListener('click', () => this.showDone());
+    this.root.querySelector('#back-pick')?.addEventListener('click', () => this.showPick());
   }
 
   // ---------- 5. done ----------
@@ -523,7 +670,7 @@ export class CaptureFlow {
 
     this.root.replaceChildren(el(`
       <section>
-        ${stepper(submitted ? 4 : 3)}
+        ${stepper((submitted ? 4 : 3) + (s.variants ? 1 : 0), !!s.variants)}
         <div class="done">
           <div class="card card-pad done-hero">
             <h1>${submitted ? (p.requireApproval ? 'Sent for approval' : 'Your photo is saved') : 'Your new photo'}</h1>

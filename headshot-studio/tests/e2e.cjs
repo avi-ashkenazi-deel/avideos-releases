@@ -30,7 +30,13 @@ const OUT = process.env.OUT_DIR || path.join(__dirname, 'out');
   const errors = [];
   page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
   // MediaPipe logs its own INFO lines through console.error; ignore those.
-  page.on('console', (m) => { if (m.type() === 'error' && !m.text().startsWith('INFO:')) errors.push('console: ' + m.text()); });
+  page.on('console', (m) => {
+    const t = m.text();
+    if (m.type() !== 'error' || t.startsWith('INFO:') || t.startsWith('Failed to load resource')) return;
+    errors.push('console: ' + t);
+  });
+  // Missing files are errors, except the server probe on static hosting.
+  page.on('response', (r) => { if (r.status() >= 400 && !r.url().endsWith('/api/status')) errors.push(`http ${r.status()}: ${r.url()}`); });
 
   await page.goto(BASE + '#capture');
   await page.waitForSelector('#start-camera');
@@ -57,7 +63,14 @@ const OUT = process.env.OUT_DIR || path.join(__dirname, 'out');
     await page.click('#shutter', { timeout: 2000 }).catch(() => {});
   }
   const t0proc = Date.now();
-  await page.waitForSelector('.retouch', { timeout: 120000 });
+  await page.waitForSelector('.retouch, .pick-grid', { timeout: 120000 });
+  if (await page.$('.pick-grid')) {
+    // AI regeneration is on: choose the first generated option.
+    console.log('pick screen: options', await page.$$eval('.pick-card', (els) => els.length));
+    await page.screenshot({ path: path.join(OUT, '3a-pick.png'), fullPage: true });
+    await page.click('.pick-card[data-variant="0"]');
+    await page.waitForSelector('.retouch', { timeout: 120000 });
+  }
   console.log('processing ms:', Date.now() - t0proc);
   await page.waitForTimeout(500);
   await page.screenshot({ path: path.join(OUT, '3-retouch.png'), fullPage: true });
