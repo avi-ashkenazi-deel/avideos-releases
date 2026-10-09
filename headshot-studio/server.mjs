@@ -93,15 +93,14 @@ async function openai(image, prompt, n) {
   return (json.data || []).filter((d) => d.b64_json).map((d) => ({ data: d.b64_json, mime: 'image/png' }));
 }
 
-// Self-hosted: keeps the real person and only repaints what was hidden
-// (behind a drink or a hand) and the backdrop. Needs the keep mask from the
-// browser.
+// Self-hosted: the browser fills hidden clothing in (mirrored from the
+// visible side); the model only blends that patch. Everything else is kept.
 async function local(image, keep, policy, n, clothing) {
   const dir = await mkdtemp(join(tmpdir(), 'headshot-'));
   try {
     await writeFile(join(dir, 'photo.png'), Buffer.from(image.data, 'base64'));
     await writeFile(join(dir, 'keep.png'), Buffer.from(keep, 'base64'));
-    await writeFile(join(dir, 'job.json'), JSON.stringify({ ...buildLocalPrompt(policy, clothing), n }));
+    await writeFile(join(dir, 'job.json'), JSON.stringify({ ...buildLocalPrompt(policy, clothing), n, strength: 0.6 }));
     await new Promise((resolve, reject) => {
       const py = spawn(process.env.HEADSHOT_PYTHON || 'python3', [join(ROOT, 'tools', 'local_inpaint.py'), dir], { stdio: ['ignore', 'inherit', 'pipe'] });
       let err = '';
@@ -116,7 +115,7 @@ async function local(image, keep, policy, n, clothing) {
   }
 }
 
-async function generate({ image, keep, clothing, policy, n }) {
+async function generate({ image, filled, keep, clothing, policy, n }) {
   const p = provider();
   if (!p) throw Object.assign(new Error('No image model is configured on the server.'), { status: 503 });
   const m = /^data:(image\/(?:jpeg|png));base64,([A-Za-z0-9+/=]+)$/.exec(image || '');
@@ -137,8 +136,9 @@ async function generate({ image, keep, clothing, policy, n }) {
     images = await openai(input, prompt, count);
   } else if (p === 'local') {
     const k = /^data:image\/png;base64,([A-Za-z0-9+/=]+)$/.exec(keep || '');
-    if (!k) throw Object.assign(new Error('The self-hosted model needs the head mask.'), { status: 400 });
-    images = await local(input, k[1], policy || {}, count, clothing);
+    const f = /^data:image\/png;base64,([A-Za-z0-9+/=]+)$/.exec(filled || '');
+    if (!k || !f) throw Object.assign(new Error('The self-hosted model needs the filled photo and keep mask.'), { status: 400 });
+    images = await local({ mime: 'image/png', data: f[1] }, k[1], policy || {}, count, clothing);
   } else {
     throw Object.assign(new Error(`Unknown HEADSHOT_PROVIDER "${p}"`), { status: 500 });
   }

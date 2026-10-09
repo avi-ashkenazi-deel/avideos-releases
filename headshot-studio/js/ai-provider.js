@@ -21,10 +21,10 @@ export function regenStatus() {
   return statusPromise;
 }
 
-// keepCanvas: white where the person is (minus hands and held objects); the
-// self-hosted model only repaints outside it. clothing: measured color of
-// their top. Hosted models get neither; their prompt covers both.
-export async function regenerate(canvas, policy, keepCanvas = null, clothing = null) {
+// hidden: { image, keep } for the self-hosted model: the photo with hidden
+// clothing filled in, and a mask of what to keep (white). clothing: measured
+// color of their top. Hosted models get the plain cut-out; the prompt covers it.
+export async function regenerate(canvas, policy, hidden = null, clothing = null) {
   // The company background image is not needed for the prompt; keep the request small.
   const slim = { ...policy, background: { ...policy.background, image: null } };
   const res = await fetch('api/generate', {
@@ -32,7 +32,8 @@ export async function regenerate(canvas, policy, keepCanvas = null, clothing = n
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       image: canvas.toDataURL('image/jpeg', 0.92),
-      keep: keepCanvas ? keepCanvas.toDataURL('image/png') : undefined,
+      filled: hidden ? hidden.image.toDataURL('image/png') : undefined,
+      keep: hidden ? hidden.keep.toDataURL('image/png') : undefined,
       clothing: clothing || undefined,
       policy: slim,
       n: policy.ai.variations,
@@ -92,9 +93,9 @@ export const onDeviceProvider = {
     // Flattering light (fill light, under-eyes) is on for every photo. A
     // regenerated photo is already studio-lit, so it gets less of the rest.
     const params = regenerated ? {
-      brightness: 0, contrast: 0, warmth: 0, fillLight: 30,
+      brightness: 0, contrast: 0, warmth: 0, fillLight: 40,
       smoothing: cap(10), skinTone: 0, skinLight: 0,
-      eyeBright: cap(10), eyeClarity: cap(10), underEye: cap(40),
+      eyeBright: cap(10), eyeClarity: cap(10), underEye: cap(50),
       lipColor: 0,
       zoom: 0, offsetY: 0,
     } : {

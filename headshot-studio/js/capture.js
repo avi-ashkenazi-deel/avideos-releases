@@ -6,7 +6,7 @@ import { el, esc, rulesHTML, stepper, toast, downloadCanvas, sizedCopy } from '.
 import { RETOUCH_LIMITS, STRICTNESS, EDIT_GROUPS, saveSubmissions } from './policy.js';
 import { getLiveLandmarker, preload } from './vision.js';
 import { Guide, TARGET } from './guidance.js';
-import { prepare, Renderer, composeAvatar, makeCanvas } from './pipeline.js';
+import { prepare, Renderer, composeAvatar, makeCanvas, blurChannel } from './pipeline.js';
 import { onDeviceProvider, regenStatus, regenerate } from './ai-provider.js';
 import { renderSample } from './sample.js';
 
@@ -55,6 +55,42 @@ function cutoutOnGrey(prep) {
   }
   ctx.putImageData(img, 0, 0);
   return c;
+}
+
+// For the self-hosted model: where a drink or a hand hid the person's clothes,
+// fill in the same garment by mirroring the visible side across the face
+// center line, and mark only that patch to be repainted. Everything else
+// (the real person, and the plain backdrop the app replaces anyway) is kept.
+function fillHidden(prep) {
+  const { W, H, masks, geometry: g } = prep;
+  const src = prep.baseClean || prep.base;
+  const c = cutoutOnGrey(prep);
+  const ctx = c.getContext('2d');
+  const img = ctx.getImageData(0, 0, W, H);
+  const d = img.data;
+  const repaint = new Float32Array(W * H);
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const i = y * W + x;
+      // Hidden = part of the foreground, but not the real person.
+      if (masks.person[i] < 0.5 || masks.keep[i] > 0.5) continue;
+      const mx = Math.round(2 * g.cx - x);
+      const mi = y * W + mx;
+      const j = i * 4;
+      if (y > g.chinY && mx >= 0 && mx < W && masks.keep[mi] > 0.5) {
+        d[j] = src[mi * 4]; d[j + 1] = src[mi * 4 + 1]; d[j + 2] = src[mi * 4 + 2];
+        repaint[i] = 1;
+      } else {
+        d[j] = 214; d[j + 1] = 217; d[j + 2] = 222;
+      }
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  // Grow the patch a little so the model also blends its seams.
+  const grown = blurChannel(repaint, W, H, 6, 1);
+  const keep = new Float32Array(W * H);
+  for (let i = 0; i < W * H; i++) keep[i] = grown[i] > 0.05 ? 0 : 1;
+  return { image: c, keep: maskCanvas(keep, W, H), patch: repaint.some((v) => v > 0) };
 }
 
 function maskCanvas(mask, W, H) {
@@ -460,7 +496,8 @@ export class CaptureFlow {
       const cutout = cutoutOnGrey(prep0);
       shot.replaceChildren(coverCopy(cutout, 400, 500));
       await mark('regen');
-      const result = await regenerate(cutout, this.policy, maskCanvas(prep0.masks.keep, prep0.W, prep0.H), prep0.clothing);
+      const hidden = fillHidden(prep0);
+      const result = await regenerate(cutout, this.policy, hidden, prep0.clothing);
       this.setSession({
         variants: result.images,
         regenInfo: { provider: result.provider, model: result.model, mock: result.mock },
