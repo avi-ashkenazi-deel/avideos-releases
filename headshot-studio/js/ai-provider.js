@@ -22,13 +22,20 @@ export function regenStatus() {
   return statusPromise;
 }
 
-export async function regenerate(canvas, policy) {
+// keepCanvas: white where the real head is (face, hair, neck). The self-hosted
+// model regenerates only around it; hosted models ignore it.
+export async function regenerate(canvas, policy, keepCanvas = null) {
   // The company background image is not needed for the prompt; keep the request small.
   const slim = { ...policy, background: { ...policy.background, image: null } };
   const res = await fetch('api/generate', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ image: canvas.toDataURL('image/jpeg', 0.92), policy: slim, n: policy.ai.variations }),
+    body: JSON.stringify({
+      image: canvas.toDataURL('image/jpeg', 0.92),
+      keep: keepCanvas ? keepCanvas.toDataURL('image/png') : undefined,
+      policy: slim,
+      n: policy.ai.variations,
+    }),
   });
   const json = await res.json().catch(() => ({}));
   if (!res.ok || !json.images?.length) throw new Error(json.error || `The image model did not return a photo (${res.status}).`);

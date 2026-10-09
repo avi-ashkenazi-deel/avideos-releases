@@ -48,3 +48,22 @@ export function buildPrompt(policy) {
     'Style: a realistic photograph with an 85mm portrait-lens look, natural colors, natural skin texture, sharp focus on the eyes. Vertical 4:5 framing, subject centered. No text, watermark, border or frame.',
   ].join('\n');
 }
+
+// Short keyword prompt for the self-hosted Stable Diffusion inpainting model
+// (its text encoder reads only ~75 tokens). The head is never regenerated
+// there: the real face, hair and neck are kept and pasted back.
+const LOCAL_OUTFIT = {
+  keep: 'wearing a clean, well-fitted plain dark crew-neck top',
+  casual: 'wearing a simple plain black crew-neck t-shirt',
+  formal: 'wearing a dark navy blue suit jacket over a crisp white dress shirt with an open collar',
+};
+
+export function buildLocalPrompt(policy) {
+  const ai = policy.ai || {};
+  const t = policy.background?.type;
+  const backdrop = t === 'blur' || t === 'original' ? 'softly blurred bright modern office background' : 'plain light grey seamless studio backdrop';
+  return {
+    prompt: `professional corporate headshot photograph, head and shoulders portrait, ${LOCAL_OUTFIT[ai.attire] || LOCAL_OUTFIT.casual}, slim natural build, ${backdrop}, soft even studio lighting, sharp focus, 85mm lens, photorealistic, high detail`,
+    negative: 'drink, glass, cocktail, cup, food, fruit, phone, hand, fingers, raised arm, people, crowd, restaurant, bar, turtleneck, muscular, bodybuilder, text, logo, watermark, frame, border, blurry, lowres, deformed, extra limbs, cartoon, painting, illustration, nsfw',
+  };
+}

@@ -55,6 +55,19 @@ function cutoutOnGrey(prep) {
   return c;
 }
 
+function maskCanvas(mask, W, H) {
+  const c = makeCanvas(W, H);
+  const ctx = c.getContext('2d');
+  const img = ctx.createImageData(W, H);
+  for (let i = 0; i < W * H; i++) {
+    const v = Math.round(255 * mask[i]);
+    img.data[i * 4] = img.data[i * 4 + 1] = img.data[i * 4 + 2] = v;
+    img.data[i * 4 + 3] = 255;
+  }
+  ctx.putImageData(img, 0, 0);
+  return c;
+}
+
 function canvasFromDataUrl(src) {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -445,7 +458,7 @@ export class CaptureFlow {
       const cutout = cutoutOnGrey(prep0);
       shot.replaceChildren(coverCopy(cutout, 400, 500));
       await mark('regen');
-      const result = await regenerate(cutout, this.policy);
+      const result = await regenerate(cutout, this.policy, maskCanvas(prep0.masks.head, prep0.W, prep0.H));
       this.setSession({
         variants: result.images,
         regenInfo: { provider: result.provider, model: result.model, mock: result.mock },

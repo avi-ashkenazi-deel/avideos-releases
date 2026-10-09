@@ -4,15 +4,18 @@
 //
 //   GEMINI_API_KEY=...  node headshot-studio/server.mjs   Google Gemini image model
 //   OPENAI_API_KEY=...  node headshot-studio/server.mjs   OpenAI GPT Image
+//   HEADSHOT_PROVIDER=local node headshot-studio/server.mjs  self-hosted open-source model (tools/local_inpaint.py)
 //   HEADSHOT_PROVIDER=mock node headshot-studio/server.mjs   test mode: returns the photo unchanged
 //
-// Optional: GEMINI_IMAGE_MODEL, OPENAI_IMAGE_MODEL, PORT (default 8080).
+// Optional: GEMINI_IMAGE_MODEL, OPENAI_IMAGE_MODEL, HEADSHOT_PYTHON (for local), PORT (default 8080).
 
 import http from 'node:http';
-import { readFile } from 'node:fs/promises';
+import { spawn } from 'node:child_process';
+import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { extname, join, normalize, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { buildPrompt } from './js/prompt.js';
+import { buildPrompt, buildLocalPrompt } from './js/prompt.js';
 
 const ROOT = fileURLToPath(new URL('.', import.meta.url));
 const PORT = Number(process.env.PORT || 8080);
@@ -33,6 +36,7 @@ function provider() {
 function modelName(p) {
   if (p === 'gemini') return process.env.GEMINI_IMAGE_MODEL || 'gemini-nano-banana-2.1';
   if (p === 'openai') return process.env.OPENAI_IMAGE_MODEL || 'gpt-image-2';
+  if (p === 'local') return (process.env.HEADSHOT_LOCAL_MODEL || 'Lykon/dreamshaper-8-inpainting') + ' (self-hosted)';
   return p;
 }
 
@@ -89,7 +93,29 @@ async function openai(image, prompt, n) {
   return (json.data || []).filter((d) => d.b64_json).map((d) => ({ data: d.b64_json, mime: 'image/png' }));
 }
 
-async function generate({ image, policy, n }) {
+// Self-hosted: keeps the real head and regenerates the rest. Needs the head
+// mask from the browser.
+async function local(image, keep, policy, n) {
+  const dir = await mkdtemp(join(tmpdir(), 'headshot-'));
+  try {
+    await writeFile(join(dir, 'photo.png'), Buffer.from(image.data, 'base64'));
+    await writeFile(join(dir, 'keep.png'), Buffer.from(keep, 'base64'));
+    await writeFile(join(dir, 'job.json'), JSON.stringify({ ...buildLocalPrompt(policy), n }));
+    await new Promise((resolve, reject) => {
+      const py = spawn(process.env.HEADSHOT_PYTHON || 'python3', [join(ROOT, 'tools', 'local_inpaint.py'), dir], { stdio: ['ignore', 'inherit', 'pipe'] });
+      let err = '';
+      py.stderr.on('data', (d) => { err = (err + d).slice(-2000); });
+      py.on('error', reject);
+      py.on('close', (code) => (code === 0 ? resolve() : reject(new Error(`Local model failed: ${err.trim().split('\n').pop()}`))));
+    });
+    const files = (await readdir(dir)).filter((f) => /^out-\d+\.png$/.test(f)).sort();
+    return Promise.all(files.map(async (f) => ({ data: (await readFile(join(dir, f))).toString('base64'), mime: 'image/png' })));
+  } finally {
+    rm(dir, { recursive: true, force: true });
+  }
+}
+
+async function generate({ image, keep, policy, n }) {
   const p = provider();
   if (!p) throw Object.assign(new Error('No image model is configured on the server.'), { status: 503 });
   const m = /^data:(image\/(?:jpeg|png));base64,([A-Za-z0-9+/=]+)$/.exec(image || '');
@@ -108,6 +134,10 @@ async function generate({ image, policy, n }) {
     if (!images.length) throw results[0].reason;
   } else if (p === 'openai') {
     images = await openai(input, prompt, count);
+  } else if (p === 'local') {
+    const k = /^data:image\/png;base64,([A-Za-z0-9+/=]+)$/.exec(keep || '');
+    if (!k) throw Object.assign(new Error('The self-hosted model needs the head mask.'), { status: 400 });
+    images = await local(input, k[1], policy || {}, count);
   } else {
     throw Object.assign(new Error(`Unknown HEADSHOT_PROVIDER "${p}"`), { status: 500 });
   }
@@ -151,7 +181,7 @@ const server = http.createServer(async (req, res) => {
     const rel = normalize(decodeURIComponent(url.pathname)).replace(/^([/\\])+/, '') || 'index.html';
     const file = join(ROOT, rel);
     if (!file.startsWith(ROOT.endsWith(sep) ? ROOT : ROOT + sep)) return send(res, 403, 'Forbidden', 'text/plain');
-    if (rel.startsWith('server') || rel.startsWith('tests')) return send(res, 404, 'Not found', 'text/plain');
+    if (/^(server|tests|tools)/.test(rel)) return send(res, 404, 'Not found', 'text/plain');
     const body = await readFile(file);
     return send(res, 200, body, TYPES[extname(file)] || 'application/octet-stream');
   } catch (err) {

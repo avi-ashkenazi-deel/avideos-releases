@@ -228,7 +228,7 @@ export async function prepare(source, framing, onStep = () => {}) {
 
   // Person mask: tighten the soft model output, then feather the edge.
   let person = new Float32Array(N);
-  for (let i = 0; i < N; i++) person[i] = Math.min(1, Math.max(0, (1 - bgConf[i] - 0.2) / 0.6));
+  for (let i = 0; i < N; i++) person[i] = Math.min(1, Math.max(0, (1 - bgConf[i] - 0.28) / 0.5));
   person = keepConnected(person, W, H, Math.round(lm[1].x * W), Math.round(lm[1].y * H));
   person = blurChannel(person, W, H, 1.5, 2);
 
@@ -249,6 +249,20 @@ export async function prepare(source, framing, onStep = () => {}) {
   for (let i = 0; i < N; i++) skin[i] = Math.max(faceSkin[i], bodySkin[i] * 0.8) * (1 - cut[i]);
   skin = blurChannel(skin, W, H, feather * 0.6, 2);
 
+  // Head mask (face, hair, neck), connected to the chosen face. The
+  // self-hosted model keeps exactly this and regenerates the rest.
+  const hair = up(SEG.hair);
+  let head = new Float32Array(N);
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const i = y * W + x;
+      let k = Math.max(hair[i], faceSkin[i]);
+      if (y > g.chinY - 5 && y < g.chinY + g.faceH * 0.22 && Math.abs(x - g.cx) < g.faceW * 0.42) k = Math.max(k, bodySkin[i]);
+      head[i] = k > 0.5 ? 1 : 0;
+    }
+  }
+  head = blurChannel(keepConnected(head, W, H, Math.round(lm[1].x * W), Math.round(lm[1].y * H)), W, H, 2, 2);
+
   const eyes = blurChannel(polygonMask(W, H, [{ pts: P(IDX.eyeR), scale: 1.05 }, { pts: P(IDX.eyeL), scale: 1.05 }]), W, H, feather * 0.35, 2);
   const lips = blurChannel(polygonMask(W, H, [{ pts: P(IDX.lipsOuter), scale: 1.0 }, { pts: P(IDX.lipsInner), scale: 1.0, cut: true }]), W, H, feather * 0.5, 2);
 
@@ -262,12 +276,12 @@ export async function prepare(source, framing, onStep = () => {}) {
 
   // Edge clean-up: along the cut-out edge, pixels still carry the old
   // background's color. Swap them for colors from just inside the person.
-  const inner = blurRGB(base, W, H, 4, person.map((m) => m * m));
+  const inner = blurRGB(base, W, H, 5, person.map((m) => m * m * m));
   const baseClean = Uint8ClampedArray.from(base);
   for (let i = 0, j = 0; i < N; i++, j += 4) {
     const m = person[i];
-    if (m > 0.02 && m < 0.95) {
-      const e = Math.min(1, (0.95 - m) / 0.6);
+    if (m > 0.02 && m < 0.98) {
+      const e = Math.min(1, (0.98 - m) / 0.45);
       baseClean[j] = base[j] + (inner[0][i] - base[j]) * e;
       baseClean[j + 1] = base[j + 1] + (inner[1][i] - base[j + 1]) * e;
       baseClean[j + 2] = base[j + 2] + (inner[2][i] - base[j + 2]) * e;
@@ -283,7 +297,7 @@ export async function prepare(source, framing, onStep = () => {}) {
   g.headTop = headTop;
 
   return {
-    W, H, base, baseClean, smooth, detail, roomBlur, masks: { person, skin, eyes, lips }, lm, geometry: g, blendshapes,
+    W, H, base, baseClean, smooth, detail, roomBlur, masks: { person, skin, eyes, lips, head }, lm, geometry: g, blendshapes,
     original: work,
   };
 }
