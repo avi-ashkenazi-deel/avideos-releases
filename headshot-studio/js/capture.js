@@ -519,6 +519,8 @@ export class CaptureFlow {
       const result = await regenerate(cutout, this.policy, hidden, prep0.clothing);
       this.setSession({
         variants: result.images,
+        variantLabels: result.labels || [],
+        regenWarnings: result.warnings || [],
         regenInfo: { provider: result.provider, model: result.model, mock: result.mock },
         compareWith: prep0.original,
       });
@@ -582,12 +584,13 @@ export class CaptureFlow {
             <button class="btn btn--text" id="retake">${icon('camera', 16)}Retake</button>
           </div>
         </div>
+        ${(s.regenWarnings || []).map((w) => `<div class="alert alert--warning" style="margin-bottom:16px">${icon('sparkle')}<div>${esc(w)}</div></div>`).join('')}
         ${info.mock ? `<div class="alert alert--warning" style="margin-bottom:16px">${icon('sparkle')}<div><b>Test mode.</b> No image model is connected to the server, so these options are your photo unchanged. Start the server with GEMINI_API_KEY or OPENAI_API_KEY to generate real studio photos.</div></div>` : ''}
         <div class="pick-grid" id="pick-grid">
           ${s.variants.map((src, i) => `
             <button type="button" class="pick-card" data-variant="${i}">
               <img src="${src}" alt="Generated option ${i + 1}">
-              <span class="pick-label"><b>Option ${i + 1}</b><span class="caption">${info.mock ? 'Test mode' : 'AI studio photo'}</span></span>
+              <span class="pick-label"><b>Option ${i + 1}</b><span class="caption">${esc(s.variantLabels?.[i] || (info.mock ? 'Test mode' : 'AI studio photo'))}</span></span>
             </button>`).join('')}
           <button type="button" class="pick-card pick-card--original" data-variant="original">
             <span class="pick-original" id="pick-original"></span>
@@ -605,7 +608,7 @@ export class CaptureFlow {
       const v = card.dataset.variant;
       try {
         if (v === 'original') await this.chooseOriginal();
-        else await this.finishWith(await canvasFromDataUrl(s.variants[Number(v)]), s.regenInfo);
+        else await this.finishWith(await canvasFromDataUrl(s.variants[Number(v)]), { ...s.regenInfo, model: s.variantLabels?.[Number(v)] || s.regenInfo.model });
       } catch (err) {
         console.error(err);
         cards.forEach((c) => { c.disabled = false; });

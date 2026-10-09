@@ -5,9 +5,11 @@
 //   GEMINI_API_KEY=...  node headshot-studio/server.mjs   Google Gemini image model
 //   OPENAI_API_KEY=...  node headshot-studio/server.mjs   OpenAI GPT Image
 //   HEADSHOT_PROVIDER=local node headshot-studio/server.mjs  self-hosted open-source model (tools/local_inpaint.py)
+//   both keys set                                            compare: options from each model, side by side
 //   HEADSHOT_PROVIDER=mock node headshot-studio/server.mjs   test mode: returns the photo unchanged
 //
-// Optional: GEMINI_IMAGE_MODEL, OPENAI_IMAGE_MODEL, HEADSHOT_PYTHON (for local), PORT (default 8080).
+// Optional: GEMINI_IMAGE_MODEL, OPENAI_IMAGE_MODEL, HEADSHOT_PYTHON (for local),
+// HEADSHOT_COMPARE (models to compare, default gemini,openai), PORT (default 8080).
 
 import http from 'node:http';
 import { spawn } from 'node:child_process';
@@ -25,17 +27,27 @@ const TYPES = {
   '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml',
 };
 
+// With both keys set, the server compares: every photo gets options from
+// each model, labeled, so they can be judged side by side.
 function provider() {
   const forced = process.env.HEADSHOT_PROVIDER;
   if (forced) return forced;
+  if (process.env.GEMINI_API_KEY && process.env.OPENAI_API_KEY) return 'compare';
   if (process.env.GEMINI_API_KEY) return 'gemini';
   if (process.env.OPENAI_API_KEY) return 'openai';
   return null;
 }
 
+// Which providers 'compare' runs. Default Gemini vs OpenAI; any list works,
+// e.g. HEADSHOT_COMPARE=gemini,local.
+function compareList() {
+  return (process.env.HEADSHOT_COMPARE || 'gemini,openai').split(',').map((x) => x.trim()).filter(Boolean);
+}
+
 function modelName(p) {
   if (p === 'gemini') return process.env.GEMINI_IMAGE_MODEL || 'gemini-nano-banana-2.1';
   if (p === 'openai') return process.env.OPENAI_IMAGE_MODEL || 'gpt-image-2';
+  if (p === 'compare') return compareList().map(modelName).join(' vs ');
   if (p === 'local') return (process.env.HEADSHOT_LOCAL_MODEL || 'Lykon/dreamshaper-8-inpainting') + ' (self-hosted)';
   return p;
 }
@@ -54,6 +66,17 @@ function findImage(node) {
   return null;
 }
 
+// Turns an API error response into one readable sentence.
+async function apiError(name, res) {
+  const text = await res.text();
+  let msg = text;
+  try {
+    const j = JSON.parse(text);
+    msg = (Array.isArray(j) ? j[0] : j)?.error?.message || text;
+  } catch { /* not JSON */ }
+  return new Error(`${name} ${res.status}: ${msg.slice(0, 200)}`);
+}
+
 async function gemini(image, prompt) {
   const res = await fetch('https://generativelanguage.googleapis.com/v1beta/interactions', {
     method: 'POST',
@@ -67,7 +90,7 @@ async function gemini(image, prompt) {
       response_format: { type: 'image', mime_type: 'image/jpeg', aspect_ratio: '4:5', image_size: '1K' },
     }),
   });
-  if (!res.ok) throw new Error(`Gemini ${res.status}: ${(await res.text()).slice(0, 300)}`);
+  if (!res.ok) throw await apiError('Gemini', res);
   const hit = findImage(await res.json());
   if (!hit) throw new Error('Gemini returned no image');
   return hit;
@@ -88,7 +111,7 @@ async function openai(image, prompt, n) {
     headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
     body: form,
   });
-  if (!res.ok) throw new Error(`OpenAI ${res.status}: ${(await res.text()).slice(0, 300)}`);
+  if (!res.ok) throw await apiError('OpenAI', res);
   const json = await res.json();
   return (json.data || []).filter((d) => d.b64_json).map((d) => ({ data: d.b64_json, mime: 'image/png' }));
 }
@@ -115,34 +138,52 @@ async function local(image, keep, policy, n, clothing) {
   }
 }
 
+async function runProvider(p, ctx) {
+  const { input, count, prompt, keep, filled, clothing, policy } = ctx;
+  if (p === 'mock') return Array.from({ length: count }, () => input);
+  if (p === 'gemini') {
+    // One image per call; run the variations in parallel.
+    const results = await Promise.allSettled(Array.from({ length: count }, () => gemini(input, prompt)));
+    const images = results.filter((r) => r.status === 'fulfilled').map((r) => r.value);
+    if (!images.length) throw results[0].reason;
+    return images;
+  }
+  if (p === 'openai') return openai(input, prompt, count);
+  if (p === 'local') {
+    const k = /^data:image\/png;base64,([A-Za-z0-9+/=]+)$/.exec(keep || '');
+    const f = /^data:image\/png;base64,([A-Za-z0-9+/=]+)$/.exec(filled || '');
+    if (!k || !f) throw Object.assign(new Error('The self-hosted model needs the filled photo and keep mask.'), { status: 400 });
+    return local({ mime: 'image/png', data: f[1] }, k[1], policy, count, clothing);
+  }
+  throw Object.assign(new Error(`Unknown image model "${p}"`), { status: 500 });
+}
+
 async function generate({ image, filled, keep, clothing, policy, n }) {
   const p = provider();
   if (!p) throw Object.assign(new Error('No image model is configured on the server.'), { status: 503 });
   const m = /^data:(image\/(?:jpeg|png));base64,([A-Za-z0-9+/=]+)$/.exec(image || '');
   if (!m) throw Object.assign(new Error('Send the photo as a JPEG or PNG data URL.'), { status: 400 });
-  const input = { mime: m[1], data: m[2] };
-  const count = Math.max(1, Math.min(4, Number(n) || 1));
-  const prompt = buildPrompt(policy || {});
+  const ctx = {
+    input: { mime: m[1], data: m[2] },
+    count: Math.max(1, Math.min(4, Number(n) || 1)),
+    prompt: buildPrompt(policy || {}),
+    keep, filled, clothing, policy: policy || {},
+  };
 
-  let images;
-  if (p === 'mock') {
-    images = Array.from({ length: count }, () => input);
-  } else if (p === 'gemini') {
-    // One image per call; run the variations in parallel.
-    const results = await Promise.allSettled(Array.from({ length: count }, () => gemini(input, prompt)));
-    images = results.filter((r) => r.status === 'fulfilled').map((r) => r.value);
-    if (!images.length) throw results[0].reason;
-  } else if (p === 'openai') {
-    images = await openai(input, prompt, count);
-  } else if (p === 'local') {
-    const k = /^data:image\/png;base64,([A-Za-z0-9+/=]+)$/.exec(keep || '');
-    const f = /^data:image\/png;base64,([A-Za-z0-9+/=]+)$/.exec(filled || '');
-    if (!k || !f) throw Object.assign(new Error('The self-hosted model needs the filled photo and keep mask.'), { status: 400 });
-    images = await local({ mime: 'image/png', data: f[1] }, k[1], policy || {}, count, clothing);
-  } else {
-    throw Object.assign(new Error(`Unknown HEADSHOT_PROVIDER "${p}"`), { status: 500 });
-  }
-  return { provider: p, model: modelName(p), mock: p === 'mock', images: images.map((i) => `data:${i.mime};base64,${i.data}`) };
+  // In compare mode each model gets the same photo and prompt, in parallel.
+  const list = p === 'compare' ? compareList() : [p];
+  const runs = await Promise.allSettled(list.map((q) => runProvider(q, ctx)));
+  const images = [], labels = [], warnings = [];
+  runs.forEach((r, k) => {
+    if (r.status === 'fulfilled') {
+      r.value.forEach((img) => { images.push(`data:${img.mime};base64,${img.data}`); labels.push(modelName(list[k])); });
+    } else {
+      console.error(list[k], r.reason);
+      warnings.push(`${modelName(list[k])} failed: ${r.reason?.message || 'no response'}`);
+    }
+  });
+  if (!images.length) throw runs[0].reason;
+  return { provider: p, model: modelName(p), mock: list.every((q) => q === 'mock'), images, labels, warnings };
 }
 
 function send(res, status, body, type = 'application/json') {

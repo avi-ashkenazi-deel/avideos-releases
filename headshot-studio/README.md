@@ -40,6 +40,22 @@ edits, so it keeps clothes and face shape best, and costs about $0.034 per
 1K image on the paid tier. OpenAI `gpt-image-2` is the backup to compare
 against; it costs several times more per high-quality image.
 
+### Compare Gemini and GPT Image
+
+1. Get an API key for each: Gemini from Google AI Studio (aistudio.google.com,
+   "Get API key"), OpenAI from platform.openai.com ("API keys"). For company
+   use, prefer keys from Deel's own Google Cloud and OpenAI accounts.
+2. Start the server with both keys. With both set it runs in compare mode:
+   ```bash
+   GEMINI_API_KEY=...  OPENAI_API_KEY=...  node headshot-studio/server.mjs
+   ```
+3. Open http://localhost:8080/#capture, take a photo or upload one.
+4. The Choose screen shows options from each model, labeled with the model
+   name ("Options to choose from" in Admin is per model). Pick one to see it
+   styled and retouched; "Other options" goes back to compare.
+
+Never put keys in the browser code or commit them.
+
 Without the server (any static host, e.g. `npx serve headshot-studio`) the app
 still works but only retouches the real photo. Browsers only allow the camera
 on `localhost` or HTTPS. The face models (Google MediaPipe, ~20 MB) load from a
