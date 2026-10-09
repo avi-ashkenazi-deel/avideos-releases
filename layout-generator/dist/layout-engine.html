@@ -285,6 +285,71 @@ details.json pre { font-size: 11px; line-height: 1.45; background: var(--bg); bo
 .deck-row .empty-row { color: var(--fg-3); font-size: 12.5px; padding: 8px; }
 @media (max-width: 640px) { .seg button { padding: 8px 9px; } }
 
+/* Canvas mode */
+.badge { display: inline-block; min-width: 16px; padding: 0 5px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); font-size: 10px; line-height: 16px; margin-left: 4px; vertical-align: middle; }
+body.canvas-mode .app { grid-template-columns: 1fr; grid-template-areas: "top" "main"; }
+body.canvas-mode .sidebar, body.canvas-mode .controls, body.canvas-mode #readout, body.canvas-mode #empty { display: none; }
+body.canvas-mode .main { overflow: hidden; background-image: none; }
+.cv { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.cv-toolbar { display: flex; align-items: center; gap: 12px; padding: 8px 12px; border-bottom: 1px solid var(--line); background: var(--panel); flex-wrap: wrap; }
+.cv-tools { display: flex; gap: 2px; background: var(--bg); border: 1px solid var(--line-2); border-radius: var(--r); padding: 2px; align-items: center; }
+.cv-tools button { width: 32px; height: 30px; border: 0; background: transparent; color: var(--fg-2); border-radius: 4px; cursor: pointer; font-size: 14px; }
+.cv-tools button:hover { color: var(--fg); background: var(--panel-2); }
+.cv-tools button.on { background: var(--accent); color: var(--accent-ink); }
+.cv-tools .select { width: auto; padding: 4px 24px 4px 8px; font-size: 12px; }
+.cv-center { display: flex; align-items: center; gap: 8px; }
+.cv-center #cvZoom { min-width: 44px; text-align: center; font-size: 12px; color: var(--fg-2); }
+.cv-right { margin-left: auto; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.cv-menu { position: relative; }
+.cv-menu summary { list-style: none; cursor: pointer; }
+.cv-menu summary::-webkit-details-marker { display: none; }
+.cv-menu-list { position: absolute; right: 0; top: calc(100% + 6px); background: var(--panel-2); border: 1px solid var(--line-2); border-radius: var(--r); padding: 6px; display: flex; flex-direction: column; gap: 2px; z-index: 30; min-width: 230px; box-shadow: 0 10px 30px rgba(0,0,0,.5); }
+.cv-menu-list button { text-align: left; background: transparent; border: 0; color: var(--fg); padding: 8px 10px; border-radius: 4px; cursor: pointer; font-size: 13px; }
+.cv-menu-list button:hover { background: var(--bg); }
+.cv-body { display: grid; grid-template-columns: 240px 1fr 320px; flex: 1; min-height: 0; }
+.cv-layers, .cv-props { background: var(--panel); overflow-y: auto; min-height: 0; }
+.cv-layers { border-right: 1px solid var(--line); }
+.cv-props { border-left: 1px solid var(--line); padding-bottom: 40px; }
+.cv-panel-head { display: flex; flex-direction: column; gap: 8px; padding: 12px 12px 8px; position: sticky; top: 0; background: var(--panel); z-index: 2; }
+.cv-panel-head .input { padding: 6px 8px; font-size: 12px; }
+.cv-layer-frame { border-top: 1px solid var(--line); }
+.cv-layer-frame.on > .cv-layer-row.frame { background: rgba(216,201,163,.1); }
+.cv-layer-row { display: flex; align-items: center; gap: 6px; padding: 5px 10px; font-size: 12px; cursor: pointer; color: var(--fg-2); }
+.cv-layer-row:hover { background: var(--panel-2); }
+.cv-layer-row.frame { font-weight: 600; color: var(--fg); padding: 8px 10px; }
+.cv-layer-row.block { padding-left: 24px; }
+.cv-layer-row.on { background: rgba(216,201,163,.14); color: var(--fg); }
+.cv-layer-row.hidden-layer .nm { opacity: .4; text-decoration: line-through; }
+.cv-layer-row .glyph { width: 14px; text-align: center; color: var(--fg-3); font-size: 11px; }
+.cv-layer-row .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cv-layer-row .dim { color: var(--fg-3); font-family: var(--font-mono); font-size: 10.5px; }
+.cv-layer-row .eye { border: 0; background: transparent; color: var(--fg-3); cursor: pointer; font-size: 11px; padding: 0 2px; opacity: 0; }
+.cv-layer-row:hover .eye, .cv-layer-row .eye.off { opacity: 1; }
+.cv-stage { position: relative; overflow: hidden; min-width: 0; background-color: #121216; background-image: radial-gradient(var(--line-2) 1px, transparent 1px); touch-action: none; user-select: none; }
+.cv-world { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform; }
+.cv-frame { position: absolute; box-shadow: 0 10px 40px rgba(0,0,0,.5); overflow: hidden; background: #000; }
+.cv-frame > svg { display: block; }
+.cv-frame-label { position: absolute; color: var(--fg-3); font-family: var(--font-mono); white-space: nowrap; pointer-events: none; line-height: 1.2; }
+.cv-overlay { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
+.cv-empty { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; color: var(--fg-2); pointer-events: none; padding: 20px; }
+.cv-empty .big { font-size: 20px; color: var(--fg); }
+.cv-section { padding: 12px 14px; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; }
+.cv-section h3 { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--fg-2); font-weight: 600; }
+.cv-f { display: grid; grid-template-columns: 76px 1fr; align-items: center; gap: 6px; font-size: 12px; color: var(--fg-2); }
+.cv-f input, .cv-f select { width: 100%; background: var(--bg); border: 1px solid var(--line-2); border-radius: 4px; color: var(--fg); padding: 5px 7px; font-size: 12.5px; min-width: 0; }
+.cv-f input[type="color"] { width: 34px; height: 28px; padding: 1px; }
+.cv-color { display: grid; grid-template-columns: 34px 1fr; gap: 6px; }
+.cv-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; }
+.cv-grid2 .cv-f { grid-template-columns: 24px 1fr; }
+.cv-check { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--fg-2); }
+.cv-check input { accent-color: var(--accent); }
+.cv-row { display: flex; gap: 6px; align-items: center; }
+.cv-row.wrap { flex-wrap: wrap; }
+.cv-align button { flex: 1; padding: 5px 0; font-size: 14px; }
+.cv-text { width: 100%; background: var(--bg); border: 1px solid var(--line-2); border-radius: 4px; color: var(--fg); padding: 7px 8px; font: 13px/1.4 var(--font-ui); resize: vertical; }
+.cv-code { width: 100%; min-height: 160px; background: var(--bg); border: 1px solid var(--line); border-radius: 4px; color: var(--fg-2); padding: 8px; font: 11px/1.45 var(--font-mono); resize: vertical; }
+@media (max-width: 960px) { .cv-body { grid-template-columns: 1fr; grid-template-rows: auto 1fr auto; } .cv-layers { max-height: 140px; } .cv-props { max-height: 40vh; border-left: 0; border-top: 1px solid var(--line); } }
+
 </style>
 
 <div id="app" class="app">
@@ -298,6 +363,7 @@ details.json pre { font-size: 11px; line-height: 1.45; background: var(--bg); bo
       <div class="seg" id="modeSeg" role="group" aria-label="Mode">
         <button type="button" data-mode="single" class="on">Single</button>
         <button type="button" data-mode="deck">Deck</button>
+        <button type="button" data-mode="canvas">Canvas <span id="canvasBadge" class="badge" hidden></span></button>
       </div>
       <input id="prompt" name="prompt" type="text" spellcheck="false"
         placeholder='Describe what you need, e.g. "36 bold image-led square posts for Deel Payroll, dark, with a CTA"'>
@@ -436,6 +502,7 @@ details.json pre { font-size: 11px; line-height: 1.45; background: var(--bg); bo
         <button id="compareBtn" class="btn small" type="button" disabled>Compare (0)</button>
         <button id="exportFavBtn" class="btn small" type="button" disabled>Export favorites</button>
         <button id="exportFavPptxBtn" class="btn small" type="button" disabled title="All favorites as one editable deck per format">Favorites → PPTX</button>
+        <button id="toCanvasBtn" class="btn small" type="button" disabled title="Open the picked (or favorited) layouts on the canvas to edit">Send to canvas</button>
       </div>
     </div>
     <div id="readout" class="readout"></div>
@@ -447,9 +514,62 @@ details.json pre { font-size: 11px; line-height: 1.45; background: var(--bg); bo
       <span class="grow"></span>
       <button id="deckPptxBtn" class="btn small primary" type="button" disabled>Export deck (PPTX)</button>
       <button id="deckPngBtn" class="btn small" type="button" disabled>Export picks (PNG)</button>
+      <button id="deckCanvasBtn" class="btn small" type="button" disabled title="Open the picked slides on the canvas to edit">Open picks on canvas</button>
     </div>
     <div id="deckView" class="deck" hidden></div>
     <div id="gallery" class="gallery" aria-live="polite"></div>
+    <div id="canvasView" class="cv" hidden>
+      <div class="cv-toolbar">
+        <div class="cv-tools" id="cvTools">
+          <button class="on" data-tool="select" title="Select (V)">↖</button>
+          <button data-tool="hand" title="Hand (H)">✋</button>
+          <button data-tool="frame" title="Frame (F)">▢</button>
+          <select id="cvFrameFormat" class="select" hidden aria-label="Frame format"></select>
+          <button data-tool="text" title="Text (T)">T</button>
+          <button data-tool="rect" title="Rectangle (R)">▬</button>
+          <button data-tool="ellipse" title="Ellipse (O)">●</button>
+          <button data-tool="image" title="Image (I)">▣</button>
+        </div>
+        <div class="cv-center">
+          <button id="cvZoomOut" class="btn small" type="button" title="Zoom out (-)">−</button>
+          <span id="cvZoom" class="mono">50%</span>
+          <button id="cvZoomIn" class="btn small" type="button" title="Zoom in (+)">+</button>
+          <button id="cvFit" class="btn small" type="button" title="Fit (0)">Fit</button>
+          <label class="check"><input id="cvSnap" type="checkbox" checked> Snap to grid</label>
+          <span id="cvCount" class="hint"></span>
+        </div>
+        <div class="cv-right">
+          <button id="cvUndo" class="btn small" type="button" title="Undo (⌘Z)" disabled>Undo</button>
+          <button id="cvRedo" class="btn small" type="button" title="Redo (⇧⌘Z)" disabled>Redo</button>
+          <button id="cvLink" class="btn small" type="button" title="Copy a link that carries this canvas (⌘L)">Copy link</button>
+          <button id="cvSave" class="btn small" type="button">Save JSON</button>
+          <label class="btn small file">Load<input id="cvLoad" type="file" accept="application/json,.json" hidden></label>
+          <details class="cv-menu" id="cvExport"><summary class="btn small primary">Export</summary>
+            <div class="cv-menu-list">
+              <button data-export="png" type="button">Frame → PNG</button>
+              <button data-export="svg" type="button">Frame → SVG</button>
+              <button data-export="pptx" type="button">Frames of this format → PPTX</button>
+              <button data-export="html" type="button">Frame → copy HTML/CSS</button>
+              <button data-export="all" type="button">Every frame → PNGs</button>
+              <button data-export="canvas" type="button">Whole canvas → PNG</button>
+            </div>
+          </details>
+          <button id="cvClear" class="btn small ghost" type="button" title="Remove every frame">Clear</button>
+        </div>
+      </div>
+      <div class="cv-body">
+        <aside class="cv-layers">
+          <div class="cv-panel-head"><h2>Layers</h2><input id="cvSearch" class="input" type="search" placeholder="Search layers"></div>
+          <div id="cvLayers"></div>
+        </aside>
+        <div id="stage" class="cv-stage">
+          <div id="world" class="cv-world"></div>
+          <svg id="overlay" class="cv-overlay"></svg>
+          <div id="cvEmpty" class="cv-empty" hidden><p class="big">Nothing on the canvas yet.</p><p>Pick layouts in Single or Deck mode and send them here, or press <b>F</b> and click to draw a blank frame.</p></div>
+        </div>
+        <aside class="cv-props" id="cvProps"></aside>
+      </div>
+    </div>
     <div id="empty" class="empty">
       <div class="empty-inner">
         <p class="big">Type a brief above, or just press Generate.</p>
@@ -483,6 +603,7 @@ details.json pre { font-size: 11px; line-height: 1.45; background: var(--bg); bo
           <button class="btn small" id="detailCopySvg" type="button">Copy SVG</button>
         </div>
         <div class="detail-actions">
+          <button class="btn small" id="detailCanvas" type="button" title="Open this layout on the canvas to edit it">Edit on canvas</button>
           <button class="btn small" id="detailFill" type="button" title="Ask Claude for copy that fits this exact layout (needs an API key in Settings)">Fill copy with Claude</button>
           <button class="btn small" id="detailSchema" type="button" title="Copy the content schema for this layout">Copy content schema</button>
         </div>
@@ -2260,7 +2381,8 @@ const Render = (() => {
     const keep = blocks.filter(b => !/unicode-range/.test(b) || /U\+0000-00FF/.test(b) || /U\+0100-02BA|U\+0100-02AF/.test(b));
     return keep.join('\n');
   }
-  async function fontFaceCss(families) {
+  let embedBlocked = false; // set once a host refuses the font fetch, so later exports skip the attempt (and the console noise)
+  async function fontFaceCss(families, forRaster = false) {
     const out = [];
     lastEmbedFailed = false;
     for (const fam of families) {
@@ -2272,6 +2394,7 @@ const Render = (() => {
       if (!Brand.FONTS[fam]) continue;
       if (fontCache.has(fam)) { out.push(fontCache.get(fam)); continue; }
       const spec = GOOGLE_SPECS[fam];
+      if (embedBlocked) { lastEmbedFailed = true; if (!forRaster) out.push(`@import url("https://fonts.googleapis.com/css2?family=${spec}&display=swap");`); continue; }
       try {
         const css = latinOnly(await (await fetch(`https://fonts.googleapis.com/css2?family=${spec}&display=swap`)).text());
         const urls = [...new Set([...css.matchAll(/url\((https:[^)]+)\)/g)].map(m => m[1]))];
@@ -2283,17 +2406,18 @@ const Render = (() => {
         }
         fontCache.set(fam, inlined); out.push(inlined);
       } catch (e) {
-        // Fetch is blocked in some hosts (published copies). Fall back to a stylesheet import so the SVG still loads the face in a browser.
-        lastEmbedFailed = true;
-        out.push(`@import url("https://fonts.googleapis.com/css2?family=${spec}&display=swap");`);
+        // Fetch is blocked in some hosts (published copies). For a downloadable SVG, fall back to a stylesheet import so a
+        // browser still loads the face. Never for rasterization: an SVG with an @import refuses to load as an image there.
+        lastEmbedFailed = true; if (e && /Failed to fetch|NetworkError|Refused/i.test(String(e.message || e))) embedBlocked = true;
+        if (!forRaster) out.push(`@import url("https://fonts.googleapis.com/css2?family=${spec}&display=swap");`);
       }
     }
     return out.join('\n');
   }
   function fontsEmbedded() { return !lastEmbedFailed; }
-  async function exportSVG(layout, opts) {
+  async function exportSVG(layout, opts, forRaster = false) {
     const fams = [opts.kit.fonts.display, opts.kit.fonts.body];
-    const fontStyle = await fontFaceCss(fams);
+    const fontStyle = await fontFaceCss(fams, forRaster);
     return toSVG(layout, { ...opts, forExport: true, fontStyle, showGrid: false });
   }
   // Rasterize an SVG string to a PNG data URL at the layout's pixel size.
@@ -2309,7 +2433,7 @@ const Render = (() => {
     } finally { URL.revokeObjectURL(url); }
   }
   async function exportPNG(layout, opts, scale = 1) {
-    const svg = await exportSVG(layout, opts);
+    const svg = await exportSVG(layout, opts, true);
     const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     try {
@@ -2745,6 +2869,646 @@ Rules: first slide is a cover, last is a closing. 6 to 10 slides unless the brie
   return { INTENT_LABEL, outlineFromBrief, outlineWithClaude, OUTLINE_SCHEMA, generate, reshuffle, picks, slideFromTitle };
 })();
 
+/* js/canvas.js */
+/* Canvas document model and editing operations. The document is plain JSON: frames on an infinite canvas,
+   each frame carrying a layout spec (the same JSON the engine emits). Editing the canvas is editing that JSON. */
+const Canvas = (() => {
+  const uid = () => Math.random().toString(36).slice(2, 8);
+  const clone = o => JSON.parse(JSON.stringify(o));
+  const snap = (v, u) => u > 0 ? Math.round(v / u) * u : Math.round(v);
+
+  function create(name = 'Untitled canvas') { return { v: 1, id: uid(), name, frames: [], view: { x: 0, y: 0, zoom: 0.5 }, grid: { unit: 8, snap: true }, created: Date.now() }; }
+
+  function addFrame(doc, layout, opts = {}) {
+    const L = clone(layout);
+    const last = doc.frames[doc.frames.length - 1];
+    const x = opts.x ?? (last ? last.x + last.layout.format.w + 160 : 0);
+    const y = opts.y ?? (last ? last.y : 0);
+    const frame = { id: uid(), name: opts.name || `${L.archetypeLabel || 'Frame'} · ${L.format.name}`, x, y, layout: L, autoLayout: { mode: 'none', gap: 24, padding: 72, align: 'start', justify: 'start', fill: false }, clip: true, hidden: false, locked: false };
+    for (const b of L.blocks) { if (!b.id) b.id = uid(); if (b.hidden == null) b.hidden = false; if (b.locked == null) b.locked = false; }
+    doc.frames.push(frame);
+    return frame;
+  }
+  function blankFrame(doc, format, kit, opts = {}) {
+    const g = Grid.compute(format, kit.grid);
+    const bg = Color.normalize(opts.bg || '#FFFFFF');
+    const fg = Color.bestForeground(bg, kit.colors.map(c => Color.normalize(c.hex)), 4.5)[0];
+    const accent = (kit.colors.find(c => c.role === 'accent' && Color.contrast(bg, c.hex) >= 3) || kit.colors.find(c => c.role === 'core' && Color.contrast(bg, c.hex) >= 3) || { hex: fg }).hex;
+    const minDim = Math.min(format.w, format.h);
+    const layout = { id: 'blank-' + uid(), seed: 0, archetype: 'blank', archetypeLabel: 'Blank', format: { id: format.id, name: format.name, w: format.w, h: format.h }, grid: { unit: g.unit, gutter: g.gutter, cols: g.cols, rows: g.rows, cw: g.cw, rh: g.rh, mx: g.mx, my: g.my, safe: g.safe }, palette: { bg, fg, accent: Color.normalize(accent), bgName: (kit.colors.find(c => Color.normalize(c.hex) === bg) || { name: 'Custom' }).name }, type: { level: 2, headline: Math.round(minDim * 0.09 / 2) * 2, body: Math.round(minDim * 0.024 / 2) * 2, display: kit.fonts.display, body_font: kit.fonts.body }, brand: kit.name, blocks: [], meta: {}, metrics: { whitespace: 1, density: 0, balance: 1 } };
+    return addFrame(doc, layout, { ...opts, name: opts.name || `Frame · ${format.name}` });
+  }
+  const frameById = (doc, id) => doc.frames.find(f => f.id === id);
+  const blockById = (frame, id) => frame.layout.blocks.find(b => b.id === id);
+
+  // ---- Text refitting ------------------------------------------------------------------------
+  function sourceText(b) { return b.text != null ? String(b.text) : (b.lines ? b.lines.map(l => typeof l === 'string' ? l : l.text).join(' ') : ''); }
+  function refit(b) {
+    if (b.kind === 'text') {
+      const f = b.font; const text = Text.transform(sourceText(b), f.transform);
+      let lines = Text.wrap(text, f, Math.max(8, b.w));
+      if (!lines) lines = text.split(/\s+/); // a single word wider than the box: keep it on one line per word
+      b.lines = lines;
+      b.h = Math.max(f.size, Math.round(lines.length * f.size * (f.lineHeight || 1.2)));
+      b.inkW = Math.min(b.w, Math.max(...lines.map(l => Text.width(l, f))));
+      b.overflow = lines.some(l => Text.width(l, f) > b.w + 1);
+    } else if (b.kind === 'list') {
+      const f = b.font; const indent = b.indent || Math.round(f.size * (b.marker === 'number' ? 2.1 : 1.3)); const itemGap = b.itemGap ?? Math.round(f.size * 0.4);
+      const lines = []; let inkW = 0; let overflow = false;
+      (b.items || []).forEach((item, i) => {
+        let wrapped = Text.wrap(String(item), f, Math.max(8, b.w - indent)); if (!wrapped) { wrapped = [String(item)]; overflow = true; }
+        wrapped.forEach((t, j) => { lines.push({ text: t, marker: j === 0 ? (b.marker === 'number' ? String(i + 1).padStart(2, '0') : b.marker === 'none' ? '' : '•') : null, last: j === wrapped.length - 1, markerFill: b.markerFill, markerBold: b.marker === 'number' }); inkW = Math.max(inkW, indent + Text.width(t, f)); });
+      });
+      b.lines = lines; b.indent = indent; b.itemGap = itemGap;
+      b.h = Math.round(lines.length * f.size * (f.lineHeight || 1.3) + Math.max(0, (b.items || []).length - 1) * itemGap);
+      b.inkW = Math.min(b.w, inkW); b.overflow = overflow;
+    } else if (b.kind === 'button') {
+      const tw = Text.width(b.text || '', b.font); b.overflow = tw + b.font.size > b.w;
+    }
+    return b;
+  }
+
+  // ---- Block operations ----------------------------------------------------------------------
+  function newBlock(kind, frame, kit, at) {
+    const L = frame.layout; const u = L.grid.unit; const pal = L.palette;
+    const x = at ? snap(at.x, u) : L.grid.mx, y = at ? snap(at.y, u) : L.grid.my;
+    const body = L.type.body || 26, head = L.type.headline || 72;
+    if (kind === 'text') return refit({ id: uid(), kind: 'text', role: 'text', path: 'text_' + uid(), text: 'New text', x, y, w: Math.min(L.format.w - x - L.grid.mx, 12 * u * 4), h: head, font: { family: Brand.fontCss(kit.fonts.display), weight: kit.fonts.displayWeight || 600, size: head, lineHeight: 1.1, letterSpacing: kit.fonts.tracking ?? -0.02 }, fill: pal.fg, align: 'left', decorative: false });
+    if (kind === 'body') return refit({ id: uid(), kind: 'text', role: 'body', path: 'body_' + uid(), text: 'Body copy goes here. Edit it in the properties panel.', x, y, w: Math.min(L.format.w - x - L.grid.mx, 12 * u * 4), h: body * 3, font: { family: Brand.fontCss(kit.fonts.body), weight: kit.fonts.bodyWeight || 400, size: body, lineHeight: 1.4, letterSpacing: 0 }, fill: pal.fg, align: 'left', decorative: false });
+    if (kind === 'rect') return { id: uid(), kind: 'field', x, y, w: 24 * u, h: 16 * u, fill: pal.accent, radius: 0, decorative: true };
+    if (kind === 'ellipse') return { id: uid(), kind: 'shape', shape: 'circle', x, y, w: 20 * u, h: 20 * u, fill: pal.accent, decorative: true };
+    if (kind === 'button') return { id: uid(), kind: 'button', role: 'cta', path: 'cta_' + uid(), text: 'Learn more', x, y, w: Math.round(body * 9), h: Math.round(body * 2.7), font: { family: Brand.fontCss(kit.fonts.body), weight: 600, size: body, lineHeight: 1.2 }, fill: pal.accent, color: Color.contrast(pal.accent, '#FFFFFF') >= Color.contrast(pal.accent, '#000000') ? '#FFFFFF' : '#000000', radius: Math.round(body * 1.35), decorative: false };
+    if (kind === 'image') return { id: uid(), kind: 'image', x, y, w: 40 * u, h: 30 * u, asset: null, focal: 'xMidYMid', radius: 0, decorative: false, path: 'image_' + uid() };
+    if (kind === 'icon') return { id: uid(), kind: 'icon', name: 'sparkle', x, y, w: 8 * u, h: 8 * u, fill: pal.accent, decorative: true };
+    if (kind === 'logo') return { id: uid(), kind: 'logo', x, y, w: Math.round(5 * u * Engine.logoAspect(kit, Engine.typeSet(kit, Grid.compute(Grid.byId[L.format.id] || Grid.FORMATS[0], kit.grid), 2))), h: 5 * u, fill: Brand.logoColorFor(kit, pal.bg)[0], decorative: true };
+    return null;
+  }
+  function moveBlock(frame, b, dx, dy, u) { b.x = snap(b.x + dx, u); b.y = snap(b.y + dy, u); }
+  function resizeBlock(frame, b, box, u) {
+    const keepAspect = b.kind === 'icon' || b.kind === 'badge' || b.kind === 'logo' || (b.kind === 'shape' && b.shape === 'circle');
+    let w = Math.max(u, snap(box.w, u)), h = Math.max(u, snap(box.h, u));
+    if (keepAspect) { const a = (b.w || 1) / (b.h || 1); if (Math.abs(box.w - b.w) >= Math.abs(box.h - b.h)) h = Math.max(u, Math.round(w / a)); else w = Math.max(u, Math.round(h * a)); }
+    b.x = snap(box.x, u); b.y = snap(box.y, u); b.w = w; b.h = h;
+    if (b.kind === 'logo') { /* height drives wordmark size */ }
+    refit(b);
+  }
+  function reorder(frame, b, dir) {
+    const arr = frame.layout.blocks; const i = arr.indexOf(b); if (i < 0) return;
+    const j = dir === 'front' ? arr.length - 1 : dir === 'back' ? 0 : Math.max(0, Math.min(arr.length - 1, i + dir));
+    arr.splice(i, 1); arr.splice(j, 0, b);
+  }
+  function duplicateBlock(frame, b, u) { const c = clone(b); c.id = uid(); c.x = snap(c.x + 2 * u, u); c.y = snap(c.y + 2 * u, u); frame.layout.blocks.push(c); return c; }
+  function removeBlocks(frame, ids) { frame.layout.blocks = frame.layout.blocks.filter(b => !ids.includes(b.id)); }
+
+  // ---- Align and distribute (selected blocks within a frame) ---------------------------------
+  function align(frame, blocks, mode) {
+    const W = frame.layout.format.w, H = frame.layout.format.h;
+    const ref = blocks.length > 1 ? bounds(blocks) : { x: 0, y: 0, w: W, h: H };
+    for (const b of blocks) {
+      if (mode === 'left') b.x = ref.x; if (mode === 'hcenter') b.x = Math.round(ref.x + (ref.w - b.w) / 2); if (mode === 'right') b.x = ref.x + ref.w - b.w;
+      if (mode === 'top') b.y = ref.y; if (mode === 'vcenter') b.y = Math.round(ref.y + (ref.h - b.h) / 2); if (mode === 'bottom') b.y = ref.y + ref.h - b.h;
+    }
+  }
+  function distribute(blocks, axis) {
+    if (blocks.length < 3) return;
+    const k = axis === 'h' ? 'x' : 'y', s = axis === 'h' ? 'w' : 'h';
+    const sorted = blocks.slice().sort((a, b) => a[k] - b[k]);
+    const first = sorted[0], last = sorted[sorted.length - 1];
+    const total = (last[k] + last[s]) - first[k]; const sum = sorted.reduce((t, b) => t + b[s], 0);
+    const gap = (total - sum) / (sorted.length - 1); let pos = first[k];
+    for (const b of sorted) { b[k] = Math.round(pos); pos += b[s] + gap; }
+  }
+  function bounds(blocks) {
+    const x0 = Math.min(...blocks.map(b => b.x)), y0 = Math.min(...blocks.map(b => b.y));
+    const x1 = Math.max(...blocks.map(b => b.x + b.w)), y1 = Math.max(...blocks.map(b => b.y + b.h));
+    return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+  }
+
+  // ---- Auto layout (flex) for a frame ----------------------------------------------------------
+  // Children = blocks that are not full-bleed backgrounds. Stacked in order along the main axis with gap and padding;
+  // cross-axis alignment per `align`; `fill` stretches text and lists to the inner width (vertical) and refits them.
+  function isBackground(frame, b) { const W = frame.layout.format.w, H = frame.layout.format.h; return (b.kind === 'image' || b.kind === 'field' || b.kind === 'scrim') && b.w >= W * 0.95 && b.h >= H * 0.95 && b.x <= 0 && b.y <= 0; }
+  function applyAutoLayout(frame) {
+    const al = frame.autoLayout; if (!al || al.mode === 'none') return;
+    const W = frame.layout.format.w, H = frame.layout.format.h; const pad = al.padding, gap = al.gap;
+    const children = frame.layout.blocks.filter(b => !isBackground(frame, b) && !b.hidden && b.kind !== 'scrim' && b.kind !== 'line');
+    if (!children.length) return;
+    const vertical = al.mode === 'vertical';
+    children.sort((a, b) => vertical ? (a.y - b.y || a.x - b.x) : (a.x - b.x || a.y - b.y));
+    const innerW = W - 2 * pad, innerH = H - 2 * pad;
+    if (al.fill && vertical) for (const b of children) if (b.kind === 'text' || b.kind === 'list' || b.kind === 'field') { b.w = innerW; refit(b); }
+    if (al.fill && !vertical) for (const b of children) if (b.kind === 'field' || b.kind === 'image') { b.h = innerH; }
+    const mainSize = children.reduce((t, b) => t + (vertical ? b.h : b.w), 0) + gap * (children.length - 1);
+    const mainInner = vertical ? innerH : innerW;
+    let pos = pad; let step = gap;
+    if (al.justify === 'center') pos = pad + Math.max(0, (mainInner - mainSize) / 2);
+    else if (al.justify === 'end') pos = pad + Math.max(0, mainInner - mainSize);
+    else if (al.justify === 'space-between' && children.length > 1) step = gap + Math.max(0, (mainInner - mainSize) / (children.length - 1));
+    for (const b of children) {
+      if (vertical) { b.y = Math.round(pos); pos += b.h + step; b.x = al.align === 'center' ? Math.round(pad + (innerW - b.w) / 2) : al.align === 'end' ? W - pad - b.w : pad; if (b.kind === 'text') b.align = al.align === 'center' ? 'center' : al.align === 'end' ? 'right' : 'left'; }
+      else { b.x = Math.round(pos); pos += b.w + step; b.y = al.align === 'center' ? Math.round(pad + (innerH - b.h) / 2) : al.align === 'end' ? H - pad - b.h : pad; }
+    }
+  }
+
+  // ---- Serialization, links, code -----------------------------------------------------------
+  function serialize(doc, opts = {}) {
+    const d = clone(doc);
+    if (opts.stripAssets) for (const f of d.frames) for (const b of f.layout.blocks) if (b.kind === 'image') b.assetMissing = true;
+    return JSON.stringify(d);
+  }
+  function deserialize(json) { const d = typeof json === 'string' ? JSON.parse(json) : json; if (!d || !Array.isArray(d.frames)) throw new Error('not a canvas file'); for (const f of d.frames) for (const b of f.layout.blocks) if (!b.id) b.id = uid(); return d; }
+  async function toLink(doc) {
+    const json = serialize(doc, { stripAssets: true });
+    let payload;
+    if (typeof CompressionStream === 'function') {
+      const cs = new CompressionStream('deflate-raw'); const w = cs.writable.getWriter(); w.write(new TextEncoder().encode(json)); w.close();
+      const buf = await new Response(cs.readable).arrayBuffer(); payload = 'z' + b64url(new Uint8Array(buf));
+    } else payload = 'j' + b64url(new TextEncoder().encode(json));
+    return `${location.origin}${location.pathname}#c=${payload}`;
+  }
+  async function fromHash(hash) {
+    const m = /#c=([zj])([A-Za-z0-9_-]+)/.exec(hash || ''); if (!m) return null;
+    const bytes = unb64url(m[2]);
+    if (m[1] === 'z') { const ds = new DecompressionStream('deflate-raw'); const w = ds.writable.getWriter(); w.write(bytes); w.close(); return deserialize(await new Response(ds.readable).text()); }
+    return deserialize(new TextDecoder().decode(bytes));
+  }
+  function b64url(bytes) { let bin = ''; for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000)); return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
+  function unb64url(s) { const bin = atob(s.replace(/-/g, '+').replace(/_/g, '/')); const out = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i); return out; }
+
+  // HTML/CSS for one frame: what "copy as code" means here. Absolute positions on a fixed-size frame.
+  function toHTML(frame, env) {
+    const L = frame.layout; const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+    const px = v => `${Math.round(v)}px`;
+    const parts = [`<div class="frame" style="position:relative;width:${px(L.format.w)};height:${px(L.format.h)};background:${L.palette.bg};overflow:${frame.clip ? 'hidden' : 'visible'}">`];
+    for (const b of L.blocks) {
+      if (b.hidden) continue;
+      const pos = `position:absolute;left:${px(b.x)};top:${px(b.y)};width:${px(b.w)};height:${px(b.h)};`;
+      if (b.kind === 'field') parts.push(`  <div style="${pos}background:${b.fill};border-radius:${px(b.radius || 0)};${b.alpha != null ? `opacity:${b.alpha};` : ''}"></div>`);
+      else if (b.kind === 'shape') parts.push(`  <div style="${pos}background:${b.fill};border-radius:${b.shape === 'pill' ? '999px' : b.shape === 'circle' ? '50%' : '0 100% 0 0'};"></div>`);
+      else if (b.kind === 'image') { const a = env && env.assets.images.find(i => i.id === b.asset); parts.push(`  <img src="${a ? a.dataUrl.slice(0, 40) + '…' : 'image.jpg'}" alt="" style="${pos}object-fit:cover;border-radius:${px(b.radius || 0)};">`); }
+      else if (b.kind === 'text') { const f = b.font; parts.push(`  <p style="${pos}margin:0;font-family:${f.family};font-size:${px(f.size)};font-weight:${f.weight};line-height:${f.lineHeight || 1.2};letter-spacing:${f.letterSpacing || 0}em;color:${b.fill};text-align:${b.align || 'left'}">${b.lines.map(esc).join('<br>')}</p>`); }
+      else if (b.kind === 'list') { const f = b.font; parts.push(`  <${b.marker === 'number' ? 'ol' : 'ul'} style="${pos}margin:0;padding-left:${px(b.indent)};font-family:${f.family};font-size:${px(f.size)};line-height:${f.lineHeight || 1.3};color:${b.fill}">${(b.items || []).map(i => `<li>${esc(i)}</li>`).join('')}</${b.marker === 'number' ? 'ol' : 'ul'}>`); }
+      else if (b.kind === 'button') { const f = b.font; parts.push(`  <a href="#" style="${pos}display:flex;align-items:center;justify-content:center;background:${b.fill};color:${b.color};border-radius:${px(b.radius || 0)};font-family:${f.family};font-size:${px(f.size)};font-weight:600;text-decoration:none">${esc(b.text)}</a>`); }
+      else if (b.kind === 'logo') parts.push(`  <div class="logo" style="${pos}color:${b.fill}"><!-- logo --></div>`);
+      else if (b.kind === 'rule' || b.kind === 'line') parts.push(`  <div style="${pos}background:${b.fill};min-height:2px"></div>`);
+      else if (b.kind === 'icon') parts.push(`  <svg viewBox="0 0 256 256" style="${pos}color:${b.fill}">${(Icons.SET[b.name] || '')}</svg>`);
+      else if (b.kind === 'badge') parts.push(`  <div style="${pos}display:grid;place-items:center;border-radius:50%;background:${b.fill};color:${b.color};font-weight:700">${esc(b.text)}</div>`);
+    }
+    parts.push('</div>');
+    return parts.join('\n');
+  }
+
+  // ---- History ----------------------------------------------------------------------------------
+  function history(limit = 80) {
+    const past = [], future = [];
+    return {
+      push(doc) { const s = JSON.stringify(doc); if (past.length && past[past.length - 1] === s) return; past.push(s); if (past.length > limit) past.shift(); future.length = 0; },
+      undo(doc) { if (!past.length) return null; future.push(JSON.stringify(doc)); return JSON.parse(past.pop()); },
+      redo(doc) { if (!future.length) return null; past.push(JSON.stringify(doc)); return JSON.parse(future.pop()); },
+      get canUndo() { return past.length > 0; }, get canRedo() { return future.length > 0; },
+      get depth() { return past.length; }, peek() { return past.length ? JSON.parse(past[past.length - 1]) : null; },
+    };
+  }
+
+  return { create, addFrame, blankFrame, frameById, blockById, refit, sourceText, newBlock, moveBlock, resizeBlock, reorder, duplicateBlock, removeBlocks, align, distribute, bounds, applyAutoLayout, isBackground, serialize, deserialize, toLink, fromHash, toHTML, history, snap, uid, clone };
+})();
+
+/* js/canvas-ui.js */
+/* Canvas editor UI: infinite stage, selection and handles, layers, properties, code view, export.
+   Everything the panels change is a field in the frame's layout JSON; the stage re-renders from it. */
+const CanvasUI = (() => {
+  const $ = id => document.getElementById(id);
+  let env = null, doc = null, hist = null, active = false;
+  const sel = { frameId: null, blockIds: [] };
+  let tool = 'select', hover = null, drag = null, spaceDown = false;
+  const HANDLE = 7;
+  const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+  // ---- Setup ------------------------------------------------------------------------------------
+  function init(e) {
+    env = e;
+    try { const saved = localStorage.getItem('lg.canvas'); doc = saved ? Canvas.deserialize(saved) : Canvas.create(); } catch { doc = Canvas.create(); }
+    hist = Canvas.history();
+    bindStage(); bindToolbar(); bindKeys();
+    Canvas.fromHash(location.hash).then(d => { if (d) { doc = d; env.toast('Canvas loaded from link'); if (active) renderAll(); } }).catch(() => { });
+  }
+  function count() { return doc ? doc.frames.length : 0; }
+  function open() { active = true; renderAll(); if (doc.frames.length && !sel.frameId) fit(); }
+  function close() { active = false; }
+  function commit(label) { hist.push(doc); persist(); updateUndo(); }
+  function persist() { try { const s = Canvas.serialize(doc); if (s.length < 3_000_000) localStorage.setItem('lg.canvas', s); } catch { } }
+  function updateUndo() { $('cvUndo').disabled = !hist.canUndo; $('cvRedo').disabled = !hist.canRedo; }
+
+  function addLayouts(layouts, opts = {}) {
+    hist.push(doc);
+    const start = doc.frames.length ? Math.max(...doc.frames.map(f => f.y + f.layout.format.h)) + 240 : 0;
+    let x = 0; const added = [];
+    for (const L of layouts) { const f = Canvas.addFrame(doc, L, { x, y: start }); x += L.format.w + 160; added.push(f); }
+    sel.frameId = added.length ? added[0].id : null; sel.blockIds = [];
+    persist(); updateUndo();
+    if (active) { renderAll(); fitTo(added); }
+    return added;
+  }
+
+  // ---- Geometry ------------------------------------------------------------------------------------
+  const stage = () => $('stage');
+  function toWorld(cx, cy) { const r = stage().getBoundingClientRect(); const v = doc.view; return { x: (cx - r.left - v.x) / v.zoom, y: (cy - r.top - v.y) / v.zoom }; }
+  function toScreen(wx, wy) { const v = doc.view; return { x: wx * v.zoom + v.x, y: wy * v.zoom + v.y }; }
+  function frameAt(p) { for (let i = doc.frames.length - 1; i >= 0; i--) { const f = doc.frames[i]; if (f.hidden) continue; if (p.x >= f.x && p.y >= f.y && p.x <= f.x + f.layout.format.w && p.y <= f.y + f.layout.format.h) return f; } return null; }
+  function blockAt(f, p) { const lx = p.x - f.x, ly = p.y - f.y; const bs = f.layout.blocks; for (let i = bs.length - 1; i >= 0; i--) { const b = bs[i]; if (b.hidden) continue; const w = (b.kind === 'text' && b.align !== 'center' && b.align !== 'right') ? Math.max(b.inkW || b.w, 24) : b.w; if (lx >= b.x && ly >= b.y && lx <= b.x + w && ly <= b.y + b.h) return b; } return null; }
+  function selBlocks() { const f = Canvas.frameById(doc, sel.frameId); return f ? sel.blockIds.map(id => Canvas.blockById(f, id)).filter(Boolean) : []; }
+  function selFrame() { return Canvas.frameById(doc, sel.frameId); }
+
+  function fit() { if (!doc.frames.length) { doc.view = { x: 60, y: 60, zoom: 0.5 }; applyView(); return; } fitTo(doc.frames); }
+  function fitTo(frames) {
+    const r = stage().getBoundingClientRect(); if (!r.width) return;
+    const x0 = Math.min(...frames.map(f => f.x)), y0 = Math.min(...frames.map(f => f.y));
+    const x1 = Math.max(...frames.map(f => f.x + f.layout.format.w)), y1 = Math.max(...frames.map(f => f.y + f.layout.format.h));
+    const zoom = Math.min(2, Math.max(0.05, Math.min((r.width - 80) / (x1 - x0), (r.height - 120) / (y1 - y0))));
+    doc.view = { zoom, x: (r.width - (x1 - x0) * zoom) / 2 - x0 * zoom, y: (r.height - (y1 - y0) * zoom) / 2 - y0 * zoom + 10 };
+    applyView();
+  }
+  function zoomBy(factor, cx, cy) {
+    const r = stage().getBoundingClientRect(); const px = cx != null ? cx - r.left : r.width / 2, py = cy != null ? cy - r.top : r.height / 2;
+    const v = doc.view; const z = Math.min(4, Math.max(0.05, v.zoom * factor));
+    v.x = px - (px - v.x) * (z / v.zoom); v.y = py - (py - v.y) * (z / v.zoom); v.zoom = z; applyView();
+  }
+  function applyView() { const v = doc.view; $('world').style.transform = `translate(${v.x}px, ${v.y}px) scale(${v.zoom})`; $('cvZoom').textContent = Math.round(v.zoom * 100) + '%'; stage().style.backgroundSize = `${24 * v.zoom}px ${24 * v.zoom}px`; stage().style.backgroundPosition = `${v.x}px ${v.y}px`; const fs = Math.max(11, 12 / v.zoom) + 'px', off = Math.max(16, 18 / v.zoom); $('world').querySelectorAll('.cv-frame-label').forEach(lb => { lb.style.fontSize = fs; const f = Canvas.frameById(doc, lb.dataset.label); if (f) lb.style.top = (f.y - off) + 'px'; }); drawOverlay(); }
+
+  // ---- Rendering ----------------------------------------------------------------------------------------
+  function renderAll() { renderFrames(); renderLayers(); renderProps(); applyView(); updateUndo(); $('cvCount').textContent = doc.frames.length ? `${doc.frames.length} frame${doc.frames.length > 1 ? 's' : ''}` : 'Empty canvas'; $('cvEmpty').hidden = doc.frames.length > 0; }
+  function renderFrames() {
+    const world = $('world');
+    world.innerHTML = doc.frames.map(f => `<div class="cv-frame-label" data-label="${f.id}" style="left:${f.x}px;top:${f.y - Math.max(16, 18 / doc.view.zoom)}px;font-size:${Math.max(11, 12 / doc.view.zoom)}px;${f.hidden ? 'display:none;' : ''}">${esc(f.name)}</div><div class="cv-frame" data-id="${f.id}" style="left:${f.x}px;top:${f.y}px;width:${f.layout.format.w}px;height:${f.layout.format.h}px;${f.hidden ? 'display:none;' : ''}${f.clip ? '' : 'overflow:visible;'}">${frameSVG(f)}</div>`).join('');
+  }
+  function frameSVG(f) { return env.renderSVG(f.layout, { showGrid: !!f.showGrid }); }
+  function rerenderFrame(f) {
+    const el = $('world').querySelector(`.cv-frame[data-id="${f.id}"]`); if (!el) return renderFrames();
+    const svg = el.querySelector('svg'); if (svg) svg.outerHTML = frameSVG(f); else el.insertAdjacentHTML('beforeend', frameSVG(f));
+    el.style.left = f.x + 'px'; el.style.top = f.y + 'px'; el.style.width = f.layout.format.w + 'px'; el.style.height = f.layout.format.h + 'px'; el.style.display = f.hidden ? 'none' : '';
+    const lb = $('world').querySelector(`.cv-frame-label[data-label="${f.id}"]`); if (lb) { lb.style.left = f.x + 'px'; lb.style.top = (f.y - Math.max(16, 18 / doc.view.zoom)) + 'px'; lb.textContent = f.name; lb.style.display = f.hidden ? 'none' : ''; }
+  }
+
+  function drawOverlay() {
+    const ov = $('overlay'); const r = stage().getBoundingClientRect(); ov.setAttribute('width', r.width); ov.setAttribute('height', r.height);
+    const parts = [];
+    const f = selFrame();
+    if (hover && hover.frame && !(drag && drag.type)) {
+      const hf = hover.frame; const b = hover.block;
+      const rect = b ? { x: hf.x + b.x, y: hf.y + b.y, w: b.w, h: b.h } : { x: hf.x, y: hf.y, w: hf.layout.format.w, h: hf.layout.format.h };
+      const p = toScreen(rect.x, rect.y); parts.push(`<rect x="${p.x}" y="${p.y}" width="${rect.w * doc.view.zoom}" height="${rect.h * doc.view.zoom}" fill="none" stroke="var(--accent)" stroke-opacity=".6" stroke-width="1"/>`);
+    }
+    if (f) {
+      const p = toScreen(f.x, f.y); const W = f.layout.format.w * doc.view.zoom, H = f.layout.format.h * doc.view.zoom;
+      parts.push(`<rect x="${p.x}" y="${p.y}" width="${W}" height="${H}" fill="none" stroke="var(--accent)" stroke-width="${sel.blockIds.length ? 1 : 2}" stroke-opacity="${sel.blockIds.length ? .45 : 1}"/>`);
+      const blocks = selBlocks();
+      for (const b of blocks) {
+        const q = toScreen(f.x + b.x, f.y + b.y); const w = b.w * doc.view.zoom, h = b.h * doc.view.zoom;
+        parts.push(`<rect x="${q.x}" y="${q.y}" width="${w}" height="${h}" fill="none" stroke="${b.overflow ? 'var(--danger)' : 'var(--accent)'}" stroke-width="1.5"/>`);
+        if (blocks.length === 1 && !b.locked) for (const hnd of handles(q.x, q.y, w, h)) parts.push(`<rect class="cv-handle" data-h="${hnd.id}" x="${hnd.x - HANDLE / 2}" y="${hnd.y - HANDLE / 2}" width="${HANDLE}" height="${HANDLE}" fill="#fff" stroke="var(--accent)" stroke-width="1.5" style="cursor:${hnd.cursor}"/>`);
+        parts.push(`<text x="${q.x}" y="${q.y - 6}" fill="var(--accent)" font-size="11" font-family="var(--font-mono)">${esc(b.role || b.kind)} ${Math.round(b.w)}×${Math.round(b.h)}</text>`);
+      }
+      if (!blocks.length) parts.push(`<text x="${p.x}" y="${p.y + H + 16}" fill="var(--fg-3)" font-size="11" font-family="var(--font-mono)">${f.layout.format.w}×${f.layout.format.h}</text>`);
+    }
+    if (drag && drag.type === 'marquee') { const a = toScreen(Math.min(drag.start.x, drag.cur.x), Math.min(drag.start.y, drag.cur.y)); parts.push(`<rect x="${a.x}" y="${a.y}" width="${Math.abs(drag.cur.x - drag.start.x) * doc.view.zoom}" height="${Math.abs(drag.cur.y - drag.start.y) * doc.view.zoom}" fill="rgba(216,201,163,.08)" stroke="var(--accent)" stroke-dasharray="4 3"/>`); }
+    ov.innerHTML = parts.join('');
+  }
+  function handles(x, y, w, h) {
+    return [{ id: 'nw', x, y, cursor: 'nwse-resize' }, { id: 'n', x: x + w / 2, y, cursor: 'ns-resize' }, { id: 'ne', x: x + w, y, cursor: 'nesw-resize' }, { id: 'e', x: x + w, y: y + h / 2, cursor: 'ew-resize' }, { id: 'se', x: x + w, y: y + h, cursor: 'nwse-resize' }, { id: 's', x: x + w / 2, y: y + h, cursor: 'ns-resize' }, { id: 'sw', x, y: y + h, cursor: 'nesw-resize' }, { id: 'w', x, y: y + h / 2, cursor: 'ew-resize' }];
+  }
+  function handleAt(cx, cy) {
+    const f = selFrame(); const bs = selBlocks(); if (!f || bs.length !== 1 || bs[0].locked) return null;
+    const b = bs[0]; const q = toScreen(f.x + b.x, f.y + b.y); const r = stage().getBoundingClientRect();
+    const px = cx - r.left, py = cy - r.top;
+    for (const h of handles(q.x, q.y, b.w * doc.view.zoom, b.h * doc.view.zoom)) if (Math.abs(px - h.x) <= HANDLE && Math.abs(py - h.y) <= HANDLE) return h.id;
+    return null;
+  }
+
+  // ---- Stage interaction ------------------------------------------------------------------------------
+  function bindStage() {
+    const st = stage();
+    st.addEventListener('pointerdown', onDown); st.addEventListener('pointermove', onMove); st.addEventListener('pointerup', onUp); st.addEventListener('pointercancel', onUp);
+    st.addEventListener('dblclick', e => { const p = toWorld(e.clientX, e.clientY); const f = frameAt(p); const b = f && blockAt(f, p); if (b && (b.kind === 'text' || b.kind === 'list' || b.kind === 'button')) { select(f.id, [b.id]); const ta = $('cvProps').querySelector('[data-p="text"],[data-p="items"]'); if (ta) { ta.focus(); ta.select && ta.select(); } } else if (f && !b) { fitTo([f]); } });
+    st.addEventListener('wheel', e => { e.preventDefault(); if (e.ctrlKey || e.metaKey) zoomBy(Math.exp(-e.deltaY * 0.0015), e.clientX, e.clientY); else { doc.view.x -= e.deltaX; doc.view.y -= e.deltaY; applyView(); } }, { passive: false });
+    st.addEventListener('contextmenu', e => e.preventDefault());
+    new ResizeObserver(() => active && drawOverlay()).observe(st);
+  }
+  function onDown(e) {
+    if (e.button === 1 || tool === 'hand' || spaceDown || e.button === 2) { drag = { type: 'pan', sx: e.clientX, sy: e.clientY, vx: doc.view.x, vy: doc.view.y }; stage().setPointerCapture(e.pointerId); stage().style.cursor = 'grabbing'; return; }
+    const p = toWorld(e.clientX, e.clientY);
+    const f = frameAt(p);
+    if (tool !== 'select') { placeTool(f, p); return; }
+    const h = handleAt(e.clientX, e.clientY);
+    if (h) { const b = selBlocks()[0]; drag = { type: 'resize', h, b, f: selFrame(), start: p, orig: { x: b.x, y: b.y, w: b.w, h: b.h }, moved: false }; stage().setPointerCapture(e.pointerId); return; }
+    if (!f) { if (!e.shiftKey) select(null, []); drag = { type: 'marquee', start: p, cur: p }; stage().setPointerCapture(e.pointerId); return; }
+    const b = blockAt(f, p);
+    if (b) {
+      if (e.altKey) { hist.push(doc); const c = Canvas.duplicateBlock(f, b, 0); c.x = b.x; c.y = b.y; select(f.id, [c.id]); drag = { type: 'move', f, blocks: [c], start: p, orig: [{ x: c.x, y: c.y }], moved: true }; rerenderFrame(f); }
+      else {
+        if (e.shiftKey && sel.frameId === f.id) { const ids = sel.blockIds.includes(b.id) ? sel.blockIds.filter(i => i !== b.id) : [...sel.blockIds, b.id]; select(f.id, ids); }
+        else if (!(sel.frameId === f.id && sel.blockIds.includes(b.id))) select(f.id, [b.id]);
+        const blocks = selBlocks().filter(x => !x.locked); if (!blocks.length) return;
+        drag = { type: 'move', f, blocks, start: p, orig: blocks.map(x => ({ x: x.x, y: x.y })), moved: false };
+      }
+    } else {
+      select(f.id, []);
+      if (!f.locked) drag = { type: 'move-frame', f, start: p, orig: { x: f.x, y: f.y }, moved: false };
+    }
+    stage().setPointerCapture(e.pointerId);
+  }
+  function onMove(e) {
+    if (!drag) { const p = toWorld(e.clientX, e.clientY); const f = tool === 'select' ? frameAt(p) : null; const b = f && blockAt(f, p); const next = f ? { frame: f, block: b } : null; if ((next && next.frame) !== (hover && hover.frame) || (next && next.block) !== (hover && hover.block)) { hover = next; drawOverlay(); } const h = handleAt(e.clientX, e.clientY); stage().style.cursor = tool === 'hand' || spaceDown ? 'grab' : h ? handles(0, 0, 0, 0).find(x => x.id === h).cursor : b ? 'move' : tool === 'select' ? 'default' : 'crosshair'; return; }
+    const p = toWorld(e.clientX, e.clientY);
+    if (drag.type === 'pan') { doc.view.x = drag.vx + (e.clientX - drag.sx); doc.view.y = drag.vy + (e.clientY - drag.sy); applyView(); return; }
+    if (drag.type === 'marquee') { drag.cur = p; drawOverlay(); return; }
+    const dx = p.x - drag.start.x, dy = p.y - drag.start.y;
+    if (!drag.moved && Math.hypot(dx, dy) * doc.view.zoom < 3) return;
+    if (!drag.moved) { drag.moved = true; hist.push(doc); }
+    const u = doc.grid.snap && !e.shiftKey ? (drag.f ? drag.f.layout.grid.unit : 8) : 1;
+    if (drag.type === 'move') { drag.blocks.forEach((b, i) => { b.x = Canvas.snap(drag.orig[i].x + dx, u); b.y = Canvas.snap(drag.orig[i].y + dy, u); }); rerenderFrame(drag.f); drawOverlay(); liveProps(); }
+    else if (drag.type === 'move-frame') { drag.f.x = Canvas.snap(drag.orig.x + dx, u); drag.f.y = Canvas.snap(drag.orig.y + dy, u); rerenderFrame(drag.f); drawOverlay(); liveProps(); }
+    else if (drag.type === 'resize') {
+      const o = drag.orig; let x = o.x, y = o.y, w = o.w, h = o.h; const hd = drag.h;
+      if (hd.includes('e')) w = o.w + dx; if (hd.includes('s')) h = o.h + dy; if (hd.includes('w')) { x = o.x + dx; w = o.w - dx; } if (hd.includes('n')) { y = o.y + dy; h = o.h - dy; }
+      Canvas.resizeBlock(drag.f, drag.b, { x, y, w: Math.max(4, w), h: Math.max(4, h) }, u);
+      rerenderFrame(drag.f); drawOverlay(); liveProps();
+    }
+  }
+  function onUp(e) {
+    if (!drag) return;
+    const d = drag; drag = null; stage().style.cursor = tool === 'hand' ? 'grab' : 'default';
+    if (d.type === 'marquee') { const x0 = Math.min(d.start.x, d.cur.x), y0 = Math.min(d.start.y, d.cur.y), x1 = Math.max(d.start.x, d.cur.x), y1 = Math.max(d.start.y, d.cur.y); if (x1 - x0 > 4 && y1 - y0 > 4) { const f = frameAt({ x: x0, y: y0 }) || frameAt({ x: x1, y: y1 }); if (f) { const ids = f.layout.blocks.filter(b => !b.hidden && f.x + b.x >= x0 && f.y + b.y >= y0 && f.x + b.x + b.w <= x1 && f.y + b.y + b.h <= y1).map(b => b.id); select(f.id, ids); } } drawOverlay(); return; }
+    if (d.moved) { if (d.f && d.f.autoLayout && d.f.autoLayout.mode !== 'none' && d.type !== 'move-frame') { Canvas.applyAutoLayout(d.f); rerenderFrame(d.f); } persist(); updateUndo(); renderLayers(); renderProps(); drawOverlay(); }
+  }
+  function placeTool(f, p) {
+    const kit = env.getKit();
+    if (tool === 'frame') { hist.push(doc); const fmt = Grid.byId[$('cvFrameFormat').value] || Grid.byId.slide; const bgs = kit.colors.filter(c => c.role === 'background').map(c => c.hex).sort((a, b) => Color.luminance(b) - Color.luminance(a)); const nf = Canvas.blankFrame(doc, fmt, kit, { x: Canvas.snap(p.x, 8), y: Canvas.snap(p.y, 8), bg: bgs[0] || '#FFFFFF' }); select(nf.id, []); setTool('select'); renderAll(); return; }
+    if (!f) { env.toast('Click inside a frame to add it there'); return; }
+    hist.push(doc);
+    const kindMap = { text: 'text', body: 'body', rect: 'rect', ellipse: 'ellipse', button: 'button', image: 'image', icon: 'icon', logo: 'logo' };
+    const b = Canvas.newBlock(kindMap[tool] || 'text', f, kit, { x: p.x - f.x, y: p.y - f.y });
+    if (!b) return;
+    f.layout.blocks.push(b);
+    if (f.autoLayout.mode !== 'none') Canvas.applyAutoLayout(f);
+    select(f.id, [b.id]); setTool('select'); rerenderFrame(f); renderLayers(); renderProps(); drawOverlay(); persist(); updateUndo();
+    if (tool === 'image' || b.kind === 'image') { const inp = $('cvProps').querySelector('[data-file="image"]'); if (inp) inp.click(); }
+  }
+  function select(frameId, blockIds) { sel.frameId = frameId; sel.blockIds = blockIds || []; renderLayers(); renderProps(); drawOverlay(); }
+
+  // ---- Keyboard --------------------------------------------------------------------------------------------
+  function bindKeys() {
+    document.addEventListener('keydown', e => {
+      if (!active) return; const tag = (e.target.tagName || '').toLowerCase(); const typing = tag === 'input' || tag === 'textarea' || tag === 'select' || e.target.isContentEditable;
+      if (e.key === ' ' && !typing) { spaceDown = true; stage().style.cursor = 'grab'; e.preventDefault(); return; }
+      const meta = e.metaKey || e.ctrlKey;
+      if (meta && e.key.toLowerCase() === 'z') { e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
+      if (meta && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); return; }
+      if (meta && e.key.toLowerCase() === 'l') { e.preventDefault(); copyLink(); return; }
+      if (typing) return;
+      if (meta && e.key.toLowerCase() === 'd') { e.preventDefault(); duplicateSelection(); return; }
+      if (meta && e.key.toLowerCase() === 'g') { e.preventDefault(); const f = selFrame(); if (f) { f.showGrid = !f.showGrid; rerenderFrame(f); } return; }
+      if (meta && e.key.toLowerCase() === 'a') { e.preventDefault(); const f = selFrame(); if (f) select(f.id, f.layout.blocks.filter(b => !b.hidden).map(b => b.id)); return; }
+      const k = e.key.toLowerCase();
+      if (k === 'v') setTool('select'); else if (k === 'h') setTool('hand'); else if (k === 't') setTool('text'); else if (k === 'r') setTool('rect'); else if (k === 'o') setTool('ellipse'); else if (k === 'f') setTool('frame'); else if (k === 'i') setTool('image');
+      else if (k === 'escape') { if (sel.blockIds.length) select(sel.frameId, []); else select(null, []); setTool('select'); }
+      else if (k === 'delete' || k === 'backspace') { e.preventDefault(); deleteSelection(); }
+      else if (k === '0') fit(); else if (k === '=' || k === '+') zoomBy(1.2); else if (k === '-') zoomBy(1 / 1.2);
+      else if (k === '1' && e.shiftKey) { const f = selFrame(); if (f) fitTo([f]); }
+      else if (k.startsWith('arrow')) { const f = selFrame(); const bs = selBlocks().filter(b => !b.locked); if (!f) return; e.preventDefault(); const step = e.shiftKey ? f.layout.grid.unit : 1; const dx = k === 'arrowleft' ? -step : k === 'arrowright' ? step : 0, dy = k === 'arrowup' ? -step : k === 'arrowdown' ? step : 0; hist.push(doc); if (bs.length) bs.forEach(b => { b.x += dx; b.y += dy; }); else { f.x += dx; f.y += dy; } rerenderFrame(f); drawOverlay(); liveProps(); persist(); updateUndo(); }
+      else if (k === '[' ) { const f = selFrame(); selBlocks().forEach(b => Canvas.reorder(f, b, e.shiftKey ? 'back' : -1)); if (f) { hist.push(doc); rerenderFrame(f); renderLayers(); persist(); } }
+      else if (k === ']' ) { const f = selFrame(); selBlocks().forEach(b => Canvas.reorder(f, b, e.shiftKey ? 'front' : 1)); if (f) { hist.push(doc); rerenderFrame(f); renderLayers(); persist(); } }
+    });
+    document.addEventListener('keyup', e => { if (e.key === ' ') { spaceDown = false; if (active) stage().style.cursor = tool === 'hand' ? 'grab' : 'default'; } });
+  }
+  function setTool(t) { tool = t; document.querySelectorAll('#cvTools [data-tool]').forEach(b => b.classList.toggle('on', b.dataset.tool === t)); $('cvFrameFormat').hidden = t !== 'frame'; stage().style.cursor = t === 'hand' ? 'grab' : t === 'select' ? 'default' : 'crosshair'; }
+  function undo() { const d = hist.undo(doc); if (d) { doc = d; persist(); renderAll(); } }
+  function redo() { const d = hist.redo(doc); if (d) { doc = d; persist(); renderAll(); } }
+  function deleteSelection() {
+    const f = selFrame(); if (!f) return; hist.push(doc);
+    if (sel.blockIds.length) { Canvas.removeBlocks(f, sel.blockIds); if (f.autoLayout.mode !== 'none') Canvas.applyAutoLayout(f); select(f.id, []); rerenderFrame(f); }
+    else { doc.frames = doc.frames.filter(x => x !== f); select(null, []); renderAll(); }
+    persist(); updateUndo(); renderLayers();
+  }
+  function duplicateSelection() {
+    const f = selFrame(); if (!f) return; hist.push(doc);
+    if (sel.blockIds.length) { const ids = selBlocks().map(b => Canvas.duplicateBlock(f, b, f.layout.grid.unit).id); select(f.id, ids); rerenderFrame(f); }
+    else { const c = Canvas.addFrame(doc, f.layout, { x: f.x + f.layout.format.w + 160, y: f.y, name: f.name + ' copy' }); c.autoLayout = Canvas.clone(f.autoLayout); select(c.id, []); renderAll(); }
+    persist(); updateUndo(); renderLayers(); renderProps();
+  }
+
+  // ---- Toolbar ------------------------------------------------------------------------------------------------
+  function bindToolbar() {
+    $('cvTools').addEventListener('click', e => { const b = e.target.closest('[data-tool]'); if (b) setTool(b.dataset.tool); });
+    $('cvZoomIn').addEventListener('click', () => zoomBy(1.25)); $('cvZoomOut').addEventListener('click', () => zoomBy(1 / 1.25)); $('cvFit').addEventListener('click', fit);
+    $('cvUndo').addEventListener('click', undo); $('cvRedo').addEventListener('click', redo);
+    $('cvSnap').addEventListener('change', e => { doc.grid.snap = e.target.checked; persist(); });
+    $('cvLink').addEventListener('click', copyLink);
+    $('cvSave').addEventListener('click', async () => { const blob = new Blob([Canvas.serialize(doc)], { type: 'application/json' }); if (await env.download(blob, `${slug(doc.name)}-canvas.json`)) env.toast('Canvas saved as JSON'); });
+    $('cvLoad').addEventListener('change', async e => { const f = e.target.files[0]; if (!f) return; try { hist.push(doc); doc = Canvas.deserialize(await f.text()); select(null, []); renderAll(); fit(); env.toast('Canvas loaded'); } catch (err) { env.toast('Could not load: ' + err.message); } e.target.value = ''; });
+    $('cvClear').addEventListener('click', () => { if (!doc.frames.length) return; hist.push(doc); doc.frames = []; select(null, []); renderAll(); persist(); });
+    $('cvExport').addEventListener('click', async e => {
+      const b = e.target.closest('[data-export]'); if (!b) return; const what = b.dataset.export; const f = selFrame();
+      const t = b.textContent; b.disabled = true; b.textContent = '…';
+      try {
+        if (what === 'png' || what === 'svg' || what === 'pptx' || what === 'html') { if (!f) { env.toast('Select a frame first'); return; } }
+        if (what === 'png') { const blob = await env.exportPNG(f.layout); if (await env.download(blob, `${slug(f.name)}.png`)) env.toast('PNG saved'); }
+        else if (what === 'svg') { const svg = await env.exportSVG(f.layout); if (await env.download(new Blob([svg], { type: 'image/svg+xml' }), `${slug(f.name)}.svg`)) env.toast('SVG saved'); }
+        else if (what === 'pptx') { const frames = doc.frames.filter(x => x.layout.format.id === f.layout.format.id && !x.hidden); const blob = await env.buildPptx(frames.map(x => x.layout)); if (await env.download(blob, `${slug(doc.name)}-${f.layout.format.id}.pptx`)) env.toast(`PPTX saved: ${frames.length} slide${frames.length > 1 ? 's' : ''} of this format`); }
+        else if (what === 'html') { await copyText(Canvas.toHTML(f, { assets: env.getAssets() })); env.toast('HTML/CSS copied'); }
+        else if (what === 'canvas') { const blob = await exportCanvasPNG(); if (blob && await env.download(blob, `${slug(doc.name)}-canvas.png`)) env.toast('Canvas PNG saved'); }
+        else if (what === 'all') { let n = 0; for (const fr of doc.frames.filter(x => !x.hidden)) { const blob = await env.exportPNG(fr.layout); if (!(await env.download(blob, `${slug(fr.name)}.png`))) break; n++; await new Promise(r => setTimeout(r, 350)); } if (n) env.toast(`${n} PNG${n > 1 ? 's' : ''} saved`); }
+      } catch (err) { console.error(err); env.toast('Export failed: ' + err.message); } finally { b.disabled = false; b.textContent = t; $('cvExport').removeAttribute('open'); }
+    });
+  }
+  const slug = s => String(s || 'canvas').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'canvas';
+  async function copyText(text) { try { await navigator.clipboard.writeText(text); } catch { const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); } finally { ta.remove(); } } }
+  async function copyLink() {
+    try {
+      const link = await Canvas.toLink(doc);
+      await copyText(link);
+      const hasImages = doc.frames.some(f => f.layout.blocks.some(b => b.kind === 'image'));
+      env.toast(link.length > 60000 ? 'Link copied (very long; a hosted link is the next step)' : hasImages ? 'Link copied: layout and copy travel, images do not yet' : 'Link copied');
+    } catch (err) { env.toast('Could not build a link: ' + err.message); }
+  }
+  async function exportCanvasPNG() {
+    const frames = doc.frames.filter(f => !f.hidden); if (!frames.length) { env.toast('Nothing on the canvas'); return null; }
+    const margin = 120; const x0 = Math.min(...frames.map(f => f.x)) - margin, y0 = Math.min(...frames.map(f => f.y)) - margin;
+    const x1 = Math.max(...frames.map(f => f.x + f.layout.format.w)) + margin, y1 = Math.max(...frames.map(f => f.y + f.layout.format.h)) + margin;
+    const scale = Math.min(1, 7000 / Math.max(x1 - x0, y1 - y0));
+    const c = document.createElement('canvas'); c.width = Math.round((x1 - x0) * scale); c.height = Math.round((y1 - y0) * scale);
+    const ctx = c.getContext('2d'); ctx.fillStyle = '#1b1b22'; ctx.fillRect(0, 0, c.width, c.height);
+    for (const f of frames) { const blob = await env.exportPNG(f.layout); const url = URL.createObjectURL(blob); try { const img = new Image(); await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = url; }); ctx.drawImage(img, (f.x - x0) * scale, (f.y - y0) * scale, f.layout.format.w * scale, f.layout.format.h * scale); } finally { URL.revokeObjectURL(url); } }
+    return new Promise(res => c.toBlob(res, 'image/png'));
+  }
+
+  // ---- Layers panel ----------------------------------------------------------------------------------------------
+  function label(b) { if (b.kind === 'text') return `${b.role || 'text'} · ${Canvas.sourceText(b).slice(0, 28)}`; if (b.kind === 'list') return `${b.role || 'list'} · ${(b.items || []).length} items`; if (b.kind === 'button') return `button · ${b.text}`; if (b.kind === 'image') return 'image'; if (b.kind === 'field') return b.container ? 'card' : 'rectangle'; if (b.kind === 'shape') return b.shape; if (b.kind === 'icon') return `icon · ${b.name}`; return b.kind; }
+  const KIND_GLYPH = { text: 'T', list: '≡', button: '▭', image: '▣', field: '■', shape: '●', icon: '✦', logo: 'L', scrim: '▒', rule: '—', line: '—', badge: '①' };
+  function renderLayers() {
+    const q = ($('cvSearch').value || '').toLowerCase();
+    $('cvLayers').innerHTML = doc.frames.slice().reverse().map(f => {
+      const blocks = f.layout.blocks.slice().reverse().filter(b => !q || label(b).toLowerCase().includes(q));
+      return `<div class="cv-layer-frame ${sel.frameId === f.id && !sel.blockIds.length ? 'on' : ''}" data-frame="${f.id}">
+        <div class="cv-layer-row frame"><button class="eye ${f.hidden ? 'off' : ''}" data-eye-frame="${f.id}" title="Toggle visibility">${f.hidden ? '◌' : '◉'}</button><span class="nm" title="${esc(f.name)}">${esc(f.name)}</span><span class="dim">${f.layout.format.w}×${f.layout.format.h}</span></div>
+        <div class="cv-layer-children">${blocks.map(b => `<div class="cv-layer-row block ${sel.frameId === f.id && sel.blockIds.includes(b.id) ? 'on' : ''} ${b.hidden ? 'hidden-layer' : ''}" data-frame="${f.id}" data-block="${b.id}"><span class="glyph">${KIND_GLYPH[b.kind] || '·'}</span><span class="nm">${esc(label(b))}</span>${b.locked ? '<span class="dim">🔒</span>' : ''}<button class="eye ${b.hidden ? 'off' : ''}" data-eye="${b.id}" title="Toggle visibility">${b.hidden ? '◌' : '◉'}</button></div>`).join('')}</div>
+      </div>`;
+    }).join('') || '<div class="hint" style="padding:10px">No frames yet. Send layouts here from Single or Deck mode, or press F to draw a frame.</div>';
+  }
+  function bindLayers() {
+    $('cvLayers').addEventListener('click', e => {
+      const eyeF = e.target.closest('[data-eye-frame]'); if (eyeF) { const f = Canvas.frameById(doc, eyeF.dataset.eyeFrame); f.hidden = !f.hidden; rerenderFrame(f); renderLayers(); persist(); return; }
+      const eye = e.target.closest('[data-eye]'); if (eye) { const f = Canvas.frameById(doc, eye.closest('[data-frame]').dataset.frame); const b = Canvas.blockById(f, eye.dataset.eye); b.hidden = !b.hidden; rerenderFrame(f); renderLayers(); persist(); return; }
+      const row = e.target.closest('.cv-layer-row'); if (!row) return;
+      const fid = row.closest('[data-frame]').dataset.frame;
+      if (row.dataset.block) { if (e.shiftKey && sel.frameId === fid) select(fid, sel.blockIds.includes(row.dataset.block) ? sel.blockIds.filter(i => i !== row.dataset.block) : [...sel.blockIds, row.dataset.block]); else select(fid, [row.dataset.block]); }
+      else select(fid, []);
+    });
+    $('cvSearch').addEventListener('input', renderLayers);
+  }
+
+  // ---- Properties panel ------------------------------------------------------------------------------------------
+  const num = (k, label, v, step = 1, extra = '') => `<label class="cv-f"><span>${label}</span><input type="number" data-p="${k}" value="${Math.round(v * 100) / 100}" step="${step}" ${extra}></label>`;
+  const color = (k, label, v) => `<label class="cv-f"><span>${label}</span><span class="cv-color"><input type="color" data-p="${k}" value="${toHex(v)}"><input type="text" data-p="${k}" value="${esc(v)}" class="hex"></span></label>`;
+  const toHex = v => { try { return Color.normalize(v); } catch { return '#000000'; } };
+  const selectF = (k, label, v, opts) => `<label class="cv-f"><span>${label}</span><select data-p="${k}">${opts.map(o => `<option value="${o[0]}" ${String(o[0]) === String(v) ? 'selected' : ''}>${o[1]}</option>`).join('')}</select></label>`;
+  function renderProps() {
+    const el = $('cvProps'); const f = selFrame(); const bs = selBlocks();
+    if (!f) { el.innerHTML = `<div class="cv-section"><h3>Canvas</h3><label class="cv-f"><span>Name</span><input type="text" data-doc="name" value="${esc(doc.name)}"></label><p class="hint">${doc.frames.length} frames. Select a frame to edit its layout, or a block inside it. Hold space to pan, ⌘ wheel to zoom. Keys: V select · H hand · F frame · T text · R rectangle · O ellipse · I image · ⌘Z undo · ⌘D duplicate · ⌘L copy link · [ ] reorder.</p></div>`; return; }
+    if (!bs.length) { el.innerHTML = frameProps(f); return; }
+    if (bs.length > 1) { el.innerHTML = `<div class="cv-section"><h3>${bs.length} blocks</h3>${alignBar()}<div class="cv-row"><button class="btn small" data-act="dist-h">Distribute ↔</button><button class="btn small" data-act="dist-v">Distribute ↕</button></div><div class="cv-row"><button class="btn small" data-act="dup">Duplicate</button><button class="btn small" data-act="del">Delete</button></div></div>`; return; }
+    el.innerHTML = blockProps(f, bs[0]);
+  }
+  function alignBar() { return `<div class="cv-row cv-align">${[['left', '⇤'], ['hcenter', '⇔'], ['right', '⇥'], ['top', '⤒'], ['vcenter', '⇕'], ['bottom', '⤓']].map(([m, g]) => `<button class="btn small" data-align="${m}" title="Align ${m}">${g}</button>`).join('')}</div>`; }
+  function frameProps(f) {
+    const L = f.layout, al = f.autoLayout;
+    return `<div class="cv-section"><h3>Frame</h3>
+      <label class="cv-f"><span>Name</span><input type="text" data-f="name" value="${esc(f.name)}"></label>
+      <div class="cv-grid2">${num('x', 'X', f.x, 8)}${num('y', 'Y', f.y, 8)}${num('w', 'W', L.format.w, 8)}${num('h', 'H', L.format.h, 8)}</div>
+      ${selectF('format', 'Format', L.format.id, Grid.FORMATS.map(x => [x.id, `${x.name} ${x.w}×${x.h}`]).concat([['custom', 'Custom']]))}
+      <label class="cv-check"><input type="checkbox" data-f="clip" ${f.clip ? 'checked' : ''}> Clip content (⌥C)</label>
+      <label class="cv-check"><input type="checkbox" data-f="showGrid" ${f.showGrid ? 'checked' : ''}> Show grid (⌘G)</label>
+      <label class="cv-check"><input type="checkbox" data-f="locked" ${f.locked ? 'checked' : ''}> Lock position</label>
+    </div>
+    <div class="cv-section"><h3>Layout</h3>
+      ${selectF('al.mode', 'Flex', al.mode, [['none', 'Off (free)'], ['vertical', 'Vertical stack'], ['horizontal', 'Horizontal row']])}
+      <div class="cv-grid2">${num('al.gap', 'Gap', al.gap, 4)}${num('al.padding', 'Padding', al.padding, 4)}</div>
+      ${selectF('al.align', 'Align', al.align, [['start', 'Start'], ['center', 'Center'], ['end', 'End']])}
+      ${selectF('al.justify', 'Justify', al.justify, [['start', 'Start'], ['center', 'Center'], ['end', 'End'], ['space-between', 'Space between']])}
+      <label class="cv-check"><input type="checkbox" data-f="al.fill" ${al.fill ? 'checked' : ''}> Stretch text to inner width</label>
+      <p class="hint">Flex stacks the frame's content blocks in reading order with gap and padding. Backgrounds stay put. Drag a block to reorder it.</p>
+    </div>
+    <div class="cv-section"><h3>Fill</h3>${color('bg', 'Background', L.palette.bg)}</div>
+    <div class="cv-section"><h3>Add</h3><div class="cv-row wrap">${[['text', 'Headline'], ['body', 'Body'], ['button', 'Button'], ['rect', 'Rectangle'], ['ellipse', 'Ellipse'], ['image', 'Image'], ['icon', 'Icon'], ['logo', 'Logo']].map(([k, l]) => `<button class="btn small" data-add="${k}">${l}</button>`).join('')}</div></div>
+    <div class="cv-section"><h3>Code</h3><p class="hint">The frame is this JSON. Edit and apply, or copy it as HTML/CSS from Export.</p><textarea class="cv-code" data-code="frame" spellcheck="false">${esc(JSON.stringify(stripLayout(L), null, 1))}</textarea><div class="cv-row"><button class="btn small" data-act="apply-code">Apply JSON</button><button class="btn small" data-act="copy-code">Copy</button></div></div>
+    <div class="cv-section"><div class="cv-row"><button class="btn small" data-act="dup">Duplicate frame</button><button class="btn small" data-act="del">Delete frame</button></div></div>`;
+  }
+  function blockProps(f, b) {
+    const isText = b.kind === 'text' || b.kind === 'list' || b.kind === 'button';
+    const fontNames = Brand.allFontNames();
+    const famName = isText ? String(b.font.family).split(',')[0].replace(/["']/g, '').trim() : '';
+    return `<div class="cv-section"><h3>${esc(b.role || b.kind)}</h3>
+      <div class="cv-grid2">${num('x', 'X', b.x, 8)}${num('y', 'Y', b.y, 8)}${num('w', 'W', b.w, 8)}${num('h', 'H', b.h, 8)}</div>
+      ${alignBar()}
+      <div class="cv-row"><button class="btn small" data-act="back" title="Send backward ([)">↓ Back</button><button class="btn small" data-act="front" title="Bring forward (])">↑ Front</button><button class="btn small" data-act="dup">Duplicate</button><button class="btn small" data-act="del">Delete</button></div>
+      <label class="cv-check"><input type="checkbox" data-b="locked" ${b.locked ? 'checked' : ''}> Lock</label>
+      <label class="cv-check"><input type="checkbox" data-b="decorative" ${b.decorative ? 'checked' : ''}> Decorative (not content)</label>
+    </div>
+    ${b.kind === 'text' ? `<div class="cv-section"><h3>Text</h3><textarea class="cv-text" data-p="text" rows="3" spellcheck="true">${esc(Canvas.sourceText(b))}</textarea>${b.overflow ? '<p class="hint" style="color:var(--danger)">Text is wider than its box. Widen the box or lower the size.</p>' : ''}</div>` : ''}
+    ${b.kind === 'list' ? `<div class="cv-section"><h3>Items</h3><textarea class="cv-text" data-p="items" rows="4" spellcheck="true">${esc((b.items || []).join('\n'))}</textarea>${selectF('marker', 'Marker', b.marker || 'bullet', [['bullet', 'Bullet'], ['number', 'Number'], ['none', 'None']])}</div>` : ''}
+    ${b.kind === 'button' ? `<div class="cv-section"><h3>Label</h3><input type="text" class="cv-text" data-p="text" value="${esc(b.text)}">${color('color', 'Text color', b.color)}</div>` : ''}
+    ${isText ? `<div class="cv-section"><h3>Typography</h3>
+      ${selectF('font.familyName', 'Font', famName, fontNames.map(n => [n, n]).concat(fontNames.includes(famName) ? [] : [[famName, famName]]))}
+      <div class="cv-grid2">${num('font.size', 'Size', b.font.size, 2)}${selectF('font.weight', 'Weight', b.font.weight, Brand.fontWeights(famName).map(w => [w, w]).concat(Brand.fontWeights(famName).includes(b.font.weight) ? [] : [[b.font.weight, b.font.weight]]))}</div>
+      <div class="cv-grid2">${num('font.lineHeight', 'Line height', b.font.lineHeight || 1.2, 0.05)}${num('font.letterSpacing', 'Tracking (em)', b.font.letterSpacing || 0, 0.01)}</div>
+      ${b.kind === 'text' ? selectF('align', 'Align', b.align || 'left', [['left', 'Left'], ['center', 'Center'], ['right', 'Right']]) : ''}
+      ${b.kind === 'text' ? selectF('font.transform', 'Case', b.font.transform || 'none', [['none', 'As written'], ['upper', 'UPPERCASE'], ['lower', 'lowercase']]) : ''}
+      <button class="btn small" data-act="fit-text">Fit size to box</button>
+    </div>` : ''}
+    ${b.kind === 'image' ? `<div class="cv-section"><h3>Image</h3>${selectF('focal', 'Crop focus', b.focal || 'xMidYMid', [['xMinYMin', 'Top left'], ['xMidYMin', 'Top'], ['xMaxYMin', 'Top right'], ['xMinYMid', 'Left'], ['xMidYMid', 'Center'], ['xMaxYMid', 'Right'], ['xMinYMax', 'Bottom left'], ['xMidYMax', 'Bottom'], ['xMaxYMax', 'Bottom right']])}${num('radius', 'Radius', b.radius || 0, 4)}<label class="btn small file">Replace image<input type="file" accept="image/*" data-file="image" hidden></label>${selectF('asset', 'Asset', b.asset || '', env.getAssets().images.map(a => [a.id, a.name]).concat([['', 'None']]))}</div>` : ''}
+    ${b.kind === 'icon' ? `<div class="cv-section"><h3>Icon</h3>${selectF('name', 'Icon', b.name, Icons.names.map(n => [n, n]))}</div>` : ''}
+    ${b.kind === 'shape' ? `<div class="cv-section"><h3>Shape</h3>${selectF('shape', 'Shape', b.shape, [['circle', 'Circle'], ['pill', 'Pill'], ['quarter', 'Quarter circle']])}</div>` : ''}
+    ${(b.kind !== 'image' && b.kind !== 'icon' && b.kind !== 'logo') || b.kind === 'logo' ? `<div class="cv-section"><h3>Fill</h3>${color('fill', b.kind === 'text' || b.kind === 'list' ? 'Text color' : 'Fill', b.fill || '#000000')}${(b.kind === 'field' || b.kind === 'button') ? num('radius', 'Radius', b.radius || 0, 4) : ''}${b.kind === 'field' ? num('alpha', 'Opacity', b.alpha ?? 1, 0.05, 'min="0" max="1"') : ''}</div>` : ''}
+    <div class="cv-section"><h3>Code</h3><textarea class="cv-code" data-code="block" spellcheck="false">${esc(JSON.stringify(stripBlock(b), null, 1))}</textarea><div class="cv-row"><button class="btn small" data-act="apply-code">Apply JSON</button><button class="btn small" data-act="copy-code">Copy</button></div></div>`;
+  }
+  function stripBlock(b) { const c = Canvas.clone(b); delete c.lines; delete c.inkW; delete c.capacity; delete c.gap; delete c.maxLines; delete c.minSize; delete c.overflow; return c; }
+  function stripLayout(L) { const c = Canvas.clone(L); delete c.signature; c.blocks = c.blocks.map(stripBlock); return c; }
+  function liveProps() {
+    const f = selFrame(); const bs = selBlocks(); const el = $('cvProps');
+    const set = (k, v) => { const inp = el.querySelector(`input[data-p="${k}"]`); if (inp && document.activeElement !== inp) inp.value = Math.round(v * 100) / 100; };
+    if (f && bs.length === 1) { set('x', bs[0].x); set('y', bs[0].y); set('w', bs[0].w); set('h', bs[0].h); } else if (f && !bs.length) { set('x', f.x); set('y', f.y); }
+  }
+  function bindProps() {
+    const el = $('cvProps');
+    const getPath = (o, path) => path.split('.').reduce((a, k) => a == null ? a : a[k], o);
+    const setPath = (o, path, v) => { const ks = path.split('.'); let t = o; for (let i = 0; i < ks.length - 1; i++) { if (t[ks[i]] == null) t[ks[i]] = {}; t = t[ks[i]]; } t[ks[ks.length - 1]] = v; };
+    const apply = (e, live) => {
+      const t = e.target; const f = selFrame(); if (!f) { if (t.dataset.doc === 'name') { doc.name = t.value; persist(); } return; }
+      const bs = selBlocks();
+      if (!live) hist.push(doc);
+      if (t.dataset.f) { const k = t.dataset.f; const v = t.type === 'checkbox' ? t.checked : t.value; if (k.startsWith('al.')) { f.autoLayout[k.slice(3)] = t.type === 'number' ? +v : v; Canvas.applyAutoLayout(f); } else f[k] = v; if (k === 'clip' || k === 'showGrid') renderFrames(); else rerenderFrame(f); renderLayers(); drawOverlay(); persist(); return; }
+      if (t.dataset.b && bs.length) { for (const b of bs) b[t.dataset.b] = t.checked; renderLayers(); drawOverlay(); persist(); return; }
+      const k = t.dataset.p; if (!k) return;
+      if (!bs.length) { // frame-level numeric / palette fields
+        if (k === 'x') f.x = +t.value; else if (k === 'y') f.y = +t.value;
+        else if (k === 'w' || k === 'h') { f.layout.format[k] = Math.max(64, +t.value); f.layout.format.id = 'custom'; f.layout.format.name = 'Custom'; regrid(f); }
+        else if (k === 'format') { const fm = Grid.byId[t.value]; if (fm) { f.layout.format = { id: fm.id, name: fm.name, w: fm.w, h: fm.h }; regrid(f); if (f.autoLayout.mode !== 'none') Canvas.applyAutoLayout(f); } }
+        else if (k === 'bg') { f.layout.palette.bg = toHex(t.value); }
+        if (k.startsWith('al.')) { f.autoLayout[k.slice(3)] = t.type === 'number' ? +t.value : t.value; Canvas.applyAutoLayout(f); }
+        rerenderFrame(f); drawOverlay(); if (!live) renderProps(); persist(); return;
+      }
+      for (const b of bs) {
+        if (k === 'text') { b.text = t.value; Canvas.refit(b); }
+        else if (k === 'items') { b.items = t.value.split('\n').map(x => x.trim()).filter(Boolean); Canvas.refit(b); }
+        else if (k === 'font.familyName') { b.font.family = Brand.fontCss(t.value); const ws = Brand.fontWeights(t.value); if (!ws.includes(b.font.weight)) b.font.weight = ws.reduce((p, c) => Math.abs(c - b.font.weight) < Math.abs(p - b.font.weight) ? c : p, ws[0]); Canvas.refit(b); }
+        else if (k.startsWith('font.')) { setPath(b, k, t.type === 'number' ? +t.value : (k === 'font.weight' ? +t.value : t.value)); Canvas.refit(b); }
+        else if (k === 'x' || k === 'y') b[k] = +t.value;
+        else if (k === 'w' || k === 'h') { b[k] = Math.max(4, +t.value); Canvas.refit(b); }
+        else if (k === 'fill' || k === 'color') b[k] = toHex(t.value);
+        else if (k === 'radius' || k === 'alpha') b[k] = +t.value;
+        else if (k === 'asset') b.asset = t.value || null;
+        else b[k] = t.value;
+      }
+      if (f.autoLayout.mode !== 'none' && !live) Canvas.applyAutoLayout(f);
+      rerenderFrame(f); drawOverlay(); renderLayers(); persist(); if (!live) renderProps();
+    };
+    // Live fields (color, textarea) snapshot history on their FIRST input event, so undo returns to the text before the edit.
+    let liveField = null;
+    el.addEventListener('change', e => { if (liveField === e.target) { liveField = null; apply(e, true); renderProps(); } else apply(e, false); });
+    el.addEventListener('input', e => { const t = e.target; if (t.type === 'color' || t.type === 'range' || (t.tagName === 'TEXTAREA' && t.dataset.p) || (t.type === 'text' && t.dataset.p === 'text')) { if (liveField !== t) { hist.push(doc); liveField = t; updateUndo(); } if (t.type === 'color') { const hex = t.parentElement.querySelector('.hex'); if (hex) hex.value = t.value; } apply(e, true); } });
+    el.addEventListener('click', async e => {
+      const f = selFrame(); const bs = selBlocks();
+      const al = e.target.closest('[data-align]'); if (al && f) { hist.push(doc); Canvas.align(f, bs.length ? bs : [], al.dataset.align); rerenderFrame(f); drawOverlay(); liveProps(); persist(); return; }
+      const add = e.target.closest('[data-add]'); if (add && f) { hist.push(doc); const b = Canvas.newBlock(add.dataset.add, f, env.getKit(), null); if (b) { f.layout.blocks.push(b); if (f.autoLayout.mode !== 'none') Canvas.applyAutoLayout(f); select(f.id, [b.id]); rerenderFrame(f); persist(); if (b.kind === 'image') { const inp = $('cvProps').querySelector('[data-file="image"]'); if (inp) inp.click(); } } return; }
+      const act = e.target.closest('[data-act]'); if (!act || !f) return;
+      const a = act.dataset.act;
+      if (a === 'del') deleteSelection(); else if (a === 'dup') duplicateSelection();
+      else if (a === 'front' || a === 'back') { hist.push(doc); bs.forEach(b => Canvas.reorder(f, b, a === 'front' ? 1 : -1)); rerenderFrame(f); renderLayers(); persist(); }
+      else if (a === 'dist-h' || a === 'dist-v') { hist.push(doc); Canvas.distribute(bs, a === 'dist-h' ? 'h' : 'v'); rerenderFrame(f); drawOverlay(); persist(); }
+      else if (a === 'fit-text') { hist.push(doc); for (const b of bs) { const fit = Text.fit(Text.transform(Canvas.sourceText(b), b.font.transform), b.font, b.w, b.h, { minSize: 10, step: 2, maxLines: 40 }); if (fit) { b.font.size = fit.size; Canvas.refit(b); } } rerenderFrame(f); drawOverlay(); renderProps(); persist(); }
+      else if (a === 'copy-code') { const ta = el.querySelector('[data-code]'); await copyText(ta.value); env.toast('JSON copied'); }
+      else if (a === 'apply-code') {
+        const ta = el.querySelector('[data-code]');
+        try {
+          const parsed = JSON.parse(ta.value); hist.push(doc);
+          if (ta.dataset.code === 'frame') { parsed.blocks = (parsed.blocks || []).map(b => { if (!b.id) b.id = Canvas.uid(); return (b.kind === 'text' || b.kind === 'list') ? Canvas.refit(b) : b; }); f.layout = parsed; regrid(f, true); select(f.id, []); renderAll(); }
+          else { const b = bs[0]; const i = f.layout.blocks.indexOf(b); parsed.id = b.id; if (parsed.kind === 'text' || parsed.kind === 'list') Canvas.refit(parsed); f.layout.blocks[i] = parsed; select(f.id, [b.id]); rerenderFrame(f); }
+          persist(); env.toast('Applied');
+        } catch (err) { env.toast('JSON error: ' + err.message); }
+      }
+    });
+    el.addEventListener('change', async e => {
+      const inp = e.target.closest('[data-file="image"]'); if (!inp || !inp.files[0]) return;
+      const f = selFrame(); const b = selBlocks()[0]; if (!f || !b) return;
+      try { const asset = await env.addImage(inp.files[0]); hist.push(doc); b.asset = asset.id; rerenderFrame(f); renderProps(); persist(); } catch (err) { env.toast('Could not load image: ' + err.message); }
+      inp.value = '';
+    });
+  }
+  function regrid(f, keep) { const fmt = Grid.byId[f.layout.format.id] || { ...f.layout.format, cols: Math.max(4, Math.round(f.layout.format.w / 160)) }; const g = Grid.compute({ ...fmt, w: f.layout.format.w, h: f.layout.format.h }, { unit: f.layout.grid.unit || 8, marginRatio: 0.06, gutterUnits: 3 }); f.layout.grid = { unit: g.unit, gutter: g.gutter, cols: g.cols, rows: g.rows, cw: g.cw, rh: g.rh, mx: g.mx, my: g.my, safe: g.safe }; }
+
+  function boot() { bindLayers(); bindProps(); }
+  return { init: e => { init(e); boot(); }, open, close, addLayouts, count, fit, get doc() { return doc; }, select, setTool, _history: () => hist };
+})();
+
 /* js/app.js */
 /* UI wiring. State lives here; the engine and renderer are pure. */
 (() => {
@@ -3043,6 +3807,9 @@ Rules: first slide is a cover, last is a closing. 6 to 10 slides unless the brie
     $('compareBtn').textContent = `Compare (${state.picks.size})`; $('compareBtn').disabled = state.picks.size < 2;
     $('exportFavBtn').disabled = !state.favs.size; $('exportFavBtn').textContent = state.favs.size ? `Export favorites (${state.favs.size})` : 'Export favorites';
     $('exportFavPptxBtn').disabled = !state.favs.size;
+    $('toCanvasBtn').disabled = !(state.picks.size || state.favs.size);
+    $('toCanvasBtn').textContent = state.picks.size ? `Send to canvas (${state.picks.size})` : state.favs.size ? `Send favorites to canvas (${state.favs.size})` : 'Send to canvas';
+    updateCanvasBadge();
   }
   $('gallery').addEventListener('click', e => {
     const fav = e.target.closest('[data-fav]'); if (fav) { toggleFav(fav.dataset.fav); return; }
@@ -3208,17 +3975,25 @@ Rules: first slide is a cover, last is a closing. 6 to 10 slides unless the brie
     </ul>
     <h4>Decks</h4>
     <p>Deck mode turns the brief into an outline with one intent per slide (cover, agenda, statement, big number, comparison, process, cards, quote, closing), generates variations for every slide under one palette and type step, and exports your picks as an editable PowerPoint. Every editable block carries its copy capacity, so a layout can be handed to Claude as a schema and the copy refitted without moving anything.</p>
+    <h4>Canvas</h4>
+    <p>Send picks to the canvas to edit them: layers, properties, flex auto layout with gap and padding, align and distribute, typography, fills, and the frame's JSON beside it. Export a frame as PNG, SVG, or HTML/CSS, frames as an editable PPTX, or the whole canvas as one image. Copy link carries the canvas in the URL.</p>
     <h4>What it is not yet</h4>
-    <p>Editing in place, charts and tables, Figma export, and per-design-system connectors come next. The layout JSON is written so those can be added without changing the engine.</p>`;
+    <p>Hosted links with assets, charts and tables, Figma export, and per-design-system connectors come next. The layout JSON is written so those can be added without changing the engine.</p>`;
 
   // ---- Deck mode -----------------------------------------------------------------------------------
   function setMode(mode) {
     state.mode = mode;
     document.querySelectorAll('#modeSeg button').forEach(b => b.classList.toggle('on', b.dataset.mode === mode));
+    const canvas = mode === 'canvas';
+    document.body.classList.toggle('canvas-mode', canvas);
+    $('canvasView').hidden = !canvas;
+    $('promptForm').querySelector('#prompt').disabled = canvas; $('generateBtn').disabled = canvas;
+    if (canvas) { CanvasUI.open(); $('outlinePanel').hidden = true; $('deckBar').hidden = true; $('deckView').hidden = true; $('gallery').hidden = true; $('empty').hidden = true; LS.set('lg.mode', mode); return; }
+    CanvasUI.close();
     const deck = mode === 'deck';
     $('outlinePanel').hidden = !deck; $('deckBar').hidden = !deck; $('deckView').hidden = !deck;
     $('gallery').hidden = deck; $('empty').hidden = deck || state.layouts.length > 0;
-    for (const id of ['count', 'sort', 'filterArch', 'favOnly', 'compareBtn', 'exportFavBtn', 'exportFavPptxBtn']) $(id).closest('label, button').hidden = deck;
+    for (const id of ['count', 'sort', 'filterArch', 'favOnly', 'compareBtn', 'exportFavBtn', 'exportFavPptxBtn', 'toCanvasBtn']) $(id).closest('label, button').hidden = deck;
     $('prompt').placeholder = deck ? 'Describe the deck, e.g. "8-slide launch deck for Deel Global Payroll: cover, why now, what you get, how it works, proof, before and after, customer quote, next steps"' : 'Describe what you need, e.g. "36 bold image-led square posts for Deel Payroll, dark, with a CTA"';
     if (deck) { state.formats = [state.deckFormat]; renderChips(); if (!state.outline) { state.outline = Deck.outlineFromBrief($('prompt').value, state.kit); renderOutline(); } }
     LS.set('lg.mode', mode);
@@ -3334,7 +4109,7 @@ Rules: first slide is a cover, last is a closing. 6 to 10 slides unless the brie
       <div class="strip">${s.variations.length ? s.variations.map((l, j) => `<div class="deck-card ${tall ? 'tall' : ''} ${j === s.pick ? 'pick' : ''}" data-id="${l.id}" data-j="${j}">${Render.toSVG(l, { kit: state.kit, assets: state.assets, showGrid: state.showGrid, width: 440 })}<div class="lbl"><span>${l.archetypeLabel}</span><span>${Math.round(l.metrics.whitespace * 100)}% air</span></div><button class="open" data-open="${l.id}" type="button">Open</button></div>`).join('') : `<div class="empty-row">Nothing fit this slide's content. Shorten the copy in the outline or change its intent.</div>`}</div>
     </div>`).join('');
     const ok = d.slides.some(s => s.pick >= 0);
-    $('deckPptxBtn').disabled = !ok; $('deckPngBtn').disabled = !ok;
+    $('deckPptxBtn').disabled = !ok; $('deckPngBtn').disabled = !ok; $('deckCanvasBtn').disabled = !ok;
   }
   $('deckView').addEventListener('click', async e => {
     const open = e.target.closest('[data-open]'); if (open) { openDetail(open.dataset.open); return; }
@@ -3357,6 +4132,28 @@ Rules: first slide is a cover, last is a closing. 6 to 10 slides unless the brie
     if (n) toast(`${n} slide PNG${n > 1 ? 's' : ''} saved`);
   }));
 
+  // ---- Canvas integration ---------------------------------------------------------------------------
+  function updateCanvasBadge() { const n = CanvasUI.count(); const b = $('canvasBadge'); b.hidden = !n; b.textContent = n; }
+  function sendToCanvas(layouts) {
+    if (!layouts.length) return;
+    CanvasUI.addLayouts(layouts);
+    setMode('canvas'); updateCanvasBadge();
+    toast(`${layouts.length} layout${layouts.length > 1 ? 's' : ''} on the canvas`);
+  }
+  $('toCanvasBtn').addEventListener('click', () => { const ids = state.picks.size ? state.picks : state.favs; sendToCanvas(state.layouts.filter(l => ids.has(l.id))); });
+  $('deckCanvasBtn').addEventListener('click', () => { if (state.deck) sendToCanvas(Deck.picks(state.deck)); });
+  $('detailCanvas').addEventListener('click', () => { if (state.detail) { const l = state.detail; $('detail').hidden = true; sendToCanvas([l]); } });
+  CanvasUI.init({
+    getKit: () => state.kit, getAssets: () => state.assets, toast,
+    addImage: async file => { const ph = state.assets.images.filter(a => a.placeholder); for (const a of ph) URL.revokeObjectURL(a.url); state.assets.images = state.assets.images.filter(a => !a.placeholder); const asset = await addImage(await readAsDataURL(file), file.name); return asset; },
+    download: (blob, name) => Render.download(blob, name),
+    renderSVG: (layout, opts) => Render.toSVG(layout, { kit: state.kit, assets: state.assets, showGrid: !!(opts && opts.showGrid) }),
+    exportPNG: layout => Render.exportPNG(layout, { kit: state.kit, assets: state.assets }),
+    exportSVG: layout => Render.exportSVG(layout, { kit: state.kit, assets: state.assets }),
+    buildPptx: layouts => ExportPptx.buildDeck(layouts, { kit: state.kit, assets: state.assets }),
+  });
+  $('cvFrameFormat').innerHTML = Grid.FORMATS.map(f => `<option value="${f.id}" ${f.id === 'slide' ? 'selected' : ''}>${f.name}</option>`).join('');
+
   // ---- Init --------------------------------------------------------------------------------------
   async function init() {
     fillPresets(); fillFontSelects();
@@ -3377,6 +4174,8 @@ Rules: first slide is a cover, last is a closing. 6 to 10 slides unless the brie
     const savedMode = LS.get('lg.mode', 'single');
     if (!$('prompt').value) $('prompt').value = savedMode === 'deck' ? '8-slide launch deck for Deel Global Payroll' : 'Launch posts for Deel Global Payroll, bold, image-led, square and story';
     if (savedMode === 'deck') setMode('deck');
+    updateCanvasBadge();
+    if (savedMode === 'canvas') { await ensureDemoImages(false); await loadFonts(state.kit); setMode('canvas'); return; }
     await generate($('prompt').value);
   }
   init();

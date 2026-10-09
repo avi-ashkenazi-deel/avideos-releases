@@ -295,6 +295,9 @@
     $('compareBtn').textContent = `Compare (${state.picks.size})`; $('compareBtn').disabled = state.picks.size < 2;
     $('exportFavBtn').disabled = !state.favs.size; $('exportFavBtn').textContent = state.favs.size ? `Export favorites (${state.favs.size})` : 'Export favorites';
     $('exportFavPptxBtn').disabled = !state.favs.size;
+    $('toCanvasBtn').disabled = !(state.picks.size || state.favs.size);
+    $('toCanvasBtn').textContent = state.picks.size ? `Send to canvas (${state.picks.size})` : state.favs.size ? `Send favorites to canvas (${state.favs.size})` : 'Send to canvas';
+    updateCanvasBadge();
   }
   $('gallery').addEventListener('click', e => {
     const fav = e.target.closest('[data-fav]'); if (fav) { toggleFav(fav.dataset.fav); return; }
@@ -460,17 +463,25 @@
     </ul>
     <h4>Decks</h4>
     <p>Deck mode turns the brief into an outline with one intent per slide (cover, agenda, statement, big number, comparison, process, cards, quote, closing), generates variations for every slide under one palette and type step, and exports your picks as an editable PowerPoint. Every editable block carries its copy capacity, so a layout can be handed to Claude as a schema and the copy refitted without moving anything.</p>
+    <h4>Canvas</h4>
+    <p>Send picks to the canvas to edit them: layers, properties, flex auto layout with gap and padding, align and distribute, typography, fills, and the frame's JSON beside it. Export a frame as PNG, SVG, or HTML/CSS, frames as an editable PPTX, or the whole canvas as one image. Copy link carries the canvas in the URL.</p>
     <h4>What it is not yet</h4>
-    <p>Editing in place, charts and tables, Figma export, and per-design-system connectors come next. The layout JSON is written so those can be added without changing the engine.</p>`;
+    <p>Hosted links with assets, charts and tables, Figma export, and per-design-system connectors come next. The layout JSON is written so those can be added without changing the engine.</p>`;
 
   // ---- Deck mode -----------------------------------------------------------------------------------
   function setMode(mode) {
     state.mode = mode;
     document.querySelectorAll('#modeSeg button').forEach(b => b.classList.toggle('on', b.dataset.mode === mode));
+    const canvas = mode === 'canvas';
+    document.body.classList.toggle('canvas-mode', canvas);
+    $('canvasView').hidden = !canvas;
+    $('promptForm').querySelector('#prompt').disabled = canvas; $('generateBtn').disabled = canvas;
+    if (canvas) { CanvasUI.open(); $('outlinePanel').hidden = true; $('deckBar').hidden = true; $('deckView').hidden = true; $('gallery').hidden = true; $('empty').hidden = true; LS.set('lg.mode', mode); return; }
+    CanvasUI.close();
     const deck = mode === 'deck';
     $('outlinePanel').hidden = !deck; $('deckBar').hidden = !deck; $('deckView').hidden = !deck;
     $('gallery').hidden = deck; $('empty').hidden = deck || state.layouts.length > 0;
-    for (const id of ['count', 'sort', 'filterArch', 'favOnly', 'compareBtn', 'exportFavBtn', 'exportFavPptxBtn']) $(id).closest('label, button').hidden = deck;
+    for (const id of ['count', 'sort', 'filterArch', 'favOnly', 'compareBtn', 'exportFavBtn', 'exportFavPptxBtn', 'toCanvasBtn']) $(id).closest('label, button').hidden = deck;
     $('prompt').placeholder = deck ? 'Describe the deck, e.g. "8-slide launch deck for Deel Global Payroll: cover, why now, what you get, how it works, proof, before and after, customer quote, next steps"' : 'Describe what you need, e.g. "36 bold image-led square posts for Deel Payroll, dark, with a CTA"';
     if (deck) { state.formats = [state.deckFormat]; renderChips(); if (!state.outline) { state.outline = Deck.outlineFromBrief($('prompt').value, state.kit); renderOutline(); } }
     LS.set('lg.mode', mode);
@@ -586,7 +597,7 @@
       <div class="strip">${s.variations.length ? s.variations.map((l, j) => `<div class="deck-card ${tall ? 'tall' : ''} ${j === s.pick ? 'pick' : ''}" data-id="${l.id}" data-j="${j}">${Render.toSVG(l, { kit: state.kit, assets: state.assets, showGrid: state.showGrid, width: 440 })}<div class="lbl"><span>${l.archetypeLabel}</span><span>${Math.round(l.metrics.whitespace * 100)}% air</span></div><button class="open" data-open="${l.id}" type="button">Open</button></div>`).join('') : `<div class="empty-row">Nothing fit this slide's content. Shorten the copy in the outline or change its intent.</div>`}</div>
     </div>`).join('');
     const ok = d.slides.some(s => s.pick >= 0);
-    $('deckPptxBtn').disabled = !ok; $('deckPngBtn').disabled = !ok;
+    $('deckPptxBtn').disabled = !ok; $('deckPngBtn').disabled = !ok; $('deckCanvasBtn').disabled = !ok;
   }
   $('deckView').addEventListener('click', async e => {
     const open = e.target.closest('[data-open]'); if (open) { openDetail(open.dataset.open); return; }
@@ -609,6 +620,28 @@
     if (n) toast(`${n} slide PNG${n > 1 ? 's' : ''} saved`);
   }));
 
+  // ---- Canvas integration ---------------------------------------------------------------------------
+  function updateCanvasBadge() { const n = CanvasUI.count(); const b = $('canvasBadge'); b.hidden = !n; b.textContent = n; }
+  function sendToCanvas(layouts) {
+    if (!layouts.length) return;
+    CanvasUI.addLayouts(layouts);
+    setMode('canvas'); updateCanvasBadge();
+    toast(`${layouts.length} layout${layouts.length > 1 ? 's' : ''} on the canvas`);
+  }
+  $('toCanvasBtn').addEventListener('click', () => { const ids = state.picks.size ? state.picks : state.favs; sendToCanvas(state.layouts.filter(l => ids.has(l.id))); });
+  $('deckCanvasBtn').addEventListener('click', () => { if (state.deck) sendToCanvas(Deck.picks(state.deck)); });
+  $('detailCanvas').addEventListener('click', () => { if (state.detail) { const l = state.detail; $('detail').hidden = true; sendToCanvas([l]); } });
+  CanvasUI.init({
+    getKit: () => state.kit, getAssets: () => state.assets, toast,
+    addImage: async file => { const ph = state.assets.images.filter(a => a.placeholder); for (const a of ph) URL.revokeObjectURL(a.url); state.assets.images = state.assets.images.filter(a => !a.placeholder); const asset = await addImage(await readAsDataURL(file), file.name); return asset; },
+    download: (blob, name) => Render.download(blob, name),
+    renderSVG: (layout, opts) => Render.toSVG(layout, { kit: state.kit, assets: state.assets, showGrid: !!(opts && opts.showGrid) }),
+    exportPNG: layout => Render.exportPNG(layout, { kit: state.kit, assets: state.assets }),
+    exportSVG: layout => Render.exportSVG(layout, { kit: state.kit, assets: state.assets }),
+    buildPptx: layouts => ExportPptx.buildDeck(layouts, { kit: state.kit, assets: state.assets }),
+  });
+  $('cvFrameFormat').innerHTML = Grid.FORMATS.map(f => `<option value="${f.id}" ${f.id === 'slide' ? 'selected' : ''}>${f.name}</option>`).join('');
+
   // ---- Init --------------------------------------------------------------------------------------
   async function init() {
     fillPresets(); fillFontSelects();
@@ -629,6 +662,8 @@
     const savedMode = LS.get('lg.mode', 'single');
     if (!$('prompt').value) $('prompt').value = savedMode === 'deck' ? '8-slide launch deck for Deel Global Payroll' : 'Launch posts for Deel Global Payroll, bold, image-led, square and story';
     if (savedMode === 'deck') setMode('deck');
+    updateCanvasBadge();
+    if (savedMode === 'canvas') { await ensureDemoImages(false); await loadFonts(state.kit); setMode('canvas'); return; }
     await generate($('prompt').value);
   }
   init();

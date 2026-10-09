@@ -19,6 +19,7 @@ The prototype in this folder runs in a browser tab with no backend.
 - **Design-system agnostic.** The brand is a JSON kit: colors with roles, fonts, logo rules, grid rules, shapes. Switch from Deel to a serif editorial kit or a playful pastel kit and the same engine produces on-brand results for each.
 - **Multi-format from one idea.** Any variation can be re-rendered as a square post, story, LinkedIn post, slide, poster, or banner on that format's own grid.
 - **Whole decks, not just posts.** Deck mode turns a brief into an outline, generates variations per slide under one palette, and exports the picks as an editable PowerPoint.
+- **Editing is editing code.** Picks open on a canvas with layers, properties, flex auto layout, and the layout JSON beside them. What you see is the spec; what you export is the spec.
 - **Editable by design.** Each output is an SVG plus a JSON spec with every block on grid cells and every text block's copy capacity. The same spec already exports as an editable PowerPoint slide, and is the surface a future editor, a Figma exporter, or a Pitch template can read.
 - **Starts from what exists.** Point the mining tool at a folder of our decks and it drafts a brand kit (colors with roles, fonts) and layout priors without a model in the loop.
 
@@ -32,8 +33,8 @@ The prototype in this folder runs in a browser tab with no backend.
 
 | Phase | Scope | Outcome |
 |---|---|---|
-| Now | Single pieces and whole decks from a brief, gallery and per-slide picks, PNG/SVG/JSON and editable PPTX export, copy refitted by Claude inside each layout's limits, kit drafts mined from existing decks | Prove the thesis; collect what designers keep and discard |
-| Next | Edit in place (drag on cells, swap image, re-fit text), lock elements and regenerate the rest, charts and tables as blocks | Designers refine instead of restart |
+| Now | Single pieces and whole decks from a brief, gallery and per-slide picks, a canvas editor with flex auto layout, layers, properties, and the layout JSON as code, PNG/SVG/HTML and editable PPTX export, share links, copy refitted by Claude inside each layout's limits, kit drafts mined from existing decks | Prove the thesis; collect what designers keep and discard |
+| Next | Hosted share links with assets, lock elements and regenerate the rest, charts and tables as blocks, components and text styles | Designers refine instead of restart |
 | Then | Connectors: Figma (frames from the JSON spec), Pitch and Slides templates, a brand-kit importer from Figma variables | Every design system becomes a kit without hand-writing JSON |
 | Later | Learn from choices: rank variations by what teams pick; content-aware crops with real salience models | Fewer variations that are better |
 

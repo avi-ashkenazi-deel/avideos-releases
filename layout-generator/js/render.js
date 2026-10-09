@@ -121,7 +121,8 @@ const Render = (() => {
     const keep = blocks.filter(b => !/unicode-range/.test(b) || /U\+0000-00FF/.test(b) || /U\+0100-02BA|U\+0100-02AF/.test(b));
     return keep.join('\n');
   }
-  async function fontFaceCss(families) {
+  let embedBlocked = false; // set once a host refuses the font fetch, so later exports skip the attempt (and the console noise)
+  async function fontFaceCss(families, forRaster = false) {
     const out = [];
     lastEmbedFailed = false;
     for (const fam of families) {
@@ -133,6 +134,7 @@ const Render = (() => {
       if (!Brand.FONTS[fam]) continue;
       if (fontCache.has(fam)) { out.push(fontCache.get(fam)); continue; }
       const spec = GOOGLE_SPECS[fam];
+      if (embedBlocked) { lastEmbedFailed = true; if (!forRaster) out.push(`@import url("https://fonts.googleapis.com/css2?family=${spec}&display=swap");`); continue; }
       try {
         const css = latinOnly(await (await fetch(`https://fonts.googleapis.com/css2?family=${spec}&display=swap`)).text());
         const urls = [...new Set([...css.matchAll(/url\((https:[^)]+)\)/g)].map(m => m[1]))];
@@ -144,17 +146,18 @@ const Render = (() => {
         }
         fontCache.set(fam, inlined); out.push(inlined);
       } catch (e) {
-        // Fetch is blocked in some hosts (published copies). Fall back to a stylesheet import so the SVG still loads the face in a browser.
-        lastEmbedFailed = true;
-        out.push(`@import url("https://fonts.googleapis.com/css2?family=${spec}&display=swap");`);
+        // Fetch is blocked in some hosts (published copies). For a downloadable SVG, fall back to a stylesheet import so a
+        // browser still loads the face. Never for rasterization: an SVG with an @import refuses to load as an image there.
+        lastEmbedFailed = true; if (e && /Failed to fetch|NetworkError|Refused/i.test(String(e.message || e))) embedBlocked = true;
+        if (!forRaster) out.push(`@import url("https://fonts.googleapis.com/css2?family=${spec}&display=swap");`);
       }
     }
     return out.join('\n');
   }
   function fontsEmbedded() { return !lastEmbedFailed; }
-  async function exportSVG(layout, opts) {
+  async function exportSVG(layout, opts, forRaster = false) {
     const fams = [opts.kit.fonts.display, opts.kit.fonts.body];
-    const fontStyle = await fontFaceCss(fams);
+    const fontStyle = await fontFaceCss(fams, forRaster);
     return toSVG(layout, { ...opts, forExport: true, fontStyle, showGrid: false });
   }
   // Rasterize an SVG string to a PNG data URL at the layout's pixel size.
@@ -170,7 +173,7 @@ const Render = (() => {
     } finally { URL.revokeObjectURL(url); }
   }
   async function exportPNG(layout, opts, scale = 1) {
-    const svg = await exportSVG(layout, opts);
+    const svg = await exportSVG(layout, opts, true);
     const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     try {

@@ -39,6 +39,18 @@ Switch the top-left toggle to **Deck**. The brief becomes an outline (one intent
 - **Consistency.** One background, text, and accent color for the whole deck; one type step; the logo stays in the same corner after the cover.
 - **Shuffle** regenerates one slide's variations; **Reshuffle deck** starts over with a new palette.
 
+## Canvas
+
+Pick layouts in Single mode (tick cards, or favorite them) or pick slides in Deck mode, then **Send to canvas**. The canvas is an infinite stage where every frame is one layout spec and editing the frame is editing that JSON.
+
+- **Tools.** Select (V), Hand (H), Frame (F), Text (T), Rectangle (R), Ellipse (O), Image (I). Space to pan, ⌘ wheel to zoom, 0 to fit. Drag to move, handles to resize, ⌥ drag to duplicate, marquee to multi-select, arrows to nudge (⇧ for one grid unit), [ and ] to reorder, ⌘Z / ⇧⌘Z undo and redo, ⌘D duplicate, ⌘L copy link.
+- **Layers.** Frames and their blocks, with search, visibility, and lock. Click to select, shift-click to add.
+- **Properties.** Position and size on the pixel grid, align and distribute, order, lock, decorative flag. Typography (font, size, weight, line height, tracking, alignment, case, fit size to box). Fill, radius, opacity. Image crop focus and replace. Icon picker. Frame: name, format, clip content, grid overlay, background.
+- **Layout (flex).** Turn a frame's auto layout on as a vertical stack or horizontal row with gap, padding, align, justify, and stretch. Content blocks reflow in reading order; backgrounds stay. Drag a block to reorder it.
+- **Code.** Every frame and block shows its JSON. Edit and apply. Export copies a frame as HTML/CSS.
+- **Export.** Frame to PNG or SVG, all frames of one format to an editable PPTX, every frame to PNGs, or the whole canvas to one PNG.
+- **Share.** Copy link puts the canvas (layout and copy, not images) into the URL hash. Save and Load move the whole canvas as JSON. The canvas also persists in the browser.
+
 ## Copy that fits
 
 Every editable block carries its copy capacity, so a layout can be turned into a content schema. In the detail view, **Copy content schema** gives you the JSON schema for that exact layout, and **Fill copy with Claude** (with a key in Settings) asks Claude for copy inside those limits and refits it into the same layout, same seed, same moves. Decorative blocks (fields, shapes, scrims, rules, icons, the logo) are flagged `decorative: true` in the spec; everything else is content.
@@ -107,6 +119,8 @@ js/engine.js        the generator: eight families, validation, metrics, dedup
 js/render.js        SVG renderer, PNG/SVG export with embedded fonts
 js/icons.js         curated Phosphor icon set (MIT) and keyword picker
 js/deck.js          outline from brief (rules or Claude), per-slide variations, picks
+js/canvas.js        canvas document: frames, block ops, flex auto layout, links, HTML export, history
+js/canvas-ui.js     canvas editor: stage, selection, tools, layers, properties, code view, export
 js/export-pptx.js   layout spec -> editable PowerPoint (pptxgenjs)
 js/prompt.js        brief parser + optional Claude interpreter
 js/app.js           UI state and wiring
@@ -120,6 +134,7 @@ docs/learnings.md   what Presenton and a 2,415-slide corpus taught us
 ## Known limits
 
 - In the published copy, exports go through the viewer's save prompt and PNGs use fallback fonts (font files cannot be fetched there). Run locally for exact type.
+- Canvas share links carry layout and copy only; images are referenced by id and need the same session's assets. A hosted link with assets is the next step.
 - The Claude interpreter calls Anthropic directly from the browser with your key. It is off by default and never used in published copies.
 - Hex values in the Deel preset were read from the guidelines PDF. Confirm against the Figma library before production use.
 - PPTX export references fonts by name; install the brand fonts to see exact type in PowerPoint. Image corner radii and gradient scrims are approximated (scrims and arcs become transparent image layers).

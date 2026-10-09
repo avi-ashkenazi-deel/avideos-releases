@@ -23,6 +23,7 @@
       <div class="seg" id="modeSeg" role="group" aria-label="Mode">
         <button type="button" data-mode="single" class="on">Single</button>
         <button type="button" data-mode="deck">Deck</button>
+        <button type="button" data-mode="canvas">Canvas <span id="canvasBadge" class="badge" hidden></span></button>
       </div>
       <input id="prompt" name="prompt" type="text" spellcheck="false"
         placeholder='Describe what you need, e.g. "36 bold image-led square posts for Deel Payroll, dark, with a CTA"'>
@@ -161,6 +162,7 @@
         <button id="compareBtn" class="btn small" type="button" disabled>Compare (0)</button>
         <button id="exportFavBtn" class="btn small" type="button" disabled>Export favorites</button>
         <button id="exportFavPptxBtn" class="btn small" type="button" disabled title="All favorites as one editable deck per format">Favorites → PPTX</button>
+        <button id="toCanvasBtn" class="btn small" type="button" disabled title="Open the picked (or favorited) layouts on the canvas to edit">Send to canvas</button>
       </div>
     </div>
     <div id="readout" class="readout"></div>
@@ -172,9 +174,62 @@
       <span class="grow"></span>
       <button id="deckPptxBtn" class="btn small primary" type="button" disabled>Export deck (PPTX)</button>
       <button id="deckPngBtn" class="btn small" type="button" disabled>Export picks (PNG)</button>
+      <button id="deckCanvasBtn" class="btn small" type="button" disabled title="Open the picked slides on the canvas to edit">Open picks on canvas</button>
     </div>
     <div id="deckView" class="deck" hidden></div>
     <div id="gallery" class="gallery" aria-live="polite"></div>
+    <div id="canvasView" class="cv" hidden>
+      <div class="cv-toolbar">
+        <div class="cv-tools" id="cvTools">
+          <button class="on" data-tool="select" title="Select (V)">↖</button>
+          <button data-tool="hand" title="Hand (H)">✋</button>
+          <button data-tool="frame" title="Frame (F)">▢</button>
+          <select id="cvFrameFormat" class="select" hidden aria-label="Frame format"></select>
+          <button data-tool="text" title="Text (T)">T</button>
+          <button data-tool="rect" title="Rectangle (R)">▬</button>
+          <button data-tool="ellipse" title="Ellipse (O)">●</button>
+          <button data-tool="image" title="Image (I)">▣</button>
+        </div>
+        <div class="cv-center">
+          <button id="cvZoomOut" class="btn small" type="button" title="Zoom out (-)">−</button>
+          <span id="cvZoom" class="mono">50%</span>
+          <button id="cvZoomIn" class="btn small" type="button" title="Zoom in (+)">+</button>
+          <button id="cvFit" class="btn small" type="button" title="Fit (0)">Fit</button>
+          <label class="check"><input id="cvSnap" type="checkbox" checked> Snap to grid</label>
+          <span id="cvCount" class="hint"></span>
+        </div>
+        <div class="cv-right">
+          <button id="cvUndo" class="btn small" type="button" title="Undo (⌘Z)" disabled>Undo</button>
+          <button id="cvRedo" class="btn small" type="button" title="Redo (⇧⌘Z)" disabled>Redo</button>
+          <button id="cvLink" class="btn small" type="button" title="Copy a link that carries this canvas (⌘L)">Copy link</button>
+          <button id="cvSave" class="btn small" type="button">Save JSON</button>
+          <label class="btn small file">Load<input id="cvLoad" type="file" accept="application/json,.json" hidden></label>
+          <details class="cv-menu" id="cvExport"><summary class="btn small primary">Export</summary>
+            <div class="cv-menu-list">
+              <button data-export="png" type="button">Frame → PNG</button>
+              <button data-export="svg" type="button">Frame → SVG</button>
+              <button data-export="pptx" type="button">Frames of this format → PPTX</button>
+              <button data-export="html" type="button">Frame → copy HTML/CSS</button>
+              <button data-export="all" type="button">Every frame → PNGs</button>
+              <button data-export="canvas" type="button">Whole canvas → PNG</button>
+            </div>
+          </details>
+          <button id="cvClear" class="btn small ghost" type="button" title="Remove every frame">Clear</button>
+        </div>
+      </div>
+      <div class="cv-body">
+        <aside class="cv-layers">
+          <div class="cv-panel-head"><h2>Layers</h2><input id="cvSearch" class="input" type="search" placeholder="Search layers"></div>
+          <div id="cvLayers"></div>
+        </aside>
+        <div id="stage" class="cv-stage">
+          <div id="world" class="cv-world"></div>
+          <svg id="overlay" class="cv-overlay"></svg>
+          <div id="cvEmpty" class="cv-empty" hidden><p class="big">Nothing on the canvas yet.</p><p>Pick layouts in Single or Deck mode and send them here, or press <b>F</b> and click to draw a blank frame.</p></div>
+        </div>
+        <aside class="cv-props" id="cvProps"></aside>
+      </div>
+    </div>
     <div id="empty" class="empty">
       <div class="empty-inner">
         <p class="big">Type a brief above, or just press Generate.</p>
@@ -208,6 +263,7 @@
           <button class="btn small" id="detailCopySvg" type="button">Copy SVG</button>
         </div>
         <div class="detail-actions">
+          <button class="btn small" id="detailCanvas" type="button" title="Open this layout on the canvas to edit it">Edit on canvas</button>
           <button class="btn small" id="detailFill" type="button" title="Ask Claude for copy that fits this exact layout (needs an API key in Settings)">Fill copy with Claude</button>
           <button class="btn small" id="detailSchema" type="button" title="Copy the content schema for this layout">Copy content schema</button>
         </div>
@@ -271,6 +327,8 @@
 <script src="js/export-pptx.js"></script>
 <script src="js/prompt.js"></script>
 <script src="js/deck.js"></script>
+<script src="js/canvas.js"></script>
+<script src="js/canvas-ui.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>
