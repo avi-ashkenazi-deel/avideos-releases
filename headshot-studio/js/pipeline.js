@@ -137,16 +137,55 @@ export function faceGeometry(lm, W, H) {
 function computeCrop(lm, W, H, framing) {
   const g = faceGeometry(lm, W, H);
   const closeup = framing === 'closeup';
-  let ch = g.faceH * (closeup ? 2.15 : 2.9);
+  let ch = g.faceH * (closeup ? 2.3 : 2.9);
   let cw = ch * (OUT_W / OUT_H);
   const fit = Math.min(1, W / cw, H / ch);
   cw *= fit;
   ch *= fit;
   let x = g.cx - cw / 2;
-  let y = g.eyeY - ch * (closeup ? 0.42 : 0.38);
+  let y = g.eyeY - ch * (closeup ? 0.45 : 0.38);
   x = Math.max(0, Math.min(W - cw, x));
   y = Math.max(0, Math.min(H - ch, y));
   return { x, y, w: cw, h: ch };
+}
+
+// With several faces (a group shot, a video-call inset), pick the biggest,
+// most central one.
+function pickMainFace(faces, W, H) {
+  let best = 0, bestScore = -Infinity;
+  faces.forEach((lm, i) => {
+    const g = faceGeometry(lm, W, H);
+    const off = Math.hypot(g.cx / W - 0.5, (g.eyeY / H - 0.45) * (H / W));
+    const score = (g.faceH / H) * (1 - Math.min(0.9, off * 1.2));
+    if (score > bestScore) { bestScore = score; best = i; }
+  });
+  return best;
+}
+
+// Keeps only the part of the person mask that is connected to the chosen
+// face, so other people or stray objects in the shot are dropped.
+function keepConnected(mask, W, H, sx, sy) {
+  const N = W * H;
+  const keep = new Uint8Array(N);
+  const stack = new Int32Array(N);
+  const start = Math.min(H - 1, Math.max(0, sy)) * W + Math.min(W - 1, Math.max(0, sx));
+  if (mask[start] < 0.35) return mask;
+  let top = 0;
+  stack[top++] = start;
+  keep[start] = 1;
+  while (top) {
+    const i = stack[--top];
+    const x = i % W;
+    const n = [x > 0 ? i - 1 : -1, x < W - 1 ? i + 1 : -1, i - W, i + W];
+    for (const j of n) {
+      if (j >= 0 && j < N && !keep[j] && mask[j] >= 0.35) { keep[j] = 1; stack[top++] = j; }
+    }
+  }
+  // Grow the kept area a little so the soft edge survives.
+  const grown = blurChannel(Float32Array.from(keep), W, H, 4, 1);
+  const out = new Float32Array(N);
+  for (let i = 0; i < N; i++) out[i] = mask[i] * Math.min(1, grown[i] * 3);
+  return out;
 }
 
 // ---------- prepare ----------
@@ -156,9 +195,11 @@ function computeCrop(lm, W, H, framing) {
 export async function prepare(source, framing, onStep = () => {}) {
   await onStep('face');
   const first = await detectStill(source);
-  const lm0 = first.faceLandmarks?.[0];
-  if (!lm0) throw new Error('no-face');
-  const blendshapes = first.faceBlendshapes?.[0];
+  const faces = first.faceLandmarks || [];
+  if (!faces.length) throw new Error('no-face');
+  const main = pickMainFace(faces, source.width, source.height);
+  const lm0 = faces[main];
+  const blendshapes = first.faceBlendshapes?.[main];
 
   const crop = computeCrop(lm0, source.width, source.height, framing);
   const work = makeCanvas(OUT_W, OUT_H);
@@ -167,12 +208,17 @@ export async function prepare(source, framing, onStep = () => {}) {
   wctx.drawImage(source, crop.x, crop.y, crop.w, crop.h, 0, 0, OUT_W, OUT_H);
 
   // Landmarks again on the crop, for precise feature masks.
-  const second = await detectStill(work);
-  const lm = second.faceLandmarks?.[0] || lm0.map((p) => ({
+  const mapped = lm0.map((p) => ({
     x: (p.x * source.width - crop.x) / crop.w,
     y: (p.y * source.height - crop.y) / crop.h,
     z: p.z,
   }));
+  const second = await detectStill(work);
+  // If the crop still holds another face, keep the one where ours should be.
+  const near = (second.faceLandmarks || [])
+    .map((f) => ({ f, d: Math.hypot(f[1].x - mapped[1].x, f[1].y - mapped[1].y) }))
+    .sort((a, b) => a.d - b.d)[0];
+  const lm = near && near.d < 0.08 ? near.f : mapped;
 
   await onStep('background');
   const seg = await segment(work);
@@ -183,6 +229,7 @@ export async function prepare(source, framing, onStep = () => {}) {
   // Person mask: tighten the soft model output, then feather the edge.
   let person = new Float32Array(N);
   for (let i = 0; i < N; i++) person[i] = Math.min(1, Math.max(0, (1 - bgConf[i] - 0.2) / 0.6));
+  person = keepConnected(person, W, H, Math.round(lm[1].x * W), Math.round(lm[1].y * H));
   person = blurChannel(person, W, H, 1.5, 2);
 
   await onStep('features');
@@ -213,8 +260,30 @@ export async function prepare(source, framing, onStep = () => {}) {
   for (let i = 0; i < N; i++) bgWeight[i] = 1 - person[i];
   const roomBlur = blurRGB(base, W, H, 14, bgWeight);
 
+  // Edge clean-up: along the cut-out edge, pixels still carry the old
+  // background's color. Swap them for colors from just inside the person.
+  const inner = blurRGB(base, W, H, 4, person.map((m) => m * m));
+  const baseClean = Uint8ClampedArray.from(base);
+  for (let i = 0, j = 0; i < N; i++, j += 4) {
+    const m = person[i];
+    if (m > 0.02 && m < 0.95) {
+      const e = Math.min(1, (0.95 - m) / 0.6);
+      baseClean[j] = base[j] + (inner[0][i] - base[j]) * e;
+      baseClean[j + 1] = base[j + 1] + (inner[1][i] - base[j + 1]) * e;
+      baseClean[j + 2] = base[j + 2] + (inner[2][i] - base[j + 2]) * e;
+    }
+  }
+
+  // Top of the head including hair, so avatars never clip it.
+  let headTop = g.topY;
+  const x0 = Math.max(0, Math.round(g.cx - g.faceW * 0.6)), x1 = Math.min(W, Math.round(g.cx + g.faceW * 0.6));
+  outer: for (let y = 0; y < g.topY; y++) {
+    for (let x = x0; x < x1; x++) if (person[y * W + x] > 0.5) { headTop = y; break outer; }
+  }
+  g.headTop = headTop;
+
   return {
-    W, H, base, smooth, detail, roomBlur, masks: { person, skin, eyes, lips }, lm, geometry: g, blendshapes,
+    W, H, base, baseClean, smooth, detail, roomBlur, masks: { person, skin, eyes, lips }, lm, geometry: g, blendshapes,
     original: work,
   };
 }
@@ -295,7 +364,8 @@ export class Renderer {
 
   // Returns the rendered portrait canvas (OUT_W x OUT_H).
   render(params) {
-    const { W, H, base, smooth, detail, roomBlur, masks } = this.prep;
+    const { W, H, smooth, detail, roomBlur, masks } = this.prep;
+    const base = this.useMask && this.prep.baseClean ? this.prep.baseClean : this.prep.base;
     const { person, skin, eyes, lips } = masks;
     const out = this.out.data;
     const p = { ...NEUTRAL, ...params };
@@ -402,7 +472,19 @@ export function composeAvatar(portrait, prep, policy, params = {}, size = 512) {
   let cx = g.cx;
   let cy = g.eyeY + g.faceH * 0.3 - (params.offsetY || 0) / 100 * g.faceH * 0.6;
   let x = Math.max(0, Math.min(portrait.width - side, cx - side / 2));
-  let y = Math.max(0, Math.min(portrait.height - side, cy - side / 2));
+  let y = cy - side / 2;
+  if (g.headTop !== undefined && !params.zoom && !params.offsetY) {
+    // Default framing keeps a little room above the hair, zooming out if
+    // needed. Once the person zooms or moves the frame, their choice wins.
+    const wantTop = g.headTop - side * 0.05;
+    if (wantTop < y) {
+      const bottom = y + side;
+      y = Math.max(0, wantTop);
+      side = Math.min(portrait.width, portrait.height, Math.max(side, bottom - y - side * 0.12));
+      x = Math.max(0, Math.min(portrait.width - side, cx - side / 2));
+    }
+  }
+  y = Math.max(0, Math.min(portrait.height - side, y));
 
   const c = makeCanvas(size, size);
   const ctx = c.getContext('2d');
