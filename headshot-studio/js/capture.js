@@ -71,7 +71,11 @@ function fillHidden(prep) {
   const repaint = new Float32Array(W * H);
   const kept = (i) => masks.keep[i] > 0.5;
   const [fr, fg, fb] = prep.clothingRGB;
-  for (let y = Math.max(0, Math.ceil(g.chinY)); y < H; y++) {
+  // Around the neck only fill what the person mask covers (so real
+  // background beside the neck stays), always with the clothing color.
+  const neckTop = g.chinY - g.faceH * 0.15, neckBottom = g.chinY + g.faceH * 0.3;
+  for (let y = Math.max(0, Math.ceil(neckTop)); y < H; y++) {
+    const neckBand = y < neckBottom;
     // The body's width on this row: the real clothes plus their mirror image.
     let minX = W, maxX = -1;
     for (let x = 0; x < W; x++) {
@@ -81,11 +85,11 @@ function fillHidden(prep) {
     for (let x = minX; x <= maxX; x++) {
       const i = y * W + x;
       // Hidden = part of the foreground (or a gap inside the body), not the real person.
-      if (kept(i)) continue;
+      if (kept(i) || (neckBand && masks.person[i] < 0.5)) continue;
       const mx = Math.round(2 * g.cx - x);
       const mi = y * W + mx;
       const j = i * 4;
-      if (mx >= 0 && mx < W && kept(mi)) {
+      if (!neckBand && mx >= 0 && mx < W && kept(mi)) {
         d[j] = src[mi * 4]; d[j + 1] = src[mi * 4 + 1]; d[j + 2] = src[mi * 4 + 2];
       } else {
         const n = (Math.random() - 0.5) * 6;
