@@ -120,10 +120,18 @@
 
   // ---- Images -------------------------------------------------------------------------
   const readAsDataURL = f => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(f); });
-  const loadImage = src => new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = src; });
+  const loadImage = src => new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => rej(new Error('image failed to decode')); im.src = src; });
+  function dataUrlToBlob(dataUrl) {
+    const m = /^data:([^;,]+)?(;base64)?,(.*)$/s.exec(dataUrl); if (!m) throw new Error('not a data URL');
+    const mime = m[1] || 'application/octet-stream';
+    if (!m[2]) return new Blob([decodeURIComponent(m[3])], { type: mime });
+    const bin = atob(m[3]); const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new Blob([bytes], { type: mime });
+  }
   async function addImage(dataUrl, name, placeholder = false) {
     const im = await loadImage(dataUrl);
-    const blob = await (await fetch(dataUrl)).blob();
+    const blob = dataUrlToBlob(dataUrl);
     const asset = { id: 'img' + (imgSeq++), name, url: URL.createObjectURL(blob), dataUrl, w: im.naturalWidth, h: im.naturalHeight, lum: Color.luminanceMap(im), placeholder, palette: Color.extractPalette(im) };
     state.assets.images.push(asset); renderImages();
     return asset;
@@ -153,7 +161,10 @@
     for (const a of state.assets.images) URL.revokeObjectURL(a.url);
     state.assets.images = [];
     const pal = state.kit.colors.filter(c => c.role !== 'neutral').map(c => c.hex);
-    for (let i = 0; i < 3; i++) await addImage(Brand.makeDemoImage(1000 + i * 7 + RNG.hashStr(state.kit.name), pal, 1200, i === 1 ? 800 : 1200), 'placeholder ' + (i + 1), true);
+    for (let i = 0; i < 3; i++) {
+      try { await addImage(Brand.makeDemoImage(1000 + i * 7 + RNG.hashStr(state.kit.name), pal, 1200, i === 1 ? 800 : 1200), 'placeholder ' + (i + 1), true); }
+      catch (err) { console.warn('placeholder image skipped', err); }
+    }
   }
 
   // ---- Formats chips --------------------------------------------------------------------
@@ -234,6 +245,10 @@
       if (!out.length) toast('Nothing passed the rules. Try shorter copy or a bigger safe space.');
       else if (opts.append) toast(`${out.length} variations added`);
       $('main').scrollTop = 0;
+    } catch (err) {
+      console.error(err);
+      $('readout').innerHTML = `<span style="color:var(--danger)">Generation failed: ${escapeHtml(err && err.message ? err.message : String(err))}. Reload the page and try again; if it repeats, copy this message to Claude.</span>`;
+      toast('Generation failed: ' + (err && err.message ? err.message : err));
     } finally { state.busy = false; $('generateBtn').disabled = false; $('generateBtn').textContent = 'Generate'; }
   }
   function renderReadout(intent, made, attempts, ms, formats) {
@@ -557,6 +572,10 @@
         `<span><span class="k">variations</span> <b>${made}</b> <span class="k">in ${ms} ms</span></span>`,
       ].join('');
       renderDeck();
+    } catch (err) {
+      console.error(err);
+      $('readout').innerHTML = `<span style="color:var(--danger)">Deck generation failed: ${escapeHtml(err && err.message ? err.message : String(err))}. Reload the page and try again; if it repeats, copy this message to Claude.</span>`;
+      toast('Deck generation failed: ' + (err && err.message ? err.message : err));
     } finally { state.busy = false; $('generateBtn').disabled = false; $('generateBtn').textContent = 'Generate'; }
   }
   function renderDeck() {
@@ -594,8 +613,13 @@
   async function init() {
     fillPresets(); fillFontSelects();
     const savedKit = LS.get('lg.kit', null); const savedPreset = LS.get('lg.preset', 'deel');
-    if (savedKit && savedKit.colors && savedKit.fonts) { loadKit(savedKit); $('presetSelect').value = savedKit.presetId && Brand.PRESETS[savedKit.presetId] ? savedKit.presetId : '__custom'; }
-    else { loadKit(Brand.fromPreset(savedPreset in Brand.PRESETS ? savedPreset : 'deel')); $('presetSelect').value = state.kit.presetId; }
+    try {
+      if (savedKit && savedKit.colors && savedKit.fonts && savedKit.content && savedKit.grid && savedKit.logo) {
+        // Saved kits from older versions get the preset's sample deck back.
+        if (!savedKit.deck && savedKit.presetId && Brand.PRESETS[savedKit.presetId]) savedKit.deck = Brand.PRESETS[savedKit.presetId].deck;
+        loadKit(savedKit); $('presetSelect').value = savedKit.presetId && Brand.PRESETS[savedKit.presetId] ? savedKit.presetId : '__custom';
+      } else throw new Error('no saved kit');
+    } catch { loadKit(Brand.fromPreset(savedPreset in Brand.PRESETS ? savedPreset : 'deel')); $('presetSelect').value = state.kit.presetId; }
     renderChips();
     $('apiKey').value = LS.get('lg.apiKey', ''); $('useClaude').checked = !!LS.get('lg.useClaude', false);
     $('prompt').value = LS.get('lg.prompt', '');
