@@ -30,6 +30,19 @@ node build.mjs
 4. **Checks.** Text is measured and must fit its cells. Nothing textual may leave the safe area or overlap. Text on a photo needs a scrim or a panel, chosen from the image's luminance map. Text on a color field needs WCAG contrast. The logo uses only its allowed colors and keeps its clear zone. Duplicates are dropped.
 5. **Output.** Each survivor is an SVG plus a JSON spec in which every text block carries its copy capacity. Export PNG, SVG, JSON, or an editable PowerPoint slide (favorites export as one deck per format). Regenerate a favorite as 24 close variations, or render the same idea across every format.
 
+## Deck mode
+
+Switch the top-left toggle to **Deck**. The brief becomes an outline (one intent per slide), the engine generates variations for every slide under one palette and type level, you pick one per slide, and the picks export as one editable PowerPoint deck or a set of PNGs.
+
+- **Outline.** Written by the rule parser from the brief (an explicit list such as "cover, why now, what you get, how it works, proof, before and after, quote, next steps" wins; otherwise the kit's sample deck, trimmed to the requested count), or by Claude when a key is set. Every row is editable in the sidebar: intent, headline, and details (one item per line).
+- **Intents.** cover, agenda, statement, big number, comparison, process, cards, quote, body copy, closing. Each maps to the families that can express it.
+- **Consistency.** One background, text, and accent color for the whole deck; one type step; the logo stays in the same corner after the cover.
+- **Shuffle** regenerates one slide's variations; **Reshuffle deck** starts over with a new palette.
+
+## Copy that fits
+
+Every editable block carries its copy capacity, so a layout can be turned into a content schema. In the detail view, **Copy content schema** gives you the JSON schema for that exact layout, and **Fill copy with Claude** (with a key in Settings) asks Claude for copy inside those limits and refits it into the same layout, same seed, same moves. Decorative blocks (fields, shapes, scrims, rules, icons, the logo) are flagged `decorative: true` in the spec; everything else is content.
+
 ## Composition families
 
 | Family | What it does |
@@ -42,6 +55,13 @@ node build.mjs
 | Color blocks | Bands, columns, corners, or stripes in approved field colors. Text on the ground or on a block with contrast checked. |
 | Editorial | Narrow column, hairline rule, small image, lots of air. |
 | Statement stat | One big number with a supporting line. |
+| Agenda | Headline plus a numbered or bulleted list of sections. |
+| Comparison | Two cards or two columns side by side, bullets in each, optional highlight. |
+| Process | Three to five steps with number badges or icons, horizontal on wide formats and a vertical timeline on tall ones. |
+| Cards | Two to four cards with icon, title, and text. Grid on wide and square formats, stacked on stories. |
+| Quote | Quotation with attribution, optional large mark and portrait image. |
+
+Icons come from a curated set of 63 Phosphor icons (MIT), picked by keyword from the card or step text.
 
 ## Brand kit contract
 
@@ -85,6 +105,8 @@ js/grid.js          formats and the modular grid
 js/text.js          canvas text measurement and fitting
 js/engine.js        the generator: eight families, validation, metrics, dedup
 js/render.js        SVG renderer, PNG/SVG export with embedded fonts
+js/icons.js         curated Phosphor icon set (MIT) and keyword picker
+js/deck.js          outline from brief (rules or Claude), per-slide variations, picks
 js/export-pptx.js   layout spec -> editable PowerPoint (pptxgenjs)
 js/prompt.js        brief parser + optional Claude interpreter
 js/app.js           UI state and wiring

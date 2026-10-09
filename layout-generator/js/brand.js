@@ -47,6 +47,33 @@ const Brand = (() => {
         stat: '150+',
         footer: 'deel.com',
       },
+      deck: {
+        title: 'Deel Global Payroll',
+        slides: [
+          { intent: 'cover', eyebrow: 'Deel Global Payroll', headline: 'Global payroll, run from one platform', subhead: 'Payroll, HR, and compliance for teams in 150+ countries.' },
+          { intent: 'agenda', headline: 'What we will cover', items: ['Why now', 'What Deel Global Payroll does', 'How it works', 'Proof', 'Before and after', 'Next steps'] },
+          { intent: 'statement', eyebrow: 'Why now', headline: 'Most companies run five payroll vendors. One system can\'t cover them all.', subhead: 'Every new country adds a provider, a process, and a place for errors to hide.' },
+          { intent: 'cards', eyebrow: 'What you get', headline: 'One platform, four things done for you', items: [
+            { title: 'Owned infrastructure', text: 'No third-party processors. Faster fixes and total accountability.', icon: 'bank' },
+            { title: 'Local experts', text: '2,000+ in-house specialists across 150+ countries.', icon: 'users-three' },
+            { title: 'AI that takes action', text: 'Approvals, anomalies, and reports handled inside the workflow.', icon: 'sparkle' },
+            { title: 'Compliance built in', text: 'Local tax logic and real-time checks on every run.', icon: 'shield-check' },
+          ] },
+          { intent: 'process', eyebrow: 'How it works', headline: 'From first entity to first payslip in four steps', steps: [
+            { title: 'Connect your HRIS', text: 'Sync people, contracts, and pay data.' },
+            { title: 'Map entities and pay groups', text: 'Local rules applied automatically.' },
+            { title: 'Run and approve', text: 'One calendar, one approval flow.' },
+            { title: 'Pay and report', text: 'Payslips, filings, and reporting in 200+ currencies.' },
+          ] },
+          { intent: 'stat', stat: '150+', headline: 'Countries where Deel runs payroll on its own rails', subhead: 'With 200+ currencies and in-house entities.' },
+          { intent: 'comparison', headline: 'Before and after', columns: [
+            { title: 'Vendor patchwork', bullets: ['Five providers on average', 'Manual reconciliation every cycle', 'Compliance gaps surface late'] },
+            { title: 'Deel Global Payroll', bullets: ['One platform, one payroll engine', 'Automated reconciliation', 'Real-time compliance checks'] },
+          ] },
+          { intent: 'quote', quote: 'Deel enables us to hire and support exceptional talent anywhere.', attribution: 'Mati Staniszewski, CEO, ElevenLabs' },
+          { intent: 'closing', headline: 'Let\'s run your next payroll together', subhead: 'Book a 30-minute walkthrough with a payroll specialist.', cta: 'Book a demo', footer: 'deel.com' },
+        ],
+      },
     },
     mono: {
       name: 'Editorial Mono',
@@ -70,6 +97,16 @@ const Brand = (() => {
         cta: 'Read the issue',
         stat: '12',
         footer: 'folio.studio',
+      },
+      deck: {
+        title: 'Issue 14',
+        slides: [
+          { intent: 'cover', eyebrow: 'Issue 14', headline: 'The quiet return of the printed annual report', subhead: 'Why finance teams are putting their numbers back on paper.' },
+          { intent: 'statement', headline: 'Trust is a typeface', subhead: 'What a page communicates before anyone reads it.' },
+          { intent: 'cards', headline: 'Three things print still does better', items: [{ title: 'Sequence', text: 'A report read in order makes an argument.' }, { title: 'Permanence', text: 'Paper cannot be quietly edited after the board meeting.' }, { title: 'Attention', text: 'Twelve pages hold a reader longer than twelve tabs.' }] },
+          { intent: 'quote', quote: 'We printed 400 copies and the questions in the AGM changed.', attribution: 'CFO, listed manufacturer' },
+          { intent: 'closing', headline: 'Read the issue', cta: 'Read the issue', footer: 'folio.studio' },
+        ],
       },
     },
     pastel: {
@@ -95,6 +132,16 @@ const Brand = (() => {
         cta: 'Start for $12',
         stat: '3 min',
         footer: 'sprout.plants',
+      },
+      deck: {
+        title: 'Sprout',
+        slides: [
+          { intent: 'cover', eyebrow: 'New', headline: 'Plants that forgive you', subhead: 'Low-light, low-effort greenery delivered monthly.' },
+          { intent: 'process', headline: 'How it works', steps: [{ title: 'Pick a plan', text: 'Three sizes, one price each.' }, { title: 'Meet your plant', text: 'Delivered potted, with a care card.' }, { title: 'Skip or swap', text: 'Any month, in two taps.' }] },
+          { intent: 'stat', stat: '3 min', headline: 'Weekly care time, measured by our members' },
+          { intent: 'cards', headline: 'Why members stay', items: [{ title: 'Forgiving species', text: 'Chosen for low light and missed waterings.' }, { title: 'Real support', text: 'Text a plant person, get an answer the same day.' }, { title: 'Fair pricing', text: 'From $12 a month, cancel anytime.' }] },
+          { intent: 'closing', headline: 'Start with one plant', cta: 'Start for $12', footer: 'sprout.plants' },
+        ],
       },
     },
   };

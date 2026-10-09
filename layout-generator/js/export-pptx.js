@@ -21,7 +21,7 @@ const ExportPptx = (() => {
   const stripData = d => String(d).replace(/^data:/, '');
   const fontName = css => String(css).split(',')[0].replace(/["']/g, '').trim();
   const RASTER = new Set(['scrim']);
-  const isRaster = b => RASTER.has(b.kind) || (b.kind === 'shape' && (b.shape === 'quarter' || b.shape === 'blob')) || (b.kind === 'logo' && b.logoKind === 'svg');
+  const isRaster = b => RASTER.has(b.kind) || b.kind === 'icon' || b.kind === 'line' || (b.kind === 'shape' && (b.shape === 'quarter' || b.shape === 'blob')) || (b.kind === 'logo' && b.logoKind === 'svg');
 
   async function rasterLayer(layout, blocks, opts) {
     const svg = Render.toSVG({ ...layout, blocks }, { kit: opts.kit, assets: opts.assets, forExport: true, transparent: true, showGrid: false });
@@ -64,6 +64,16 @@ const ExportPptx = (() => {
           align: b.align || 'left', valign: 'top', margin: 0, lineSpacingMultiple: f.lineHeight || 1.2,
           charSpacing: f.letterSpacing ? Math.round(f.letterSpacing * pt(f.size) * 10) / 10 : 0, fit: 'none', wrap: true,
         });
+      } else if (b.kind === 'list') {
+        const f = b.font;
+        const runs = [];
+        for (const line of b.lines) {
+          if (line.marker != null) runs.push({ text: line.text, options: { bullet: b.marker === 'number' ? { type: 'number' } : { indent: Math.round(pt(b.indent)) }, breakLine: true, paraSpaceAfter: line.last ? pt(b.itemGap || 0) : 0 } });
+          else runs.push({ text: line.text, options: { breakLine: true, indentLevel: 0 } });
+        }
+        slide.addText(runs, { ...box, h: inch(b.h + f.size * 0.4), fontFace: fontName(f.family), fontSize: pt(f.size), color: hex(b.fill), bold: f.weight >= 600, valign: 'top', margin: 0, lineSpacingMultiple: f.lineHeight || 1.3, fit: 'none', wrap: true });
+      } else if (b.kind === 'badge') {
+        slide.addText(b.text, { ...box, shape: pptx.ShapeType.ellipse, fill: { color: hex(b.fill) }, line: { color: hex(b.fill), transparency: 100 }, fontFace: fontName(b.font.family), fontSize: pt(b.h * 0.46), color: hex(b.color), bold: true, align: 'center', valign: 'middle', margin: 0 });
       } else if (b.kind === 'button') {
         const f = b.font;
         slide.addText(b.text, {

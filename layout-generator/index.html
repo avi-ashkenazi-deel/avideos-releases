@@ -20,6 +20,10 @@
       <span class="tag">structured randomization</span>
     </div>
     <form id="promptForm" class="promptbar" autocomplete="off">
+      <div class="seg" id="modeSeg" role="group" aria-label="Mode">
+        <button type="button" data-mode="single" class="on">Single</button>
+        <button type="button" data-mode="deck">Deck</button>
+      </div>
       <input id="prompt" name="prompt" type="text" spellcheck="false"
         placeholder='Describe what you need, e.g. "36 bold image-led square posts for Deel Payroll, dark, with a CTA"'>
       <button id="generateBtn" type="submit" class="btn primary">Generate</button>
@@ -81,6 +85,16 @@
         <label>Images <span class="hint">photos, renders, product shots</span></label>
         <div id="imageList" class="images"></div>
         <label class="btn small file">Add images<input id="imageFiles" type="file" accept="image/*" multiple hidden></label>
+      </div>
+    </section>
+
+    <section class="panel" id="outlinePanel" hidden>
+      <div class="panel-head"><h2>Deck outline</h2><span class="hint" id="outlineSource"></span></div>
+      <p class="hint">One row per slide. Edit anything, then Generate again. Details take one item per line: <code>Title — text</code> for cards and steps, two blocks split by <code>---</code> for a comparison, quote then attribution for a quote.</p>
+      <div id="outlineList" class="outline"></div>
+      <div class="row">
+        <button id="outlineAdd" class="btn small" type="button">Add slide</button>
+        <button id="outlineReset" class="btn small" type="button">Rebuild from brief</button>
       </div>
     </section>
 
@@ -150,6 +164,16 @@
       </div>
     </div>
     <div id="readout" class="readout"></div>
+    <div id="deckBar" class="deckbar" hidden>
+      <label class="inline">Per slide
+        <select id="perSlide" class="select"><option>4</option><option selected>6</option><option>8</option><option>12</option></select>
+      </label>
+      <button id="deckShuffleAll" class="btn small" type="button">Reshuffle deck</button>
+      <span class="grow"></span>
+      <button id="deckPptxBtn" class="btn small primary" type="button" disabled>Export deck (PPTX)</button>
+      <button id="deckPngBtn" class="btn small" type="button" disabled>Export picks (PNG)</button>
+    </div>
+    <div id="deckView" class="deck" hidden></div>
     <div id="gallery" class="gallery" aria-live="polite"></div>
     <div id="empty" class="empty">
       <div class="empty-inner">
@@ -182,6 +206,10 @@
           <button class="btn small" id="detailPptx" type="button" title="Editable PowerPoint slide">PPTX</button>
           <button class="btn small" id="detailJson" type="button">JSON</button>
           <button class="btn small" id="detailCopySvg" type="button">Copy SVG</button>
+        </div>
+        <div class="detail-actions">
+          <button class="btn small" id="detailFill" type="button" title="Ask Claude for copy that fits this exact layout (needs an API key in Settings)">Fill copy with Claude</button>
+          <button class="btn small" id="detailSchema" type="button" title="Copy the content schema for this layout">Copy content schema</button>
         </div>
         <dl class="specs" id="detailSpecs"></dl>
         <div id="familyStrip" class="family"></div>
@@ -238,9 +266,11 @@
 <script src="js/grid.js"></script>
 <script src="js/text.js"></script>
 <script src="js/engine.js"></script>
+<script src="js/icons.js"></script>
 <script src="js/render.js"></script>
 <script src="js/export-pptx.js"></script>
 <script src="js/prompt.js"></script>
+<script src="js/deck.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

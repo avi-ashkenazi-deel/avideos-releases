@@ -46,13 +46,15 @@ Two things stand out. Real decks are far more image-led and far less wordy than 
 3. **Deck → brand kit draft and layout priors.** Presenton's Template V2 needs a vision model to read a deck. For the brand-kit half of that job the PPTX already says most of it: theme color scheme, theme fonts, and the colors and typefaces actually used on slides, weighted by count and fill area (the same weighting Presenton's theme profiler uses). `tools/pptx_to_kit.py` reads a deck or a folder of decks with the standard library only and writes a kit JSON the engine loads, plus priors (archetype shares, anchor distribution, headline sizes, suggested weights). This is the "take brand stuff from the real world" step without a model in the loop.
 4. **Layout lint parity.** Presenton checks generated HTML for off-canvas boxes and overlapping siblings after the fact. Our validator already rejects those before a layout exists; nothing to add, but it confirms the approach.
 
+5. **A slide-intent vocabulary and a deck mode.** Presenton's outline → structure step, rebuilt on our engine: the brief becomes an outline (rules or Claude), each slide gets an intent (cover, agenda, statement, big number, comparison, process, cards, quote, body, closing), and the engine generates variations per slide under one palette and type level. Five new families carry the intents the old ones could not: agenda, comparison, process, cards, quote. Picks export as one editable deck. Where Presenton selects a fixed layout per slide, we generate a field of valid ones per slide and let the designer pick.
+6. **Editable vs decorative, and a content schema.** Every block in the spec is now flagged; editable blocks carry a dotted `path` (`items.2.text`), and `Engine.contentSchema(layout)` turns a layout into a JSON schema whose descriptions carry the capacities. `Engine.hydrate` refits new copy into the same layout with the same seed. "Fill copy with Claude" in the detail view uses both.
+7. **Icons.** A curated 63-icon subset of Phosphor (MIT, regular weight) as an `icon` block, chosen by keyword from the card or step text, rasterized on PPTX export.
+
 ## Worth borrowing next
 
-- **A slide-intent vocabulary and a deck mode.** Presenton's outline → structure step is the missing piece for multi-slide output: a brief becomes an outline, each entry gets an intent (cover, agenda, stat, comparison, process, quote, closing), and the engine generates variations per intent while keeping one palette and type level across the deck. Our families cover cover/statement/editorial/split; comparison, process/timeline, and card grids are new archetypes to add.
-- **Editable vs decorative.** Presenton marks every element. We should mark shapes and scrims as decorative in the JSON so editors and exporters can treat them as a locked layer.
-- **Content schema generation.** Turn a layout's editable text blocks (with capacity) into a JSON schema and let Claude fill it. This is the natural follow-up to item 1 and reuses the interpreter we already have.
-- **Icon library.** Phosphor icons (MIT) in six weights are a cheap way to add an `icon` block kind for metric cards and feature lists.
 - **Theme-role mapping for imported kits.** Presenton's roles (primary, background, card, stroke, text pairs) map cleanly onto our color roles; `pptx_to_kit.py` assigns roles heuristically and a reviewer confirms them in the sidebar.
+- **Repeatable regions.** Presenton certifies card grids and timelines as repeatable groups with min/max counts. Our cards and process families cap item counts per format; exposing those caps in the schema (`maxItems`) is done, growing a layout when the outline has more items is not.
+- **Charts and tables.** Presenton generates Chart.js charts from numeric tables. A `chart` block fed by the content schema is the next family a data-heavy deck needs.
 
 ## Not worth borrowing
 

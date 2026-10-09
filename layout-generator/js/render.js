@@ -13,6 +13,23 @@ const Render = (() => {
     const spans = b.lines.map((line, i) => `<tspan x="${n(x)}" y="${n(first + i * lh)}">${esc(line)}</tspan>`).join('');
     return `<text font-family='${Text.quote(f.family).replace(/'/g, '')}' font-size="${f.size}" font-weight="${f.weight}" fill="${b.fill}" text-anchor="${anchor}"${ls}>${spans}</text>`;
   }
+  function listEl(b) {
+    const f = b.font;
+    const lh = f.size * (f.lineHeight || 1.3);
+    const first = b.y + f.size * 0.78 + (lh - f.size) / 2;
+    const ls = f.letterSpacing ? ` letter-spacing="${n(f.letterSpacing * f.size)}"` : '';
+    const parts = []; let yy = first;
+    for (const line of b.lines) {
+      if (line.marker != null) parts.push(`<tspan x="${n(b.x)}" y="${n(yy)}"${line.markerFill ? ` fill="${line.markerFill}"` : ''}${line.markerBold ? ' font-weight="700"' : ''}>${esc(line.marker)}</tspan>`);
+      parts.push(`<tspan x="${n(b.x + b.indent)}" y="${n(yy)}">${esc(line.text)}</tspan>`);
+      yy += lh + (line.last ? (b.itemGap || 0) : 0);
+    }
+    return `<text font-family='${Text.quote(f.family).replace(/'/g, '')}' font-size="${f.size}" font-weight="${f.weight}" fill="${b.fill}" text-anchor="start"${ls}>${parts.join('')}</text>`;
+  }
+  function badgeEl(b) {
+    const r = Math.min(b.w, b.h) / 2; const size = b.h * 0.46;
+    return `<circle cx="${n(b.x + r)}" cy="${n(b.y + r)}" r="${n(r)}" fill="${b.fill}"/><text x="${n(b.x + r)}" y="${n(b.y + r + size * 0.35)}" font-family='${Text.quote(b.font.family).replace(/'/g, '')}' font-size="${n(size)}" font-weight="700" fill="${b.color}" text-anchor="middle">${esc(b.text)}</text>`;
+  }
   function logoEl(b, kit) {
     const l = kit.logo;
     if (l.kind === 'svg' && l.svg) return `<svg x="${n(b.x)}" y="${n(b.y)}" width="${n(b.w)}" height="${n(b.h)}" viewBox="${l.svg.viewBox}" preserveAspectRatio="xMidYMid meet" overflow="visible">${Brand.logoInner(kit, b.fill)}</svg>`;
@@ -61,6 +78,10 @@ const Render = (() => {
         parts.push(`<rect x="${n(b.x)}" y="${n(b.y)}" width="${n(b.w)}" height="${n(b.h)}" rx="${b.radius || 0}" fill="${b.fill}"/>`);
         parts.push(`<text x="${n(b.x + b.w / 2)}" y="${n(b.y + b.h / 2 + f.size * 0.35)}" font-family='${Text.quote(f.family).replace(/'/g, '')}' font-size="${f.size}" font-weight="${f.weight}" fill="${b.color}" text-anchor="middle">${esc(b.text)}</text>`);
       } else if (b.kind === 'text') parts.push(textEl(b));
+      else if (b.kind === 'list') parts.push(listEl(b));
+      else if (b.kind === 'icon') parts.push(Icons.svg(b.name, n(b.x), n(b.y), n(b.h), b.fill));
+      else if (b.kind === 'badge') parts.push(badgeEl(b));
+      else if (b.kind === 'line') parts.push(`<line x1="${n(b.x)}" y1="${n(b.y)}" x2="${n(b.x + b.w)}" y2="${n(b.y + b.h)}" stroke="${b.fill}" stroke-width="${b.width || 2}"${b.dash ? ` stroke-dasharray="${b.dash}"` : ''}/>`);
       else if (b.kind === 'logo') parts.push(logoEl(b, kit));
     }
     if (opts.showGrid) parts.push(gridOverlay(layout));

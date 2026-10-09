@@ -187,7 +187,7 @@ textarea.input { resize: vertical; line-height: 1.4; }
 .card:hover { border-color: var(--fg-3); }
 .card.selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 .card .canvas { display: grid; place-items: center; background: var(--bg-grid); padding: 10px; }
-.card .canvas svg { width: 100%; height: auto; display: block; border-radius: 3px; box-shadow: 0 4px 24px rgba(0,0,0,.45); }
+.card .canvas > svg { width: 100%; height: auto; display: block; border-radius: 3px; box-shadow: 0 4px 24px rgba(0,0,0,.45); }
 .card .meta { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; font-size: 11.5px; color: var(--fg-3); font-family: var(--font-mono); }
 .card .meta .arch { color: var(--fg-2); }
 .card .fav { position: absolute; top: 8px; right: 8px; background: rgba(0,0,0,.55); border: 0; color: #fff; border-radius: 6px; width: 26px; height: 26px; cursor: pointer; opacity: 0; transition: opacity .15s; }
@@ -204,7 +204,7 @@ textarea.input { resize: vertical; line-height: 1.4; }
 .modal-inner { background: var(--panel); border: 1px solid var(--line-2); border-radius: var(--r-lg); max-width: min(1200px, 100%); max-height: 100%; overflow: auto; }
 .modal-inner.detail { display: grid; grid-template-columns: 1fr 360px; width: min(1200px, 100%); height: min(820px, 100%); }
 .detail-preview { display: grid; place-items: center; padding: 24px; background: var(--bg-grid); min-width: 0; overflow: hidden; }
-.detail-preview svg { max-width: 100%; max-height: 100%; width: auto; height: auto; box-shadow: 0 12px 60px rgba(0,0,0,.6); border-radius: 4px; }
+.detail-preview > svg { max-width: 100%; max-height: 100%; width: auto; height: auto; box-shadow: 0 12px 60px rgba(0,0,0,.6); border-radius: 4px; }
 .detail-side { padding: 18px; display: flex; flex-direction: column; gap: 14px; overflow-y: auto; border-left: 1px solid var(--line); }
 .detail-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; padding: 0; }
 .detail-actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
@@ -213,7 +213,7 @@ textarea.input { resize: vertical; line-height: 1.4; }
 .specs dd { margin: 0; font-family: var(--font-mono); color: var(--fg-2); word-break: break-word; }
 .family { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
 .family .fam { flex: none; width: 120px; cursor: pointer; border: 1px solid var(--line-2); border-radius: var(--r); padding: 6px; background: var(--bg-grid); }
-.family .fam svg { width: 100%; height: auto; display: block; }
+.family .fam > svg { width: 100%; height: auto; display: block; }
 .family .fam .lbl { font-size: 10px; color: var(--fg-3); font-family: var(--font-mono); margin-top: 4px; }
 details.json summary { cursor: pointer; color: var(--fg-2); font-size: 12.5px; }
 details.json pre { font-size: 11px; line-height: 1.45; background: var(--bg); border: 1px solid var(--line); border-radius: var(--r); padding: 10px; overflow: auto; max-height: 260px; margin: 8px 0 0; }
@@ -221,7 +221,7 @@ details.json pre { font-size: 11px; line-height: 1.45; background: var(--bg); bo
 .modal-inner.compare { width: min(1400px, 100%); padding: 18px; }
 .compare-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-top: 12px; }
 .compare-grid .item { background: var(--bg-grid); padding: 12px; border-radius: var(--r); }
-.compare-grid .item svg { width: 100%; height: auto; display: block; }
+.compare-grid .item > svg { width: 100%; height: auto; display: block; }
 .compare-grid .item .lbl { font-family: var(--font-mono); font-size: 11px; color: var(--fg-3); margin-top: 6px; }
 
 .modal-inner.about, .modal-inner.settings { width: min(720px, 100%); padding: 22px; }
@@ -254,6 +254,42 @@ details.json pre { font-size: 11px; line-height: 1.45; background: var(--bg); bo
   .field.three { grid-template-columns: 1fr 1fr; }
 }
 
+/* Mode switch */
+.seg { display: inline-flex; border: 1px solid var(--line-2); border-radius: var(--r); overflow: hidden; flex: none; }
+.seg button { padding: 9px 12px; background: var(--panel-2); color: var(--fg-2); border: 0; cursor: pointer; font-size: 13px; }
+.seg button + button { border-left: 1px solid var(--line-2); }
+.seg button.on { background: var(--bg); color: var(--accent); }
+
+/* Outline editor */
+.outline { display: flex; flex-direction: column; gap: 8px; }
+.outline-row { border: 1px solid var(--line-2); border-radius: var(--r); background: var(--bg); padding: 8px; display: grid; grid-template-columns: 28px 1fr auto; gap: 6px 8px; align-items: start; }
+.outline-row .num { font-family: var(--font-mono); color: var(--fg-3); font-size: 12px; padding-top: 8px; }
+.outline-row .fields { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.outline-row .select, .outline-row .input { padding: 6px 8px; font-size: 12.5px; }
+.outline-row textarea.input { min-height: 54px; font-family: var(--font-mono); font-size: 11.5px; line-height: 1.4; }
+.outline-row .ops { display: flex; flex-direction: column; gap: 4px; }
+.outline-row .ops button { width: 26px; height: 26px; padding: 0; font-size: 12px; }
+
+/* Deck view */
+.deckbar { display: flex; align-items: center; gap: 10px; padding: 10px 16px 0; flex-wrap: wrap; }
+.deck { display: flex; flex-direction: column; gap: 14px; padding: 16px; }
+.deck-row { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 12px; }
+.deck-row .head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.deck-row .head .n { font-family: var(--font-mono); color: var(--fg-3); font-size: 12px; }
+.deck-row .head .intent { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--accent); border: 1px solid rgba(216,201,163,.3); border-radius: 999px; padding: 2px 8px; }
+.deck-row .head .title { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+.deck-row .strip { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 6px; }
+.deck-card { flex: none; width: 220px; border: 1px solid var(--line-2); border-radius: var(--r); background: var(--bg-grid); padding: 8px; cursor: pointer; transition: border-color .15s; position: relative; }
+.deck-card.tall { width: 150px; }
+.deck-card > svg { width: 100%; height: auto; display: block; border-radius: 3px; box-shadow: 0 4px 18px rgba(0,0,0,.4); }
+.deck-card:hover { border-color: var(--fg-3); }
+.deck-card.pick { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.deck-card .lbl { font-family: var(--font-mono); font-size: 10.5px; color: var(--fg-3); margin-top: 6px; display: flex; justify-content: space-between; }
+.deck-card .open { position: absolute; top: 6px; right: 6px; background: rgba(0,0,0,.6); color: #fff; border: 0; border-radius: 5px; font-size: 11px; padding: 3px 7px; cursor: pointer; opacity: 0; }
+.deck-card:hover .open { opacity: 1; }
+.deck-row .empty-row { color: var(--fg-3); font-size: 12.5px; padding: 8px; }
+@media (max-width: 640px) { .seg button { padding: 8px 9px; } }
+
 </style>
 </head>
 <body>
@@ -266,6 +302,10 @@ details.json pre { font-size: 11px; line-height: 1.45; background: var(--bg); bo
       <span class="tag">structured randomization</span>
     </div>
     <form id="promptForm" class="promptbar" autocomplete="off">
+      <div class="seg" id="modeSeg" role="group" aria-label="Mode">
+        <button type="button" data-mode="single" class="on">Single</button>
+        <button type="button" data-mode="deck">Deck</button>
+      </div>
       <input id="prompt" name="prompt" type="text" spellcheck="false"
         placeholder='Describe what you need, e.g. "36 bold image-led square posts for Deel Payroll, dark, with a CTA"'>
       <button id="generateBtn" type="submit" class="btn primary">Generate</button>
@@ -327,6 +367,16 @@ details.json pre { font-size: 11px; line-height: 1.45; background: var(--bg); bo
         <label>Images <span class="hint">photos, renders, product shots</span></label>
         <div id="imageList" class="images"></div>
         <label class="btn small file">Add images<input id="imageFiles" type="file" accept="image/*" multiple hidden></label>
+      </div>
+    </section>
+
+    <section class="panel" id="outlinePanel" hidden>
+      <div class="panel-head"><h2>Deck outline</h2><span class="hint" id="outlineSource"></span></div>
+      <p class="hint">One row per slide. Edit anything, then Generate again. Details take one item per line: <code>Title — text</code> for cards and steps, two blocks split by <code>---</code> for a comparison, quote then attribution for a quote.</p>
+      <div id="outlineList" class="outline"></div>
+      <div class="row">
+        <button id="outlineAdd" class="btn small" type="button">Add slide</button>
+        <button id="outlineReset" class="btn small" type="button">Rebuild from brief</button>
       </div>
     </section>
 
@@ -396,6 +446,16 @@ details.json pre { font-size: 11px; line-height: 1.45; background: var(--bg); bo
       </div>
     </div>
     <div id="readout" class="readout"></div>
+    <div id="deckBar" class="deckbar" hidden>
+      <label class="inline">Per slide
+        <select id="perSlide" class="select"><option>4</option><option selected>6</option><option>8</option><option>12</option></select>
+      </label>
+      <button id="deckShuffleAll" class="btn small" type="button">Reshuffle deck</button>
+      <span class="grow"></span>
+      <button id="deckPptxBtn" class="btn small primary" type="button" disabled>Export deck (PPTX)</button>
+      <button id="deckPngBtn" class="btn small" type="button" disabled>Export picks (PNG)</button>
+    </div>
+    <div id="deckView" class="deck" hidden></div>
     <div id="gallery" class="gallery" aria-live="polite"></div>
     <div id="empty" class="empty">
       <div class="empty-inner">
@@ -428,6 +488,10 @@ details.json pre { font-size: 11px; line-height: 1.45; background: var(--bg); bo
           <button class="btn small" id="detailPptx" type="button" title="Editable PowerPoint slide">PPTX</button>
           <button class="btn small" id="detailJson" type="button">JSON</button>
           <button class="btn small" id="detailCopySvg" type="button">Copy SVG</button>
+        </div>
+        <div class="detail-actions">
+          <button class="btn small" id="detailFill" type="button" title="Ask Claude for copy that fits this exact layout (needs an API key in Settings)">Fill copy with Claude</button>
+          <button class="btn small" id="detailSchema" type="button" title="Copy the content schema for this layout">Copy content schema</button>
         </div>
         <dl class="specs" id="detailSpecs"></dl>
         <div id="familyStrip" class="family"></div>
@@ -669,6 +733,33 @@ const Brand = (() => {
         stat: '150+',
         footer: 'deel.com',
       },
+      deck: {
+        title: 'Deel Global Payroll',
+        slides: [
+          { intent: 'cover', eyebrow: 'Deel Global Payroll', headline: 'Global payroll, run from one platform', subhead: 'Payroll, HR, and compliance for teams in 150+ countries.' },
+          { intent: 'agenda', headline: 'What we will cover', items: ['Why now', 'What Deel Global Payroll does', 'How it works', 'Proof', 'Before and after', 'Next steps'] },
+          { intent: 'statement', eyebrow: 'Why now', headline: 'Most companies run five payroll vendors. One system can\'t cover them all.', subhead: 'Every new country adds a provider, a process, and a place for errors to hide.' },
+          { intent: 'cards', eyebrow: 'What you get', headline: 'One platform, four things done for you', items: [
+            { title: 'Owned infrastructure', text: 'No third-party processors. Faster fixes and total accountability.', icon: 'bank' },
+            { title: 'Local experts', text: '2,000+ in-house specialists across 150+ countries.', icon: 'users-three' },
+            { title: 'AI that takes action', text: 'Approvals, anomalies, and reports handled inside the workflow.', icon: 'sparkle' },
+            { title: 'Compliance built in', text: 'Local tax logic and real-time checks on every run.', icon: 'shield-check' },
+          ] },
+          { intent: 'process', eyebrow: 'How it works', headline: 'From first entity to first payslip in four steps', steps: [
+            { title: 'Connect your HRIS', text: 'Sync people, contracts, and pay data.' },
+            { title: 'Map entities and pay groups', text: 'Local rules applied automatically.' },
+            { title: 'Run and approve', text: 'One calendar, one approval flow.' },
+            { title: 'Pay and report', text: 'Payslips, filings, and reporting in 200+ currencies.' },
+          ] },
+          { intent: 'stat', stat: '150+', headline: 'Countries where Deel runs payroll on its own rails', subhead: 'With 200+ currencies and in-house entities.' },
+          { intent: 'comparison', headline: 'Before and after', columns: [
+            { title: 'Vendor patchwork', bullets: ['Five providers on average', 'Manual reconciliation every cycle', 'Compliance gaps surface late'] },
+            { title: 'Deel Global Payroll', bullets: ['One platform, one payroll engine', 'Automated reconciliation', 'Real-time compliance checks'] },
+          ] },
+          { intent: 'quote', quote: 'Deel enables us to hire and support exceptional talent anywhere.', attribution: 'Mati Staniszewski, CEO, ElevenLabs' },
+          { intent: 'closing', headline: 'Let\'s run your next payroll together', subhead: 'Book a 30-minute walkthrough with a payroll specialist.', cta: 'Book a demo', footer: 'deel.com' },
+        ],
+      },
     },
     mono: {
       name: 'Editorial Mono',
@@ -692,6 +783,16 @@ const Brand = (() => {
         cta: 'Read the issue',
         stat: '12',
         footer: 'folio.studio',
+      },
+      deck: {
+        title: 'Issue 14',
+        slides: [
+          { intent: 'cover', eyebrow: 'Issue 14', headline: 'The quiet return of the printed annual report', subhead: 'Why finance teams are putting their numbers back on paper.' },
+          { intent: 'statement', headline: 'Trust is a typeface', subhead: 'What a page communicates before anyone reads it.' },
+          { intent: 'cards', headline: 'Three things print still does better', items: [{ title: 'Sequence', text: 'A report read in order makes an argument.' }, { title: 'Permanence', text: 'Paper cannot be quietly edited after the board meeting.' }, { title: 'Attention', text: 'Twelve pages hold a reader longer than twelve tabs.' }] },
+          { intent: 'quote', quote: 'We printed 400 copies and the questions in the AGM changed.', attribution: 'CFO, listed manufacturer' },
+          { intent: 'closing', headline: 'Read the issue', cta: 'Read the issue', footer: 'folio.studio' },
+        ],
       },
     },
     pastel: {
@@ -717,6 +818,16 @@ const Brand = (() => {
         cta: 'Start for $12',
         stat: '3 min',
         footer: 'sprout.plants',
+      },
+      deck: {
+        title: 'Sprout',
+        slides: [
+          { intent: 'cover', eyebrow: 'New', headline: 'Plants that forgive you', subhead: 'Low-light, low-effort greenery delivered monthly.' },
+          { intent: 'process', headline: 'How it works', steps: [{ title: 'Pick a plan', text: 'Three sizes, one price each.' }, { title: 'Meet your plant', text: 'Delivered potted, with a care card.' }, { title: 'Skip or swap', text: 'Any month, in two taps.' }] },
+          { intent: 'stat', stat: '3 min', headline: 'Weekly care time, measured by our members' },
+          { intent: 'cards', headline: 'Why members stay', items: [{ title: 'Forgiving species', text: 'Chosen for low light and missed waterings.' }, { title: 'Real support', text: 'Text a plant person, get an answer the same day.' }, { title: 'Fair pricing', text: 'From $12 a month, cancel anytime.' }] },
+          { intent: 'closing', headline: 'Start with one plant', cta: 'Start for $12', footer: 'sprout.plants' },
+        ],
       },
     },
   };
@@ -950,11 +1061,27 @@ const Text = (() => {
    Anything that breaks a rule (overflowing text, text off the safe area, unreadable contrast) is rejected. */
 const Engine = (() => {
   const H_LEVELS = [0.055, 0.07, 0.09, 0.115, 0.145, 0.18];
-  const ARCHETYPES = ['type-led', 'split', 'full-bleed', 'poster', 'mosaic', 'color-block', 'editorial', 'stat'];
+  const ARCHETYPES = ['type-led', 'split', 'full-bleed', 'poster', 'mosaic', 'color-block', 'editorial', 'stat', 'agenda', 'comparison', 'process', 'cards', 'quote'];
   const ARCH_LABEL = {
     'type-led': 'Type-led', 'split': 'Split', 'full-bleed': 'Full-bleed image', 'poster': 'Framed image',
     'mosaic': 'Mosaic', 'color-block': 'Color blocks', 'editorial': 'Editorial', 'stat': 'Statement stat',
+    'agenda': 'Agenda', 'comparison': 'Comparison', 'process': 'Process', 'cards': 'Cards', 'quote': 'Quote',
   };
+  // Slide intents (deck mode) and the families that can express them.
+  const SLIDE_INTENTS = ['cover', 'agenda', 'statement', 'stat', 'comparison', 'process', 'cards', 'quote', 'body', 'closing'];
+  const INTENT_WEIGHTS = {
+    cover: { 'type-led': 3, 'full-bleed': 3, split: 2, 'color-block': 1.5, poster: 1 },
+    agenda: { agenda: 1 },
+    statement: { 'type-led': 3, 'color-block': 1.5, editorial: 1 },
+    stat: { stat: 1 },
+    comparison: { comparison: 1 },
+    process: { process: 1 },
+    cards: { cards: 1 },
+    quote: { quote: 1 },
+    body: { editorial: 2, split: 1.5, poster: 1, 'type-led': 1 },
+    closing: { 'type-led': 2, 'color-block': 1.5, 'full-bleed': 1 },
+  };
+  const normItems = arr => (arr || []).map((it, i) => typeof it === 'string' ? { title: it, text: '' } : { title: it.title || it.name || '', text: it.text || it.body || it.description || '', icon: it.icon, bullets: it.bullets }).filter(it => it.title || it.text);
 
   const snap = (v, u) => Math.round(v / u) * u;
   const snapFont = (v, unit) => { const s = Math.max(2, unit / 4); return Math.max(10, Math.round(v / s) * s); };
@@ -1007,6 +1134,12 @@ const Engine = (() => {
       }
       if (it.kind === 'rule') { const h = it.h || Math.max(2, g.unit / 4); blocks.push({ ...it, w: Math.min(region.w, it.w || snap(region.w * 0.25, g.unit)), h }); total += h; continue; }
       if (it.kind === 'logo') { const h = it.h; const w = Math.min(region.w, snap(h * it.aspect, g.unit)); blocks.push({ ...it, w, h }); total += h; continue; }
+      if (it.kind === 'icon' || it.kind === 'badge') { blocks.push({ ...it, w: it.h }); total += it.h; continue; }
+      if (it.kind === 'list') {
+        const res = fitList(it, region, g); if (!res) return null;
+        blocks.push({ ...it, lines: res.lines, font: { ...it.font, size: res.size }, h: res.height, w: region.w, inkW: res.inkW, indent: res.indent, itemGap: res.itemGap, align: 'left' });
+        total += res.height; continue;
+      }
       const text = Text.transform(it.text, it.font.transform);
       const f = Text.fit(text, it.font, region.w, region.h, { minSize: it.minSize || Math.max(10, it.font.size * 0.62), step: Math.max(2, g.unit / 4), maxLines: it.maxLines || 12 });
       if (!f) return null;
@@ -1026,6 +1159,7 @@ const Engine = (() => {
         else if (align === 'right') b.x = region.x + region.w - b.w;
       }
       if (b.kind === 'text') b.capacity = textCapacity(b, region.w, slack);
+      if (b.kind === 'list') b.capacity = { items: b.items.length, maxItems: b.items.length + Math.floor(slack / (b.font.size * (b.font.lineHeight || 1.3) * 1.6)), charsPerItem: Math.max(1, Math.floor((region.w - b.indent) / (Text.width(SAMPLE, b.font) / SAMPLE.length) * (b.maxLinesPerItem || 3) * 0.85)) };
       y += b.h + (b.gap || 0);
     }
     return { blocks, total, y0: blocks[0].y, y1: y - (blocks[blocks.length - 1].gap || 0) };
@@ -1043,12 +1177,30 @@ const Engine = (() => {
     const currentChars = b.lines.join(' ').length;
     return { charsPerLine, maxLines, maxChars: Math.max(currentChars, Math.floor(charsPerLine * maxLines * 0.85)), currentChars };
   }
+  // Fit a bulleted or numbered list: every item wraps at the indent, size steps down until all lines fit.
+  function fitList(it, region, g) {
+    const lh = it.font.lineHeight || 1.3; let size = it.font.size; const minSize = Math.max(10, size * 0.6); const step = Math.max(2, g.unit / 4);
+    const n = it.items.length;
+    while (size >= minSize) {
+      const f = { ...it.font, size }; const indent = snap(size * (it.marker === 'number' ? 2.1 : 1.3), 2); const itemGap = Math.round(size * (it.itemGap ?? 0.4));
+      const lines = []; let ok = true; let inkW = 0;
+      for (let i = 0; i < n; i++) {
+        const wrapped = Text.wrap(String(it.items[i]), f, region.w - indent);
+        if (!wrapped || wrapped.length > (it.maxLinesPerItem || 3)) { ok = false; break; }
+        wrapped.forEach((t, j) => { lines.push({ text: t, marker: j === 0 ? (it.marker === 'number' ? String(i + 1).padStart(2, '0') : it.marker === 'none' ? '' : '•') : null, last: j === wrapped.length - 1, markerFill: it.markerFill, markerBold: it.marker === 'number' }); inkW = Math.max(inkW, indent + Text.width(t, f)); });
+      }
+      if (ok) { const height = lines.length * size * lh + (n - 1) * itemGap; if (height <= region.h) return { size, lines, height: snap(height, g.unit / 2) || height, inkW: Math.min(region.w, inkW), indent, itemGap }; }
+      size -= step;
+    }
+    return null;
+  }
   // Ink rect of a text stack (what other things must avoid).
   function inkRect(stack, region, align) {
     let x0 = region.x + region.w, x1 = region.x;
     for (const b of stack.blocks) {
-      let w = b.kind === 'text' ? b.inkW : b.w, x;
+      let w = (b.kind === 'text' || b.kind === 'list') ? b.inkW : b.w, x;
       if (b.kind === 'text') x = align === 'center' ? region.x + (region.w - w) / 2 : align === 'right' ? region.x + region.w - w : region.x;
+      else if (b.kind === 'list') x = region.x;
       else x = b.x;
       x0 = Math.min(x0, x); x1 = Math.max(x1, x + w);
     }
@@ -1067,7 +1219,7 @@ const Engine = (() => {
     items.push({ kind: 'text', role: 'headline', text: content.headline, font: opts.headlineFont || ts.headline, fill: pal.fg, maxLines: opts.headlineMaxLines || (opts.stat ? 3 : 5), gap: gap(ts.subhead.size * 0.9) });
     if (content.subhead && intent.includeSubhead !== false && rng.chance(opts.subhead ?? P[1])) items.push({ kind: 'text', role: 'subhead', text: content.subhead, font: ts.subhead, fill: pal.fg2, maxLines: 4, gap: gap(ts.body.size * 0.9) });
     if (content.body && intent.includeBody !== false && rng.chance(opts.body ?? P[2])) items.push({ kind: 'text', role: 'body', text: content.body, font: ts.body, fill: pal.fg2, maxLines: 6, gap: gap(ts.body.size * 1.2) });
-    if (content.cta && intent.includeCta !== false && rng.chance(opts.cta ?? P[3])) {
+    if (content.cta && intent.includeCta !== false && (intent.ctaAlways || rng.chance(opts.cta ?? P[3]))) {
       const asButton = rng.chance(0.7);
       if (asButton) items.push({ kind: 'button', role: 'cta', text: content.cta, font: ts.cta, fill: pal.accent, color: pal.onAccent, radius: ctx.radius(ts.cta.size * 1.35) });
       else items.push({ kind: 'text', role: 'cta', text: content.cta + '  →', font: { ...ts.cta, weight: ts.eyebrow.weight }, fill: pal.accentText, maxLines: 1 });
@@ -1085,15 +1237,20 @@ const Engine = (() => {
     let pool = hinted.length ? hinted : pairs;
     if (intent.dark > 0.5) { const d = pool.filter(p => p.dark); if (d.length) pool = d; }
     if (intent.dark < -0.5) { const l = pool.filter(p => !p.dark); if (l.length) pool = l; }
-    const pair = rng.weighted(pool.map(p => ({ v: p, w: p.bgRole === 'background' ? (intent.loud > 0.6 ? 1 : 2) : (intent.loud > 0.4 ? 2.2 : 1) })));
-    const fg = pair.fgs[0];
-    const fgAlt = pair.fgs.length > 1 && rng.chance(0.3) ? pair.fgs[1] : fg;
-    let accent = rng.pick(pair.accents);
+    let pair = rng.weighted(pool.map(p => ({ v: p, w: p.bgRole === 'background' ? (intent.loud > 0.6 ? 1 : 2) : (intent.loud > 0.4 ? 2.2 : 1) })));
+    const lock = intent.lockPalette;
+    if (lock && lock.bg) { const found = pairs.find(p => p.bg === Color.normalize(lock.bg)); if (found) pair = found; }
+    const fg = lock && lock.fg && pair.fgs.includes(Color.normalize(lock.fg)) ? Color.normalize(lock.fg) : pair.fgs[0];
+    const fgAlt = !lock && pair.fgs.length > 1 && rng.chance(0.3) ? pair.fgs[1] : fg;
+    let accent = lock && lock.accent && pair.accents.includes(Color.normalize(lock.accent)) ? Color.normalize(lock.accent) : rng.pick(pair.accents);
     if (intent.colorHints && intent.colorHints.length) { const a = pair.accents.filter(x => intent.colorHints.includes(x) && x !== pair.bg); if (a.length) accent = rng.pick(a); }
     const onAccent = Color.contrast(accent, '#FFFFFF') >= Color.contrast(accent, '#000000') ? '#FFFFFF' : '#000000';
     const accentText = Color.contrast(pair.bg, accent) >= 4.5 ? accent : fg;
     const fields = pair.fields.filter(f => f !== accent);
-    return { bg: pair.bg, bgName: pair.bgName, fg: fgAlt, fg2: Color.mix(fg, pair.bg, 0.12), accent, onAccent, accentText, fields: fields.length ? fields : pair.fields, dark: pair.dark, pair };
+    const card = Color.mix(pair.bg, fg, pair.dark ? 0.1 : 0.06);
+    const accentCard = (fields.find(f => Color.contrast(f, pair.bg) >= 1.3) || accent);
+    const accentCardText = Color.bestForeground(accentCard, kit.colors.map(c => Color.normalize(c.hex)).concat(['#FFFFFF', '#000000']), 4.5)[0];
+    return { bg: pair.bg, bgName: pair.bgName, fg: fgAlt, fg2: Color.mix(fg, pair.bg, 0.12), accent, onAccent, accentText, fields: fields.length ? fields : pair.fields, dark: pair.dark, pair, card, cardStroke: Color.mix(pair.bg, fg, 0.18), accentCard, accentCardText };
   }
 
   // ---- Logo placement -----------------------------------------------------------
@@ -1110,7 +1267,7 @@ const Engine = (() => {
       TL: { x: g.mx, y: s.top }, TR: { x: g.w - g.mx - w, y: s.top }, TC: { x: (g.w - w) / 2, y: s.top },
       BL: { x: g.mx, y: g.h - s.bottom - h }, BR: { x: g.w - g.mx - w, y: g.h - s.bottom - h }, BC: { x: (g.w - w) / 2, y: g.h - s.bottom - h },
     };
-    const order = [...(prefer || []), 'TL', 'BL', 'TR', 'BR', 'TC', 'BC'].filter((v, i, a) => a.indexOf(v) === i);
+    const order = [...(intent.logoPrefer || []), ...(prefer || []), 'TL', 'BL', 'TR', 'BR', 'TC', 'BC'].filter((v, i, a) => a.indexOf(v) === i);
     const ok = order.filter(k => { const r = { ...spots[k], w, h }; return !avoid.some(a => inter(grow(r, clear), a)); });
     if (!ok.length) return null;
     const k = rng.weighted(ok.map((v, i) => ({ v, w: Math.max(1, 4 - i) })));
@@ -1523,17 +1680,207 @@ const Engine = (() => {
     return { blocks, meta: { align, valign } };
   };
 
+
+  // ---- Deck families -----------------------------------------------------------------
+  // A card: a surface rect plus an inner stack. Returns blocks or null.
+  function card(ctx, r, items, opts = {}) {
+    const { g } = ctx;
+    const pad = opts.pad ?? g.unit * 3;
+    const region = { x: r.x + pad, y: r.y + pad, w: r.w - 2 * pad, h: r.h - 2 * pad };
+    if (region.w < g.unit * 6 || region.h < g.unit * 4) return null;
+    const stack = buildStack(items, region, opts.align || 'left', opts.valign || 'top', g);
+    if (!stack) return null;
+    const surface = opts.plain ? [] : [{ kind: 'field', x: r.x, y: r.y, w: r.w, h: r.h, fill: opts.fill, radius: opts.radius ?? ctx.radius(g.unit * 2), container: true, stroke: opts.stroke }];
+    return [...surface, ...stack.blocks];
+  }
+  function headlineRegion(ctx, rows, cs, c0 = 0) {
+    return Grid.rect(ctx.g, c0, ctx.r0, cs, rows);
+  }
+  function cardPal(ctx, highlighted) {
+    const { pal } = ctx;
+    if (highlighted) return { fill: pal.accentCard, fg: pal.accentCardText, fg2: Color.mix(pal.accentCardText, pal.accentCard, 0.15), accentText: pal.accentCardText };
+    return { fill: pal.card, fg: pal.fg, fg2: pal.fg2, accentText: pal.accentText };
+  }
+  function iconOrBadge(ctx, cp, i, text, mode) {
+    const { ts, g } = ctx;
+    const h = snap(ts.body.size * 1.9, g.unit);
+    if (mode === 'icon') return { kind: 'icon', name: Icons.forText(text, i), h, fill: cp.accentText, gap: snap(ts.body.size * 0.8, g.unit) };
+    if (mode === 'badge') return { kind: 'badge', text: String(i + 1), h, fill: ctx.pal.accent, color: ctx.pal.onAccent, font: ts.cta, gap: snap(ts.body.size * 0.8, g.unit) };
+    return null;
+  }
+
+  A['agenda'] = ctx => {
+    const { g, rng, pal, ts, content } = ctx;
+    const raw = content.items && content.items.length ? normItems(content.items).map(i => i.title) : (content.bullets || []);
+    const items = raw.filter(Boolean).slice(0, 8);
+    if (items.length < 2) return null;
+    const C = g.cols, R = ctx.R, wide = g.w >= g.h;
+    const head = [{ kind: 'text', role: 'eyebrow', path: 'eyebrow', text: content.eyebrow || '', font: ts.eyebrow, fill: pal.accentText, maxLines: 1, gap: snap(ts.headline.size * 0.4, g.unit) }].filter(i => i.text);
+    head.push({ kind: 'text', role: 'headline', path: 'headline', text: content.headline || 'Agenda', font: ts.headline, fill: pal.fg, maxLines: 3 });
+    const listItem = { kind: 'list', role: 'items', path: 'items', items, marker: rng.chance(0.75) ? 'number' : 'bullet', font: { ...ts.subhead, size: snapFont(ts.subhead.size * 1.15, g.unit), lineHeight: 1.25, weight: nearestWeight(ctx.kit.fonts.body, 500) }, fill: pal.fg, markerFill: pal.accentText, maxLinesPerItem: 2, itemGap: 0.55 };
+    const blocks = []; let avoid = [];
+    if (wide) {
+      const k = Math.max(3, Math.round(C * rng.pick([0.36, 0.42])));
+      const hr = Grid.rect(g, 0, ctx.r0, k, R - 1);
+      const hs = buildStack(head, hr, 'left', rng.pick(['top', 'center']), g); if (!hs) return null;
+      const lr = Grid.rect(g, k + 1, ctx.r0, C - k - 1, R - 1);
+      const ls = buildStack([listItem], lr, 'left', rng.pick(['top', 'center']), g); if (!ls) return null;
+      blocks.push(...hs.blocks, ...ls.blocks); avoid = [inkRect(hs, hr, 'left'), inkRect(ls, lr, 'left')];
+    } else {
+      const hr = Grid.rect(g, 0, ctx.r0, C, 2);
+      const hs = buildStack(head, hr, 'left', 'top', g); if (!hs) return null;
+      const lr = Grid.rect(g, 0, ctx.r0 + 2, C, R - 3);
+      const ls = buildStack([listItem], lr, 'left', 'top', g); if (!ls) return null;
+      blocks.push(...hs.blocks, ...ls.blocks); avoid = [inkRect(hs, hr, 'left'), inkRect(ls, lr, 'left')];
+    }
+    const logo = placeLogo(ctx, avoid, ['BL', 'BR', 'TR']); if (logo) { blocks.push(logo); avoid.push(logo); }
+    const foot = footerBlock(ctx, avoid, logo); if (foot) blocks.push(foot);
+    return { blocks, meta: { items: items.length, marker: listItem.marker } };
+  };
+
+  A['comparison'] = ctx => {
+    const { g, rng, pal, ts, content } = ctx;
+    let cols = normItems(content.columns);
+    if (cols.length < 2) { const it = normItems(content.items); if (it.length >= 2) cols = it.slice(0, 2); }
+    if (cols.length < 2 && content.bullets && content.bullets.length >= 4) { const h = Math.ceil(content.bullets.length / 2); cols = [{ title: 'Before', bullets: content.bullets.slice(0, h) }, { title: 'After', bullets: content.bullets.slice(h) }]; }
+    if (cols.length < 2 || !content.headline) return null;
+    const C = g.cols, R = ctx.R;
+    if (R < 4) return null;
+    const headRows = 2;
+    const hr = headlineRegion(ctx, headRows, rng.pick([C, Math.round(C * 0.75)]));
+    const hs = buildStack([{ kind: 'text', role: 'headline', path: 'headline', text: content.headline, font: { ...ts.headline, size: snapFont(ts.headline.size * 0.85, g.unit) }, fill: pal.fg, maxLines: 2 }], hr, 'left', 'top', g);
+    if (!hs) return null;
+    const plain = rng.chance(0.3); const highlight = !plain && rng.chance(0.55);
+    const k = Math.floor(C / 2); const rows = R - headRows;
+    const rects = [Grid.rect(g, 0, ctx.r0 + headRows, k, rows), Grid.rect(g, C - k, ctx.r0 + headRows, k, rows)];
+    const blocks = [...hs.blocks]; const avoid = [inkRect(hs, hr, 'left')];
+    cols.slice(0, 2).forEach((col, i) => {
+      const cp = cardPal(ctx, highlight && i === 1);
+      const items = [{ kind: 'text', role: 'title', path: `columns.${i}.title`, text: col.title, font: { ...ts.subhead, weight: nearestWeight(ctx.kit.fonts.body, 600) }, fill: cp.fg, maxLines: 2, gap: snap(ts.body.size * 0.8, g.unit) }];
+      if (col.bullets && col.bullets.length) items.push({ kind: 'list', role: 'bullets', path: `columns.${i}.bullets`, items: col.bullets.slice(0, 6), marker: 'bullet', font: ts.body, fill: cp.fg2, markerFill: cp.accentText, maxLinesPerItem: 3 });
+      else if (col.text) items.push({ kind: 'text', role: 'text', path: `columns.${i}.text`, text: col.text, font: ts.body, fill: cp.fg2, maxLines: 8 });
+      const b = card(ctx, rects[i], items, { plain, fill: cp.fill, pad: plain ? 0 : g.unit * 3 });
+      if (!b) { blocks.length = 0; return; }
+      blocks.push(...b); avoid.push(rects[i]);
+    });
+    if (!blocks.length) return null;
+    if (plain) { const r0 = rects[0]; blocks.push({ kind: 'line', x: r0.x + r0.w + g.gutter / 2 + (rects[1].x - r0.x - r0.w - g.gutter) / 2, y: r0.y, w: 0, h: r0.h, fill: pal.cardStroke, width: 2 }); }
+    const logo = placeLogo(ctx, avoid, ['TR']); if (logo) blocks.push(logo);
+    return { blocks, meta: { plain, highlight } };
+  };
+
+  A['process'] = ctx => {
+    const { g, rng, pal, ts, content } = ctx;
+    let steps = normItems(content.steps); if (steps.length < 3) steps = normItems(content.items);
+    steps = steps.slice(0, 5);
+    if (steps.length < 3 || !content.headline) return null;
+    const C = g.cols, R = ctx.R, wide = g.w >= g.h * 1.2;
+    const n = steps.length;
+    const mode = rng.weighted([{ v: 'badge', w: 3 }, { v: 'icon', w: 2 }]);
+    const blocks = []; const avoid = [];
+    const hr = headlineRegion(ctx, 2, rng.pick([C, Math.round(C * 0.7)]));
+    const hs = buildStack([{ kind: 'text', role: 'headline', path: 'headline', text: content.headline, font: { ...ts.headline, size: snapFont(ts.headline.size * 0.85, g.unit) }, fill: pal.fg, maxLines: 2 }], hr, 'left', 'top', g);
+    if (!hs) return null;
+    blocks.push(...hs.blocks); avoid.push(inkRect(hs, hr, 'left'));
+    if (wide && R >= 4) {
+      const per = Math.floor(C / n); const used = per * n; const c0 = Math.floor((C - used) / 2);
+      const rows = R - 2 - (R > 5 ? 1 : 0);
+      const stepBlocks = []; let badgeY = null, firstX = null, lastX = null;
+      for (let i = 0; i < n; i++) {
+        const r = Grid.rect(g, c0 + i * per, ctx.r0 + 2, per, rows); r.w -= g.gutter; // breathing room between steps
+        const cp = cardPal(ctx, false);
+        const items = [iconOrBadge(ctx, cp, i, steps[i].title + ' ' + steps[i].text, mode), { kind: 'text', role: 'title', path: `steps.${i}.title`, text: steps[i].title, font: { ...ts.subhead, weight: nearestWeight(ctx.kit.fonts.body, 600) }, fill: pal.fg, maxLines: 2, gap: snap(ts.body.size * 0.5, g.unit) }];
+        if (steps[i].text) items.push({ kind: 'text', role: 'text', path: `steps.${i}.text`, text: steps[i].text, font: ts.body, fill: pal.fg2, maxLines: 4 });
+        const st = buildStack(items.filter(Boolean), r, 'left', 'top', g); if (!st) return null;
+        const badge = st.blocks[0]; if (badge && badge.kind === 'badge') { badgeY = badge.y + badge.h / 2; firstX = firstX ?? badge.x + badge.w; lastX = badge.x; }
+        stepBlocks.push(...st.blocks); avoid.push(r);
+      }
+      if (badgeY != null && n > 1 && rng.chance(0.7)) blocks.push({ kind: 'line', x: firstX, y: badgeY, w: lastX - firstX, h: 0, fill: pal.cardStroke, width: 2, dash: '8 8' });
+      blocks.push(...stepBlocks);
+    } else {
+      const rows = R - 2; const r = Grid.rect(g, 0, ctx.r0 + 2, C, rows);
+      const badgeH = snap(ts.body.size * 1.9, g.unit); const gutter = g.unit * 2;
+      const stepH = Math.floor(r.h / n);
+      for (let i = 0; i < n; i++) {
+        const region = { x: r.x + badgeH + gutter * 2, y: r.y + i * stepH, w: r.w - badgeH - gutter * 2, h: stepH - g.unit };
+        const items = [{ kind: 'text', role: 'title', path: `steps.${i}.title`, text: steps[i].title, font: { ...ts.subhead, weight: nearestWeight(ctx.kit.fonts.body, 600) }, fill: pal.fg, maxLines: 2, gap: snap(ts.body.size * 0.4, g.unit) }];
+        if (steps[i].text) items.push({ kind: 'text', role: 'text', path: `steps.${i}.text`, text: steps[i].text, font: ts.body, fill: pal.fg2, maxLines: 3 });
+        const st = buildStack(items, region, 'left', 'top', g); if (!st) return null;
+        const b = iconOrBadge(ctx, cardPal(ctx, false), i, steps[i].title, mode); b.x = r.x; b.y = region.y; b.w = b.h;
+        if (i < n - 1) blocks.push({ kind: 'line', x: r.x + badgeH / 2, y: region.y + badgeH, w: 0, h: stepH - badgeH, fill: pal.cardStroke, width: 2, dash: '8 8' });
+        blocks.push(b, ...st.blocks); avoid.push({ x: r.x, y: region.y, w: r.w, h: stepH });
+      }
+    }
+    const logo = placeLogo(ctx, avoid, ['TR', 'BR']); if (logo) blocks.push(logo);
+    return { blocks, meta: { steps: n, mode, wide } };
+  };
+
+  A['cards'] = ctx => {
+    const { g, rng, pal, ts, content } = ctx;
+    const items = normItems(content.items).slice(0, 6);
+    if (items.length < 2 || !content.headline) return null;
+    const C = g.cols, R = ctx.R, wide = g.w >= g.h * 1.2, tall = g.h > g.w * 1.3;
+    const n = Math.min(items.length, wide ? 4 : tall ? 3 : 4);
+    const list = items.slice(0, n);
+    const mode = rng.weighted([{ v: 'icon', w: 3 }, { v: 'badge', w: 1 }, { v: 'none', w: 1 }]);
+    const highlight = rng.chance(0.35) ? rng.int(0, n - 1) : -1;
+    const blocks = []; const avoid = [];
+    const headItems = [{ kind: 'text', role: 'headline', path: 'headline', text: content.headline, font: { ...ts.headline, size: snapFont(ts.headline.size * 0.85, g.unit) }, fill: pal.fg, maxLines: 2, gap: snap(ts.subhead.size * 0.6, g.unit) }];
+    if (content.subhead && rng.chance(0.5)) headItems.push({ kind: 'text', role: 'subhead', path: 'subhead', text: content.subhead, font: ts.subhead, fill: pal.fg2, maxLines: 2 });
+    const headRows = wide ? 2 : 2;
+    const hr = headlineRegion(ctx, headRows, rng.pick([C, Math.round(C * 0.75)]));
+    const hs = buildStack(headItems, hr, 'left', 'top', g); if (!hs) return null;
+    blocks.push(...hs.blocks); avoid.push(inkRect(hs, hr, 'left'));
+    // grid of cards
+    let rects = [];
+    if (wide || (!tall && n <= 2)) { const per = Math.floor(C / n); const c0 = Math.floor((C - per * n) / 2); const rows = R - headRows; for (let i = 0; i < n; i++) rects.push(Grid.rect(g, c0 + i * per, ctx.r0 + headRows, per, rows)); }
+    else if (!tall) { const per = Math.floor(C / 2); const rowsEach = Math.floor((R - headRows) / 2); for (let i = 0; i < n; i++) rects.push(Grid.rect(g, (i % 2) * (C - per), ctx.r0 + headRows + Math.floor(i / 2) * rowsEach, per, rowsEach)); }
+    else { const rowsEach = Math.floor((R - headRows) / n); for (let i = 0; i < n; i++) rects.push(Grid.rect(g, 0, ctx.r0 + headRows + i * rowsEach, C, rowsEach)); }
+    for (let i = 0; i < n; i++) {
+      const cp = cardPal(ctx, i === highlight);
+      const ib = iconOrBadge(ctx, cp, i, list[i].title + ' ' + list[i].text, mode === 'none' ? null : mode);
+      const its = [ib, { kind: 'text', role: 'title', path: `items.${i}.title`, text: list[i].title, font: { ...ts.subhead, weight: nearestWeight(ctx.kit.fonts.body, 600) }, fill: cp.fg, maxLines: 2, gap: snap(ts.body.size * 0.45, g.unit) }].filter(Boolean);
+      if (list[i].text) its.push({ kind: 'text', role: 'text', path: `items.${i}.text`, text: list[i].text, font: ts.body, fill: cp.fg2, maxLines: 5 });
+      const r = { ...rects[i] }; if (rects.length > 1 && (wide || !tall)) r.w -= 0; 
+      const b = card(ctx, r, its, { fill: cp.fill, valign: tall ? 'center' : 'top' }); if (!b) return null;
+      blocks.push(...b); avoid.push(r);
+    }
+    const logo = placeLogo(ctx, avoid, ['TR', 'BR']); if (logo) blocks.push(logo);
+    return { blocks, meta: { cards: n, mode, highlight: highlight >= 0 } };
+  };
+
+  A['quote'] = ctx => {
+    const { g, rng, pal, ts, content } = ctx;
+    if (!content.quote) return null;
+    const C = g.cols, R = ctx.R;
+    const align = rng.weighted([{ v: 'left', w: 2 }, { v: 'center', w: 2 }]);
+    const img = ctx.assets.images.length && g.w >= g.h && rng.chance(0.4) ? pickImage(ctx) : null;
+    const blocks = []; let region, k = 0;
+    if (img) { k = Math.round(C * 0.4); const r = Grid.rect(g, 0, ctx.r0, k, R); blocks.push(imageBlock(ctx, r, img, ctx.radius(g.unit * 2))); region = Grid.rect(g, k + 1, ctx.r0 + 1, C - k - 1, R - 2); }
+    else { const cs = align === 'center' ? Math.round(C * 0.8) : Math.round(C * 0.75); const c0 = align === 'center' ? Math.floor((C - cs) / 2) : 0; region = Grid.rect(g, c0, ctx.r0 + 1, cs, R - 2); }
+    const quoteFont = { ...ts.headline, size: snapFont(ts.headline.size * 0.8, g.unit), weight: nearestWeight(ctx.kit.fonts.display, (ctx.kit.fonts.displayWeight || 600) - 100), lineHeight: 1.15 };
+    const items = [];
+    if (rng.chance(0.7)) items.push({ kind: 'text', role: 'mark', text: '\u201C', font: { ...ts.headline, size: snapFont(ts.headline.size * 1.6, g.unit), lineHeight: 0.7 }, fill: pal.accentText, maxLines: 1, gap: 0, decorative: true });
+    items.push({ kind: 'text', role: 'quote', path: 'quote', text: content.quote, font: quoteFont, fill: pal.fg, maxLines: 6, gap: snap(ts.body.size * 1.2, g.unit) });
+    if (content.attribution) items.push({ kind: 'text', role: 'attribution', path: 'attribution', text: content.attribution, font: ts.eyebrow, fill: pal.fg2, maxLines: 2 });
+    const stack = buildStack(items, region, img ? 'left' : align, 'center', g); if (!stack) return null;
+    blocks.push(...stack.blocks);
+    const avoid = [inkRect(stack, region, img ? 'left' : align), ...(img ? [blocks[0]] : [])];
+    const logo = placeLogo(ctx, avoid, align === 'center' ? ['BC', 'BL'] : ['BL', 'TL']); if (logo && !(img && inter(logo, blocks[0]))) blocks.push(logo);
+    return { blocks, meta: { align, image: !!img } };
+  };
+
   // ---- Validation and metrics ------------------------------------------------------
   function validate(layout, g) {
-    const texts = layout.blocks.filter(b => b.kind === 'text' || b.kind === 'button' || b.kind === 'logo');
+    const texts = layout.blocks.filter(b => b.kind === 'text' || b.kind === 'list' || b.kind === 'button' || b.kind === 'logo' || b.kind === 'badge');
     const s = g.safe;
     for (const t of texts) {
-      const r = { x: t.x, y: t.y, w: t.kind === 'text' ? (t.inkW || t.w) : t.w, h: t.h };
+      const r = { x: t.x, y: t.y, w: (t.kind === 'text' || t.kind === 'list') ? (t.inkW || t.w) : t.w, h: t.h };
       if (t.kind === 'text' && t.align === 'center') r.x = t.x + (t.w - r.w) / 2;
       if (t.kind === 'text' && t.align === 'right') r.x = t.x + t.w - r.w;
       if (r.x < s.left - 1 || r.y < s.top - 1 || r.x + r.w > g.w - s.right + 1 || r.y + r.h > g.h - s.bottom + 1) return 'outside safe area: ' + t.role;
       for (const o of texts) if (o !== t) {
-        const ro = { x: o.x, y: o.y, w: o.kind === 'text' ? (o.inkW || o.w) : o.w, h: o.h };
+        const ro = { x: o.x, y: o.y, w: (o.kind === 'text' || o.kind === 'list') ? (o.inkW || o.w) : o.w, h: o.h };
         if (o.kind === 'text' && o.align === 'center') ro.x = o.x + (o.w - ro.w) / 2;
         if (o.kind === 'text' && o.align === 'right') ro.x = o.x + o.w - ro.w;
         if (inter(r, ro)) return 'overlap: ' + t.role + '/' + o.role;
@@ -1546,7 +1893,7 @@ const Engine = (() => {
       const shape = under.filter(b => b.kind === 'shape').pop();
       if (shape && inter(r, shape) && t.kind !== 'button') return 'text on shape: ' + t.role;
       if (topImage && !(under.some(b => b.kind === 'scrim') || (topField && layout.blocks.indexOf(topField) > layout.blocks.indexOf(topImage))) && !layout.meta.overlay) return 'text on image without treatment: ' + t.role;
-      if (topField && !topImage && t.kind === 'text' && t.fill && Color.contrast(topField.fill, t.fill) < (t.role === 'headline' || t.role === 'stat' ? 3 : 4.5) && !topField.alpha) return 'low contrast on field: ' + t.role;
+      if (topField && !topImage && (t.kind === 'text' || t.kind === 'list') && t.fill && Color.contrast(topField.fill, t.fill) < (t.role === 'headline' || t.role === 'stat' || t.role === 'mark' ? 3 : 4.5) && !topField.alpha) return 'low contrast on field: ' + t.role;
     }
     return null;
   }
@@ -1555,9 +1902,9 @@ const Engine = (() => {
     let ink = 0, sx = 0, sy = 0, sw = 0, textInk = 0;
     for (const b of layout.blocks) {
       if (b.kind === 'scrim') continue;
-      const r = { x: b.x, y: b.y, w: b.kind === 'text' ? (b.inkW || b.w) : b.w, h: b.h };
+      const r = { x: b.x, y: b.y, w: (b.kind === 'text' || b.kind === 'list') ? (b.inkW || b.w) : b.w, h: b.h };
       const a = Math.min(total, area({ x: Math.max(0, r.x), y: Math.max(0, r.y), w: Math.min(g.w, r.x + r.w) - Math.max(0, r.x), h: Math.min(g.h, r.y + r.h) - Math.max(0, r.y) }));
-      if (b.kind === 'text' || b.kind === 'button' || b.kind === 'logo') { textInk += a; sx += (r.x + r.w / 2) * a; sy += (r.y + r.h / 2) * a; sw += a; }
+      if (b.kind === 'text' || b.kind === 'list' || b.kind === 'button' || b.kind === 'logo') { textInk += a; sx += (r.x + r.w / 2) * a; sy += (r.y + r.h / 2) * a; sw += a; }
       else if (b.kind === 'image' || b.kind === 'field') { sx += (r.x + r.w / 2) * a * 0.3; sy += (r.y + r.h / 2) * a * 0.3; sw += a * 0.3; }
       ink += a;
     }
@@ -1568,7 +1915,7 @@ const Engine = (() => {
   }
   function signature(layout, g) {
     const cell = v => Math.round(v / (g.cw + g.gutter));
-    return layout.archetype + '|' + layout.format.id + '|' + layout.palette.bg + layout.palette.fg + '|' + layout.blocks.map(b => (b.kind[0]) + (b.role ? b.role[0] : '') + cell(b.x) + ',' + cell(b.y) + ',' + cell(b.w) + ',' + cell(b.h) + (b.kind === 'text' ? '/' + b.lines.length + ':' + b.font.size : '')).join(';');
+    return layout.archetype + '|' + layout.format.id + '|' + layout.palette.bg + layout.palette.fg + '|' + layout.blocks.map(b => (b.kind[0]) + (b.role ? b.role[0] : '') + cell(b.x) + ',' + cell(b.y) + ',' + cell(b.w) + ',' + cell(b.h) + ((b.kind === 'text' || b.kind === 'list') ? '/' + b.lines.length + ':' + b.font.size : '')).join(';');
   }
 
   // ---- Public API --------------------------------------------------------------------
@@ -1580,8 +1927,13 @@ const Engine = (() => {
       : e === 'type'
         ? { 'type-led': 3, 'color-block': 2.5, editorial: 2, stat: 1.6, split: 1, poster: 0.5, 'full-bleed': 0.3, mosaic: 0.15 }
         : { 'type-led': 2, split: 2, poster: 1.5, 'full-bleed': 1.5, 'color-block': 2, editorial: 1.5, mosaic: n >= 2 ? 1 : 0.2, stat: 1 };
+    if (intent.slideIntent && INTENT_WEIGHTS[intent.slideIntent]) {
+      const iw = INTENT_WEIGHTS[intent.slideIntent]; for (const k of Object.keys(w)) w[k] = 0; for (const k of Object.keys(iw)) w[k] = iw[k];
+      for (const k of ['agenda', 'comparison', 'process', 'cards', 'quote']) if (!(k in w)) w[k] = 0;
+    } else { for (const k of ['agenda', 'comparison', 'process', 'cards', 'quote']) w[k] = (intent.archetypes && intent.archetypes.includes(k)) ? 1 : 0; }
     if (!n) { w['full-bleed'] = 0; w.mosaic = 0; w.poster *= 0.6; w.split *= 0.7; }
     if (!content.stat) w.stat = 0;
+    if (!content.quote) w.quote = 0;
     if (intent.archetypes && intent.archetypes.length) for (const k of Object.keys(w)) if (!intent.archetypes.includes(k)) w[k] = 0;
     return w;
   }
@@ -1599,7 +1951,7 @@ const Engine = (() => {
     // Type level from loudness, then step down if text refuses to fit.
     const loud = intent.loud ?? 0.5;
     const center = Math.round(loud * (H_LEVELS.length - 1));
-    let level = Math.max(0, Math.min(H_LEVELS.length - 1, center + rng.int(-1, 1)));
+    let level = intent.level != null ? Math.max(0, Math.min(H_LEVELS.length - 1, intent.level)) : Math.max(0, Math.min(H_LEVELS.length - 1, center + rng.int(-1, 1)));
     const weights = archetypeWeights(intent, assets, content);
     const items = Object.entries(weights).filter(([, w]) => w > 0).map(([v, w]) => ({ v, w }));
     if (!items.length) return null;
@@ -1622,6 +1974,13 @@ const Engine = (() => {
       if (bad) { layout.rejected = bad; continue; }
       layout.metrics = metrics(layout, g);
       layout.signature = signature(layout, g);
+      layout.slideIntent = intent.slideIntent || null;
+      let imgN = 0;
+      for (const b of layout.blocks) {
+        if (b.kind === 'image') { b.decorative = false; b.path = b.path || `image_${++imgN}`; }
+        else if (b.kind === 'text' || b.kind === 'list' || b.kind === 'button') { b.decorative = !!b.decorative; if (!b.path && b.role) b.path = b.role; }
+        else b.decorative = true;
+      }
       layout.id = archetype.slice(0, 2).toUpperCase() + '-' + format.id.slice(0, 2).toUpperCase() + '-' + seed.toString(36);
       return layout;
     }
@@ -1646,7 +2005,142 @@ const Engine = (() => {
     return { layouts: out, attempts };
   }
 
-  return { generate, generateMany, ARCHETYPES, ARCH_LABEL, H_LEVELS, typeSet, logoAspect };
+  // Content schema: every editable block becomes a field; dotted paths with indices become arrays.
+  function contentSchema(layout) {
+    const root = { type: 'object', additionalProperties: false, properties: {}, required: [] };
+    const ensure = (node, key, isArray) => {
+      if (!node.properties[key]) node.properties[key] = isArray ? { type: 'array', items: { type: 'object', additionalProperties: false, properties: {}, required: [] }, maxItems: 0 } : { type: 'object', additionalProperties: false, properties: {}, required: [] };
+      if (!node.required.includes(key)) node.required.push(key);
+      return node.properties[key];
+    };
+    for (const b of layout.blocks) {
+      if (b.decorative || !b.path) continue;
+      const parts = b.path.split('.');
+      let node = root;
+      for (let i = 0; i < parts.length - 1; i++) {
+        const key = parts[i]; const nextIsIndex = /^\d+$/.test(parts[i + 1]);
+        if (/^\d+$/.test(key)) continue;
+        const child = ensure(node, key, nextIsIndex);
+        if (nextIsIndex) { child.maxItems = Math.max(child.maxItems, +parts[i + 1] + 1); node = child.items; } else node = child;
+      }
+      const leaf = parts[parts.length - 1];
+      let field;
+      if (b.kind === 'list') field = { type: 'array', items: { type: 'string' }, description: `${leaf}: ${b.capacity.items} items (up to ${b.capacity.maxItems}), each up to ${b.capacity.charsPerItem} characters` };
+      else if (b.kind === 'image') field = { type: 'string', description: `Image prompt for a ${Math.round(b.w)}×${Math.round(b.h)} area` };
+      else if (b.kind === 'button') field = { type: 'string', description: `${leaf}: button label, up to 24 characters` };
+      else field = { type: 'string', description: `${leaf}: up to ${b.capacity ? b.capacity.maxChars : 80} characters, ${b.capacity ? b.capacity.maxLines : 2} lines` };
+      if (leaf === 'eyebrow' || leaf === 'footer') field.description += ' (optional, may be empty)';
+      node.properties[leaf] = field; if (!node.required.includes(leaf)) node.required.push(leaf);
+    }
+    return root;
+  }
+  // Apply new copy to an existing layout: same seed, same moves, text refitted. Null when it no longer fits.
+  function hydrate(layout, content, env) {
+    const intent = { ...env.intent, content: { ...(env.intent.content || {}), ...content }, lockPalette: layout.palette, level: layout.type.level, slideIntent: layout.slideIntent };
+    return generate({ intent, kit: env.kit, assets: env.assets, format: Grid.byId[layout.format.id], seed: layout.seed, archetype: layout.archetype });
+  }
+  function palettePick(kit, intent, seed) {
+    const pal = choosePalette({ rng: RNG.make(seed), kit, intent });
+    return pal ? { bg: pal.bg, fg: pal.fg, accent: pal.accent, bgName: pal.bgName } : null;
+  }
+  return { generate, generateMany, ARCHETYPES, ARCH_LABEL, SLIDE_INTENTS, INTENT_WEIGHTS, H_LEVELS, typeSet, logoAspect, contentSchema, hydrate, palettePick, normItems };
+})();
+
+/* js/icons.js */
+/* Icon set: a curated subset of Phosphor Icons (regular weight), MIT License, (c) Phosphor Icons (Helena Zhang, Tobias Fried).
+   https://phosphoricons.com  Each entry is the inner markup of a 256x256 viewBox; strokes use currentColor. */
+const Icons = (() => {
+  const SET = {
+"check-circle": "<polyline points=\"88 136 112 160 168 104\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><circle cx=\"128\" cy=\"128\" r=\"96\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/>",
+"star": "<path d=\"M128,189.09l54.72,33.65a8.4,8.4,0,0,0,12.52-9.17l-14.88-62.79,48.7-42A8.46,8.46,0,0,0,224.27,94L160.36,88.8,135.74,29.2a8.36,8.36,0,0,0-15.48,0L95.64,88.8,31.73,94a8.46,8.46,0,0,0-4.79,14.83l48.7,42L60.76,213.57a8.4,8.4,0,0,0,12.52,9.17Z\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/>",
+"users": "<circle cx=\"84\" cy=\"108\" r=\"52\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><path d=\"M10.23,200a88,88,0,0,1,147.54,0\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><path d=\"M172,160a87.93,87.93,0,0,1,73.77,40\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><path d=\"M152.69,59.7A52,52,0,1,1,172,160\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/>",
+"users-three": "<path d=\"M192,120a59.91,59.91,0,0,1,48,24\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><path d=\"M16,144a59.91,59.91,0,0,1,48-24\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><circle cx=\"128\" cy=\"144\" r=\"40\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><path d=\"M72,216a65,65,0,0,1,112,0\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><path d=\"M161,80a32,32,0,1,1,31,40\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><path d=\"M64,120A32,32,0,1,1,95,80\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/>",
+"globe": "<circle cx=\"128\" cy=\"128\" r=\"96\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><path d=\"M168,128c0,64-40,96-40,96s-40-32-40-96,40-96,40-96S168,64,168,128Z\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><line x1=\"37.46\" y1=\"96\" x2=\"218.54\" y2=\"96\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><line x1=\"37.46\" y1=\"160\" x2=\"218.54\" y2=\"160\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/>",
+"shield-check": "<path d=\"M216,112V56a8,8,0,0,0-8-8H48a8,8,0,0,0-8,8v56c0,96,88,120,88,120S216,208,216,112Z\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><polyline points=\"88 136 112 160 168 104\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/>",
+"lightning": "<polygon points=\"160 16 144 96 208 120 96 240 112 160 48 136 160 16\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/>",
+"chart-line-up": "<polyline points=\"224 208 32 208 32 48\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><polyline points=\"200 72 128 144 96 112 32 176\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><polyline points=\"200 112 200 72 160 72\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/>",
+"trend-up": "<polyline points=\"232 56 136 152 96 112 24 184\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><polyline points=\"232 120 232 56 168 56\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/>",
+"clock": "<circle cx=\"128\" cy=\"128\" r=\"96\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><polyline points=\"128 72 128 128 184 128\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/>",
+"timer": "<circle cx=\"128\" cy=\"136\" r=\"88\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><line x1=\"128\" y1=\"136\" x2=\"168\" y2=\"96\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><line x1=\"104\" y1=\"16\" x2=\"152\" y2=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/>",
+"currency-circle-dollar": "<line x1=\"128\" y1=\"72\" x2=\"128\" y2=\"88\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><line x1=\"128\" y1=\"168\" x2=\"128\" y2=\"184\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><circle cx=\"128\" cy=\"128\" r=\"96\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><path d=\"M104,168h36a20,20,0,0,0,0-40H116a20,20,0,0,1,0-40h36\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/>",
+"coins": "<ellipse cx=\"96\" cy=\"84\" rx=\"80\" ry=\"36\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><path d=\"M16,84v40c0,19.88,35.82,36,80,36s80-16.12,80-36V84\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><line x1=\"64\" y1=\"117\" x2=\"64\" y2=\"157\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><path d=\"M176,96.72c36.52,3.34,64,17.86,64,35.28,0,19.88-35.82,36-80,36-19.6,0-37.56-3.17-51.47-8.44\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><path d=\"M80,159.28V172c0,19.88,35.82,36,80,36s80-16.12,80-36V132\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><line x1=\"192\" y1=\"165\" x2=\"192\" y2=\"205\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><line x1=\"128\" y1=\"117\" x2=\"128\" y2=\"205\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/>",
+"credit-card": "<rect x=\"24\" y=\"56\" width=\"208\" height=\"144\" rx=\"8\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><line x1=\"168\" y1=\"168\" x2=\"200\" y2=\"168\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><line x1=\"120\" y1=\"168\" x2=\"136\" y2=\"168\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><line x1=\"24\" y1=\"96\" x2=\"232\" y2=\"96\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/>",
+"bank": "<polygon points=\"24 96 232 96 128 32 24 96\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><line x1=\"56\" y1=\"96\" x2=\"56\" y2=\"176\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><line x1=\"104\" y1=\"96\" x2=\"104\" y2=\"176\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><line x1=\"152\" y1=\"96\" x2=\"152\" y2=\"176\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><line x1=\"200\" y1=\"96\" x2=\"200\" y2=\"176\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><line x1=\"32\" y1=\"176\" x2=\"224\" y2=\"176\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><line x1=\"16\" y1=\"208\" x2=\"240\" y2=\"208\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/>",
+"hand-coins": "<circle cx=\"204\" cy=\"84\" r=\"28\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><path d=\"M48,208H16a8,8,0,0,1-8-8V160a8,8,0,0,1,8-8H48\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><path d=\"M112,160h32l67-15.41a16.61,16.61,0,0,1,21,16h0a16.59,16.59,0,0,1-9.18,14.85L184,192l-64,16H48V152l25-25a24,24,0,0,1,17-7H140a20,20,0,0,1,20,20h0a20,20,0,0,1-20,20Z\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><path d=\"M176,85.29A28,28,0,1,1,192,58.71\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/>",
+"rocket-launch": "<path d=\"M191.11,112.89c24-24,25.5-52.55,24.75-65.28a8,8,0,0,0-7.47-7.47c-12.73-.75-41.26.73-65.28,24.75L80,128l48,48Z\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><path d=\"M136,72H74.35a8,8,0,0,0-5.65,2.34L34.35,108.69a8,8,0,0,0,4.53,13.57L80,128\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><path d=\"M184,120v61.65a8,8,0,0,1-2.34,5.65l-34.35,34.35a8,8,0,0,1-13.57-4.53L128,176\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><path d=\"M94.56,187.82C90.69,196.31,77.65,216,40,216c0-37.65,19.69-50.69,28.18-54.56\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/>",
+"target": "<line x1=\"128\" y1=\"128\" x2=\"224\" y2=\"32\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><path d=\"M195.88,60.12a95.88,95.88,0,1,0,18.77,26.49\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><path d=\"M161.94,94.06a48,48,0,1,0,14,31.2\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/>",
+"heart": "<path d=\"M128,224S24,168,24,102A54,54,0,0,1,78,48c22.59,0,41.94,12.31,50,32,8.06-19.69,27.41-32,50-32a54,54,0,0,1,54,54C232,168,128,224,128,224Z\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/>",
+"lock": "<rect x=\"40\" y=\"88\" width=\"176\" height=\"128\" rx=\"8\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><circle cx=\"128\" cy=\"152\" r=\"12\"/><path d=\"M88,88V56a40,40,0,0,1,80,0V88\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/>",
+"envelope": "<polyline points=\"224 56 128 144 32 56\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><path d=\"M32,56H224a0,0,0,0,1,0,0V192a8,8,0,0,1-8,8H40a8,8,0,0,1-8-8V56A0,0,0,0,1,32,56Z\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><line x1=\"110.55\" y1=\"128\" x2=\"34.47\" y2=\"197.74\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><line x1=\"221.53\" y1=\"197.74\" x2=\"145.45\" y2=\"128\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/>",
+"map-pin": "<circle cx=\"128\" cy=\"104\" r=\"32\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><path d=\"M208,104c0,72-80,128-80,128S48,176,48,104a80,80,0,0,1,160,0Z\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/>",
+"phone": "<path d=\"M164.39,145.34a8,8,0,0,1,7.59-.69l47.16,21.13a8,8,0,0,1,4.8,8.3A48.33,48.33,0,0,1,176,216,136,136,0,0,1,40,80,48.33,48.33,0,0,1,81.92,32.06a8,8,0,0,1,8.3,4.8l21.13,47.2a8,8,0,0,1-.66,7.53L89.32,117a7.93,7.93,0,0,0-.54,7.81c8.27,16.93,25.77,34.22,42.75,42.41a7.92,7.92,0,0,0,7.83-.59Z\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/>",
+"briefcase": "<rect x=\"32\" y=\"64\" width=\"192\" height=\"144\" rx=\"8\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><path d=\"M168,64V48a16,16,0,0,0-16-16H104A16,16,0,0,0,88,48V64\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><path d=\"M224,118.31A191.09,191.09,0,0,1,128,144a191.14,191.14,0,0,1-96-25.68\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><line x1=\"112\" y1=\"112\" x2=\"144\" y2=\"112\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/>",
+"calendar": "<rect x=\"40\" y=\"40\" width=\"176\" height=\"176\" rx=\"8\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><line x1=\"176\" y1=\"24\" x2=\"176\" y2=\"56\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><line x1=\"80\" y1=\"24\" x2=\"80\" y2=\"56\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><line x1=\"40\" y1=\"88\" x2=\"216\" y2=\"88\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><polyline points=\"88 128 104 120 104 184\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><path d=\"M138.14,128a16,16,0,1,1,26.64,17.63L136,184h32\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/>",
+"gear": "<circle cx=\"128\" cy=\"128\" r=\"40\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><path d=\"M41.43,178.09A99.14,99.14,0,0,1,31.36,153.8l16.78-21a81.59,81.59,0,0,1,0-9.64l-16.77-21a99.43,99.43,0,0,1,10.05-24.3l26.71-3a81,81,0,0,1,6.81-6.81l3-26.7A99.14,99.14,0,0,1,102.2,31.36l21,16.78a81.59,81.59,0,0,1,9.64,0l21-16.77a99.43,99.43,0,0,1,24.3,10.05l3,26.71a81,81,0,0,1,6.81,6.81l26.7,3a99.14,99.14,0,0,1,10.07,24.29l-16.78,21a81.59,81.59,0,0,1,0,9.64l16.77,21a99.43,99.43,0,0,1-10,24.3l-26.71,3a81,81,0,0,1-6.81,6.81l-3,26.7a99.14,99.14,0,0,1-24.29,10.07l-21-16.78a81.59,81.59,0,0,1-9.64,0l-21,16.77a99.43,99.43,0,0,1-24.3-10l-3-26.71a81,81,0,0,1-6.81-6.81Z\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/>",
+"lightbulb": "<line x1=\"88\" y1=\"232\" x2=\"168\" y2=\"232\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><path d=\"M78.7,167A79.87,79.87,0,0,1,48,104.45C47.76,61.09,82.72,25,126.07,24a80,80,0,0,1,51.34,142.9A24.3,24.3,0,0,0,168,186v6a8,8,0,0,1-8,8H96a8,8,0,0,1-8-8v-6A24.11,24.11,0,0,0,78.7,167Z\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><path d=\"M136,56c20,3.37,36.61,20,40,40\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/>",
+"airplane": "<path d=\"M152,96l80,40v32l-80-16v32l16,16v32l-40-16L88,232V200l16-16V152L24,168V136l80-40V48a24,24,0,0,1,48,0Z\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/>",
+"house": "<path d=\"M104,216V152h48v64h64V120a8,8,0,0,0-2.34-5.66l-80-80a8,8,0,0,0-11.32,0l-80,80A8,8,0,0,0,40,120v96Z\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/>",
+"buildings": "<path d=\"M136,216V32a8,8,0,0,0-12.44-6.65l-80,53.33A8,8,0,0,0,40,85.35V216\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><path d=\"M136,88h72a8,8,0,0,1,8,8V216\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><line x1=\"16\" y1=\"216\" x2=\"240\" y2=\"216\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><line x1=\"104\" y1=\"112\" x2=\"104\" y2=\"128\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><line x1=\"72\" y1=\"112\" x2=\"72\" y2=\"128\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><line x1=\"72\" y1=\"168\" x2=\"72\" y2=\"184\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><line x1=\"104\" y1=\"168\" x2=\"104\" y2=\"184\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/>",
+"trophy": "<line x1=\"96\" y1=\"224\" x2=\"160\" y2=\"224\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><line x1=\"128\" y1=\"184\" x2=\"128\" y2=\"224\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><path d=\"M58,128H48A32,32,0,0,1,16,96V80a8,8,0,0,1,8-8H56\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><path d=\"M198,128h10a32,32,0,0,0,32-32V80a8,8,0,0,0-8-8H200\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><path d=\"M56,48H200v63.1c0,39.7-31.75,72.6-71.45,72.9A72,72,0,0,1,56,112Z\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/>",
+"medal": "<circle cx=\"128\" cy=\"96\" r=\"80\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><circle cx=\"128\" cy=\"96\" r=\"48\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><polyline points=\"176 160 176 240 127.99 216 80 240 80 160.01\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/>",
+"flag": "<line x1=\"48\" y1=\"224\" x2=\"48\" y2=\"56\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><path d=\"M48,176c64-55.43,112,55.43,176,0V56C160,111.43,112,.57,48,56\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/>",
+"puzzle-piece": "<path d=\"M64,216a8,8,0,0,1-8-8V165.31a28,28,0,1,1,0-50.62V72a8,8,0,0,1,8-8h46.69a28,28,0,1,1,50.61,0H208a8,8,0,0,1,8,8v42.69a28,28,0,1,0,0,50.62V208a8,8,0,0,1-8,8Z\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/>",
+"cube": "<polyline points=\"32.7 76.92 128 129.08 223.3 76.92\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><path d=\"M131.84,25l88,48.18a8,8,0,0,1,4.16,7v95.64a8,8,0,0,1-4.16,7l-88,48.18a8,8,0,0,1-7.68,0l-88-48.18a8,8,0,0,1-4.16-7V80.18a8,8,0,0,1,4.16-7l88-48.18A8,8,0,0,1,131.84,25Z\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><line x1=\"128\" y1=\"129.09\" x2=\"128\" y2=\"232\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/>",
+"stack": "<polyline points=\"32 176 128 232 224 176\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><polyline points=\"32 128 128 184 224 128\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><polygon points=\"32 80 128 136 224 80 128 24 32 80\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/>",
+"sparkle": "<path d=\"M84.27,171.73l-55.09-20.3a7.92,7.92,0,0,1,0-14.86l55.09-20.3,20.3-55.09a7.92,7.92,0,0,1,14.86,0l20.3,55.09,55.09,20.3a7.92,7.92,0,0,1,0,14.86l-55.09,20.3-20.3,55.09a7.92,7.92,0,0,1-14.86,0Z\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><line x1=\"176\" y1=\"16\" x2=\"176\" y2=\"64\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><line x1=\"224\" y1=\"72\" x2=\"224\" y2=\"104\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><line x1=\"152\" y1=\"40\" x2=\"200\" y2=\"40\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><line x1=\"208\" y1=\"88\" x2=\"240\" y2=\"88\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/>",
+"arrow-right": "<line x1=\"40\" y1=\"128\" x2=\"216\" y2=\"128\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><polyline points=\"144 56 216 128 144 200\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/>",
+"plus": "<line x1=\"40\" y1=\"128\" x2=\"216\" y2=\"128\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><line x1=\"128\" y1=\"40\" x2=\"128\" y2=\"216\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/>",
+"warning": "<path d=\"M142.41,40.22l87.46,151.87C236,202.79,228.08,216,215.46,216H40.54C27.92,216,20,202.79,26.13,192.09L113.59,40.22C119.89,29.26,136.11,29.26,142.41,40.22Z\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><line x1=\"128\" y1=\"144\" x2=\"128\" y2=\"104\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><circle cx=\"128\" cy=\"180\" r=\"12\"/>",
+"question": "<circle cx=\"128\" cy=\"180\" r=\"12\"/><path d=\"M128,144v-8c17.67,0,32-12.54,32-28s-14.33-28-32-28S96,92.54,96,108v4\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><circle cx=\"128\" cy=\"128\" r=\"96\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/>",
+"info": "<circle cx=\"128\" cy=\"128\" r=\"96\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><path d=\"M120,120a8,8,0,0,1,8,8v40a8,8,0,0,0,8,8\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><circle cx=\"124\" cy=\"84\" r=\"12\"/>",
+"link": "<path d=\"M141.38,64.68l11-11a46.62,46.62,0,0,1,65.94,0h0a46.62,46.62,0,0,1,0,65.94L193.94,144,183.6,154.34a46.63,46.63,0,0,1-66-.05h0A46.48,46.48,0,0,1,104,120.06\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><path d=\"M114.62,191.32l-11,11a46.63,46.63,0,0,1-66-.05h0a46.63,46.63,0,0,1,.06-65.89L72.4,101.66a46.62,46.62,0,0,1,65.94,0h0A46.45,46.45,0,0,1,152,135.94\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/>",
+"code": "<polyline points=\"64 88 16 128 64 168\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><polyline points=\"192 88 240 128 192 168\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><line x1=\"160\" y1=\"40\" x2=\"96\" y2=\"216\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/>",
+"cloud": "<path d=\"M80,128a80,80,0,1,1,80,80H72A56,56,0,1,1,85.92,97.74\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/>",
+"database": "<ellipse cx=\"128\" cy=\"80\" rx=\"88\" ry=\"48\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><path d=\"M40,80v48c0,26.51,39.4,48,88,48s88-21.49,88-48V80\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><path d=\"M40,128v48c0,26.51,39.4,48,88,48s88-21.49,88-48V128\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/>",
+"desktop": "<rect x=\"32\" y=\"48\" width=\"192\" height=\"144\" rx=\"16\" transform=\"translate(256 240) rotate(180)\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><line x1=\"160\" y1=\"224\" x2=\"96\" y2=\"224\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><line x1=\"32\" y1=\"152\" x2=\"224\" y2=\"152\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><line x1=\"128\" y1=\"192\" x2=\"128\" y2=\"224\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/>",
+"device-mobile": "<rect x=\"64\" y=\"24\" width=\"128\" height=\"208\" rx=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><line x1=\"64\" y1=\"56\" x2=\"192\" y2=\"56\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><line x1=\"64\" y1=\"200\" x2=\"192\" y2=\"200\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/>",
+"leaf": "<path d=\"M63.81,192.19c-47.89-79.81,16-159.62,151.64-151.64C223.43,176.23,143.62,240.08,63.81,192.19Z\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><line x1=\"160\" y1=\"96\" x2=\"40\" y2=\"216\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/>",
+"headset": "<path d=\"M224,200v8a32,32,0,0,1-32,32H136\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><path d=\"M224,128H192a16,16,0,0,0-16,16v40a16,16,0,0,0,16,16h32V128a96,96,0,1,0-192,0v56a16,16,0,0,0,16,16H64a16,16,0,0,0,16-16V144a16,16,0,0,0-16-16H32\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/>",
+"handshake": "<polyline points=\"200 152 160 192 96 176 40 136\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><polyline points=\"72.68 70.63 128 56 183.32 70.63\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><path d=\"M34.37,60.42,8.85,111.48a8,8,0,0,0,3.57,10.73L40,136,72.68,70.63,45.11,56.85A8,8,0,0,0,34.37,60.42Z\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><path d=\"M216,136l27.58-13.79a8,8,0,0,0,3.57-10.73L221.63,60.42a8,8,0,0,0-10.74-3.57L183.32,70.63Z\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><path d=\"M184,72H144L98.34,116.29a8,8,0,0,0,1.38,12.42C117.23,139.9,141,139.13,160,120l40,32,16-16\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><polyline points=\"124.06 216 82.34 205.57 56 186.75\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/>",
+"file-text": "<path d=\"M200,224H56a8,8,0,0,1-8-8V40a8,8,0,0,1,8-8h96l56,56V216A8,8,0,0,1,200,224Z\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><polyline points=\"152 32 152 88 208 88\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><line x1=\"96\" y1=\"136\" x2=\"160\" y2=\"136\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><line x1=\"96\" y1=\"168\" x2=\"160\" y2=\"168\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/>",
+"chat-circle": "<path d=\"M79.93,211.11a96,96,0,1,0-35-35h0L32.42,213.46a8,8,0,0,0,10.12,10.12l37.39-12.47Z\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/>",
+"magnifying-glass": "<circle cx=\"112\" cy=\"112\" r=\"80\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><line x1=\"168.57\" y1=\"168.57\" x2=\"224\" y2=\"224\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/>",
+"bell": "<path d=\"M96,192a32,32,0,0,0,64,0\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><path d=\"M56,104a72,72,0,0,1,144,0c0,35.82,8.3,64.6,14.9,76A8,8,0,0,1,208,192H48a8,8,0,0,1-6.88-12C47.71,168.6,56,139.81,56,104Z\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/>",
+"gift": "<rect x=\"32\" y=\"80\" width=\"192\" height=\"48\" rx=\"8\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><path d=\"M208,128v72a8,8,0,0,1-8,8H56a8,8,0,0,1-8-8V128\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><line x1=\"128\" y1=\"80\" x2=\"128\" y2=\"208\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><path d=\"M176.79,31.21c9.34,9.34,9.89,25.06,0,33.82C159.88,80,128,80,128,80s0-31.88,15-48.79C151.73,21.32,167.45,21.87,176.79,31.21Z\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><path d=\"M79.21,31.21c-9.34,9.34-9.89,25.06,0,33.82C96.12,80,128,80,128,80s0-31.88-15-48.79C104.27,21.32,88.55,21.87,79.21,31.21Z\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/>",
+"compass": "<circle cx=\"128\" cy=\"128\" r=\"96\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><polygon points=\"176 80 112 112 80 176 144 144 176 80\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/>",
+"path": "<circle cx=\"200\" cy=\"200\" r=\"24\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><path d=\"M72,56h96a32,32,0,0,1,0,64H72a40,40,0,0,0,0,80H176\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/>",
+"git-branch": "<path d=\"M80,168V144a16,16,0,0,1,16-16h88a16,16,0,0,0,16-16V88\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><line x1=\"80\" y1=\"88\" x2=\"80\" y2=\"168\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><circle cx=\"80\" cy=\"64\" r=\"24\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><circle cx=\"200\" cy=\"64\" r=\"24\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><circle cx=\"80\" cy=\"192\" r=\"24\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/>",
+"layout": "<line x1=\"104\" y1=\"104\" x2=\"104\" y2=\"208\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><line x1=\"32\" y1=\"104\" x2=\"224\" y2=\"104\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><rect x=\"32\" y=\"48\" width=\"192\" height=\"160\" rx=\"8\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/>",
+"grid-four": "<rect x=\"48\" y=\"48\" width=\"160\" height=\"160\" rx=\"8\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><line x1=\"128\" y1=\"48\" x2=\"128\" y2=\"208\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><line x1=\"48\" y1=\"128\" x2=\"208\" y2=\"128\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/>",
+"list-checks": "<line x1=\"128\" y1=\"128\" x2=\"216\" y2=\"128\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><line x1=\"128\" y1=\"64\" x2=\"216\" y2=\"64\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><line x1=\"128\" y1=\"192\" x2=\"216\" y2=\"192\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><polyline points=\"40 64 56 80 88 48\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><polyline points=\"40 128 56 144 88 112\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><polyline points=\"40 192 56 208 88 176\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/>",
+"hourglass": "<path d=\"M128,128,67.2,82.4A8,8,0,0,1,64,76V40a8,8,0,0,1,8-8H184a8,8,0,0,1,8,8V75.64A8,8,0,0,1,188.82,82L128,128h0\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/><path d=\"M128,128,67.2,173.6A8,8,0,0,0,64,180v36a8,8,0,0,0,8,8H184a8,8,0,0,0,8-8V180.36a8,8,0,0,0-3.18-6.38L128,128h0\" fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"16\"/>"
+};
+  const KEYWORDS = [
+    [/pay|salary|payroll|money|cost|price|invoice|fund/i, 'currency-circle-dollar'], [/global|countr|world|anywhere|international/i, 'globe'],
+    [/secur|complian|protect|safe|privacy|trust/i, 'shield-check'], [/fast|speed|instant|quick|minutes/i, 'lightning'],
+    [/team|people|employee|worker|talent|hire/i, 'users-three'], [/time|hour|deadline|schedule/i, 'clock'],
+    [/grow|scale|increase|revenue|result|trend/i, 'trend-up'], [/support|help|expert|service/i, 'headset'],
+    [/ai|automat|smart|agent|intellig/i, 'sparkle'], [/infra|own|bank|entity|entities|engine/i, 'bank'],
+    [/report|insight|analytic|data|chart/i, 'chart-line-up'], [/device|laptop|it\b|equipment/i, 'desktop'],
+    [/mobile|phone|app/i, 'device-mobile'], [/mail|email|message|notify/i, 'envelope'], [/locat|office|local|city|region/i, 'map-pin'],
+    [/launch|start|onboard|rocket/i, 'rocket-launch'], [/goal|target|focus|objective/i, 'target'], [/love|care|benefit|health|wellbeing/i, 'heart'],
+    [/integrat|connect|link|api|sync/i, 'link'], [/idea|innovat|learn|insight/i, 'lightbulb'], [/calendar|date|month|quarter|annual/i, 'calendar'],
+    [/setting|config|control|manage/i, 'gear'], [/build|house|home|remote/i, 'house'], [/win|award|best|leader|top/i, 'trophy'],
+    [/check|done|complete|verified|approved/i, 'check-circle'], [/document|contract|file|paper/i, 'file-text'], [/partner|deal|agree/i, 'handshake'],
+    [/travel|relocat|mobility|visa|immigration/i, 'airplane'], [/cloud|host|server/i, 'cloud'], [/code|develop|engineer/i, 'code'],
+  ];
+  const FALLBACK = ['check-circle', 'star', 'sparkle', 'lightning', 'target', 'cube', 'compass', 'puzzle-piece'];
+  function has(name) { return !!SET[name]; }
+  function forText(text, index = 0) {
+    const t = String(text || '');
+    for (const [re, name] of KEYWORDS) if (re.test(t)) return name;
+    return FALLBACK[index % FALLBACK.length];
+  }
+  function svg(name, x, y, size, color) {
+    const inner = SET[name] || SET['check-circle'];
+    return `<svg x="${x}" y="${y}" width="${size}" height="${size}" viewBox="0 0 256 256" overflow="visible">${inner.replace(/currentColor/g, color)}</svg>`;
+  }
+  return { SET, names: Object.keys(SET), has, forText, svg };
 })();
 
 /* js/render.js */
@@ -1664,6 +2158,23 @@ const Render = (() => {
     const ls = f.letterSpacing ? ` letter-spacing="${n(f.letterSpacing * f.size)}"` : '';
     const spans = b.lines.map((line, i) => `<tspan x="${n(x)}" y="${n(first + i * lh)}">${esc(line)}</tspan>`).join('');
     return `<text font-family='${Text.quote(f.family).replace(/'/g, '')}' font-size="${f.size}" font-weight="${f.weight}" fill="${b.fill}" text-anchor="${anchor}"${ls}>${spans}</text>`;
+  }
+  function listEl(b) {
+    const f = b.font;
+    const lh = f.size * (f.lineHeight || 1.3);
+    const first = b.y + f.size * 0.78 + (lh - f.size) / 2;
+    const ls = f.letterSpacing ? ` letter-spacing="${n(f.letterSpacing * f.size)}"` : '';
+    const parts = []; let yy = first;
+    for (const line of b.lines) {
+      if (line.marker != null) parts.push(`<tspan x="${n(b.x)}" y="${n(yy)}"${line.markerFill ? ` fill="${line.markerFill}"` : ''}${line.markerBold ? ' font-weight="700"' : ''}>${esc(line.marker)}</tspan>`);
+      parts.push(`<tspan x="${n(b.x + b.indent)}" y="${n(yy)}">${esc(line.text)}</tspan>`);
+      yy += lh + (line.last ? (b.itemGap || 0) : 0);
+    }
+    return `<text font-family='${Text.quote(f.family).replace(/'/g, '')}' font-size="${f.size}" font-weight="${f.weight}" fill="${b.fill}" text-anchor="start"${ls}>${parts.join('')}</text>`;
+  }
+  function badgeEl(b) {
+    const r = Math.min(b.w, b.h) / 2; const size = b.h * 0.46;
+    return `<circle cx="${n(b.x + r)}" cy="${n(b.y + r)}" r="${n(r)}" fill="${b.fill}"/><text x="${n(b.x + r)}" y="${n(b.y + r + size * 0.35)}" font-family='${Text.quote(b.font.family).replace(/'/g, '')}' font-size="${n(size)}" font-weight="700" fill="${b.color}" text-anchor="middle">${esc(b.text)}</text>`;
   }
   function logoEl(b, kit) {
     const l = kit.logo;
@@ -1713,6 +2224,10 @@ const Render = (() => {
         parts.push(`<rect x="${n(b.x)}" y="${n(b.y)}" width="${n(b.w)}" height="${n(b.h)}" rx="${b.radius || 0}" fill="${b.fill}"/>`);
         parts.push(`<text x="${n(b.x + b.w / 2)}" y="${n(b.y + b.h / 2 + f.size * 0.35)}" font-family='${Text.quote(f.family).replace(/'/g, '')}' font-size="${f.size}" font-weight="${f.weight}" fill="${b.color}" text-anchor="middle">${esc(b.text)}</text>`);
       } else if (b.kind === 'text') parts.push(textEl(b));
+      else if (b.kind === 'list') parts.push(listEl(b));
+      else if (b.kind === 'icon') parts.push(Icons.svg(b.name, n(b.x), n(b.y), n(b.h), b.fill));
+      else if (b.kind === 'badge') parts.push(badgeEl(b));
+      else if (b.kind === 'line') parts.push(`<line x1="${n(b.x)}" y1="${n(b.y)}" x2="${n(b.x + b.w)}" y2="${n(b.y + b.h)}" stroke="${b.fill}" stroke-width="${b.width || 2}"${b.dash ? ` stroke-dasharray="${b.dash}"` : ''}/>`);
       else if (b.kind === 'logo') parts.push(logoEl(b, kit));
     }
     if (opts.showGrid) parts.push(gridOverlay(layout));
@@ -1858,7 +2373,7 @@ const ExportPptx = (() => {
   const stripData = d => String(d).replace(/^data:/, '');
   const fontName = css => String(css).split(',')[0].replace(/["']/g, '').trim();
   const RASTER = new Set(['scrim']);
-  const isRaster = b => RASTER.has(b.kind) || (b.kind === 'shape' && (b.shape === 'quarter' || b.shape === 'blob')) || (b.kind === 'logo' && b.logoKind === 'svg');
+  const isRaster = b => RASTER.has(b.kind) || b.kind === 'icon' || b.kind === 'line' || (b.kind === 'shape' && (b.shape === 'quarter' || b.shape === 'blob')) || (b.kind === 'logo' && b.logoKind === 'svg');
 
   async function rasterLayer(layout, blocks, opts) {
     const svg = Render.toSVG({ ...layout, blocks }, { kit: opts.kit, assets: opts.assets, forExport: true, transparent: true, showGrid: false });
@@ -1901,6 +2416,16 @@ const ExportPptx = (() => {
           align: b.align || 'left', valign: 'top', margin: 0, lineSpacingMultiple: f.lineHeight || 1.2,
           charSpacing: f.letterSpacing ? Math.round(f.letterSpacing * pt(f.size) * 10) / 10 : 0, fit: 'none', wrap: true,
         });
+      } else if (b.kind === 'list') {
+        const f = b.font;
+        const runs = [];
+        for (const line of b.lines) {
+          if (line.marker != null) runs.push({ text: line.text, options: { bullet: b.marker === 'number' ? { type: 'number' } : { indent: Math.round(pt(b.indent)) }, breakLine: true, paraSpaceAfter: line.last ? pt(b.itemGap || 0) : 0 } });
+          else runs.push({ text: line.text, options: { breakLine: true, indentLevel: 0 } });
+        }
+        slide.addText(runs, { ...box, h: inch(b.h + f.size * 0.4), fontFace: fontName(f.family), fontSize: pt(f.size), color: hex(b.fill), bold: f.weight >= 600, valign: 'top', margin: 0, lineSpacingMultiple: f.lineHeight || 1.3, fit: 'none', wrap: true });
+      } else if (b.kind === 'badge') {
+        slide.addText(b.text, { ...box, shape: pptx.ShapeType.ellipse, fill: { color: hex(b.fill) }, line: { color: hex(b.fill), transparency: 100 }, fontFace: fontName(b.font.family), fontSize: pt(b.h * 0.46), color: hex(b.color), bold: true, align: 'center', valign: 'middle', margin: 0 });
       } else if (b.kind === 'button') {
         const f = b.font;
         slide.addText(b.text, {
@@ -2064,7 +2589,167 @@ content: only fields the brief explicitly supplies (quoted copy, a CTA, a stat),
     intent.formatsExplicit = true; intent.countExplicit = intent.count !== 96;
     return intent;
   }
-  return { parse, interpret, INTENT_SCHEMA, DEFAULT };
+  // Ask Claude for copy that fits one layout: the schema carries the capacities.
+  async function fillContent({ brief, kit, schema, current, apiKey, slideIntent }) {
+    const system = `You write on-brand copy for a fixed layout. Return JSON that follows the schema exactly; every description states the character and line limits, and they are hard limits: shorter is fine, longer breaks the layout. Keep the meaning of the current copy unless the brief asks for something else. Sentence case headlines, no exclamation marks, no emojis, active voice, concrete and specific, no invented numbers. Brand: ${kit.name}. Voice: ${kit.note || 'clear, confident, human'}.`;
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+      body: JSON.stringify({ model: 'claude-opus-5-5', max_tokens: 2048, system, messages: [{ role: 'user', content: `Brief:\n${brief}\n\nSlide intent: ${slideIntent || 'single piece'}\n\nCurrent copy (reference):\n${JSON.stringify(current, null, 1)}` }], output_config: { effort: 'low', format: { type: 'json_schema', schema } } }),
+    });
+    if (!res.ok) throw new Error(`Claude request failed (${res.status}): ${(await res.text()).slice(0, 300)}`);
+    const data = await res.json();
+    if (data.stop_reason === 'refusal') throw new Error('Claude declined this brief.');
+    const block = (data.content || []).find(b => b.type === 'text'); if (!block) throw new Error('No text in response');
+    return JSON.parse(block.text);
+  }
+  return { parse, interpret, fillContent, INTENT_SCHEMA, DEFAULT };
+})();
+
+/* js/deck.js */
+/* Deck mode: a brief becomes an outline (one intent per slide), the engine generates variations per slide
+   under one palette and type level, you pick one per slide, and the picks export as one editable deck. */
+const Deck = (() => {
+  const INTENT_LABEL = { cover: 'Cover', agenda: 'Agenda', statement: 'Statement', stat: 'Big number', comparison: 'Comparison', process: 'Process', cards: 'Cards', quote: 'Quote', body: 'Body copy', closing: 'Closing' };
+  const INTENT_KEYS = [
+    [/\b(cover|title|intro|opening|welcome)\b/i, 'cover'], [/\b(agenda|contents|overview|what we.ll cover|toc)\b/i, 'agenda'],
+    [/\b(problem|why now|challenge|context|statement|thesis|belief|pain)\b/i, 'statement'], [/\b(stat|number|metric|kpi|proof|results?|numbers)\b/i, 'stat'],
+    [/\b(compar|versus|vs\.?|before and after|before\/after|alternative|old way)\b/i, 'comparison'], [/\b(process|how it works|steps?|timeline|roadmap|journey|workflow|phases?)\b/i, 'process'],
+    [/\b(features?|benefits?|pillars?|cards?|what you get|solution|offer|pricing|plans?|team|values?|services?|products?)\b/i, 'cards'], [/\b(quote|testimonial|customer story|said|voice)\b/i, 'quote'],
+    [/\b(closing|cta|next steps?|thank|contact|get started|call to action|end)\b/i, 'closing'], [/\b(detail|body|story|background|about|explain)\b/i, 'body'],
+  ];
+  const DEFAULT_STORY = ['cover', 'statement', 'cards', 'process', 'stat', 'comparison', 'quote', 'closing'];
+
+  function intentFor(text, i, n) {
+    for (const [re, intent] of INTENT_KEYS) if (re.test(text)) return intent;
+    if (i === 0) return 'cover'; if (i === n - 1) return 'closing';
+    return DEFAULT_STORY[1 + (i % (DEFAULT_STORY.length - 2))];
+  }
+  // Content for a slide from the kit's sample deck when the brief gives only an intent and a title.
+  function sampleFor(kit, intent) {
+    const sample = (kit.deck && kit.deck.slides || []).find(s => s.intent === intent);
+    return sample ? { ...sample } : null;
+  }
+  function slideFromTitle(kit, title, intent) {
+    const base = sampleFor(kit, intent) || {};
+    const s = { ...base, intent };
+    if (title) {
+      if (intent === 'quote') { s.quote = base.quote || title; }
+      else if (intent === 'stat') { const m = title.match(/(\d[\d,.]*\s*(?:\+|%|k|m|x)?)/); if (m) { s.stat = m[1].trim(); s.headline = title.replace(m[1], '').replace(/^\W+|\W+$/g, '') || base.headline; } else s.headline = title; }
+      else s.headline = title;
+    }
+    if (!s.headline && intent !== 'quote') s.headline = kit.content.headline;
+    if (intent === 'closing' && !s.cta) s.cta = kit.content.cta;
+    if (intent === 'cover' && !s.eyebrow) s.eyebrow = kit.content.eyebrow;
+    return s;
+  }
+  // Rule-based outline from the brief. Explicit lists ("cover, problem, how it works, pricing, cta") win.
+  function outlineFromBrief(text, kit) {
+    const raw = String(text || '').trim();
+    const t = raw.toLowerCase();
+    const cm = t.match(/\b(\d{1,2})[\s-]*(slides?|pages?|cards?)\b/);
+    let n = cm ? Math.max(2, Math.min(16, +cm[1])) : null;
+    let listPart = null;
+    const colon = raw.split(/:(.+)/s);
+    const looksLikeList = str => { const parts = str.split(/,|;|\n|\s→\s|\s->\s/).map(x => x.trim()).filter(Boolean); return parts.length >= 3 && parts.filter(p => INTENT_KEYS.some(([re]) => re.test(p))).length >= 2; };
+    if (colon.length > 1 && colon[1].includes(',')) listPart = colon[1];
+    else if (looksLikeList(raw)) listPart = raw;
+    let slides = [];
+    if (listPart) {
+      const parts = listPart.split(/,|;|\n|\s→\s|\s->\s/).map(x => x.replace(/\b(then|and finally|finally|and)\b/gi, ' ').trim()).filter(x => x.length > 1);
+      slides = parts.map((p, i) => slideFromTitle(kit, /^(cover|agenda|closing|cta|quote|stat|process|cards|comparison|statement)$/i.test(p) ? '' : p, intentFor(p, i, parts.length)));
+      if (n && slides.length > n) slides = slides.slice(0, n);
+    } else if (kit.deck && kit.deck.slides && kit.deck.slides.length) {
+      slides = kit.deck.slides.map(s => ({ ...s }));
+      if (n && slides.length > n) {
+        const keep = new Set([0, slides.length - 1]);
+        for (let k = 1; k < n - 1 && keep.size < n; k++) keep.add(Math.round(k * (slides.length - 1) / (n - 1)));
+        for (let i = 1; i < slides.length - 1 && keep.size < n; i++) keep.add(i);
+        slides = slides.filter((_, i) => keep.has(i));
+      }
+    } else {
+      n = n || 6;
+      slides = [];
+      for (let i = 0; i < n; i++) { const intent = i === 0 ? 'cover' : i === n - 1 ? 'closing' : DEFAULT_STORY[1 + ((i - 1) % (DEFAULT_STORY.length - 2))]; slides.push(slideFromTitle(kit, '', intent)); }
+    }
+    slides.forEach((s, i) => { s.section = String(i + 1).padStart(2, '0'); });
+    return { title: (kit.deck && kit.deck.title) || kit.name, slides, source: 'rules' };
+  }
+
+  const OUTLINE_SCHEMA = {
+    type: 'object', additionalProperties: false,
+    properties: {
+      title: { type: 'string' },
+      slides: { type: 'array', items: { type: 'object', additionalProperties: false, properties: {
+        intent: { type: 'string', enum: Engine.SLIDE_INTENTS },
+        eyebrow: { type: 'string' }, headline: { type: 'string' }, subhead: { type: 'string' }, body: { type: 'string' },
+        bullets: { type: 'array', items: { type: 'string' } },
+        items: { type: 'array', items: { type: 'object', additionalProperties: false, properties: { title: { type: 'string' }, text: { type: 'string' } }, required: ['title', 'text'] } },
+        steps: { type: 'array', items: { type: 'object', additionalProperties: false, properties: { title: { type: 'string' }, text: { type: 'string' } }, required: ['title', 'text'] } },
+        columns: { type: 'array', items: { type: 'object', additionalProperties: false, properties: { title: { type: 'string' }, bullets: { type: 'array', items: { type: 'string' } } }, required: ['title', 'bullets'] } },
+        quote: { type: 'string' }, attribution: { type: 'string' }, stat: { type: 'string' }, cta: { type: 'string' },
+      }, required: ['intent', 'eyebrow', 'headline', 'subhead', 'body', 'bullets', 'items', 'steps', 'columns', 'quote', 'attribution', 'stat', 'cta'] } },
+      summary: { type: 'string' },
+    },
+    required: ['title', 'slides', 'summary'],
+  };
+  async function outlineWithClaude(text, kit, apiKey) {
+    const system = `You write presentation outlines for a layout engine. Return JSON that follows the schema exactly.
+Intents and what each needs: cover (eyebrow, headline, subhead) · agenda (headline, items: titles of the other slides) · statement (headline ≤ 90 chars, subhead) · stat (stat like "150+" or "3 min", headline as its caption, subhead) · comparison (headline, exactly 2 columns with a title and 3 bullets each) · process (headline, 3 to 5 steps with title ≤ 32 chars and text ≤ 90 chars) · cards (headline, 3 to 4 items with title ≤ 32 chars and text ≤ 110 chars) · quote (quote ≤ 160 chars, attribution) · body (headline, body ≤ 300 chars) · closing (headline, subhead, cta).
+Rules: first slide is a cover, last is a closing. 6 to 10 slides unless the brief says otherwise. Sentence case headlines, no exclamation marks, no emojis, active voice, concrete facts only from the brief and brand facts; never invent numbers. Fields a slide does not use must be empty strings or empty arrays. Write in the brand's voice.`;
+    const brand = { name: kit.name, tagline: kit.content.subhead, products: kit.content.body, cta: kit.content.cta, sampleDeck: kit.deck ? kit.deck.slides.slice(0, 3) : null };
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+      body: JSON.stringify({ model: 'claude-opus-5-5', max_tokens: 6000, system, messages: [{ role: 'user', content: `Brief:\n${text}\n\nBrand facts:\n${JSON.stringify(brand, null, 1)}` }], output_config: { effort: 'medium', format: { type: 'json_schema', schema: OUTLINE_SCHEMA } } }),
+    });
+    if (!res.ok) throw new Error(`Claude request failed (${res.status}): ${(await res.text()).slice(0, 300)}`);
+    const data = await res.json();
+    if (data.stop_reason === 'refusal') throw new Error('Claude declined this brief.');
+    const block = (data.content || []).find(b => b.type === 'text'); if (!block) throw new Error('No text in response');
+    const parsed = JSON.parse(block.text);
+    const slides = (parsed.slides || []).map((s, i) => { const o = { intent: s.intent, section: String(i + 1).padStart(2, '0') }; for (const [k, v] of Object.entries(s)) if (k !== 'intent' && v && (!Array.isArray(v) || v.length)) o[k] = v; return o; });
+    return { title: parsed.title || kit.name, slides, source: 'claude', summary: parsed.summary };
+  }
+
+  // Generate variations for every slide under one palette and type level.
+  // returns {palette, level, slides: [{index, outline, variations, pick}]}
+  async function generate({ outline, kit, assets, format, baseIntent, perSlide = 6, seedBase, onProgress }) {
+    const seed0 = seedBase >>> 0;
+    const palette = Engine.palettePick(kit, baseIntent, seed0);
+    const loud = baseIntent.loud ?? 0.5;
+    const level = Math.max(1, Math.min(4, Math.round(loud * (Engine.H_LEVELS.length - 1))));
+    const slides = [];
+    let seed = seed0;
+    for (let i = 0; i < outline.slides.length; i++) {
+      const o = outline.slides[i];
+      const content = { ...kit.content, eyebrow: '', subhead: '', body: '', stat: '', cta: '', footer: '', ...o };
+      if (!content.eyebrow && o.intent !== 'cover' && o.intent !== 'closing' && o.intent !== 'quote') content.eyebrow = o.section ? `${o.section}` : '';
+      if (o.intent === 'closing' && !content.footer) content.footer = kit.content.footer;
+      const intent = { ...baseIntent, content, slideIntent: o.intent, lockPalette: palette, level, ctaAlways: o.intent === 'closing', includeCta: o.intent === 'closing' || o.intent === 'cover' ? baseIntent.includeCta !== false : false, logoPrefer: i === 0 ? null : ['TR', 'BR'] };
+      const variations = []; const seen = new Set(); let attempts = 0;
+      while (variations.length < perSlide && attempts < perSlide * 12) {
+        seed = (seed + 0x9E3779B9) >>> 0; attempts++;
+        const L = Engine.generate({ intent, kit, assets, format, seed });
+        if (!L || seen.has(L.signature)) continue;
+        seen.add(L.signature); L.deckIndex = i; variations.push(L);
+      }
+      slides.push({ index: i, outline: o, variations, pick: variations.length ? 0 : -1, attempts });
+      if (onProgress) { onProgress(i + 1, outline.slides.length); await new Promise(r => setTimeout(r, 0)); }
+    }
+    return { palette, level, slides, format };
+  }
+  // Replace one slide's variations (new seed).
+  async function reshuffle(deck, index, env) {
+    const one = { ...env.outline, slides: [deck.slides[index].outline] };
+    const res = await generate({ ...env, outline: one, seedBase: (Math.random() * 2 ** 32) >>> 0, baseIntent: { ...env.baseIntent }, perSlide: env.perSlide });
+    // keep the deck's palette and level: regenerate with the lock
+    const s = res.slides[0];
+    deck.slides[index] = { ...s, index };
+    return deck;
+  }
+  function picks(deck) { return deck.slides.map(s => s.pick >= 0 ? s.variations[s.pick] : null).filter(Boolean); }
+  return { INTENT_LABEL, outlineFromBrief, outlineWithClaude, OUTLINE_SCHEMA, generate, reshuffle, picks, slideFromTitle };
 })();
 
 /* js/app.js */
@@ -2074,6 +2759,7 @@ content: only fields the brief explicitly supplies (quoted copy, a CTA, a stat),
   const state = {
     kit: null, assets: { images: [] }, layouts: [], favs: new Set(), picks: new Set(),
     formats: ['square'], showGrid: false, lastPrompt: null, intent: Prompt.DEFAULT(), seedBase: 1, detail: null, busy: false,
+    mode: 'single', outline: null, outlineEdited: false, deck: null, deckFormat: 'slide',
   };
   const LS = { get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch { return d; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { } } };
   let imgSeq = 1;
@@ -2184,6 +2870,7 @@ content: only fields the brief explicitly supplies (quoted copy, a CTA, a stat),
     const id = e.target.value; if (id === '__custom') return;
     loadKit(Brand.fromPreset(id)); $('presetSelect').value = id;
     await ensureDemoImages(true); persistKit(); Text.clearCache();
+    state.outline = null; state.outlineEdited = false; if (state.mode === 'deck') { state.outline = Deck.outlineFromBrief($('prompt').value, state.kit); renderOutline(); }
   });
 
   // ---- Images -------------------------------------------------------------------------
@@ -2231,6 +2918,7 @@ content: only fields the brief explicitly supplies (quoted copy, a CTA, a stat),
   $('formatChips').addEventListener('click', e => {
     const b = e.target.closest('[data-f]'); if (!b) return;
     const id = b.dataset.f;
+    if (state.mode === 'deck') { state.formats = [id]; state.deckFormat = id; renderChips(); return; }
     if (state.formats.includes(id)) { if (state.formats.length > 1) state.formats = state.formats.filter(x => x !== id); }
     else state.formats.push(id);
     renderChips();
@@ -2257,6 +2945,7 @@ content: only fields the brief explicitly supplies (quoted copy, a CTA, a stat),
   }
   async function generate(text, opts = {}) {
     if (state.busy) return;
+    if (state.mode === 'deck' && !opts.intent) return generateDeck(text);
     state.busy = true; $('generateBtn').disabled = true; $('generateBtn').textContent = 'Reading brief…';
     try {
       const kit = readKit();
@@ -2362,7 +3051,7 @@ content: only fields the brief explicitly supplies (quoted copy, a CTA, a stat),
   $('showGrid').addEventListener('change', () => { state.showGrid = $('showGrid').checked; renderGallery(); });
 
   // ---- Detail --------------------------------------------------------------------------
-  function findLayout(id) { return state.layouts.find(l => l.id === id) || state.family?.find(l => l.id === id); }
+  function findLayout(id) { return state.layouts.find(l => l.id === id) || state.family?.find(l => l.id === id) || state.deck?.slides.flatMap(s => s.variations).find(l => l.id === id); }
   function openDetail(id) {
     const l = findLayout(id); if (!l) return;
     state.detail = l; state.family = null;
@@ -2392,6 +3081,8 @@ content: only fields the brief explicitly supplies (quoted copy, a CTA, a stat),
     $('detailSpecs').innerHTML = rows.map(([k, v]) => `<dt>${k}</dt><dd>${escapeHtml(v)}</dd>`).join('');
     $('detailJsonView').textContent = JSON.stringify(stripForJson(l), null, 1);
     $('familyStrip').innerHTML = '';
+    $('detailFill').disabled = !($('apiKey').value.trim());
+    $('detailFill').title = $('apiKey').value.trim() ? 'Ask Claude for copy that fits this exact layout' : 'Add an Anthropic API key in Settings to use this';
   }
   function stripForJson(l) {
     const c = JSON.parse(JSON.stringify(l)); delete c.signature; delete c.rejected;
@@ -2399,6 +3090,20 @@ content: only fields the brief explicitly supplies (quoted copy, a CTA, a stat),
     return c;
   }
   $('detailClose').addEventListener('click', () => { $('detail').hidden = true; state.detail = null; });
+  $('detailSchema').addEventListener('click', async e => { const l = state.detail; if (!l) return; await copyText(JSON.stringify(Engine.contentSchema(l), null, 2)); toast('Content schema copied'); });
+  $('detailFill').addEventListener('click', e => withBusy(e.target, async () => {
+    const l = state.detail; if (!l) return;
+    const key = $('apiKey').value.trim(); if (!key) { toast('Add an API key in Settings first'); return; }
+    const schema = Engine.contentSchema(l);
+    const current = {}; for (const b of l.blocks) if (!b.decorative && b.path && b.kind !== 'image') current[b.path] = b.kind === 'list' ? b.items : (b.lines ? b.lines.join(' ') : b.text);
+    const content = await Prompt.fillContent({ brief: $('prompt').value, kit: state.kit, schema, current, apiKey: key, slideIntent: l.slideIntent });
+    const next = Engine.hydrate(l, content, { intent: state.intent, kit: state.kit, assets: state.assets });
+    if (!next) { toast('Claude wrote copy that does not fit this layout. Try again or pick a roomier variation.'); return; }
+    next.id = next.id + '-c';
+    if (state.mode === 'deck' && l.deckIndex != null && state.deck) { const row = state.deck.slides[l.deckIndex]; next.deckIndex = l.deckIndex; row.variations.unshift(next); row.pick = 0; renderDeck(); }
+    else { state.layouts.unshift(next); renderGallery(); }
+    state.detail = next; renderDetail(); toast('Copy refitted into the same layout');
+  }));
   $('detailGrid').addEventListener('change', renderDetail);
   $('detailFav').addEventListener('click', () => state.detail && toggleFav(state.detail.id));
   $('detailMore').addEventListener('click', async () => {
@@ -2493,8 +3198,152 @@ content: only fields the brief explicitly supplies (quoted copy, a CTA, a stat),
       <li><b>Figma Make, Framer, Relume</b> generate UI and web layouts from prompts using real components. Product surfaces, not brand comms.</li>
       <li><b>Research</b> (LayoutPrompter, PosterLlama, COLE, CreatiPoster, LayoutGPT) treats layout as structured generation: an LLM emits boxes in JSON or HTML under content-aware constraints. This prototype follows that idea with explicit rules instead of a trained model, so it runs anywhere and is auditable.</li>
     </ul>
+    <h4>Decks</h4>
+    <p>Deck mode turns the brief into an outline with one intent per slide (cover, agenda, statement, big number, comparison, process, cards, quote, closing), generates variations for every slide under one palette and type step, and exports your picks as an editable PowerPoint. Every editable block carries its copy capacity, so a layout can be handed to Claude as a schema and the copy refitted without moving anything.</p>
     <h4>What it is not yet</h4>
-    <p>Visual generation only. Editing, Figma export, and per-design-system connectors come next. The layout JSON is written so those can be added without changing the engine.</p>`;
+    <p>Editing in place, charts and tables, Figma export, and per-design-system connectors come next. The layout JSON is written so those can be added without changing the engine.</p>`;
+
+  // ---- Deck mode -----------------------------------------------------------------------------------
+  function setMode(mode) {
+    state.mode = mode;
+    document.querySelectorAll('#modeSeg button').forEach(b => b.classList.toggle('on', b.dataset.mode === mode));
+    const deck = mode === 'deck';
+    $('outlinePanel').hidden = !deck; $('deckBar').hidden = !deck; $('deckView').hidden = !deck;
+    $('gallery').hidden = deck; $('empty').hidden = deck || state.layouts.length > 0;
+    for (const id of ['count', 'sort', 'filterArch', 'favOnly', 'compareBtn', 'exportFavBtn', 'exportFavPptxBtn']) $(id).closest('label, button').hidden = deck;
+    $('prompt').placeholder = deck ? 'Describe the deck, e.g. "8-slide launch deck for Deel Global Payroll: cover, why now, what you get, how it works, proof, before and after, customer quote, next steps"' : 'Describe what you need, e.g. "36 bold image-led square posts for Deel Payroll, dark, with a CTA"';
+    if (deck) { state.formats = [state.deckFormat]; renderChips(); if (!state.outline) { state.outline = Deck.outlineFromBrief($('prompt').value, state.kit); renderOutline(); } }
+    LS.set('lg.mode', mode);
+  }
+  $('modeSeg').addEventListener('click', e => { const b = e.target.closest('[data-mode]'); if (b) setMode(b.dataset.mode); });
+
+  // Outline editor --------------------------------------------------------------------------------------
+  const DETAIL_HINT = { cards: 'Title — text, one per line', process: 'Step title — text, one per line', agenda: 'One entry per line', comparison: 'Left title\nbullet\nbullet\n---\nRight title\nbullet\nbullet', quote: 'Quote\nAttribution', stat: 'Stat (e.g. 150+)\nSubhead', cover: 'Subhead', statement: 'Subhead', body: 'Body copy', closing: 'Subhead\nCTA label' };
+  function detailsText(sl) {
+    const i = sl.intent;
+    if (i === 'cards' || i === 'process') return Engine.normItems(i === 'cards' ? sl.items : (sl.steps && sl.steps.length ? sl.steps : sl.items)).map(x => x.text ? `${x.title} — ${x.text}` : x.title).join('\n');
+    if (i === 'agenda') return (sl.items && sl.items.length ? Engine.normItems(sl.items).map(x => x.title) : (sl.bullets || [])).join('\n');
+    if (i === 'comparison') return (sl.columns || []).map(c => [c.title, ...(c.bullets || [])].join('\n')).join('\n---\n');
+    if (i === 'quote') return [sl.quote || '', sl.attribution || ''].join('\n');
+    if (i === 'stat') return [sl.stat || '', sl.subhead || ''].join('\n');
+    if (i === 'closing') return [sl.subhead || '', sl.cta || ''].join('\n');
+    if (i === 'body') return sl.body || '';
+    return sl.subhead || '';
+  }
+  function parseDetails(sl, text) {
+    const i = sl.intent; const lines = String(text || '').split('\n').map(x => x.trim()).filter(Boolean);
+    const pair = l => { const m = l.split(/\s[—–-]\s|:\s/); return { title: m[0].trim(), text: m.slice(1).join(' ').trim() }; };
+    delete sl.items; delete sl.steps; delete sl.columns; delete sl.bullets;
+    if (i === 'cards') sl.items = lines.map(pair);
+    else if (i === 'process') sl.steps = lines.map(pair);
+    else if (i === 'agenda') sl.items = lines.map(l => ({ title: l, text: '' }));
+    else if (i === 'comparison') { sl.columns = text.split(/\n-{3,}\n?/).map(block => { const ls = block.split('\n').map(x => x.trim()).filter(Boolean); return { title: ls[0] || '', bullets: ls.slice(1) }; }).filter(c => c.title); }
+    else if (i === 'quote') { sl.quote = lines[0] || ''; sl.attribution = lines[1] || ''; }
+    else if (i === 'stat') { sl.stat = lines[0] || ''; sl.subhead = lines.slice(1).join(' '); }
+    else if (i === 'closing') { sl.subhead = lines[0] || ''; sl.cta = lines[1] || sl.cta || state.kit.content.cta; }
+    else if (i === 'body') sl.body = lines.join(' ');
+    else sl.subhead = lines.join(' ');
+  }
+  function renderOutline() {
+    const o = state.outline; if (!o) return;
+    $('outlineSource').textContent = `${o.slides.length} slides · ${o.source === 'claude' ? 'written by Claude' : state.outlineEdited ? 'edited' : 'from brief'}`;
+    $('outlineList').innerHTML = o.slides.map((sl, i) => `<div class="outline-row" data-i="${i}">
+      <div class="num">${String(i + 1).padStart(2, '0')}</div>
+      <div class="fields">
+        <select class="select" data-k="intent" id="ol-intent-${i}" aria-label="Slide intent">${Engine.SLIDE_INTENTS.map(k => `<option value="${k}" ${k === sl.intent ? 'selected' : ''}>${Deck.INTENT_LABEL[k]}</option>`).join('')}</select>
+        <input class="input" data-k="headline" id="ol-headline-${i}" type="text" placeholder="${sl.intent === 'quote' ? 'Headline (optional)' : 'Headline'}" value="${escapeHtml(sl.headline || '')}">
+        <textarea class="input" data-k="details" id="ol-details-${i}" rows="3" placeholder="${escapeHtml(DETAIL_HINT[sl.intent] || '')}">${escapeHtml(detailsText(sl))}</textarea>
+      </div>
+      <div class="ops"><button class="btn small" data-op="up" title="Move up" type="button">↑</button><button class="btn small" data-op="down" title="Move down" type="button">↓</button><button class="btn small" data-op="rm" title="Remove" type="button">✕</button></div>
+    </div>`).join('');
+  }
+  $('outlineList').addEventListener('change', e => {
+    const row = e.target.closest('.outline-row'); if (!row) return;
+    const i = +row.dataset.i; const sl = state.outline.slides[i]; const k = e.target.dataset.k;
+    if (k === 'intent') { const title = sl.headline; const fresh = Deck.slideFromTitle(state.kit, '', e.target.value); Object.assign(sl, fresh, { headline: title || fresh.headline, intent: e.target.value }); }
+    else if (k === 'headline') sl.headline = e.target.value.trim();
+    else if (k === 'details') parseDetails(sl, e.target.value);
+    state.outlineEdited = true; renderOutline();
+  });
+  $('outlineList').addEventListener('click', e => {
+    const b = e.target.closest('[data-op]'); if (!b) return;
+    const i = +b.closest('.outline-row').dataset.i; const sl = state.outline.slides;
+    if (b.dataset.op === 'rm') sl.splice(i, 1);
+    else if (b.dataset.op === 'up' && i > 0) [sl[i - 1], sl[i]] = [sl[i], sl[i - 1]];
+    else if (b.dataset.op === 'down' && i < sl.length - 1) [sl[i + 1], sl[i]] = [sl[i], sl[i + 1]];
+    sl.forEach((x, j) => x.section = String(j + 1).padStart(2, '0'));
+    state.outlineEdited = true; renderOutline();
+  });
+  $('outlineAdd').addEventListener('click', () => { const sl = state.outline.slides; sl.splice(Math.max(0, sl.length - 1), 0, Deck.slideFromTitle(state.kit, '', 'cards')); sl.forEach((x, j) => x.section = String(j + 1).padStart(2, '0')); state.outlineEdited = true; renderOutline(); });
+  $('outlineReset').addEventListener('click', async () => { state.outlineEdited = false; state.outline = await resolveOutline($('prompt').value, true); renderOutline(); toast('Outline rebuilt'); });
+
+  async function resolveOutline(text, force) {
+    if (state.outline && state.outlineEdited && !force) return state.outline;
+    const useClaude = $('useClaude').checked && $('apiKey').value.trim();
+    if (useClaude) {
+      try { const o = await Deck.outlineWithClaude(text, state.kit, $('apiKey').value.trim()); $('interpretLog').textContent = 'Claude outline: ' + (o.summary || ''); return o; }
+      catch (err) { $('interpretLog').textContent = 'Claude outline failed, used rules. ' + err.message; toast('Claude outline failed, used rules'); }
+    }
+    return Deck.outlineFromBrief(text, state.kit);
+  }
+
+  async function generateDeck(text) {
+    state.busy = true; $('generateBtn').disabled = true; $('generateBtn').textContent = 'Reading brief…';
+    try {
+      const kit = readKit();
+      await ensureDemoImages(false); await loadFonts(kit);
+      const promptChanged = text !== state.lastPrompt;
+      const base = await resolveIntent(text);
+      if (promptChanged) { state.outlineEdited = false; state.lastPrompt = text; }
+      state.intent = base;
+      state.outline = await resolveOutline(text, promptChanged && !state.outlineEdited);
+      renderOutline();
+      LS.set('lg.prompt', text);
+      const format = Grid.byId[state.deckFormat] || Grid.byId.slide;
+      const seedBase = (state.seedBase = (state.seedBase * 1664525 + 1013904223) >>> 0);
+      const t0 = performance.now();
+      state.deck = await Deck.generate({ outline: state.outline, kit, assets: state.assets, format, baseIntent: base, perSlide: +$('perSlide').value, seedBase, onProgress: (i, n) => { $('generateBtn').textContent = `Slide ${i}/${n}…`; } });
+      const ms = Math.round(performance.now() - t0);
+      const made = state.deck.slides.reduce((s, x) => s + x.variations.length, 0);
+      $('readout').innerHTML = [
+        `<span><span class="k">deck</span> <b>${escapeHtml(state.outline.title)}</b> · ${state.deck.slides.length} slides · ${format.name}</span>`,
+        `<span><span class="k">outline by</span> <b>${state.outline.source === 'claude' ? 'Claude' : 'rules'}</b> · <span class="k">brief read by</span> <b>${base.source === 'claude' ? 'Claude' : 'rules'}</b></span>`,
+        `<span><span class="k">palette</span> <b>${state.deck.palette ? state.deck.palette.bgName : '—'}</b> · <span class="k">type step</span> <b>${state.deck.level + 1}/6</b></span>`,
+        `<span><span class="k">variations</span> <b>${made}</b> <span class="k">in ${ms} ms</span></span>`,
+      ].join('');
+      renderDeck();
+    } finally { state.busy = false; $('generateBtn').disabled = false; $('generateBtn').textContent = 'Generate'; }
+  }
+  function renderDeck() {
+    const d = state.deck; if (!d) return;
+    const tall = d.format.h > d.format.w;
+    $('deckView').innerHTML = d.slides.map(s => `<div class="deck-row" data-i="${s.index}">
+      <div class="head"><span class="n">${String(s.index + 1).padStart(2, '0')}</span><span class="intent">${Deck.INTENT_LABEL[s.outline.intent] || s.outline.intent}</span><span class="title">${escapeHtml(s.outline.headline || s.outline.quote || '')}</span><button class="btn small" data-shuffle="${s.index}" type="button">Shuffle</button></div>
+      <div class="strip">${s.variations.length ? s.variations.map((l, j) => `<div class="deck-card ${tall ? 'tall' : ''} ${j === s.pick ? 'pick' : ''}" data-id="${l.id}" data-j="${j}">${Render.toSVG(l, { kit: state.kit, assets: state.assets, showGrid: state.showGrid, width: 440 })}<div class="lbl"><span>${l.archetypeLabel}</span><span>${Math.round(l.metrics.whitespace * 100)}% air</span></div><button class="open" data-open="${l.id}" type="button">Open</button></div>`).join('') : `<div class="empty-row">Nothing fit this slide's content. Shorten the copy in the outline or change its intent.</div>`}</div>
+    </div>`).join('');
+    const ok = d.slides.some(s => s.pick >= 0);
+    $('deckPptxBtn').disabled = !ok; $('deckPngBtn').disabled = !ok;
+  }
+  $('deckView').addEventListener('click', async e => {
+    const open = e.target.closest('[data-open]'); if (open) { openDetail(open.dataset.open); return; }
+    const sh = e.target.closest('[data-shuffle]');
+    if (sh) { const i = +sh.dataset.shuffle; sh.disabled = true; sh.textContent = '…'; try { await Deck.reshuffle(state.deck, i, { outline: state.outline, kit: state.kit, assets: state.assets, format: state.deck.format, baseIntent: { ...state.intent, lockPalette: state.deck.palette, level: state.deck.level }, perSlide: +$('perSlide').value }); } finally { renderDeck(); } return; }
+    const card = e.target.closest('.deck-card'); if (!card) return;
+    const row = card.closest('.deck-row'); const i = +row.dataset.i; state.deck.slides[i].pick = +card.dataset.j;
+    row.querySelectorAll('.deck-card').forEach(c => c.classList.toggle('pick', c === card));
+  });
+  $('deckView').addEventListener('dblclick', e => { const card = e.target.closest('.deck-card'); if (card) openDetail(card.dataset.id); });
+  $('deckShuffleAll').addEventListener('click', () => generateDeck($('prompt').value));
+  $('deckPptxBtn').addEventListener('click', e => withBusy(e.target, async () => {
+    const picks = Deck.picks(state.deck); if (!picks.length) return;
+    const blob = await ExportPptx.buildDeck(picks, { kit: state.kit, assets: state.assets });
+    if (await Render.download(blob, `${slug(state.outline.title || state.kit.name)}-deck-${picks.length}-slides.pptx`)) toast(`Deck saved: ${picks.length} editable slides`);
+  }));
+  $('deckPngBtn').addEventListener('click', e => withBusy(e.target, async () => {
+    const picks = Deck.picks(state.deck); let n = 0;
+    for (const l of picks) { const blob = await Render.exportPNG(l, { kit: state.kit, assets: state.assets }); if (!(await Render.download(blob, `${slug(state.outline.title || state.kit.name)}-${String(n + 1).padStart(2, '0')}.png`))) break; n++; await new Promise(r => setTimeout(r, 350)); }
+    if (n) toast(`${n} slide PNG${n > 1 ? 's' : ''} saved`);
+  }));
 
   // ---- Init --------------------------------------------------------------------------------------
   async function init() {
@@ -2508,7 +3357,9 @@ content: only fields the brief explicitly supplies (quoted copy, a CTA, a stat),
     $('promptForm').addEventListener('submit', e => { e.preventDefault(); generate($('prompt').value); });
     await ensureDemoImages(false);
     // First frame: a working state, not an empty shell.
-    if (!$('prompt').value) $('prompt').value = 'Launch posts for Deel Global Payroll, bold, image-led, square and story';
+    const savedMode = LS.get('lg.mode', 'single');
+    if (!$('prompt').value) $('prompt').value = savedMode === 'deck' ? '8-slide launch deck for Deel Global Payroll' : 'Launch posts for Deel Global Payroll, bold, image-led, square and story';
+    if (savedMode === 'deck') setMode('deck');
     await generate($('prompt').value);
   }
   init();

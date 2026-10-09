@@ -4,11 +4,27 @@
    Anything that breaks a rule (overflowing text, text off the safe area, unreadable contrast) is rejected. */
 const Engine = (() => {
   const H_LEVELS = [0.055, 0.07, 0.09, 0.115, 0.145, 0.18];
-  const ARCHETYPES = ['type-led', 'split', 'full-bleed', 'poster', 'mosaic', 'color-block', 'editorial', 'stat'];
+  const ARCHETYPES = ['type-led', 'split', 'full-bleed', 'poster', 'mosaic', 'color-block', 'editorial', 'stat', 'agenda', 'comparison', 'process', 'cards', 'quote'];
   const ARCH_LABEL = {
     'type-led': 'Type-led', 'split': 'Split', 'full-bleed': 'Full-bleed image', 'poster': 'Framed image',
     'mosaic': 'Mosaic', 'color-block': 'Color blocks', 'editorial': 'Editorial', 'stat': 'Statement stat',
+    'agenda': 'Agenda', 'comparison': 'Comparison', 'process': 'Process', 'cards': 'Cards', 'quote': 'Quote',
   };
+  // Slide intents (deck mode) and the families that can express them.
+  const SLIDE_INTENTS = ['cover', 'agenda', 'statement', 'stat', 'comparison', 'process', 'cards', 'quote', 'body', 'closing'];
+  const INTENT_WEIGHTS = {
+    cover: { 'type-led': 3, 'full-bleed': 3, split: 2, 'color-block': 1.5, poster: 1 },
+    agenda: { agenda: 1 },
+    statement: { 'type-led': 3, 'color-block': 1.5, editorial: 1 },
+    stat: { stat: 1 },
+    comparison: { comparison: 1 },
+    process: { process: 1 },
+    cards: { cards: 1 },
+    quote: { quote: 1 },
+    body: { editorial: 2, split: 1.5, poster: 1, 'type-led': 1 },
+    closing: { 'type-led': 2, 'color-block': 1.5, 'full-bleed': 1 },
+  };
+  const normItems = arr => (arr || []).map((it, i) => typeof it === 'string' ? { title: it, text: '' } : { title: it.title || it.name || '', text: it.text || it.body || it.description || '', icon: it.icon, bullets: it.bullets }).filter(it => it.title || it.text);
 
   const snap = (v, u) => Math.round(v / u) * u;
   const snapFont = (v, unit) => { const s = Math.max(2, unit / 4); return Math.max(10, Math.round(v / s) * s); };
@@ -61,6 +77,12 @@ const Engine = (() => {
       }
       if (it.kind === 'rule') { const h = it.h || Math.max(2, g.unit / 4); blocks.push({ ...it, w: Math.min(region.w, it.w || snap(region.w * 0.25, g.unit)), h }); total += h; continue; }
       if (it.kind === 'logo') { const h = it.h; const w = Math.min(region.w, snap(h * it.aspect, g.unit)); blocks.push({ ...it, w, h }); total += h; continue; }
+      if (it.kind === 'icon' || it.kind === 'badge') { blocks.push({ ...it, w: it.h }); total += it.h; continue; }
+      if (it.kind === 'list') {
+        const res = fitList(it, region, g); if (!res) return null;
+        blocks.push({ ...it, lines: res.lines, font: { ...it.font, size: res.size }, h: res.height, w: region.w, inkW: res.inkW, indent: res.indent, itemGap: res.itemGap, align: 'left' });
+        total += res.height; continue;
+      }
       const text = Text.transform(it.text, it.font.transform);
       const f = Text.fit(text, it.font, region.w, region.h, { minSize: it.minSize || Math.max(10, it.font.size * 0.62), step: Math.max(2, g.unit / 4), maxLines: it.maxLines || 12 });
       if (!f) return null;
@@ -80,6 +102,7 @@ const Engine = (() => {
         else if (align === 'right') b.x = region.x + region.w - b.w;
       }
       if (b.kind === 'text') b.capacity = textCapacity(b, region.w, slack);
+      if (b.kind === 'list') b.capacity = { items: b.items.length, maxItems: b.items.length + Math.floor(slack / (b.font.size * (b.font.lineHeight || 1.3) * 1.6)), charsPerItem: Math.max(1, Math.floor((region.w - b.indent) / (Text.width(SAMPLE, b.font) / SAMPLE.length) * (b.maxLinesPerItem || 3) * 0.85)) };
       y += b.h + (b.gap || 0);
     }
     return { blocks, total, y0: blocks[0].y, y1: y - (blocks[blocks.length - 1].gap || 0) };
@@ -97,12 +120,30 @@ const Engine = (() => {
     const currentChars = b.lines.join(' ').length;
     return { charsPerLine, maxLines, maxChars: Math.max(currentChars, Math.floor(charsPerLine * maxLines * 0.85)), currentChars };
   }
+  // Fit a bulleted or numbered list: every item wraps at the indent, size steps down until all lines fit.
+  function fitList(it, region, g) {
+    const lh = it.font.lineHeight || 1.3; let size = it.font.size; const minSize = Math.max(10, size * 0.6); const step = Math.max(2, g.unit / 4);
+    const n = it.items.length;
+    while (size >= minSize) {
+      const f = { ...it.font, size }; const indent = snap(size * (it.marker === 'number' ? 2.1 : 1.3), 2); const itemGap = Math.round(size * (it.itemGap ?? 0.4));
+      const lines = []; let ok = true; let inkW = 0;
+      for (let i = 0; i < n; i++) {
+        const wrapped = Text.wrap(String(it.items[i]), f, region.w - indent);
+        if (!wrapped || wrapped.length > (it.maxLinesPerItem || 3)) { ok = false; break; }
+        wrapped.forEach((t, j) => { lines.push({ text: t, marker: j === 0 ? (it.marker === 'number' ? String(i + 1).padStart(2, '0') : it.marker === 'none' ? '' : '•') : null, last: j === wrapped.length - 1, markerFill: it.markerFill, markerBold: it.marker === 'number' }); inkW = Math.max(inkW, indent + Text.width(t, f)); });
+      }
+      if (ok) { const height = lines.length * size * lh + (n - 1) * itemGap; if (height <= region.h) return { size, lines, height: snap(height, g.unit / 2) || height, inkW: Math.min(region.w, inkW), indent, itemGap }; }
+      size -= step;
+    }
+    return null;
+  }
   // Ink rect of a text stack (what other things must avoid).
   function inkRect(stack, region, align) {
     let x0 = region.x + region.w, x1 = region.x;
     for (const b of stack.blocks) {
-      let w = b.kind === 'text' ? b.inkW : b.w, x;
+      let w = (b.kind === 'text' || b.kind === 'list') ? b.inkW : b.w, x;
       if (b.kind === 'text') x = align === 'center' ? region.x + (region.w - w) / 2 : align === 'right' ? region.x + region.w - w : region.x;
+      else if (b.kind === 'list') x = region.x;
       else x = b.x;
       x0 = Math.min(x0, x); x1 = Math.max(x1, x + w);
     }
@@ -121,7 +162,7 @@ const Engine = (() => {
     items.push({ kind: 'text', role: 'headline', text: content.headline, font: opts.headlineFont || ts.headline, fill: pal.fg, maxLines: opts.headlineMaxLines || (opts.stat ? 3 : 5), gap: gap(ts.subhead.size * 0.9) });
     if (content.subhead && intent.includeSubhead !== false && rng.chance(opts.subhead ?? P[1])) items.push({ kind: 'text', role: 'subhead', text: content.subhead, font: ts.subhead, fill: pal.fg2, maxLines: 4, gap: gap(ts.body.size * 0.9) });
     if (content.body && intent.includeBody !== false && rng.chance(opts.body ?? P[2])) items.push({ kind: 'text', role: 'body', text: content.body, font: ts.body, fill: pal.fg2, maxLines: 6, gap: gap(ts.body.size * 1.2) });
-    if (content.cta && intent.includeCta !== false && rng.chance(opts.cta ?? P[3])) {
+    if (content.cta && intent.includeCta !== false && (intent.ctaAlways || rng.chance(opts.cta ?? P[3]))) {
       const asButton = rng.chance(0.7);
       if (asButton) items.push({ kind: 'button', role: 'cta', text: content.cta, font: ts.cta, fill: pal.accent, color: pal.onAccent, radius: ctx.radius(ts.cta.size * 1.35) });
       else items.push({ kind: 'text', role: 'cta', text: content.cta + '  →', font: { ...ts.cta, weight: ts.eyebrow.weight }, fill: pal.accentText, maxLines: 1 });
@@ -139,15 +180,20 @@ const Engine = (() => {
     let pool = hinted.length ? hinted : pairs;
     if (intent.dark > 0.5) { const d = pool.filter(p => p.dark); if (d.length) pool = d; }
     if (intent.dark < -0.5) { const l = pool.filter(p => !p.dark); if (l.length) pool = l; }
-    const pair = rng.weighted(pool.map(p => ({ v: p, w: p.bgRole === 'background' ? (intent.loud > 0.6 ? 1 : 2) : (intent.loud > 0.4 ? 2.2 : 1) })));
-    const fg = pair.fgs[0];
-    const fgAlt = pair.fgs.length > 1 && rng.chance(0.3) ? pair.fgs[1] : fg;
-    let accent = rng.pick(pair.accents);
+    let pair = rng.weighted(pool.map(p => ({ v: p, w: p.bgRole === 'background' ? (intent.loud > 0.6 ? 1 : 2) : (intent.loud > 0.4 ? 2.2 : 1) })));
+    const lock = intent.lockPalette;
+    if (lock && lock.bg) { const found = pairs.find(p => p.bg === Color.normalize(lock.bg)); if (found) pair = found; }
+    const fg = lock && lock.fg && pair.fgs.includes(Color.normalize(lock.fg)) ? Color.normalize(lock.fg) : pair.fgs[0];
+    const fgAlt = !lock && pair.fgs.length > 1 && rng.chance(0.3) ? pair.fgs[1] : fg;
+    let accent = lock && lock.accent && pair.accents.includes(Color.normalize(lock.accent)) ? Color.normalize(lock.accent) : rng.pick(pair.accents);
     if (intent.colorHints && intent.colorHints.length) { const a = pair.accents.filter(x => intent.colorHints.includes(x) && x !== pair.bg); if (a.length) accent = rng.pick(a); }
     const onAccent = Color.contrast(accent, '#FFFFFF') >= Color.contrast(accent, '#000000') ? '#FFFFFF' : '#000000';
     const accentText = Color.contrast(pair.bg, accent) >= 4.5 ? accent : fg;
     const fields = pair.fields.filter(f => f !== accent);
-    return { bg: pair.bg, bgName: pair.bgName, fg: fgAlt, fg2: Color.mix(fg, pair.bg, 0.12), accent, onAccent, accentText, fields: fields.length ? fields : pair.fields, dark: pair.dark, pair };
+    const card = Color.mix(pair.bg, fg, pair.dark ? 0.1 : 0.06);
+    const accentCard = (fields.find(f => Color.contrast(f, pair.bg) >= 1.3) || accent);
+    const accentCardText = Color.bestForeground(accentCard, kit.colors.map(c => Color.normalize(c.hex)).concat(['#FFFFFF', '#000000']), 4.5)[0];
+    return { bg: pair.bg, bgName: pair.bgName, fg: fgAlt, fg2: Color.mix(fg, pair.bg, 0.12), accent, onAccent, accentText, fields: fields.length ? fields : pair.fields, dark: pair.dark, pair, card, cardStroke: Color.mix(pair.bg, fg, 0.18), accentCard, accentCardText };
   }
 
   // ---- Logo placement -----------------------------------------------------------
@@ -164,7 +210,7 @@ const Engine = (() => {
       TL: { x: g.mx, y: s.top }, TR: { x: g.w - g.mx - w, y: s.top }, TC: { x: (g.w - w) / 2, y: s.top },
       BL: { x: g.mx, y: g.h - s.bottom - h }, BR: { x: g.w - g.mx - w, y: g.h - s.bottom - h }, BC: { x: (g.w - w) / 2, y: g.h - s.bottom - h },
     };
-    const order = [...(prefer || []), 'TL', 'BL', 'TR', 'BR', 'TC', 'BC'].filter((v, i, a) => a.indexOf(v) === i);
+    const order = [...(intent.logoPrefer || []), ...(prefer || []), 'TL', 'BL', 'TR', 'BR', 'TC', 'BC'].filter((v, i, a) => a.indexOf(v) === i);
     const ok = order.filter(k => { const r = { ...spots[k], w, h }; return !avoid.some(a => inter(grow(r, clear), a)); });
     if (!ok.length) return null;
     const k = rng.weighted(ok.map((v, i) => ({ v, w: Math.max(1, 4 - i) })));
@@ -577,17 +623,207 @@ const Engine = (() => {
     return { blocks, meta: { align, valign } };
   };
 
+
+  // ---- Deck families -----------------------------------------------------------------
+  // A card: a surface rect plus an inner stack. Returns blocks or null.
+  function card(ctx, r, items, opts = {}) {
+    const { g } = ctx;
+    const pad = opts.pad ?? g.unit * 3;
+    const region = { x: r.x + pad, y: r.y + pad, w: r.w - 2 * pad, h: r.h - 2 * pad };
+    if (region.w < g.unit * 6 || region.h < g.unit * 4) return null;
+    const stack = buildStack(items, region, opts.align || 'left', opts.valign || 'top', g);
+    if (!stack) return null;
+    const surface = opts.plain ? [] : [{ kind: 'field', x: r.x, y: r.y, w: r.w, h: r.h, fill: opts.fill, radius: opts.radius ?? ctx.radius(g.unit * 2), container: true, stroke: opts.stroke }];
+    return [...surface, ...stack.blocks];
+  }
+  function headlineRegion(ctx, rows, cs, c0 = 0) {
+    return Grid.rect(ctx.g, c0, ctx.r0, cs, rows);
+  }
+  function cardPal(ctx, highlighted) {
+    const { pal } = ctx;
+    if (highlighted) return { fill: pal.accentCard, fg: pal.accentCardText, fg2: Color.mix(pal.accentCardText, pal.accentCard, 0.15), accentText: pal.accentCardText };
+    return { fill: pal.card, fg: pal.fg, fg2: pal.fg2, accentText: pal.accentText };
+  }
+  function iconOrBadge(ctx, cp, i, text, mode) {
+    const { ts, g } = ctx;
+    const h = snap(ts.body.size * 1.9, g.unit);
+    if (mode === 'icon') return { kind: 'icon', name: Icons.forText(text, i), h, fill: cp.accentText, gap: snap(ts.body.size * 0.8, g.unit) };
+    if (mode === 'badge') return { kind: 'badge', text: String(i + 1), h, fill: ctx.pal.accent, color: ctx.pal.onAccent, font: ts.cta, gap: snap(ts.body.size * 0.8, g.unit) };
+    return null;
+  }
+
+  A['agenda'] = ctx => {
+    const { g, rng, pal, ts, content } = ctx;
+    const raw = content.items && content.items.length ? normItems(content.items).map(i => i.title) : (content.bullets || []);
+    const items = raw.filter(Boolean).slice(0, 8);
+    if (items.length < 2) return null;
+    const C = g.cols, R = ctx.R, wide = g.w >= g.h;
+    const head = [{ kind: 'text', role: 'eyebrow', path: 'eyebrow', text: content.eyebrow || '', font: ts.eyebrow, fill: pal.accentText, maxLines: 1, gap: snap(ts.headline.size * 0.4, g.unit) }].filter(i => i.text);
+    head.push({ kind: 'text', role: 'headline', path: 'headline', text: content.headline || 'Agenda', font: ts.headline, fill: pal.fg, maxLines: 3 });
+    const listItem = { kind: 'list', role: 'items', path: 'items', items, marker: rng.chance(0.75) ? 'number' : 'bullet', font: { ...ts.subhead, size: snapFont(ts.subhead.size * 1.15, g.unit), lineHeight: 1.25, weight: nearestWeight(ctx.kit.fonts.body, 500) }, fill: pal.fg, markerFill: pal.accentText, maxLinesPerItem: 2, itemGap: 0.55 };
+    const blocks = []; let avoid = [];
+    if (wide) {
+      const k = Math.max(3, Math.round(C * rng.pick([0.36, 0.42])));
+      const hr = Grid.rect(g, 0, ctx.r0, k, R - 1);
+      const hs = buildStack(head, hr, 'left', rng.pick(['top', 'center']), g); if (!hs) return null;
+      const lr = Grid.rect(g, k + 1, ctx.r0, C - k - 1, R - 1);
+      const ls = buildStack([listItem], lr, 'left', rng.pick(['top', 'center']), g); if (!ls) return null;
+      blocks.push(...hs.blocks, ...ls.blocks); avoid = [inkRect(hs, hr, 'left'), inkRect(ls, lr, 'left')];
+    } else {
+      const hr = Grid.rect(g, 0, ctx.r0, C, 2);
+      const hs = buildStack(head, hr, 'left', 'top', g); if (!hs) return null;
+      const lr = Grid.rect(g, 0, ctx.r0 + 2, C, R - 3);
+      const ls = buildStack([listItem], lr, 'left', 'top', g); if (!ls) return null;
+      blocks.push(...hs.blocks, ...ls.blocks); avoid = [inkRect(hs, hr, 'left'), inkRect(ls, lr, 'left')];
+    }
+    const logo = placeLogo(ctx, avoid, ['BL', 'BR', 'TR']); if (logo) { blocks.push(logo); avoid.push(logo); }
+    const foot = footerBlock(ctx, avoid, logo); if (foot) blocks.push(foot);
+    return { blocks, meta: { items: items.length, marker: listItem.marker } };
+  };
+
+  A['comparison'] = ctx => {
+    const { g, rng, pal, ts, content } = ctx;
+    let cols = normItems(content.columns);
+    if (cols.length < 2) { const it = normItems(content.items); if (it.length >= 2) cols = it.slice(0, 2); }
+    if (cols.length < 2 && content.bullets && content.bullets.length >= 4) { const h = Math.ceil(content.bullets.length / 2); cols = [{ title: 'Before', bullets: content.bullets.slice(0, h) }, { title: 'After', bullets: content.bullets.slice(h) }]; }
+    if (cols.length < 2 || !content.headline) return null;
+    const C = g.cols, R = ctx.R;
+    if (R < 4) return null;
+    const headRows = 2;
+    const hr = headlineRegion(ctx, headRows, rng.pick([C, Math.round(C * 0.75)]));
+    const hs = buildStack([{ kind: 'text', role: 'headline', path: 'headline', text: content.headline, font: { ...ts.headline, size: snapFont(ts.headline.size * 0.85, g.unit) }, fill: pal.fg, maxLines: 2 }], hr, 'left', 'top', g);
+    if (!hs) return null;
+    const plain = rng.chance(0.3); const highlight = !plain && rng.chance(0.55);
+    const k = Math.floor(C / 2); const rows = R - headRows;
+    const rects = [Grid.rect(g, 0, ctx.r0 + headRows, k, rows), Grid.rect(g, C - k, ctx.r0 + headRows, k, rows)];
+    const blocks = [...hs.blocks]; const avoid = [inkRect(hs, hr, 'left')];
+    cols.slice(0, 2).forEach((col, i) => {
+      const cp = cardPal(ctx, highlight && i === 1);
+      const items = [{ kind: 'text', role: 'title', path: `columns.${i}.title`, text: col.title, font: { ...ts.subhead, weight: nearestWeight(ctx.kit.fonts.body, 600) }, fill: cp.fg, maxLines: 2, gap: snap(ts.body.size * 0.8, g.unit) }];
+      if (col.bullets && col.bullets.length) items.push({ kind: 'list', role: 'bullets', path: `columns.${i}.bullets`, items: col.bullets.slice(0, 6), marker: 'bullet', font: ts.body, fill: cp.fg2, markerFill: cp.accentText, maxLinesPerItem: 3 });
+      else if (col.text) items.push({ kind: 'text', role: 'text', path: `columns.${i}.text`, text: col.text, font: ts.body, fill: cp.fg2, maxLines: 8 });
+      const b = card(ctx, rects[i], items, { plain, fill: cp.fill, pad: plain ? 0 : g.unit * 3 });
+      if (!b) { blocks.length = 0; return; }
+      blocks.push(...b); avoid.push(rects[i]);
+    });
+    if (!blocks.length) return null;
+    if (plain) { const r0 = rects[0]; blocks.push({ kind: 'line', x: r0.x + r0.w + g.gutter / 2 + (rects[1].x - r0.x - r0.w - g.gutter) / 2, y: r0.y, w: 0, h: r0.h, fill: pal.cardStroke, width: 2 }); }
+    const logo = placeLogo(ctx, avoid, ['TR']); if (logo) blocks.push(logo);
+    return { blocks, meta: { plain, highlight } };
+  };
+
+  A['process'] = ctx => {
+    const { g, rng, pal, ts, content } = ctx;
+    let steps = normItems(content.steps); if (steps.length < 3) steps = normItems(content.items);
+    steps = steps.slice(0, 5);
+    if (steps.length < 3 || !content.headline) return null;
+    const C = g.cols, R = ctx.R, wide = g.w >= g.h * 1.2;
+    const n = steps.length;
+    const mode = rng.weighted([{ v: 'badge', w: 3 }, { v: 'icon', w: 2 }]);
+    const blocks = []; const avoid = [];
+    const hr = headlineRegion(ctx, 2, rng.pick([C, Math.round(C * 0.7)]));
+    const hs = buildStack([{ kind: 'text', role: 'headline', path: 'headline', text: content.headline, font: { ...ts.headline, size: snapFont(ts.headline.size * 0.85, g.unit) }, fill: pal.fg, maxLines: 2 }], hr, 'left', 'top', g);
+    if (!hs) return null;
+    blocks.push(...hs.blocks); avoid.push(inkRect(hs, hr, 'left'));
+    if (wide && R >= 4) {
+      const per = Math.floor(C / n); const used = per * n; const c0 = Math.floor((C - used) / 2);
+      const rows = R - 2 - (R > 5 ? 1 : 0);
+      const stepBlocks = []; let badgeY = null, firstX = null, lastX = null;
+      for (let i = 0; i < n; i++) {
+        const r = Grid.rect(g, c0 + i * per, ctx.r0 + 2, per, rows); r.w -= g.gutter; // breathing room between steps
+        const cp = cardPal(ctx, false);
+        const items = [iconOrBadge(ctx, cp, i, steps[i].title + ' ' + steps[i].text, mode), { kind: 'text', role: 'title', path: `steps.${i}.title`, text: steps[i].title, font: { ...ts.subhead, weight: nearestWeight(ctx.kit.fonts.body, 600) }, fill: pal.fg, maxLines: 2, gap: snap(ts.body.size * 0.5, g.unit) }];
+        if (steps[i].text) items.push({ kind: 'text', role: 'text', path: `steps.${i}.text`, text: steps[i].text, font: ts.body, fill: pal.fg2, maxLines: 4 });
+        const st = buildStack(items.filter(Boolean), r, 'left', 'top', g); if (!st) return null;
+        const badge = st.blocks[0]; if (badge && badge.kind === 'badge') { badgeY = badge.y + badge.h / 2; firstX = firstX ?? badge.x + badge.w; lastX = badge.x; }
+        stepBlocks.push(...st.blocks); avoid.push(r);
+      }
+      if (badgeY != null && n > 1 && rng.chance(0.7)) blocks.push({ kind: 'line', x: firstX, y: badgeY, w: lastX - firstX, h: 0, fill: pal.cardStroke, width: 2, dash: '8 8' });
+      blocks.push(...stepBlocks);
+    } else {
+      const rows = R - 2; const r = Grid.rect(g, 0, ctx.r0 + 2, C, rows);
+      const badgeH = snap(ts.body.size * 1.9, g.unit); const gutter = g.unit * 2;
+      const stepH = Math.floor(r.h / n);
+      for (let i = 0; i < n; i++) {
+        const region = { x: r.x + badgeH + gutter * 2, y: r.y + i * stepH, w: r.w - badgeH - gutter * 2, h: stepH - g.unit };
+        const items = [{ kind: 'text', role: 'title', path: `steps.${i}.title`, text: steps[i].title, font: { ...ts.subhead, weight: nearestWeight(ctx.kit.fonts.body, 600) }, fill: pal.fg, maxLines: 2, gap: snap(ts.body.size * 0.4, g.unit) }];
+        if (steps[i].text) items.push({ kind: 'text', role: 'text', path: `steps.${i}.text`, text: steps[i].text, font: ts.body, fill: pal.fg2, maxLines: 3 });
+        const st = buildStack(items, region, 'left', 'top', g); if (!st) return null;
+        const b = iconOrBadge(ctx, cardPal(ctx, false), i, steps[i].title, mode); b.x = r.x; b.y = region.y; b.w = b.h;
+        if (i < n - 1) blocks.push({ kind: 'line', x: r.x + badgeH / 2, y: region.y + badgeH, w: 0, h: stepH - badgeH, fill: pal.cardStroke, width: 2, dash: '8 8' });
+        blocks.push(b, ...st.blocks); avoid.push({ x: r.x, y: region.y, w: r.w, h: stepH });
+      }
+    }
+    const logo = placeLogo(ctx, avoid, ['TR', 'BR']); if (logo) blocks.push(logo);
+    return { blocks, meta: { steps: n, mode, wide } };
+  };
+
+  A['cards'] = ctx => {
+    const { g, rng, pal, ts, content } = ctx;
+    const items = normItems(content.items).slice(0, 6);
+    if (items.length < 2 || !content.headline) return null;
+    const C = g.cols, R = ctx.R, wide = g.w >= g.h * 1.2, tall = g.h > g.w * 1.3;
+    const n = Math.min(items.length, wide ? 4 : tall ? 3 : 4);
+    const list = items.slice(0, n);
+    const mode = rng.weighted([{ v: 'icon', w: 3 }, { v: 'badge', w: 1 }, { v: 'none', w: 1 }]);
+    const highlight = rng.chance(0.35) ? rng.int(0, n - 1) : -1;
+    const blocks = []; const avoid = [];
+    const headItems = [{ kind: 'text', role: 'headline', path: 'headline', text: content.headline, font: { ...ts.headline, size: snapFont(ts.headline.size * 0.85, g.unit) }, fill: pal.fg, maxLines: 2, gap: snap(ts.subhead.size * 0.6, g.unit) }];
+    if (content.subhead && rng.chance(0.5)) headItems.push({ kind: 'text', role: 'subhead', path: 'subhead', text: content.subhead, font: ts.subhead, fill: pal.fg2, maxLines: 2 });
+    const headRows = wide ? 2 : 2;
+    const hr = headlineRegion(ctx, headRows, rng.pick([C, Math.round(C * 0.75)]));
+    const hs = buildStack(headItems, hr, 'left', 'top', g); if (!hs) return null;
+    blocks.push(...hs.blocks); avoid.push(inkRect(hs, hr, 'left'));
+    // grid of cards
+    let rects = [];
+    if (wide || (!tall && n <= 2)) { const per = Math.floor(C / n); const c0 = Math.floor((C - per * n) / 2); const rows = R - headRows; for (let i = 0; i < n; i++) rects.push(Grid.rect(g, c0 + i * per, ctx.r0 + headRows, per, rows)); }
+    else if (!tall) { const per = Math.floor(C / 2); const rowsEach = Math.floor((R - headRows) / 2); for (let i = 0; i < n; i++) rects.push(Grid.rect(g, (i % 2) * (C - per), ctx.r0 + headRows + Math.floor(i / 2) * rowsEach, per, rowsEach)); }
+    else { const rowsEach = Math.floor((R - headRows) / n); for (let i = 0; i < n; i++) rects.push(Grid.rect(g, 0, ctx.r0 + headRows + i * rowsEach, C, rowsEach)); }
+    for (let i = 0; i < n; i++) {
+      const cp = cardPal(ctx, i === highlight);
+      const ib = iconOrBadge(ctx, cp, i, list[i].title + ' ' + list[i].text, mode === 'none' ? null : mode);
+      const its = [ib, { kind: 'text', role: 'title', path: `items.${i}.title`, text: list[i].title, font: { ...ts.subhead, weight: nearestWeight(ctx.kit.fonts.body, 600) }, fill: cp.fg, maxLines: 2, gap: snap(ts.body.size * 0.45, g.unit) }].filter(Boolean);
+      if (list[i].text) its.push({ kind: 'text', role: 'text', path: `items.${i}.text`, text: list[i].text, font: ts.body, fill: cp.fg2, maxLines: 5 });
+      const r = { ...rects[i] }; if (rects.length > 1 && (wide || !tall)) r.w -= 0; 
+      const b = card(ctx, r, its, { fill: cp.fill, valign: tall ? 'center' : 'top' }); if (!b) return null;
+      blocks.push(...b); avoid.push(r);
+    }
+    const logo = placeLogo(ctx, avoid, ['TR', 'BR']); if (logo) blocks.push(logo);
+    return { blocks, meta: { cards: n, mode, highlight: highlight >= 0 } };
+  };
+
+  A['quote'] = ctx => {
+    const { g, rng, pal, ts, content } = ctx;
+    if (!content.quote) return null;
+    const C = g.cols, R = ctx.R;
+    const align = rng.weighted([{ v: 'left', w: 2 }, { v: 'center', w: 2 }]);
+    const img = ctx.assets.images.length && g.w >= g.h && rng.chance(0.4) ? pickImage(ctx) : null;
+    const blocks = []; let region, k = 0;
+    if (img) { k = Math.round(C * 0.4); const r = Grid.rect(g, 0, ctx.r0, k, R); blocks.push(imageBlock(ctx, r, img, ctx.radius(g.unit * 2))); region = Grid.rect(g, k + 1, ctx.r0 + 1, C - k - 1, R - 2); }
+    else { const cs = align === 'center' ? Math.round(C * 0.8) : Math.round(C * 0.75); const c0 = align === 'center' ? Math.floor((C - cs) / 2) : 0; region = Grid.rect(g, c0, ctx.r0 + 1, cs, R - 2); }
+    const quoteFont = { ...ts.headline, size: snapFont(ts.headline.size * 0.8, g.unit), weight: nearestWeight(ctx.kit.fonts.display, (ctx.kit.fonts.displayWeight || 600) - 100), lineHeight: 1.15 };
+    const items = [];
+    if (rng.chance(0.7)) items.push({ kind: 'text', role: 'mark', text: '\u201C', font: { ...ts.headline, size: snapFont(ts.headline.size * 1.6, g.unit), lineHeight: 0.7 }, fill: pal.accentText, maxLines: 1, gap: 0, decorative: true });
+    items.push({ kind: 'text', role: 'quote', path: 'quote', text: content.quote, font: quoteFont, fill: pal.fg, maxLines: 6, gap: snap(ts.body.size * 1.2, g.unit) });
+    if (content.attribution) items.push({ kind: 'text', role: 'attribution', path: 'attribution', text: content.attribution, font: ts.eyebrow, fill: pal.fg2, maxLines: 2 });
+    const stack = buildStack(items, region, img ? 'left' : align, 'center', g); if (!stack) return null;
+    blocks.push(...stack.blocks);
+    const avoid = [inkRect(stack, region, img ? 'left' : align), ...(img ? [blocks[0]] : [])];
+    const logo = placeLogo(ctx, avoid, align === 'center' ? ['BC', 'BL'] : ['BL', 'TL']); if (logo && !(img && inter(logo, blocks[0]))) blocks.push(logo);
+    return { blocks, meta: { align, image: !!img } };
+  };
+
   // ---- Validation and metrics ------------------------------------------------------
   function validate(layout, g) {
-    const texts = layout.blocks.filter(b => b.kind === 'text' || b.kind === 'button' || b.kind === 'logo');
+    const texts = layout.blocks.filter(b => b.kind === 'text' || b.kind === 'list' || b.kind === 'button' || b.kind === 'logo' || b.kind === 'badge');
     const s = g.safe;
     for (const t of texts) {
-      const r = { x: t.x, y: t.y, w: t.kind === 'text' ? (t.inkW || t.w) : t.w, h: t.h };
+      const r = { x: t.x, y: t.y, w: (t.kind === 'text' || t.kind === 'list') ? (t.inkW || t.w) : t.w, h: t.h };
       if (t.kind === 'text' && t.align === 'center') r.x = t.x + (t.w - r.w) / 2;
       if (t.kind === 'text' && t.align === 'right') r.x = t.x + t.w - r.w;
       if (r.x < s.left - 1 || r.y < s.top - 1 || r.x + r.w > g.w - s.right + 1 || r.y + r.h > g.h - s.bottom + 1) return 'outside safe area: ' + t.role;
       for (const o of texts) if (o !== t) {
-        const ro = { x: o.x, y: o.y, w: o.kind === 'text' ? (o.inkW || o.w) : o.w, h: o.h };
+        const ro = { x: o.x, y: o.y, w: (o.kind === 'text' || o.kind === 'list') ? (o.inkW || o.w) : o.w, h: o.h };
         if (o.kind === 'text' && o.align === 'center') ro.x = o.x + (o.w - ro.w) / 2;
         if (o.kind === 'text' && o.align === 'right') ro.x = o.x + o.w - ro.w;
         if (inter(r, ro)) return 'overlap: ' + t.role + '/' + o.role;
@@ -600,7 +836,7 @@ const Engine = (() => {
       const shape = under.filter(b => b.kind === 'shape').pop();
       if (shape && inter(r, shape) && t.kind !== 'button') return 'text on shape: ' + t.role;
       if (topImage && !(under.some(b => b.kind === 'scrim') || (topField && layout.blocks.indexOf(topField) > layout.blocks.indexOf(topImage))) && !layout.meta.overlay) return 'text on image without treatment: ' + t.role;
-      if (topField && !topImage && t.kind === 'text' && t.fill && Color.contrast(topField.fill, t.fill) < (t.role === 'headline' || t.role === 'stat' ? 3 : 4.5) && !topField.alpha) return 'low contrast on field: ' + t.role;
+      if (topField && !topImage && (t.kind === 'text' || t.kind === 'list') && t.fill && Color.contrast(topField.fill, t.fill) < (t.role === 'headline' || t.role === 'stat' || t.role === 'mark' ? 3 : 4.5) && !topField.alpha) return 'low contrast on field: ' + t.role;
     }
     return null;
   }
@@ -609,9 +845,9 @@ const Engine = (() => {
     let ink = 0, sx = 0, sy = 0, sw = 0, textInk = 0;
     for (const b of layout.blocks) {
       if (b.kind === 'scrim') continue;
-      const r = { x: b.x, y: b.y, w: b.kind === 'text' ? (b.inkW || b.w) : b.w, h: b.h };
+      const r = { x: b.x, y: b.y, w: (b.kind === 'text' || b.kind === 'list') ? (b.inkW || b.w) : b.w, h: b.h };
       const a = Math.min(total, area({ x: Math.max(0, r.x), y: Math.max(0, r.y), w: Math.min(g.w, r.x + r.w) - Math.max(0, r.x), h: Math.min(g.h, r.y + r.h) - Math.max(0, r.y) }));
-      if (b.kind === 'text' || b.kind === 'button' || b.kind === 'logo') { textInk += a; sx += (r.x + r.w / 2) * a; sy += (r.y + r.h / 2) * a; sw += a; }
+      if (b.kind === 'text' || b.kind === 'list' || b.kind === 'button' || b.kind === 'logo') { textInk += a; sx += (r.x + r.w / 2) * a; sy += (r.y + r.h / 2) * a; sw += a; }
       else if (b.kind === 'image' || b.kind === 'field') { sx += (r.x + r.w / 2) * a * 0.3; sy += (r.y + r.h / 2) * a * 0.3; sw += a * 0.3; }
       ink += a;
     }
@@ -622,7 +858,7 @@ const Engine = (() => {
   }
   function signature(layout, g) {
     const cell = v => Math.round(v / (g.cw + g.gutter));
-    return layout.archetype + '|' + layout.format.id + '|' + layout.palette.bg + layout.palette.fg + '|' + layout.blocks.map(b => (b.kind[0]) + (b.role ? b.role[0] : '') + cell(b.x) + ',' + cell(b.y) + ',' + cell(b.w) + ',' + cell(b.h) + (b.kind === 'text' ? '/' + b.lines.length + ':' + b.font.size : '')).join(';');
+    return layout.archetype + '|' + layout.format.id + '|' + layout.palette.bg + layout.palette.fg + '|' + layout.blocks.map(b => (b.kind[0]) + (b.role ? b.role[0] : '') + cell(b.x) + ',' + cell(b.y) + ',' + cell(b.w) + ',' + cell(b.h) + ((b.kind === 'text' || b.kind === 'list') ? '/' + b.lines.length + ':' + b.font.size : '')).join(';');
   }
 
   // ---- Public API --------------------------------------------------------------------
@@ -634,8 +870,13 @@ const Engine = (() => {
       : e === 'type'
         ? { 'type-led': 3, 'color-block': 2.5, editorial: 2, stat: 1.6, split: 1, poster: 0.5, 'full-bleed': 0.3, mosaic: 0.15 }
         : { 'type-led': 2, split: 2, poster: 1.5, 'full-bleed': 1.5, 'color-block': 2, editorial: 1.5, mosaic: n >= 2 ? 1 : 0.2, stat: 1 };
+    if (intent.slideIntent && INTENT_WEIGHTS[intent.slideIntent]) {
+      const iw = INTENT_WEIGHTS[intent.slideIntent]; for (const k of Object.keys(w)) w[k] = 0; for (const k of Object.keys(iw)) w[k] = iw[k];
+      for (const k of ['agenda', 'comparison', 'process', 'cards', 'quote']) if (!(k in w)) w[k] = 0;
+    } else { for (const k of ['agenda', 'comparison', 'process', 'cards', 'quote']) w[k] = (intent.archetypes && intent.archetypes.includes(k)) ? 1 : 0; }
     if (!n) { w['full-bleed'] = 0; w.mosaic = 0; w.poster *= 0.6; w.split *= 0.7; }
     if (!content.stat) w.stat = 0;
+    if (!content.quote) w.quote = 0;
     if (intent.archetypes && intent.archetypes.length) for (const k of Object.keys(w)) if (!intent.archetypes.includes(k)) w[k] = 0;
     return w;
   }
@@ -653,7 +894,7 @@ const Engine = (() => {
     // Type level from loudness, then step down if text refuses to fit.
     const loud = intent.loud ?? 0.5;
     const center = Math.round(loud * (H_LEVELS.length - 1));
-    let level = Math.max(0, Math.min(H_LEVELS.length - 1, center + rng.int(-1, 1)));
+    let level = intent.level != null ? Math.max(0, Math.min(H_LEVELS.length - 1, intent.level)) : Math.max(0, Math.min(H_LEVELS.length - 1, center + rng.int(-1, 1)));
     const weights = archetypeWeights(intent, assets, content);
     const items = Object.entries(weights).filter(([, w]) => w > 0).map(([v, w]) => ({ v, w }));
     if (!items.length) return null;
@@ -676,6 +917,13 @@ const Engine = (() => {
       if (bad) { layout.rejected = bad; continue; }
       layout.metrics = metrics(layout, g);
       layout.signature = signature(layout, g);
+      layout.slideIntent = intent.slideIntent || null;
+      let imgN = 0;
+      for (const b of layout.blocks) {
+        if (b.kind === 'image') { b.decorative = false; b.path = b.path || `image_${++imgN}`; }
+        else if (b.kind === 'text' || b.kind === 'list' || b.kind === 'button') { b.decorative = !!b.decorative; if (!b.path && b.role) b.path = b.role; }
+        else b.decorative = true;
+      }
       layout.id = archetype.slice(0, 2).toUpperCase() + '-' + format.id.slice(0, 2).toUpperCase() + '-' + seed.toString(36);
       return layout;
     }
@@ -700,5 +948,43 @@ const Engine = (() => {
     return { layouts: out, attempts };
   }
 
-  return { generate, generateMany, ARCHETYPES, ARCH_LABEL, H_LEVELS, typeSet, logoAspect };
+  // Content schema: every editable block becomes a field; dotted paths with indices become arrays.
+  function contentSchema(layout) {
+    const root = { type: 'object', additionalProperties: false, properties: {}, required: [] };
+    const ensure = (node, key, isArray) => {
+      if (!node.properties[key]) node.properties[key] = isArray ? { type: 'array', items: { type: 'object', additionalProperties: false, properties: {}, required: [] }, maxItems: 0 } : { type: 'object', additionalProperties: false, properties: {}, required: [] };
+      if (!node.required.includes(key)) node.required.push(key);
+      return node.properties[key];
+    };
+    for (const b of layout.blocks) {
+      if (b.decorative || !b.path) continue;
+      const parts = b.path.split('.');
+      let node = root;
+      for (let i = 0; i < parts.length - 1; i++) {
+        const key = parts[i]; const nextIsIndex = /^\d+$/.test(parts[i + 1]);
+        if (/^\d+$/.test(key)) continue;
+        const child = ensure(node, key, nextIsIndex);
+        if (nextIsIndex) { child.maxItems = Math.max(child.maxItems, +parts[i + 1] + 1); node = child.items; } else node = child;
+      }
+      const leaf = parts[parts.length - 1];
+      let field;
+      if (b.kind === 'list') field = { type: 'array', items: { type: 'string' }, description: `${leaf}: ${b.capacity.items} items (up to ${b.capacity.maxItems}), each up to ${b.capacity.charsPerItem} characters` };
+      else if (b.kind === 'image') field = { type: 'string', description: `Image prompt for a ${Math.round(b.w)}×${Math.round(b.h)} area` };
+      else if (b.kind === 'button') field = { type: 'string', description: `${leaf}: button label, up to 24 characters` };
+      else field = { type: 'string', description: `${leaf}: up to ${b.capacity ? b.capacity.maxChars : 80} characters, ${b.capacity ? b.capacity.maxLines : 2} lines` };
+      if (leaf === 'eyebrow' || leaf === 'footer') field.description += ' (optional, may be empty)';
+      node.properties[leaf] = field; if (!node.required.includes(leaf)) node.required.push(leaf);
+    }
+    return root;
+  }
+  // Apply new copy to an existing layout: same seed, same moves, text refitted. Null when it no longer fits.
+  function hydrate(layout, content, env) {
+    const intent = { ...env.intent, content: { ...(env.intent.content || {}), ...content }, lockPalette: layout.palette, level: layout.type.level, slideIntent: layout.slideIntent };
+    return generate({ intent, kit: env.kit, assets: env.assets, format: Grid.byId[layout.format.id], seed: layout.seed, archetype: layout.archetype });
+  }
+  function palettePick(kit, intent, seed) {
+    const pal = choosePalette({ rng: RNG.make(seed), kit, intent });
+    return pal ? { bg: pal.bg, fg: pal.fg, accent: pal.accent, bgName: pal.bgName } : null;
+  }
+  return { generate, generateMany, ARCHETYPES, ARCH_LABEL, SLIDE_INTENTS, INTENT_WEIGHTS, H_LEVELS, typeSet, logoAspect, contentSchema, hydrate, palettePick, normItems };
 })();

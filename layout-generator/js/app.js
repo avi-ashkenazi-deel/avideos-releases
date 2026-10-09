@@ -4,6 +4,7 @@
   const state = {
     kit: null, assets: { images: [] }, layouts: [], favs: new Set(), picks: new Set(),
     formats: ['square'], showGrid: false, lastPrompt: null, intent: Prompt.DEFAULT(), seedBase: 1, detail: null, busy: false,
+    mode: 'single', outline: null, outlineEdited: false, deck: null, deckFormat: 'slide',
   };
   const LS = { get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch { return d; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { } } };
   let imgSeq = 1;
@@ -114,6 +115,7 @@
     const id = e.target.value; if (id === '__custom') return;
     loadKit(Brand.fromPreset(id)); $('presetSelect').value = id;
     await ensureDemoImages(true); persistKit(); Text.clearCache();
+    state.outline = null; state.outlineEdited = false; if (state.mode === 'deck') { state.outline = Deck.outlineFromBrief($('prompt').value, state.kit); renderOutline(); }
   });
 
   // ---- Images -------------------------------------------------------------------------
@@ -161,6 +163,7 @@
   $('formatChips').addEventListener('click', e => {
     const b = e.target.closest('[data-f]'); if (!b) return;
     const id = b.dataset.f;
+    if (state.mode === 'deck') { state.formats = [id]; state.deckFormat = id; renderChips(); return; }
     if (state.formats.includes(id)) { if (state.formats.length > 1) state.formats = state.formats.filter(x => x !== id); }
     else state.formats.push(id);
     renderChips();
@@ -187,6 +190,7 @@
   }
   async function generate(text, opts = {}) {
     if (state.busy) return;
+    if (state.mode === 'deck' && !opts.intent) return generateDeck(text);
     state.busy = true; $('generateBtn').disabled = true; $('generateBtn').textContent = 'Reading brief…';
     try {
       const kit = readKit();
@@ -292,7 +296,7 @@
   $('showGrid').addEventListener('change', () => { state.showGrid = $('showGrid').checked; renderGallery(); });
 
   // ---- Detail --------------------------------------------------------------------------
-  function findLayout(id) { return state.layouts.find(l => l.id === id) || state.family?.find(l => l.id === id); }
+  function findLayout(id) { return state.layouts.find(l => l.id === id) || state.family?.find(l => l.id === id) || state.deck?.slides.flatMap(s => s.variations).find(l => l.id === id); }
   function openDetail(id) {
     const l = findLayout(id); if (!l) return;
     state.detail = l; state.family = null;
@@ -322,6 +326,8 @@
     $('detailSpecs').innerHTML = rows.map(([k, v]) => `<dt>${k}</dt><dd>${escapeHtml(v)}</dd>`).join('');
     $('detailJsonView').textContent = JSON.stringify(stripForJson(l), null, 1);
     $('familyStrip').innerHTML = '';
+    $('detailFill').disabled = !($('apiKey').value.trim());
+    $('detailFill').title = $('apiKey').value.trim() ? 'Ask Claude for copy that fits this exact layout' : 'Add an Anthropic API key in Settings to use this';
   }
   function stripForJson(l) {
     const c = JSON.parse(JSON.stringify(l)); delete c.signature; delete c.rejected;
@@ -329,6 +335,20 @@
     return c;
   }
   $('detailClose').addEventListener('click', () => { $('detail').hidden = true; state.detail = null; });
+  $('detailSchema').addEventListener('click', async e => { const l = state.detail; if (!l) return; await copyText(JSON.stringify(Engine.contentSchema(l), null, 2)); toast('Content schema copied'); });
+  $('detailFill').addEventListener('click', e => withBusy(e.target, async () => {
+    const l = state.detail; if (!l) return;
+    const key = $('apiKey').value.trim(); if (!key) { toast('Add an API key in Settings first'); return; }
+    const schema = Engine.contentSchema(l);
+    const current = {}; for (const b of l.blocks) if (!b.decorative && b.path && b.kind !== 'image') current[b.path] = b.kind === 'list' ? b.items : (b.lines ? b.lines.join(' ') : b.text);
+    const content = await Prompt.fillContent({ brief: $('prompt').value, kit: state.kit, schema, current, apiKey: key, slideIntent: l.slideIntent });
+    const next = Engine.hydrate(l, content, { intent: state.intent, kit: state.kit, assets: state.assets });
+    if (!next) { toast('Claude wrote copy that does not fit this layout. Try again or pick a roomier variation.'); return; }
+    next.id = next.id + '-c';
+    if (state.mode === 'deck' && l.deckIndex != null && state.deck) { const row = state.deck.slides[l.deckIndex]; next.deckIndex = l.deckIndex; row.variations.unshift(next); row.pick = 0; renderDeck(); }
+    else { state.layouts.unshift(next); renderGallery(); }
+    state.detail = next; renderDetail(); toast('Copy refitted into the same layout');
+  }));
   $('detailGrid').addEventListener('change', renderDetail);
   $('detailFav').addEventListener('click', () => state.detail && toggleFav(state.detail.id));
   $('detailMore').addEventListener('click', async () => {
@@ -423,8 +443,152 @@
       <li><b>Figma Make, Framer, Relume</b> generate UI and web layouts from prompts using real components. Product surfaces, not brand comms.</li>
       <li><b>Research</b> (LayoutPrompter, PosterLlama, COLE, CreatiPoster, LayoutGPT) treats layout as structured generation: an LLM emits boxes in JSON or HTML under content-aware constraints. This prototype follows that idea with explicit rules instead of a trained model, so it runs anywhere and is auditable.</li>
     </ul>
+    <h4>Decks</h4>
+    <p>Deck mode turns the brief into an outline with one intent per slide (cover, agenda, statement, big number, comparison, process, cards, quote, closing), generates variations for every slide under one palette and type step, and exports your picks as an editable PowerPoint. Every editable block carries its copy capacity, so a layout can be handed to Claude as a schema and the copy refitted without moving anything.</p>
     <h4>What it is not yet</h4>
-    <p>Visual generation only. Editing, Figma export, and per-design-system connectors come next. The layout JSON is written so those can be added without changing the engine.</p>`;
+    <p>Editing in place, charts and tables, Figma export, and per-design-system connectors come next. The layout JSON is written so those can be added without changing the engine.</p>`;
+
+  // ---- Deck mode -----------------------------------------------------------------------------------
+  function setMode(mode) {
+    state.mode = mode;
+    document.querySelectorAll('#modeSeg button').forEach(b => b.classList.toggle('on', b.dataset.mode === mode));
+    const deck = mode === 'deck';
+    $('outlinePanel').hidden = !deck; $('deckBar').hidden = !deck; $('deckView').hidden = !deck;
+    $('gallery').hidden = deck; $('empty').hidden = deck || state.layouts.length > 0;
+    for (const id of ['count', 'sort', 'filterArch', 'favOnly', 'compareBtn', 'exportFavBtn', 'exportFavPptxBtn']) $(id).closest('label, button').hidden = deck;
+    $('prompt').placeholder = deck ? 'Describe the deck, e.g. "8-slide launch deck for Deel Global Payroll: cover, why now, what you get, how it works, proof, before and after, customer quote, next steps"' : 'Describe what you need, e.g. "36 bold image-led square posts for Deel Payroll, dark, with a CTA"';
+    if (deck) { state.formats = [state.deckFormat]; renderChips(); if (!state.outline) { state.outline = Deck.outlineFromBrief($('prompt').value, state.kit); renderOutline(); } }
+    LS.set('lg.mode', mode);
+  }
+  $('modeSeg').addEventListener('click', e => { const b = e.target.closest('[data-mode]'); if (b) setMode(b.dataset.mode); });
+
+  // Outline editor --------------------------------------------------------------------------------------
+  const DETAIL_HINT = { cards: 'Title — text, one per line', process: 'Step title — text, one per line', agenda: 'One entry per line', comparison: 'Left title\nbullet\nbullet\n---\nRight title\nbullet\nbullet', quote: 'Quote\nAttribution', stat: 'Stat (e.g. 150+)\nSubhead', cover: 'Subhead', statement: 'Subhead', body: 'Body copy', closing: 'Subhead\nCTA label' };
+  function detailsText(sl) {
+    const i = sl.intent;
+    if (i === 'cards' || i === 'process') return Engine.normItems(i === 'cards' ? sl.items : (sl.steps && sl.steps.length ? sl.steps : sl.items)).map(x => x.text ? `${x.title} — ${x.text}` : x.title).join('\n');
+    if (i === 'agenda') return (sl.items && sl.items.length ? Engine.normItems(sl.items).map(x => x.title) : (sl.bullets || [])).join('\n');
+    if (i === 'comparison') return (sl.columns || []).map(c => [c.title, ...(c.bullets || [])].join('\n')).join('\n---\n');
+    if (i === 'quote') return [sl.quote || '', sl.attribution || ''].join('\n');
+    if (i === 'stat') return [sl.stat || '', sl.subhead || ''].join('\n');
+    if (i === 'closing') return [sl.subhead || '', sl.cta || ''].join('\n');
+    if (i === 'body') return sl.body || '';
+    return sl.subhead || '';
+  }
+  function parseDetails(sl, text) {
+    const i = sl.intent; const lines = String(text || '').split('\n').map(x => x.trim()).filter(Boolean);
+    const pair = l => { const m = l.split(/\s[—–-]\s|:\s/); return { title: m[0].trim(), text: m.slice(1).join(' ').trim() }; };
+    delete sl.items; delete sl.steps; delete sl.columns; delete sl.bullets;
+    if (i === 'cards') sl.items = lines.map(pair);
+    else if (i === 'process') sl.steps = lines.map(pair);
+    else if (i === 'agenda') sl.items = lines.map(l => ({ title: l, text: '' }));
+    else if (i === 'comparison') { sl.columns = text.split(/\n-{3,}\n?/).map(block => { const ls = block.split('\n').map(x => x.trim()).filter(Boolean); return { title: ls[0] || '', bullets: ls.slice(1) }; }).filter(c => c.title); }
+    else if (i === 'quote') { sl.quote = lines[0] || ''; sl.attribution = lines[1] || ''; }
+    else if (i === 'stat') { sl.stat = lines[0] || ''; sl.subhead = lines.slice(1).join(' '); }
+    else if (i === 'closing') { sl.subhead = lines[0] || ''; sl.cta = lines[1] || sl.cta || state.kit.content.cta; }
+    else if (i === 'body') sl.body = lines.join(' ');
+    else sl.subhead = lines.join(' ');
+  }
+  function renderOutline() {
+    const o = state.outline; if (!o) return;
+    $('outlineSource').textContent = `${o.slides.length} slides · ${o.source === 'claude' ? 'written by Claude' : state.outlineEdited ? 'edited' : 'from brief'}`;
+    $('outlineList').innerHTML = o.slides.map((sl, i) => `<div class="outline-row" data-i="${i}">
+      <div class="num">${String(i + 1).padStart(2, '0')}</div>
+      <div class="fields">
+        <select class="select" data-k="intent" id="ol-intent-${i}" aria-label="Slide intent">${Engine.SLIDE_INTENTS.map(k => `<option value="${k}" ${k === sl.intent ? 'selected' : ''}>${Deck.INTENT_LABEL[k]}</option>`).join('')}</select>
+        <input class="input" data-k="headline" id="ol-headline-${i}" type="text" placeholder="${sl.intent === 'quote' ? 'Headline (optional)' : 'Headline'}" value="${escapeHtml(sl.headline || '')}">
+        <textarea class="input" data-k="details" id="ol-details-${i}" rows="3" placeholder="${escapeHtml(DETAIL_HINT[sl.intent] || '')}">${escapeHtml(detailsText(sl))}</textarea>
+      </div>
+      <div class="ops"><button class="btn small" data-op="up" title="Move up" type="button">↑</button><button class="btn small" data-op="down" title="Move down" type="button">↓</button><button class="btn small" data-op="rm" title="Remove" type="button">✕</button></div>
+    </div>`).join('');
+  }
+  $('outlineList').addEventListener('change', e => {
+    const row = e.target.closest('.outline-row'); if (!row) return;
+    const i = +row.dataset.i; const sl = state.outline.slides[i]; const k = e.target.dataset.k;
+    if (k === 'intent') { const title = sl.headline; const fresh = Deck.slideFromTitle(state.kit, '', e.target.value); Object.assign(sl, fresh, { headline: title || fresh.headline, intent: e.target.value }); }
+    else if (k === 'headline') sl.headline = e.target.value.trim();
+    else if (k === 'details') parseDetails(sl, e.target.value);
+    state.outlineEdited = true; renderOutline();
+  });
+  $('outlineList').addEventListener('click', e => {
+    const b = e.target.closest('[data-op]'); if (!b) return;
+    const i = +b.closest('.outline-row').dataset.i; const sl = state.outline.slides;
+    if (b.dataset.op === 'rm') sl.splice(i, 1);
+    else if (b.dataset.op === 'up' && i > 0) [sl[i - 1], sl[i]] = [sl[i], sl[i - 1]];
+    else if (b.dataset.op === 'down' && i < sl.length - 1) [sl[i + 1], sl[i]] = [sl[i], sl[i + 1]];
+    sl.forEach((x, j) => x.section = String(j + 1).padStart(2, '0'));
+    state.outlineEdited = true; renderOutline();
+  });
+  $('outlineAdd').addEventListener('click', () => { const sl = state.outline.slides; sl.splice(Math.max(0, sl.length - 1), 0, Deck.slideFromTitle(state.kit, '', 'cards')); sl.forEach((x, j) => x.section = String(j + 1).padStart(2, '0')); state.outlineEdited = true; renderOutline(); });
+  $('outlineReset').addEventListener('click', async () => { state.outlineEdited = false; state.outline = await resolveOutline($('prompt').value, true); renderOutline(); toast('Outline rebuilt'); });
+
+  async function resolveOutline(text, force) {
+    if (state.outline && state.outlineEdited && !force) return state.outline;
+    const useClaude = $('useClaude').checked && $('apiKey').value.trim();
+    if (useClaude) {
+      try { const o = await Deck.outlineWithClaude(text, state.kit, $('apiKey').value.trim()); $('interpretLog').textContent = 'Claude outline: ' + (o.summary || ''); return o; }
+      catch (err) { $('interpretLog').textContent = 'Claude outline failed, used rules. ' + err.message; toast('Claude outline failed, used rules'); }
+    }
+    return Deck.outlineFromBrief(text, state.kit);
+  }
+
+  async function generateDeck(text) {
+    state.busy = true; $('generateBtn').disabled = true; $('generateBtn').textContent = 'Reading brief…';
+    try {
+      const kit = readKit();
+      await ensureDemoImages(false); await loadFonts(kit);
+      const promptChanged = text !== state.lastPrompt;
+      const base = await resolveIntent(text);
+      if (promptChanged) { state.outlineEdited = false; state.lastPrompt = text; }
+      state.intent = base;
+      state.outline = await resolveOutline(text, promptChanged && !state.outlineEdited);
+      renderOutline();
+      LS.set('lg.prompt', text);
+      const format = Grid.byId[state.deckFormat] || Grid.byId.slide;
+      const seedBase = (state.seedBase = (state.seedBase * 1664525 + 1013904223) >>> 0);
+      const t0 = performance.now();
+      state.deck = await Deck.generate({ outline: state.outline, kit, assets: state.assets, format, baseIntent: base, perSlide: +$('perSlide').value, seedBase, onProgress: (i, n) => { $('generateBtn').textContent = `Slide ${i}/${n}…`; } });
+      const ms = Math.round(performance.now() - t0);
+      const made = state.deck.slides.reduce((s, x) => s + x.variations.length, 0);
+      $('readout').innerHTML = [
+        `<span><span class="k">deck</span> <b>${escapeHtml(state.outline.title)}</b> · ${state.deck.slides.length} slides · ${format.name}</span>`,
+        `<span><span class="k">outline by</span> <b>${state.outline.source === 'claude' ? 'Claude' : 'rules'}</b> · <span class="k">brief read by</span> <b>${base.source === 'claude' ? 'Claude' : 'rules'}</b></span>`,
+        `<span><span class="k">palette</span> <b>${state.deck.palette ? state.deck.palette.bgName : '—'}</b> · <span class="k">type step</span> <b>${state.deck.level + 1}/6</b></span>`,
+        `<span><span class="k">variations</span> <b>${made}</b> <span class="k">in ${ms} ms</span></span>`,
+      ].join('');
+      renderDeck();
+    } finally { state.busy = false; $('generateBtn').disabled = false; $('generateBtn').textContent = 'Generate'; }
+  }
+  function renderDeck() {
+    const d = state.deck; if (!d) return;
+    const tall = d.format.h > d.format.w;
+    $('deckView').innerHTML = d.slides.map(s => `<div class="deck-row" data-i="${s.index}">
+      <div class="head"><span class="n">${String(s.index + 1).padStart(2, '0')}</span><span class="intent">${Deck.INTENT_LABEL[s.outline.intent] || s.outline.intent}</span><span class="title">${escapeHtml(s.outline.headline || s.outline.quote || '')}</span><button class="btn small" data-shuffle="${s.index}" type="button">Shuffle</button></div>
+      <div class="strip">${s.variations.length ? s.variations.map((l, j) => `<div class="deck-card ${tall ? 'tall' : ''} ${j === s.pick ? 'pick' : ''}" data-id="${l.id}" data-j="${j}">${Render.toSVG(l, { kit: state.kit, assets: state.assets, showGrid: state.showGrid, width: 440 })}<div class="lbl"><span>${l.archetypeLabel}</span><span>${Math.round(l.metrics.whitespace * 100)}% air</span></div><button class="open" data-open="${l.id}" type="button">Open</button></div>`).join('') : `<div class="empty-row">Nothing fit this slide's content. Shorten the copy in the outline or change its intent.</div>`}</div>
+    </div>`).join('');
+    const ok = d.slides.some(s => s.pick >= 0);
+    $('deckPptxBtn').disabled = !ok; $('deckPngBtn').disabled = !ok;
+  }
+  $('deckView').addEventListener('click', async e => {
+    const open = e.target.closest('[data-open]'); if (open) { openDetail(open.dataset.open); return; }
+    const sh = e.target.closest('[data-shuffle]');
+    if (sh) { const i = +sh.dataset.shuffle; sh.disabled = true; sh.textContent = '…'; try { await Deck.reshuffle(state.deck, i, { outline: state.outline, kit: state.kit, assets: state.assets, format: state.deck.format, baseIntent: { ...state.intent, lockPalette: state.deck.palette, level: state.deck.level }, perSlide: +$('perSlide').value }); } finally { renderDeck(); } return; }
+    const card = e.target.closest('.deck-card'); if (!card) return;
+    const row = card.closest('.deck-row'); const i = +row.dataset.i; state.deck.slides[i].pick = +card.dataset.j;
+    row.querySelectorAll('.deck-card').forEach(c => c.classList.toggle('pick', c === card));
+  });
+  $('deckView').addEventListener('dblclick', e => { const card = e.target.closest('.deck-card'); if (card) openDetail(card.dataset.id); });
+  $('deckShuffleAll').addEventListener('click', () => generateDeck($('prompt').value));
+  $('deckPptxBtn').addEventListener('click', e => withBusy(e.target, async () => {
+    const picks = Deck.picks(state.deck); if (!picks.length) return;
+    const blob = await ExportPptx.buildDeck(picks, { kit: state.kit, assets: state.assets });
+    if (await Render.download(blob, `${slug(state.outline.title || state.kit.name)}-deck-${picks.length}-slides.pptx`)) toast(`Deck saved: ${picks.length} editable slides`);
+  }));
+  $('deckPngBtn').addEventListener('click', e => withBusy(e.target, async () => {
+    const picks = Deck.picks(state.deck); let n = 0;
+    for (const l of picks) { const blob = await Render.exportPNG(l, { kit: state.kit, assets: state.assets }); if (!(await Render.download(blob, `${slug(state.outline.title || state.kit.name)}-${String(n + 1).padStart(2, '0')}.png`))) break; n++; await new Promise(r => setTimeout(r, 350)); }
+    if (n) toast(`${n} slide PNG${n > 1 ? 's' : ''} saved`);
+  }));
 
   // ---- Init --------------------------------------------------------------------------------------
   async function init() {
@@ -438,7 +602,9 @@
     $('promptForm').addEventListener('submit', e => { e.preventDefault(); generate($('prompt').value); });
     await ensureDemoImages(false);
     // First frame: a working state, not an empty shell.
-    if (!$('prompt').value) $('prompt').value = 'Launch posts for Deel Global Payroll, bold, image-led, square and story';
+    const savedMode = LS.get('lg.mode', 'single');
+    if (!$('prompt').value) $('prompt').value = savedMode === 'deck' ? '8-slide launch deck for Deel Global Payroll' : 'Launch posts for Deel Global Payroll, bold, image-led, square and story';
+    if (savedMode === 'deck') setMode('deck');
     await generate($('prompt').value);
   }
   init();
