@@ -18,7 +18,8 @@ The prototype in this folder runs in a browser tab with no backend.
 - **Rules are enforced, not suggested.** Text is measured and must fit. Nothing leaves the safe area. Text on a photo gets a scrim or a panel based on the image's own luminance. Text on a color field must pass WCAG contrast. The wordmark only appears in its three permitted colors. Invalid attempts are rejected, and the readout shows how many.
 - **Design-system agnostic.** The brand is a JSON kit: colors with roles, fonts, logo rules, grid rules, shapes. Switch from Deel to a serif editorial kit or a playful pastel kit and the same engine produces on-brand results for each.
 - **Multi-format from one idea.** Any variation can be re-rendered as a square post, story, LinkedIn post, slide, poster, or banner on that format's own grid.
-- **Editable by design.** Each output is an SVG plus a JSON spec with every block on grid cells. That is the surface a future editor, a Figma exporter, or a Pitch template can read.
+- **Editable by design.** Each output is an SVG plus a JSON spec with every block on grid cells and every text block's copy capacity. The same spec already exports as an editable PowerPoint slide, and is the surface a future editor, a Figma exporter, or a Pitch template can read.
+- **Starts from what exists.** Point the mining tool at a folder of our decks and it drafts a brand kit (colors with roles, fonts) and layout priors without a model in the loop.
 
 ## What we are asking for
 
@@ -30,7 +31,7 @@ The prototype in this folder runs in a browser tab with no backend.
 
 | Phase | Scope | Outcome |
 |---|---|---|
-| Now | Visual generation from prompt + assets, gallery, compare, export | Prove the thesis; collect what designers keep and discard |
+| Now | Visual generation from prompt + assets, gallery, compare, PNG/SVG/JSON and editable PPTX export, kit drafts mined from existing decks | Prove the thesis; collect what designers keep and discard |
 | Next | Edit in place (drag on cells, swap image, re-fit text), lock elements and regenerate the rest | Designers refine instead of restart |
 | Then | Connectors: Figma (frames from the JSON spec), Pitch and Slides templates, a brand-kit importer from Figma variables | Every design system becomes a kit without hand-writing JSON |
 | Later | Learn from choices: rank variations by what teams pick; content-aware crops with real salience models | Fewer variations that are better |

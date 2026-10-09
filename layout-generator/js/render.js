@@ -37,7 +37,7 @@ const Render = (() => {
     const defs = []; const parts = [];
     let clipId = 0, gradId = 0;
     const uid = layout.id || 'l';
-    parts.push(`<rect width="${W}" height="${H}" fill="${layout.palette.bg}"/>`);
+    if (!opts.transparent) parts.push(`<rect width="${W}" height="${H}" fill="${layout.palette.bg}"/>`);
     for (const b of layout.blocks) {
       if (b.kind === 'field') {
         parts.push(`<rect x="${n(b.x)}" y="${n(b.y)}" width="${n(b.w)}" height="${n(b.h)}" rx="${b.radius || 0}" fill="${b.fill}"${b.alpha != null && b.alpha < 1 ? ` fill-opacity="${b.alpha}"` : ''}/>`);
@@ -136,6 +136,18 @@ const Render = (() => {
     const fontStyle = await fontFaceCss(fams);
     return toSVG(layout, { ...opts, forExport: true, fontStyle, showGrid: false });
   }
+  // Rasterize an SVG string to a PNG data URL at the layout's pixel size.
+  async function svgToPngDataUrl(svg, w, h, scale = 1) {
+    const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    try {
+      const img = new Image();
+      await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = url; });
+      const c = document.createElement('canvas'); c.width = Math.round(w * scale); c.height = Math.round(h * scale);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      return c.toDataURL('image/png');
+    } finally { URL.revokeObjectURL(url); }
+  }
   async function exportPNG(layout, opts, scale = 1) {
     const svg = await exportSVG(layout, opts);
     const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
@@ -167,5 +179,5 @@ const Render = (() => {
     setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
     return true;
   }
-  return { toSVG, gridOverlay, exportSVG, exportPNG, download, fontFaceCss, fontsEmbedded, bufToBase64 };
+  return { toSVG, gridOverlay, exportSVG, exportPNG, svgToPngDataUrl, download, fontFaceCss, fontsEmbedded, bufToBase64 };
 })();

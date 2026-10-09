@@ -72,15 +72,30 @@ const Engine = (() => {
     if (total > region.h + 0.5) return null;
     let y = valign === 'top' ? region.y : valign === 'bottom' ? region.y + region.h - total : region.y + (region.h - total) / 2;
     y = Math.max(region.y, Math.min(region.y + region.h - total, snap(y, g.unit)));
+    const slack = Math.max(0, region.h - total);
     for (const b of blocks) {
       b.y = y; b.align = align; b.x = region.x;
       if (b.kind !== 'text') {
         if (align === 'center') b.x = snap(region.x + (region.w - b.w) / 2, 1);
         else if (align === 'right') b.x = region.x + region.w - b.w;
       }
+      if (b.kind === 'text') b.capacity = textCapacity(b, region.w, slack);
       y += b.h + (b.gap || 0);
     }
     return { blocks, total, y0: blocks[0].y, y1: y - (blocks[blocks.length - 1].gap || 0) };
+  }
+  // Safe copy capacity for a fitted text block: how much text this box can take before the
+  // layout breaks (its own lines plus the stack's free height), with a safety factor. The spec
+  // carries it so a copy generator can be asked for text that fits instead of text that is cut.
+  const SAMPLE = 'Run payroll in 150+ countries from one platform, with local experts and owned infrastructure.';
+  function textCapacity(b, width, slack) {
+    const f = b.font;
+    const avgGlyph = Text.width(SAMPLE, f) / SAMPLE.length;
+    const charsPerLine = Math.max(1, Math.floor(width / avgGlyph));
+    const lineH = f.size * (f.lineHeight || 1.2);
+    const maxLines = Math.max(b.lines.length, Math.min(b.maxLines || 12, b.lines.length + Math.floor(slack / lineH)));
+    const currentChars = b.lines.join(' ').length;
+    return { charsPerLine, maxLines, maxChars: Math.max(currentChars, Math.floor(charsPerLine * maxLines * 0.85)), currentChars };
   }
   // Ink rect of a text stack (what other things must avoid).
   function inkRect(stack, region, align) {

@@ -28,7 +28,7 @@ node build.mjs
 2. **Grid.** Each format gets a modular grid from the kit's rules: pixel unit, safe space, gutter, columns. Cells are multiples of the unit. Story formats exclude the rows platform UI covers.
 3. **Moves.** A seeded generator picks a composition family, a column span, an anchor, a type step, an approved color pair, a crop, a shape. Only moves the rules allow.
 4. **Checks.** Text is measured and must fit its cells. Nothing textual may leave the safe area or overlap. Text on a photo needs a scrim or a panel, chosen from the image's luminance map. Text on a color field needs WCAG contrast. The logo uses only its allowed colors and keeps its clear zone. Duplicates are dropped.
-5. **Output.** Each survivor is an SVG plus a JSON spec. Export PNG, SVG, or JSON. Regenerate a favorite as 24 close variations, or render the same idea across every format.
+5. **Output.** Each survivor is an SVG plus a JSON spec in which every text block carries its copy capacity. Export PNG, SVG, JSON, or an editable PowerPoint slide (favorites export as one deck per format). Regenerate a favorite as 24 close variations, or render the same idea across every format.
 
 ## Composition families
 
@@ -63,6 +63,16 @@ Color roles: `core` (can be a ground or a big field), `accent` (pops, CTAs), `ba
 
 The Deel preset carries the palette and type roles from the 2026 brand guidelines (Acai, Blueberry, Deelberry, Slate, Smoothie, Seltzer, Tangelo, Cornbread, Latte). Bagoss is a licensed face, so Bricolage Grotesque stands in until you upload the real font file from the sidebar. Upload the wordmark SVG the same way; the engine recolors it to the three permitted logo colors.
 
+## Start from an existing deck
+
+`tools/pptx_to_kit.py` reads a .pptx (or a folder of them) with the standard library only and writes a brand-kit draft the engine loads, plus layout priors mined from the slides (archetype shares, text anchors, headline sizes):
+
+```bash
+python3 tools/pptx_to_kit.py path/to/deck.pptx --kit my-brand.json --priors priors.json --name "Acme"
+```
+
+Load the kit from the sidebar, review the color roles and fonts, upload the logo, and generate. See `docs/learnings.md` for where this came from.
+
 ## Files
 
 ```
@@ -75,11 +85,14 @@ js/grid.js          formats and the modular grid
 js/text.js          canvas text measurement and fitting
 js/engine.js        the generator: eight families, validation, metrics, dedup
 js/render.js        SVG renderer, PNG/SVG export with embedded fonts
+js/export-pptx.js   layout spec -> editable PowerPoint (pptxgenjs)
 js/prompt.js        brief parser + optional Claude interpreter
 js/app.js           UI state and wiring
 build.mjs           single-file bundler
+tools/pptx_to_kit.py  deck -> brand-kit draft + layout priors
 docs/pitch.md       the case for building this properly
 docs/landscape.md   research: how other tools generate layouts
+docs/learnings.md   what Presenton and a 2,415-slide corpus taught us
 ```
 
 ## Known limits
@@ -87,3 +100,4 @@ docs/landscape.md   research: how other tools generate layouts
 - In the published copy, exports go through the viewer's save prompt and PNGs use fallback fonts (font files cannot be fetched there). Run locally for exact type.
 - The Claude interpreter calls Anthropic directly from the browser with your key. It is off by default and never used in published copies.
 - Hex values in the Deel preset were read from the guidelines PDF. Confirm against the Figma library before production use.
+- PPTX export references fonts by name; install the brand fonts to see exact type in PowerPoint. Image corner radii and gradient scrims are approximated (scrims and arcs become transparent image layers).

@@ -20,6 +20,13 @@ Source: https://x.com/MSchwaibold/status/2104640742861779151
 | **Presentations.ai** | Reads content, picks a layout per slide, applies brand ("Brand Sync") | Brand kit | Yes; PPT export | Same pattern as Gamma with a stronger brand story. |
 | **Figma Slides / Figma Make** | Agent generates on canvas using your library's real components, spacing tokens, and variables | Design system components | Fully editable in Figma | The right end state for editability. Product UI focus today. |
 
+## Open source
+
+| Tool | How layouts are produced | Brand control | Takeaway |
+|---|---|---|---|
+| **Presenton** (Apache 2.0) | Standard mode: outline → layout index per slide → schema-conforming content with geometry-derived text limits → hydrate. Smart mode: the model writes Tailwind HTML per slide under overflow rules, then a linter checks boxes. Template V2 imports a PPTX through vision-model passes | Theme roles derived from a deck; 16 templates × ~25 layouts | Closest open reference. Editable PPTX export is the bar. See `learnings.md`. |
+| **Open-Presentations** (corpus) | 51 real decks, 2,415 slides | n/a | Ground truth for what real slides do: 46% full-bleed photos, 60% short copy, 12% giant numerals. |
+
 ## Design and marketing tools
 
 | Tool | How layouts are produced | Brand control | Takeaway |
@@ -62,4 +69,5 @@ The prototype follows this idea with explicit rules instead of a trained model. 
 - Adobe Express: https://helpx.adobe.com/express/web/create-with-templates/text-to-template.html
 - Microsoft Designer: https://support.microsoft.com/en-us/designer/welcome-to-microsoft-designer
 - Relume: https://blog.logrocket.com/ux-design/relume-ai/ · Framer: https://www.framer.com/ai/
+- Presenton: https://github.com/presenton/presenton · Open-Presentations: https://github.com/mahdinasseri/Open-Presentations
 - Research: https://arxiv.org/html/2512.04082 (PosterCopilot) · https://arxiv.org/pdf/2601.11747 (PRISM) · https://arxiv.org/pdf/2509.16891 (LLMs as Layout Designers)

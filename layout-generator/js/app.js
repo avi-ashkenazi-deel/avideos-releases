@@ -20,7 +20,13 @@
       if (cur) sel.value = cur;
     }
   }
+  function registerKitFonts(kit) {
+    for (const name of [kit.fonts?.display, kit.fonts?.body]) {
+      if (name && !Brand.FONTS[name] && !Brand.customFonts[name]) Brand.customFonts[name] = { css: `"${name}", system-ui, sans-serif`, weights: [300, 400, 500, 600, 700, 800, 900], system: true };
+    }
+  }
   function loadKit(kit) {
+    registerKitFonts(kit); fillFontSelects();
     state.kit = kit;
     $('brandName').value = kit.name;
     $('displayFont').value = kit.fonts.display; $('bodyFont').value = kit.fonts.body;
@@ -269,6 +275,7 @@
   function updateBars() {
     $('compareBtn').textContent = `Compare (${state.picks.size})`; $('compareBtn').disabled = state.picks.size < 2;
     $('exportFavBtn').disabled = !state.favs.size; $('exportFavBtn').textContent = state.favs.size ? `Export favorites (${state.favs.size})` : 'Export favorites';
+    $('exportFavPptxBtn').disabled = !state.favs.size;
   }
   $('gallery').addEventListener('click', e => {
     const fav = e.target.closest('[data-fav]'); if (fav) { toggleFav(fav.dataset.fav); return; }
@@ -308,6 +315,7 @@
       ['Palette', `${l.palette.bgName} ${l.palette.bg} · text ${l.palette.fg} · accent ${l.palette.accent}`],
       ['Type', `${l.type.display} ${l.type.headline}px headline · ${l.type.body_font} ${l.type.body}px body · step ${l.type.level + 1}/6`],
       ['Elements', l.blocks.map(b => b.role || b.kind).join(', ')],
+      ['Copy capacity', l.blocks.filter(b => b.kind === 'text' && b.capacity).map(b => `${b.role} ${b.capacity.currentChars}/${b.capacity.maxChars} chars · ${b.lines.length}/${b.capacity.maxLines} lines`).join(' · ') || '—'],
       ['Moves', meta || '—'],
       ['Metrics', `whitespace ${Math.round(l.metrics.whitespace * 100)}% · density ${Math.round(l.metrics.density * 100)}% · balance ${Math.round(l.metrics.balance * 100)}%`],
     ];
@@ -351,6 +359,7 @@
   async function withBusy(btn, fn) { const t = btn.textContent; btn.disabled = true; btn.textContent = '…'; try { await fn(); } catch (e) { console.warn(e); toast('Export failed: ' + e.message); } finally { btn.disabled = false; btn.textContent = t; } }
   $('detailPng').addEventListener('click', e => withBusy(e.target, async () => { const l = state.detail; const blob = await Render.exportPNG(l, { kit: state.kit, assets: state.assets }); if (await Render.download(blob, `${slug(state.kit.name)}-${l.id}.png`)) toast(Render.fontsEmbedded() ? 'PNG saved' : 'PNG saved with fallback fonts (run locally for exact type)'); }));
   $('detailSvg').addEventListener('click', e => withBusy(e.target, async () => { const l = state.detail; const svg = await Render.exportSVG(l, { kit: state.kit, assets: state.assets }); if (await Render.download(new Blob([svg], { type: 'image/svg+xml' }), `${slug(state.kit.name)}-${l.id}.svg`)) toast('SVG saved'); }));
+  $('detailPptx').addEventListener('click', e => withBusy(e.target, async () => { const l = state.detail; const blob = await ExportPptx.buildDeck([l], { kit: state.kit, assets: state.assets }); if (await Render.download(blob, `${slug(state.kit.name)}-${l.id}.pptx`)) toast('PowerPoint saved: text, images, and fields stay editable'); }));
   $('detailJson').addEventListener('click', e => withBusy(e.target, async () => { const l = state.detail; if (await Render.download(new Blob([JSON.stringify(stripForJson(l), null, 2)], { type: 'application/json' }), `${slug(state.kit.name)}-${l.id}.json`)) toast('JSON saved'); }));
   $('detailCopySvg').addEventListener('click', e => withBusy(e.target, async () => { const svg = await Render.exportSVG(state.detail, { kit: state.kit, assets: state.assets }); await copyText(svg); toast('SVG copied'); }));
   const slug = s => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'brand';
@@ -366,6 +375,13 @@
     $('compare').hidden = false;
   });
   $('compareClose').addEventListener('click', () => $('compare').hidden = true);
+  $('exportFavPptxBtn').addEventListener('click', e => withBusy(e.target, async () => {
+    const list = state.layouts.filter(l => state.favs.has(l.id));
+    const decks = await ExportPptx.buildDecks(list, { kit: state.kit, assets: state.assets });
+    let n = 0;
+    for (const d of decks) { if (!(await Render.download(d.blob, `${slug(state.kit.name)}-${d.formatId}-${d.count}-slides.pptx`))) break; n++; await new Promise(r => setTimeout(r, 350)); }
+    if (n) toast(`${n} deck${n > 1 ? 's' : ''} saved (one per format)`);
+  }));
   $('exportFavBtn').addEventListener('click', e => withBusy(e.target, async () => {
     const list = state.layouts.filter(l => state.favs.has(l.id));
     let n = 0;
@@ -398,7 +414,7 @@
       <li><b>Grid.</b> Each format gets a modular grid from the kit's rules. Cells are multiples of the pixel unit. Platform-reserved zones (story UI) are excluded from usable rows.</li>
       <li><b>Moves.</b> A seeded random generator picks a composition family (type-led, split, full-bleed, framed image, mosaic, color blocks, editorial, stat), a column span, an anchor, a type step, an approved color pair, a crop, a shape.</li>
       <li><b>Checks.</b> Text is measured and must fit its cells. Nothing textual may leave the safe area or overlap. Text on a photo needs a scrim or a panel, chosen from the image's own luminance map. Text on a color field needs WCAG contrast. Duplicates are dropped.</li>
-      <li><b>Output.</b> Every survivor is an SVG plus a JSON spec, so the same layout can be edited, re-rendered in another format, or pushed to Figma later.</li>
+      <li><b>Output.</b> Every survivor is an SVG plus a JSON spec in which every block is a box on the grid and every text block carries its copy capacity. The same spec exports as PNG, SVG, or an editable PowerPoint slide, and can be re-rendered in another format or pushed to Figma later.</li>
     </ul>
     <h4>Where this sits in the landscape</h4>
     <ul>

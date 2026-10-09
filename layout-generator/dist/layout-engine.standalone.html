@@ -392,6 +392,7 @@ details.json pre { font-size: 11px; line-height: 1.45; background: var(--bg); bo
         <label class="check"><input id="favOnly" type="checkbox"> Favorites</label>
         <button id="compareBtn" class="btn small" type="button" disabled>Compare (0)</button>
         <button id="exportFavBtn" class="btn small" type="button" disabled>Export favorites</button>
+        <button id="exportFavPptxBtn" class="btn small" type="button" disabled title="All favorites as one editable deck per format">Favorites → PPTX</button>
       </div>
     </div>
     <div id="readout" class="readout"></div>
@@ -424,6 +425,7 @@ details.json pre { font-size: 11px; line-height: 1.45; background: var(--bg); bo
         <div class="detail-actions">
           <button class="btn small" id="detailPng" type="button">PNG</button>
           <button class="btn small" id="detailSvg" type="button">SVG</button>
+          <button class="btn small" id="detailPptx" type="button" title="Editable PowerPoint slide">PPTX</button>
           <button class="btn small" id="detailJson" type="button">JSON</button>
           <button class="btn small" id="detailCopySvg" type="button">Copy SVG</button>
         </div>
@@ -1016,15 +1018,30 @@ const Engine = (() => {
     if (total > region.h + 0.5) return null;
     let y = valign === 'top' ? region.y : valign === 'bottom' ? region.y + region.h - total : region.y + (region.h - total) / 2;
     y = Math.max(region.y, Math.min(region.y + region.h - total, snap(y, g.unit)));
+    const slack = Math.max(0, region.h - total);
     for (const b of blocks) {
       b.y = y; b.align = align; b.x = region.x;
       if (b.kind !== 'text') {
         if (align === 'center') b.x = snap(region.x + (region.w - b.w) / 2, 1);
         else if (align === 'right') b.x = region.x + region.w - b.w;
       }
+      if (b.kind === 'text') b.capacity = textCapacity(b, region.w, slack);
       y += b.h + (b.gap || 0);
     }
     return { blocks, total, y0: blocks[0].y, y1: y - (blocks[blocks.length - 1].gap || 0) };
+  }
+  // Safe copy capacity for a fitted text block: how much text this box can take before the
+  // layout breaks (its own lines plus the stack's free height), with a safety factor. The spec
+  // carries it so a copy generator can be asked for text that fits instead of text that is cut.
+  const SAMPLE = 'Run payroll in 150+ countries from one platform, with local experts and owned infrastructure.';
+  function textCapacity(b, width, slack) {
+    const f = b.font;
+    const avgGlyph = Text.width(SAMPLE, f) / SAMPLE.length;
+    const charsPerLine = Math.max(1, Math.floor(width / avgGlyph));
+    const lineH = f.size * (f.lineHeight || 1.2);
+    const maxLines = Math.max(b.lines.length, Math.min(b.maxLines || 12, b.lines.length + Math.floor(slack / lineH)));
+    const currentChars = b.lines.join(' ').length;
+    return { charsPerLine, maxLines, maxChars: Math.max(currentChars, Math.floor(charsPerLine * maxLines * 0.85)), currentChars };
   }
   // Ink rect of a text stack (what other things must avoid).
   function inkRect(stack, region, align) {
@@ -1672,7 +1689,7 @@ const Render = (() => {
     const defs = []; const parts = [];
     let clipId = 0, gradId = 0;
     const uid = layout.id || 'l';
-    parts.push(`<rect width="${W}" height="${H}" fill="${layout.palette.bg}"/>`);
+    if (!opts.transparent) parts.push(`<rect width="${W}" height="${H}" fill="${layout.palette.bg}"/>`);
     for (const b of layout.blocks) {
       if (b.kind === 'field') {
         parts.push(`<rect x="${n(b.x)}" y="${n(b.y)}" width="${n(b.w)}" height="${n(b.h)}" rx="${b.radius || 0}" fill="${b.fill}"${b.alpha != null && b.alpha < 1 ? ` fill-opacity="${b.alpha}"` : ''}/>`);
@@ -1771,6 +1788,18 @@ const Render = (() => {
     const fontStyle = await fontFaceCss(fams);
     return toSVG(layout, { ...opts, forExport: true, fontStyle, showGrid: false });
   }
+  // Rasterize an SVG string to a PNG data URL at the layout's pixel size.
+  async function svgToPngDataUrl(svg, w, h, scale = 1) {
+    const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    try {
+      const img = new Image();
+      await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = url; });
+      const c = document.createElement('canvas'); c.width = Math.round(w * scale); c.height = Math.round(h * scale);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      return c.toDataURL('image/png');
+    } finally { URL.revokeObjectURL(url); }
+  }
   async function exportPNG(layout, opts, scale = 1) {
     const svg = await exportSVG(layout, opts);
     const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
@@ -1802,7 +1831,121 @@ const Render = (() => {
     setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
     return true;
   }
-  return { toSVG, gridOverlay, exportSVG, exportPNG, download, fontFaceCss, fontsEmbedded, bufToBase64 };
+  return { toSVG, gridOverlay, exportSVG, exportPNG, svgToPngDataUrl, download, fontFaceCss, fontsEmbedded, bufToBase64 };
+})();
+
+/* js/export-pptx.js */
+/* Layout spec -> editable PowerPoint. Every block in the spec is already an absolute box on the canvas,
+   so the mapping is direct: fields and simple shapes become native shapes, images stay images, text stays
+   text in the brand font, and only gradients, arcs, and SVG logos are rasterized to transparent layers. */
+const ExportPptx = (() => {
+  const CDN = 'https://cdn.jsdelivr.net/npm/pptxgenjs@4.0.1/dist/pptxgen.bundle.js';
+  const PX_PER_IN = 96;
+  let loading = null;
+  function lib() {
+    if (window.PptxGenJS) return Promise.resolve(window.PptxGenJS);
+    if (!loading) loading = new Promise((res, rej) => {
+      const s = document.createElement('script'); s.src = CDN; s.async = true;
+      s.onload = () => window.PptxGenJS ? res(window.PptxGenJS) : rej(new Error('PptxGenJS did not initialize'));
+      s.onerror = () => rej(new Error('Could not load the PowerPoint library (offline, or scripts blocked here)'));
+      document.head.appendChild(s);
+    });
+    return loading;
+  }
+  const inch = v => Math.round(v / PX_PER_IN * 1000) / 1000;
+  const pt = px => Math.round(px * 0.75 * 10) / 10;
+  const hex = c => { const h = String(c || '#000000').replace('#', '').toUpperCase(); return h.length === 3 ? h.split('').map(x => x + x).join('') : h.slice(0, 6); };
+  const stripData = d => String(d).replace(/^data:/, '');
+  const fontName = css => String(css).split(',')[0].replace(/["']/g, '').trim();
+  const RASTER = new Set(['scrim']);
+  const isRaster = b => RASTER.has(b.kind) || (b.kind === 'shape' && (b.shape === 'quarter' || b.shape === 'blob')) || (b.kind === 'logo' && b.logoKind === 'svg');
+
+  async function rasterLayer(layout, blocks, opts) {
+    const svg = Render.toSVG({ ...layout, blocks }, { kit: opts.kit, assets: opts.assets, forExport: true, transparent: true, showGrid: false });
+    return Render.svgToPngDataUrl(svg, layout.format.w, layout.format.h, 1);
+  }
+
+  async function addLayoutSlide(pptx, slide, layout, opts) {
+    const { kit } = opts;
+    const W = layout.format.w, H = layout.format.h;
+    slide.background = { color: hex(layout.palette.bg) };
+    const blocks = layout.blocks.map(b => b.kind === 'logo' ? { ...b, logoKind: kit.logo.kind } : b);
+    let pending = [];
+    const flush = async () => {
+      if (!pending.length) return;
+      const data = await rasterLayer(layout, pending, opts);
+      slide.addImage({ data: stripData(data), x: 0, y: 0, w: inch(W), h: inch(H) });
+      pending = [];
+    };
+    for (const b of blocks) {
+      if (isRaster(b)) { pending.push(b); continue; }
+      await flush();
+      const box = { x: inch(b.x), y: inch(b.y), w: inch(b.w), h: inch(b.h) };
+      if (b.kind === 'field') {
+        const o = { ...box, fill: { color: hex(b.fill), transparency: b.alpha != null ? Math.round((1 - b.alpha) * 100) : 0 }, line: { color: hex(b.fill), transparency: 100 } };
+        if (b.radius) { o.rectRadius = inch(b.radius); slide.addShape(pptx.ShapeType.roundRect, o); } else slide.addShape(pptx.ShapeType.rect, o);
+      } else if (b.kind === 'rule') {
+        slide.addShape(pptx.ShapeType.rect, { ...box, fill: { color: hex(b.fill) }, line: { color: hex(b.fill), transparency: 100 } });
+      } else if (b.kind === 'shape') {
+        const o = { ...box, fill: { color: hex(b.fill) }, line: { color: hex(b.fill), transparency: 100 } };
+        if (b.shape === 'circle') slide.addShape(pptx.ShapeType.ellipse, o);
+        else { o.rectRadius = inch(Math.min(b.w, b.h) / 2); slide.addShape(pptx.ShapeType.roundRect, o); }
+      } else if (b.kind === 'image') {
+        const a = opts.assets.images.find(i => i.id === b.asset);
+        if (a) slide.addImage({ data: stripData(a.dataUrl), ...box, sizing: { type: 'cover', w: box.w, h: box.h } });
+      } else if (b.kind === 'text') {
+        const f = b.font;
+        slide.addText(b.lines.join('\n'), {
+          ...box, h: inch(b.h + f.size * 0.4),
+          fontFace: fontName(f.family), fontSize: pt(f.size), color: hex(b.fill), bold: f.weight >= 600,
+          align: b.align || 'left', valign: 'top', margin: 0, lineSpacingMultiple: f.lineHeight || 1.2,
+          charSpacing: f.letterSpacing ? Math.round(f.letterSpacing * pt(f.size) * 10) / 10 : 0, fit: 'none', wrap: true,
+        });
+      } else if (b.kind === 'button') {
+        const f = b.font;
+        slide.addText(b.text, {
+          ...box, shape: pptx.ShapeType.roundRect, rectRadius: inch(b.radius || 0), fill: { color: hex(b.fill) }, line: { color: hex(b.fill), transparency: 100 },
+          fontFace: fontName(f.family), fontSize: pt(f.size), color: hex(b.color), bold: true, align: 'center', valign: 'middle', margin: 0,
+        });
+      } else if (b.kind === 'logo') {
+        if (kit.logo.kind === 'image' && kit.logo.dataUrl) slide.addImage({ data: stripData(kit.logo.dataUrl), ...box, sizing: { type: 'contain', w: box.w, h: box.h } });
+        else {
+          const size = b.h / 0.74;
+          slide.addText(kit.logo.text || kit.name, {
+            x: box.x, y: inch(b.y - size * 0.2), w: inch(b.w * 1.3), h: inch(size * 1.2),
+            fontFace: fontName(Brand.fontCss(kit.fonts.display)), fontSize: pt(size), color: hex(b.fill), bold: true,
+            charSpacing: Math.round(-0.04 * pt(size) * 10) / 10, align: 'left', valign: 'middle', margin: 0,
+          });
+        }
+      }
+    }
+    await flush();
+  }
+
+  // layouts: one or more layouts of the SAME format -> one deck Blob
+  async function buildDeck(layouts, opts) {
+    const PptxGenJS = await lib();
+    const pptx = new PptxGenJS();
+    const f = layouts[0].format;
+    pptx.defineLayout({ name: 'LAYOUT_ENGINE', width: inch(f.w), height: inch(f.h) });
+    pptx.layout = 'LAYOUT_ENGINE';
+    pptx.title = `${opts.kit.name} layouts`;
+    for (const L of layouts) {
+      const slide = pptx.addSlide();
+      await addLayoutSlide(pptx, slide, L, opts);
+      slide.addNotes(`${L.archetypeLabel} · ${L.format.name} · seed ${L.seed} · ${L.id}`);
+    }
+    return pptx.write({ outputType: 'blob' });
+  }
+  // Mixed formats -> one deck per format
+  async function buildDecks(layouts, opts) {
+    const groups = new Map();
+    for (const L of layouts) { const k = L.format.id; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(L); }
+    const out = [];
+    for (const [id, list] of groups) out.push({ formatId: id, formatName: list[0].format.name, count: list.length, blob: await buildDeck(list, opts) });
+    return out;
+  }
+  return { buildDeck, buildDecks, lib };
 })();
 
 /* js/prompt.js */
@@ -1947,7 +2090,13 @@ content: only fields the brief explicitly supplies (quoted copy, a CTA, a stat),
       if (cur) sel.value = cur;
     }
   }
+  function registerKitFonts(kit) {
+    for (const name of [kit.fonts?.display, kit.fonts?.body]) {
+      if (name && !Brand.FONTS[name] && !Brand.customFonts[name]) Brand.customFonts[name] = { css: `"${name}", system-ui, sans-serif`, weights: [300, 400, 500, 600, 700, 800, 900], system: true };
+    }
+  }
   function loadKit(kit) {
+    registerKitFonts(kit); fillFontSelects();
     state.kit = kit;
     $('brandName').value = kit.name;
     $('displayFont').value = kit.fonts.display; $('bodyFont').value = kit.fonts.body;
@@ -2196,6 +2345,7 @@ content: only fields the brief explicitly supplies (quoted copy, a CTA, a stat),
   function updateBars() {
     $('compareBtn').textContent = `Compare (${state.picks.size})`; $('compareBtn').disabled = state.picks.size < 2;
     $('exportFavBtn').disabled = !state.favs.size; $('exportFavBtn').textContent = state.favs.size ? `Export favorites (${state.favs.size})` : 'Export favorites';
+    $('exportFavPptxBtn').disabled = !state.favs.size;
   }
   $('gallery').addEventListener('click', e => {
     const fav = e.target.closest('[data-fav]'); if (fav) { toggleFav(fav.dataset.fav); return; }
@@ -2235,6 +2385,7 @@ content: only fields the brief explicitly supplies (quoted copy, a CTA, a stat),
       ['Palette', `${l.palette.bgName} ${l.palette.bg} · text ${l.palette.fg} · accent ${l.palette.accent}`],
       ['Type', `${l.type.display} ${l.type.headline}px headline · ${l.type.body_font} ${l.type.body}px body · step ${l.type.level + 1}/6`],
       ['Elements', l.blocks.map(b => b.role || b.kind).join(', ')],
+      ['Copy capacity', l.blocks.filter(b => b.kind === 'text' && b.capacity).map(b => `${b.role} ${b.capacity.currentChars}/${b.capacity.maxChars} chars · ${b.lines.length}/${b.capacity.maxLines} lines`).join(' · ') || '—'],
       ['Moves', meta || '—'],
       ['Metrics', `whitespace ${Math.round(l.metrics.whitespace * 100)}% · density ${Math.round(l.metrics.density * 100)}% · balance ${Math.round(l.metrics.balance * 100)}%`],
     ];
@@ -2278,6 +2429,7 @@ content: only fields the brief explicitly supplies (quoted copy, a CTA, a stat),
   async function withBusy(btn, fn) { const t = btn.textContent; btn.disabled = true; btn.textContent = '…'; try { await fn(); } catch (e) { console.warn(e); toast('Export failed: ' + e.message); } finally { btn.disabled = false; btn.textContent = t; } }
   $('detailPng').addEventListener('click', e => withBusy(e.target, async () => { const l = state.detail; const blob = await Render.exportPNG(l, { kit: state.kit, assets: state.assets }); if (await Render.download(blob, `${slug(state.kit.name)}-${l.id}.png`)) toast(Render.fontsEmbedded() ? 'PNG saved' : 'PNG saved with fallback fonts (run locally for exact type)'); }));
   $('detailSvg').addEventListener('click', e => withBusy(e.target, async () => { const l = state.detail; const svg = await Render.exportSVG(l, { kit: state.kit, assets: state.assets }); if (await Render.download(new Blob([svg], { type: 'image/svg+xml' }), `${slug(state.kit.name)}-${l.id}.svg`)) toast('SVG saved'); }));
+  $('detailPptx').addEventListener('click', e => withBusy(e.target, async () => { const l = state.detail; const blob = await ExportPptx.buildDeck([l], { kit: state.kit, assets: state.assets }); if (await Render.download(blob, `${slug(state.kit.name)}-${l.id}.pptx`)) toast('PowerPoint saved: text, images, and fields stay editable'); }));
   $('detailJson').addEventListener('click', e => withBusy(e.target, async () => { const l = state.detail; if (await Render.download(new Blob([JSON.stringify(stripForJson(l), null, 2)], { type: 'application/json' }), `${slug(state.kit.name)}-${l.id}.json`)) toast('JSON saved'); }));
   $('detailCopySvg').addEventListener('click', e => withBusy(e.target, async () => { const svg = await Render.exportSVG(state.detail, { kit: state.kit, assets: state.assets }); await copyText(svg); toast('SVG copied'); }));
   const slug = s => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'brand';
@@ -2293,6 +2445,13 @@ content: only fields the brief explicitly supplies (quoted copy, a CTA, a stat),
     $('compare').hidden = false;
   });
   $('compareClose').addEventListener('click', () => $('compare').hidden = true);
+  $('exportFavPptxBtn').addEventListener('click', e => withBusy(e.target, async () => {
+    const list = state.layouts.filter(l => state.favs.has(l.id));
+    const decks = await ExportPptx.buildDecks(list, { kit: state.kit, assets: state.assets });
+    let n = 0;
+    for (const d of decks) { if (!(await Render.download(d.blob, `${slug(state.kit.name)}-${d.formatId}-${d.count}-slides.pptx`))) break; n++; await new Promise(r => setTimeout(r, 350)); }
+    if (n) toast(`${n} deck${n > 1 ? 's' : ''} saved (one per format)`);
+  }));
   $('exportFavBtn').addEventListener('click', e => withBusy(e.target, async () => {
     const list = state.layouts.filter(l => state.favs.has(l.id));
     let n = 0;
@@ -2325,7 +2484,7 @@ content: only fields the brief explicitly supplies (quoted copy, a CTA, a stat),
       <li><b>Grid.</b> Each format gets a modular grid from the kit's rules. Cells are multiples of the pixel unit. Platform-reserved zones (story UI) are excluded from usable rows.</li>
       <li><b>Moves.</b> A seeded random generator picks a composition family (type-led, split, full-bleed, framed image, mosaic, color blocks, editorial, stat), a column span, an anchor, a type step, an approved color pair, a crop, a shape.</li>
       <li><b>Checks.</b> Text is measured and must fit its cells. Nothing textual may leave the safe area or overlap. Text on a photo needs a scrim or a panel, chosen from the image's own luminance map. Text on a color field needs WCAG contrast. Duplicates are dropped.</li>
-      <li><b>Output.</b> Every survivor is an SVG plus a JSON spec, so the same layout can be edited, re-rendered in another format, or pushed to Figma later.</li>
+      <li><b>Output.</b> Every survivor is an SVG plus a JSON spec in which every block is a box on the grid and every text block carries its copy capacity. The same spec exports as PNG, SVG, or an editable PowerPoint slide, and can be re-rendered in another format or pushed to Figma later.</li>
     </ul>
     <h4>Where this sits in the landscape</h4>
     <ul>
