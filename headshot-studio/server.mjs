@@ -100,7 +100,7 @@ async function local(image, keep, policy, n, clothing) {
   try {
     await writeFile(join(dir, 'photo.png'), Buffer.from(image.data, 'base64'));
     await writeFile(join(dir, 'keep.png'), Buffer.from(keep, 'base64'));
-    await writeFile(join(dir, 'job.json'), JSON.stringify({ ...buildLocalPrompt(policy, clothing), n, strength: 0.6 }));
+    await writeFile(join(dir, 'job.json'), JSON.stringify({ ...buildLocalPrompt(policy, clothing), n, strength: 0.7 }));
     await new Promise((resolve, reject) => {
       const py = spawn(process.env.HEADSHOT_PYTHON || 'python3', [join(ROOT, 'tools', 'local_inpaint.py'), dir], { stdio: ['ignore', 'inherit', 'pipe'] });
       let err = '';

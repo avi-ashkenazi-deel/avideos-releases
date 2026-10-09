@@ -69,20 +69,35 @@ function fillHidden(prep) {
   const img = ctx.getImageData(0, 0, W, H);
   const d = img.data;
   const repaint = new Float32Array(W * H);
-  for (let y = 0; y < H; y++) {
+  const kept = (i) => masks.keep[i] > 0.5;
+  const [fr, fg, fb] = prep.clothingRGB;
+  for (let y = Math.max(0, Math.ceil(g.chinY)); y < H; y++) {
+    // The body's width on this row: the real clothes plus their mirror image.
+    let minX = W, maxX = -1;
     for (let x = 0; x < W; x++) {
+      const mx = Math.round(2 * g.cx - x);
+      if (kept(y * W + x) || (mx >= 0 && mx < W && kept(y * W + mx))) { minX = Math.min(minX, x); maxX = x; }
+    }
+    for (let x = minX; x <= maxX; x++) {
       const i = y * W + x;
-      // Hidden = part of the foreground, but not the real person.
-      if (masks.person[i] < 0.5 || masks.keep[i] > 0.5) continue;
+      // Hidden = part of the foreground (or a gap inside the body), not the real person.
+      if (kept(i)) continue;
       const mx = Math.round(2 * g.cx - x);
       const mi = y * W + mx;
       const j = i * 4;
-      if (y > g.chinY && mx >= 0 && mx < W && masks.keep[mi] > 0.5) {
+      if (mx >= 0 && mx < W && kept(mi)) {
         d[j] = src[mi * 4]; d[j + 1] = src[mi * 4 + 1]; d[j + 2] = src[mi * 4 + 2];
-        repaint[i] = 1;
       } else {
-        d[j] = 214; d[j + 1] = 217; d[j + 2] = 222;
+        const n = (Math.random() - 0.5) * 6;
+        d[j] = fr + n; d[j + 1] = fg + n; d[j + 2] = fb + n;
       }
+      repaint[i] = 1;
+    }
+  }
+  // Hidden things outside the body (above the shoulders) become backdrop.
+  for (let i = 0; i < W * H; i++) {
+    if (masks.person[i] > 0.5 && !kept(i) && !repaint[i]) {
+      d[i * 4] = 214; d[i * 4 + 1] = 217; d[i * 4 + 2] = 222;
     }
   }
   ctx.putImageData(img, 0, 0);

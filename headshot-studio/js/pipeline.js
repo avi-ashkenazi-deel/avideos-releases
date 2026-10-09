@@ -276,19 +276,24 @@ export async function prepare(source, framing, onStep = () => {}) {
   const hair = up(SEG.hair);
   const clothes = up(SEG.clothes);
   const oval = polygonMask(W, H, [{ pts: P(IDX.faceOval), scale: 1.06 }]);
-  let keep = new Float32Array(N);
+  // Head (face outline, hair, neck) is grown a little; clothes are trimmed a
+  // little, so the edge of whatever covered them is repainted too.
+  let headKeep = new Float32Array(N);
+  let clothesKeep = new Float32Array(N);
   for (let y = 0; y < H; y++) {
     for (let x = 0; x < W; x++) {
       const i = y * W + x;
       const neck = y > g.chinY - 5 && y < g.chinY + g.faceH * 0.35 && Math.abs(x - g.cx) < g.faceW * 0.5;
-      const k = Math.max(hair[i], faceSkin[i], clothes[i], oval[i], neck ? bodySkin[i] : 0);
-      keep[i] = k > 0.5 ? 1 : 0;
+      headKeep[i] = Math.max(hair[i], faceSkin[i], oval[i], neck ? bodySkin[i] : 0) > 0.5 ? 1 : 0;
+      clothesKeep[i] = clothes[i] > 0.6 ? 1 : 0;
     }
   }
+  const grownHead = blurChannel(headKeep, W, H, Math.max(3, g.faceW * 0.025), 1);
+  const trimmedClothes = blurChannel(clothesKeep, W, H, 3, 1);
+  let keep = new Float32Array(N);
+  for (let i = 0; i < N; i++) keep[i] = grownHead[i] > 0.12 || trimmedClothes[i] > 0.95 ? 1 : 0;
   keep = keepConnected(keep, W, H, Math.round(lm[1].x * W), Math.round(lm[1].y * H));
-  const grown = blurChannel(keep, W, H, Math.max(3, g.faceW * 0.025), 1);
-  for (let i = 0; i < N; i++) keep[i] = grown[i] > 0.12 ? 1 : 0;
-  keep = blurChannel(keep, W, H, 2, 2);
+  keep = blurChannel(keep, W, H, 1.5, 2);
 
   // Flattering light: crescents under each eye, and the face for fill light.
   const eyeW = Math.hypot(lm[33].x * W - lm[133].x * W, lm[33].y * H - lm[133].y * H);
@@ -330,6 +335,7 @@ export async function prepare(source, framing, onStep = () => {}) {
     if (clothes[i] > 0.7) { cr += base[j]; cg += base[j + 1]; cb += base[j + 2]; cn++; }
   }
   const clothing = cn > 500 ? colorName(cr / cn, cg / cn, cb / cn) : null;
+  const clothingRGB = cn > 500 ? [cr / cn, cg / cn, cb / cn] : [40, 40, 44];
 
   // Edge clean-up: along the cut-out edge, pixels still carry the old
   // background's color. Swap them for colors from just inside the person.
@@ -354,7 +360,7 @@ export async function prepare(source, framing, onStep = () => {}) {
   g.headTop = headTop;
 
   return {
-    W, H, base, baseClean, smooth, detail, roomBlur, masks: { person, skin, eyes, lips, keep, underEye, faceFill }, skinRef, refL, clothing,
+    W, H, base, baseClean, smooth, detail, roomBlur, masks: { person, skin, eyes, lips, keep, underEye, faceFill }, skinRef, refL, clothing, clothingRGB,
     lm, geometry: g, blendshapes,
     original: work,
   };
