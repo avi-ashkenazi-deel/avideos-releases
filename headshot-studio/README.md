@@ -15,6 +15,7 @@ coaching and retouching are automated.
 # With AI studio photos (recommended). The key stays on the server.
 GEMINI_API_KEY=...  node headshot-studio/server.mjs     # Google Gemini image model
 OPENAI_API_KEY=...  node headshot-studio/server.mjs     # or OpenAI GPT Image
+HEADSHOT_PROVIDER=local node headshot-studio/server.mjs # self-hosted open-source model (see below)
 HEADSHOT_PROVIDER=mock node headshot-studio/server.mjs  # test mode: photos come back unchanged
 
 # open http://localhost:8080/#capture  (person)
@@ -23,6 +24,15 @@ HEADSHOT_PROVIDER=mock node headshot-studio/server.mjs  # test mode: photos come
 
 Optional: `GEMINI_IMAGE_MODEL` (default `gemini-nano-banana-2.1`),
 `OPENAI_IMAGE_MODEL` (default `gpt-image-2`), `PORT`.
+
+**Self-hosted option** (`local`): no photo leaves your server. It keeps the
+person's real head (face, hair, neck) and regenerates everything else with an
+open-source Stable Diffusion inpainting model (`tools/local_inpaint.py`,
+default `Lykon/dreamshaper-8-inpainting`). Install with
+`pip install torch diffusers transformers accelerate safetensors pillow` and
+point `HEADSHOT_PYTHON` at that Python. About 4 minutes per image on a 4-core
+CPU, a few seconds on a GPU. It follows outfit colors less precisely than the
+hosted models.
 
 Without the server (any static host, e.g. `npx serve headshot-studio`) the app
 still works but only retouches the real photo. Browsers only allow the camera
