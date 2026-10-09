@@ -4,7 +4,7 @@
   const state = {
     kit: null, assets: { images: [] }, layouts: [], favs: new Set(), picks: new Set(),
     formats: ['square'], showGrid: false, lastPrompt: null, intent: Prompt.DEFAULT(), seedBase: 1, detail: null, busy: false,
-    mode: 'single', outline: null, outlineEdited: false, deck: null, deckFormat: 'slide',
+    mode: 'single', outline: null, outlineEdited: false, deck: null, deckFormat: 'slide', copyVariant: 0, copyDraft: null,
   };
   const LS = { get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch { return d; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { } } };
   let imgSeq = 1;
@@ -91,6 +91,42 @@
   $('bodyFont').addEventListener('change', readKit);
   $('brandName').addEventListener('change', () => { readKit(); if (state.kit.logo.kind === 'wordmark') { state.kit.logo.text = state.kit.name.toLowerCase(); renderLogo(); } });
   for (const id of ['eyebrow', 'headline', 'subhead', 'body', 'cta', 'stat', 'footer', 'unit', 'margin', 'gutter', 'radius', 'shapes']) $(id).addEventListener('change', readKit);
+
+  // ---- Copy from the brief -----------------------------------------------------------------------------
+  // The prompt bar names the subject and the kind of message; Copy.draft turns that into the Content panel.
+  // Typing in a content field locks the copy so a later Generate does not overwrite hand edits.
+  const COPY_FIELDS = ['eyebrow', 'headline', 'subhead', 'body', 'cta', 'stat'];
+  function setCopyHint(text, locked) { const h = $('copyHint'); h.textContent = text; h.classList.toggle('locked', !!locked); }
+  function applyBriefCopy(text, intent) {
+    if (!$('copyFromBrief').checked) return null;
+    const d = Copy.draft(text, state.kit, { intent, variant: state.copyVariant });
+    state.copyDraft = d;
+    if (!d) { setCopyHint(String(text || '').trim() ? 'The brief names no new subject, so the current copy stays.' : 'The brief names the subject; the copy follows it.'); return null; }
+    for (const k of COPY_FIELDS) $(k).value = d.content[k] || '';
+    setCopyHint(`From brief: ${d.summary} · phrasing ${d.variant + 1}/${d.variants}`);
+    return d;
+  }
+  function redraftCopy() {
+    const text = $('prompt').value;
+    const d = applyBriefCopy(text, Prompt.parse(text, state.kit));
+    if (!d) { toast('The brief names no subject to write about'); return; }
+    readKit();
+    if (state.mode !== 'canvas') generate(text);
+  }
+  for (const id of COPY_FIELDS) $(id).addEventListener('input', () => {
+    if (!$('copyFromBrief').checked) return;
+    $('copyFromBrief').checked = false; LS.set('lg.copyFromBrief', false);
+    setCopyHint('Locked to your edits. Tick From brief to let the prompt write the copy again.', true);
+  });
+  $('copyFromBrief').addEventListener('change', () => {
+    LS.set('lg.copyFromBrief', $('copyFromBrief').checked);
+    if ($('copyFromBrief').checked) redraftCopy(); else setCopyHint('Locked: the copy below stays as it is.', true);
+  });
+  $('copyRewrite').addEventListener('click', () => {
+    state.copyVariant = (state.copyVariant + 1) % 4; LS.set('lg.copyVariant', state.copyVariant);
+    if (!$('copyFromBrief').checked) { $('copyFromBrief').checked = true; LS.set('lg.copyFromBrief', true); }
+    redraftCopy();
+  });
 
   $('fontFile').addEventListener('change', async e => {
     const f = e.target.files[0]; if (!f) return;
@@ -204,12 +240,10 @@
     if (state.mode === 'deck' && !opts.intent) return generateDeck(text);
     state.busy = true; $('generateBtn').disabled = true; $('generateBtn').textContent = 'Reading brief…';
     try {
-      const kit = readKit();
-      await ensureDemoImages(false);
-      await loadFonts(kit);
       let intent = opts.intent;
       if (!intent) {
         intent = await resolveIntent(text);
+        applyBriefCopy(text, intent);
         const promptChanged = text !== state.lastPrompt;
         if (promptChanged) {
           if (intent.formatsExplicit && intent.formats?.length) { state.formats = intent.formats.slice(); renderChips(); }
@@ -220,6 +254,9 @@
         intent.count = +$('count').value;
         state.intent = intent;
       }
+      const kit = readKit();
+      await ensureDemoImages(false);
+      await loadFonts(kit);
       LS.set('lg.prompt', text);
       const formats = intent.formats.map(id => Grid.byId[id]).filter(Boolean);
       const count = intent.count;
@@ -555,16 +592,18 @@
       try { const o = await Deck.outlineWithClaude(text, state.kit, $('apiKey').value.trim()); $('interpretLog').textContent = 'Claude outline: ' + (o.summary || ''); return o; }
       catch (err) { $('interpretLog').textContent = 'Claude outline failed, used rules. ' + err.message; toast('Claude outline failed, used rules'); }
     }
-    return Deck.outlineFromBrief(text, state.kit);
+    const d = Copy.draft(text, state.kit, { intent: state.intent, variant: state.copyVariant });
+    return Deck.outlineFromBrief(text, state.kit, { subject: d ? d.subject : null });
   }
 
   async function generateDeck(text) {
     state.busy = true; $('generateBtn').disabled = true; $('generateBtn').textContent = 'Reading brief…';
     try {
-      const kit = readKit();
-      await ensureDemoImages(false); await loadFonts(kit);
       const promptChanged = text !== state.lastPrompt;
       const base = await resolveIntent(text);
+      applyBriefCopy(text, base);
+      const kit = readKit();
+      await ensureDemoImages(false); await loadFonts(kit);
       if (promptChanged) { state.outlineEdited = false; state.lastPrompt = text; }
       state.intent = base;
       state.outline = await resolveOutline(text, promptChanged && !state.outlineEdited);
@@ -655,6 +694,8 @@
     } catch { loadKit(Brand.fromPreset(savedPreset in Brand.PRESETS ? savedPreset : 'deel')); $('presetSelect').value = state.kit.presetId; }
     renderChips();
     $('apiKey').value = LS.get('lg.apiKey', ''); $('useClaude').checked = !!LS.get('lg.useClaude', false);
+    state.copyVariant = (+LS.get('lg.copyVariant', 0) || 0) % 4; $('copyFromBrief').checked = LS.get('lg.copyFromBrief', true) !== false;
+    if (!$('copyFromBrief').checked) setCopyHint('Locked: the copy below stays as it is.', true);
     $('prompt').value = LS.get('lg.prompt', '');
     $('promptForm').addEventListener('submit', e => { e.preventDefault(); generate($('prompt').value); });
     await ensureDemoImages(false);

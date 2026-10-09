@@ -35,8 +35,9 @@ const Deck = (() => {
     return s;
   }
   // Rule-based outline from the brief. Explicit lists ("cover, problem, how it works, pricing, cta") win.
-  function outlineFromBrief(text, kit) {
+  function outlineFromBrief(text, kit, opts = {}) {
     const raw = String(text || '').trim();
+    let title = (kit.deck && kit.deck.title) || kit.name;
     const t = raw.toLowerCase();
     const cm = t.match(/\b(\d{1,2})[\s-]*(slides?|pages?|cards?)\b/);
     let n = cm ? Math.max(2, Math.min(16, +cm[1])) : null;
@@ -52,6 +53,18 @@ const Deck = (() => {
       if (n && slides.length > n) slides = slides.slice(0, n);
     } else if (kit.deck && kit.deck.slides && kit.deck.slides.length) {
       slides = kit.deck.slides.map(s => ({ ...s }));
+      // The brief is about something else than the sample deck: rename the product in every slide and
+      // take cover and closing from the drafted copy. Body facts stay the sample's; Claude outline replaces them.
+      const subject = opts.subject && String(opts.subject).trim();
+      if (subject && kit.deck.title && !kit.deck.title.toLowerCase().includes(subject.toLowerCase()) && subject.toLowerCase() !== kit.name.toLowerCase()) {
+        const re = new RegExp(kit.deck.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+        const swap = v => typeof v === 'string' ? v.replace(re, subject) : Array.isArray(v) ? v.map(swap) : (v && typeof v === 'object') ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, swap(x)])) : v;
+        slides = slides.map(swap);
+        const cover = slides.find(s => s.intent === 'cover'), closing = slides.find(s => s.intent === 'closing');
+        if (cover) { cover.headline = kit.content.headline || cover.headline; cover.subhead = kit.content.subhead || cover.subhead; cover.eyebrow = kit.content.eyebrow || cover.eyebrow; }
+        if (closing && kit.content.cta) closing.cta = kit.content.cta;
+        title = subject;
+      }
       if (n && slides.length > n) {
         const keep = new Set([0, slides.length - 1]);
         for (let k = 1; k < n - 1 && keep.size < n; k++) keep.add(Math.round(k * (slides.length - 1) / (n - 1)));
@@ -64,7 +77,7 @@ const Deck = (() => {
       for (let i = 0; i < n; i++) { const intent = i === 0 ? 'cover' : i === n - 1 ? 'closing' : DEFAULT_STORY[1 + ((i - 1) % (DEFAULT_STORY.length - 2))]; slides.push(slideFromTitle(kit, '', intent)); }
     }
     slides.forEach((s, i) => { s.section = String(i + 1).padStart(2, '0'); });
-    return { title: (kit.deck && kit.deck.title) || kit.name, slides, source: 'rules' };
+    return { title, slides, source: 'rules' };
   }
 
   const OUTLINE_SCHEMA = {

@@ -25,10 +25,11 @@ node build.mjs
 ## What it does
 
 1. **Brief → constraints.** The prompt becomes a small JSON intent: formats, count, loudness, light or dark, image-led or type-led, density, composition families, quoted copy, brand color names. A rule parser handles this offline. Optionally Claude reads the brief into the same schema (Settings → paste an API key).
-2. **Grid.** Each format gets a modular grid from the kit's rules: pixel unit, safe space, gutter, columns. Cells are multiples of the unit. Story formats exclude the rows platform UI covers.
-3. **Moves.** A seeded generator picks a composition family, a column span, an anchor, a type step, an approved color pair, a crop, a shape. Only moves the rules allow.
-4. **Checks.** Text is measured and must fit its cells. Nothing textual may leave the safe area or overlap. Text on a photo needs a scrim or a panel, chosen from the image's luminance map. Text on a color field needs WCAG contrast. The logo uses only its allowed colors and keeps its clear zone. Duplicates are dropped.
-5. **Output.** Each survivor is an SVG plus a JSON spec in which every text block carries its copy capacity. Export PNG, SVG, JSON, or an editable PowerPoint slide (favorites export as one deck per format). Regenerate a favorite as 24 close variations, or render the same idea across every format.
+2. **Brief → copy.** The brief also writes the Content panel. A rule-based copywriter finds the subject ("Akai", "the LATAM payroll webinar"), the kind of message (launch, event, hiring, report, offer, quote, guide, feature, proof), an audience, a date, an offer or a stat, and drafts eyebrow, headline, subhead, body and CTA in that register. Quoted text, `cta:` and `stat:` in the brief always win, and an appositive ("Akai, Deel's AI assistant that answers HR questions") becomes the subhead. A brief about the kit's own subject keeps the kit's copy. **Rewrite** cycles phrasings; typing in a field locks the copy until **From brief** is ticked again. In deck mode the subject also renames the sample deck and sets its cover and closing.
+3. **Grid.** Each format gets a modular grid from the kit's rules: pixel unit, safe space, gutter, columns. Cells are multiples of the unit. Story formats exclude the rows platform UI covers.
+4. **Moves.** A seeded generator picks a composition family, a column span, an anchor, a type step, an approved color pair, a crop, a shape. Only moves the rules allow.
+5. **Checks.** Text is measured and must fit its cells. Nothing textual may leave the safe area or overlap. Text on a photo needs a scrim or a panel, chosen from the image's luminance map. Text on a color field needs WCAG contrast. The logo uses only its allowed colors and keeps its clear zone. Duplicates are dropped.
+6. **Output.** Each survivor is an SVG plus a JSON spec in which every text block carries its copy capacity. Export PNG, SVG, JSON, or an editable PowerPoint slide (favorites export as one deck per format). Regenerate a favorite as 24 close variations, or render the same idea across every format.
 
 ## Deck mode
 

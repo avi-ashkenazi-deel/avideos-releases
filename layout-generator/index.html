@@ -100,7 +100,8 @@
     </section>
 
     <section class="panel">
-      <div class="panel-head"><h2>Content</h2></div>
+      <div class="panel-head"><h2>Content</h2><label class="check" title="Let the brief in the prompt bar write the copy below. Editing a field by hand switches this off."><input type="checkbox" id="copyFromBrief" checked> From brief</label></div>
+      <div class="copy-row"><span id="copyHint" class="hint">The brief names the subject; the copy follows it.</span><button class="btn small" id="copyRewrite" type="button" title="Next phrasing for the same brief">↻ Rewrite</button></div>
       <div class="field"><label for="eyebrow">Eyebrow</label><input id="eyebrow" class="input" type="text"></div>
       <div class="field"><label for="headline">Headline</label><textarea id="headline" class="input" rows="2"></textarea></div>
       <div class="field"><label for="subhead">Subhead</label><textarea id="subhead" class="input" rows="2"></textarea></div>
@@ -326,6 +327,7 @@
 <script src="js/render.js"></script>
 <script src="js/export-pptx.js"></script>
 <script src="js/prompt.js"></script>
+<script src="js/copy.js"></script>
 <script src="js/deck.js"></script>
 <script src="js/canvas.js"></script>
 <script src="js/canvas-ui.js"></script>
