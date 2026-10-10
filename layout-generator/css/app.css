@@ -393,4 +393,6 @@ body.canvas-mode .main { overflow: hidden; background-image: none; }
 .cv-layer-row.grouped .glyph { color: var(--accent); }
 .cv-keys summary { cursor: pointer; font-size: 12px; color: var(--fg-2); }
 .cv-keys summary:hover { color: var(--fg); }
-
+.cv-stage.drop { outline: 2px dashed var(--accent); outline-offset: -8px; }
+.import-body ol { padding-left: 20px; display: grid; gap: 6px; }
+.import-body .cv-row { margin: 8px 0; }

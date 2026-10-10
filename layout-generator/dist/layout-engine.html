@@ -397,7 +397,9 @@ body.canvas-mode .main { overflow: hidden; background-image: none; }
 .cv-layer-row.grouped .glyph { color: var(--accent); }
 .cv-keys summary { cursor: pointer; font-size: 12px; color: var(--fg-2); }
 .cv-keys summary:hover { color: var(--fg); }
-
+.cv-stage.drop { outline: 2px dashed var(--accent); outline-offset: -8px; }
+.import-body ol { padding-left: 20px; display: grid; gap: 6px; }
+.import-body .cv-row { margin: 8px 0; }
 
 </style>
 
@@ -596,7 +598,8 @@ body.canvas-mode .main { overflow: hidden; background-image: none; }
           <button id="cvRedo" class="btn small" type="button" title="Redo (⇧⌘Z)" disabled>Redo</button>
           <button id="cvLink" class="btn small" type="button" title="Copy a link that carries this canvas (⌘L)">Copy link</button>
           <button id="cvSave" class="btn small" type="button">Save JSON</button>
-          <label class="btn small file">Load<input id="cvLoad" type="file" accept="application/json,.json" hidden></label>
+          <button id="cvImport" class="btn small" type="button" data-tip="Figma, web pages, canvas files">Import</button>
+          <label class="btn small file">Load<input id="cvLoad" type="file" accept="application/json,.json,.fig" hidden></label>
           <details class="cv-menu" id="cvExport"><summary class="btn small primary">Export</summary>
             <div class="cv-menu-list">
               <span class="cv-menu-h">Selected screens (or all)</span>
@@ -684,6 +687,27 @@ body.canvas-mode .main { overflow: hidden; background-image: none; }
         <button class="btn ghost icon" id="compareClose" type="button" aria-label="Close">✕</button>
       </div>
       <div id="compareGrid" class="compare-grid"></div>
+    </div>
+  </div>
+
+  <div id="importModal" class="modal" hidden>
+    <div class="modal-inner about">
+      <div class="detail-head">
+        <h3>Import</h3>
+        <button class="btn ghost icon" id="importClose" type="button" aria-label="Close">✕</button>
+      </div>
+      <div class="prose import-body">
+        <h4>From Figma</h4>
+        <ol>
+          <li><b>Paste:</b> select frames or layers in Figma, press ⌘C, come back to the canvas and press ⌘V. Layers without a frame go into the selected frame.</li>
+          <li><b>File:</b> in Figma choose File → Save local copy, then drop the .fig on the canvas or pick it here.</li>
+        </ol>
+        <div class="cv-row"><label class="btn small file">Choose a .fig file<input id="figFile" type="file" accept=".fig,application/octet-stream" hidden></label><span class="hint" id="figStatus"></span></div>
+        <p class="hint">Frames, text, shapes, vectors, image fills, gradients, strokes, shadows and components from the same file come through. Variables, constraints and prototypes do not. Fonts we don't ship load from Google Fonts when they exist there.</p>
+        <div id="captureSection"></div>
+        <h4>Canvas file</h4>
+        <div class="cv-row"><label class="btn small file">Open canvas JSON<input id="canvasFile" type="file" accept="application/json,.json" hidden></label></div>
+      </div>
     </div>
   </div>
 
@@ -3358,6 +3382,382 @@ const ImageGen = (() => {
   return { PROVIDERS, settings, ready, aspectOf, promptFor, generate };
 })();
 
+/* js/figma.js */
+/* Figma in: .fig files and Figma clipboard paste.
+   Both carry the same binary: "fig-kiwi", a version, then a compressed kiwi schema and a compressed message (deflate-raw,
+   or zstd in newer files). The schema travels with the data, so the decoder below knows nothing Figma-specific; only
+   the conversion to frames and blocks reads Figma's node types. A .fig file is usually a zip around that binary
+   (canvas.fig) with the image fills in images/<hash>. Fidelity is best-effort: frames, rectangles, ellipses, text,
+   vectors, image fills, gradients, strokes, drop shadows, opacity and rotation come through; components are expanded
+   from their main component when it is in the same data; variables, constraints and prototypes are not read. */
+const FigmaImport = (() => {
+  // ---- kiwi binary reader ----------------------------------------------------------------------------------------
+  const f32 = new Float32Array(1), i32 = new Int32Array(f32.buffer);
+  class BB {
+    constructor(u8) { this.d = u8; this.i = 0; }
+    byte() { if (this.i >= this.d.length) throw new Error('kiwi: read past end'); return this.d[this.i++]; }
+    bool() { return this.byte() !== 0; }
+    bytes() { const n = this.uint(); if (this.i + n > this.d.length) throw new Error('kiwi: read past end'); const out = this.d.subarray(this.i, this.i + n); this.i += n; return out; }
+    uint() { let v = 0, s = 0, b; do { b = this.byte(); v |= (b & 127) << s; s += 7; } while (b & 128 && s < 35); return v >>> 0; }
+    int() { const v = this.uint() | 0; return v & 1 ? ~(v >>> 1) : v >>> 1; }
+    float() { const first = this.byte(); if (first === 0) return 0; if (this.i + 3 > this.d.length) throw new Error('kiwi: read past end'); let bits = first | (this.d[this.i++] << 8) | (this.d[this.i++] << 16) | (this.d[this.i++] << 24); bits = (bits << 23) | (bits >>> 9); i32[0] = bits; return f32[0]; }
+    uint64() { let v = 0n, s = 0n, b; do { b = this.byte(); v |= BigInt(b & 127) << s; s += 7n; } while (b & 128 && s < 70n); return Number(v); }
+    int64() { const v = BigInt(this.uint64()); return Number(v & 1n ? ~(v >> 1n) : v >> 1n); }
+    string() { let out = ''; for (;;) { let c; const a = this.byte(); if (a < 0xC0) c = a; else { const b = this.byte(); if (a < 0xE0) c = ((a & 0x1F) << 6) | (b & 0x3F); else { const d = this.byte(); if (a < 0xF0) c = ((a & 0x0F) << 12) | ((b & 0x3F) << 6) | (d & 0x3F); else { const e = this.byte(); c = ((a & 0x07) << 18) | ((b & 0x3F) << 12) | ((d & 0x3F) << 6) | (e & 0x3F); } } } if (c === 0) break; out += String.fromCodePoint(c); } return out; }
+  }
+  const BUILTIN = ['bool', 'byte', 'int', 'uint', 'float', 'string', 'int64', 'uint64'];
+  const KIND = ['ENUM', 'STRUCT', 'MESSAGE'];
+  function decodeSchema(u8) {
+    const bb = new BB(u8); const defs = []; const n = bb.uint();
+    for (let i = 0; i < n; i++) {
+      const name = bb.string(); const kind = KIND[bb.byte()]; const fc = bb.uint(); const fields = [];
+      for (let j = 0; j < fc; j++) { const fname = bb.string(); const type = bb.int(); const isArray = !!(bb.byte() & 1); const value = bb.uint(); fields.push({ name: fname, type, isArray, value }); }
+      defs.push({ name, kind, fields });
+    }
+    for (const d of defs) for (const f of d.fields) f.type = f.type < 0 ? BUILTIN[~f.type] : defs[f.type] ? defs[f.type].name : 'unknown';
+    return defs;
+  }
+  function compile(defs) {
+    const byName = new Map(defs.map(d => [d.name, d]));
+    for (const d of defs) { d.byValue = new Map(d.fields.map(f => [f.value, f])); }
+    const readOne = (bb, type) => {
+      switch (type) {
+        case 'bool': return bb.bool(); case 'byte': return bb.byte(); case 'int': return bb.int(); case 'uint': return bb.uint();
+        case 'float': return bb.float(); case 'string': return bb.string(); case 'int64': return bb.int64(); case 'uint64': return bb.uint64();
+      }
+      const d = byName.get(type); if (!d) throw new Error('kiwi: unknown type ' + type);
+      return decode(bb, d);
+    };
+    const readField = (bb, f) => {
+      if (f.isArray) { if (f.type === 'byte') return bb.bytes().slice(); const n = bb.uint(); const out = new Array(n); for (let i = 0; i < n; i++) out[i] = readOne(bb, f.type); return out; }
+      return readOne(bb, f.type);
+    };
+    function decode(bb, d) {
+      if (d.kind === 'ENUM') { const v = bb.uint(); const f = d.byValue.get(v); return f ? f.name : v; }
+      const out = {};
+      if (d.kind === 'STRUCT') { for (const f of d.fields) out[f.name] = readField(bb, f); return out; }
+      for (;;) { const id = bb.uint(); if (id === 0) return out; const f = d.byValue.get(id); if (!f) throw new Error(`kiwi: unknown field ${id} in ${d.name}`); out[f.name] = readField(bb, f); }
+    }
+    return { decode: (u8, root = 'Message') => { const d = byName.get(root); if (!d) throw new Error('kiwi: no ' + root); return decode(new BB(u8), d); } };
+  }
+
+  // ---- containers: zip, fig-kiwi archive, deflate / zstd ------------------------------------------------------------
+  const isZstd = u8 => u8.length > 4 && u8[0] === 0x28 && u8[1] === 0xB5 && u8[2] === 0x2F && u8[3] === 0xFD;
+  let fzstdP = null;
+  function loadZstd() {
+    if (window.fzstd) return Promise.resolve(window.fzstd);
+    if (!fzstdP) fzstdP = new Promise((res, rej) => { const s = document.createElement('script'); s.src = 'https://cdn.jsdelivr.net/npm/fzstd@0.1.1/umd/index.js'; s.onload = () => window.fzstd ? res(window.fzstd) : rej(new Error('zstd decoder did not load')); s.onerror = () => { fzstdP = null; rej(new Error('Could not load the zstd decoder this file needs')); }; document.head.appendChild(s); });
+    return fzstdP;
+  }
+  async function inflateRaw(u8) {
+    const ds = new DecompressionStream('deflate-raw'); const w = ds.writable.getWriter(); w.write(u8).catch(() => { }); w.close().catch(() => { });
+    return new Uint8Array(await new Response(ds.readable).arrayBuffer());
+  }
+  async function unpack(u8) {
+    if (isZstd(u8)) { const z = await loadZstd(); return z.decompress(u8); }
+    try { return await inflateRaw(u8); } catch (e) { return u8; } // some chunks are stored uncompressed
+  }
+  function readZip(u8) {
+    const dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength); let eocd = -1;
+    for (let i = u8.length - 22; i >= Math.max(0, u8.length - 65557); i--) if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+    if (eocd < 0) throw new Error('not a zip');
+    const n = dv.getUint16(eocd + 10, true); let p = dv.getUint32(eocd + 16, true); const out = new Map(); const td = new TextDecoder();
+    for (let k = 0; k < n; k++) {
+      if (dv.getUint32(p, true) !== 0x02014b50) break;
+      const method = dv.getUint16(p + 10, true), csize = dv.getUint32(p + 20, true), nlen = dv.getUint16(p + 28, true), elen = dv.getUint16(p + 30, true), clen = dv.getUint16(p + 32, true), lho = dv.getUint32(p + 42, true);
+      const name = td.decode(u8.subarray(p + 46, p + 46 + nlen)); p += 46 + nlen + elen + clen;
+      const start = lho + 30 + dv.getUint16(lho + 26, true) + dv.getUint16(lho + 28, true);
+      out.set(name, { method, data: u8.subarray(start, start + csize) });
+    }
+    return out;
+  }
+  async function zipEntry(e) { if (e.method === 0) return e.data; if (e.method === 8) return inflateRaw(e.data); throw new Error('unsupported zip compression ' + e.method); }
+  function readArchive(u8) {
+    const head = new TextDecoder().decode(u8.subarray(0, 8));
+    if (head !== 'fig-kiwi' && head !== 'fig-jam.') throw new Error('Not Figma data (no fig-kiwi header)');
+    const dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength); let p = 8; const version = dv.getUint32(p, true); p += 4; const files = [];
+    while (p + 4 <= u8.length) { const size = dv.getUint32(p, true); p += 4; if (p + size > u8.length) break; files.push(u8.subarray(p, p + size)); p += size; }
+    return { version, files };
+  }
+  async function decodeArchive(u8) {
+    const { version, files } = readArchive(u8);
+    if (files.length < 2) throw new Error('Figma data is missing its schema or content');
+    const schema = decodeSchema(await unpack(files[0]));
+    const message = compile(schema).decode(await unpack(files[1]));
+    return { version, message };
+  }
+  const hex = u8 => Array.from(u8 || [], b => b.toString(16).padStart(2, '0')).join('');
+
+  // A .fig file (zip or bare archive) or ArrayBuffer -> { message, images: Map(hash -> bytes) }
+  async function readFile(input) {
+    const u8 = input instanceof Uint8Array ? input : new Uint8Array(input instanceof ArrayBuffer ? input : await input.arrayBuffer());
+    const images = new Map();
+    if (u8[0] === 0x50 && u8[1] === 0x4B) {
+      const zip = readZip(u8);
+      const main = zip.get('canvas.fig') || [...zip.entries()].find(([k]) => /\.fig$/.test(k))?.[1];
+      if (!main) throw new Error('This zip has no canvas.fig inside');
+      for (const [k, e] of zip) if (/^images\//.test(k) && !k.endsWith('/')) images.set(k.slice(7).toLowerCase(), e);
+      const res = await decodeArchive(await zipEntry(main));
+      return { ...res, images, imageEntry: zipEntry };
+    }
+    const res = await decodeArchive(u8);
+    return { ...res, images, imageEntry: zipEntry };
+  }
+  // Clipboard HTML from Figma carries the archive base64-encoded between (figma) markers.
+  const hasFigmaHTML = html => typeof html === 'string' && html.includes('(figma)') && html.includes('(/figma)');
+  async function readClipboardHTML(html) {
+    const m = /\(figma\)([A-Za-z0-9+/=\s]+?)\(\/figma\)/.exec(html); if (!m) throw new Error('No Figma data on the clipboard');
+    const bin = atob(m[1].replace(/\s+/g, '')); const u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+    let meta = null; const mm = /\(figmeta\)([A-Za-z0-9+/=\s]+?)\(\/figmeta\)/.exec(html); if (mm) { try { meta = JSON.parse(atob(mm[1].replace(/\s+/g, ''))); } catch { } }
+    const res = await decodeArchive(u8);
+    return { ...res, meta, images: new Map(), imageEntry: zipEntry };
+  }
+
+  // ---- geometry helpers ------------------------------------------------------------------------------------------
+  const I = { m00: 1, m01: 0, m02: 0, m10: 0, m11: 1, m12: 0 };
+  const mul = (a, b) => ({ m00: a.m00 * b.m00 + a.m01 * b.m10, m01: a.m00 * b.m01 + a.m01 * b.m11, m02: a.m00 * b.m02 + a.m01 * b.m12 + a.m02, m10: a.m10 * b.m00 + a.m11 * b.m10, m11: a.m10 * b.m01 + a.m11 * b.m11, m12: a.m10 * b.m02 + a.m11 * b.m12 + a.m12 });
+  const inv = m => { const det = m.m00 * m.m11 - m.m01 * m.m10 || 1e-9; return { m00: m.m11 / det, m01: -m.m01 / det, m02: (m.m01 * m.m12 - m.m11 * m.m02) / det, m10: -m.m10 / det, m11: m.m00 / det, m12: (m.m10 * m.m02 - m.m00 * m.m12) / det }; };
+  const ap = (m, x, y) => ({ x: m.m00 * x + m.m01 * y + m.m02, y: m.m10 * x + m.m11 * y + m.m12 });
+  const r2 = v => Math.round(v * 100) / 100;
+  const to255 = v => Math.max(0, Math.min(255, Math.round((v || 0) * 255)));
+  const colorHex = c => '#' + [c.r, c.g, c.b].map(v => to255(v).toString(16).padStart(2, '0')).join('').toUpperCase();
+  const idOf = g => g ? `${g.sessionID}:${g.localID}` : '';
+  // Box (x, y, w, h, rotation about the centre) from a transform and a size.
+  function boxOf(m, w, h) {
+    const rot = Math.atan2(m.m10, m.m00) * 180 / Math.PI;
+    const sx = Math.hypot(m.m00, m.m10), sy = Math.hypot(m.m01, m.m11);
+    const W = w * sx, H = h * sy;
+    const c = ap(m, w / 2, h / 2);
+    return { x: r2(c.x - W / 2), y: r2(c.y - H / 2), w: r2(Math.max(1, W)), h: r2(Math.max(1, H)), rotation: Math.abs(rot) < 0.01 ? 0 : r2(rot) };
+  }
+
+  // ---- paints, effects, text ---------------------------------------------------------------------------------------
+  const visiblePaints = ps => (ps || []).filter(p => p && p.visible !== false && (p.opacity ?? 1) > 0.001);
+  function gradientOf(p, w, h) {
+    const stops = (p.stops || []).map(s => ({ c: colorHex(s.color), p: r2(s.position), a: r2((s.color.a ?? 1) * (p.opacity ?? 1)) }));
+    if (stops.length < 2) return null;
+    if (p.type === 'GRADIENT_RADIAL' || p.type === 'GRADIENT_DIAMOND' || p.type === 'GRADIENT_ANGULAR') return { type: 'radial', stops };
+    let angle = 180;
+    if (p.transform) { const t = inv(p.transform); const a = ap(t, 0, 0.5), b = ap(t, 1, 0.5); const dx = (b.x - a.x) * (w || 1), dy = (b.y - a.y) * (h || 1); angle = Math.round((Math.atan2(dx, -dy) * 180 / Math.PI + 360) % 360); }
+    return { type: 'linear', angle, stops };
+  }
+  // The first visible paint decides; Figma stacks paints, we keep the top solid/gradient/image.
+  function mainPaint(ps) { const v = visiblePaints(ps); return v.length ? v[v.length - 1] : null; }
+  function shadowOf(effects) {
+    const e = (effects || []).find(x => x && x.visible !== false && x.type === 'DROP_SHADOW'); if (!e) return null;
+    return { on: true, x: r2(e.offset ? e.offset.x : 0), y: r2(e.offset ? e.offset.y : 0), blur: r2(e.radius || 0), color: colorHex(e.color || { r: 0, g: 0, b: 0 }), alpha: r2(e.color ? e.color.a ?? 0.25 : 0.25) };
+  }
+  function strokeOf(n) {
+    const p = mainPaint(n.strokePaints); if (!p || p.type !== 'SOLID' || !(n.strokeWeight > 0)) return null;
+    return { color: colorHex(p.color), width: r2(n.strokeWeight) };
+  }
+  const WEIGHTS = [[/thin|hairline/i, 100], [/extra ?light|ultra ?light/i, 200], [/light/i, 300], [/semi ?bold|demi ?bold/i, 600], [/extra ?bold|ultra ?bold/i, 800], [/black|heavy/i, 900], [/bold/i, 700], [/medium/i, 500]];
+  const weightOf = style => { for (const [re, w] of WEIGHTS) if (re.test(style || '')) return w; return 400; };
+  function fontFamilyCss(family) {
+    family = String(family || 'Inter').replace(/["'<>]/g, '');
+    if (typeof Brand !== 'undefined' && (Brand.FONTS[family] || Brand.customFonts[family])) return Brand.fontCss(family);
+    return `"${family}", Inter, system-ui, sans-serif`;
+  }
+  function numberOf(v, size, dflt) { if (!v || typeof v.value !== 'number') return dflt; if (v.units === 'PIXELS') return size ? v.value / size : dflt; if (v.units === 'PERCENT') return v.value / 100; return v.value || dflt; }
+  // Vector geometry: a blob of commands (0 close, 1 move, 2 line, 3 quad, 4 cubic) with little-endian float32 points.
+  function pathOf(bytes) {
+    if (!bytes || !bytes.length) return '';
+    const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength); let i = 0; const out = [];
+    const f = () => { const v = dv.getFloat32(i, true); i += 4; return r2(v); };
+    const ARGS = [0, 2, 2, 4, 6]; const CMD = ['Z', 'M', 'L', 'Q', 'C'];
+    while (i < bytes.length) {
+      const c = bytes[i++]; if (c > 4 || i + ARGS[c] * 4 > bytes.length) break;
+      const args = []; for (let k = 0; k < ARGS[c]; k++) args.push(f());
+      out.push(CMD[c] + args.join(' '));
+    }
+    return out.join('');
+  }
+
+  // ---- conversion ----------------------------------------------------------------------------------------------------
+  const CONTAINERS = new Set(['FRAME', 'GROUP', 'SYMBOL', 'INSTANCE', 'SECTION']);
+  const VECTORS = new Set(['VECTOR', 'STAR', 'LINE', 'REGULAR_POLYGON', 'BOOLEAN_OPERATION']);
+  // message -> { frames: [{name, x, y, layout, clip}], loose: bool, imagesNeeded }
+  async function convert(data, env) {
+    const { message } = data; const blobs = message.blobs || [];
+    const nodes = (message.nodeChanges || []).filter(n => n && n.guid && n.phase !== 'REMOVED');
+    const byId = new Map(nodes.map(n => [idOf(n.guid), n]));
+    const kids = new Map();
+    for (const n of nodes) { const pid = n.parentIndex && idOf(n.parentIndex.guid); if (!pid) continue; if (!kids.has(pid)) kids.set(pid, []); kids.get(pid).push(n); }
+    for (const list of kids.values()) list.sort((a, b) => (a.parentIndex.position < b.parentIndex.position ? -1 : a.parentIndex.position > b.parentIndex.position ? 1 : 0));
+    const childrenOf = n => kids.get(idOf(n.guid)) || [];
+    // image bytes by hash, from the zip or from blobs inside the message
+    const imageCache = new Map();
+    async function imageAsset(paint) {
+      const img = paint.image || paint.imageThumbnail; if (!img) return null;
+      const key = img.hash ? hex(img.hash) : img.dataBlob != null ? 'blob' + img.dataBlob : null; if (!key) return null;
+      if (imageCache.has(key)) return imageCache.get(key);
+      let bytes = null;
+      if (img.dataBlob != null && blobs[img.dataBlob]) bytes = blobs[img.dataBlob].bytes;
+      else if (data.images && data.images.has(key)) bytes = await data.imageEntry(data.images.get(key));
+      let asset = null;
+      if (bytes && bytes.length) {
+        const mime = bytes[0] === 0x89 ? 'image/png' : bytes[0] === 0xFF ? 'image/jpeg' : bytes[0] === 0x47 ? 'image/gif' : bytes[0] === 0x52 ? 'image/webp' : 'image/png';
+        let bin = ''; for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+        try { asset = await env.addImage(`data:${mime};base64,${btoa(bin)}`, img.name || 'Figma image'); } catch { asset = null; }
+      }
+      imageCache.set(key, asset); return asset;
+    }
+    const stats = { nodes: nodes.length, blocks: 0, skipped: {}, images: 0, missingImages: 0, instances: 0 };
+    const skip = t => { stats.skipped[t] = (stats.skipped[t] || 0) + 1; };
+
+    // Walk a subtree; m is the transform from this node's parent space into frame space.
+    async function walk(n, m, opacity, out, overrides, depth) {
+      if (depth > 40 || n.visible === false || n.mask) return;
+      const ov = overrides && overrides.get(idOf(n.guid)); if (ov) n = { ...n, ...ov };
+      n = inheritFromMain(n);
+      if (n.visible === false) return;
+      const local = n.transform || I; const M = mul(m, local);
+      const w = n.size ? n.size.x : 0, h = n.size ? n.size.y : 0;
+      const box = boxOf(M, w, h);
+      const op = opacity * (n.opacity ?? 1);
+      const common = b => { if (box.rotation) b.rotation = box.rotation; if (op < 0.999) b.opacity = r2(op); const sh = shadowOf(n.effects); if (sh) b.shadow = sh; if (n.name) b.name = String(n.name).slice(0, 80); stats.blocks++; out.push(b); return b; };
+      const t = n.type;
+      if (t === 'TEXT') { textBlock(n, box, common); return; }
+      if (t === 'RECTANGLE' || t === 'ROUNDED_RECTANGLE' || (CONTAINERS.has(t) && t !== 'GROUP')) {
+        await fillBlocks(n, box, common, t === 'FRAME' || t === 'SYMBOL' || t === 'INSTANCE' || t === 'SECTION' ? 'container' : 'rect');
+      } else if (t === 'ELLIPSE') {
+        const p = mainPaint(n.fillPaints); const st = strokeOf(n);
+        if (p && p.type === 'IMAGE') await imageBlock(n, box, common, p, Math.min(box.w, box.h) / 2);
+        else if (p || st) { const b = { id: uid(), kind: 'shape', shape: Math.abs(box.w - box.h) < 0.5 ? 'circle' : 'ellipse', x: box.x, y: box.y, w: box.w, h: box.h, fill: p && p.type === 'SOLID' ? colorHex(p.color) : 'none', decorative: true }; if (p && p.type !== 'SOLID') { const g = gradientOf(p, w, h); if (g) b.gradient = g; b.fill = g ? g.stops[0].c : '#000000'; } if (p && p.type === 'SOLID' && (p.color.a ?? 1) * (p.opacity ?? 1) < 0.999) b.opacity = r2((b.opacity || 1) * (p.color.a ?? 1) * (p.opacity ?? 1)); if (st) b.stroke = st; common(b); }
+      } else if (VECTORS.has(t)) {
+        vectorBlock(n, box, common, w, h);
+        if (t === 'BOOLEAN_OPERATION') return; // operands are already inside its geometry
+      } else if (t === 'GROUP') { /* children only */ }
+      else if (t === 'INSTANCE' || t === 'SYMBOL') { /* handled above */ }
+      else { skip(t); }
+      // children
+      if (t === 'INSTANCE') {
+        stats.instances++;
+        const sym = n.symbolData && byId.get(idOf(n.symbolData.symbolID));
+        const own = childrenOf(n);
+        if (own.length) { for (const c of own) await walk(c, M, op, out, overrides, depth + 1); }
+        else if (sym) {
+          // expand the main component inside the instance box; overrides keyed by the last guid of their path
+          const ovs = new Map(overrides || []);
+          for (const o of (n.symbolData.symbolOverrides || [])) { const path = o.guidPath && o.guidPath.guids; if (!path || !path.length) continue; const { guidPath, ...fields } = o; ovs.set(idOf(path[path.length - 1]), fields); }
+          const sw = sym.size ? sym.size.x : w, shh = sym.size ? sym.size.y : h;
+          const scale = { m00: sw ? w / sw : 1, m01: 0, m02: 0, m10: 0, m11: shh ? h / shh : 1, m12: 0 };
+          for (const c of childrenOf(sym)) await walk(c, mul(M, scale), op, out, ovs, depth + 1);
+        }
+        return;
+      }
+      if (CONTAINERS.has(t)) for (const c of childrenOf(n)) await walk(c, M, op, out, overrides, depth + 1);
+    }
+    async function fillBlocks(n, box, common, role) {
+      const paints = visiblePaints(n.fillPaints);
+      const radius = r2(n.cornerRadius || Math.max(n.rectangleTopLeftCornerRadius || 0, n.rectangleTopRightCornerRadius || 0, n.rectangleBottomLeftCornerRadius || 0, n.rectangleBottomRightCornerRadius || 0) || 0);
+      const st = strokeOf(n);
+      for (const p of paints) {
+        if (p.type === 'IMAGE') { await imageBlock(n, box, common, p, radius); continue; }
+        const b = { id: uid(), kind: 'field', x: box.x, y: box.y, w: box.w, h: box.h, radius, fill: '#000000', decorative: true };
+        if (role === 'container') b.container = true;
+        if (p.type === 'SOLID') { b.fill = colorHex(p.color); const a = (p.color.a ?? 1) * (p.opacity ?? 1); if (a < 0.999) b.alpha = r2(a); }
+        else { const g = gradientOf(p, n.size ? n.size.x : 0, n.size ? n.size.y : 0); if (!g) continue; b.gradient = g; b.fill = g.stops[0].c; }
+        common(b);
+      }
+      if (st && (role !== 'container' || paints.length || st)) { const b = { id: uid(), kind: 'field', x: box.x, y: box.y, w: box.w, h: box.h, radius, fill: 'none', alpha: 0, stroke: st, decorative: true }; common(b); }
+    }
+    async function imageBlock(n, box, common, p, radius) {
+      const asset = await imageAsset(p);
+      if (asset) stats.images++; else stats.missingImages++;
+      common({ id: uid(), kind: 'image', x: box.x, y: box.y, w: box.w, h: box.h, asset: asset ? asset.id : null, focal: 'xMidYMid', fit: p.imageScaleMode === 'FIT' ? 'contain' : 'cover', radius: radius || 0, decorative: false, path: 'image_' + uid(), placeholder: '#D9D9DE' });
+    }
+    function vectorBlock(n, box, common, w, h) {
+      const fill = mainPaint(n.fillPaints); const strokeP = mainPaint(n.strokePaints);
+      const parts = [];
+      const fillCol = fill && fill.type === 'SOLID' ? colorHex(fill.color) : fill ? (gradientOf(fill, w, h) || { stops: [{ c: '#000000' }] }).stops[0].c : null;
+      const fillA = fill && fill.type === 'SOLID' ? (fill.color.a ?? 1) * (fill.opacity ?? 1) : 1;
+      for (const g of (n.fillGeometry || [])) { const d = pathOf(blobs[g.commandsBlob] && blobs[g.commandsBlob].bytes); if (d && fillCol) parts.push(`<path d="${d}" fill="${fillCol}"${fillA < 0.999 ? ` fill-opacity="${r2(fillA)}"` : ''}${g.windingRule === 'ODD' ? ' fill-rule="evenodd"' : ''}/>`); }
+      if (strokeP && strokeP.type === 'SOLID') for (const g of (n.strokeGeometry || [])) { const d = pathOf(blobs[g.commandsBlob] && blobs[g.commandsBlob].bytes); if (d) parts.push(`<path d="${d}" fill="${colorHex(strokeP.color)}"${g.windingRule === 'ODD' ? ' fill-rule="evenodd"' : ''}/>`); }
+      if (!parts.length && n.type === 'LINE' && strokeP && strokeP.type === 'SOLID') { common({ id: uid(), kind: 'line', x: box.x, y: box.y, w: box.w, h: 0, fill: colorHex(strokeP.color), width: r2(n.strokeWeight || 1), decorative: true }); return; }
+      if (!parts.length) { skip(n.type + ' (no geometry)'); return; }
+      common({ id: uid(), kind: 'vector', x: box.x, y: box.y, w: Math.max(1, box.w), h: Math.max(1, box.h), viewBox: [0, 0, r2(Math.max(w, 0.01)), r2(Math.max(h, 0.01))], svg: parts.join(''), fill: fillCol || '#000000', decorative: true });
+    }
+    function textBlock(n, box, common) {
+      const chars = (n.textData && n.textData.characters) || ''; if (!chars.trim()) return;
+      const size = r2(n.fontSize || 16); const fam = n.fontName ? n.fontName.family : 'Inter'; const style = n.fontName ? n.fontName.style : 'Regular';
+      const p = mainPaint(n.fillPaints);
+      const b = {
+        id: uid(), kind: 'text', role: 'text', path: 'text_' + uid(), text: chars.replace(/\u2028|\u2029/g, '\n'),
+        x: box.x, y: box.y, w: box.w, h: box.h, align: { CENTER: 'center', RIGHT: 'right' }[n.textAlignHorizontal] || 'left',
+        font: { family: fontFamilyCss(fam), weight: weightOf(style), size, lineHeight: r2(numberOf(n.lineHeight, size, 1.2) || 1.2), letterSpacing: r2(numberOf(n.letterSpacing, size, 0)), transform: n.textCase === 'UPPER' ? 'upper' : n.textCase === 'LOWER' ? 'lower' : undefined, style: /italic|oblique/i.test(style) ? 'italic' : undefined },
+        fill: p && p.type === 'SOLID' ? colorHex(p.color) : '#000000', decorative: false,
+      };
+      if (p && p.type !== 'SOLID' && p.type !== 'IMAGE') { const g = gradientOf(p, box.w, box.h); if (g) { b.gradient = g; b.fill = g.stops[0].c; } }
+      if (p && p.type === 'SOLID' && (p.color.a ?? 1) * (p.opacity ?? 1) < 0.999) b.opacity = r2((p.color.a ?? 1) * (p.opacity ?? 1));
+      if (n.textDecoration === 'UNDERLINE') b.decoration = 'underline'; else if (n.textDecoration === 'STRIKETHROUGH') b.decoration = 'line-through';
+      if (!b.font.transform) delete b.font.transform; if (!b.font.style) delete b.font.style;
+      // Auto-width text never wraps in Figma; give it room for font substitution.
+      if (n.textAutoResize === 'WIDTH_AND_HEIGHT' && !/\n/.test(chars)) { const extra = b.w * 0.15; if (b.align === 'center') b.x -= extra / 2; else if (b.align === 'right') b.x -= extra; b.w += extra; }
+      if (/^(headline|title|heading|h1|h2|hero)/i.test(n.name || '') || size >= 40) b.role = 'headline';
+      if (typeof Canvas !== 'undefined') Canvas.refit(b);
+      common(b);
+    }
+    const uid = () => Math.random().toString(36).slice(2, 8);
+    // An instance without its own paints shows its main component's.
+    const VISUAL = ['fillPaints', 'strokePaints', 'strokeWeight', 'cornerRadius', 'effects', 'rectangleTopLeftCornerRadius', 'rectangleTopRightCornerRadius', 'rectangleBottomLeftCornerRadius', 'rectangleBottomRightCornerRadius', 'opacity'];
+    function inheritFromMain(n) {
+      if (n.type !== 'INSTANCE' || !n.symbolData) return n;
+      const sym = byId.get(idOf(n.symbolData.symbolID)); if (!sym) return n;
+      const add = {}; for (const k of VISUAL) if (n[k] === undefined && sym[k] !== undefined) add[k] = sym[k];
+      return Object.keys(add).length ? { ...n, ...add } : n;
+    }
+
+    // Top level: nodes that sit on a page (or have no parent in this data).
+    const tops = nodes.filter(n => { if (n.type === 'DOCUMENT' || n.type === 'CANVAS') return false; const p = n.parentIndex && byId.get(idOf(n.parentIndex.guid)); return !p || p.type === 'CANVAS' || p.type === 'DOCUMENT'; });
+    tops.sort((a, b) => (a.parentIndex && b.parentIndex && a.parentIndex.position < b.parentIndex.position ? -1 : 1));
+    const pageOf = n => { let p = n; for (let k = 0; k < 50 && p; k++) { const q = p.parentIndex && byId.get(idOf(p.parentIndex.guid)); if (!q || q.type === 'CANVAS') return q ? q.name : ''; p = q; } return ''; };
+    const frames = []; const loose = [];
+    for (let n of tops) {
+      if (n.visible === false) continue;
+      n = inheritFromMain(n);
+      const isScreen = (n.type === 'FRAME' || n.type === 'SYMBOL' || n.type === 'INSTANCE' || n.type === 'SECTION') && n.size && n.size.x >= 8 && n.size.y >= 8;
+      if (!isScreen) { loose.push(n); continue; }
+      const T = n.transform || I; const W = Math.round(n.size.x), H = Math.round(n.size.y);
+      const blocks = [];
+      // the screen's own fill becomes the background (or a block when it is an image or there are several)
+      const paints = visiblePaints(n.fillPaints); const solid = paints.length === 1 && paints[0].type === 'SOLID' ? paints[0] : null;
+      const grad = paints.length === 1 && /^GRADIENT/.test(paints[0].type) ? gradientOf(paints[0], W, H) : null;
+      const bg = solid ? colorHex(solid.color) : grad ? grad.stops[0].c : '#FFFFFF';
+      if (!solid && !grad && paints.length) { const tmp = { ...n, transform: I, effects: null, strokePaints: null }; await fillBlocks(tmp, { x: 0, y: 0, w: W, h: H, rotation: 0 }, b => { stats.blocks++; blocks.push(b); return b; }, 'rect'); }
+      if (n.type === 'INSTANCE') await walk({ ...n, transform: I, fillPaints: [], effects: null, strokePaints: null, opacity: 1 }, I, 1, blocks, null, 0);
+      else for (const c of childrenOf(n)) await walk(c, I, 1, blocks, null, 1);
+      frames.push({ name: String(n.name || 'Figma frame').slice(0, 80), x: Math.round(T.m02), y: Math.round(T.m12), w: W, h: H, bg, bgGradient: grad, clip: !n.frameMaskDisabled, blocks, page: pageOf(n) });
+    }
+    if (loose.length) {
+      const blocks = [];
+      for (const n of loose) await walk(n, I, 1, blocks, null, 1);
+      if (blocks.length) {
+        const x0 = Math.min(...blocks.map(b => b.x)), y0 = Math.min(...blocks.map(b => b.y)), x1 = Math.max(...blocks.map(b => b.x + b.w)), y1 = Math.max(...blocks.map(b => b.y + b.h));
+        for (const b of blocks) { b.x = r2(b.x - x0); b.y = r2(b.y - y0); }
+        frames.push({ name: loose.length === 1 ? String(loose[0].name || 'Figma layers') : 'Figma layers', x: Math.round(x0), y: Math.round(y0), w: Math.max(8, Math.ceil(x1 - x0)), h: Math.max(8, Math.ceil(y1 - y0)), bg: '#FFFFFF', clip: false, blocks, loose: true });
+      }
+    }
+    return { frames, stats };
+  }
+  // Frames from convert() -> layouts the canvas can hold.
+  function toLayouts(frames, kit) {
+    return frames.map(F => {
+      const fmt = { id: 'custom', name: 'Custom', w: F.w, h: F.h, cols: Math.max(4, Math.min(12, Math.round(F.w / 160))) };
+      const g = Grid.compute(fmt, { unit: 8, marginRatio: 0.06, gutterUnits: 3 });
+      const fg = F.blocks.find(b => b.kind === 'text');
+      const layout = {
+        id: 'fig-' + Math.random().toString(36).slice(2, 8), seed: 0, archetype: 'figma', archetypeLabel: 'Figma', format: { id: 'custom', name: 'Custom', w: F.w, h: F.h },
+        grid: { unit: 8, gutter: g.gutter, cols: g.cols, rows: g.rows, cw: g.cw, rh: g.rh, mx: g.mx, my: g.my, safe: g.safe },
+        palette: { bg: F.bg, fg: fg ? fg.fill : '#000000', accent: (F.blocks.find(b => b.kind === 'field' && b.fill && b.fill !== F.bg && b.fill !== 'none') || { fill: fg ? fg.fill : '#000000' }).fill, bgName: 'Figma', ...(F.bgGradient ? { bgGradient: F.bgGradient } : {}) },
+        type: { level: 2, headline: 48, body: 16, display: kit.fonts.display, body_font: kit.fonts.body }, brand: kit.name, blocks: F.blocks, meta: { source: 'figma', page: F.page || '' }, metrics: { whitespace: 0, density: 0, balance: 0 },
+      };
+      return { name: F.name, x: F.x, y: F.y, layout, clip: F.clip, loose: !!F.loose };
+    });
+  }
+  return { readFile, readClipboardHTML, hasFigmaHTML, convert, toLayouts, _kiwi: { decodeSchema, compile, BB }, _pathOf: pathOf, readArchive };
+})();
+
 /* js/canvas.js */
 /* Canvas document model and editing operations. The document is plain JSON: frames on an infinite canvas,
    each frame carrying a layout spec (the same JSON the engine emits). Editing the canvas is editing that JSON. */
@@ -4001,6 +4401,9 @@ const CanvasUI = (() => {
     st.addEventListener('wheel', e => { if (e.target.closest && e.target.closest('.cv-editor')) return; e.preventDefault(); if (e.ctrlKey || e.metaKey) zoomBy(Math.exp(-e.deltaY * 0.0015), e.clientX, e.clientY); else { doc.view.x -= e.deltaX; doc.view.y -= e.deltaY; applyView(); } }, { passive: false });
     st.addEventListener('contextmenu', e => e.preventDefault());
     new ResizeObserver(() => active && drawOverlay()).observe(st);
+    st.addEventListener('dragover', e => { if (e.dataTransfer && [...e.dataTransfer.types].includes('Files')) { e.preventDefault(); st.classList.add('drop'); } });
+    st.addEventListener('dragleave', () => st.classList.remove('drop'));
+    st.addEventListener('drop', async e => { st.classList.remove('drop'); const files = e.dataTransfer && [...e.dataTransfer.files]; if (!files || !files.length) return; e.preventDefault(); lastPointer = toWorld(e.clientX, e.clientY); for (const file of files) { try { if (env.importFile && await env.importFile(file)) continue; if (/^image\//.test(file.type)) await dropImage(file); else env.toast(`Can't open ${file.name}`); } catch (err) { env.toast(err.message); } } });
   }
   function onDblClick(e) {
     if (e.target.closest && e.target.closest('.cv-editor')) return;
@@ -4147,6 +4550,14 @@ const CanvasUI = (() => {
       persist(); updateUndo(); renderLayers(); renderProps(); drawOverlay();
     } else if (hadGuides) drawOverlay();
   }
+  // An image dropped on a frame becomes an image block there; on empty canvas it becomes a frame of its own size.
+  async function dropImage(file) {
+    const asset = await env.addImage(file); const p = lastPointer || { x: 0, y: 0 }; const f = frameAt(p);
+    const w = asset.w || 800, h = asset.h || 600;
+    if (f) { hist.push(doc); const s = Math.min(1, (FW(f) * 0.6) / w, (FH(f) * 0.6) / h); const b = { id: Canvas.uid(), kind: 'image', x: Math.round(p.x - f.x - w * s / 2), y: Math.round(p.y - f.y - h * s / 2), w: Math.round(w * s), h: Math.round(h * s), asset: asset.id, focal: 'xMidYMid', radius: 0, decorative: false, path: 'image_' + Canvas.uid() }; f.layout.blocks.push(b); select(f.id, [b.id]); rerenderFrame(f); persist(); updateUndo(); return; }
+    const nf = createFrame({ x: p.x - w / 2, y: p.y - h / 2, format: Canvas.customFormat(w, h), name: file.name.replace(/\.[^.]+$/, '') });
+    mutate(() => { nf.layout.blocks.push({ id: Canvas.uid(), kind: 'image', x: 0, y: 0, w: FW(nf), h: FH(nf), asset: asset.id, focal: 'xMidYMid', radius: 0, decorative: false, path: 'image_1' }); }, { history: false, frames: [nf.id] });
+  }
   function placeTool(f, p) {
     if (!f) { env.toast('Click inside a frame to add it there'); return; }
     hist.push(doc);
@@ -4195,6 +4606,27 @@ const CanvasUI = (() => {
     return added;
   }
 
+  // Imported screens keep their relative positions and land below everything already on the canvas.
+  function placeFrames(items, opts = {}) {
+    if (!items.length) return [];
+    hist.push(doc);
+    const bx = Math.min(...items.map(i => i.x)), by = Math.min(...items.map(i => i.y));
+    const ox = doc.frames.length ? Math.min(...doc.frames.map(f => f.x)) : 0;
+    const oy = doc.frames.length ? Math.max(...doc.frames.map(f => f.y + FH(f))) + 320 : 0;
+    const added = items.map(it => { const f = Canvas.addFrame(doc, it.layout, { x: Canvas.snap(ox + (it.x - bx), 8), y: Canvas.snap(oy + (it.y - by), 8), name: it.name }); f.clip = it.clip !== false; return f; });
+    selectFrames(added.map(f => f.id)); if (active) { renderAll(); fitTo(added); } persist(); updateUndo();
+    return added;
+  }
+  // Loose layers (no frame of their own) go into a frame, centred, keeping their arrangement.
+  function insertBlocks(frameId, blocks) {
+    const f = Canvas.frameById(doc, frameId); if (!f || !blocks.length) return [];
+    hist.push(doc);
+    const bb = Canvas.bounds(blocks); const dx = Math.round(Math.max(0, (FW(f) - bb.w) / 2) - bb.x), dy = Math.round(Math.max(0, (FH(f) - bb.h) / 2) - bb.y);
+    const ids = blocks.map(b => { const c = Canvas.clone(b); c.id = Canvas.uid(); c.x += dx; c.y += dy; if (c.kind === 'text' || c.kind === 'list') Canvas.refit(c); f.layout.blocks.push(c); return c.id; });
+    select(f.id, ids); rerenderFrame(f); renderLayers(); persist(); updateUndo();
+    return ids;
+  }
+
   // ---- Selection --------------------------------------------------------------------------------------------
   function expandGroups(f, ids) {
     const out = new Set();
@@ -4235,7 +4667,7 @@ const CanvasUI = (() => {
     ed.addEventListener('input', () => {
       const fr = Canvas.frameById(doc, f.id); const bl = fr && Canvas.blockById(fr, b.id); if (!bl) return;
       const t = ed.innerText.replace(/ /g, ' ');
-      if (bl.kind === 'list') bl.items = t.split('\n').map(x => x.trim()).filter(Boolean); else bl.text = t.replace(/\s*\n+\s*/g, ' ');
+      if (bl.kind === 'list') bl.items = t.split('\n').map(x => x.trim()).filter(Boolean); else if (bl.kind === 'button') bl.text = t.replace(/\s*\n+\s*/g, ' '); else bl.text = t.replace(/\n{3,}/g, '\n\n');
       Canvas.refit(bl); positionEditor(); if (!editing.hide) rerenderFrame(fr); drawOverlay(); emitLive([fr.id]);
     });
     ed.addEventListener('keydown', e => {
@@ -4845,7 +5277,7 @@ const CanvasUI = (() => {
   return {
     init, open, close, addLayouts, count, fit, fitTo: ids => fitTo(ids.map(id => Canvas.frameById(doc, id)).filter(Boolean)),
     get doc() { return doc; }, get active() { return active; },
-    select, selectFrames, selection, setTool, createFrame, placeRow, mutate, remoteApplied, replaceDoc, renderAll, rerender: ids => ids.forEach(id => { const f = Canvas.frameById(doc, id); if (f) rerenderFrame(f); }),
+    select, selectFrames, selection, setTool, createFrame, placeRow, placeFrames, insertBlocks, mutate, remoteApplied, replaceDoc, renderAll, rerender: ids => ids.forEach(id => { const f = Canvas.frameById(doc, id); if (f) rerenderFrame(f); }),
     regrid, exportAction, makeVariations, resizeScreens, copySelection, pasteClipboard, startEdit: (fid, bid) => { const f = Canvas.frameById(doc, fid); return startEdit(f, f && Canvas.blockById(f, bid)); },
     on: (k, fn) => { hooks[k].push(fn); return () => { hooks[k] = hooks[k].filter(x => x !== fn); }; },
     setPeers: list => { peers = Array.isArray(list) ? list : []; if (active) drawOverlay(); },
@@ -5344,7 +5776,7 @@ const CanvasUI = (() => {
   $('imgProvider').addEventListener('change', () => { fillImageModels($('imgProvider').value, ''); saveImageGen(); });
   $('imgModel').addEventListener('change', saveImageGen); $('imgKey').addEventListener('change', saveImageGen);
   loadImageGen();
-  document.addEventListener('keydown', e => { if (e.key === 'Escape') for (const id of ['detail', 'compare', 'about', 'settings']) $(id).hidden = true; });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') for (const id of ['detail', 'compare', 'about', 'settings', 'importModal']) $(id).hidden = true; });
   for (const id of ['detail', 'compare', 'about', 'settings']) $(id).addEventListener('click', e => { if (e.target === $(id)) $(id).hidden = true; });
   $('aboutBody').innerHTML = `
     <p>Most AI design tools pick a template or paint pixels. This engine does neither. It takes the rules a design system already has (a column grid, a pixel grid, safe space, approved color pairs, the logo's clear zone, a type scale) and lets chance move only inside them. The result is not one answer but a field of valid answers you can scan, compare, and choose from. The design decision stays with the designer; the engine removes the blank canvas and the manual iteration.</p>
@@ -5557,6 +5989,73 @@ const CanvasUI = (() => {
     for (let k = 0; k < 10; k++) { const V = Engine.generate({ intent, kit: state.kit, assets: state.assets, format: fmt, seed: (L.seed + k * 0x9E3779B9) >>> 0, archetype: L.archetype }); if (V) return V; }
     return null;
   }
+  // ---- Import: Figma files and clipboard, canvas JSON ---------------------------------------------------------------
+  const loadedFamilies = new Set();
+  // Load families the import uses that we don't ship, from Google Fonts when they exist there; then refit their text.
+  async function ensureFonts(frames) {
+    const fams = new Map();
+    for (const f of frames) for (const b of f.layout.blocks) if (b.font && b.font.family) { const name = String(b.font.family).split(',')[0].replace(/["']/g, '').trim(); if (!Brand.FONTS[name] && !Brand.customFonts[name] && !/^(inter|system-ui|sans-serif|serif|monospace)$/i.test(name)) { if (!fams.has(name)) fams.set(name, new Set()); fams.get(name).add(b.font.weight || 400); } }
+    const loads = [];
+    for (const [name, weights] of fams) {
+      if (!loadedFamilies.has(name)) { loadedFamilies.add(name); const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(name).replace(/%20/g, '+')}:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&display=swap`; document.head.appendChild(l); }
+      for (const w of weights) loads.push(document.fonts.load(`${w} 24px "${name}"`).catch(() => null));
+    }
+    if (!loads.length) return 0;
+    await Promise.race([Promise.all(loads), new Promise(r => setTimeout(r, 3500))]);
+    Text.clearCache();
+    for (const f of frames) for (const b of f.layout.blocks) if (b.kind === 'text' || b.kind === 'list') Canvas.refit(b);
+    return fams.size;
+  }
+  async function importFigmaData(data, how) {
+    const res = await FigmaImport.convert(data, { addImage: (url, name) => addImage(url, name) });
+    const items = FigmaImport.toLayouts(res.frames, state.kit);
+    if (!items.length) { toast('Nothing visible to import'); return; }
+    const MAX = 80; const list = items.slice(0, MAX);
+    const sel = CanvasUI.selection();
+    let added = [];
+    if (list.length === 1 && list[0].loose && sel.frameIds.length === 1) CanvasUI.insertBlocks(sel.frameIds[0], list[0].layout.blocks);
+    else added = CanvasUI.placeFrames(list);
+    if (state.mode !== 'canvas') setMode('canvas');
+    updateCanvasBadge();
+    const s = res.stats; const skipped = Object.entries(s.skipped).map(([k, v]) => `${v} ${k.toLowerCase()}`).join(', ');
+    toast(`${how}: ${list.length > 1 || !list[0].loose ? `${list.length} frame${list.length > 1 ? 's' : ''}` : 'layers'}, ${s.blocks} layers${s.images ? `, ${s.images} images` : ''}${s.missingImages ? `, ${s.missingImages} images not included` : ''}${items.length > MAX ? `, first ${MAX} frames only` : ''}${skipped ? ` · skipped ${skipped}` : ''}`);
+    const frames = added.length ? added : CanvasUI.doc.frames.filter(f => sel.frameIds.includes(f.id));
+    if (await ensureFonts(frames)) CanvasUI.mutate(() => { }, { history: false, frames: frames.map(f => f.id) });
+  }
+  async function importFile(file) {
+    const head = new Uint8Array(await file.slice(0, 8).arrayBuffer()); const sig = String.fromCharCode(...head);
+    if (/\.fig$/i.test(file.name) || sig === 'fig-kiwi' || (sig.startsWith('PK') && /\.fig$/i.test(file.name))) {
+      toast(`Reading ${file.name}…`);
+      try { await importFigmaData(await FigmaImport.readFile(file), 'Figma file'); } catch (err) { console.error(err); toast('Could not read this Figma file: ' + err.message); }
+      return true;
+    }
+    if (/\.json$/i.test(file.name) || file.type === 'application/json') {
+      const text = await file.text(); let j; try { j = JSON.parse(text); } catch { return false; }
+      if (j && j.lgCapture && window.WebImport) { await WebImport.importCapture(j.lgCapture); return true; }
+      if (j && Array.isArray(j.frames)) { CanvasUI.replaceDoc(Canvas.deserialize(j), { keepView: false }); CanvasUI.fit(); toast('Canvas loaded'); updateCanvasBadge(); return true; }
+    }
+    return false;
+  }
+  function onCanvasPaste(e) {
+    const dt = e.clipboardData; if (!dt) return false;
+    const html = dt.getData('text/html');
+    if (FigmaImport.hasFigmaHTML(html)) {
+      e.preventDefault(); toast('Reading Figma layers…');
+      FigmaImport.readClipboardHTML(html).then(d => importFigmaData(d, 'Pasted from Figma')).catch(err => { console.error(err); toast('Could not read the Figma paste: ' + err.message); });
+      return true;
+    }
+    if (window.WebImport && WebImport.handlePaste(e)) return true;
+    const files = [...(dt.files || [])].filter(f => /^image\//.test(f.type));
+    if (files.length) { e.preventDefault(); (async () => { for (const f of files) { const a = await addImage(await readAsDataURL(f), f.name || 'pasted image'); const sel = CanvasUI.selection(); if (sel.frameIds.length === 1) { const fr = Canvas.frameById(CanvasUI.doc, sel.frameIds[0]); const s = Math.min(1, fr.layout.format.w * 0.6 / a.w, fr.layout.format.h * 0.6 / a.h); CanvasUI.insertBlocks(fr.id, [{ id: 'x', kind: 'image', x: 0, y: 0, w: Math.round(a.w * s), h: Math.round(a.h * s), asset: a.id, focal: 'xMidYMid', radius: 0, decorative: false, path: 'image_pasted' }]); } else { CanvasUI.placeFrames([{ name: f.name || 'Pasted image', x: 0, y: 0, clip: true, layout: FigmaImport.toLayouts([{ name: 'Pasted image', x: 0, y: 0, w: a.w, h: a.h, bg: '#FFFFFF', clip: true, blocks: [{ id: 'img', kind: 'image', x: 0, y: 0, w: a.w, h: a.h, asset: a.id, focal: 'xMidYMid', radius: 0, decorative: false, path: 'image_1' }] }], state.kit)[0].layout }]); } } })(); return true; }
+    return false;
+  }
+  function openImport() { $('importModal').hidden = false; if (window.WebImport) WebImport.renderSection($('captureSection')); }
+  $('cvImport').addEventListener('click', openImport);
+  $('importClose').addEventListener('click', () => { $('importModal').hidden = true; });
+  $('importModal').addEventListener('click', e => { if (e.target === $('importModal')) $('importModal').hidden = true; });
+  $('figFile').addEventListener('change', async e => { const f = e.target.files[0]; if (!f) return; $('figStatus').textContent = 'Reading…'; await importFile(f); $('figStatus').textContent = ''; $('importModal').hidden = true; e.target.value = ''; });
+  $('canvasFile').addEventListener('change', async e => { const f = e.target.files[0]; if (!f) return; if (!(await importFile(f))) toast('Not a canvas file'); $('importModal').hidden = true; e.target.value = ''; });
+
   function sendToCanvas(layouts) {
     if (!layouts.length) return;
     CanvasUI.addLayouts(layouts);
@@ -5568,7 +6067,10 @@ const CanvasUI = (() => {
   $('detailCanvas').addEventListener('click', () => { if (state.detail) { const l = state.detail; $('detail').hidden = true; sendToCanvas([l]); } });
   CanvasUI.init({
     getKit: () => state.kit, getAssets: () => state.assets, toast,
-    addImage: async file => { const ph = state.assets.images.filter(a => a.placeholder); for (const a of ph) URL.revokeObjectURL(a.url); state.assets.images = state.assets.images.filter(a => !a.placeholder); const asset = await addImage(await readAsDataURL(file), file.name); return asset; },
+    addImage: async file => addImage(await readAsDataURL(file), file.name),
+    importFile: file => importFile(file),
+    onPaste: e => onCanvasPaste(e),
+    openImport: () => openImport(),
     addImageData: (dataUrl, name) => addImage(dataUrl, name),
     updateColors: colors => { state.kit.colors = colors.map(c => ({ name: c.name || c.hex, hex: Color.normalize(c.hex), role: c.role || 'accent' })); renderColors(); persistKit(); },
     resetColors: () => { const preset = Brand.PRESETS[state.kit.presetId]; if (!preset) return false; state.kit.colors = preset.colors.map(c => ({ ...c })); renderColors(); persistKit(); return true; },

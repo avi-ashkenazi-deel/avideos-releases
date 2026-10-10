@@ -207,7 +207,8 @@
           <button id="cvRedo" class="btn small" type="button" title="Redo (⇧⌘Z)" disabled>Redo</button>
           <button id="cvLink" class="btn small" type="button" title="Copy a link that carries this canvas (⌘L)">Copy link</button>
           <button id="cvSave" class="btn small" type="button">Save JSON</button>
-          <label class="btn small file">Load<input id="cvLoad" type="file" accept="application/json,.json" hidden></label>
+          <button id="cvImport" class="btn small" type="button" data-tip="Figma, web pages, canvas files">Import</button>
+          <label class="btn small file">Load<input id="cvLoad" type="file" accept="application/json,.json,.fig" hidden></label>
           <details class="cv-menu" id="cvExport"><summary class="btn small primary">Export</summary>
             <div class="cv-menu-list">
               <span class="cv-menu-h">Selected screens (or all)</span>
@@ -298,6 +299,27 @@
     </div>
   </div>
 
+  <div id="importModal" class="modal" hidden>
+    <div class="modal-inner about">
+      <div class="detail-head">
+        <h3>Import</h3>
+        <button class="btn ghost icon" id="importClose" type="button" aria-label="Close">✕</button>
+      </div>
+      <div class="prose import-body">
+        <h4>From Figma</h4>
+        <ol>
+          <li><b>Paste:</b> select frames or layers in Figma, press ⌘C, come back to the canvas and press ⌘V. Layers without a frame go into the selected frame.</li>
+          <li><b>File:</b> in Figma choose File → Save local copy, then drop the .fig on the canvas or pick it here.</li>
+        </ol>
+        <div class="cv-row"><label class="btn small file">Choose a .fig file<input id="figFile" type="file" accept=".fig,application/octet-stream" hidden></label><span class="hint" id="figStatus"></span></div>
+        <p class="hint">Frames, text, shapes, vectors, image fills, gradients, strokes, shadows and components from the same file come through. Variables, constraints and prototypes do not. Fonts we don't ship load from Google Fonts when they exist there.</p>
+        <div id="captureSection"></div>
+        <h4>Canvas file</h4>
+        <div class="cv-row"><label class="btn small file">Open canvas JSON<input id="canvasFile" type="file" accept="application/json,.json" hidden></label></div>
+      </div>
+    </div>
+  </div>
+
   <div id="about" class="modal" hidden>
     <div class="modal-inner about">
       <div class="detail-head">
@@ -349,6 +371,7 @@
 <script src="js/copy.js"></script>
 <script src="js/deck.js"></script>
 <script src="js/imagegen.js"></script>
+<script src="js/figma.js"></script>
 <script src="js/canvas.js"></script>
 <script src="js/canvas-ui.js"></script>
 <script src="js/app.js"></script>

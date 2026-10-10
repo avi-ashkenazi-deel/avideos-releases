@@ -487,7 +487,7 @@
   $('imgProvider').addEventListener('change', () => { fillImageModels($('imgProvider').value, ''); saveImageGen(); });
   $('imgModel').addEventListener('change', saveImageGen); $('imgKey').addEventListener('change', saveImageGen);
   loadImageGen();
-  document.addEventListener('keydown', e => { if (e.key === 'Escape') for (const id of ['detail', 'compare', 'about', 'settings']) $(id).hidden = true; });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') for (const id of ['detail', 'compare', 'about', 'settings', 'importModal']) $(id).hidden = true; });
   for (const id of ['detail', 'compare', 'about', 'settings']) $(id).addEventListener('click', e => { if (e.target === $(id)) $(id).hidden = true; });
   $('aboutBody').innerHTML = `
     <p>Most AI design tools pick a template or paint pixels. This engine does neither. It takes the rules a design system already has (a column grid, a pixel grid, safe space, approved color pairs, the logo's clear zone, a type scale) and lets chance move only inside them. The result is not one answer but a field of valid answers you can scan, compare, and choose from. The design decision stays with the designer; the engine removes the blank canvas and the manual iteration.</p>
@@ -700,6 +700,73 @@
     for (let k = 0; k < 10; k++) { const V = Engine.generate({ intent, kit: state.kit, assets: state.assets, format: fmt, seed: (L.seed + k * 0x9E3779B9) >>> 0, archetype: L.archetype }); if (V) return V; }
     return null;
   }
+  // ---- Import: Figma files and clipboard, canvas JSON ---------------------------------------------------------------
+  const loadedFamilies = new Set();
+  // Load families the import uses that we don't ship, from Google Fonts when they exist there; then refit their text.
+  async function ensureFonts(frames) {
+    const fams = new Map();
+    for (const f of frames) for (const b of f.layout.blocks) if (b.font && b.font.family) { const name = String(b.font.family).split(',')[0].replace(/["']/g, '').trim(); if (!Brand.FONTS[name] && !Brand.customFonts[name] && !/^(inter|system-ui|sans-serif|serif|monospace)$/i.test(name)) { if (!fams.has(name)) fams.set(name, new Set()); fams.get(name).add(b.font.weight || 400); } }
+    const loads = [];
+    for (const [name, weights] of fams) {
+      if (!loadedFamilies.has(name)) { loadedFamilies.add(name); const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(name).replace(/%20/g, '+')}:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&display=swap`; document.head.appendChild(l); }
+      for (const w of weights) loads.push(document.fonts.load(`${w} 24px "${name}"`).catch(() => null));
+    }
+    if (!loads.length) return 0;
+    await Promise.race([Promise.all(loads), new Promise(r => setTimeout(r, 3500))]);
+    Text.clearCache();
+    for (const f of frames) for (const b of f.layout.blocks) if (b.kind === 'text' || b.kind === 'list') Canvas.refit(b);
+    return fams.size;
+  }
+  async function importFigmaData(data, how) {
+    const res = await FigmaImport.convert(data, { addImage: (url, name) => addImage(url, name) });
+    const items = FigmaImport.toLayouts(res.frames, state.kit);
+    if (!items.length) { toast('Nothing visible to import'); return; }
+    const MAX = 80; const list = items.slice(0, MAX);
+    const sel = CanvasUI.selection();
+    let added = [];
+    if (list.length === 1 && list[0].loose && sel.frameIds.length === 1) CanvasUI.insertBlocks(sel.frameIds[0], list[0].layout.blocks);
+    else added = CanvasUI.placeFrames(list);
+    if (state.mode !== 'canvas') setMode('canvas');
+    updateCanvasBadge();
+    const s = res.stats; const skipped = Object.entries(s.skipped).map(([k, v]) => `${v} ${k.toLowerCase()}`).join(', ');
+    toast(`${how}: ${list.length > 1 || !list[0].loose ? `${list.length} frame${list.length > 1 ? 's' : ''}` : 'layers'}, ${s.blocks} layers${s.images ? `, ${s.images} images` : ''}${s.missingImages ? `, ${s.missingImages} images not included` : ''}${items.length > MAX ? `, first ${MAX} frames only` : ''}${skipped ? ` · skipped ${skipped}` : ''}`);
+    const frames = added.length ? added : CanvasUI.doc.frames.filter(f => sel.frameIds.includes(f.id));
+    if (await ensureFonts(frames)) CanvasUI.mutate(() => { }, { history: false, frames: frames.map(f => f.id) });
+  }
+  async function importFile(file) {
+    const head = new Uint8Array(await file.slice(0, 8).arrayBuffer()); const sig = String.fromCharCode(...head);
+    if (/\.fig$/i.test(file.name) || sig === 'fig-kiwi' || (sig.startsWith('PK') && /\.fig$/i.test(file.name))) {
+      toast(`Reading ${file.name}…`);
+      try { await importFigmaData(await FigmaImport.readFile(file), 'Figma file'); } catch (err) { console.error(err); toast('Could not read this Figma file: ' + err.message); }
+      return true;
+    }
+    if (/\.json$/i.test(file.name) || file.type === 'application/json') {
+      const text = await file.text(); let j; try { j = JSON.parse(text); } catch { return false; }
+      if (j && j.lgCapture && window.WebImport) { await WebImport.importCapture(j.lgCapture); return true; }
+      if (j && Array.isArray(j.frames)) { CanvasUI.replaceDoc(Canvas.deserialize(j), { keepView: false }); CanvasUI.fit(); toast('Canvas loaded'); updateCanvasBadge(); return true; }
+    }
+    return false;
+  }
+  function onCanvasPaste(e) {
+    const dt = e.clipboardData; if (!dt) return false;
+    const html = dt.getData('text/html');
+    if (FigmaImport.hasFigmaHTML(html)) {
+      e.preventDefault(); toast('Reading Figma layers…');
+      FigmaImport.readClipboardHTML(html).then(d => importFigmaData(d, 'Pasted from Figma')).catch(err => { console.error(err); toast('Could not read the Figma paste: ' + err.message); });
+      return true;
+    }
+    if (window.WebImport && WebImport.handlePaste(e)) return true;
+    const files = [...(dt.files || [])].filter(f => /^image\//.test(f.type));
+    if (files.length) { e.preventDefault(); (async () => { for (const f of files) { const a = await addImage(await readAsDataURL(f), f.name || 'pasted image'); const sel = CanvasUI.selection(); if (sel.frameIds.length === 1) { const fr = Canvas.frameById(CanvasUI.doc, sel.frameIds[0]); const s = Math.min(1, fr.layout.format.w * 0.6 / a.w, fr.layout.format.h * 0.6 / a.h); CanvasUI.insertBlocks(fr.id, [{ id: 'x', kind: 'image', x: 0, y: 0, w: Math.round(a.w * s), h: Math.round(a.h * s), asset: a.id, focal: 'xMidYMid', radius: 0, decorative: false, path: 'image_pasted' }]); } else { CanvasUI.placeFrames([{ name: f.name || 'Pasted image', x: 0, y: 0, clip: true, layout: FigmaImport.toLayouts([{ name: 'Pasted image', x: 0, y: 0, w: a.w, h: a.h, bg: '#FFFFFF', clip: true, blocks: [{ id: 'img', kind: 'image', x: 0, y: 0, w: a.w, h: a.h, asset: a.id, focal: 'xMidYMid', radius: 0, decorative: false, path: 'image_1' }] }], state.kit)[0].layout }]); } } })(); return true; }
+    return false;
+  }
+  function openImport() { $('importModal').hidden = false; if (window.WebImport) WebImport.renderSection($('captureSection')); }
+  $('cvImport').addEventListener('click', openImport);
+  $('importClose').addEventListener('click', () => { $('importModal').hidden = true; });
+  $('importModal').addEventListener('click', e => { if (e.target === $('importModal')) $('importModal').hidden = true; });
+  $('figFile').addEventListener('change', async e => { const f = e.target.files[0]; if (!f) return; $('figStatus').textContent = 'Reading…'; await importFile(f); $('figStatus').textContent = ''; $('importModal').hidden = true; e.target.value = ''; });
+  $('canvasFile').addEventListener('change', async e => { const f = e.target.files[0]; if (!f) return; if (!(await importFile(f))) toast('Not a canvas file'); $('importModal').hidden = true; e.target.value = ''; });
+
   function sendToCanvas(layouts) {
     if (!layouts.length) return;
     CanvasUI.addLayouts(layouts);
@@ -711,7 +778,10 @@
   $('detailCanvas').addEventListener('click', () => { if (state.detail) { const l = state.detail; $('detail').hidden = true; sendToCanvas([l]); } });
   CanvasUI.init({
     getKit: () => state.kit, getAssets: () => state.assets, toast,
-    addImage: async file => { const ph = state.assets.images.filter(a => a.placeholder); for (const a of ph) URL.revokeObjectURL(a.url); state.assets.images = state.assets.images.filter(a => !a.placeholder); const asset = await addImage(await readAsDataURL(file), file.name); return asset; },
+    addImage: async file => addImage(await readAsDataURL(file), file.name),
+    importFile: file => importFile(file),
+    onPaste: e => onCanvasPaste(e),
+    openImport: () => openImport(),
     addImageData: (dataUrl, name) => addImage(dataUrl, name),
     updateColors: colors => { state.kit.colors = colors.map(c => ({ name: c.name || c.hex, hex: Color.normalize(c.hex), role: c.role || 'accent' })); renderColors(); persistKit(); },
     resetColors: () => { const preset = Brand.PRESETS[state.kit.presetId]; if (!preset) return false; state.kit.colors = preset.colors.map(c => ({ ...c })); renderColors(); persistKit(); return true; },

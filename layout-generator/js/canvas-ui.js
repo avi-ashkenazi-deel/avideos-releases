@@ -235,6 +235,9 @@ const CanvasUI = (() => {
     st.addEventListener('wheel', e => { if (e.target.closest && e.target.closest('.cv-editor')) return; e.preventDefault(); if (e.ctrlKey || e.metaKey) zoomBy(Math.exp(-e.deltaY * 0.0015), e.clientX, e.clientY); else { doc.view.x -= e.deltaX; doc.view.y -= e.deltaY; applyView(); } }, { passive: false });
     st.addEventListener('contextmenu', e => e.preventDefault());
     new ResizeObserver(() => active && drawOverlay()).observe(st);
+    st.addEventListener('dragover', e => { if (e.dataTransfer && [...e.dataTransfer.types].includes('Files')) { e.preventDefault(); st.classList.add('drop'); } });
+    st.addEventListener('dragleave', () => st.classList.remove('drop'));
+    st.addEventListener('drop', async e => { st.classList.remove('drop'); const files = e.dataTransfer && [...e.dataTransfer.files]; if (!files || !files.length) return; e.preventDefault(); lastPointer = toWorld(e.clientX, e.clientY); for (const file of files) { try { if (env.importFile && await env.importFile(file)) continue; if (/^image\//.test(file.type)) await dropImage(file); else env.toast(`Can't open ${file.name}`); } catch (err) { env.toast(err.message); } } });
   }
   function onDblClick(e) {
     if (e.target.closest && e.target.closest('.cv-editor')) return;
@@ -381,6 +384,14 @@ const CanvasUI = (() => {
       persist(); updateUndo(); renderLayers(); renderProps(); drawOverlay();
     } else if (hadGuides) drawOverlay();
   }
+  // An image dropped on a frame becomes an image block there; on empty canvas it becomes a frame of its own size.
+  async function dropImage(file) {
+    const asset = await env.addImage(file); const p = lastPointer || { x: 0, y: 0 }; const f = frameAt(p);
+    const w = asset.w || 800, h = asset.h || 600;
+    if (f) { hist.push(doc); const s = Math.min(1, (FW(f) * 0.6) / w, (FH(f) * 0.6) / h); const b = { id: Canvas.uid(), kind: 'image', x: Math.round(p.x - f.x - w * s / 2), y: Math.round(p.y - f.y - h * s / 2), w: Math.round(w * s), h: Math.round(h * s), asset: asset.id, focal: 'xMidYMid', radius: 0, decorative: false, path: 'image_' + Canvas.uid() }; f.layout.blocks.push(b); select(f.id, [b.id]); rerenderFrame(f); persist(); updateUndo(); return; }
+    const nf = createFrame({ x: p.x - w / 2, y: p.y - h / 2, format: Canvas.customFormat(w, h), name: file.name.replace(/\.[^.]+$/, '') });
+    mutate(() => { nf.layout.blocks.push({ id: Canvas.uid(), kind: 'image', x: 0, y: 0, w: FW(nf), h: FH(nf), asset: asset.id, focal: 'xMidYMid', radius: 0, decorative: false, path: 'image_1' }); }, { history: false, frames: [nf.id] });
+  }
   function placeTool(f, p) {
     if (!f) { env.toast('Click inside a frame to add it there'); return; }
     hist.push(doc);
@@ -429,6 +440,27 @@ const CanvasUI = (() => {
     return added;
   }
 
+  // Imported screens keep their relative positions and land below everything already on the canvas.
+  function placeFrames(items, opts = {}) {
+    if (!items.length) return [];
+    hist.push(doc);
+    const bx = Math.min(...items.map(i => i.x)), by = Math.min(...items.map(i => i.y));
+    const ox = doc.frames.length ? Math.min(...doc.frames.map(f => f.x)) : 0;
+    const oy = doc.frames.length ? Math.max(...doc.frames.map(f => f.y + FH(f))) + 320 : 0;
+    const added = items.map(it => { const f = Canvas.addFrame(doc, it.layout, { x: Canvas.snap(ox + (it.x - bx), 8), y: Canvas.snap(oy + (it.y - by), 8), name: it.name }); f.clip = it.clip !== false; return f; });
+    selectFrames(added.map(f => f.id)); if (active) { renderAll(); fitTo(added); } persist(); updateUndo();
+    return added;
+  }
+  // Loose layers (no frame of their own) go into a frame, centred, keeping their arrangement.
+  function insertBlocks(frameId, blocks) {
+    const f = Canvas.frameById(doc, frameId); if (!f || !blocks.length) return [];
+    hist.push(doc);
+    const bb = Canvas.bounds(blocks); const dx = Math.round(Math.max(0, (FW(f) - bb.w) / 2) - bb.x), dy = Math.round(Math.max(0, (FH(f) - bb.h) / 2) - bb.y);
+    const ids = blocks.map(b => { const c = Canvas.clone(b); c.id = Canvas.uid(); c.x += dx; c.y += dy; if (c.kind === 'text' || c.kind === 'list') Canvas.refit(c); f.layout.blocks.push(c); return c.id; });
+    select(f.id, ids); rerenderFrame(f); renderLayers(); persist(); updateUndo();
+    return ids;
+  }
+
   // ---- Selection --------------------------------------------------------------------------------------------
   function expandGroups(f, ids) {
     const out = new Set();
@@ -469,7 +501,7 @@ const CanvasUI = (() => {
     ed.addEventListener('input', () => {
       const fr = Canvas.frameById(doc, f.id); const bl = fr && Canvas.blockById(fr, b.id); if (!bl) return;
       const t = ed.innerText.replace(/ /g, ' ');
-      if (bl.kind === 'list') bl.items = t.split('\n').map(x => x.trim()).filter(Boolean); else bl.text = t.replace(/\s*\n+\s*/g, ' ');
+      if (bl.kind === 'list') bl.items = t.split('\n').map(x => x.trim()).filter(Boolean); else if (bl.kind === 'button') bl.text = t.replace(/\s*\n+\s*/g, ' '); else bl.text = t.replace(/\n{3,}/g, '\n\n');
       Canvas.refit(bl); positionEditor(); if (!editing.hide) rerenderFrame(fr); drawOverlay(); emitLive([fr.id]);
     });
     ed.addEventListener('keydown', e => {
@@ -1079,7 +1111,7 @@ const CanvasUI = (() => {
   return {
     init, open, close, addLayouts, count, fit, fitTo: ids => fitTo(ids.map(id => Canvas.frameById(doc, id)).filter(Boolean)),
     get doc() { return doc; }, get active() { return active; },
-    select, selectFrames, selection, setTool, createFrame, placeRow, mutate, remoteApplied, replaceDoc, renderAll, rerender: ids => ids.forEach(id => { const f = Canvas.frameById(doc, id); if (f) rerenderFrame(f); }),
+    select, selectFrames, selection, setTool, createFrame, placeRow, placeFrames, insertBlocks, mutate, remoteApplied, replaceDoc, renderAll, rerender: ids => ids.forEach(id => { const f = Canvas.frameById(doc, id); if (f) rerenderFrame(f); }),
     regrid, exportAction, makeVariations, resizeScreens, copySelection, pasteClipboard, startEdit: (fid, bid) => { const f = Canvas.frameById(doc, fid); return startEdit(f, f && Canvas.blockById(f, bid)); },
     on: (k, fn) => { hooks[k].push(fn); return () => { hooks[k] = hooks[k].filter(x => x !== fn); }; },
     setPeers: list => { peers = Array.isArray(list) ? list : []; if (active) drawOverlay(); },
