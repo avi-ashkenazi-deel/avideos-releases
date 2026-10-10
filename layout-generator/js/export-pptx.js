@@ -34,7 +34,9 @@ const ExportPptx = (() => {
     const { kit } = opts;
     const W = layout.format.w, H = layout.format.h;
     slide.background = { color: hex(layout.palette.bg) };
-    const blocks = layout.blocks.map(b => b.kind === 'logo' ? { ...b, logoKind: kit.logo.kind } : b);
+    // Paint order (a box, then what is inside it); a hidden box hides its contents. Positions are already absolute.
+    const order = typeof Auto !== 'undefined' ? (() => { const I = Auto.index({ layout }); const out = []; const walk = id => { for (const k of Auto.childrenOf(I, id)) { if (k.hidden) continue; out.push(k); if (k.kind === 'box') walk(k.id); } }; walk(''); return out; })() : layout.blocks;
+    const blocks = order.map(b => b.kind === 'logo' ? { ...b, logoKind: kit.logo.kind } : b);
     let pending = [];
     const flush = async () => {
       if (!pending.length) return;
@@ -47,7 +49,13 @@ const ExportPptx = (() => {
       if (isRaster(b)) { pending.push(b); continue; }
       await flush();
       const box = { x: inch(b.x), y: inch(b.y), w: inch(b.w), h: inch(b.h) };
-      if (b.kind === 'field') {
+      if (b.kind === 'box') {
+        const filled = b.fill && b.fill !== 'none'; const st = b.stroke && Number(b.stroke.width) > 0;
+        if (filled || st) {
+          const o = { ...box, fill: filled ? { color: hex(b.fill) } : { type: 'none' }, line: st ? { color: hex(b.stroke.color), width: pt(b.stroke.width) } : { color: 'FFFFFF', transparency: 100 } };
+          if (b.radius) { o.rectRadius = inch(b.radius); slide.addShape(pptx.ShapeType.roundRect, o); } else slide.addShape(pptx.ShapeType.rect, o);
+        }
+      } else if (b.kind === 'field') {
         const o = { ...box, fill: { color: hex(b.fill), transparency: b.alpha != null ? Math.round((1 - b.alpha) * 100) : 0 }, line: { color: hex(b.fill), transparency: 100 } };
         if (b.radius) { o.rectRadius = inch(b.radius); slide.addShape(pptx.ShapeType.roundRect, o); } else slide.addShape(pptx.ShapeType.rect, o);
       } else if (b.kind === 'rule') {

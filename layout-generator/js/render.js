@@ -133,8 +133,8 @@ const Render = (() => {
     const ctx = { defs: [], id: k => `${prefix}-${k}${seq++}` };
     const parts = [];
     if (!opts.transparent) parts.push(`<rect width="${W}" height="${H}" fill="${layout.palette && layout.palette.bgGradient ? (() => { const id = ctx.id('bg'); ctx.defs.push(gradientDef(layout.palette.bgGradient, id)); return `url(#${id})`; })() : col(layout.palette && layout.palette.bg, '#FFFFFF')}"/>`);
-    for (const b of layout.blocks) {
-      if (b.hidden) continue;
+    // Boxes draw their fill, then their children (clipped when the box clips); siblings in list order.
+    const blockEl = b => {
       let el = '';
       if (b.kind === 'field') el = `<rect x="${n(b.x)}" y="${n(b.y)}" width="${n(b.w)}" height="${n(b.h)}" rx="${n(b.radius || 0)}" fill="${paint(b, ctx)}"${b.alpha != null && b.alpha < 1 ? ` fill-opacity="${n(clamp01(b.alpha))}"` : ''}${strokeAttr(b)}/>`;
       else if (b.kind === 'image') {
@@ -165,8 +165,22 @@ const Render = (() => {
       else if (b.kind === 'line') el = `<line x1="${n(b.x)}" y1="${n(b.y)}" x2="${n(b.x + b.w)}" y2="${n(b.y + b.h)}" stroke="${col(b.fill)}" stroke-width="${n(b.width || 2)}"${b.dash ? ` stroke-dasharray="${String(b.dash).replace(/[^\d\s.,]/g, '')}"` : ''}/>`;
       else if (b.kind === 'logo') el = logoEl(b, kit);
       else if (b.kind === 'vector') el = vectorEl(b, ctx);
-      if (el) parts.push(fx(b, el, ctx));
-    }
+      return el;
+    };
+    const I = typeof Auto !== 'undefined' ? Auto.index({ layout }) : null;
+    const kidsOf = pid => I ? (I.kids.get(pid) || []) : (pid ? [] : layout.blocks);
+    const drawList = pid => kidsOf(pid).filter(b => !b.hidden).map(drawBlock).join('');
+    const drawBlock = b => {
+      if (b.kind !== 'box') { const el = blockEl(b); return el ? fx(b, el, ctx) : ''; }
+      const hasFill = (b.fill && b.fill !== 'none') || (b.gradient && Array.isArray(b.gradient.stops) && b.gradient.stops.length >= 2);
+      const st = strokeAttr(b);
+      const rect = hasFill || st ? `<rect x="${n(b.x)}" y="${n(b.y)}" width="${n(b.w)}" height="${n(b.h)}" rx="${n(b.radius || 0)}" fill="${hasFill ? paint(b, ctx) : 'none'}"${st}/>` : '';
+      let kids = drawList(b.id);
+      if (b.clip && kids) { const id = ctx.id('k'); ctx.defs.push(`<clipPath id="${id}"><rect x="${n(b.x)}" y="${n(b.y)}" width="${n(b.w)}" height="${n(b.h)}" rx="${n(b.radius || 0)}"/></clipPath>`); kids = `<g clip-path="url(#${id})">${kids}</g>`; }
+      const bg = rect ? fx({ x: b.x, y: b.y, w: b.w, h: b.h, shadow: b.shadow }, rect, ctx) : '';
+      return fx({ x: b.x, y: b.y, w: b.w, h: b.h, opacity: b.opacity, rotation: b.rotation }, bg + kids, ctx);
+    };
+    parts.push(drawList(''));
     if (opts.showGrid) parts.push(gridOverlay(layout));
     const attrs = opts.width ? ` width="${n(opts.width)}"` : ` width="${W}" height="${H}"`;
     return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}"${attrs} data-id="${esc(layout.id)}">${opts.fontStyle ? `<defs><style>${opts.fontStyle}</style></defs>` : ''}${ctx.defs.length ? `<defs>${ctx.defs.join('')}</defs>` : ''}${parts.join('')}</svg>`;

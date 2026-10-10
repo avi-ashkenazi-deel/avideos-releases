@@ -29,7 +29,9 @@ const Sync = (() => {
       fr.z = i; fr.layout = { ...layoutRest, meta: metaRest }; fr.order = blocks.map(b => b.id);
       out.set('f~' + f.id, fr);
       if (original) out.set('o~' + f.id, { original });
-      for (const b of blocks) out.set(`b~${f.id}~${b.id}`, b);
+      // Positions and sizes that auto layout computes are left out: every viewer computes them, so they never echo.
+      const I = Auto.needs(f) ? Auto.index(f) : null;
+      for (const b of blocks) out.set(`b~${f.id}~${b.id}`, Auto.syncBlock(f, b, I));
     });
     return out;
   }
@@ -46,7 +48,8 @@ const Sync = (() => {
     layout.meta = { ...(layout.meta || {}) }; if (o && !o._del && o.original) layout.meta.original = Canvas.clone(o.original);
     if (!layout.format || !layout.palette || !layout.grid) return null; // incomplete record
     const f = { id: fid, layout }; for (const k of FRAME_KEYS) if (fr[k] !== undefined && k !== 'id') f[k] = Canvas.clone(fr[k]);
-    if (!f.autoLayout) f.autoLayout = { mode: 'none', gap: 24, padding: 72, align: 'start', justify: 'start', fill: false };
+    Canvas.migrate(f);
+    if (Auto.needs(f)) { Auto.fillDefaults(f); Auto.layout(f); }
     return f;
   }
   function docFrom(map, base) {

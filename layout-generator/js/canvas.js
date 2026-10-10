@@ -12,7 +12,7 @@ const Canvas = (() => {
     const last = doc.frames[doc.frames.length - 1];
     const x = opts.x ?? (last ? last.x + last.layout.format.w + 160 : 0);
     const y = opts.y ?? (last ? last.y : 0);
-    const frame = { id: uid(), name: opts.name || `${L.archetypeLabel || 'Frame'} · ${L.format.name}`, x, y, layout: L, autoLayout: { mode: 'none', gap: 24, padding: 72, align: 'start', justify: 'start', fill: false }, clip: true, hidden: false, locked: false };
+    const frame = { id: uid(), name: opts.name || `${L.archetypeLabel || 'Frame'} · ${L.format.name}`, x, y, layout: L, autoLayout: opts.autoLayout ? clone(opts.autoLayout) : defaultAuto(), clip: true, hidden: false, locked: false };
     for (const b of L.blocks) { if (!b.id) b.id = uid(); if (b.hidden == null) b.hidden = false; if (b.locked == null) b.locked = false; }
     doc.frames.push(frame);
     return frame;
@@ -25,6 +25,25 @@ const Canvas = (() => {
     const minDim = Math.min(format.w, format.h);
     const layout = { id: 'blank-' + uid(), seed: 0, archetype: 'blank', archetypeLabel: 'Blank', format: { id: format.id, name: format.name, w: format.w, h: format.h }, grid: { unit: g.unit, gutter: g.gutter, cols: g.cols, rows: g.rows, cw: g.cw, rh: g.rh, mx: g.mx, my: g.my, safe: g.safe }, palette: { bg, fg, accent: Color.normalize(accent), bgName: (kit.colors.find(c => Color.normalize(c.hex) === bg) || { name: 'Custom' }).name }, type: { level: 2, headline: Math.round(minDim * 0.09 / 2) * 2, body: Math.round(minDim * 0.024 / 2) * 2, display: kit.fonts.display, body_font: kit.fonts.body }, brand: kit.name, blocks: [], meta: {}, metrics: { whitespace: 1, density: 0, balance: 1 } };
     return addFrame(doc, layout, { ...opts, name: opts.name || `Frame · ${format.name}` });
+  }
+  const defaultAuto = () => ({ v: 2, mode: 'none', wrap: false, gap: 24, gapAuto: false, counterGap: 24, counterGapAuto: false, pad: { t: 72, r: 72, b: 72, l: 72 }, main: 'start', cross: 'start' });
+  // Screens saved with the first flex (one stack per screen that skipped backgrounds and sorted by position) move to
+  // auto layout: backgrounds become absolute, the flow follows reading order, and "stretch text" becomes Fill.
+  function migrate(f) {
+    const al = f.autoLayout;
+    if (al && al.v === 2) return f;
+    if (!al) { f.autoLayout = defaultAuto(); return f; }
+    const vertical = al.mode === 'vertical';
+    if (al.mode === 'vertical' || al.mode === 'horizontal') {
+      const blocks = f.layout.blocks;
+      const flow = blocks.filter(b => !b.parent && !isBackground(f, b) && !b.hidden && b.kind !== 'scrim' && b.kind !== 'line');
+      for (const b of blocks) if (!b.parent && !flow.includes(b)) b.absolute = true;
+      const order = flow.slice().sort((a, b) => vertical ? (a.y - b.y || a.x - b.x) : (a.x - b.x || a.y - b.y));
+      const slots = flow.map(b => blocks.indexOf(b)).sort((a, b) => a - b); order.forEach((b, i) => { blocks[slots[i]] = b; });
+      if (al.fill) for (const b of flow) { if (vertical && (b.kind === 'text' || b.kind === 'list' || b.kind === 'field')) b.sizeW = 'fill'; if (!vertical && (b.kind === 'field' || b.kind === 'image')) b.sizeH = 'fill'; }
+    }
+    f.autoLayout = Auto.norm(al);
+    return f;
   }
   const frameById = (doc, id) => doc.frames.find(f => f.id === id);
   const blockById = (frame, id) => frame.layout.blocks.find(b => b.id === id);
@@ -80,35 +99,58 @@ const Canvas = (() => {
     if (b.kind === 'logo') { /* height drives wordmark size */ }
     refit(b);
   }
+  // Order among siblings (blocks with the same parent): in a stack that is also the flow order.
   function reorder(frame, b, dir) {
-    const arr = frame.layout.blocks; const i = arr.indexOf(b); if (i < 0) return;
-    const j = dir === 'front' ? arr.length - 1 : dir === 'back' ? 0 : Math.max(0, Math.min(arr.length - 1, i + dir));
-    arr.splice(i, 1); arr.splice(j, 0, b);
+    const arr = frame.layout.blocks; if (arr.indexOf(b) < 0) return;
+    const sib = arr.filter(x => (x.parent || '') === (b.parent || '')); const i = sib.indexOf(b);
+    const j = dir === 'front' ? sib.length - 1 : dir === 'back' ? 0 : Math.max(0, Math.min(sib.length - 1, i + dir));
+    if (j === i) return;
+    const target = sib[j]; arr.splice(arr.indexOf(b), 1);
+    const t = arr.indexOf(target); arr.splice(j > i ? t + 1 : t, 0, b);
   }
-  function duplicateBlock(frame, b, u) { const c = clone(b); c.id = uid(); c.x = snap(c.x + 2 * u, u); c.y = snap(c.y + 2 * u, u); frame.layout.blocks.push(c); return c; }
-  function removeBlocks(frame, ids) { frame.layout.blocks = frame.layout.blocks.filter(b => !ids.includes(b.id)); }
-  // Move blocks into another frame and keep their place on the canvas.
-  function transferBlocks(src, dst, blocks, u) {
-    const out = [];
-    for (const b of blocks) {
-      src.layout.blocks = src.layout.blocks.filter(x => x !== b);
-      const wx = src.x + b.x, wy = src.y + b.y;
-      b.x = snap(wx - dst.x, u); b.y = snap(wy - dst.y, u);
-      dst.layout.blocks.push(b); out.push(b);
-    }
-    return out;
+  // A copy of a block (and of what is inside it, for a box) right after it. In a stack it takes the next place in the
+  // flow; elsewhere it is nudged so it shows.
+  function duplicateBlock(frame, b, u) {
+    const src = Auto.withDescendants(frame, [b]); const copies = clone(src); Auto.remap(copies, b.parent || null);
+    const c = copies[0]; if (b.parent) c.parent = b.parent; else delete c.parent;
+    const flow = Auto.inFlow(Auto.index(frame), b);
+    if (!flow && u) for (const x of copies) { x.x = snap(x.x + 2 * u, u); x.y = snap(x.y + 2 * u, u); }
+    const arr = frame.layout.blocks; const at = Math.max(...src.map(x => arr.indexOf(x))) + 1;
+    arr.splice(at, 0, ...copies);
+    return c;
   }
-  // Paste clones into a frame; dx/dy nudge them off their source, and they are kept inside the frame.
+  // Removing a box removes what is inside it.
+  function removeBlocks(frame, ids) { const gone = new Set(Auto.withDescendants(frame, frame.layout.blocks.filter(b => ids.includes(b.id))).map(b => b.id)); frame.layout.blocks = frame.layout.blocks.filter(b => !gone.has(b.id)); }
+  // Move blocks (with what is inside them) into another frame and keep their place on the canvas. They land at the
+  // top level of the other frame unless `into` names a box there.
+  function transferBlocks(src, dst, blocks, u, into) {
+    const top = Auto.topmost(src, blocks); const all = Auto.withDescendants(src, top); const ids = new Set(all.map(b => b.id));
+    src.layout.blocks = src.layout.blocks.filter(x => !ids.has(x.id));
+    const dx = src.x - dst.x, dy = src.y - dst.y; const ox = top.length ? snap(top[0].x + dx, u) - (top[0].x + dx) : 0, oy = top.length ? snap(top[0].y + dy, u) - (top[0].y + dy) : 0;
+    for (const b of all) { b.x += dx + ox; b.y += dy + oy; if (b.lx != null) { b.lx += dx + ox; b.ly += dy + oy; } }
+    for (const b of top) { if (into) b.parent = into; else delete b.parent; delete b.rx; delete b.ry; delete b.lx; delete b.ly; }
+    dst.layout.blocks.push(...all);
+    return top;
+  }
+  // Paste clones into a frame; dx/dy nudge them off their source, and they are kept inside the frame. Boxes bring
+  // what is inside them. `into` pastes into a box.
   function pasteBlocks(frame, blocks, opts = {}) {
-    const u = frame.layout.grid.unit; const W = frame.layout.format.w, H = frame.layout.format.h; const out = [];
-    for (const b of blocks) {
-      const c = clone(b); c.id = uid();
-      c.x = snap(c.x + (opts.dx || 0), u); c.y = snap(c.y + (opts.dy || 0), u);
-      c.x = Math.max(0, Math.min(W - Math.min(c.w, W), c.x)); c.y = Math.max(0, Math.min(H - Math.min(c.h, H), c.y));
-      if (c.kind === 'text' || c.kind === 'list') refit(c);
-      frame.layout.blocks.push(c); out.push(c);
+    const u = frame.layout.grid.unit; const W = frame.layout.format.w, H = frame.layout.format.h;
+    const copies = clone(blocks); const inSet = new Set(copies.map(b => b.id));
+    const tops = copies.filter(b => !b.parent || !inSet.has(b.parent));
+    Auto.remap(copies, opts.into || null);
+    const kidsOf = new Map(); for (const b of copies) if (b.parent) { if (!kidsOf.has(b.parent)) kidsOf.set(b.parent, []); kidsOf.get(b.parent).push(b); }
+    const subtree = b => { const out = [b]; for (const k of kidsOf.get(b.id) || []) out.push(...subtree(k)); return out; };
+    for (const t of tops) {
+      let nx = snap(t.x + (opts.dx || 0), u), ny = snap(t.y + (opts.dy || 0), u);
+      nx = Math.max(0, Math.min(W - Math.min(t.w, W), nx)); ny = Math.max(0, Math.min(H - Math.min(t.h, H), ny));
+      const ddx = nx - t.x, ddy = ny - t.y;
+      for (const x of subtree(t)) { x.x += ddx; x.y += ddy; if (x.lx != null) { x.lx += ddx; x.ly += ddy; } }
+      if (!opts.into) { delete t.rx; delete t.ry; delete t.lx; delete t.ly; }
     }
-    return out;
+    for (const c of copies) if (c.kind === 'text' || c.kind === 'list') refit(c);
+    frame.layout.blocks.push(...copies);
+    return tops;
   }
   // A format for a frame drawn by hand: columns scale with width, like the built-in formats.
   function customFormat(w, h) { w = Math.max(64, Math.round(w / 8) * 8); h = Math.max(64, Math.round(h / 8) * 8); return { id: 'custom', name: 'Custom', w, h, cols: Math.max(4, Math.min(12, Math.round(w / 160))) }; }
@@ -137,31 +179,10 @@ const Canvas = (() => {
     return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
   }
 
-  // ---- Auto layout (flex) for a frame ----------------------------------------------------------
-  // Children = blocks that are not full-bleed backgrounds. Stacked in order along the main axis with gap and padding;
-  // cross-axis alignment per `align`; `fill` stretches text and lists to the inner width (vertical) and refits them.
+  // ---- Auto layout: see autolayout.js. Full-bleed images and fields count as backgrounds (absolute when a screen's
+  // auto layout is switched on). ---------------------------------------------------------------------------------------
   function isBackground(frame, b) { const W = frame.layout.format.w, H = frame.layout.format.h; return (b.kind === 'image' || b.kind === 'field' || b.kind === 'scrim') && b.w >= W * 0.95 && b.h >= H * 0.95 && b.x <= 0 && b.y <= 0; }
-  function applyAutoLayout(frame) {
-    const al = frame.autoLayout; if (!al || al.mode === 'none') return;
-    const W = frame.layout.format.w, H = frame.layout.format.h; const pad = al.padding, gap = al.gap;
-    const children = frame.layout.blocks.filter(b => !isBackground(frame, b) && !b.hidden && b.kind !== 'scrim' && b.kind !== 'line');
-    if (!children.length) return;
-    const vertical = al.mode === 'vertical';
-    children.sort((a, b) => vertical ? (a.y - b.y || a.x - b.x) : (a.x - b.x || a.y - b.y));
-    const innerW = W - 2 * pad, innerH = H - 2 * pad;
-    if (al.fill && vertical) for (const b of children) if (b.kind === 'text' || b.kind === 'list' || b.kind === 'field') { b.w = innerW; refit(b); }
-    if (al.fill && !vertical) for (const b of children) if (b.kind === 'field' || b.kind === 'image') { b.h = innerH; }
-    const mainSize = children.reduce((t, b) => t + (vertical ? b.h : b.w), 0) + gap * (children.length - 1);
-    const mainInner = vertical ? innerH : innerW;
-    let pos = pad; let step = gap;
-    if (al.justify === 'center') pos = pad + Math.max(0, (mainInner - mainSize) / 2);
-    else if (al.justify === 'end') pos = pad + Math.max(0, mainInner - mainSize);
-    else if (al.justify === 'space-between' && children.length > 1) step = gap + Math.max(0, (mainInner - mainSize) / (children.length - 1));
-    for (const b of children) {
-      if (vertical) { b.y = Math.round(pos); pos += b.h + step; b.x = al.align === 'center' ? Math.round(pad + (innerW - b.w) / 2) : al.align === 'end' ? W - pad - b.w : pad; if (b.kind === 'text') b.align = al.align === 'center' ? 'center' : al.align === 'end' ? 'right' : 'left'; }
-      else { b.x = Math.round(pos); pos += b.w + step; b.y = al.align === 'center' ? Math.round(pad + (innerH - b.h) / 2) : al.align === 'end' ? H - pad - b.h : pad; }
-    }
-  }
+  function applyAutoLayout(frame) { return Auto.layout(frame); }
 
   // ---- Serialization, links, code -----------------------------------------------------------
   function serialize(doc, opts = {}) {
@@ -169,7 +190,7 @@ const Canvas = (() => {
     if (opts.stripAssets) for (const f of d.frames) for (const b of f.layout.blocks) if (b.kind === 'image') b.assetMissing = true;
     return JSON.stringify(d);
   }
-  function deserialize(json) { const d = typeof json === 'string' ? JSON.parse(json) : json; if (!d || !Array.isArray(d.frames)) throw new Error('not a canvas file'); for (const f of d.frames) for (const b of f.layout.blocks) if (!b.id) b.id = uid(); return d; }
+  function deserialize(json) { const d = typeof json === 'string' ? JSON.parse(json) : json; if (!d || !Array.isArray(d.frames)) throw new Error('not a canvas file'); for (const f of d.frames) { for (const b of f.layout.blocks) if (!b.id) b.id = uid(); migrate(f); } return d; }
   async function toLink(doc) {
     const json = serialize(doc, { stripAssets: true });
     let payload;
@@ -201,79 +222,130 @@ const Canvas = (() => {
   }
   function hexAlpha(hex, a) { if (!/^#[0-9a-fA-F]{6}$/.test(hex)) return hex; return hex + Math.round(Math.max(0, Math.min(1, a)) * 255).toString(16).padStart(2, '0'); }
   function famName(f) { return String((f && f.family) || 'sans-serif').split(',')[0].replace(/["']/g, '').trim(); }
-  // One intermediate description per block; HTML and React render from it.
-  function codeNodes(frame, env) {
-    const L = frame.layout; const nodes = [];
-    for (const b of L.blocks) {
-      if (b.hidden) continue;
-      const box = { left: Math.round(b.x), top: Math.round(b.y), width: Math.round(b.w), height: Math.round(b.h) };
-      const fxs = cssFx(b); const bg = cssGradient(b.gradient);
-      const f = b.font || {};
-      const type = { family: famName(f), size: Math.round(f.size || 16), weight: f.weight || 400, lh: f.lineHeight || 1.2, ls: f.letterSpacing || 0, italic: f.style === 'italic' };
-      if (b.kind === 'field' || b.kind === 'rule') nodes.push({ tag: 'div', box, bg: bg || cssColor(b.fill), radius: b.radius || 0, alpha: b.alpha, fxs, role: b.role || b.kind });
-      else if (b.kind === 'shape') nodes.push({ tag: 'div', box, bg: bg || cssColor(b.fill), radius: b.shape === 'pill' ? 9999 : (b.shape === 'circle' || b.shape === 'ellipse') ? '50%' : '0 100% 0 0', fxs, role: b.shape });
-      else if (b.kind === 'image') { const a = env && env.assets && env.assets.images.find(i => i.id === b.asset); nodes.push({ tag: 'img', box, src: a ? (a.name || 'image') : 'image.jpg', radius: b.radius || 0, fit: b.fit === 'contain' ? 'contain' : 'cover', fxs, role: 'image' }); }
-      else if (b.kind === 'text') nodes.push({ tag: /^(headline|stat|quote)$/.test(b.role) ? 'h2' : 'p', box, text: sourceText(b), color: cssColor(b.fill), bgText: bg, type, align: b.align || 'left', upper: f.transform === 'upper', fxs, role: b.role || 'text' });
-      else if (b.kind === 'list') nodes.push({ tag: b.marker === 'number' ? 'ol' : 'ul', box, items: b.items || [], color: cssColor(b.fill), type, indent: b.indent || 24, fxs, role: b.role || 'list' });
-      else if (b.kind === 'button') nodes.push({ tag: 'a', box, text: b.text, color: cssColor(b.color), bg: bg || cssColor(b.fill), radius: b.radius || 0, type: { ...type, weight: f.weight || 600 }, fxs, role: 'cta' });
-      else if (b.kind === 'icon') nodes.push({ tag: 'svg', box, inner: (Icons.SET[b.name] || '').replace(/currentColor/g, cssColor(b.fill)), viewBox: '0 0 256 256', fxs, role: 'icon ' + b.name });
-      else if (b.kind === 'vector') nodes.push({ tag: 'svg', box, inner: b.d ? `<path d="${String(b.d).replace(/[^MmLlHhVvCcSsQqTtAaZz0-9eE.,\s+-]/g, '')}" fill="${cssColor(b.fill)}"/>` : (typeof Render !== 'undefined' ? Render.sanitizeSvgInner(b.svg) : ''), viewBox: Array.isArray(b.viewBox) ? b.viewBox.join(' ') : `0 0 ${b.vw || b.w} ${b.vh || b.h}`, fxs, role: 'vector' });
-      else if (b.kind === 'logo') nodes.push({ tag: 'div', box, text: (env && env.kit && env.kit.logo && env.kit.logo.text) || 'logo', color: cssColor(b.fill), type: { ...type, weight: 700, size: Math.round(b.h / 0.74) }, fxs, role: 'logo' });
-      else if (b.kind === 'line') nodes.push({ tag: 'div', box: { ...box, height: Math.max(2, box.height) }, bg: cssColor(b.fill), fxs, role: 'line' });
-      else if (b.kind === 'badge') nodes.push({ tag: 'div', box, text: b.text, color: cssColor(b.color), bg: cssColor(b.fill), radius: '50%', type: { ...type, weight: 700 }, fxs, role: 'badge' });
+  // One intermediate description per block, as a tree: boxes hold their children. HTML and React render from it.
+  // Children of an auto layout container are flex items (sized fixed, hug or fill); everything else is placed
+  // absolutely inside its parent, like Figma's Dev Mode and Paper's code.
+  function nodeOf(b, env) {
+    const fxs = cssFx(b); const bg = cssGradient(b.gradient); const f = b.font || {};
+    const type = { family: famName(f), size: Math.round(f.size || 16), weight: f.weight || 400, lh: f.lineHeight || 1.2, ls: f.letterSpacing || 0, italic: f.style === 'italic' };
+    if (b.kind === 'box') return { tag: 'div', bg: bg || (b.fill && b.fill !== 'none' ? cssColor(b.fill) : null), radius: b.radius || 0, fxs, role: b.label || 'box', clip: !!b.clip };
+    if (b.kind === 'field' || b.kind === 'rule') return { tag: 'div', bg: bg || cssColor(b.fill), radius: b.radius || 0, alpha: b.alpha, fxs, role: b.role || b.kind };
+    if (b.kind === 'shape') return { tag: 'div', bg: bg || cssColor(b.fill), radius: b.shape === 'pill' ? 9999 : (b.shape === 'circle' || b.shape === 'ellipse') ? '50%' : '0 100% 0 0', fxs, role: b.shape };
+    if (b.kind === 'image') { const a = env && env.assets && env.assets.images.find(i => i.id === b.asset); return { tag: 'img', src: a ? (a.name || 'image') : 'image.jpg', radius: b.radius || 0, fit: b.fit === 'contain' ? 'contain' : 'cover', fxs, role: 'image' }; }
+    if (b.kind === 'text') return { tag: /^(headline|stat|quote)$/.test(b.role) ? 'h2' : 'p', text: sourceText(b), color: cssColor(b.fill), bgText: bg, type, align: b.align || 'left', upper: f.transform === 'upper', fxs, role: b.role || 'text' };
+    if (b.kind === 'list') return { tag: b.marker === 'number' ? 'ol' : 'ul', items: b.items || [], color: cssColor(b.fill), type, indent: b.indent || 24, fxs, role: b.role || 'list' };
+    if (b.kind === 'button') return { tag: 'a', text: b.text, color: cssColor(b.color), bg: bg || cssColor(b.fill), radius: b.radius || 0, type: { ...type, weight: f.weight || 600 }, fxs, role: 'cta' };
+    if (b.kind === 'icon') return { tag: 'svg', inner: (Icons.SET[b.name] || '').replace(/currentColor/g, cssColor(b.fill)), viewBox: '0 0 256 256', fxs, role: 'icon ' + b.name };
+    if (b.kind === 'vector') return { tag: 'svg', inner: b.d ? `<path d="${String(b.d).replace(/[^MmLlHhVvCcSsQqTtAaZz0-9eE.,\s+-]/g, '')}" fill="${cssColor(b.fill)}"/>` : (typeof Render !== 'undefined' ? Render.sanitizeSvgInner(b.svg) : ''), viewBox: Array.isArray(b.viewBox) ? b.viewBox.join(' ') : `0 0 ${b.vw || b.w} ${b.vh || b.h}`, fxs, role: 'vector' };
+    if (b.kind === 'logo') return { tag: 'div', text: (env && env.kit && env.kit.logo && env.kit.logo.text) || 'logo', color: cssColor(b.fill), type: { ...type, weight: 700, size: Math.round(b.h / 0.74) }, fxs, role: 'logo' };
+    if (b.kind === 'line') return { tag: 'div', bg: cssColor(b.fill), fxs, role: 'line', minH: 2 };
+    if (b.kind === 'badge') return { tag: 'div', text: b.text, color: cssColor(b.color), bg: cssColor(b.fill), radius: '50%', type: { ...type, weight: 700 }, fxs, role: 'badge' };
+    return null;
+  }
+  function flexOf(s) {
+    if (!Auto.on(s)) return null;
+    const J = { start: 'flex-start', center: 'center', end: 'flex-end' }, A = { start: 'flex-start', center: 'center', end: 'flex-end', baseline: 'baseline' };
+    return { dir: s.mode === 'horizontal' ? 'row' : 'column', gap: s.gapAuto ? 0 : s.gap, rowGap: s.wrap ? (s.counterGapAuto ? 0 : s.counterGap) : null, justify: s.gapAuto ? 'space-between' : J[s.main], align: A[s.cross], wrap: !!s.wrap, pad: s.pad, alignContent: s.wrap && s.counterGapAuto ? 'space-between' : null };
+  }
+  function codeTree(frame, env) {
+    const I = Auto.index(frame);
+    const build = (pid, origin, parentFlex) => Auto.childrenOf(I, pid).filter(b => !b.hidden).map(b => {
+      const nd = nodeOf(b, env); if (!nd) return null;
+      const flow = !!parentFlex && !b.absolute;
+      nd.pos = flow ? 'flow' : 'abs';
+      nd.box = { left: Math.round(b.x - origin.x), top: Math.round(b.y - origin.y), width: Math.round(b.w), height: Math.round(Math.max(b.h, nd.minH || 0)) };
+      if (flow) { const main = parentFlex.dir === 'row' ? 'w' : 'h'; nd.size = { w: Auto.sizing(I, b, 'w'), h: Auto.sizing(I, b, 'h'), main }; for (const k of ['minW', 'maxW', 'minH', 'maxH']) if (b[k] != null) nd[k] = b[k]; }
+      if (b.kind === 'box') { nd.flex = flexOf(I.S(b.id)); nd.children = build(b.id, { x: b.x, y: b.y }, nd.flex); }
+      return nd;
+    }).filter(Boolean);
+    const flex = flexOf(I.rootS);
+    return { flex, children: build('', { x: 0, y: 0 }, flex) };
+  }
+  // CSS for one node as [property, value] pairs (shared by HTML and, through a mapping, React).
+  function cssOf(nd) {
+    const st = [];
+    if (nd.pos === 'abs') st.push(['position', 'absolute'], ['left', nd.box.left + 'px'], ['top', nd.box.top + 'px'], ['width', nd.box.width + 'px'], ['height', nd.box.height + 'px']);
+    else {
+      const sz = nd.size; const axis = (k, v) => { const isMain = sz.main === k; if (v === 'fill') return isMain ? [['flex', '1 1 0'], [k === 'w' ? 'min-width' : 'min-height', '0']] : [['align-self', 'stretch']]; if (v === 'hug') return [[k === 'w' ? 'width' : 'height', 'fit-content']]; return [[k === 'w' ? 'width' : 'height', (k === 'w' ? nd.box.width : nd.box.height) + 'px'], ...(isMain ? [['flex-shrink', '0']] : [])]; };
+      st.push(['position', 'relative'], ...axis('w', sz.w), ...axis('h', sz.h));
+      for (const [k, css] of [['minW', 'min-width'], ['maxW', 'max-width'], ['minH', 'min-height'], ['maxH', 'max-height']]) if (nd[k] != null) st.push([css, nd[k] + 'px']);
     }
-    return nodes;
+    if (nd.flex) { const F = nd.flex; st.push(['display', 'flex'], ['flex-direction', F.dir], ['justify-content', F.justify], ['align-items', F.align]); if (F.wrap) st.push(['flex-wrap', 'wrap']); if (F.gap) st.push([F.wrap ? 'column-gap' : 'gap', F.gap + 'px']); if (F.rowGap) st.push(['row-gap', F.rowGap + 'px']); if (F.alignContent) st.push(['align-content', F.alignContent]); const p = F.pad; if (p.t || p.r || p.b || p.l) st.push(['padding', `${p.t}px ${p.r}px ${p.b}px ${p.l}px`]); st.push(['box-sizing', 'border-box']); }
+    if (nd.clip) st.push(['overflow', 'hidden']);
+    if (nd.bg) st.push(['background', nd.bg]); if (nd.radius) st.push(['border-radius', typeof nd.radius === 'number' ? nd.radius + 'px' : nd.radius]); if (nd.alpha != null && nd.alpha < 1) st.push(['opacity', String(nd.alpha)]);
+    if (nd.type) { st.push(['margin', '0'], ['font-family', `'${nd.type.family}'`], ['font-size', nd.type.size + 'px'], ['font-weight', String(nd.type.weight)], ['line-height', String(nd.type.lh)]); if (nd.type.ls) st.push(['letter-spacing', nd.type.ls + 'em']); if (nd.type.italic) st.push(['font-style', 'italic']); }
+    if (nd.color) st.push(['color', nd.color]); if (nd.align && nd.align !== 'left') st.push(['text-align', nd.align]); if (nd.upper) st.push(['text-transform', 'uppercase']);
+    if (nd.tag === 'p' || nd.tag === 'h2') st.push(['white-space', 'pre-wrap']);
+    if (nd.tag === 'a') st.push(['display', 'flex'], ['align-items', 'center'], ['justify-content', 'center'], ['text-decoration', 'none']);
+    if (nd.tag === 'img') st.push(['object-fit', nd.fit]);
+    if (nd.tag === 'ul' || nd.tag === 'ol') st.push(['padding-left', nd.indent + 'px'], ['margin', '0']);
+    for (const x of nd.fxs) { const [k, v] = x.split(/:(.+)/); st.push([k, v]); }
+    return st;
+  }
+  function rootCss(frame, tree) {
+    const L = frame.layout; const st = [['position', 'relative'], ['width', L.format.w + 'px'], ['height', L.format.h + 'px'], ['background', cssGradient(L.palette.bgGradient) || cssColor(L.palette.bg)], ['overflow', frame.clip ? 'hidden' : 'visible']];
+    if (tree.flex) { const F = tree.flex; st.push(['display', 'flex'], ['flex-direction', F.dir], ['justify-content', F.justify], ['align-items', F.align], ['box-sizing', 'border-box']); if (F.wrap) st.push(['flex-wrap', 'wrap']); if (F.gap) st.push([F.wrap ? 'column-gap' : 'gap', F.gap + 'px']); if (F.rowGap) st.push(['row-gap', F.rowGap + 'px']); const p = F.pad; st.push(['padding', `${p.t}px ${p.r}px ${p.b}px ${p.l}px`]); }
+    return st;
+  }
+  // Kept for callers that want the flat list (every block's absolute box in frame coordinates).
+  function codeNodes(frame, env) {
+    const out = []; const walk = (list, ox, oy) => { for (const nd of list) { out.push({ ...nd, box: { ...nd.box, left: nd.box.left + ox, top: nd.box.top + oy } }); if (nd.children) walk(nd.children, ox + nd.box.left, oy + nd.box.top); } };
+    walk(codeTree(frame, env).children, 0, 0); return out;
   }
   function toHTML(frame, env) {
-    const L = frame.layout; const e = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
-    const px = v => typeof v === 'number' ? `${v}px` : v;
-    const bgFrame = cssGradient(L.palette.bgGradient) || cssColor(L.palette.bg);
-    const parts = [`<div class="frame" style="position:relative;width:${L.format.w}px;height:${L.format.h}px;background:${bgFrame};overflow:${frame.clip ? 'hidden' : 'visible'}">`];
-    for (const nd of codeNodes(frame, env)) {
-      const st = [`position:absolute`, `left:${nd.box.left}px`, `top:${nd.box.top}px`, `width:${nd.box.width}px`, `height:${nd.box.height}px`];
-      if (nd.bg) st.push(`background:${nd.bg}`); if (nd.radius) st.push(`border-radius:${px(nd.radius)}`); if (nd.alpha != null && nd.alpha < 1) st.push(`opacity:${nd.alpha}`);
-      if (nd.type) st.push(`margin:0`, `font-family:'${nd.type.family}'`, `font-size:${nd.type.size}px`, `font-weight:${nd.type.weight}`, `line-height:${nd.type.lh}`, ...(nd.type.ls ? [`letter-spacing:${nd.type.ls}em`] : []), ...(nd.type.italic ? ['font-style:italic'] : []));
-      if (nd.color) st.push(`color:${nd.color}`); if (nd.align && nd.align !== 'left') st.push(`text-align:${nd.align}`); if (nd.upper) st.push('text-transform:uppercase');
-      if (nd.tag === 'a') st.push('display:flex', 'align-items:center', 'justify-content:center', 'text-decoration:none');
-      if (nd.tag === 'img') st.push(`object-fit:${nd.fit}`);
-      if (nd.tag === 'ul' || nd.tag === 'ol') st.push(`padding-left:${nd.indent}px`);
-      st.push(...nd.fxs);
-      const style = st.join(';');
-      if (nd.tag === 'img') parts.push(`  <img src="${e(nd.src)}" alt="" style="${style}">`);
-      else if (nd.tag === 'svg') parts.push(`  <svg viewBox="${nd.viewBox}" preserveAspectRatio="none" style="${style}">${nd.inner}</svg>`);
-      else if (nd.tag === 'ul' || nd.tag === 'ol') parts.push(`  <${nd.tag} style="${style}">${nd.items.map(i => `<li>${e(i)}</li>`).join('')}</${nd.tag}>`);
-      else parts.push(`  <${nd.tag}${nd.tag === 'a' ? ' href="#"' : ''} style="${style}">${e(nd.text || '')}</${nd.tag}>`);
-    }
+    const e = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
+    const tree = codeTree(frame, env); const style = st => st.map(([k, v]) => `${k}:${v}`).join(';');
+    const parts = [`<div class="frame" style="${style(rootCss(frame, tree))}">`];
+    const emitNode = (nd, depth) => {
+      const pad = '  '.repeat(depth); const s = style(cssOf(nd));
+      if (nd.children) { parts.push(`${pad}<div data-name="${e(nd.role)}" style="${s}">`); nd.children.forEach(c => emitNode(c, depth + 1)); parts.push(`${pad}</div>`); return; }
+      if (nd.tag === 'img') parts.push(`${pad}<img src="${e(nd.src)}" alt="" style="${s}">`);
+      else if (nd.tag === 'svg') parts.push(`${pad}<svg viewBox="${nd.viewBox}" preserveAspectRatio="none" style="${s}">${nd.inner}</svg>`);
+      else if (nd.tag === 'ul' || nd.tag === 'ol') parts.push(`${pad}<${nd.tag} style="${s}">${nd.items.map(i => `<li>${e(i)}</li>`).join('')}</${nd.tag}>`);
+      else parts.push(`${pad}<${nd.tag}${nd.tag === 'a' ? ' href="#"' : ''} style="${s}">${e(nd.text || '')}</${nd.tag}>`);
+    };
+    tree.children.forEach(nd => emitNode(nd, 1));
     parts.push('</div>');
     return parts.join('\n');
   }
   // React + Tailwind: arbitrary values keep the exact pixels; fonts and effects go to style where Tailwind has no utility.
+  const TW = {
+    'position:absolute': 'absolute', 'position:relative': 'relative', 'display:flex': 'flex', 'flex-direction:row': 'flex-row', 'flex-direction:column': 'flex-col', 'flex-wrap:wrap': 'flex-wrap',
+    'justify-content:flex-start': 'justify-start', 'justify-content:center': 'justify-center', 'justify-content:flex-end': 'justify-end', 'justify-content:space-between': 'justify-between',
+    'align-items:flex-start': 'items-start', 'align-items:center': 'items-center', 'align-items:flex-end': 'items-end', 'align-items:baseline': 'items-baseline', 'align-content:space-between': 'content-between',
+    'align-self:stretch': 'self-stretch', 'flex:1 1 0': 'flex-1', 'flex-shrink:0': 'shrink-0', 'width:fit-content': 'w-fit', 'height:fit-content': 'h-fit', 'overflow:hidden': 'overflow-hidden', 'overflow:visible': 'overflow-visible',
+    'box-sizing:border-box': 'box-border', 'margin:0': 'm-0', 'text-align:center': 'text-center', 'text-align:right': 'text-right', 'text-transform:uppercase': 'uppercase', 'font-style:italic': 'italic', 'white-space:pre-wrap': 'whitespace-pre-wrap',
+    'text-decoration:none': 'no-underline', 'object-fit:cover': 'object-cover', 'object-fit:contain': 'object-contain', 'min-width:0': 'min-w-0', 'min-height:0': 'min-h-0',
+  };
+  const TWP = { left: 'left', top: 'top', width: 'w', height: 'h', gap: 'gap', 'column-gap': 'gap-x', 'row-gap': 'gap-y', padding: 'p', 'font-size': 'text', 'font-weight': 'font', 'line-height': 'leading', 'letter-spacing': 'tracking', 'border-radius': 'rounded', opacity: 'opacity', 'padding-left': 'pl', 'min-width': 'min-w', 'max-width': 'max-w', 'min-height': 'min-h', 'max-height': 'max-h' };
+  function twClasses(st) {
+    const cls = [], style = {};
+    for (const [k, v] of st) {
+      const key = `${k}:${v}`;
+      if (TW[key]) { cls.push(TW[key]); continue; }
+      if (k === 'background' || k === 'color') { if (/gradient/.test(v)) style[k] = v; else cls.push(`${k === 'color' ? 'text' : 'bg'}-[${v}]`); continue; }
+      if (k === 'border-radius' && v === '9999px') { cls.push('rounded-full'); continue; }
+      if (TWP[k]) { cls.push(`${TWP[k]}-[${String(v).replace(/\s+/g, '_')}]`); continue; }
+      style[k.replace(/-([a-z])/g, (_, c) => c.toUpperCase())] = String(v).replace(/^'(.*)'$/, '$1');
+    }
+    return { cls, style };
+  }
   function toReact(frame, env) {
-    const L = frame.layout; const e = s => String(s ?? '').replace(/[{}<>]/g, c => ({ '{': '&#123;', '}': '&#125;', '<': '&lt;', '>': '&gt;' }[c]));
-    const tw = v => String(v).replace(/\s+/g, '_');
+    const e = s => String(s ?? '').replace(/[{}<>]/g, c => ({ '{': '&#123;', '}': '&#125;', '<': '&lt;', '>': '&gt;' }[c]));
     const comp = (frame.name || 'Frame').replace(/[^A-Za-z0-9]+(.)?/g, (_, c) => c ? c.toUpperCase() : '').replace(/^[^A-Za-z]+/, '') || 'Frame';
     const name = comp[0].toUpperCase() + comp.slice(1);
-    const bgFrame = cssGradient(L.palette.bgGradient);
-    const lines = [`export default function ${name}() {`, `  return (`, `    <div className="relative w-[${L.format.w}px] h-[${L.format.h}px] ${frame.clip ? 'overflow-hidden ' : ''}${bgFrame ? '' : `bg-[${cssColor(L.palette.bg)}]`}"${bgFrame ? ` style={{ background: '${bgFrame}' }}` : ''}>`];
-    for (const nd of codeNodes(frame, env)) {
-      const cls = ['absolute', `left-[${nd.box.left}px]`, `top-[${nd.box.top}px]`, `w-[${nd.box.width}px]`, `h-[${nd.box.height}px]`];
-      const style = {};
-      if (nd.bg) { if (/gradient/.test(nd.bg)) style.background = nd.bg; else cls.push(`bg-[${nd.bg}]`); }
-      if (nd.radius) cls.push(nd.radius === 9999 ? 'rounded-full' : nd.radius === '50%' ? 'rounded-[50%]' : `rounded-[${tw(typeof nd.radius === 'number' ? nd.radius + 'px' : nd.radius)}]`);
-      if (nd.alpha != null && nd.alpha < 1) cls.push(`opacity-[${nd.alpha}]`);
-      if (nd.type) { cls.push('m-0', `text-[${nd.type.size}px]`, `font-[${nd.type.weight}]`, `leading-[${nd.type.lh}]`); if (nd.type.ls) cls.push(`tracking-[${nd.type.ls}em]`); if (nd.type.italic) cls.push('italic'); style.fontFamily = nd.type.family; }
-      if (nd.color) cls.push(`text-[${nd.color}]`); if (nd.align === 'center') cls.push('text-center'); if (nd.align === 'right') cls.push('text-right'); if (nd.upper) cls.push('uppercase');
-      if (nd.tag === 'a') cls.push('flex', 'items-center', 'justify-center', 'no-underline');
-      if (nd.tag === 'img') cls.push(nd.fit === 'contain' ? 'object-contain' : 'object-cover');
-      if (nd.tag === 'ul' || nd.tag === 'ol') cls.push(`pl-[${nd.indent}px]`, nd.tag === 'ul' ? 'list-disc' : 'list-decimal');
-      for (const x of nd.fxs) { const [k, v] = x.split(/:(.+)/); style[k.replace(/-([a-z])/g, (_, c) => c.toUpperCase())] = v; }
-      const st = Object.keys(style).length ? ` style={{ ${Object.entries(style).map(([k, v]) => `${k}: ${JSON.stringify(v)}`).join(', ')} }}` : '';
-      const c = ` className="${cls.join(' ')}"${st}`;
-      if (nd.tag === 'img') lines.push(`      <img src="/${e(nd.src).replace(/[^A-Za-z0-9._-]+/g, '-')}" alt=""${c} />`);
-      else if (nd.tag === 'svg') lines.push(`      <svg viewBox="${nd.viewBox}" preserveAspectRatio="none"${c} dangerouslySetInnerHTML={{ __html: ${JSON.stringify(nd.inner)} }} />`);
-      else if (nd.tag === 'ul' || nd.tag === 'ol') lines.push(`      <${nd.tag}${c}>`, ...nd.items.map(i => `        <li>${e(i)}</li>`), `      </${nd.tag}>`);
-      else lines.push(`      <${nd.tag}${nd.tag === 'a' ? ' href="#"' : ''}${c}>${e(nd.text || '')}</${nd.tag}>`);
-    }
+    const tree = codeTree(frame, env);
+    const attrs = st => { const { cls, style } = twClasses(st); const sx = Object.keys(style).length ? ` style={{ ${Object.entries(style).map(([k, v]) => `${k}: ${JSON.stringify(v)}`).join(', ')} }}` : ''; return ` className="${cls.join(' ')}"${sx}`; };
+    const lines = [`export default function ${name}() {`, `  return (`, `    <div${attrs(rootCss(frame, tree))}>`];
+    const emitNode = (nd, depth) => {
+      const pad = '  '.repeat(depth + 2); const c = attrs(cssOf(nd));
+      if (nd.children) { lines.push(`${pad}<div${c}>`); nd.children.forEach(ch => emitNode(ch, depth + 1)); lines.push(`${pad}</div>`); return; }
+      if (nd.tag === 'img') lines.push(`${pad}<img src="/${e(nd.src).replace(/[^A-Za-z0-9._-]+/g, '-')}" alt=""${c} />`);
+      else if (nd.tag === 'svg') lines.push(`${pad}<svg viewBox="${nd.viewBox}" preserveAspectRatio="none"${c} dangerouslySetInnerHTML={{ __html: ${JSON.stringify(nd.inner)} }} />`);
+      else if (nd.tag === 'ul' || nd.tag === 'ol') lines.push(`${pad}<${nd.tag}${c}>`, ...nd.items.map(i => `${pad}  <li>${e(i)}</li>`), `${pad}</${nd.tag}>`);
+      else lines.push(`${pad}<${nd.tag}${nd.tag === 'a' ? ' href="#"' : ''}${c}>${e(nd.text || '')}</${nd.tag}>`);
+    };
+    tree.children.forEach(nd => emitNode(nd, 1));
     lines.push('    </div>', '  );', '}');
     return lines.join('\n');
   }
@@ -310,7 +382,12 @@ const Canvas = (() => {
   // Resize a frame to another format by scaling its blocks; text sizes scale with the smaller ratio and refit.
   function scaleFrame(frame, format) {
     const L = frame.layout; const sx = format.w / L.format.w, sy = format.h / L.format.h; const sf = Math.min(sx, sy);
+    const scaleAuto = a => { if (!a) return a; const s = Auto.norm(a); s.gap = Math.round(s.gap * sf); s.counterGap = Math.round(s.counterGap * sf); s.pad = { t: Math.round(s.pad.t * sy), r: Math.round(s.pad.r * sx), b: Math.round(s.pad.b * sy), l: Math.round(s.pad.l * sx) }; return s; };
+    frame.autoLayout = scaleAuto(frame.autoLayout);
     for (const b of L.blocks) {
+      if (b.auto) b.auto = scaleAuto(b.auto);
+      if (b.rx != null) { b.rx = Math.round(b.rx * sx); b.ry = Math.round(b.ry * sy); } delete b.lx; delete b.ly;
+      for (const k of ['minW', 'maxW']) if (b[k] != null) b[k] = Math.round(b[k] * sx); for (const k of ['minH', 'maxH']) if (b[k] != null) b[k] = Math.round(b[k] * sy);
       b.x = Math.round(b.x * sx); b.y = Math.round(b.y * sy); b.w = Math.max(4, Math.round(b.w * sx)); b.h = Math.max(4, Math.round(b.h * sy));
       if (b.font) { b.font.size = Math.max(8, Math.round(b.font.size * sf)); }
       if (b.kind === 'icon' || b.kind === 'badge' || b.kind === 'logo' || (b.kind === 'shape' && b.shape === 'circle')) { const s = Math.round(Math.min(b.w, b.h)); if (b.kind !== 'logo') { b.w = s; b.h = s; } else { b.h = Math.max(8, Math.round(b.h * sf / sy)); } }
@@ -375,8 +452,8 @@ const Canvas = (() => {
     const out = []; const x0 = Math.min(...frames.map(f => f.x)), y0 = Math.min(...frames.map(f => f.y));
     for (const src of frames) {
       const c = addFrame(doc, src.layout, { x: snap(at.x + (src.x - x0), 8), y: snap(at.y + (src.y - y0), 8), name: String(src.name || 'Frame').replace(/ copy( \d+)?$/, '') + ' copy' });
-      c.autoLayout = clone(src.autoLayout || c.autoLayout); c.clip = src.clip !== false;
-      for (const b of c.layout.blocks) b.id = uid();
+      c.autoLayout = clone(src.autoLayout || c.autoLayout); c.clip = src.clip !== false; migrate(c);
+      Auto.remap(c.layout.blocks, null);
       out.push(c);
     }
     return out;
@@ -399,5 +476,5 @@ const Canvas = (() => {
     };
   }
 
-  return { create, addFrame, blankFrame, frameById, blockById, refit, sourceText, newBlock, moveBlock, resizeBlock, reorder, duplicateBlock, removeBlocks, transferBlocks, pasteBlocks, customFormat, align, distribute, bounds, applyAutoLayout, isBackground, serialize, deserialize, toLink, fromHash, toHTML, toReact, recolor, extractContent, scaleFrame, applyTokens, group, ungroup, groupMembers, tidy, replaceText, setFonts, pasteFrames, framesBounds, cssGradient, history, snap, uid, clone };
+  return { create, addFrame, blankFrame, migrate, defaultAuto, frameById, blockById, refit, sourceText, newBlock, moveBlock, resizeBlock, reorder, duplicateBlock, removeBlocks, transferBlocks, pasteBlocks, customFormat, align, distribute, bounds, applyAutoLayout, isBackground, serialize, deserialize, toLink, fromHash, toHTML, toReact, codeTree, codeNodes, recolor, extractContent, scaleFrame, applyTokens, group, ungroup, groupMembers, tidy, replaceText, setFonts, pasteFrames, framesBounds, cssGradient, history, snap, uid, clone };
 })();

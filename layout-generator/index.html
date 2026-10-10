@@ -190,6 +190,10 @@
           <button data-tool="ellipse" data-tip="Ellipse · O" aria-label="Ellipse (O)">●</button>
           <button data-tool="image" data-tip="Image · I" aria-label="Image (I)">▣</button>
         </div>
+        <div class="cv-seg cv-mode" id="cvMode" role="group" aria-label="Editing mode">
+          <button type="button" data-edit="simple" data-tip="Simple: edit text, images and colors; layouts keep themselves tidy">Simple</button>
+          <button type="button" data-edit="advanced" data-tip="Advanced: auto layout, sizing, nesting and code">Advanced</button>
+        </div>
         <div class="cv-newframe">
           <button id="cvNewFrame" class="btn small" type="button" data-tip="Add a blank frame in view · ⇧N">＋ Frame</button>
           <select id="cvFrameFormat" class="select" aria-label="Frame format"></select>
@@ -385,6 +389,7 @@
 <script src="js/looks.js"></script>
 <script src="js/webimport.js"></script>
 <script src="js/canvas.js"></script>
+<script src="js/autolayout.js"></script>
 <script src="js/canvas-ui.js"></script>
 <script src="js/sync.js"></script>
 <script src="js/tool-defs.js"></script>

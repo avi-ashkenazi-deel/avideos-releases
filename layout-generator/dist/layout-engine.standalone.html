@@ -450,6 +450,32 @@ body.canvas-mode .main { overflow: hidden; background-image: none; }
 @media (max-width: 960px) { .agent-panel { left: 16px; } }
 
 
+/* ---- Auto layout and editing mode ---------------------------------------------------------------------------- */
+.cv-simple .cv-adv { display: none !important; }
+.cv-mode { grid-template-columns: repeat(2, auto); margin-right: 8px; }
+.cv-mode button { padding: 4px 10px; font-size: 12px; }
+.cv-layer-row.block { padding-left: 6px; gap: 4px; }
+.cv-layer-row .fold { border: 0; background: transparent; color: var(--fg-3); cursor: pointer; width: 14px; padding: 0; font-size: 10px; line-height: 1; }
+.cv-layer-row .fold:hover { color: var(--fg); }
+.cv-layer-row .fold-sp { width: 14px; flex: none; }
+.cv-layer-row .glyph.stack { color: var(--accent); font-weight: 700; }
+.al-dir { margin-bottom: 8px; }
+.al-dir button { font-size: 12px; }
+.al-row { display: grid; grid-template-columns: 72px 1fr; gap: 10px; align-items: start; margin-bottom: 8px; }
+.al-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; background: var(--bg); border: 1px solid var(--line-2); border-radius: 6px; padding: 4px; width: 72px; height: 72px; box-sizing: border-box; }
+.al-cell { border: 0; border-radius: 3px; background: transparent; cursor: pointer; position: relative; padding: 0; }
+.al-cell::after { content: ''; position: absolute; left: 50%; top: 50%; width: 3px; height: 3px; border-radius: 50%; background: var(--fg-3); transform: translate(-50%, -50%); }
+.al-cell:hover { background: var(--panel-2); }
+.al-cell.on::after { width: 10px; height: 10px; border-radius: 2px; background: var(--accent); }
+.al-fields { display: flex; flex-direction: column; gap: 6px; }
+.al-fields .cv-f { grid-template-columns: 52px 1fr; }
+.al-rm { float: right; margin-top: -3px; padding: 0 8px; }
+.cv-grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 6px; }
+.cv-grid4 .cv-f { grid-template-columns: 14px 1fr; gap: 4px; }
+.cv-grid4 .cv-f input { min-width: 0; }
+.cv-minmax summary { font-size: 12px; color: var(--fg-3); cursor: pointer; margin: 6px 0; }
+input[disabled] { opacity: .5; cursor: not-allowed; }
+
 </style>
 </head>
 <body>
@@ -631,6 +657,10 @@ body.canvas-mode .main { overflow: hidden; background-image: none; }
           <button data-tool="rect" data-tip="Rectangle · R" aria-label="Rectangle (R)">▬</button>
           <button data-tool="ellipse" data-tip="Ellipse · O" aria-label="Ellipse (O)">●</button>
           <button data-tool="image" data-tip="Image · I" aria-label="Image (I)">▣</button>
+        </div>
+        <div class="cv-seg cv-mode" id="cvMode" role="group" aria-label="Editing mode">
+          <button type="button" data-edit="simple" data-tip="Simple: edit text, images and colors; layouts keep themselves tidy">Simple</button>
+          <button type="button" data-edit="advanced" data-tip="Advanced: auto layout, sizing, nesting and code">Advanced</button>
         </div>
         <div class="cv-newframe">
           <button id="cvNewFrame" class="btn small" type="button" data-tip="Add a blank frame in view · ⇧N">＋ Frame</button>
@@ -2548,8 +2578,8 @@ const Render = (() => {
     const ctx = { defs: [], id: k => `${prefix}-${k}${seq++}` };
     const parts = [];
     if (!opts.transparent) parts.push(`<rect width="${W}" height="${H}" fill="${layout.palette && layout.palette.bgGradient ? (() => { const id = ctx.id('bg'); ctx.defs.push(gradientDef(layout.palette.bgGradient, id)); return `url(#${id})`; })() : col(layout.palette && layout.palette.bg, '#FFFFFF')}"/>`);
-    for (const b of layout.blocks) {
-      if (b.hidden) continue;
+    // Boxes draw their fill, then their children (clipped when the box clips); siblings in list order.
+    const blockEl = b => {
       let el = '';
       if (b.kind === 'field') el = `<rect x="${n(b.x)}" y="${n(b.y)}" width="${n(b.w)}" height="${n(b.h)}" rx="${n(b.radius || 0)}" fill="${paint(b, ctx)}"${b.alpha != null && b.alpha < 1 ? ` fill-opacity="${n(clamp01(b.alpha))}"` : ''}${strokeAttr(b)}/>`;
       else if (b.kind === 'image') {
@@ -2580,8 +2610,22 @@ const Render = (() => {
       else if (b.kind === 'line') el = `<line x1="${n(b.x)}" y1="${n(b.y)}" x2="${n(b.x + b.w)}" y2="${n(b.y + b.h)}" stroke="${col(b.fill)}" stroke-width="${n(b.width || 2)}"${b.dash ? ` stroke-dasharray="${String(b.dash).replace(/[^\d\s.,]/g, '')}"` : ''}/>`;
       else if (b.kind === 'logo') el = logoEl(b, kit);
       else if (b.kind === 'vector') el = vectorEl(b, ctx);
-      if (el) parts.push(fx(b, el, ctx));
-    }
+      return el;
+    };
+    const I = typeof Auto !== 'undefined' ? Auto.index({ layout }) : null;
+    const kidsOf = pid => I ? (I.kids.get(pid) || []) : (pid ? [] : layout.blocks);
+    const drawList = pid => kidsOf(pid).filter(b => !b.hidden).map(drawBlock).join('');
+    const drawBlock = b => {
+      if (b.kind !== 'box') { const el = blockEl(b); return el ? fx(b, el, ctx) : ''; }
+      const hasFill = (b.fill && b.fill !== 'none') || (b.gradient && Array.isArray(b.gradient.stops) && b.gradient.stops.length >= 2);
+      const st = strokeAttr(b);
+      const rect = hasFill || st ? `<rect x="${n(b.x)}" y="${n(b.y)}" width="${n(b.w)}" height="${n(b.h)}" rx="${n(b.radius || 0)}" fill="${hasFill ? paint(b, ctx) : 'none'}"${st}/>` : '';
+      let kids = drawList(b.id);
+      if (b.clip && kids) { const id = ctx.id('k'); ctx.defs.push(`<clipPath id="${id}"><rect x="${n(b.x)}" y="${n(b.y)}" width="${n(b.w)}" height="${n(b.h)}" rx="${n(b.radius || 0)}"/></clipPath>`); kids = `<g clip-path="url(#${id})">${kids}</g>`; }
+      const bg = rect ? fx({ x: b.x, y: b.y, w: b.w, h: b.h, shadow: b.shadow }, rect, ctx) : '';
+      return fx({ x: b.x, y: b.y, w: b.w, h: b.h, opacity: b.opacity, rotation: b.rotation }, bg + kids, ctx);
+    };
+    parts.push(drawList(''));
     if (opts.showGrid) parts.push(gridOverlay(layout));
     const attrs = opts.width ? ` width="${n(opts.width)}"` : ` width="${W}" height="${H}"`;
     return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}"${attrs} data-id="${esc(layout.id)}">${opts.fontStyle ? `<defs><style>${opts.fontStyle}</style></defs>` : ''}${ctx.defs.length ? `<defs>${ctx.defs.join('')}</defs>` : ''}${parts.join('')}</svg>`;
@@ -2761,7 +2805,9 @@ const ExportPptx = (() => {
     const { kit } = opts;
     const W = layout.format.w, H = layout.format.h;
     slide.background = { color: hex(layout.palette.bg) };
-    const blocks = layout.blocks.map(b => b.kind === 'logo' ? { ...b, logoKind: kit.logo.kind } : b);
+    // Paint order (a box, then what is inside it); a hidden box hides its contents. Positions are already absolute.
+    const order = typeof Auto !== 'undefined' ? (() => { const I = Auto.index({ layout }); const out = []; const walk = id => { for (const k of Auto.childrenOf(I, id)) { if (k.hidden) continue; out.push(k); if (k.kind === 'box') walk(k.id); } }; walk(''); return out; })() : layout.blocks;
+    const blocks = order.map(b => b.kind === 'logo' ? { ...b, logoKind: kit.logo.kind } : b);
     let pending = [];
     const flush = async () => {
       if (!pending.length) return;
@@ -2774,7 +2820,13 @@ const ExportPptx = (() => {
       if (isRaster(b)) { pending.push(b); continue; }
       await flush();
       const box = { x: inch(b.x), y: inch(b.y), w: inch(b.w), h: inch(b.h) };
-      if (b.kind === 'field') {
+      if (b.kind === 'box') {
+        const filled = b.fill && b.fill !== 'none'; const st = b.stroke && Number(b.stroke.width) > 0;
+        if (filled || st) {
+          const o = { ...box, fill: filled ? { color: hex(b.fill) } : { type: 'none' }, line: st ? { color: hex(b.stroke.color), width: pt(b.stroke.width) } : { color: 'FFFFFF', transparency: 100 } };
+          if (b.radius) { o.rectRadius = inch(b.radius); slide.addShape(pptx.ShapeType.roundRect, o); } else slide.addShape(pptx.ShapeType.rect, o);
+        }
+      } else if (b.kind === 'field') {
         const o = { ...box, fill: { color: hex(b.fill), transparency: b.alpha != null ? Math.round((1 - b.alpha) * 100) : 0 }, line: { color: hex(b.fill), transparency: 100 } };
         if (b.radius) { o.rectRadius = inch(b.radius); slide.addShape(pptx.ShapeType.roundRect, o); } else slide.addShape(pptx.ShapeType.rect, o);
       } else if (b.kind === 'rule') {
@@ -4207,7 +4259,7 @@ const Canvas = (() => {
     const last = doc.frames[doc.frames.length - 1];
     const x = opts.x ?? (last ? last.x + last.layout.format.w + 160 : 0);
     const y = opts.y ?? (last ? last.y : 0);
-    const frame = { id: uid(), name: opts.name || `${L.archetypeLabel || 'Frame'} · ${L.format.name}`, x, y, layout: L, autoLayout: { mode: 'none', gap: 24, padding: 72, align: 'start', justify: 'start', fill: false }, clip: true, hidden: false, locked: false };
+    const frame = { id: uid(), name: opts.name || `${L.archetypeLabel || 'Frame'} · ${L.format.name}`, x, y, layout: L, autoLayout: opts.autoLayout ? clone(opts.autoLayout) : defaultAuto(), clip: true, hidden: false, locked: false };
     for (const b of L.blocks) { if (!b.id) b.id = uid(); if (b.hidden == null) b.hidden = false; if (b.locked == null) b.locked = false; }
     doc.frames.push(frame);
     return frame;
@@ -4220,6 +4272,25 @@ const Canvas = (() => {
     const minDim = Math.min(format.w, format.h);
     const layout = { id: 'blank-' + uid(), seed: 0, archetype: 'blank', archetypeLabel: 'Blank', format: { id: format.id, name: format.name, w: format.w, h: format.h }, grid: { unit: g.unit, gutter: g.gutter, cols: g.cols, rows: g.rows, cw: g.cw, rh: g.rh, mx: g.mx, my: g.my, safe: g.safe }, palette: { bg, fg, accent: Color.normalize(accent), bgName: (kit.colors.find(c => Color.normalize(c.hex) === bg) || { name: 'Custom' }).name }, type: { level: 2, headline: Math.round(minDim * 0.09 / 2) * 2, body: Math.round(minDim * 0.024 / 2) * 2, display: kit.fonts.display, body_font: kit.fonts.body }, brand: kit.name, blocks: [], meta: {}, metrics: { whitespace: 1, density: 0, balance: 1 } };
     return addFrame(doc, layout, { ...opts, name: opts.name || `Frame · ${format.name}` });
+  }
+  const defaultAuto = () => ({ v: 2, mode: 'none', wrap: false, gap: 24, gapAuto: false, counterGap: 24, counterGapAuto: false, pad: { t: 72, r: 72, b: 72, l: 72 }, main: 'start', cross: 'start' });
+  // Screens saved with the first flex (one stack per screen that skipped backgrounds and sorted by position) move to
+  // auto layout: backgrounds become absolute, the flow follows reading order, and "stretch text" becomes Fill.
+  function migrate(f) {
+    const al = f.autoLayout;
+    if (al && al.v === 2) return f;
+    if (!al) { f.autoLayout = defaultAuto(); return f; }
+    const vertical = al.mode === 'vertical';
+    if (al.mode === 'vertical' || al.mode === 'horizontal') {
+      const blocks = f.layout.blocks;
+      const flow = blocks.filter(b => !b.parent && !isBackground(f, b) && !b.hidden && b.kind !== 'scrim' && b.kind !== 'line');
+      for (const b of blocks) if (!b.parent && !flow.includes(b)) b.absolute = true;
+      const order = flow.slice().sort((a, b) => vertical ? (a.y - b.y || a.x - b.x) : (a.x - b.x || a.y - b.y));
+      const slots = flow.map(b => blocks.indexOf(b)).sort((a, b) => a - b); order.forEach((b, i) => { blocks[slots[i]] = b; });
+      if (al.fill) for (const b of flow) { if (vertical && (b.kind === 'text' || b.kind === 'list' || b.kind === 'field')) b.sizeW = 'fill'; if (!vertical && (b.kind === 'field' || b.kind === 'image')) b.sizeH = 'fill'; }
+    }
+    f.autoLayout = Auto.norm(al);
+    return f;
   }
   const frameById = (doc, id) => doc.frames.find(f => f.id === id);
   const blockById = (frame, id) => frame.layout.blocks.find(b => b.id === id);
@@ -4275,35 +4346,58 @@ const Canvas = (() => {
     if (b.kind === 'logo') { /* height drives wordmark size */ }
     refit(b);
   }
+  // Order among siblings (blocks with the same parent): in a stack that is also the flow order.
   function reorder(frame, b, dir) {
-    const arr = frame.layout.blocks; const i = arr.indexOf(b); if (i < 0) return;
-    const j = dir === 'front' ? arr.length - 1 : dir === 'back' ? 0 : Math.max(0, Math.min(arr.length - 1, i + dir));
-    arr.splice(i, 1); arr.splice(j, 0, b);
+    const arr = frame.layout.blocks; if (arr.indexOf(b) < 0) return;
+    const sib = arr.filter(x => (x.parent || '') === (b.parent || '')); const i = sib.indexOf(b);
+    const j = dir === 'front' ? sib.length - 1 : dir === 'back' ? 0 : Math.max(0, Math.min(sib.length - 1, i + dir));
+    if (j === i) return;
+    const target = sib[j]; arr.splice(arr.indexOf(b), 1);
+    const t = arr.indexOf(target); arr.splice(j > i ? t + 1 : t, 0, b);
   }
-  function duplicateBlock(frame, b, u) { const c = clone(b); c.id = uid(); c.x = snap(c.x + 2 * u, u); c.y = snap(c.y + 2 * u, u); frame.layout.blocks.push(c); return c; }
-  function removeBlocks(frame, ids) { frame.layout.blocks = frame.layout.blocks.filter(b => !ids.includes(b.id)); }
-  // Move blocks into another frame and keep their place on the canvas.
-  function transferBlocks(src, dst, blocks, u) {
-    const out = [];
-    for (const b of blocks) {
-      src.layout.blocks = src.layout.blocks.filter(x => x !== b);
-      const wx = src.x + b.x, wy = src.y + b.y;
-      b.x = snap(wx - dst.x, u); b.y = snap(wy - dst.y, u);
-      dst.layout.blocks.push(b); out.push(b);
-    }
-    return out;
+  // A copy of a block (and of what is inside it, for a box) right after it. In a stack it takes the next place in the
+  // flow; elsewhere it is nudged so it shows.
+  function duplicateBlock(frame, b, u) {
+    const src = Auto.withDescendants(frame, [b]); const copies = clone(src); Auto.remap(copies, b.parent || null);
+    const c = copies[0]; if (b.parent) c.parent = b.parent; else delete c.parent;
+    const flow = Auto.inFlow(Auto.index(frame), b);
+    if (!flow && u) for (const x of copies) { x.x = snap(x.x + 2 * u, u); x.y = snap(x.y + 2 * u, u); }
+    const arr = frame.layout.blocks; const at = Math.max(...src.map(x => arr.indexOf(x))) + 1;
+    arr.splice(at, 0, ...copies);
+    return c;
   }
-  // Paste clones into a frame; dx/dy nudge them off their source, and they are kept inside the frame.
+  // Removing a box removes what is inside it.
+  function removeBlocks(frame, ids) { const gone = new Set(Auto.withDescendants(frame, frame.layout.blocks.filter(b => ids.includes(b.id))).map(b => b.id)); frame.layout.blocks = frame.layout.blocks.filter(b => !gone.has(b.id)); }
+  // Move blocks (with what is inside them) into another frame and keep their place on the canvas. They land at the
+  // top level of the other frame unless `into` names a box there.
+  function transferBlocks(src, dst, blocks, u, into) {
+    const top = Auto.topmost(src, blocks); const all = Auto.withDescendants(src, top); const ids = new Set(all.map(b => b.id));
+    src.layout.blocks = src.layout.blocks.filter(x => !ids.has(x.id));
+    const dx = src.x - dst.x, dy = src.y - dst.y; const ox = top.length ? snap(top[0].x + dx, u) - (top[0].x + dx) : 0, oy = top.length ? snap(top[0].y + dy, u) - (top[0].y + dy) : 0;
+    for (const b of all) { b.x += dx + ox; b.y += dy + oy; if (b.lx != null) { b.lx += dx + ox; b.ly += dy + oy; } }
+    for (const b of top) { if (into) b.parent = into; else delete b.parent; delete b.rx; delete b.ry; delete b.lx; delete b.ly; }
+    dst.layout.blocks.push(...all);
+    return top;
+  }
+  // Paste clones into a frame; dx/dy nudge them off their source, and they are kept inside the frame. Boxes bring
+  // what is inside them. `into` pastes into a box.
   function pasteBlocks(frame, blocks, opts = {}) {
-    const u = frame.layout.grid.unit; const W = frame.layout.format.w, H = frame.layout.format.h; const out = [];
-    for (const b of blocks) {
-      const c = clone(b); c.id = uid();
-      c.x = snap(c.x + (opts.dx || 0), u); c.y = snap(c.y + (opts.dy || 0), u);
-      c.x = Math.max(0, Math.min(W - Math.min(c.w, W), c.x)); c.y = Math.max(0, Math.min(H - Math.min(c.h, H), c.y));
-      if (c.kind === 'text' || c.kind === 'list') refit(c);
-      frame.layout.blocks.push(c); out.push(c);
+    const u = frame.layout.grid.unit; const W = frame.layout.format.w, H = frame.layout.format.h;
+    const copies = clone(blocks); const inSet = new Set(copies.map(b => b.id));
+    const tops = copies.filter(b => !b.parent || !inSet.has(b.parent));
+    Auto.remap(copies, opts.into || null);
+    const kidsOf = new Map(); for (const b of copies) if (b.parent) { if (!kidsOf.has(b.parent)) kidsOf.set(b.parent, []); kidsOf.get(b.parent).push(b); }
+    const subtree = b => { const out = [b]; for (const k of kidsOf.get(b.id) || []) out.push(...subtree(k)); return out; };
+    for (const t of tops) {
+      let nx = snap(t.x + (opts.dx || 0), u), ny = snap(t.y + (opts.dy || 0), u);
+      nx = Math.max(0, Math.min(W - Math.min(t.w, W), nx)); ny = Math.max(0, Math.min(H - Math.min(t.h, H), ny));
+      const ddx = nx - t.x, ddy = ny - t.y;
+      for (const x of subtree(t)) { x.x += ddx; x.y += ddy; if (x.lx != null) { x.lx += ddx; x.ly += ddy; } }
+      if (!opts.into) { delete t.rx; delete t.ry; delete t.lx; delete t.ly; }
     }
-    return out;
+    for (const c of copies) if (c.kind === 'text' || c.kind === 'list') refit(c);
+    frame.layout.blocks.push(...copies);
+    return tops;
   }
   // A format for a frame drawn by hand: columns scale with width, like the built-in formats.
   function customFormat(w, h) { w = Math.max(64, Math.round(w / 8) * 8); h = Math.max(64, Math.round(h / 8) * 8); return { id: 'custom', name: 'Custom', w, h, cols: Math.max(4, Math.min(12, Math.round(w / 160))) }; }
@@ -4332,31 +4426,10 @@ const Canvas = (() => {
     return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
   }
 
-  // ---- Auto layout (flex) for a frame ----------------------------------------------------------
-  // Children = blocks that are not full-bleed backgrounds. Stacked in order along the main axis with gap and padding;
-  // cross-axis alignment per `align`; `fill` stretches text and lists to the inner width (vertical) and refits them.
+  // ---- Auto layout: see autolayout.js. Full-bleed images and fields count as backgrounds (absolute when a screen's
+  // auto layout is switched on). ---------------------------------------------------------------------------------------
   function isBackground(frame, b) { const W = frame.layout.format.w, H = frame.layout.format.h; return (b.kind === 'image' || b.kind === 'field' || b.kind === 'scrim') && b.w >= W * 0.95 && b.h >= H * 0.95 && b.x <= 0 && b.y <= 0; }
-  function applyAutoLayout(frame) {
-    const al = frame.autoLayout; if (!al || al.mode === 'none') return;
-    const W = frame.layout.format.w, H = frame.layout.format.h; const pad = al.padding, gap = al.gap;
-    const children = frame.layout.blocks.filter(b => !isBackground(frame, b) && !b.hidden && b.kind !== 'scrim' && b.kind !== 'line');
-    if (!children.length) return;
-    const vertical = al.mode === 'vertical';
-    children.sort((a, b) => vertical ? (a.y - b.y || a.x - b.x) : (a.x - b.x || a.y - b.y));
-    const innerW = W - 2 * pad, innerH = H - 2 * pad;
-    if (al.fill && vertical) for (const b of children) if (b.kind === 'text' || b.kind === 'list' || b.kind === 'field') { b.w = innerW; refit(b); }
-    if (al.fill && !vertical) for (const b of children) if (b.kind === 'field' || b.kind === 'image') { b.h = innerH; }
-    const mainSize = children.reduce((t, b) => t + (vertical ? b.h : b.w), 0) + gap * (children.length - 1);
-    const mainInner = vertical ? innerH : innerW;
-    let pos = pad; let step = gap;
-    if (al.justify === 'center') pos = pad + Math.max(0, (mainInner - mainSize) / 2);
-    else if (al.justify === 'end') pos = pad + Math.max(0, mainInner - mainSize);
-    else if (al.justify === 'space-between' && children.length > 1) step = gap + Math.max(0, (mainInner - mainSize) / (children.length - 1));
-    for (const b of children) {
-      if (vertical) { b.y = Math.round(pos); pos += b.h + step; b.x = al.align === 'center' ? Math.round(pad + (innerW - b.w) / 2) : al.align === 'end' ? W - pad - b.w : pad; if (b.kind === 'text') b.align = al.align === 'center' ? 'center' : al.align === 'end' ? 'right' : 'left'; }
-      else { b.x = Math.round(pos); pos += b.w + step; b.y = al.align === 'center' ? Math.round(pad + (innerH - b.h) / 2) : al.align === 'end' ? H - pad - b.h : pad; }
-    }
-  }
+  function applyAutoLayout(frame) { return Auto.layout(frame); }
 
   // ---- Serialization, links, code -----------------------------------------------------------
   function serialize(doc, opts = {}) {
@@ -4364,7 +4437,7 @@ const Canvas = (() => {
     if (opts.stripAssets) for (const f of d.frames) for (const b of f.layout.blocks) if (b.kind === 'image') b.assetMissing = true;
     return JSON.stringify(d);
   }
-  function deserialize(json) { const d = typeof json === 'string' ? JSON.parse(json) : json; if (!d || !Array.isArray(d.frames)) throw new Error('not a canvas file'); for (const f of d.frames) for (const b of f.layout.blocks) if (!b.id) b.id = uid(); return d; }
+  function deserialize(json) { const d = typeof json === 'string' ? JSON.parse(json) : json; if (!d || !Array.isArray(d.frames)) throw new Error('not a canvas file'); for (const f of d.frames) { for (const b of f.layout.blocks) if (!b.id) b.id = uid(); migrate(f); } return d; }
   async function toLink(doc) {
     const json = serialize(doc, { stripAssets: true });
     let payload;
@@ -4396,79 +4469,130 @@ const Canvas = (() => {
   }
   function hexAlpha(hex, a) { if (!/^#[0-9a-fA-F]{6}$/.test(hex)) return hex; return hex + Math.round(Math.max(0, Math.min(1, a)) * 255).toString(16).padStart(2, '0'); }
   function famName(f) { return String((f && f.family) || 'sans-serif').split(',')[0].replace(/["']/g, '').trim(); }
-  // One intermediate description per block; HTML and React render from it.
-  function codeNodes(frame, env) {
-    const L = frame.layout; const nodes = [];
-    for (const b of L.blocks) {
-      if (b.hidden) continue;
-      const box = { left: Math.round(b.x), top: Math.round(b.y), width: Math.round(b.w), height: Math.round(b.h) };
-      const fxs = cssFx(b); const bg = cssGradient(b.gradient);
-      const f = b.font || {};
-      const type = { family: famName(f), size: Math.round(f.size || 16), weight: f.weight || 400, lh: f.lineHeight || 1.2, ls: f.letterSpacing || 0, italic: f.style === 'italic' };
-      if (b.kind === 'field' || b.kind === 'rule') nodes.push({ tag: 'div', box, bg: bg || cssColor(b.fill), radius: b.radius || 0, alpha: b.alpha, fxs, role: b.role || b.kind });
-      else if (b.kind === 'shape') nodes.push({ tag: 'div', box, bg: bg || cssColor(b.fill), radius: b.shape === 'pill' ? 9999 : (b.shape === 'circle' || b.shape === 'ellipse') ? '50%' : '0 100% 0 0', fxs, role: b.shape });
-      else if (b.kind === 'image') { const a = env && env.assets && env.assets.images.find(i => i.id === b.asset); nodes.push({ tag: 'img', box, src: a ? (a.name || 'image') : 'image.jpg', radius: b.radius || 0, fit: b.fit === 'contain' ? 'contain' : 'cover', fxs, role: 'image' }); }
-      else if (b.kind === 'text') nodes.push({ tag: /^(headline|stat|quote)$/.test(b.role) ? 'h2' : 'p', box, text: sourceText(b), color: cssColor(b.fill), bgText: bg, type, align: b.align || 'left', upper: f.transform === 'upper', fxs, role: b.role || 'text' });
-      else if (b.kind === 'list') nodes.push({ tag: b.marker === 'number' ? 'ol' : 'ul', box, items: b.items || [], color: cssColor(b.fill), type, indent: b.indent || 24, fxs, role: b.role || 'list' });
-      else if (b.kind === 'button') nodes.push({ tag: 'a', box, text: b.text, color: cssColor(b.color), bg: bg || cssColor(b.fill), radius: b.radius || 0, type: { ...type, weight: f.weight || 600 }, fxs, role: 'cta' });
-      else if (b.kind === 'icon') nodes.push({ tag: 'svg', box, inner: (Icons.SET[b.name] || '').replace(/currentColor/g, cssColor(b.fill)), viewBox: '0 0 256 256', fxs, role: 'icon ' + b.name });
-      else if (b.kind === 'vector') nodes.push({ tag: 'svg', box, inner: b.d ? `<path d="${String(b.d).replace(/[^MmLlHhVvCcSsQqTtAaZz0-9eE.,\s+-]/g, '')}" fill="${cssColor(b.fill)}"/>` : (typeof Render !== 'undefined' ? Render.sanitizeSvgInner(b.svg) : ''), viewBox: Array.isArray(b.viewBox) ? b.viewBox.join(' ') : `0 0 ${b.vw || b.w} ${b.vh || b.h}`, fxs, role: 'vector' });
-      else if (b.kind === 'logo') nodes.push({ tag: 'div', box, text: (env && env.kit && env.kit.logo && env.kit.logo.text) || 'logo', color: cssColor(b.fill), type: { ...type, weight: 700, size: Math.round(b.h / 0.74) }, fxs, role: 'logo' });
-      else if (b.kind === 'line') nodes.push({ tag: 'div', box: { ...box, height: Math.max(2, box.height) }, bg: cssColor(b.fill), fxs, role: 'line' });
-      else if (b.kind === 'badge') nodes.push({ tag: 'div', box, text: b.text, color: cssColor(b.color), bg: cssColor(b.fill), radius: '50%', type: { ...type, weight: 700 }, fxs, role: 'badge' });
+  // One intermediate description per block, as a tree: boxes hold their children. HTML and React render from it.
+  // Children of an auto layout container are flex items (sized fixed, hug or fill); everything else is placed
+  // absolutely inside its parent, like Figma's Dev Mode and Paper's code.
+  function nodeOf(b, env) {
+    const fxs = cssFx(b); const bg = cssGradient(b.gradient); const f = b.font || {};
+    const type = { family: famName(f), size: Math.round(f.size || 16), weight: f.weight || 400, lh: f.lineHeight || 1.2, ls: f.letterSpacing || 0, italic: f.style === 'italic' };
+    if (b.kind === 'box') return { tag: 'div', bg: bg || (b.fill && b.fill !== 'none' ? cssColor(b.fill) : null), radius: b.radius || 0, fxs, role: b.label || 'box', clip: !!b.clip };
+    if (b.kind === 'field' || b.kind === 'rule') return { tag: 'div', bg: bg || cssColor(b.fill), radius: b.radius || 0, alpha: b.alpha, fxs, role: b.role || b.kind };
+    if (b.kind === 'shape') return { tag: 'div', bg: bg || cssColor(b.fill), radius: b.shape === 'pill' ? 9999 : (b.shape === 'circle' || b.shape === 'ellipse') ? '50%' : '0 100% 0 0', fxs, role: b.shape };
+    if (b.kind === 'image') { const a = env && env.assets && env.assets.images.find(i => i.id === b.asset); return { tag: 'img', src: a ? (a.name || 'image') : 'image.jpg', radius: b.radius || 0, fit: b.fit === 'contain' ? 'contain' : 'cover', fxs, role: 'image' }; }
+    if (b.kind === 'text') return { tag: /^(headline|stat|quote)$/.test(b.role) ? 'h2' : 'p', text: sourceText(b), color: cssColor(b.fill), bgText: bg, type, align: b.align || 'left', upper: f.transform === 'upper', fxs, role: b.role || 'text' };
+    if (b.kind === 'list') return { tag: b.marker === 'number' ? 'ol' : 'ul', items: b.items || [], color: cssColor(b.fill), type, indent: b.indent || 24, fxs, role: b.role || 'list' };
+    if (b.kind === 'button') return { tag: 'a', text: b.text, color: cssColor(b.color), bg: bg || cssColor(b.fill), radius: b.radius || 0, type: { ...type, weight: f.weight || 600 }, fxs, role: 'cta' };
+    if (b.kind === 'icon') return { tag: 'svg', inner: (Icons.SET[b.name] || '').replace(/currentColor/g, cssColor(b.fill)), viewBox: '0 0 256 256', fxs, role: 'icon ' + b.name };
+    if (b.kind === 'vector') return { tag: 'svg', inner: b.d ? `<path d="${String(b.d).replace(/[^MmLlHhVvCcSsQqTtAaZz0-9eE.,\s+-]/g, '')}" fill="${cssColor(b.fill)}"/>` : (typeof Render !== 'undefined' ? Render.sanitizeSvgInner(b.svg) : ''), viewBox: Array.isArray(b.viewBox) ? b.viewBox.join(' ') : `0 0 ${b.vw || b.w} ${b.vh || b.h}`, fxs, role: 'vector' };
+    if (b.kind === 'logo') return { tag: 'div', text: (env && env.kit && env.kit.logo && env.kit.logo.text) || 'logo', color: cssColor(b.fill), type: { ...type, weight: 700, size: Math.round(b.h / 0.74) }, fxs, role: 'logo' };
+    if (b.kind === 'line') return { tag: 'div', bg: cssColor(b.fill), fxs, role: 'line', minH: 2 };
+    if (b.kind === 'badge') return { tag: 'div', text: b.text, color: cssColor(b.color), bg: cssColor(b.fill), radius: '50%', type: { ...type, weight: 700 }, fxs, role: 'badge' };
+    return null;
+  }
+  function flexOf(s) {
+    if (!Auto.on(s)) return null;
+    const J = { start: 'flex-start', center: 'center', end: 'flex-end' }, A = { start: 'flex-start', center: 'center', end: 'flex-end', baseline: 'baseline' };
+    return { dir: s.mode === 'horizontal' ? 'row' : 'column', gap: s.gapAuto ? 0 : s.gap, rowGap: s.wrap ? (s.counterGapAuto ? 0 : s.counterGap) : null, justify: s.gapAuto ? 'space-between' : J[s.main], align: A[s.cross], wrap: !!s.wrap, pad: s.pad, alignContent: s.wrap && s.counterGapAuto ? 'space-between' : null };
+  }
+  function codeTree(frame, env) {
+    const I = Auto.index(frame);
+    const build = (pid, origin, parentFlex) => Auto.childrenOf(I, pid).filter(b => !b.hidden).map(b => {
+      const nd = nodeOf(b, env); if (!nd) return null;
+      const flow = !!parentFlex && !b.absolute;
+      nd.pos = flow ? 'flow' : 'abs';
+      nd.box = { left: Math.round(b.x - origin.x), top: Math.round(b.y - origin.y), width: Math.round(b.w), height: Math.round(Math.max(b.h, nd.minH || 0)) };
+      if (flow) { const main = parentFlex.dir === 'row' ? 'w' : 'h'; nd.size = { w: Auto.sizing(I, b, 'w'), h: Auto.sizing(I, b, 'h'), main }; for (const k of ['minW', 'maxW', 'minH', 'maxH']) if (b[k] != null) nd[k] = b[k]; }
+      if (b.kind === 'box') { nd.flex = flexOf(I.S(b.id)); nd.children = build(b.id, { x: b.x, y: b.y }, nd.flex); }
+      return nd;
+    }).filter(Boolean);
+    const flex = flexOf(I.rootS);
+    return { flex, children: build('', { x: 0, y: 0 }, flex) };
+  }
+  // CSS for one node as [property, value] pairs (shared by HTML and, through a mapping, React).
+  function cssOf(nd) {
+    const st = [];
+    if (nd.pos === 'abs') st.push(['position', 'absolute'], ['left', nd.box.left + 'px'], ['top', nd.box.top + 'px'], ['width', nd.box.width + 'px'], ['height', nd.box.height + 'px']);
+    else {
+      const sz = nd.size; const axis = (k, v) => { const isMain = sz.main === k; if (v === 'fill') return isMain ? [['flex', '1 1 0'], [k === 'w' ? 'min-width' : 'min-height', '0']] : [['align-self', 'stretch']]; if (v === 'hug') return [[k === 'w' ? 'width' : 'height', 'fit-content']]; return [[k === 'w' ? 'width' : 'height', (k === 'w' ? nd.box.width : nd.box.height) + 'px'], ...(isMain ? [['flex-shrink', '0']] : [])]; };
+      st.push(['position', 'relative'], ...axis('w', sz.w), ...axis('h', sz.h));
+      for (const [k, css] of [['minW', 'min-width'], ['maxW', 'max-width'], ['minH', 'min-height'], ['maxH', 'max-height']]) if (nd[k] != null) st.push([css, nd[k] + 'px']);
     }
-    return nodes;
+    if (nd.flex) { const F = nd.flex; st.push(['display', 'flex'], ['flex-direction', F.dir], ['justify-content', F.justify], ['align-items', F.align]); if (F.wrap) st.push(['flex-wrap', 'wrap']); if (F.gap) st.push([F.wrap ? 'column-gap' : 'gap', F.gap + 'px']); if (F.rowGap) st.push(['row-gap', F.rowGap + 'px']); if (F.alignContent) st.push(['align-content', F.alignContent]); const p = F.pad; if (p.t || p.r || p.b || p.l) st.push(['padding', `${p.t}px ${p.r}px ${p.b}px ${p.l}px`]); st.push(['box-sizing', 'border-box']); }
+    if (nd.clip) st.push(['overflow', 'hidden']);
+    if (nd.bg) st.push(['background', nd.bg]); if (nd.radius) st.push(['border-radius', typeof nd.radius === 'number' ? nd.radius + 'px' : nd.radius]); if (nd.alpha != null && nd.alpha < 1) st.push(['opacity', String(nd.alpha)]);
+    if (nd.type) { st.push(['margin', '0'], ['font-family', `'${nd.type.family}'`], ['font-size', nd.type.size + 'px'], ['font-weight', String(nd.type.weight)], ['line-height', String(nd.type.lh)]); if (nd.type.ls) st.push(['letter-spacing', nd.type.ls + 'em']); if (nd.type.italic) st.push(['font-style', 'italic']); }
+    if (nd.color) st.push(['color', nd.color]); if (nd.align && nd.align !== 'left') st.push(['text-align', nd.align]); if (nd.upper) st.push(['text-transform', 'uppercase']);
+    if (nd.tag === 'p' || nd.tag === 'h2') st.push(['white-space', 'pre-wrap']);
+    if (nd.tag === 'a') st.push(['display', 'flex'], ['align-items', 'center'], ['justify-content', 'center'], ['text-decoration', 'none']);
+    if (nd.tag === 'img') st.push(['object-fit', nd.fit]);
+    if (nd.tag === 'ul' || nd.tag === 'ol') st.push(['padding-left', nd.indent + 'px'], ['margin', '0']);
+    for (const x of nd.fxs) { const [k, v] = x.split(/:(.+)/); st.push([k, v]); }
+    return st;
+  }
+  function rootCss(frame, tree) {
+    const L = frame.layout; const st = [['position', 'relative'], ['width', L.format.w + 'px'], ['height', L.format.h + 'px'], ['background', cssGradient(L.palette.bgGradient) || cssColor(L.palette.bg)], ['overflow', frame.clip ? 'hidden' : 'visible']];
+    if (tree.flex) { const F = tree.flex; st.push(['display', 'flex'], ['flex-direction', F.dir], ['justify-content', F.justify], ['align-items', F.align], ['box-sizing', 'border-box']); if (F.wrap) st.push(['flex-wrap', 'wrap']); if (F.gap) st.push([F.wrap ? 'column-gap' : 'gap', F.gap + 'px']); if (F.rowGap) st.push(['row-gap', F.rowGap + 'px']); const p = F.pad; st.push(['padding', `${p.t}px ${p.r}px ${p.b}px ${p.l}px`]); }
+    return st;
+  }
+  // Kept for callers that want the flat list (every block's absolute box in frame coordinates).
+  function codeNodes(frame, env) {
+    const out = []; const walk = (list, ox, oy) => { for (const nd of list) { out.push({ ...nd, box: { ...nd.box, left: nd.box.left + ox, top: nd.box.top + oy } }); if (nd.children) walk(nd.children, ox + nd.box.left, oy + nd.box.top); } };
+    walk(codeTree(frame, env).children, 0, 0); return out;
   }
   function toHTML(frame, env) {
-    const L = frame.layout; const e = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
-    const px = v => typeof v === 'number' ? `${v}px` : v;
-    const bgFrame = cssGradient(L.palette.bgGradient) || cssColor(L.palette.bg);
-    const parts = [`<div class="frame" style="position:relative;width:${L.format.w}px;height:${L.format.h}px;background:${bgFrame};overflow:${frame.clip ? 'hidden' : 'visible'}">`];
-    for (const nd of codeNodes(frame, env)) {
-      const st = [`position:absolute`, `left:${nd.box.left}px`, `top:${nd.box.top}px`, `width:${nd.box.width}px`, `height:${nd.box.height}px`];
-      if (nd.bg) st.push(`background:${nd.bg}`); if (nd.radius) st.push(`border-radius:${px(nd.radius)}`); if (nd.alpha != null && nd.alpha < 1) st.push(`opacity:${nd.alpha}`);
-      if (nd.type) st.push(`margin:0`, `font-family:'${nd.type.family}'`, `font-size:${nd.type.size}px`, `font-weight:${nd.type.weight}`, `line-height:${nd.type.lh}`, ...(nd.type.ls ? [`letter-spacing:${nd.type.ls}em`] : []), ...(nd.type.italic ? ['font-style:italic'] : []));
-      if (nd.color) st.push(`color:${nd.color}`); if (nd.align && nd.align !== 'left') st.push(`text-align:${nd.align}`); if (nd.upper) st.push('text-transform:uppercase');
-      if (nd.tag === 'a') st.push('display:flex', 'align-items:center', 'justify-content:center', 'text-decoration:none');
-      if (nd.tag === 'img') st.push(`object-fit:${nd.fit}`);
-      if (nd.tag === 'ul' || nd.tag === 'ol') st.push(`padding-left:${nd.indent}px`);
-      st.push(...nd.fxs);
-      const style = st.join(';');
-      if (nd.tag === 'img') parts.push(`  <img src="${e(nd.src)}" alt="" style="${style}">`);
-      else if (nd.tag === 'svg') parts.push(`  <svg viewBox="${nd.viewBox}" preserveAspectRatio="none" style="${style}">${nd.inner}</svg>`);
-      else if (nd.tag === 'ul' || nd.tag === 'ol') parts.push(`  <${nd.tag} style="${style}">${nd.items.map(i => `<li>${e(i)}</li>`).join('')}</${nd.tag}>`);
-      else parts.push(`  <${nd.tag}${nd.tag === 'a' ? ' href="#"' : ''} style="${style}">${e(nd.text || '')}</${nd.tag}>`);
-    }
+    const e = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
+    const tree = codeTree(frame, env); const style = st => st.map(([k, v]) => `${k}:${v}`).join(';');
+    const parts = [`<div class="frame" style="${style(rootCss(frame, tree))}">`];
+    const emitNode = (nd, depth) => {
+      const pad = '  '.repeat(depth); const s = style(cssOf(nd));
+      if (nd.children) { parts.push(`${pad}<div data-name="${e(nd.role)}" style="${s}">`); nd.children.forEach(c => emitNode(c, depth + 1)); parts.push(`${pad}</div>`); return; }
+      if (nd.tag === 'img') parts.push(`${pad}<img src="${e(nd.src)}" alt="" style="${s}">`);
+      else if (nd.tag === 'svg') parts.push(`${pad}<svg viewBox="${nd.viewBox}" preserveAspectRatio="none" style="${s}">${nd.inner}</svg>`);
+      else if (nd.tag === 'ul' || nd.tag === 'ol') parts.push(`${pad}<${nd.tag} style="${s}">${nd.items.map(i => `<li>${e(i)}</li>`).join('')}</${nd.tag}>`);
+      else parts.push(`${pad}<${nd.tag}${nd.tag === 'a' ? ' href="#"' : ''} style="${s}">${e(nd.text || '')}</${nd.tag}>`);
+    };
+    tree.children.forEach(nd => emitNode(nd, 1));
     parts.push('</div>');
     return parts.join('\n');
   }
   // React + Tailwind: arbitrary values keep the exact pixels; fonts and effects go to style where Tailwind has no utility.
+  const TW = {
+    'position:absolute': 'absolute', 'position:relative': 'relative', 'display:flex': 'flex', 'flex-direction:row': 'flex-row', 'flex-direction:column': 'flex-col', 'flex-wrap:wrap': 'flex-wrap',
+    'justify-content:flex-start': 'justify-start', 'justify-content:center': 'justify-center', 'justify-content:flex-end': 'justify-end', 'justify-content:space-between': 'justify-between',
+    'align-items:flex-start': 'items-start', 'align-items:center': 'items-center', 'align-items:flex-end': 'items-end', 'align-items:baseline': 'items-baseline', 'align-content:space-between': 'content-between',
+    'align-self:stretch': 'self-stretch', 'flex:1 1 0': 'flex-1', 'flex-shrink:0': 'shrink-0', 'width:fit-content': 'w-fit', 'height:fit-content': 'h-fit', 'overflow:hidden': 'overflow-hidden', 'overflow:visible': 'overflow-visible',
+    'box-sizing:border-box': 'box-border', 'margin:0': 'm-0', 'text-align:center': 'text-center', 'text-align:right': 'text-right', 'text-transform:uppercase': 'uppercase', 'font-style:italic': 'italic', 'white-space:pre-wrap': 'whitespace-pre-wrap',
+    'text-decoration:none': 'no-underline', 'object-fit:cover': 'object-cover', 'object-fit:contain': 'object-contain', 'min-width:0': 'min-w-0', 'min-height:0': 'min-h-0',
+  };
+  const TWP = { left: 'left', top: 'top', width: 'w', height: 'h', gap: 'gap', 'column-gap': 'gap-x', 'row-gap': 'gap-y', padding: 'p', 'font-size': 'text', 'font-weight': 'font', 'line-height': 'leading', 'letter-spacing': 'tracking', 'border-radius': 'rounded', opacity: 'opacity', 'padding-left': 'pl', 'min-width': 'min-w', 'max-width': 'max-w', 'min-height': 'min-h', 'max-height': 'max-h' };
+  function twClasses(st) {
+    const cls = [], style = {};
+    for (const [k, v] of st) {
+      const key = `${k}:${v}`;
+      if (TW[key]) { cls.push(TW[key]); continue; }
+      if (k === 'background' || k === 'color') { if (/gradient/.test(v)) style[k] = v; else cls.push(`${k === 'color' ? 'text' : 'bg'}-[${v}]`); continue; }
+      if (k === 'border-radius' && v === '9999px') { cls.push('rounded-full'); continue; }
+      if (TWP[k]) { cls.push(`${TWP[k]}-[${String(v).replace(/\s+/g, '_')}]`); continue; }
+      style[k.replace(/-([a-z])/g, (_, c) => c.toUpperCase())] = String(v).replace(/^'(.*)'$/, '$1');
+    }
+    return { cls, style };
+  }
   function toReact(frame, env) {
-    const L = frame.layout; const e = s => String(s ?? '').replace(/[{}<>]/g, c => ({ '{': '&#123;', '}': '&#125;', '<': '&lt;', '>': '&gt;' }[c]));
-    const tw = v => String(v).replace(/\s+/g, '_');
+    const e = s => String(s ?? '').replace(/[{}<>]/g, c => ({ '{': '&#123;', '}': '&#125;', '<': '&lt;', '>': '&gt;' }[c]));
     const comp = (frame.name || 'Frame').replace(/[^A-Za-z0-9]+(.)?/g, (_, c) => c ? c.toUpperCase() : '').replace(/^[^A-Za-z]+/, '') || 'Frame';
     const name = comp[0].toUpperCase() + comp.slice(1);
-    const bgFrame = cssGradient(L.palette.bgGradient);
-    const lines = [`export default function ${name}() {`, `  return (`, `    <div className="relative w-[${L.format.w}px] h-[${L.format.h}px] ${frame.clip ? 'overflow-hidden ' : ''}${bgFrame ? '' : `bg-[${cssColor(L.palette.bg)}]`}"${bgFrame ? ` style={{ background: '${bgFrame}' }}` : ''}>`];
-    for (const nd of codeNodes(frame, env)) {
-      const cls = ['absolute', `left-[${nd.box.left}px]`, `top-[${nd.box.top}px]`, `w-[${nd.box.width}px]`, `h-[${nd.box.height}px]`];
-      const style = {};
-      if (nd.bg) { if (/gradient/.test(nd.bg)) style.background = nd.bg; else cls.push(`bg-[${nd.bg}]`); }
-      if (nd.radius) cls.push(nd.radius === 9999 ? 'rounded-full' : nd.radius === '50%' ? 'rounded-[50%]' : `rounded-[${tw(typeof nd.radius === 'number' ? nd.radius + 'px' : nd.radius)}]`);
-      if (nd.alpha != null && nd.alpha < 1) cls.push(`opacity-[${nd.alpha}]`);
-      if (nd.type) { cls.push('m-0', `text-[${nd.type.size}px]`, `font-[${nd.type.weight}]`, `leading-[${nd.type.lh}]`); if (nd.type.ls) cls.push(`tracking-[${nd.type.ls}em]`); if (nd.type.italic) cls.push('italic'); style.fontFamily = nd.type.family; }
-      if (nd.color) cls.push(`text-[${nd.color}]`); if (nd.align === 'center') cls.push('text-center'); if (nd.align === 'right') cls.push('text-right'); if (nd.upper) cls.push('uppercase');
-      if (nd.tag === 'a') cls.push('flex', 'items-center', 'justify-center', 'no-underline');
-      if (nd.tag === 'img') cls.push(nd.fit === 'contain' ? 'object-contain' : 'object-cover');
-      if (nd.tag === 'ul' || nd.tag === 'ol') cls.push(`pl-[${nd.indent}px]`, nd.tag === 'ul' ? 'list-disc' : 'list-decimal');
-      for (const x of nd.fxs) { const [k, v] = x.split(/:(.+)/); style[k.replace(/-([a-z])/g, (_, c) => c.toUpperCase())] = v; }
-      const st = Object.keys(style).length ? ` style={{ ${Object.entries(style).map(([k, v]) => `${k}: ${JSON.stringify(v)}`).join(', ')} }}` : '';
-      const c = ` className="${cls.join(' ')}"${st}`;
-      if (nd.tag === 'img') lines.push(`      <img src="/${e(nd.src).replace(/[^A-Za-z0-9._-]+/g, '-')}" alt=""${c} />`);
-      else if (nd.tag === 'svg') lines.push(`      <svg viewBox="${nd.viewBox}" preserveAspectRatio="none"${c} dangerouslySetInnerHTML={{ __html: ${JSON.stringify(nd.inner)} }} />`);
-      else if (nd.tag === 'ul' || nd.tag === 'ol') lines.push(`      <${nd.tag}${c}>`, ...nd.items.map(i => `        <li>${e(i)}</li>`), `      </${nd.tag}>`);
-      else lines.push(`      <${nd.tag}${nd.tag === 'a' ? ' href="#"' : ''}${c}>${e(nd.text || '')}</${nd.tag}>`);
-    }
+    const tree = codeTree(frame, env);
+    const attrs = st => { const { cls, style } = twClasses(st); const sx = Object.keys(style).length ? ` style={{ ${Object.entries(style).map(([k, v]) => `${k}: ${JSON.stringify(v)}`).join(', ')} }}` : ''; return ` className="${cls.join(' ')}"${sx}`; };
+    const lines = [`export default function ${name}() {`, `  return (`, `    <div${attrs(rootCss(frame, tree))}>`];
+    const emitNode = (nd, depth) => {
+      const pad = '  '.repeat(depth + 2); const c = attrs(cssOf(nd));
+      if (nd.children) { lines.push(`${pad}<div${c}>`); nd.children.forEach(ch => emitNode(ch, depth + 1)); lines.push(`${pad}</div>`); return; }
+      if (nd.tag === 'img') lines.push(`${pad}<img src="/${e(nd.src).replace(/[^A-Za-z0-9._-]+/g, '-')}" alt=""${c} />`);
+      else if (nd.tag === 'svg') lines.push(`${pad}<svg viewBox="${nd.viewBox}" preserveAspectRatio="none"${c} dangerouslySetInnerHTML={{ __html: ${JSON.stringify(nd.inner)} }} />`);
+      else if (nd.tag === 'ul' || nd.tag === 'ol') lines.push(`${pad}<${nd.tag}${c}>`, ...nd.items.map(i => `${pad}  <li>${e(i)}</li>`), `${pad}</${nd.tag}>`);
+      else lines.push(`${pad}<${nd.tag}${nd.tag === 'a' ? ' href="#"' : ''}${c}>${e(nd.text || '')}</${nd.tag}>`);
+    };
+    tree.children.forEach(nd => emitNode(nd, 1));
     lines.push('    </div>', '  );', '}');
     return lines.join('\n');
   }
@@ -4505,7 +4629,12 @@ const Canvas = (() => {
   // Resize a frame to another format by scaling its blocks; text sizes scale with the smaller ratio and refit.
   function scaleFrame(frame, format) {
     const L = frame.layout; const sx = format.w / L.format.w, sy = format.h / L.format.h; const sf = Math.min(sx, sy);
+    const scaleAuto = a => { if (!a) return a; const s = Auto.norm(a); s.gap = Math.round(s.gap * sf); s.counterGap = Math.round(s.counterGap * sf); s.pad = { t: Math.round(s.pad.t * sy), r: Math.round(s.pad.r * sx), b: Math.round(s.pad.b * sy), l: Math.round(s.pad.l * sx) }; return s; };
+    frame.autoLayout = scaleAuto(frame.autoLayout);
     for (const b of L.blocks) {
+      if (b.auto) b.auto = scaleAuto(b.auto);
+      if (b.rx != null) { b.rx = Math.round(b.rx * sx); b.ry = Math.round(b.ry * sy); } delete b.lx; delete b.ly;
+      for (const k of ['minW', 'maxW']) if (b[k] != null) b[k] = Math.round(b[k] * sx); for (const k of ['minH', 'maxH']) if (b[k] != null) b[k] = Math.round(b[k] * sy);
       b.x = Math.round(b.x * sx); b.y = Math.round(b.y * sy); b.w = Math.max(4, Math.round(b.w * sx)); b.h = Math.max(4, Math.round(b.h * sy));
       if (b.font) { b.font.size = Math.max(8, Math.round(b.font.size * sf)); }
       if (b.kind === 'icon' || b.kind === 'badge' || b.kind === 'logo' || (b.kind === 'shape' && b.shape === 'circle')) { const s = Math.round(Math.min(b.w, b.h)); if (b.kind !== 'logo') { b.w = s; b.h = s; } else { b.h = Math.max(8, Math.round(b.h * sf / sy)); } }
@@ -4570,8 +4699,8 @@ const Canvas = (() => {
     const out = []; const x0 = Math.min(...frames.map(f => f.x)), y0 = Math.min(...frames.map(f => f.y));
     for (const src of frames) {
       const c = addFrame(doc, src.layout, { x: snap(at.x + (src.x - x0), 8), y: snap(at.y + (src.y - y0), 8), name: String(src.name || 'Frame').replace(/ copy( \d+)?$/, '') + ' copy' });
-      c.autoLayout = clone(src.autoLayout || c.autoLayout); c.clip = src.clip !== false;
-      for (const b of c.layout.blocks) b.id = uid();
+      c.autoLayout = clone(src.autoLayout || c.autoLayout); c.clip = src.clip !== false; migrate(c);
+      Auto.remap(c.layout.blocks, null);
       out.push(c);
     }
     return out;
@@ -4594,7 +4723,394 @@ const Canvas = (() => {
     };
   }
 
-  return { create, addFrame, blankFrame, frameById, blockById, refit, sourceText, newBlock, moveBlock, resizeBlock, reorder, duplicateBlock, removeBlocks, transferBlocks, pasteBlocks, customFormat, align, distribute, bounds, applyAutoLayout, isBackground, serialize, deserialize, toLink, fromHash, toHTML, toReact, recolor, extractContent, scaleFrame, applyTokens, group, ungroup, groupMembers, tidy, replaceText, setFonts, pasteFrames, framesBounds, cssGradient, history, snap, uid, clone };
+  return { create, addFrame, blankFrame, migrate, defaultAuto, frameById, blockById, refit, sourceText, newBlock, moveBlock, resizeBlock, reorder, duplicateBlock, removeBlocks, transferBlocks, pasteBlocks, customFormat, align, distribute, bounds, applyAutoLayout, isBackground, serialize, deserialize, toLink, fromHash, toHTML, toReact, codeTree, codeNodes, recolor, extractContent, scaleFrame, applyTokens, group, ungroup, groupMembers, tidy, replaceText, setFonts, pasteFrames, framesBounds, cssGradient, history, snap, uid, clone };
+})();
+
+/* js/autolayout.js */
+/* Auto layout, Figma style. A box (kind 'box') stacks its children horizontally or vertically, optionally wrapping, with
+   a gap (or Auto: space between), padding on four sides and alignment; each child sizes itself Fixed, Hug contents or
+   Fill container per axis, and can opt out with absolute position. The screen itself can be an auto layout container.
+   Blocks stay one flat list per frame; `parent` links a block to its box, and sibling order is list order.
+   Positions are frame coordinates. For children in the flow, x/y (and hug or fill sizes) are computed here, so they are
+   derived data. Children outside the flow keep an offset from their box (rx, ry), so they move with it. lx/ly remember
+   where this pass left them: a later difference means someone moved the block by hand. */
+const Auto = (() => {
+  const MAINS = ['start', 'center', 'end'], CROSSES = ['start', 'center', 'end', 'baseline'];
+  const num = (v, d = 0) => (v != null && v !== '' && Number.isFinite(+v)) ? +v : d;
+  const r2 = v => Math.round(v * 100) / 100;
+
+  // ---- Settings ------------------------------------------------------------------------------------------------------
+  // Also reads the first flex shape screens had ({mode, gap, padding, align, justify, fill}).
+  function norm(al) {
+    const a = al || {};
+    const out = { v: 2, mode: a.mode === 'horizontal' || a.mode === 'vertical' ? a.mode : 'none', wrap: !!a.wrap, gap: num(a.gap, 24), gapAuto: !!a.gapAuto, counterGap: num(a.counterGap ?? a.gap, 24), counterGapAuto: !!a.counterGapAuto };
+    const pn = num(a.padding, 0);
+    out.pad = a.pad && typeof a.pad === 'object' ? { t: num(a.pad.t), r: num(a.pad.r), b: num(a.pad.b), l: num(a.pad.l) } : { t: pn, r: pn, b: pn, l: pn };
+    let main = a.main, cross = a.cross;
+    if (a.v !== 2) { if (a.justify === 'space-between') out.gapAuto = true; main = a.justify && a.justify !== 'space-between' ? a.justify : 'start'; cross = a.align; }
+    out.main = MAINS.includes(main) ? main : 'start'; out.cross = CROSSES.includes(cross) ? cross : 'start';
+    if (out.mode !== 'horizontal') out.wrap = false;
+    return out;
+  }
+  const on = s => !!s && (s.mode === 'horizontal' || s.mode === 'vertical');
+  const isBox = b => !!b && b.kind === 'box';
+  // A screen needs a layout pass when it, or any box in it, stacks children, or when blocks sit inside boxes.
+  function needs(f) { return on(norm(f.autoLayout)) || f.layout.blocks.some(b => b.parent || isBox(b)); }
+
+  // ---- Tree ------------------------------------------------------------------------------------------------------------
+  // Parents must be boxes in the same frame and must not loop; anything else sits at the top level.
+  function index(f) {
+    const blocks = f.layout.blocks; const byId = new Map(blocks.map(b => [b.id, b]));
+    const par = new Map();
+    for (const b of blocks) {
+      let p = b.parent; const seen = new Set([b.id]); let ok = true;
+      while (p) { const P = byId.get(p); if (!P || !isBox(P) || seen.has(p)) { ok = false; break; } seen.add(p); p = P.parent; }
+      par.set(b.id, ok && b.parent ? b.parent : '');
+    }
+    const kids = new Map([['', []]]);
+    for (const b of blocks) { const p = par.get(b.id); if (!kids.has(p)) kids.set(p, []); kids.get(p).push(b); }
+    const sCache = new Map(); const rootS = norm(f.autoLayout);
+    return { f, byId, par, kids, rootS, S: id => { if (!id) return rootS; if (!sCache.has(id)) sCache.set(id, norm(byId.get(id).auto)); return sCache.get(id); } };
+  }
+  const childrenOf = (I, id) => I.kids.get(id || '') || [];
+  const parentOf = (f, b) => { const I = index(f); return I.byId.get(I.par.get(b.id)) || null; };
+  function ancestors(f, b, I = index(f)) { const out = []; let p = I.par.get(b.id); while (p) { const P = I.byId.get(p); out.push(P); p = I.par.get(p); } return out; }
+  function descendants(f, b, I = index(f)) { const out = []; const walk = id => { for (const k of childrenOf(I, id)) { out.push(k); walk(k.id); } }; walk(b.id); return out; }
+  // Paint order: each block, then its children, siblings in list order. Hit testing walks it backwards.
+  function paintOrder(f, I = index(f)) { const out = []; const walk = id => { for (const k of childrenOf(I, id)) { out.push(k); if (isBox(k)) walk(k.id); } }; walk(''); return out; }
+  // The blocks of a selection that are not inside another selected block (moving a box moves what is in it).
+  function topmost(f, blocks) { const I = index(f); const ids = new Set(blocks.map(b => b.id)); return blocks.filter(b => !ancestors(f, b, I).some(a => ids.has(a.id))); }
+  function inFlow(I, b) { if (b.hidden || b.absolute) return false; return on(I.S(I.par.get(b.id))); }
+  const flowKids = (I, id) => childrenOf(I, id).filter(k => !k.hidden && !k.absolute);
+
+  // ---- Sizing -------------------------------------------------------------------------------------------------------------
+  const HUGGABLE = new Set(['text', 'list', 'button']);
+  const canHug = (I, b) => HUGGABLE.has(b.kind) || (isBox(b) && on(I.S(b.id)));
+  // fixed | hug | fill for one axis. Text and lists hug their height by default (auto height), like Figma's text.
+  function sizing(I, b, axis) {
+    const v = axis === 'w' ? b.sizeW : b.sizeH;
+    if (v === 'fill') return 'fill';
+    if (v === 'hug') return canHug(I, b) ? 'hug' : 'fixed';
+    if (v === 'fixed') return 'fixed';
+    if (axis === 'h' && (b.kind === 'text' || b.kind === 'list')) return 'hug';
+    return 'fixed';
+  }
+  const clampW = (b, v) => Math.max(1, Math.min(num(b.maxW, Infinity), Math.max(num(b.minW, 0), v)));
+  const clampH = (b, v) => Math.max(1, Math.min(num(b.maxH, Infinity), Math.max(num(b.minH, 0), v)));
+  function textHugW(b) { const f = b.font || { size: 16, weight: 400, family: 'sans-serif' }; const t = Text.transform(Canvas.sourceText(b), f.transform); return Math.ceil(Math.max(8, ...t.split('\n').map(l => Text.width(l, f)))) + 1; }
+  function listHugW(b) { const f = b.font || { size: 16, weight: 400, family: 'sans-serif' }; const indent = b.indent || Math.round(f.size * (b.marker === 'number' ? 2.1 : 1.3)); return Math.ceil(indent + Math.max(8, ...(b.items && b.items.length ? b.items : ['']).map(i => Text.width(String(i), f)))) + 1; }
+  function buttonHug(b) { const f = b.font || { size: 16, weight: 600, family: 'sans-serif' }; const px = num(b.padX, Math.round(f.size * 1.4)), py = num(b.padY, Math.round(f.size * 0.75)); return { w: Math.ceil(Text.width(String(b.text || ''), f) + 2 * px), h: Math.ceil(f.size * (f.lineHeight || 1.2) + 2 * py) }; }
+  function hugW(I, b) {
+    if (b.kind === 'text') return textHugW(b);
+    if (b.kind === 'list') return listHugW(b);
+    if (b.kind === 'button') return buttonHug(b).w;
+    if (isBox(b) && on(I.S(b.id))) return boxHugW(I, b);
+    return b.w;
+  }
+  function hugH(I, b, w) {
+    if (b.kind === 'text' || b.kind === 'list') { b.w = w; Canvas.refit(b); return b.h; }
+    if (b.kind === 'button') return buttonHug(b).h;
+    if (isBox(b) && on(I.S(b.id))) return arrange(I, b.id, I.S(b.id), w, null).h;
+    return b.h;
+  }
+  function boxHugW(I, b) {
+    const s = I.S(b.id), p = s.pad; const kids = flowKids(I, b.id);
+    if (s.wrap) return b.w;
+    const ws = kids.map(k => clampW(k, sizing(I, k, 'w') !== 'fixed' && canHug(I, k) ? hugW(I, k) : k.w));
+    if (!ws.length) return p.l + p.r;
+    return s.mode === 'vertical' ? Math.max(...ws) + p.l + p.r : ws.reduce((a, c) => a + c, 0) + (s.gapAuto ? 0 : s.gap) * (ws.length - 1) + p.l + p.r;
+  }
+  // A block's own size outside any flow: fill means nothing there, so it keeps its size.
+  function ownSize(I, b) {
+    const sw = sizing(I, b, 'w'); const w = clampW(b, sw === 'hug' ? hugW(I, b) : b.w);
+    const sh = sizing(I, b, 'h'); const h = clampH(b, sh === 'hug' ? hugH(I, b, w) : b.h);
+    return { w, h };
+  }
+  function baseline(b, h) {
+    if ((b.kind === 'text' || b.kind === 'list') && b.font) { const s = b.font.size || 16; return s * 0.78 + (s * (b.font.lineHeight || 1.2) - s) / 2; }
+    if (b.kind === 'button' && b.font) return h / 2 + (b.font.size || 16) * 0.35;
+    if (isBox(b) && b.firstBaseline != null) return b.firstBaseline;
+    return h;
+  }
+  const crossOff = (c, inner, size) => c === 'center' ? (inner - size) / 2 : c === 'end' ? inner - size : 0;
+
+  // ---- Arrange: child boxes of one container for an outer size W x H (H null = hug) -------------------------------------
+  function arrange(I, cid, s, W, H) {
+    const p = s.pad; const kids = flowKids(I, cid);
+    const innerW = Math.max(0, W - p.l - p.r), innerH = H == null ? null : Math.max(0, H - p.t - p.b);
+    const items = kids.map(k => ({ k, x: 0, y: 0, w: 0, h: 0 }));
+    if (!items.length) return { items, h: p.t + p.b };
+    if (s.mode === 'vertical') return arrangeV(I, s, items, innerW, innerH, p);
+    return s.wrap ? arrangeWrap(I, s, items, innerW, innerH, p) : arrangeH(I, s, items, innerW, innerH, p);
+  }
+  function arrangeV(I, s, items, innerW, innerH, p) {
+    for (const it of items) { const sw = sizing(I, it.k, 'w'); it.w = clampW(it.k, sw === 'fill' ? innerW : sw === 'hug' ? hugW(I, it.k) : it.k.w); }
+    const grow = [];
+    for (const it of items) {
+      const sh = sizing(I, it.k, 'h');
+      if (sh === 'fill' && innerH != null) { grow.push(it); it.h = clampH(it.k, 1); }
+      else it.h = clampH(it.k, sh === 'hug' || (sh === 'fill' && canHug(I, it.k)) ? hugH(I, it.k, it.w) : it.k.h);
+    }
+    const n = items.length; let gap = s.gap;
+    const sum = items.filter(it => !grow.includes(it)).reduce((t, it) => t + it.h, 0);
+    let free = innerH == null ? 0 : innerH - sum - gap * (n - 1);
+    if (grow.length) { const each = Math.max(0, free) / grow.length; for (const it of grow) { it.h = clampH(it.k, each); if (it.k.kind === 'text' || it.k.kind === 'list') hugH(I, it.k, it.w); } free = innerH - items.reduce((t, it) => t + it.h, 0) - gap * (n - 1); }
+    else if (s.gapAuto && n > 1 && innerH != null) { gap = Math.max(0, (innerH - sum) / (n - 1)); free = innerH - sum - gap * (n - 1); }
+    const off = innerH == null || grow.length || (s.gapAuto && n > 1) ? 0 : s.main === 'center' ? free / 2 : s.main === 'end' ? free : 0;
+    let y = p.t + off;
+    for (const it of items) { it.y = y; y += it.h + gap; it.x = p.l + crossOff(s.cross, innerW, it.w); }
+    const used = items.reduce((t, it) => t + it.h, 0) + gap * (n - 1);
+    return { items, h: (innerH == null ? used : innerH) + p.t + p.b };
+  }
+  function arrangeH(I, s, items, innerW, innerH, p) {
+    const grow = [];
+    for (const it of items) { const sw = sizing(I, it.k, 'w'); if (sw === 'fill') { grow.push(it); it.w = clampW(it.k, 1); } else it.w = clampW(it.k, sw === 'hug' ? hugW(I, it.k) : it.k.w); }
+    const n = items.length; let gap = s.gap;
+    const sum = items.filter(it => !grow.includes(it)).reduce((t, it) => t + it.w, 0);
+    let free = innerW - sum - gap * (n - 1);
+    if (grow.length) { const each = Math.max(0, free) / grow.length; for (const it of grow) it.w = clampW(it.k, each); free = innerW - items.reduce((t, it) => t + it.w, 0) - gap * (n - 1); }
+    else if (s.gapAuto && n > 1) { gap = Math.max(0, (innerW - sum) / (n - 1)); free = innerW - sum - gap * (n - 1); }
+    rowHeights(I, s, items, innerH);
+    const lineH = innerH != null ? innerH : rowExtent(s, items);
+    placeRow(s, items, p.l + (grow.length || (s.gapAuto && n > 1) ? 0 : s.main === 'center' ? free / 2 : s.main === 'end' ? free : 0), gap, p.t, lineH);
+    return { items, h: lineH + p.t + p.b };
+  }
+  function arrangeWrap(I, s, items, innerW, innerH, p) {
+    for (const it of items) { const sw = sizing(I, it.k, 'w'); it.fill = sw === 'fill'; it.w = clampW(it.k, sw === 'fixed' ? it.k.w : canHug(I, it.k) ? hugW(I, it.k) : it.k.w); }
+    const rows = []; let row = [], rowW = 0;
+    for (const it of items) { const add = (row.length ? s.gap : 0) + it.w; if (row.length && rowW + add > innerW + 0.5) { rows.push(row); row = [it]; rowW = it.w; } else { row.push(it); rowW += add; } }
+    if (row.length) rows.push(row);
+    const metas = rows.map(r => {
+      const n = r.length; let gap = s.gap; const sum = r.reduce((t, it) => t + it.w, 0); let free = innerW - sum - gap * (n - 1);
+      const grow = r.filter(it => it.fill);
+      if (grow.length && free > 0) { const each = free / grow.length; for (const it of grow) it.w = clampW(it.k, it.w + each); free = innerW - r.reduce((t, it) => t + it.w, 0) - gap * (n - 1); }
+      else if (s.gapAuto && n > 1) { gap = Math.max(0, (innerW - sum) / (n - 1)); free = 0; }
+      rowHeights(I, s, r, null);
+      return { r, gap, off: grow.length || (s.gapAuto && n > 1) ? 0 : s.main === 'center' ? free / 2 : s.main === 'end' ? free : 0, h: rowExtent(s, r) };
+    });
+    const total = metas.reduce((t, m) => t + m.h, 0);
+    let cgap = s.counterGap; if (s.counterGapAuto && innerH != null && metas.length > 1) cgap = Math.max(0, (innerH - total) / (metas.length - 1));
+    let y = p.t;
+    for (const m of metas) { for (const it of m.r) if (sizing(I, it.k, 'h') === 'fill') it.h = clampH(it.k, m.h); placeRow(s, m.r, p.l + m.off, m.gap, y, m.h); y += m.h + cgap; }
+    const used = total + cgap * (metas.length - 1);
+    return { items, h: (innerH == null ? used : Math.max(innerH, used)) + p.t + p.b };
+  }
+  // Heights of one row once widths are known; fill-height children take the row's height.
+  function rowHeights(I, s, items, innerH) {
+    const fills = [];
+    for (const it of items) {
+      const sh = sizing(I, it.k, 'h');
+      if (sh === 'fill') { fills.push(it); it.h = clampH(it.k, innerH != null ? innerH : canHug(I, it.k) ? hugH(I, it.k, it.w) : it.k.h); }
+      else it.h = clampH(it.k, sh === 'hug' ? hugH(I, it.k, it.w) : it.k.h);
+    }
+    if (innerH == null && fills.length) { const others = items.filter(it => !fills.includes(it)); const lh = others.length ? rowExtent(s, others) : Math.max(...fills.map(it => it.h)); for (const it of fills) it.h = clampH(it.k, lh); }
+    for (const it of fills) if (it.k.kind === 'text' || it.k.kind === 'list') hugH(I, it.k, it.w);
+  }
+  function rowExtent(s, items) {
+    if (s.cross !== 'baseline') return Math.max(...items.map(it => it.h));
+    const bl = items.map(it => baseline(it.k, it.h)); const up = Math.max(...bl); return up + Math.max(...items.map((it, i) => it.h - bl[i]));
+  }
+  function placeRow(s, items, x0, gap, y0, lineH) {
+    let x = x0;
+    const up = s.cross === 'baseline' ? Math.max(...items.map(it => baseline(it.k, it.h))) : 0;
+    for (const it of items) { it.x = x; x += it.w + gap; it.y = y0 + (s.cross === 'baseline' ? up - baseline(it.k, it.h) : crossOff(s.cross, lineH, it.h)); }
+  }
+
+  // ---- Commit: write boxes into blocks, top down ----------------------------------------------------------------------
+  function commit(I, b, x, y, w, h, measured) {
+    b.x = r2(x); b.y = r2(y);
+    if (measured) {
+      if (b.kind === 'text' || b.kind === 'list') { b.w = r2(w); Canvas.refit(b); if (sizing(I, b, 'h') !== 'hug') b.h = r2(h); }
+      else { b.w = r2(w); b.h = r2(h); if (b.kind === 'button') Canvas.refit(b); }
+    }
+    if (isBox(b)) layoutInside(I, b);
+  }
+  function layoutInside(I, b) {
+    const s = I.S(b.id);
+    if (on(s)) { const r = arrange(I, b.id, s, b.w, b.h); for (const it of r.items) commit(I, it.k, b.x + it.x, b.y + it.y, it.w, it.h, true); }
+    for (const k of childrenOf(I, b.id)) {
+      if (on(s) && !k.hidden && !k.absolute) continue;
+      const explicit = k.sizeW === 'hug' || k.sizeH === 'hug' || isBox(k);
+      const sz = explicit ? ownSize(I, k) : null;
+      commit(I, k, b.x + num(k.rx), b.y + num(k.ry), sz ? sz.w : k.w, sz ? sz.h : k.h, !!sz);
+    }
+  }
+  // The pass for one screen. Returns true when it ran.
+  function layout(f) {
+    if (!needs(f)) return false;
+    const I = index(f); const blocks = f.layout.blocks;
+    // 1. offsets of blocks that sit in a box but outside its flow
+    for (const b of blocks) {
+      const pid = I.par.get(b.id);
+      if (!pid) { if (b.parent) delete b.parent; delete b.rx; delete b.ry; if (!isBox(b)) { delete b.lx; delete b.ly; } continue; }
+      if (inFlow(I, b)) continue;
+      const P = I.byId.get(pid); const hasXY = Number.isFinite(b.x) && Number.isFinite(b.y);
+      if (b.rx == null || b.ry == null) { b.rx = hasXY && Number.isFinite(P.x) ? b.x - P.x : 0; b.ry = hasXY && Number.isFinite(P.y) ? b.y - P.y : 0; }
+      else if (hasXY && b.lx != null && b.ly != null && (b.x !== b.lx || b.y !== b.ly)) {
+        // moved by hand: keep where it was put. Moved together with its box (same distance): the offset holds.
+        const dp = P.lx != null && Number.isFinite(P.x) ? { x: P.x - P.lx, y: P.y - P.ly } : { x: 0, y: 0 };
+        b.rx += (b.x - b.lx) - dp.x; b.ry += (b.y - b.ly) - dp.y;
+      }
+    }
+    // 2. the screen, then every box inside it
+    const W = f.layout.format.w, H = f.layout.format.h; const rs = I.rootS;
+    if (on(rs)) { const r = arrange(I, '', rs, W, H); for (const it of r.items) commit(I, it.k, it.x, it.y, it.w, it.h, true); }
+    for (const b of childrenOf(I, '')) {
+      if (on(rs) && !b.hidden && !b.absolute) continue;
+      const explicit = b.sizeW === 'hug' || b.sizeH === 'hug' || (isBox(b) && on(I.S(b.id)));
+      const sz = explicit ? ownSize(I, b) : null;
+      commit(I, b, num(b.x), num(b.y), sz ? sz.w : b.w, sz ? sz.h : b.h, !!sz);
+    }
+    // 3. bookkeeping for the next pass
+    for (const b of blocks) {
+      const parented = !!I.par.get(b.id); const flow = parented && inFlow(I, b);
+      if (parented && !flow) { b.rx = r2(b.rx); b.ry = r2(b.ry); }
+      if (flow) { delete b.rx; delete b.ry; }
+      if ((parented && !flow) || isBox(b)) { b.lx = b.x; b.ly = b.y; } else { delete b.lx; delete b.ly; }
+    }
+    return true;
+  }
+
+  // ---- Sync view: drop what every viewer computes for themselves ------------------------------------------------------
+  const MEASURED = ['lines', 'inkW', 'overflow'];
+  // Measured again by every viewer's pass: blocks in a flow, explicit hug sizes, and stacks.
+  const remeasured = (I, b, flow) => flow || b.sizeW === 'hug' || b.sizeH === 'hug' || (isBox(b) && on(I.S(b.id)));
+  function syncBlock(f, b, I) {
+    if (!I) return b;
+    const pid = I.par.get(b.id); const flow = inFlow(I, b); const re = remeasured(I, b, flow);
+    if (!pid && !re && b.lx == null) return b;
+    const out = { ...b }; delete out.lx; delete out.ly;
+    if (pid || flow) { delete out.x; delete out.y; }
+    if (flow) { delete out.rx; delete out.ry; }
+    if (re) {
+      const sw = sizing(I, b, 'w'), sh = sizing(I, b, 'h');
+      if (sw === 'hug' || (flow && sw === 'fill')) delete out.w;
+      if (sh === 'hug' || (flow && sh === 'fill')) delete out.h;
+      if (b.kind === 'text' || b.kind === 'list') for (const k of MEASURED) delete out[k];
+    }
+    return out;
+  }
+  // Blocks arriving without positions get defaults so nothing downstream sees undefined before the pass runs.
+  function fillDefaults(f) { for (const b of f.layout.blocks) { for (const k of ['x', 'y']) if (!Number.isFinite(b[k])) b[k] = 0; for (const k of ['w', 'h']) if (!Number.isFinite(b[k])) b[k] = 8; } }
+
+  // ---- Editing operations -------------------------------------------------------------------------------------------------
+  const snapTo = (v, u = 4) => Math.max(0, Math.round(v / u) * u);
+  // Direction, gap, padding and alignment read from how blocks already sit (what Shift+A does in Figma).
+  function infer(blocks, box) {
+    if (!blocks.length) return { mode: 'vertical', gap: 16, pad: { t: 0, r: 0, b: 0, l: 0 }, cross: 'start' };
+    const ov = (a0, a1, b0, b1) => Math.max(0, Math.min(a1, b1) - Math.max(a0, b0));
+    const byX = blocks.slice().sort((a, b) => a.x - b.x), byY = blocks.slice().sort((a, b) => a.y - b.y);
+    let ox = 0, oy = 0; for (let i = 1; i < blocks.length; i++) { ox += ov(byX[i - 1].x, byX[i - 1].x + byX[i - 1].w, byX[i].x, byX[i].x + byX[i].w); oy += ov(byY[i - 1].y, byY[i - 1].y + byY[i - 1].h, byY[i].y, byY[i].y + byY[i].h); }
+    const mode = blocks.length > 1 && ox < oy ? 'horizontal' : 'vertical';
+    const seq = mode === 'horizontal' ? byX : byY; const gaps = [];
+    for (let i = 1; i < seq.length; i++) gaps.push(mode === 'horizontal' ? seq[i].x - (seq[i - 1].x + seq[i - 1].w) : seq[i].y - (seq[i - 1].y + seq[i - 1].h));
+    gaps.sort((a, b) => a - b); const gap = gaps.length ? snapTo(gaps[Math.floor(gaps.length / 2)]) : 16;
+    const bb = Canvas.bounds(blocks); const pad = box ? { t: snapTo(bb.y - box.y), r: snapTo(box.x + box.w - bb.x - bb.w), b: snapTo(box.y + box.h - bb.y - bb.h), l: snapTo(bb.x - box.x) } : { t: 0, r: 0, b: 0, l: 0 };
+    const near = (vals, tol = 3) => vals.every(v => Math.abs(v - vals[0]) <= tol);
+    let cross = 'start';
+    if (blocks.length > 1) {
+      if (mode === 'vertical') cross = near(blocks.map(b => b.x)) ? 'start' : near(blocks.map(b => b.x + b.w / 2)) ? 'center' : near(blocks.map(b => b.x + b.w)) ? 'end' : 'start';
+      else cross = near(blocks.map(b => b.y)) ? 'start' : near(blocks.map(b => b.y + b.h / 2)) ? 'center' : near(blocks.map(b => b.y + b.h)) ? 'end' : 'start';
+    }
+    return { mode, gap, pad, cross, order: seq };
+  }
+  // Move a block to sit just before `before` (or last) among the children of parentId, keeping the list's other order.
+  function moveInList(f, b, parentId, before) {
+    const list = f.layout.blocks; list.splice(list.indexOf(b), 1);
+    if (parentId) b.parent = parentId; else delete b.parent;
+    let i = before ? list.indexOf(before) : -1;
+    if (i < 0) { const I = index({ ...f, layout: { ...f.layout, blocks: list } }); const sib = childrenOf(I, parentId); const last = sib[sib.length - 1]; i = last ? lastIndexOfSubtree(list, I, last) + 1 : (parentId ? list.findIndex(x => x.id === parentId) + 1 : list.length); }
+    list.splice(Math.max(0, i), 0, b);
+  }
+  function lastIndexOfSubtree(list, I, b) { let i = list.indexOf(b); const walk = id => { for (const k of childrenOf(I, id)) { i = Math.max(i, list.indexOf(k)); walk(k.id); } }; walk(b.id); return i; }
+  // Wrap blocks (siblings) in a new box. withAuto: an auto layout stack inferred from their arrangement (Shift+A);
+  // without: a plain box (Frame selection).
+  function wrap(f, blocks, withAuto = true) {
+    if (!blocks.length) return null;
+    const I = index(f); const pid = I.par.get(blocks[0].id) || '';
+    const sibs = blocks.filter(b => (I.par.get(b.id) || '') === pid);
+    const bb = Canvas.bounds(sibs);
+    const box = { id: Canvas.uid(), kind: 'box', x: bb.x, y: bb.y, w: Math.max(1, bb.w), h: Math.max(1, bb.h), fill: 'none', radius: 0, clip: false, decorative: true, hidden: false, locked: false };
+    if (pid) box.parent = pid;
+    if (withAuto) {
+      const inf = infer(sibs, null);
+      box.auto = { v: 2, mode: inf.mode, wrap: false, gap: inf.gap, gapAuto: false, counterGap: inf.gap, counterGapAuto: false, pad: { t: 0, r: 0, b: 0, l: 0 }, main: 'start', cross: inf.cross };
+      box.sizeW = 'hug'; box.sizeH = 'hug';
+      sibs.splice(0, sibs.length, ...inf.order);
+    }
+    const list = f.layout.blocks; const first = Math.min(...sibs.map(b => list.indexOf(b)));
+    list.splice(first, 0, box);
+    for (const b of sibs) { list.splice(list.indexOf(b), 1); b.parent = box.id; delete b.rx; delete b.ry; delete b.lx; delete b.ly; if (withAuto) delete b.absolute; }
+    // children follow in their new order right after the box
+    let at = list.indexOf(box) + 1; for (const b of sibs) { list.splice(at++, 0, b); }
+    if (!withAuto) for (const b of sibs) { b.rx = b.x - box.x; b.ry = b.y - box.y; }
+    return box;
+  }
+  // Turn auto layout on for a box (or the screen, box null), reading direction and spacing from the children.
+  function enable(f, box) {
+    const I = index(f); const pid = box ? box.id : '';
+    const kids = childrenOf(I, pid).filter(k => !k.hidden);
+    const area = box || { x: 0, y: 0, w: f.layout.format.w, h: f.layout.format.h };
+    if (!box) for (const k of kids) if (Canvas.isBackground(f, k) || k.kind === 'scrim') k.absolute = true;
+    const flow = kids.filter(k => !k.absolute);
+    const inf = infer(flow, area);
+    const s = { v: 2, mode: inf.mode, wrap: false, gap: inf.gap, gapAuto: false, counterGap: inf.gap, counterGapAuto: false, pad: inf.pad, main: 'start', cross: inf.cross };
+    if (box) box.auto = s; else f.autoLayout = s;
+    // flow order follows position
+    const list = f.layout.blocks; const slots = flow.map(k => list.indexOf(k)).sort((a, b) => a - b);
+    inf.order.forEach((k, i) => { list[slots[i]] = k; });
+    for (const k of flow) { delete k.rx; delete k.ry; delete k.lx; delete k.ly; }
+    return s;
+  }
+  // Turn it off: children stay where they are and become free.
+  function disable(f, box) { if (box) box.auto = { ...norm(box.auto), mode: 'none' }; else f.autoLayout = { ...norm(f.autoLayout), mode: 'none' }; if (box) { delete box.sizeW; delete box.sizeH; } }
+  // Every stack in the screen off at once (simple editing, when someone drags a block to a free spot).
+  function flatten(f) {
+    let n = 0;
+    if (on(norm(f.autoLayout))) { f.autoLayout = { ...norm(f.autoLayout), mode: 'none' }; n++; }
+    for (const b of f.layout.blocks) {
+      if (isBox(b) && on(norm(b.auto))) { b.auto = { ...norm(b.auto), mode: 'none' }; n++; }
+      if (b.sizeW === 'hug' || b.sizeW === 'fill') b.sizeW = 'fixed'; if (b.sizeH === 'fill') b.sizeH = 'fixed'; if (b.sizeH === 'hug' && b.kind !== 'text' && b.kind !== 'list') b.sizeH = 'fixed';
+    }
+    return n;
+  }
+  // Remove a box but keep what is in it (children move up a level and keep their places).
+  function unwrap(f, box) {
+    const I = index(f); const pid = I.par.get(box.id) || '';
+    const kids = childrenOf(I, box.id); const list = f.layout.blocks;
+    for (const k of kids) { if (pid) k.parent = pid; else delete k.parent; delete k.rx; delete k.ry; delete k.lx; delete k.ly; }
+    list.splice(list.indexOf(box), 1);
+    return kids;
+  }
+  // Ids in a pasted or duplicated subtree are new; parents inside the set follow, others drop to `root`.
+  function remap(blocks, root) {
+    const map = new Map(blocks.map(b => [b.id, Canvas.uid()]));
+    for (const b of blocks) { b.id = map.get(b.id); if (b.parent && map.has(b.parent)) b.parent = map.get(b.parent); else if (root) b.parent = root; else delete b.parent; }
+    return map;
+  }
+  // A selection plus everything inside its boxes, in list order.
+  function withDescendants(f, blocks) {
+    const I = index(f); const ids = new Set();
+    for (const b of blocks) { ids.add(b.id); for (const d of descendants(f, b, I)) ids.add(d.id); }
+    return f.layout.blocks.filter(b => ids.has(b.id));
+  }
+  // Where a dragged block would land among a stack's children: index before which it goes.
+  function dropIndex(f, box, p, exclude = []) {
+    const I = index(f); const pid = box ? box.id : ''; const s = I.S(pid);
+    const ex = new Set(exclude.map(b => b.id)); const kids = flowKids(I, pid).filter(k => !ex.has(k.id));
+    const H = s.mode === 'horizontal';
+    for (let i = 0; i < kids.length; i++) { const k = kids[i]; const mid = H ? k.x + k.w / 2 : k.y + k.h / 2; const v = H ? p.x : p.y; if (s.wrap) { if (p.y < k.y + k.h && (p.x < k.x + k.w / 2 || p.y < k.y)) return { index: i, before: k, kids, s }; } else if (v < mid) return { index: i, before: k, kids, s }; }
+    return { index: kids.length, before: null, kids, s };
+  }
+  // The deepest box under a point that could take a dropped block (never the dragged ones or what is in them).
+  function containerAt(f, p, exclude = []) {
+    const I = index(f); const ex = new Set(); for (const b of exclude) { ex.add(b.id); for (const d of descendants(f, b, I)) ex.add(d.id); }
+    const order = paintOrder(f, I);
+    for (let i = order.length - 1; i >= 0; i--) { const b = order[i]; if (!isBox(b) || b.hidden || ex.has(b.id)) continue; if (p.x >= b.x && p.y >= b.y && p.x <= b.x + b.w && p.y <= b.y + b.h) return b; }
+    return null;
+  }
+
+  return { norm, on, isBox, needs, index, childrenOf, parentOf, ancestors, descendants, paintOrder, topmost, inFlow, flowKids, sizing, canHug, ownSize, layout, syncBlock, fillDefaults, infer, wrap, enable, disable, flatten, unwrap, remap, withDescendants, moveInList, dropIndex, containerAt, settingsOf: (f, b) => b ? norm(b.auto) : norm(f.autoLayout) };
 })();
 
 /* js/canvas-ui.js */
@@ -4608,6 +5124,13 @@ const CanvasUI = (() => {
   const sel = { frameId: null, blockIds: [], frameIds: [] };
   let tool = 'select', hover = null, drag = null, spaceDown = false, clipboard = null, lastPointer = null, dropTarget = null;
   let guides = [], editing = null, groupFocus = null, peers = [], undoMerge = null;
+  // Simple editing (default) hides auto layout, sizing and code, and treats stacks as tidy containers; Advanced is
+  // Figma-style. Per person, kept in this browser.
+  let editMode = (() => { try { return localStorage.getItem('lg.editMode') === 'advanced' ? 'advanced' : 'simple'; } catch { return 'simple'; } })();
+  const advanced = () => editMode === 'advanced';
+  let layoutHold = null; // a frame whose layout pass waits while a block in one of its stacks is dragged
+  let dropHint = null;   // where a dragged block would land: {frame, container, index, before, line, free, flatten}
+  const folded = new Set(); // boxes collapsed in the layers panel
   const hooks = { change: [], live: [], select: [], pointer: [] };
   const HANDLE = 7;
   const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -4638,14 +5161,14 @@ const CanvasUI = (() => {
   }
   // Remote changes: the document object was patched in place by the sync layer.
   function remoteApplied(frameIds, structural) {
-    validateSelection();
+    validateSelection(); hover = null;
     if (editing && !Canvas.frameById(doc, editing.frameId)) endEdit(true);
     if (!active) { persist({ silent: true }); return; }
     if (structural || !frameIds) renderFrames(); else frameIds.forEach(id => { const f = Canvas.frameById(doc, id); if (f && !(editing && editing.frameId === id)) rerenderFrame(f); });
     renderLayers(); if (!propsFocused()) renderProps(); drawOverlay(); updateCount();
     persist({ silent: true });
   }
-  function replaceDoc(d, opts = {}) { const view = doc && doc.view; doc = d; if (opts.keepView !== false && view) doc.view = view; validateSelection(); if (active) renderAll(); persist(opts); }
+  function replaceDoc(d, opts = {}) { hover = null; const view = doc && doc.view; doc = d; if (opts.keepView !== false && view) doc.view = view; validateSelection(); if (active) renderAll(); persist(opts); }
   const propsFocused = () => { const a = document.activeElement; return !!(a && $('cvProps').contains(a) && a !== document.body); };
   function validateSelection() {
     sel.frameIds = sel.frameIds.filter(id => Canvas.frameById(doc, id));
@@ -4672,7 +5195,33 @@ const CanvasUI = (() => {
   const FW = f => f.layout.format.w, FH = f => f.layout.format.h;
   function frameAt(p) { for (let i = doc.frames.length - 1; i >= 0; i--) { const f = doc.frames[i]; if (f.hidden) continue; if (p.x >= f.x && p.y >= f.y && p.x <= f.x + FW(f) && p.y <= f.y + FH(f)) return f; } return null; }
   function labelAt(p) { const off = Math.max(16, 18 / doc.view.zoom) + 2; for (let i = doc.frames.length - 1; i >= 0; i--) { const f = doc.frames[i]; if (f.hidden) continue; if (p.x >= f.x && p.x <= f.x + FW(f) && p.y >= f.y - off && p.y < f.y) return f; } return null; }
-  function blockAt(f, p) { const lx = p.x - f.x, ly = p.y - f.y; const bs = f.layout.blocks; for (let i = bs.length - 1; i >= 0; i--) { const b = bs[i]; if (b.hidden) continue; const w = (b.kind === 'text' && b.align !== 'center' && b.align !== 'right') ? Math.max(b.inkW || b.w, 24) : b.w; if (lx >= b.x && ly >= b.y && lx <= b.x + w && ly <= b.y + b.h) return b; } return null; }
+  // The deepest visible block under a point and the boxes it sits in: [top level, ..., deepest]. Clipping boxes hide
+  // what lies outside them.
+  function hitChain(f, p) {
+    const I = Auto.index(f); const lx = p.x - f.x, ly = p.y - f.y; const order = Auto.paintOrder(f, I);
+    const gone = new Set(); for (const b of order) { const pid = I.par.get(b.id); if (b.hidden || (pid && gone.has(pid))) gone.add(b.id); }
+    for (let i = order.length - 1; i >= 0; i--) {
+      const b = order[i]; if (gone.has(b.id)) continue;
+      const w = (b.kind === 'text' && b.align !== 'center' && b.align !== 'right') ? Math.max(b.inkW || b.w, 24) : b.w;
+      if (!(lx >= b.x && ly >= b.y && lx <= b.x + w && ly <= b.y + b.h)) continue;
+      const anc = Auto.ancestors(f, b, I);
+      if (anc.some(a => a.clip && !(lx >= a.x && ly >= a.y && lx <= a.x + a.w && ly <= a.y + a.h))) continue;
+      return [...anc.reverse(), b];
+    }
+    return [];
+  }
+  // Which level a click selects. Advanced works like Figma: the top level, or a sibling of what is selected; double-click
+  // goes one level in; ⌘-click goes straight to the deepest. Simple picks the thing itself (text, image, button).
+  function pickLevel(f, chain, e) {
+    if (!chain.length) return null;
+    const deepest = chain[chain.length - 1];
+    if (e && (e.metaKey || e.ctrlKey)) return deepest;
+    if (!advanced()) return deepest;
+    const scopes = new Set(sel.frameId === f.id ? selBlocks().map(b => b.parent || '') : []);
+    for (let i = chain.length - 1; i > 0; i--) if (scopes.has(chain[i].parent || '')) return chain[i];
+    return chain[0];
+  }
+  function blockAt(f, p, e) { return pickLevel(f, hitChain(f, p), e); }
   function selFrame() { return Canvas.frameById(doc, sel.frameId); }
   function selFrames() { return (sel.frameIds.length ? sel.frameIds : sel.frameId ? [sel.frameId] : []).map(id => Canvas.frameById(doc, id)).filter(Boolean); }
   function selBlocks() { const f = selFrame(); return f ? sel.blockIds.map(id => Canvas.blockById(f, id)).filter(Boolean) : []; }
@@ -4706,6 +5255,7 @@ const CanvasUI = (() => {
     $('world').innerHTML = doc.frames.map(f => `${labelHTML(f)}<div class="cv-frame" data-id="${esc(f.id)}" style="left:${f.x}px;top:${f.y}px;width:${FW(f)}px;height:${FH(f)}px;${f.hidden ? 'display:none;' : ''}${f.clip === false ? 'overflow:visible;' : ''}">${frameSVG(f)}</div>`).join('');
   }
   function frameSVG(f) {
+    if (layoutHold !== f.id && Auto.needs(f)) Auto.layout(f);
     const L = editing && editing.frameId === f.id && editing.hide ? { ...f.layout, blocks: f.layout.blocks.filter(b => b.id !== editing.blockId) } : f.layout;
     return env.renderSVG(L, { showGrid: !!f.showGrid });
   }
@@ -4747,12 +5297,15 @@ const CanvasUI = (() => {
     if (f && frames.length === 1) {
       if (blocks.length) {
         const gb = blocks.length > 1 ? Canvas.bounds(blocks) : null;
+        // the box the selection sits in, so you can see which stack it belongs to
+        const par = blocks.length && blocks[0].parent ? Canvas.blockById(f, blocks[0].parent) : null;
+        if (par && !(drag && drag.type)) parts.push(rect(f.x + par.x, f.y + par.y, par.w, par.h, 'fill="none" stroke="var(--accent)" stroke-opacity=".55" stroke-dasharray="3 3" stroke-width="1"'));
         for (const b of blocks) {
           const q = toScreen(f.x + b.x, f.y + b.y); const w = b.w * Z, h = b.h * Z;
           parts.push(`<rect x="${q.x}" y="${q.y}" width="${w}" height="${h}" fill="none" stroke="${b.overflow ? 'var(--danger)' : 'var(--accent)'}" stroke-width="1.5"/>`);
           if (blocks.length === 1) {
             if (!b.locked && !(editing && editing.blockId === b.id)) for (const hnd of handles(q.x, q.y, w, h)) parts.push(`<rect class="cv-handle" x="${hnd.x - HANDLE / 2}" y="${hnd.y - HANDLE / 2}" width="${HANDLE}" height="${HANDLE}" fill="#fff" stroke="var(--accent)" stroke-width="1.5"/>`);
-            parts.push(`<text x="${q.x}" y="${q.y - 6}" fill="var(--accent)" font-size="11" font-family="var(--font-mono)">${esc(b.group ? 'group · ' : '')}${esc(b.role || b.kind)} ${Math.round(b.w)}×${Math.round(b.h)}</text>`);
+            parts.push(`<text x="${q.x}" y="${q.y - 6}" fill="var(--accent)" font-size="11" font-family="var(--font-mono)">${esc(b.group ? 'group · ' : '')}${esc(kindLabel(f, b))} ${Math.round(b.w)}×${Math.round(b.h)}${esc(sizeLabel(f, b))}</text>`);
           }
         }
         if (gb) { const q = toScreen(f.x + gb.x, f.y + gb.y); parts.push(`<rect x="${q.x - 3}" y="${q.y - 3}" width="${gb.w * Z + 6}" height="${gb.h * Z + 6}" fill="none" stroke="var(--accent)" stroke-dasharray="4 3" stroke-width="1"/><text x="${q.x}" y="${q.y - 8}" fill="var(--accent)" font-size="11" font-family="var(--font-mono)">${blocks[0].group && blocks.every(b => b.group === blocks[0].group) ? 'group' : blocks.length + ' blocks'} ${Math.round(gb.w)}×${Math.round(gb.h)}</text>`); }
@@ -4768,6 +5321,12 @@ const CanvasUI = (() => {
       else { const a = toScreen(g.from, g.v), b = toScreen(g.to, g.v); parts.push(`<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="#FF3B8D" stroke-width="1"/>`); }
     }
     if (drag && drag.type === 'draw-frame' && drag.moved) { const a = toScreen(Math.min(drag.start.x, drag.cur.x), Math.min(drag.start.y, drag.cur.y)); const w = Math.abs(drag.cur.x - drag.start.x), h = Math.abs(drag.cur.y - drag.start.y); parts.push(`<rect x="${a.x}" y="${a.y}" width="${w * Z}" height="${h * Z}" fill="rgba(216,201,163,.06)" stroke="var(--accent)" stroke-dasharray="6 4" stroke-width="1.5"/><text x="${a.x}" y="${a.y - 6}" fill="var(--accent)" font-size="11" font-family="var(--font-mono)">${Math.round(w / 8) * 8}×${Math.round(h / 8) * 8}</text>`); }
+    if (dropHint && dropHint.frame) {
+      const fr = dropHint.frame; const c = dropHint.container;
+      if (c) parts.push(rect(fr.x + c.x, fr.y + c.y, c.w, c.h, 'fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-dasharray="5 3"'));
+      if (dropHint.line) { const L = dropHint.line; const a = toScreen(fr.x + L.x0, fr.y + L.y0), b = toScreen(fr.x + L.x1, fr.y + L.y1); parts.push(`<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="#FF3B8D" stroke-width="3" stroke-linecap="round"/>`); }
+      if (dropHint.flatten) { const a = toScreen(fr.x, fr.y); parts.push(`<text x="${a.x + 8}" y="${a.y + 18}" fill="var(--accent)" font-size="12" font-weight="600" font-family="var(--font-mono)">Drop to place freely (screen switches to free positions)</text>`); }
+    }
     if (dropTarget) { const a = toScreen(dropTarget.x, dropTarget.y); parts.push(`<rect x="${a.x}" y="${a.y}" width="${FW(dropTarget) * Z}" height="${FH(dropTarget) * Z}" fill="rgba(216,201,163,.1)" stroke="var(--accent)" stroke-dasharray="6 4" stroke-width="2"/><text x="${a.x + 8}" y="${a.y + 18}" fill="var(--accent)" font-size="12" font-weight="600" font-family="var(--font-mono)">Move into ${esc(dropTarget.name)}</text>`); }
     if (drag && drag.type === 'marquee') { const a = toScreen(Math.min(drag.start.x, drag.cur.x), Math.min(drag.start.y, drag.cur.y)); parts.push(`<rect x="${a.x}" y="${a.y}" width="${Math.abs(drag.cur.x - drag.start.x) * Z}" height="${Math.abs(drag.cur.y - drag.start.y) * Z}" fill="rgba(216,201,163,.08)" stroke="var(--accent)" stroke-dasharray="4 3"/>`); }
     // other people's cursors, last so they sit on top
@@ -4778,6 +5337,8 @@ const CanvasUI = (() => {
     }
     ov.innerHTML = parts.join('');
   }
+  function kindLabel(f, b) { if (b.kind === 'box') return b.label || (Auto.on(Auto.settingsOf(f, b)) ? 'stack' : 'box'); return b.role || b.kind; }
+  function sizeLabel(f, b) { if (!advanced()) return ''; const I = Auto.index(f); const w = Auto.sizing(I, b, 'w'), h = Auto.sizing(I, b, 'h'); const t = v => v === 'hug' ? 'Hug' : v === 'fill' ? 'Fill' : ''; const parts = [t(w) && 'W ' + t(w), t(h) && 'H ' + t(h)].filter(Boolean); return parts.length ? ' · ' + parts.join(' ') : ''; }
   function handles(x, y, w, h) {
     return [{ id: 'nw', x, y, cursor: 'nwse-resize' }, { id: 'n', x: x + w / 2, y, cursor: 'ns-resize' }, { id: 'ne', x: x + w, y, cursor: 'nesw-resize' }, { id: 'e', x: x + w, y: y + h / 2, cursor: 'ew-resize' }, { id: 'se', x: x + w, y: y + h, cursor: 'nwse-resize' }, { id: 's', x: x + w / 2, y: y + h, cursor: 'ns-resize' }, { id: 'sw', x, y: y + h, cursor: 'nesw-resize' }, { id: 'w', x, y: y + h / 2, cursor: 'ew-resize' }];
   }
@@ -4801,7 +5362,8 @@ const CanvasUI = (() => {
     const x1 = Math.max(...moving.map((b, i) => orig[i].x + b.w)), y1 = Math.max(...moving.map((b, i) => orig[i].y + b.h));
     if (free) return { dx, dy, guides: [] };
     const th = 6 / doc.view.zoom; const W = FW(f), H = FH(f), g = f.layout.grid || {};
-    const others = f.layout.blocks.filter(b => !moving.includes(b) && !b.hidden && !Canvas.isBackground(f, b));
+    const along = new Set(Auto.withDescendants(f, moving).map(b => b.id));
+    const others = f.layout.blocks.filter(b => !along.has(b.id) && !b.hidden && !Canvas.isBackground(f, b));
     const xs = [0, W / 2, W], ys = [0, H / 2, H]; if (g.mx) xs.push(g.mx, W - g.mx); if (g.my) ys.push(g.my, H - g.my);
     for (const o of others) { xs.push(o.x, o.x + o.w / 2, o.x + o.w); ys.push(o.y, o.y + o.h / 2, o.y + o.h); }
     const gl = []; let ndx, ndy;
@@ -4844,7 +5406,8 @@ const CanvasUI = (() => {
     const p = toWorld(e.clientX, e.clientY);
     const lf = labelAt(p); if (lf) { select(lf.id, []); const inp = $('cvProps').querySelector('[data-f="name"]'); if (inp) { inp.focus(); inp.select(); } return; }
     const f = frameAt(p); if (!f) return;
-    const b = blockAt(f, p);
+    const chain = hitChain(f, p); const b = pickLevel(f, chain, e);
+    if (b && b.kind === 'box') { const i = chain.indexOf(b); const inner = chain[i + 1]; if (inner) { select(f.id, [inner.id]); if (inner.kind === 'text' || inner.kind === 'list' || inner.kind === 'button') startEdit(f, inner); return; } }
     if (b && b.group && groupFocus !== b.group) { groupFocus = b.group; select(f.id, [b.id], { keepGroupFocus: true }); return; }
     if (b && (b.kind === 'text' || b.kind === 'list' || b.kind === 'button')) { startEdit(f, b); return; }
     if (!b) fitTo([f]);
@@ -4867,7 +5430,7 @@ const CanvasUI = (() => {
     const f = frameAt(p);
     if (!f) { if (!e.shiftKey) select(null, []); drag = { type: 'marquee', start: p, cur: p, add: e.shiftKey }; stage().setPointerCapture(e.pointerId); return; }
     if (sel.frameIds.length > 1 && sel.frameIds.includes(f.id) && !e.shiftKey) { startFrameDrag(selFrames().filter(x => !x.locked), p, e, f); return; }
-    const b = blockAt(f, p);
+    const b = blockAt(f, p, e);
     if (!b) { frameClick(f, e, p); return; }
     if (e.altKey && !b.locked) {
       hist.push(doc);
@@ -4875,14 +5438,44 @@ const CanvasUI = (() => {
       const copies = src.map(x => { const c = Canvas.duplicateBlock(f, x, 0); c.x = x.x; c.y = x.y; return c; });
       const g = copies.length > 1 && src.every(x => x.group && x.group === src[0].group) ? 'g' + Canvas.uid() : null; if (g) copies.forEach(c => { c.group = g; });
       sel.frameId = f.id; sel.frameIds = [f.id]; sel.blockIds = copies.map(c => c.id); afterSelect();
-      drag = { type: 'move', f, blocks: copies, start: p, orig: copies.map(c => ({ x: c.x, y: c.y })), moved: true }; rerenderFrame(f);
+      drag = { type: 'move', f, blocks: copies, start: p, orig: copies.map(c => ({ x: c.x, y: c.y })), moved: true, flow: flowDrag(f, copies) }; rerenderFrame(f);
     } else {
       if (e.shiftKey && sel.frameId === f.id && sel.frameIds.length <= 1) { const ids = Canvas.groupMembers(f, b).map(x => x.id); const has = sel.blockIds.includes(b.id); select(f.id, has ? sel.blockIds.filter(i => !ids.includes(i)) : [...sel.blockIds, ...ids], { keepGroupFocus: true }); }
       else if (!(sel.frameId === f.id && sel.blockIds.includes(b.id))) select(f.id, [b.id]);
-      const blocks = selBlocks().filter(x => !x.locked); if (!blocks.length) return;
-      drag = { type: 'move', f, blocks, start: p, orig: blocks.map(x => ({ x: x.x, y: x.y })), moved: false };
+      const blocks = Auto.topmost(f, selBlocks().filter(x => !x.locked)); if (!blocks.length) return;
+      drag = { type: 'move', f, blocks, start: p, orig: blocks.map(x => ({ x: x.x, y: x.y })), moved: false, flow: flowDrag(f, blocks) };
     }
     stage().setPointerCapture(e.pointerId);
+  }
+  // Blocks dragged out of a stack's flow: the stack holds still while they move, and shows where they would land.
+  function flowDrag(f, blocks) {
+    const I = Auto.index(f); if (!blocks.every(b => Auto.inFlow(I, b))) return null;
+    const pid = I.par.get(blocks[0].id) || ''; if (!blocks.every(b => (I.par.get(b.id) || '') === pid)) return null;
+    const P = pid ? I.byId.get(pid) : null;
+    return { parent: pid, area: P ? { x: P.x, y: P.y, w: P.w, h: P.h } : { x: 0, y: 0, w: FW(f), h: FH(f) } };
+  }
+  // Where a block dragged to p (frame coordinates) would go.
+  function dropTargetIn(f, blocks, lp, fl) {
+    const I = Auto.index(f);
+    if (fl && !advanced()) {
+      const a = fl.area, m = 24;
+      if (lp.x >= a.x - m && lp.y >= a.y - m && lp.x <= a.x + a.w + m && lp.y <= a.y + a.h + m) { const P = fl.parent ? I.byId.get(fl.parent) : null; const d = Auto.dropIndex(f, P, lp, blocks); return { container: P, index: d.index, before: d.before, line: insertLine(f, P, d) }; }
+      return { flatten: true };
+    }
+    if (!advanced()) return null;
+    const box = Auto.containerAt(f, lp, blocks);
+    const s = box ? Auto.settingsOf(f, box) : Auto.settingsOf(f, null);
+    if (Auto.on(s)) { const d = Auto.dropIndex(f, box, lp, blocks); return { container: box, index: d.index, before: d.before, line: insertLine(f, box, d) }; }
+    const cur = I.par.get(blocks[0].id) || '';
+    if ((box ? box.id : '') !== cur || fl) return { container: box, free: true };
+    return null;
+  }
+  // A short line between two stack items (frame coordinates) for the drop indicator.
+  function insertLine(f, box, d) {
+    const s = d.s; const H = s.mode === 'horizontal'; const area = box || { x: 0, y: 0, w: FW(f), h: FH(f) };
+    const p = s.pad; const k = d.kids; const prev = k[d.index - 1], next = k[d.index];
+    if (H) { const x = prev && next ? (prev.x + prev.w + next.x) / 2 : prev ? prev.x + prev.w + Math.min(s.gap, 12) / 2 : next ? next.x - Math.min(s.gap, 12) / 2 : area.x + p.l; const ref = next || prev; const y0 = ref ? ref.y : area.y + p.t, y1 = ref ? ref.y + ref.h : area.y + area.h - p.b; return { x0: x, y0, x1: x, y1 }; }
+    const y = prev && next ? (prev.y + prev.h + next.y) / 2 : prev ? prev.y + prev.h + Math.min(s.gap, 12) / 2 : next ? next.y - Math.min(s.gap, 12) / 2 : area.y + p.t; const ref = next || prev; const x0 = ref ? ref.x : area.x + p.l, x1 = ref ? ref.x + ref.w : area.x + area.w - p.r; return { x0, y0: y, x1, y1: y };
   }
   function frameClick(f, e, p) {
     if (e.shiftKey) { const ids = selFrames().map(x => x.id); selectFrames(ids.includes(f.id) ? ids.filter(i => i !== f.id) : [...ids, f.id]); return; }
@@ -4925,10 +5518,13 @@ const CanvasUI = (() => {
     const free = e.shiftKey || !doc.grid.snap;
     const u = !free ? (drag.f ? drag.f.layout.grid.unit : 8) : 1;
     if (drag.type === 'move') {
-      const s = snapBlocks(drag.f, drag.blocks, drag.orig, dx, dy, u, e.shiftKey);
+      if (drag.flow) layoutHold = drag.f.id;
+      const s = snapBlocks(drag.f, drag.blocks, drag.orig, dx, dy, u, e.shiftKey || !!drag.flow);
       drag.blocks.forEach((b, i) => { b.x = Math.round(drag.orig[i].x + s.dx); b.y = Math.round(drag.orig[i].y + s.dy); });
       guides = s.guides;
       const over = frameAt(p); dropTarget = over && over !== drag.f && !over.locked ? over : null; if (dropTarget) guides = [];
+      dropHint = dropTarget ? null : dropTargetIn(drag.f, drag.blocks, { x: p.x - drag.f.x, y: p.y - drag.f.y }, drag.flow);
+      if (dropHint) { dropHint.frame = drag.f; if (dropHint.line) guides = []; }
       rerenderFrame(drag.f); drawOverlay(); liveProps(); emitLive([drag.f.id]);
     } else if (drag.type === 'move-frames') {
       const s = snapFrames(drag.frames, drag.orig, dx, dy, e.shiftKey);
@@ -4959,13 +5555,21 @@ const CanvasUI = (() => {
         if (inside.length) { const base = d.add ? selFrames().map(f => f.id) : []; selectFrames([...new Set([...base, ...inside])]); }
         else {
           const f = frameAt({ x: x0, y: y0 }) || frameAt({ x: x1, y: y1 }) || doc.frames.find(fr => !fr.hidden && !(x1 < fr.x || x0 > fr.x + FW(fr) || y1 < fr.y || y0 > fr.y + FH(fr)));
-          if (f) { const ids = f.layout.blocks.filter(b => !b.hidden && !b.locked && f.x + b.x >= x0 && f.y + b.y >= y0 && f.x + b.x + b.w <= x1 && f.y + b.y + b.h <= y1).map(b => b.id); if (ids.length) select(f.id, ids); }
+          if (f) { const inside = f.layout.blocks.filter(b => !b.hidden && !b.locked && f.x + b.x >= x0 && f.y + b.y >= y0 && f.x + b.x + b.w <= x1 && f.y + b.y + b.h <= y1); const ids = Auto.topmost(f, inside).map(b => b.id); if (ids.length) select(f.id, ids); }
         }
       }
       drawOverlay(); return;
     }
     if (d.type === 'draw-frame') {
       const w = Math.abs(d.cur.x - d.start.x), h = Math.abs(d.cur.y - d.start.y);
+      const host = frameAt(d.start);
+      if (host && d.moved && w * doc.view.zoom > 12 && h * doc.view.zoom > 12) {
+        // Drawn inside a screen: a box (a frame inside the frame), like Figma.
+        hist.push(doc); const lp = { x: Math.min(d.start.x, d.cur.x) - host.x, y: Math.min(d.start.y, d.cur.y) - host.y };
+        const box = { id: Canvas.uid(), kind: 'box', x: Math.round(lp.x), y: Math.round(lp.y), w: Math.round(w), h: Math.round(h), fill: '#FFFFFF', radius: 0, clip: true, decorative: true, hidden: false, locked: false };
+        host.layout.blocks.push(box); placeInContainer(host, box, { x: lp.x + 1, y: lp.y + 1 });
+        rerenderFrame(host); select(host.id, [box.id]); persist(); updateUndo(); setTool('select'); return;
+      }
       if (d.moved && w * doc.view.zoom > 12 && h * doc.view.zoom > 12) createFrame({ x: Math.min(d.start.x, d.cur.x), y: Math.min(d.start.y, d.cur.y), format: Canvas.customFormat(w, h) });
       else createFrame({ x: d.start.x, y: d.start.y });
       setTool('select'); return;
@@ -4973,16 +5577,40 @@ const CanvasUI = (() => {
     if (d.type === 'move' && d.moved && dropTarget) {
       const dst = dropTarget; dropTarget = null;
       const ids = Canvas.transferBlocks(d.f, dst, d.blocks, dst.layout.grid.unit).map(b => b.id);
-      if (d.f.autoLayout.mode !== 'none') Canvas.applyAutoLayout(d.f); if (dst.autoLayout.mode !== 'none') Canvas.applyAutoLayout(dst);
+      
       rerenderFrame(d.f); rerenderFrame(dst); select(dst.id, ids, { keepGroupFocus: true }); persist(); updateUndo(); env.toast(`Moved into ${dst.name}`); return;
     }
     dropTarget = null;
+    const hint = dropHint; dropHint = null; if (layoutHold === (d.f && d.f.id)) layoutHold = null;
+    if (d.type === 'move' && d.moved && hint) { dropInto(d.f, d.blocks, hint); return; }
     if (d.type === 'move-frames' && !d.moved && d.clickTo) { select(d.clickTo.id, []); return; }
-    if (d.type === 'resize-frame' && d.moved) { regrid(d.f); if (d.f.autoLayout.mode !== 'none') Canvas.applyAutoLayout(d.f); rerenderFrame(d.f); }
+    if (d.type === 'resize' && d.moved) {
+      // Resizing a hugging or filling block by hand fixes that axis, like Figma.
+      const I = Auto.index(d.f); const b = d.b;
+      if (Math.round(b.w) !== Math.round(d.orig.w) && (Auto.sizing(I, b, 'w') !== 'fixed')) b.sizeW = 'fixed';
+      if (Math.round(b.h) !== Math.round(d.orig.h) && (Auto.sizing(I, b, 'h') !== 'fixed')) b.sizeH = 'fixed';
+      rerenderFrame(d.f);
+    }
+    if (d.type === 'resize-frame' && d.moved) { regrid(d.f); rerenderFrame(d.f); }
     if (d.moved) {
-      if (d.f && d.f.autoLayout && d.f.autoLayout.mode !== 'none' && d.type === 'move') { Canvas.applyAutoLayout(d.f); rerenderFrame(d.f); }
+      if (d.f && d.type === 'move' && (d.flow || Auto.needs(d.f))) rerenderFrame(d.f);
       persist(); updateUndo(); renderLayers(); renderProps(); drawOverlay();
     } else if (hadGuides) drawOverlay();
+  }
+  // Finish a drag that lands in a stack, in another box, or (simple editing) on a free spot of a stacked screen.
+  function dropInto(f, blocks, hint) {
+    if (hint.flatten) {
+      const at = blocks.map(b => ({ b, x: b.x, y: b.y }));
+      Auto.flatten(f); Auto.layout(f); for (const a of at) { a.b.x = a.x; a.b.y = a.y; }
+      env.toast('This screen now uses free positions, so you can place things anywhere. ⌘Z to undo.');
+    } else if (hint.free) {
+      const box = hint.container;
+      for (const b of blocks) { if (box) b.parent = box.id; else delete b.parent; delete b.rx; delete b.ry; delete b.lx; delete b.ly; delete b.absolute; }
+    } else {
+      const pid = hint.container ? hint.container.id : '';
+      for (const b of blocks) { if (hint.before === b) continue; Auto.moveInList(f, b, pid, hint.before); delete b.absolute; delete b.rx; delete b.ry; delete b.lx; delete b.ly; }
+    }
+    rerenderFrame(f); select(f.id, blocks.map(b => b.id), { keepGroupFocus: true }); persist(); updateUndo();
   }
   // An image dropped on a frame becomes an image block there; on empty canvas it becomes a frame of its own size.
   async function dropImage(file) {
@@ -4998,12 +5626,17 @@ const CanvasUI = (() => {
     const kindMap = { text: 'text', body: 'body', rect: 'rect', ellipse: 'ellipse', button: 'button', image: 'image', icon: 'icon', logo: 'logo' };
     const b = Canvas.newBlock(kindMap[tool] || 'text', f, env.getKit(), { x: p.x - f.x, y: p.y - f.y });
     if (!b) return;
-    f.layout.blocks.push(b);
-    if (f.autoLayout.mode !== 'none') Canvas.applyAutoLayout(f);
+    f.layout.blocks.push(b); placeInContainer(f, b, { x: p.x - f.x, y: p.y - f.y });
     const wasText = tool === 'text';
     select(f.id, [b.id]); setTool('select'); rerenderFrame(f); renderLayers(); renderProps(); drawOverlay(); persist(); updateUndo();
     if (b.kind === 'image') { const inp = $('cvProps').querySelector('[data-file="image"]'); if (inp) inp.click(); }
     if (wasText) startEdit(f, b, { noHistory: true });
+  }
+  // A new block joins the box under the point: in a stack it takes that place in the flow; in a plain box it stays put.
+  function placeInContainer(f, b, lp) {
+    const box = Auto.containerAt(f, lp, [b]); const s = Auto.settingsOf(f, box);
+    if (box) b.parent = box.id;
+    if (Auto.on(s)) { const d = Auto.dropIndex(f, box, lp, [b]); Auto.moveInList(f, b, box ? box.id : '', d.before); if (b.kind === 'text' && Auto.settingsOf(f, box).mode === 'vertical') b.sizeW = 'fill'; }
   }
   // A blank frame of the toolbar's format (or a drawn custom size). With center, it lands in view on a free spot.
   function createFrame({ x, y, format, center, name, bg, history = true } = {}) {
@@ -5131,7 +5764,6 @@ const CanvasUI = (() => {
     if (f) {
       const b = Canvas.blockById(f, ed.blockId);
       if (b && b.kind === 'text' && !Canvas.sourceText(b).trim() && !cancel) { Canvas.removeBlocks(f, [b.id]); sel.blockIds = sel.blockIds.filter(i => i !== b.id); }
-      if (f.autoLayout.mode !== 'none') Canvas.applyAutoLayout(f);
       rerenderFrame(f);
     }
     persist(); updateUndo(); renderLayers(); renderProps(); drawOverlay();
@@ -5153,7 +5785,9 @@ const CanvasUI = (() => {
       if (meta && k === 'c') { if (copySelection()) e.preventDefault(); return; }
       if (meta && k === 'x') { if (copySelection()) { e.preventDefault(); deleteSelection(); } return; }
       if (meta && k === 'v') { if (clipboard) { e.preventDefault(); pasteClipboard(); } return; }
+      if (meta && e.altKey && k === 'g') { e.preventDefault(); frameSelection(); return; }
       if (meta && k === 'g') { e.preventDefault(); if (e.shiftKey) ungroupSelection(); else groupSelection(); return; }
+      if (e.shiftKey && !meta && k === 'a') { e.preventDefault(); if (e.altKey) removeAutoLayout(); else addAutoLayout(); return; }
       if (meta && k === 'a') { e.preventDefault(); const f = selFrame(); if (f && selFrames().length === 1) select(f.id, f.layout.blocks.filter(b => !b.hidden && !b.locked).map(b => b.id)); else selectFrames(doc.frames.filter(x => !x.hidden).map(x => x.id)); return; }
       if (e.shiftKey && !meta && k === 'n') { e.preventDefault(); createFrame({ center: true }); return; }
       if (e.shiftKey && !meta && k === 'g') { e.preventDefault(); const fs = selFrames(); const on = !fs.every(f => f.showGrid); fs.forEach(f => { f.showGrid = on; rerenderFrame(f); }); persist(); return; }
@@ -5161,6 +5795,8 @@ const CanvasUI = (() => {
       if (k === 'enter') {
         e.preventDefault(); const f = selFrame(); const bs = selBlocks();
         if (f && bs.length === 1 && (bs[0].kind === 'text' || bs[0].kind === 'button' || bs[0].kind === 'list')) startEdit(f, bs[0]);
+        else if (f && bs.length && e.shiftKey) { const par = bs[0].parent && Canvas.blockById(f, bs[0].parent); if (par) select(f.id, [par.id]); else select(f.id, []); }
+        else if (f && bs.length && bs.every(b => b.kind === 'box')) { const I = Auto.index(f); const kids = bs.flatMap(b => Auto.childrenOf(I, b.id)).filter(k => !k.hidden); if (kids.length) select(f.id, kids.map(k => k.id)); }
         else if (f && bs.length && bs[0].group && bs.every(b => b.group === bs[0].group)) { groupFocus = bs[0].group; select(f.id, [bs[0].id], { keepGroupFocus: true }); }
         else if (f && !bs.length && selFrames().length === 1) select(f.id, f.layout.blocks.filter(b => !b.hidden && !Canvas.isBackground(f, b)).map(b => b.id));
         return;
@@ -5172,7 +5808,7 @@ const CanvasUI = (() => {
         const f = selFrame();
         if (tool !== 'select') setTool('select');
         else if (groupFocus && f) { const g = groupFocus; groupFocus = null; select(f.id, f.layout.blocks.filter(b => b.group === g).map(b => b.id)); }
-        else if (sel.blockIds.length) select(sel.frameId, []); else select(null, []);
+        else if (sel.blockIds.length) { const b = selBlocks()[0]; const par = b && b.parent && Canvas.blockById(f, b.parent); select(sel.frameId, par ? [par.id] : []); } else select(null, []);
         return;
       }
       if (k === 'delete' || k === 'backspace') { e.preventDefault(); deleteSelection(); return; }
@@ -5197,12 +5833,12 @@ const CanvasUI = (() => {
     });
   }
   function setTool(t) { tool = t; document.querySelectorAll('#cvTools [data-tool]').forEach(b => b.classList.toggle('on', b.dataset.tool === t)); stage().style.cursor = t === 'hand' ? 'grab' : t === 'select' ? 'default' : 'crosshair'; }
-  function undo() { if (editing) endEdit(); const d = hist.undo(doc); if (d) { doc = undoMerge ? undoMerge(doc, d) : d; validateSelection(); persist(); renderAll(); } }
-  function redo() { if (editing) endEdit(); const d = hist.redo(doc); if (d) { doc = undoMerge ? undoMerge(doc, d) : d; validateSelection(); persist(); renderAll(); } }
+  function undo() { if (editing) endEdit(); hover = null; const d = hist.undo(doc); if (d) { doc = undoMerge ? undoMerge(doc, d) : d; validateSelection(); persist(); renderAll(); } }
+  function redo() { if (editing) endEdit(); hover = null; const d = hist.redo(doc); if (d) { doc = undoMerge ? undoMerge(doc, d) : d; validateSelection(); persist(); renderAll(); } }
   function deleteSelection() {
     const fs = selFrames(); if (!fs.length) return; hist.push(doc);
     const f = selFrame();
-    if (sel.blockIds.length && f) { Canvas.removeBlocks(f, sel.blockIds); if (f.autoLayout.mode !== 'none') Canvas.applyAutoLayout(f); select(f.id, []); rerenderFrame(f); }
+    if (sel.blockIds.length && f) { Canvas.removeBlocks(f, sel.blockIds); select(f.id, []); rerenderFrame(f); }
     else { const ids = new Set(fs.map(x => x.id)); doc.frames = doc.frames.filter(x => !ids.has(x.id)); select(null, []); renderAll(); }
     persist(); updateUndo(); renderLayers();
   }
@@ -5221,15 +5857,54 @@ const CanvasUI = (() => {
     hist.push(doc); const g = Canvas.group(f, bs); groupFocus = null; select(f.id, bs.map(b => b.id)); persist(); updateUndo(); env.toast(`Grouped ${bs.length} blocks`); return g;
   }
   function ungroupSelection() {
-    const f = selFrame(); const bs = selBlocks(); if (!f || !bs.some(b => b.group)) return;
+    const f = selFrame(); const bs = selBlocks(); if (!f) return;
+    if (!bs.some(b => b.group)) { if (unwrapSelection()) env.toast('Unwrapped'); return; }
     hist.push(doc); const n = Canvas.ungroup(f, bs); groupFocus = null; select(f.id, bs.map(b => b.id)); persist(); updateUndo(); env.toast(n > 1 ? `Ungrouped ${n} groups` : 'Ungrouped');
+  }
+
+  // ---- Auto layout commands ------------------------------------------------------------------------------------
+  function setEditMode(m) {
+    editMode = m === 'advanced' ? 'advanced' : 'simple';
+    try { localStorage.setItem('lg.editMode', editMode); } catch { }
+    document.body.classList.toggle('cv-simple', editMode === 'simple');
+    document.querySelectorAll('#cvMode [data-edit]').forEach(b => b.classList.toggle('on', b.dataset.edit === editMode));
+    if (active) { renderLayers(); renderProps(); drawOverlay(); }
+  }
+  const needAdvanced = () => { if (advanced()) return false; env.toast('Auto layout lives in Advanced mode (switch at the top left).'); return true; };
+  // ⇧A: a stack around the selected blocks; on one plain box, turn its auto layout on; on a screen, the screen's.
+  function addAutoLayout() {
+    if (needAdvanced()) return;
+    const f = selFrame(); if (!f) return; const bs = Auto.topmost(f, selBlocks());
+    if (!bs.length && Auto.on(Auto.settingsOf(f, null))) { env.toast('This screen already has auto layout'); return; }
+    hist.push(doc); let box = null;
+    if (!bs.length) { Auto.enable(f, null); env.toast('Auto layout on for this screen'); }
+    else if (bs.length === 1 && bs[0].kind === 'box' && !Auto.on(Auto.settingsOf(f, bs[0]))) { Auto.enable(f, bs[0]); box = bs[0]; }
+    else box = Auto.wrap(f, bs, true);
+    rerenderFrame(f); if (box) select(f.id, [box.id]); else select(f.id, []); persist(); updateUndo();
+  }
+  function removeAutoLayout() {
+    if (needAdvanced()) return;
+    const f = selFrame(); if (!f) return; const bs = selBlocks();
+    const targets = bs.length ? bs.filter(b => b.kind === 'box' && Auto.on(Auto.settingsOf(f, b))) : (Auto.on(Auto.settingsOf(f, null)) ? [null] : []);
+    if (!targets.length) return;
+    hist.push(doc); Auto.layout(f); for (const t of targets) Auto.disable(f, t);
+    rerenderFrame(f); renderProps(); persist(); updateUndo(); env.toast('Auto layout removed; everything stays where it is');
+  }
+  // ⌥⌘G: a plain box (no auto layout) around the selection.
+  function frameSelection() {
+    const f = selFrame(); const bs = Auto.topmost(f, selBlocks()); if (!f || !bs.length) return;
+    hist.push(doc); const box = Auto.wrap(f, bs, false); rerenderFrame(f); select(f.id, [box.id]); persist(); updateUndo();
+  }
+  function unwrapSelection() {
+    const f = selFrame(); const boxes = selBlocks().filter(b => b.kind === 'box'); if (!f || !boxes.length) return false;
+    hist.push(doc); Auto.layout(f); const kids = boxes.flatMap(b => Auto.unwrap(f, b)); rerenderFrame(f); select(f.id, kids.map(k => k.id)); persist(); updateUndo(); return true;
   }
 
   // ---- Clipboard: blocks or screens, inside the app and as JSON on the system clipboard -------------------------
   function copySelection() {
     const fs = selFrames(); if (!fs.length) return false;
     const bs = selBlocks();
-    clipboard = bs.length && fs.length === 1 ? { type: 'blocks', frameId: fs[0].id, blocks: bs.map(b => Canvas.clone(b)) } : { type: 'frames', frames: fs.map(f => Canvas.clone(f)) };
+    clipboard = bs.length && fs.length === 1 ? { type: 'blocks', frameId: fs[0].id, blocks: Auto.withDescendants(fs[0], Auto.topmost(fs[0], bs)).map(b => Canvas.clone(b)) } : { type: 'frames', frames: fs.map(f => Canvas.clone(f)) };
     try { if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(JSON.stringify({ lgClip: clipboard })).catch(() => { }); } catch { }
     env.toast(clipboard.type === 'blocks' ? `Copied ${bs.length} block${bs.length > 1 ? 's' : ''}` : fs.length > 1 ? `Copied ${fs.length} screens` : `Copied frame ${fs[0].name}`);
     if (active && !propsFocused()) renderProps();
@@ -5249,16 +5924,19 @@ const CanvasUI = (() => {
     const f = (selFrames().length === 1 && selFrame()) || (lastPointer && frameAt(lastPointer)) || doc.frames[doc.frames.length - 1];
     if (!f) { env.toast('Add a frame to paste into'); return; }
     const same = f.id === clip.frameId; const u = f.layout.grid.unit;
-    const out = Canvas.pasteBlocks(f, clip.blocks, { dx: same ? 2 * u : 0, dy: same ? 2 * u : 0 });
+    const tgt = sel.frameId === f.id ? selBlocks() : []; const into = tgt.length === 1 && tgt[0].kind === 'box' ? tgt[0].id : null;
+    const inStack = into && Auto.on(Auto.settingsOf(f, tgt[0]));
+    const out = Canvas.pasteBlocks(f, clip.blocks, { dx: same && !inStack ? 2 * u : 0, dy: same && !inStack ? 2 * u : 0, into });
     const groups = new Map(); for (const c of out) if (c.group) { if (!groups.has(c.group)) groups.set(c.group, 'g' + Canvas.uid()); c.group = groups.get(c.group); }
     if (same) clip.blocks.forEach(b => { b.x += 2 * u; b.y += 2 * u; });
-    if (f.autoLayout.mode !== 'none') Canvas.applyAutoLayout(f);
     select(f.id, out.map(b => b.id)); rerenderFrame(f); renderLayers(); persist(); updateUndo();
   }
 
   // ---- Toolbar ------------------------------------------------------------------------------------------------
   function bindToolbar() {
     $('cvTools').addEventListener('click', e => { const b = e.target.closest('[data-tool]'); if (b) setTool(b.dataset.tool); });
+    $('cvMode').addEventListener('click', e => { const b = e.target.closest('[data-edit]'); if (b) { setEditMode(b.dataset.edit); env.toast(advanced() ? 'Advanced: auto layout, sizing, nesting and code' : 'Simple: click any text or image to change it; layouts stay tidy'); } });
+    setEditMode(editMode);
     $('cvNewFrame').addEventListener('click', () => createFrame({ center: true }));
     $('cvZoomIn').addEventListener('click', () => zoomBy(1.25)); $('cvZoomOut').addEventListener('click', () => zoomBy(1 / 1.25)); $('cvFit').addEventListener('click', fit);
     $('cvUndo').addEventListener('click', undo); $('cvRedo').addEventListener('click', redo);
@@ -5324,25 +6002,42 @@ const CanvasUI = (() => {
   }
 
   // ---- Layers panel ----------------------------------------------------------------------------------------------
-  function label(b) { if (b.label) return b.label; if (b.kind === 'text') return `${b.role || 'text'} · ${Canvas.sourceText(b).slice(0, 28)}`; if (b.kind === 'list') return `${b.role || 'list'} · ${(b.items || []).length} items`; if (b.kind === 'button') return `button · ${b.text}`; if (b.kind === 'image') return 'image'; if (b.kind === 'field') return b.container ? 'card' : 'rectangle'; if (b.kind === 'shape') return b.shape; if (b.kind === 'icon') return `icon · ${b.name}`; if (b.kind === 'vector') return 'vector'; return b.kind; }
-  const KIND_GLYPH = { text: 'T', list: '≡', button: '▭', image: '▣', field: '■', shape: '●', icon: '✦', logo: 'L', scrim: '▒', rule: '—', line: '—', badge: '①', vector: '✎' };
+  function label(b) { if (b.label) return b.label; if (b.kind === 'box') { const m = b.auto && b.auto.mode; return m === 'vertical' ? 'Stack ↓' : m === 'horizontal' ? (b.auto.wrap ? 'Stack ↩' : 'Stack →') : 'Box'; } if (b.kind === 'text') return `${b.role || 'text'} · ${Canvas.sourceText(b).slice(0, 28)}`; if (b.kind === 'list') return `${b.role || 'list'} · ${(b.items || []).length} items`; if (b.kind === 'button') return `button · ${b.text}`; if (b.kind === 'image') return 'image'; if (b.kind === 'field') return b.container ? 'card' : 'rectangle'; if (b.kind === 'shape') return b.shape; if (b.kind === 'icon') return `icon · ${b.name}`; if (b.kind === 'vector') return 'vector'; return b.kind; }
+  const KIND_GLYPH = { text: 'T', list: '≡', button: '▭', image: '▣', field: '■', shape: '●', icon: '✦', logo: 'L', scrim: '▒', rule: '—', line: '—', badge: '①', vector: '✎', box: '⬚' };
+  // One frame's layers as a tree: boxes fold; a stack lists its children in flow order (first on top, like the
+  // code), anything else front-most first. A search shows matching layers flat.
+  function layerRows(f, q) {
+    const I = Auto.index(f); const rows = [];
+    const row = (b, depth) => {
+      const isBox = b.kind === 'box'; const kids = isBox ? Auto.childrenOf(I, b.id) : []; const open = isBox && kids.length && !folded.has(b.id);
+      const stack = isBox && Auto.on(I.S(b.id)); const flow = Auto.inFlow(I, b);
+      return `<div class="cv-layer-row block ${sel.frameId === f.id && sel.blockIds.includes(b.id) ? 'on' : ''} ${b.hidden ? 'hidden-layer' : ''} ${b.group ? 'grouped' : ''}" data-frame="${esc(f.id)}" data-block="${esc(b.id)}" style="padding-left:${6 + depth * 14}px">${isBox && kids.length ? `<button class="fold" data-fold="${esc(b.id)}" title="${open ? 'Collapse' : 'Expand'}">${open ? '▾' : '▸'}</button>` : '<span class="fold-sp"></span>'}<span class="glyph${stack ? ' stack' : ''}">${stack ? (I.S(b.id).mode === 'horizontal' ? '⇥' : '⤓') : KIND_GLYPH[b.kind] || '·'}</span><span class="nm">${esc(label(b))}</span>${b.absolute && I.par.get(b.id) !== undefined && Auto.on(I.S(I.par.get(b.id))) ? '<span class="tag" title="Absolute position">A</span>' : ''}${b.group ? '<span class="tag" title="In a group">G</span>' : ''}${b.locked ? '<span class="dim">🔒</span>' : ''}<button class="eye ${b.hidden ? 'off' : ''}" data-eye="${esc(b.id)}" title="Toggle visibility">${b.hidden ? '◌' : '◉'}</button></div>`;
+    };
+    if (q) { for (const b of f.layout.blocks.slice().reverse()) if (label(b).toLowerCase().includes(q)) rows.push(row(b, 0)); return rows; }
+    const walk = (pid, depth) => {
+      let kids = Auto.childrenOf(I, pid).slice(); if (!Auto.on(I.S(pid))) kids.reverse();
+      for (const b of kids) { rows.push(row(b, depth)); if (b.kind === 'box' && !folded.has(b.id)) walk(b.id, depth + 1); }
+    };
+    walk('', 0); return rows;
+  }
   function renderLayers() {
     if (!active) return;
     const q = ($('cvSearch').value || '').toLowerCase();
     const multi = sel.frameIds.length > 1;
     $('cvLayers').innerHTML = doc.frames.slice().reverse().map(f => {
-      const blocks = f.layout.blocks.slice().reverse().filter(b => !q || label(b).toLowerCase().includes(q));
-      if (q && !blocks.length && !String(f.name).toLowerCase().includes(q)) return '';
+      const rowsHtml = (!multi && sel.frameId === f.id) || q ? layerRows(f, q) : [];
+      if (q && !rowsHtml.length && !String(f.name).toLowerCase().includes(q)) return '';
       const fon = sel.frameIds.includes(f.id) && (!sel.blockIds.length || multi);
       const open = !multi && sel.frameId === f.id || q;
       return `<div class="cv-layer-frame ${fon ? 'on' : ''}" data-frame="${esc(f.id)}">
         <div class="cv-layer-row frame"><button class="eye ${f.hidden ? 'off' : ''}" data-eye-frame="${esc(f.id)}" title="Toggle visibility">${f.hidden ? '◌' : '◉'}</button><span class="nm" title="${esc(f.name)}">${esc(f.name)}</span><span class="dim">${FW(f)}×${FH(f)}</span></div>
-        ${open ? `<div class="cv-layer-children">${blocks.map(b => `<div class="cv-layer-row block ${sel.frameId === f.id && sel.blockIds.includes(b.id) ? 'on' : ''} ${b.hidden ? 'hidden-layer' : ''} ${b.group ? 'grouped' : ''}" data-frame="${esc(f.id)}" data-block="${esc(b.id)}"><span class="glyph">${KIND_GLYPH[b.kind] || '·'}</span><span class="nm">${esc(label(b))}</span>${b.group ? '<span class="tag" title="In a group">G</span>' : ''}${b.locked ? '<span class="dim">🔒</span>' : ''}<button class="eye ${b.hidden ? 'off' : ''}" data-eye="${esc(b.id)}" title="Toggle visibility">${b.hidden ? '◌' : '◉'}</button></div>`).join('')}</div>` : ''}
+        ${open ? `<div class="cv-layer-children">${rowsHtml.join('')}</div>` : ''}
       </div>`;
     }).join('') || '<div class="hint" style="padding:10px">No frames yet. Send layouts here from Single or Deck mode, add a frame with ＋ Frame, or paste from Figma.</div>';
   }
   function bindLayers() {
     $('cvLayers').addEventListener('click', e => {
+      const fold = e.target.closest('[data-fold]'); if (fold) { const id = fold.dataset.fold; if (folded.has(id)) folded.delete(id); else folded.add(id); renderLayers(); return; }
       const eyeF = e.target.closest('[data-eye-frame]'); if (eyeF) { const f = Canvas.frameById(doc, eyeF.dataset.eyeFrame); hist.push(doc); f.hidden = !f.hidden; rerenderFrame(f); renderLayers(); persist(); updateUndo(); return; }
       const eye = e.target.closest('[data-eye]'); if (eye) { const f = Canvas.frameById(doc, eye.closest('[data-frame]').dataset.frame); const b = Canvas.blockById(f, eye.dataset.eye); hist.push(doc); b.hidden = !b.hidden; rerenderFrame(f); renderLayers(); persist(); updateUndo(); return; }
       const row = e.target.closest('.cv-layer-row'); if (!row) return;
@@ -5425,6 +6120,46 @@ const CanvasUI = (() => {
       ${variationsSection()}
       ${exportSection(frames.length)}`;
   }
+  // Auto layout for a box (or the screen when box is null), laid out like Figma's panel.
+  function autoSection(f, box) {
+    const s = Auto.settingsOf(f, box); const who = box ? 'this box' : 'this screen';
+    if (!Auto.on(s)) return `<div class="cv-section cv-adv"><h3>Auto layout</h3><div class="cv-row">${btn('al-add', '＋ Auto layout', 'title="Shift+A"')}</div><p class="hint">Stacks ${who}'s content in a row or column with gap and padding. Text edits push things along; drag to reorder.</p>${box ? `<label class="cv-check"><input type="checkbox" data-p="clip" ${box.clip ? 'checked' : ''}> Clip content</label>` : ''}</div>`;
+    const H = s.mode === 'horizontal'; const dir = s.wrap ? 'wrap' : s.mode;
+    const vAxis = H ? (s.cross === 'baseline' ? 'start' : s.cross) : s.main, hAxis = H ? s.main : s.cross;
+    const P = ['start', 'center', 'end']; const glyph = { start: '', center: '', end: '' };
+    const cells = P.map(r => P.map(c => { const onCell = (s.gapAuto ? (H ? vAxis === r : hAxis === c) : (vAxis === r && hAxis === c)); return `<button type="button" class="al-cell${onCell ? ' on' : ''}" data-al-cell="${r},${c}" title="${r === 'start' ? 'Top' : r === 'center' ? 'Middle' : 'Bottom'} ${c === 'start' ? 'left' : c === 'center' ? 'center' : 'right'}">${glyph[c]}</button>`; }).join('')).join('');
+    const nAl = (k, l, v, extra = '') => `<label class="cv-f"><span>${l}</span><input type="number" data-al="${k}" value="${Math.round((Number(v) || 0) * 100) / 100}" step="4" min="0" ${extra}></label>`;
+    return `<div class="cv-section cv-adv"><h3>Auto layout <button type="button" class="btn small ghost al-rm" data-act="al-remove" title="Remove auto layout (⌥⇧A)">−</button></h3>
+      <div class="cv-seg al-dir">${[['vertical', '↓ Vertical'], ['horizontal', '→ Row'], ['wrap', '↩ Wrap']].map(([k, l]) => `<button type="button" data-al-dir="${k}" class="${dir === k ? 'on' : ''}">${l}</button>`).join('')}</div>
+      <div class="al-row"><div class="al-grid" aria-label="Alignment">${cells}</div>
+        <div class="al-fields">${nAl('gap', s.wrap ? 'Gap ↔' : 'Gap', s.gap, s.gapAuto ? 'disabled' : '')}<label class="cv-check"><input type="checkbox" data-al="gapAuto" ${s.gapAuto ? 'checked' : ''}> Auto (space between)</label>${s.wrap ? nAl('counterGap', 'Gap ↕', s.counterGap) : ''}</div></div>
+      <div class="cv-grid4">${nAl('pad.t', 'T', s.pad.t)}${nAl('pad.r', 'R', s.pad.r)}${nAl('pad.b', 'B', s.pad.b)}${nAl('pad.l', 'L', s.pad.l)}</div>
+      ${H ? `<label class="cv-check"><input type="checkbox" data-al="baseline" ${s.cross === 'baseline' ? 'checked' : ''}> Align text baselines</label>` : ''}
+      ${box ? `<label class="cv-check"><input type="checkbox" data-p="clip" ${box.clip ? 'checked' : ''}> Clip content</label>` : ''}
+    </div>`;
+  }
+  // Fixed / Hug / Fill per axis, absolute position and limits: only where they mean something.
+  function sizingSection(f, b) {
+    const I = Auto.index(f); const pid = I.par.get(b.id) || ''; const parentOn = Auto.on(I.S(pid)); const canHug = Auto.canHug(I, b);
+    if (!parentOn && !canHug) return '';
+    const opts = [['fixed', 'Fixed'], ...(canHug ? [['hug', 'Hug contents']] : []), ...(parentOn ? [['fill', 'Fill container']] : [])];
+    const numOpt = (k, l) => `<label class="cv-f"><span>${l}</span><input type="number" data-p="${k}" value="${b[k] != null ? b[k] : ''}" step="8" min="0" placeholder="–"></label>`;
+    return `<div class="cv-section cv-adv"><h3>Resizing</h3><div class="cv-grid2">${selectF('sizeW', 'W', Auto.sizing(I, b, 'w'), opts)}${selectF('sizeH', 'H', Auto.sizing(I, b, 'h'), opts)}</div>
+      ${parentOn ? `<label class="cv-check"><input type="checkbox" data-p="absolute" ${b.absolute ? 'checked' : ''}> Absolute position (ignore the stack)</label>` : ''}
+      <details class="cv-minmax"><summary>Min and max</summary><div class="cv-grid2">${numOpt('minW', 'Min W')}${numOpt('maxW', 'Max W')}${numOpt('minH', 'Min H')}${numOpt('maxH', 'Max H')}</div></details></div>`;
+  }
+  // Selected box, or the screen when nothing inside it is selected: what the auto layout controls change.
+  function autoTarget() { const f = selFrame(); const bs = selBlocks(); if (!f) return null; if (!bs.length) return { f, box: null }; if (bs.length === 1 && bs[0].kind === 'box') return { f, box: bs[0] }; return null; }
+  function setAuto(f, box, key, val) {
+    const s = Auto.settingsOf(f, box);
+    if (key === 'dir') { if (val === 'wrap') { s.mode = 'horizontal'; s.wrap = true; } else { s.mode = val; s.wrap = false; if (val === 'vertical' && s.cross === 'baseline') s.cross = 'start'; } }
+    else if (key === 'cell') { const [r, c] = String(val).split(','); if (s.mode === 'horizontal') { s.cross = r; if (!s.gapAuto) s.main = c; } else { s.cross = c; if (!s.gapAuto) s.main = r; } }
+    else if (key === 'gapAuto' || key === 'counterGapAuto') s[key] = !!val;
+    else if (key === 'baseline') s.cross = val ? 'baseline' : 'start';
+    else if (key.startsWith('pad.')) s.pad[key.slice(4)] = Math.max(0, +val || 0);
+    else if (key === 'gap' || key === 'counterGap') s[key] = Math.max(0, +val || 0);
+    if (box) box.auto = s; else f.autoLayout = s;
+  }
   function alignBar() { return `<div class="cv-row cv-align">${[['left', '⇤'], ['hcenter', '⇔'], ['right', '⇥'], ['top', '⤒'], ['vcenter', '⇕'], ['bottom', '⤓']].map(([m, g]) => `<button class="btn small" data-align="${m}" title="Align ${m}">${g}</button>`).join('')}</div>`; }
   function frameFill(L) {
     const g = L.palette.bgGradient; const type = g ? (g.type || 'linear') : 'solid';
@@ -5444,38 +6179,34 @@ const CanvasUI = (() => {
     ${frameFill(L)}
     ${lookSection([f])}
     <div class="cv-section"><h3>Palette</h3>${pairChips()}</div>
-    <div class="cv-section"><h3>Layout</h3>
-      ${selectF('al.mode', 'Flex', al.mode, [['none', 'Off (free)'], ['vertical', 'Vertical stack'], ['horizontal', 'Horizontal row']])}
-      <div class="cv-grid2">${num('al.gap', 'Gap', al.gap, 4)}${num('al.padding', 'Padding', al.padding, 4)}</div>
-      ${selectF('al.align', 'Align', al.align, [['start', 'Start'], ['center', 'Center'], ['end', 'End']])}
-      ${selectF('al.justify', 'Justify', al.justify, [['start', 'Start'], ['center', 'Center'], ['end', 'End'], ['space-between', 'Space between']])}
-      <label class="cv-check"><input type="checkbox" data-f="al.fill" ${al.fill ? 'checked' : ''}> Stretch text to inner width</label>
-      <p class="hint">Flex stacks the frame's content blocks in reading order with gap and padding. Backgrounds stay put.</p>
-    </div>
-    <div class="cv-section"><h3>Add</h3><div class="cv-row wrap">${[['text', 'Headline'], ['body', 'Body'], ['button', 'Button'], ['rect', 'Rectangle'], ['ellipse', 'Ellipse'], ['image', 'Image'], ['icon', 'Icon'], ['logo', 'Logo']].map(([k, l]) => `<button class="btn small" data-add="${k}">${l}</button>`).join('')}</div></div>
+    ${autoSection(f, null)}
+    <div class="cv-section"><h3>Add</h3><div class="cv-row wrap">${[['text', 'Headline'], ['body', 'Body'], ['button', 'Button'], ['rect', 'Rectangle'], ['ellipse', 'Ellipse'], ['image', 'Image'], ['icon', 'Icon'], ['logo', 'Logo']].map(([k, l]) => `<button class="btn small" data-add="${k}">${l}</button>`).join('')}<span class="cv-adv"><button class="btn small" data-add="stack">Stack</button></span></div></div>
     ${variationsSection()}
     ${exportSection(1)}
-    <div class="cv-section"><h3>Code</h3><p class="hint">The frame is this JSON. Edit and apply.</p><textarea class="cv-code" data-code="frame" spellcheck="false">${esc(JSON.stringify(stripLayout(L), null, 1))}</textarea><div class="cv-row">${btn('apply-code', 'Apply JSON')}${btn('copy-code', 'Copy')}</div></div>`;
+    <div class="cv-section cv-adv"><h3>Code</h3><p class="hint">The frame is this JSON. Edit and apply.</p><textarea class="cv-code" data-code="frame" spellcheck="false">${esc(JSON.stringify(stripLayout(L), null, 1))}</textarea><div class="cv-row">${btn('apply-code', 'Apply JSON')}${btn('copy-code', 'Copy')}</div></div>`;
   }
   function blocksProps(f, bs) {
     const grouped = bs[0].group && bs.every(b => b.group === bs[0].group);
     return `<div class="cv-section"><h3>${grouped ? 'Group' : bs.length + ' blocks'}</h3>${alignBar()}
       <div class="cv-row wrap">${btn('dist-h', 'Distribute ↔')}${btn('dist-v', 'Distribute ↕')}</div>
-      <div class="cv-row wrap">${grouped ? btn('ungroup', 'Ungroup ⇧⌘G') : btn('group', 'Group ⌘G')}${btn('copy', 'Copy')}${btn('dup', 'Duplicate')}${btn('del', 'Delete')}</div></div>
+      <div class="cv-row wrap">${grouped ? btn('ungroup', 'Ungroup ⇧⌘G') : btn('group', 'Group ⌘G')}${btn('copy', 'Copy')}${btn('dup', 'Duplicate')}${btn('del', 'Delete')}</div>
+      <div class="cv-row wrap cv-adv">${btn('al-add', 'Auto layout ⇧A')}${btn('frame-sel', 'Frame ⌥⌘G')}</div></div>
       <div class="cv-section"><h3>Fill</h3>${swatches('fill', '')}<p class="hint">Sets the fill (or text color) of every selected block.</p></div>
       <div class="cv-section"><h3>Effects</h3>${num('opacity', 'Opacity', 1, 0.05, 'min="0" max="1"')}<label class="cv-check"><input type="checkbox" data-p="shadow.on"> Drop shadow</label></div>`;
   }
   function fillSection(b) {
+    if (b.kind === 'box' && (!b.fill || b.fill === 'none') && !b.gradient) return `<div class="cv-section"><h3>Fill</h3><label class="cv-check"><input type="checkbox" data-p="hasFill"> Fill</label>${num('radius', 'Radius', b.radius || 0, 4)}</div>`;
     const isText = b.kind === 'text' || b.kind === 'list';
     const g = b.gradient; const type = g ? (g.type || 'linear') : 'solid';
     return `<div class="cv-section"><h3>${isText ? 'Text color' : 'Fill'}</h3>
       ${b.kind !== 'icon' && b.kind !== 'logo' ? selectF('fillType', 'Type', type, [['solid', 'Solid'], ['linear', 'Linear gradient'], ['radial', 'Radial gradient']]) : ''}
       ${type === 'solid' ? color('fill', 'Color', b.fill || '#000000', b.fillToken) : `${color('grad.0', 'Start', g.stops[0].c)}${color('grad.1', 'End', g.stops[g.stops.length - 1].c)}${type === 'linear' ? num('grad.angle', 'Angle', g.angle || 0, 15) : ''}`}
-      ${(b.kind === 'field' || b.kind === 'button' || b.kind === 'image') ? num('radius', 'Radius', b.radius || 0, 4) : ''}${b.kind === 'field' ? num('alpha', 'Fill alpha', b.alpha ?? 1, 0.05, 'min="0" max="1"') : ''}
+      ${b.kind === 'box' ? '<label class="cv-check"><input type="checkbox" data-p="hasFill" checked> Fill</label>' : ''}
+      ${(b.kind === 'field' || b.kind === 'button' || b.kind === 'image' || b.kind === 'box') ? num('radius', 'Radius', b.radius || 0, 4) : ''}${b.kind === 'field' ? num('alpha', 'Fill alpha', b.alpha ?? 1, 0.05, 'min="0" max="1"') : ''}
     </div>`;
   }
   function strokeSection(b) {
-    if (!['field', 'shape', 'vector', 'image', 'button'].includes(b.kind)) return '';
+    if (!['field', 'shape', 'vector', 'image', 'button', 'box'].includes(b.kind)) return '';
     const s = b.stroke || {};
     return `<div class="cv-section"><h3>Stroke</h3><div class="cv-grid2">${num('stroke.width', 'W', s.width || 0, 1, 'min="0"')}</div>${color('stroke.color', 'Color', s.color || '#000000')}</div>`;
   }
@@ -5491,11 +6222,12 @@ const CanvasUI = (() => {
     const isText = b.kind === 'text' || b.kind === 'list' || b.kind === 'button';
     const fontNames = Brand.allFontNames();
     const famName = isText && b.font ? String(b.font.family).split(',')[0].replace(/["']/g, '').trim() : '';
-    return `<div class="cv-section"><h3>${esc(b.role || b.kind)}${b.group ? ' <span class="cv-token">in group</span>' : ''}</h3>
+    const I = Auto.index(f); const flow = Auto.inFlow(I, b); const lockXY = flow ? 'disabled title="Placed by the stack. Drag to reorder, or turn on Absolute position."' : '';
+    return `<div class="cv-section"><h3>${esc(kindLabel(f, b))}${b.group ? ' <span class="cv-token">in group</span>' : ''}${flow ? ' <span class="cv-token">in a stack</span>' : ''}</h3>
       <label class="cv-f"><span>Name</span><input type="text" data-p="label" value="${esc(b.label || '')}" placeholder="${esc(label({ ...b, label: '' }))}"></label>
-      <div class="cv-grid2">${num('x', 'X', b.x, 8)}${num('y', 'Y', b.y, 8)}${num('w', 'W', b.w, 8)}${num('h', 'H', b.h, 8)}</div>
+      <div class="cv-grid2">${num('x', 'X', b.x, 8, lockXY)}${num('y', 'Y', b.y, 8, lockXY)}${num('w', 'W', b.w, 8)}${num('h', 'H', b.h, 8)}</div>
       ${alignBar()}
-      <div class="cv-row wrap">${btn('back', '↓ Back', 'title="Send backward ([)"')}${btn('front', '↑ Front', 'title="Bring forward (])"')}${btn('copy', 'Copy', 'title="Copy (⌘C)"')}${btn('paste', 'Paste', `title="Paste (⌘V)" ${clipboard ? '' : 'disabled'}`)}${btn('dup', 'Duplicate', 'title="Duplicate (⌘D)"')}${btn('del', 'Delete', 'title="Delete (⌫)"')}${b.group ? btn('ungroup', 'Ungroup') : ''}</div>
+      <div class="cv-row wrap">${btn('back', flow ? '↑ Earlier' : '↓ Back', `title="${flow ? 'Earlier in the stack' : 'Send backward'} ([)"`)}${btn('front', flow ? '↓ Later' : '↑ Front', `title="${flow ? 'Later in the stack' : 'Bring forward'} (])"`)}${btn('copy', 'Copy', 'title="Copy (⌘C)"')}${btn('paste', 'Paste', `title="Paste (⌘V)" ${clipboard ? '' : 'disabled'}`)}${btn('dup', 'Duplicate', 'title="Duplicate (⌘D)"')}${btn('del', 'Delete', 'title="Delete (⌫)"')}${b.group ? btn('ungroup', 'Ungroup') : ''}${b.kind === 'box' ? `<span class="cv-adv">${btn('unwrap', 'Unwrap ⇧⌘G')}</span>` : ''}</div>
       <label class="cv-check"><input type="checkbox" data-b="locked" ${b.locked ? 'checked' : ''}> Lock</label>
       <label class="cv-check"><input type="checkbox" data-b="decorative" ${b.decorative ? 'checked' : ''}> Decorative (not content)</label>
     </div>
@@ -5515,10 +6247,12 @@ const CanvasUI = (() => {
     ${b.kind === 'image' ? genSection(f, b) : ''}
     ${b.kind === 'icon' ? `<div class="cv-section"><h3>Icon</h3>${selectF('name', 'Icon', b.name, Icons.names.map(n => [n, n]))}</div>` : ''}
     ${b.kind === 'shape' ? `<div class="cv-section"><h3>Shape</h3>${selectF('shape', 'Shape', b.shape, [['circle', 'Circle'], ['ellipse', 'Ellipse'], ['pill', 'Pill'], ['quarter', 'Quarter circle']])}</div>` : ''}
+    ${b.kind === 'box' ? autoSection(f, b) : ''}
+    ${sizingSection(f, b)}
     ${b.kind !== 'image' ? fillSection(b) : ''}
     ${strokeSection(b)}
     ${effectsSection(b)}
-    <div class="cv-section"><h3>Code</h3><textarea class="cv-code" data-code="block" spellcheck="false">${esc(JSON.stringify(stripBlock(b), null, 1))}</textarea><div class="cv-row">${btn('apply-code', 'Apply JSON')}${btn('copy-code', 'Copy')}</div></div>`;
+    <div class="cv-section cv-adv"><h3>Code</h3><textarea class="cv-code" data-code="block" spellcheck="false">${esc(JSON.stringify(stripBlock(b), null, 1))}</textarea><div class="cv-row">${btn('apply-code', 'Apply JSON')}${btn('copy-code', 'Copy')}</div></div>`;
   }
   function stripBlock(b) { const c = Canvas.clone(b); delete c.lines; delete c.inkW; delete c.capacity; delete c.gap; delete c.maxLines; delete c.minSize; delete c.overflow; delete c.genPrompt; delete c.genMeta; return c; }
   function stripLayout(L) { const c = Canvas.clone(L); delete c.signature; c.blocks = c.blocks.map(stripBlock); return c; }
@@ -5546,6 +6280,11 @@ const CanvasUI = (() => {
     else if (k === 'rotation') { let r = (((+v || 0) % 360) + 360) % 360; if (r > 180) r -= 360; b.rotation = r; }
     else if (k === 'radius' || k === 'alpha') b[k] = +v;
     else if (k === 'asset') b.asset = v || null;
+    else if (k === 'sizeW' || k === 'sizeH') b[k] = v;
+    else if (k === 'absolute') { if (v) b.absolute = true; else delete b.absolute; delete b.rx; delete b.ry; delete b.lx; delete b.ly; }
+    else if (k === 'minW' || k === 'maxW' || k === 'minH' || k === 'maxH') { if (v === '' || v == null) delete b[k]; else b[k] = Math.max(0, +v); }
+    else if (k === 'clip') b.clip = !!v;
+    else if (k === 'hasFill') { if (v) b.fill = '#FFFFFF'; else { b.fill = 'none'; delete b.gradient; delete b.fillToken; } }
     else b[k] = v;
   }
   function setFrameProp(f, k, v) {
@@ -5556,8 +6295,7 @@ const CanvasUI = (() => {
     else if (k === 'bg') { P.bg = toHex(v); delete P.bgToken; }
     else if (k === 'bgType') { if (v === 'solid') { if (P.bgGradient) P.bg = P.bgGradient.stops[0].c; delete P.bgGradient; } else P.bgGradient = { type: v, angle: P.bgGradient ? P.bgGradient.angle : 180, stops: P.bgGradient ? P.bgGradient.stops : [{ c: toHex(P.bg), p: 0 }, { c: secondColor(P.bg), p: 1 }] }; }
     else if (k.startsWith('bgGrad.')) { if (!P.bgGradient) return; const kk = k.slice(7); if (kk === 'angle') P.bgGradient.angle = +v; else if (kk === '0') P.bgGradient.stops[0].c = toHex(v); else P.bgGradient.stops[P.bgGradient.stops.length - 1].c = toHex(v); }
-    else if (k.startsWith('al.')) f.autoLayout[k.slice(3)] = typeof v === 'string' && /^-?\d+(\.\d+)?$/.test(v) ? +v : v;
-    if (f.autoLayout.mode !== 'none') Canvas.applyAutoLayout(f);
+    else if (k === 'clip') f.clip = !!v;
   }
   // Recolor a screen around a new background: text and accent are picked from the palette for contrast.
   function recolorBg(f, hex, name) {
@@ -5609,16 +6347,16 @@ const CanvasUI = (() => {
       const val = t.type === 'checkbox' ? t.checked : t.value;
       if (t.dataset.f) {
         if (!live) hist.push(doc);
-        const k = t.dataset.f; if (k.startsWith('al.')) setFrameProp(f, k, t.type === 'checkbox' ? t.checked : t.value); else f[k] = val;
+        const k = t.dataset.f; f[k] = val;
         if (k === 'clip' || k === 'showGrid' || k === 'name') rerenderFrame(f); else rerenderFrame(f);
         renderLayers(); drawOverlay(); persist(); updateUndo(); return;
       }
+      if (t.dataset.al) { const tg = autoTarget(); if (!tg) return; if (!live) hist.push(doc); setAuto(tg.f, tg.box, t.dataset.al, t.type === 'checkbox' ? t.checked : t.value); rerenderFrame(tg.f); drawOverlay(); if (!live) renderProps(); persist(); updateUndo(); return; }
       if (t.dataset.b && bs.length) { hist.push(doc); for (const b of bs) b[t.dataset.b] = t.checked; renderLayers(); drawOverlay(); persist(); updateUndo(); return; }
       const k = t.dataset.p; if (!k) return;
       if (!live) hist.push(doc);
       if (!bs.length) { setFrameProp(f, k, val); rerenderFrame(f); drawOverlay(); if (!live) renderProps(); persist(); updateUndo(); return; }
       for (const b of bs) setBlockProp(b, k, val);
-      if (f.autoLayout.mode !== 'none' && !live) Canvas.applyAutoLayout(f);
       rerenderFrame(f); drawOverlay(); renderLayers(); persist(); updateUndo(); if (!live) renderProps();
     };
     // Live fields (color, textarea, text) snapshot history on their FIRST input event, so undo returns to the value before the edit.
@@ -5652,9 +6390,13 @@ const CanvasUI = (() => {
       const pr = e.target.closest('[data-pair]'); if (pr) { const p = Brand.pairs(env.getKit())[+pr.dataset.pair]; if (p && fs.length) { mutate(() => fs.forEach(fr => { Canvas.recolor(fr, { bg: p.bg, fg: p.fgs[0], accent: p.accents[0], bgName: p.bgName }); fr.layout.palette.bgToken = p.bgName; }), { frames: fs.map(x => x.id) }); env.toast(`${fs.length > 1 ? fs.length + ' screens' : 'Screen'} on ${p.bgName}`); } return; }
       const palRm = e.target.closest('[data-pal="rm"]'); if (palRm) { const colors = env.getKit().colors.filter((_, i) => i !== +palRm.dataset.i); env.updateColors(colors); followTokens(); renderProps(); return; }
       const al = e.target.closest('[data-align]'); if (al && f) { hist.push(doc); Canvas.align(f, bs.length ? bs : [], al.dataset.align); rerenderFrame(f); drawOverlay(); liveProps(); persist(); updateUndo(); return; }
-      const add = e.target.closest('[data-add]'); if (add && f) { hist.push(doc); const b = Canvas.newBlock(add.dataset.add, f, env.getKit(), null); if (b) { f.layout.blocks.push(b); if (f.autoLayout.mode !== 'none') Canvas.applyAutoLayout(f); select(f.id, [b.id]); rerenderFrame(f); persist(); updateUndo(); if (b.kind === 'image') { const inp = $('cvProps').querySelector('[data-file="image"]'); if (inp) inp.click(); } } return; }
+      const add = e.target.closest('[data-add]'); if (add && f) { hist.push(doc); const b = add.dataset.add === 'stack' ? { id: Canvas.uid(), kind: 'box', x: f.layout.grid.mx, y: f.layout.grid.my, w: 480, h: 240, fill: 'none', radius: 0, clip: false, decorative: true, hidden: false, locked: false, sizeW: 'fixed', sizeH: 'hug', auto: { v: 2, mode: 'vertical', wrap: false, gap: 16, gapAuto: false, counterGap: 16, counterGapAuto: false, pad: { t: 24, r: 24, b: 24, l: 24 }, main: 'start', cross: 'start' } } : Canvas.newBlock(add.dataset.add, f, env.getKit(), null); if (b) { f.layout.blocks.push(b); const sb = selBlocks(); const host = sb.length === 1 && sb[0].kind === 'box' ? sb[0] : null; if (host) { b.parent = host.id; if (Auto.on(Auto.settingsOf(f, host))) { Auto.moveInList(f, b, host.id, null); if ((b.kind === 'text' || b.kind === 'list') && Auto.settingsOf(f, host).mode === 'vertical') b.sizeW = 'fill'; } } else if (Auto.on(Auto.settingsOf(f, null))) Auto.moveInList(f, b, '', null); select(f.id, [b.id]); rerenderFrame(f); persist(); updateUndo(); if (b.kind === 'image') { const inp = $('cvProps').querySelector('[data-file="image"]'); if (inp) inp.click(); } } return; }
+      const dirB = e.target.closest('[data-al-dir]'); const cell = e.target.closest('[data-al-cell]');
+      if (dirB || cell) { const tg = autoTarget(); if (!tg) return; hist.push(doc); setAuto(tg.f, tg.box, dirB ? 'dir' : 'cell', dirB ? dirB.dataset.alDir : cell.dataset.alCell); rerenderFrame(tg.f); renderProps(); drawOverlay(); persist(); updateUndo(); return; }
       const act = e.target.closest('[data-act]'); if (!act) return;
       const a = act.dataset.act;
+      if (a === 'al-add') { addAutoLayout(); return; } if (a === 'al-remove') { removeAutoLayout(); return; }
+      if (a === 'frame-sel') { frameSelection(); return; } if (a === 'unwrap') { unwrapSelection(); return; }
       if (a === 'edit-palette') { select(null, []); const sec = el.querySelector('[data-palette]'); if (sec) sec.scrollIntoView({ block: 'start', behavior: 'smooth' }); return; }
       if (a === 'add-color') { const colors = env.getKit().colors.map(c => ({ ...c })); colors.push({ name: 'Color ' + (colors.length + 1), hex: '#888888', role: 'accent' }); env.updateColors(colors); renderProps(); const rows = el.querySelectorAll('.cv-pal-row'); const last = rows.length ? rows[rows.length - 1].querySelector('input[type="text"]') : null; if (last) { last.focus(); last.select(); } return; }
       if (a === 'reset-palette') { if (env.resetColors()) { followTokens(); renderProps(); env.toast('Palette reset to the preset'); } else env.toast('This kit has no preset to reset to'); return; }
@@ -5760,7 +6502,9 @@ const Sync = (() => {
       fr.z = i; fr.layout = { ...layoutRest, meta: metaRest }; fr.order = blocks.map(b => b.id);
       out.set('f~' + f.id, fr);
       if (original) out.set('o~' + f.id, { original });
-      for (const b of blocks) out.set(`b~${f.id}~${b.id}`, b);
+      // Positions and sizes that auto layout computes are left out: every viewer computes them, so they never echo.
+      const I = Auto.needs(f) ? Auto.index(f) : null;
+      for (const b of blocks) out.set(`b~${f.id}~${b.id}`, Auto.syncBlock(f, b, I));
     });
     return out;
   }
@@ -5777,7 +6521,8 @@ const Sync = (() => {
     layout.meta = { ...(layout.meta || {}) }; if (o && !o._del && o.original) layout.meta.original = Canvas.clone(o.original);
     if (!layout.format || !layout.palette || !layout.grid) return null; // incomplete record
     const f = { id: fid, layout }; for (const k of FRAME_KEYS) if (fr[k] !== undefined && k !== 'id') f[k] = Canvas.clone(fr[k]);
-    if (!f.autoLayout) f.autoLayout = { mode: 'none', gap: 24, padding: 72, align: 'start', justify: 'start', fill: false };
+    Canvas.migrate(f);
+    if (Auto.needs(f)) { Auto.fillDefaults(f); Auto.layout(f); }
     return f;
   }
   function docFrom(map, base) {

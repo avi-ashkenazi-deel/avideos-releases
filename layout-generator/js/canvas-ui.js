@@ -8,6 +8,13 @@ const CanvasUI = (() => {
   const sel = { frameId: null, blockIds: [], frameIds: [] };
   let tool = 'select', hover = null, drag = null, spaceDown = false, clipboard = null, lastPointer = null, dropTarget = null;
   let guides = [], editing = null, groupFocus = null, peers = [], undoMerge = null;
+  // Simple editing (default) hides auto layout, sizing and code, and treats stacks as tidy containers; Advanced is
+  // Figma-style. Per person, kept in this browser.
+  let editMode = (() => { try { return localStorage.getItem('lg.editMode') === 'advanced' ? 'advanced' : 'simple'; } catch { return 'simple'; } })();
+  const advanced = () => editMode === 'advanced';
+  let layoutHold = null; // a frame whose layout pass waits while a block in one of its stacks is dragged
+  let dropHint = null;   // where a dragged block would land: {frame, container, index, before, line, free, flatten}
+  const folded = new Set(); // boxes collapsed in the layers panel
   const hooks = { change: [], live: [], select: [], pointer: [] };
   const HANDLE = 7;
   const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -38,14 +45,14 @@ const CanvasUI = (() => {
   }
   // Remote changes: the document object was patched in place by the sync layer.
   function remoteApplied(frameIds, structural) {
-    validateSelection();
+    validateSelection(); hover = null;
     if (editing && !Canvas.frameById(doc, editing.frameId)) endEdit(true);
     if (!active) { persist({ silent: true }); return; }
     if (structural || !frameIds) renderFrames(); else frameIds.forEach(id => { const f = Canvas.frameById(doc, id); if (f && !(editing && editing.frameId === id)) rerenderFrame(f); });
     renderLayers(); if (!propsFocused()) renderProps(); drawOverlay(); updateCount();
     persist({ silent: true });
   }
-  function replaceDoc(d, opts = {}) { const view = doc && doc.view; doc = d; if (opts.keepView !== false && view) doc.view = view; validateSelection(); if (active) renderAll(); persist(opts); }
+  function replaceDoc(d, opts = {}) { hover = null; const view = doc && doc.view; doc = d; if (opts.keepView !== false && view) doc.view = view; validateSelection(); if (active) renderAll(); persist(opts); }
   const propsFocused = () => { const a = document.activeElement; return !!(a && $('cvProps').contains(a) && a !== document.body); };
   function validateSelection() {
     sel.frameIds = sel.frameIds.filter(id => Canvas.frameById(doc, id));
@@ -72,7 +79,33 @@ const CanvasUI = (() => {
   const FW = f => f.layout.format.w, FH = f => f.layout.format.h;
   function frameAt(p) { for (let i = doc.frames.length - 1; i >= 0; i--) { const f = doc.frames[i]; if (f.hidden) continue; if (p.x >= f.x && p.y >= f.y && p.x <= f.x + FW(f) && p.y <= f.y + FH(f)) return f; } return null; }
   function labelAt(p) { const off = Math.max(16, 18 / doc.view.zoom) + 2; for (let i = doc.frames.length - 1; i >= 0; i--) { const f = doc.frames[i]; if (f.hidden) continue; if (p.x >= f.x && p.x <= f.x + FW(f) && p.y >= f.y - off && p.y < f.y) return f; } return null; }
-  function blockAt(f, p) { const lx = p.x - f.x, ly = p.y - f.y; const bs = f.layout.blocks; for (let i = bs.length - 1; i >= 0; i--) { const b = bs[i]; if (b.hidden) continue; const w = (b.kind === 'text' && b.align !== 'center' && b.align !== 'right') ? Math.max(b.inkW || b.w, 24) : b.w; if (lx >= b.x && ly >= b.y && lx <= b.x + w && ly <= b.y + b.h) return b; } return null; }
+  // The deepest visible block under a point and the boxes it sits in: [top level, ..., deepest]. Clipping boxes hide
+  // what lies outside them.
+  function hitChain(f, p) {
+    const I = Auto.index(f); const lx = p.x - f.x, ly = p.y - f.y; const order = Auto.paintOrder(f, I);
+    const gone = new Set(); for (const b of order) { const pid = I.par.get(b.id); if (b.hidden || (pid && gone.has(pid))) gone.add(b.id); }
+    for (let i = order.length - 1; i >= 0; i--) {
+      const b = order[i]; if (gone.has(b.id)) continue;
+      const w = (b.kind === 'text' && b.align !== 'center' && b.align !== 'right') ? Math.max(b.inkW || b.w, 24) : b.w;
+      if (!(lx >= b.x && ly >= b.y && lx <= b.x + w && ly <= b.y + b.h)) continue;
+      const anc = Auto.ancestors(f, b, I);
+      if (anc.some(a => a.clip && !(lx >= a.x && ly >= a.y && lx <= a.x + a.w && ly <= a.y + a.h))) continue;
+      return [...anc.reverse(), b];
+    }
+    return [];
+  }
+  // Which level a click selects. Advanced works like Figma: the top level, or a sibling of what is selected; double-click
+  // goes one level in; ⌘-click goes straight to the deepest. Simple picks the thing itself (text, image, button).
+  function pickLevel(f, chain, e) {
+    if (!chain.length) return null;
+    const deepest = chain[chain.length - 1];
+    if (e && (e.metaKey || e.ctrlKey)) return deepest;
+    if (!advanced()) return deepest;
+    const scopes = new Set(sel.frameId === f.id ? selBlocks().map(b => b.parent || '') : []);
+    for (let i = chain.length - 1; i > 0; i--) if (scopes.has(chain[i].parent || '')) return chain[i];
+    return chain[0];
+  }
+  function blockAt(f, p, e) { return pickLevel(f, hitChain(f, p), e); }
   function selFrame() { return Canvas.frameById(doc, sel.frameId); }
   function selFrames() { return (sel.frameIds.length ? sel.frameIds : sel.frameId ? [sel.frameId] : []).map(id => Canvas.frameById(doc, id)).filter(Boolean); }
   function selBlocks() { const f = selFrame(); return f ? sel.blockIds.map(id => Canvas.blockById(f, id)).filter(Boolean) : []; }
@@ -106,6 +139,7 @@ const CanvasUI = (() => {
     $('world').innerHTML = doc.frames.map(f => `${labelHTML(f)}<div class="cv-frame" data-id="${esc(f.id)}" style="left:${f.x}px;top:${f.y}px;width:${FW(f)}px;height:${FH(f)}px;${f.hidden ? 'display:none;' : ''}${f.clip === false ? 'overflow:visible;' : ''}">${frameSVG(f)}</div>`).join('');
   }
   function frameSVG(f) {
+    if (layoutHold !== f.id && Auto.needs(f)) Auto.layout(f);
     const L = editing && editing.frameId === f.id && editing.hide ? { ...f.layout, blocks: f.layout.blocks.filter(b => b.id !== editing.blockId) } : f.layout;
     return env.renderSVG(L, { showGrid: !!f.showGrid });
   }
@@ -147,12 +181,15 @@ const CanvasUI = (() => {
     if (f && frames.length === 1) {
       if (blocks.length) {
         const gb = blocks.length > 1 ? Canvas.bounds(blocks) : null;
+        // the box the selection sits in, so you can see which stack it belongs to
+        const par = blocks.length && blocks[0].parent ? Canvas.blockById(f, blocks[0].parent) : null;
+        if (par && !(drag && drag.type)) parts.push(rect(f.x + par.x, f.y + par.y, par.w, par.h, 'fill="none" stroke="var(--accent)" stroke-opacity=".55" stroke-dasharray="3 3" stroke-width="1"'));
         for (const b of blocks) {
           const q = toScreen(f.x + b.x, f.y + b.y); const w = b.w * Z, h = b.h * Z;
           parts.push(`<rect x="${q.x}" y="${q.y}" width="${w}" height="${h}" fill="none" stroke="${b.overflow ? 'var(--danger)' : 'var(--accent)'}" stroke-width="1.5"/>`);
           if (blocks.length === 1) {
             if (!b.locked && !(editing && editing.blockId === b.id)) for (const hnd of handles(q.x, q.y, w, h)) parts.push(`<rect class="cv-handle" x="${hnd.x - HANDLE / 2}" y="${hnd.y - HANDLE / 2}" width="${HANDLE}" height="${HANDLE}" fill="#fff" stroke="var(--accent)" stroke-width="1.5"/>`);
-            parts.push(`<text x="${q.x}" y="${q.y - 6}" fill="var(--accent)" font-size="11" font-family="var(--font-mono)">${esc(b.group ? 'group · ' : '')}${esc(b.role || b.kind)} ${Math.round(b.w)}×${Math.round(b.h)}</text>`);
+            parts.push(`<text x="${q.x}" y="${q.y - 6}" fill="var(--accent)" font-size="11" font-family="var(--font-mono)">${esc(b.group ? 'group · ' : '')}${esc(kindLabel(f, b))} ${Math.round(b.w)}×${Math.round(b.h)}${esc(sizeLabel(f, b))}</text>`);
           }
         }
         if (gb) { const q = toScreen(f.x + gb.x, f.y + gb.y); parts.push(`<rect x="${q.x - 3}" y="${q.y - 3}" width="${gb.w * Z + 6}" height="${gb.h * Z + 6}" fill="none" stroke="var(--accent)" stroke-dasharray="4 3" stroke-width="1"/><text x="${q.x}" y="${q.y - 8}" fill="var(--accent)" font-size="11" font-family="var(--font-mono)">${blocks[0].group && blocks.every(b => b.group === blocks[0].group) ? 'group' : blocks.length + ' blocks'} ${Math.round(gb.w)}×${Math.round(gb.h)}</text>`); }
@@ -168,6 +205,12 @@ const CanvasUI = (() => {
       else { const a = toScreen(g.from, g.v), b = toScreen(g.to, g.v); parts.push(`<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="#FF3B8D" stroke-width="1"/>`); }
     }
     if (drag && drag.type === 'draw-frame' && drag.moved) { const a = toScreen(Math.min(drag.start.x, drag.cur.x), Math.min(drag.start.y, drag.cur.y)); const w = Math.abs(drag.cur.x - drag.start.x), h = Math.abs(drag.cur.y - drag.start.y); parts.push(`<rect x="${a.x}" y="${a.y}" width="${w * Z}" height="${h * Z}" fill="rgba(216,201,163,.06)" stroke="var(--accent)" stroke-dasharray="6 4" stroke-width="1.5"/><text x="${a.x}" y="${a.y - 6}" fill="var(--accent)" font-size="11" font-family="var(--font-mono)">${Math.round(w / 8) * 8}×${Math.round(h / 8) * 8}</text>`); }
+    if (dropHint && dropHint.frame) {
+      const fr = dropHint.frame; const c = dropHint.container;
+      if (c) parts.push(rect(fr.x + c.x, fr.y + c.y, c.w, c.h, 'fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-dasharray="5 3"'));
+      if (dropHint.line) { const L = dropHint.line; const a = toScreen(fr.x + L.x0, fr.y + L.y0), b = toScreen(fr.x + L.x1, fr.y + L.y1); parts.push(`<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="#FF3B8D" stroke-width="3" stroke-linecap="round"/>`); }
+      if (dropHint.flatten) { const a = toScreen(fr.x, fr.y); parts.push(`<text x="${a.x + 8}" y="${a.y + 18}" fill="var(--accent)" font-size="12" font-weight="600" font-family="var(--font-mono)">Drop to place freely (screen switches to free positions)</text>`); }
+    }
     if (dropTarget) { const a = toScreen(dropTarget.x, dropTarget.y); parts.push(`<rect x="${a.x}" y="${a.y}" width="${FW(dropTarget) * Z}" height="${FH(dropTarget) * Z}" fill="rgba(216,201,163,.1)" stroke="var(--accent)" stroke-dasharray="6 4" stroke-width="2"/><text x="${a.x + 8}" y="${a.y + 18}" fill="var(--accent)" font-size="12" font-weight="600" font-family="var(--font-mono)">Move into ${esc(dropTarget.name)}</text>`); }
     if (drag && drag.type === 'marquee') { const a = toScreen(Math.min(drag.start.x, drag.cur.x), Math.min(drag.start.y, drag.cur.y)); parts.push(`<rect x="${a.x}" y="${a.y}" width="${Math.abs(drag.cur.x - drag.start.x) * Z}" height="${Math.abs(drag.cur.y - drag.start.y) * Z}" fill="rgba(216,201,163,.08)" stroke="var(--accent)" stroke-dasharray="4 3"/>`); }
     // other people's cursors, last so they sit on top
@@ -178,6 +221,8 @@ const CanvasUI = (() => {
     }
     ov.innerHTML = parts.join('');
   }
+  function kindLabel(f, b) { if (b.kind === 'box') return b.label || (Auto.on(Auto.settingsOf(f, b)) ? 'stack' : 'box'); return b.role || b.kind; }
+  function sizeLabel(f, b) { if (!advanced()) return ''; const I = Auto.index(f); const w = Auto.sizing(I, b, 'w'), h = Auto.sizing(I, b, 'h'); const t = v => v === 'hug' ? 'Hug' : v === 'fill' ? 'Fill' : ''; const parts = [t(w) && 'W ' + t(w), t(h) && 'H ' + t(h)].filter(Boolean); return parts.length ? ' · ' + parts.join(' ') : ''; }
   function handles(x, y, w, h) {
     return [{ id: 'nw', x, y, cursor: 'nwse-resize' }, { id: 'n', x: x + w / 2, y, cursor: 'ns-resize' }, { id: 'ne', x: x + w, y, cursor: 'nesw-resize' }, { id: 'e', x: x + w, y: y + h / 2, cursor: 'ew-resize' }, { id: 'se', x: x + w, y: y + h, cursor: 'nwse-resize' }, { id: 's', x: x + w / 2, y: y + h, cursor: 'ns-resize' }, { id: 'sw', x, y: y + h, cursor: 'nesw-resize' }, { id: 'w', x, y: y + h / 2, cursor: 'ew-resize' }];
   }
@@ -201,7 +246,8 @@ const CanvasUI = (() => {
     const x1 = Math.max(...moving.map((b, i) => orig[i].x + b.w)), y1 = Math.max(...moving.map((b, i) => orig[i].y + b.h));
     if (free) return { dx, dy, guides: [] };
     const th = 6 / doc.view.zoom; const W = FW(f), H = FH(f), g = f.layout.grid || {};
-    const others = f.layout.blocks.filter(b => !moving.includes(b) && !b.hidden && !Canvas.isBackground(f, b));
+    const along = new Set(Auto.withDescendants(f, moving).map(b => b.id));
+    const others = f.layout.blocks.filter(b => !along.has(b.id) && !b.hidden && !Canvas.isBackground(f, b));
     const xs = [0, W / 2, W], ys = [0, H / 2, H]; if (g.mx) xs.push(g.mx, W - g.mx); if (g.my) ys.push(g.my, H - g.my);
     for (const o of others) { xs.push(o.x, o.x + o.w / 2, o.x + o.w); ys.push(o.y, o.y + o.h / 2, o.y + o.h); }
     const gl = []; let ndx, ndy;
@@ -244,7 +290,8 @@ const CanvasUI = (() => {
     const p = toWorld(e.clientX, e.clientY);
     const lf = labelAt(p); if (lf) { select(lf.id, []); const inp = $('cvProps').querySelector('[data-f="name"]'); if (inp) { inp.focus(); inp.select(); } return; }
     const f = frameAt(p); if (!f) return;
-    const b = blockAt(f, p);
+    const chain = hitChain(f, p); const b = pickLevel(f, chain, e);
+    if (b && b.kind === 'box') { const i = chain.indexOf(b); const inner = chain[i + 1]; if (inner) { select(f.id, [inner.id]); if (inner.kind === 'text' || inner.kind === 'list' || inner.kind === 'button') startEdit(f, inner); return; } }
     if (b && b.group && groupFocus !== b.group) { groupFocus = b.group; select(f.id, [b.id], { keepGroupFocus: true }); return; }
     if (b && (b.kind === 'text' || b.kind === 'list' || b.kind === 'button')) { startEdit(f, b); return; }
     if (!b) fitTo([f]);
@@ -267,7 +314,7 @@ const CanvasUI = (() => {
     const f = frameAt(p);
     if (!f) { if (!e.shiftKey) select(null, []); drag = { type: 'marquee', start: p, cur: p, add: e.shiftKey }; stage().setPointerCapture(e.pointerId); return; }
     if (sel.frameIds.length > 1 && sel.frameIds.includes(f.id) && !e.shiftKey) { startFrameDrag(selFrames().filter(x => !x.locked), p, e, f); return; }
-    const b = blockAt(f, p);
+    const b = blockAt(f, p, e);
     if (!b) { frameClick(f, e, p); return; }
     if (e.altKey && !b.locked) {
       hist.push(doc);
@@ -275,14 +322,44 @@ const CanvasUI = (() => {
       const copies = src.map(x => { const c = Canvas.duplicateBlock(f, x, 0); c.x = x.x; c.y = x.y; return c; });
       const g = copies.length > 1 && src.every(x => x.group && x.group === src[0].group) ? 'g' + Canvas.uid() : null; if (g) copies.forEach(c => { c.group = g; });
       sel.frameId = f.id; sel.frameIds = [f.id]; sel.blockIds = copies.map(c => c.id); afterSelect();
-      drag = { type: 'move', f, blocks: copies, start: p, orig: copies.map(c => ({ x: c.x, y: c.y })), moved: true }; rerenderFrame(f);
+      drag = { type: 'move', f, blocks: copies, start: p, orig: copies.map(c => ({ x: c.x, y: c.y })), moved: true, flow: flowDrag(f, copies) }; rerenderFrame(f);
     } else {
       if (e.shiftKey && sel.frameId === f.id && sel.frameIds.length <= 1) { const ids = Canvas.groupMembers(f, b).map(x => x.id); const has = sel.blockIds.includes(b.id); select(f.id, has ? sel.blockIds.filter(i => !ids.includes(i)) : [...sel.blockIds, ...ids], { keepGroupFocus: true }); }
       else if (!(sel.frameId === f.id && sel.blockIds.includes(b.id))) select(f.id, [b.id]);
-      const blocks = selBlocks().filter(x => !x.locked); if (!blocks.length) return;
-      drag = { type: 'move', f, blocks, start: p, orig: blocks.map(x => ({ x: x.x, y: x.y })), moved: false };
+      const blocks = Auto.topmost(f, selBlocks().filter(x => !x.locked)); if (!blocks.length) return;
+      drag = { type: 'move', f, blocks, start: p, orig: blocks.map(x => ({ x: x.x, y: x.y })), moved: false, flow: flowDrag(f, blocks) };
     }
     stage().setPointerCapture(e.pointerId);
+  }
+  // Blocks dragged out of a stack's flow: the stack holds still while they move, and shows where they would land.
+  function flowDrag(f, blocks) {
+    const I = Auto.index(f); if (!blocks.every(b => Auto.inFlow(I, b))) return null;
+    const pid = I.par.get(blocks[0].id) || ''; if (!blocks.every(b => (I.par.get(b.id) || '') === pid)) return null;
+    const P = pid ? I.byId.get(pid) : null;
+    return { parent: pid, area: P ? { x: P.x, y: P.y, w: P.w, h: P.h } : { x: 0, y: 0, w: FW(f), h: FH(f) } };
+  }
+  // Where a block dragged to p (frame coordinates) would go.
+  function dropTargetIn(f, blocks, lp, fl) {
+    const I = Auto.index(f);
+    if (fl && !advanced()) {
+      const a = fl.area, m = 24;
+      if (lp.x >= a.x - m && lp.y >= a.y - m && lp.x <= a.x + a.w + m && lp.y <= a.y + a.h + m) { const P = fl.parent ? I.byId.get(fl.parent) : null; const d = Auto.dropIndex(f, P, lp, blocks); return { container: P, index: d.index, before: d.before, line: insertLine(f, P, d) }; }
+      return { flatten: true };
+    }
+    if (!advanced()) return null;
+    const box = Auto.containerAt(f, lp, blocks);
+    const s = box ? Auto.settingsOf(f, box) : Auto.settingsOf(f, null);
+    if (Auto.on(s)) { const d = Auto.dropIndex(f, box, lp, blocks); return { container: box, index: d.index, before: d.before, line: insertLine(f, box, d) }; }
+    const cur = I.par.get(blocks[0].id) || '';
+    if ((box ? box.id : '') !== cur || fl) return { container: box, free: true };
+    return null;
+  }
+  // A short line between two stack items (frame coordinates) for the drop indicator.
+  function insertLine(f, box, d) {
+    const s = d.s; const H = s.mode === 'horizontal'; const area = box || { x: 0, y: 0, w: FW(f), h: FH(f) };
+    const p = s.pad; const k = d.kids; const prev = k[d.index - 1], next = k[d.index];
+    if (H) { const x = prev && next ? (prev.x + prev.w + next.x) / 2 : prev ? prev.x + prev.w + Math.min(s.gap, 12) / 2 : next ? next.x - Math.min(s.gap, 12) / 2 : area.x + p.l; const ref = next || prev; const y0 = ref ? ref.y : area.y + p.t, y1 = ref ? ref.y + ref.h : area.y + area.h - p.b; return { x0: x, y0, x1: x, y1 }; }
+    const y = prev && next ? (prev.y + prev.h + next.y) / 2 : prev ? prev.y + prev.h + Math.min(s.gap, 12) / 2 : next ? next.y - Math.min(s.gap, 12) / 2 : area.y + p.t; const ref = next || prev; const x0 = ref ? ref.x : area.x + p.l, x1 = ref ? ref.x + ref.w : area.x + area.w - p.r; return { x0, y0: y, x1, y1: y };
   }
   function frameClick(f, e, p) {
     if (e.shiftKey) { const ids = selFrames().map(x => x.id); selectFrames(ids.includes(f.id) ? ids.filter(i => i !== f.id) : [...ids, f.id]); return; }
@@ -325,10 +402,13 @@ const CanvasUI = (() => {
     const free = e.shiftKey || !doc.grid.snap;
     const u = !free ? (drag.f ? drag.f.layout.grid.unit : 8) : 1;
     if (drag.type === 'move') {
-      const s = snapBlocks(drag.f, drag.blocks, drag.orig, dx, dy, u, e.shiftKey);
+      if (drag.flow) layoutHold = drag.f.id;
+      const s = snapBlocks(drag.f, drag.blocks, drag.orig, dx, dy, u, e.shiftKey || !!drag.flow);
       drag.blocks.forEach((b, i) => { b.x = Math.round(drag.orig[i].x + s.dx); b.y = Math.round(drag.orig[i].y + s.dy); });
       guides = s.guides;
       const over = frameAt(p); dropTarget = over && over !== drag.f && !over.locked ? over : null; if (dropTarget) guides = [];
+      dropHint = dropTarget ? null : dropTargetIn(drag.f, drag.blocks, { x: p.x - drag.f.x, y: p.y - drag.f.y }, drag.flow);
+      if (dropHint) { dropHint.frame = drag.f; if (dropHint.line) guides = []; }
       rerenderFrame(drag.f); drawOverlay(); liveProps(); emitLive([drag.f.id]);
     } else if (drag.type === 'move-frames') {
       const s = snapFrames(drag.frames, drag.orig, dx, dy, e.shiftKey);
@@ -359,13 +439,21 @@ const CanvasUI = (() => {
         if (inside.length) { const base = d.add ? selFrames().map(f => f.id) : []; selectFrames([...new Set([...base, ...inside])]); }
         else {
           const f = frameAt({ x: x0, y: y0 }) || frameAt({ x: x1, y: y1 }) || doc.frames.find(fr => !fr.hidden && !(x1 < fr.x || x0 > fr.x + FW(fr) || y1 < fr.y || y0 > fr.y + FH(fr)));
-          if (f) { const ids = f.layout.blocks.filter(b => !b.hidden && !b.locked && f.x + b.x >= x0 && f.y + b.y >= y0 && f.x + b.x + b.w <= x1 && f.y + b.y + b.h <= y1).map(b => b.id); if (ids.length) select(f.id, ids); }
+          if (f) { const inside = f.layout.blocks.filter(b => !b.hidden && !b.locked && f.x + b.x >= x0 && f.y + b.y >= y0 && f.x + b.x + b.w <= x1 && f.y + b.y + b.h <= y1); const ids = Auto.topmost(f, inside).map(b => b.id); if (ids.length) select(f.id, ids); }
         }
       }
       drawOverlay(); return;
     }
     if (d.type === 'draw-frame') {
       const w = Math.abs(d.cur.x - d.start.x), h = Math.abs(d.cur.y - d.start.y);
+      const host = frameAt(d.start);
+      if (host && d.moved && w * doc.view.zoom > 12 && h * doc.view.zoom > 12) {
+        // Drawn inside a screen: a box (a frame inside the frame), like Figma.
+        hist.push(doc); const lp = { x: Math.min(d.start.x, d.cur.x) - host.x, y: Math.min(d.start.y, d.cur.y) - host.y };
+        const box = { id: Canvas.uid(), kind: 'box', x: Math.round(lp.x), y: Math.round(lp.y), w: Math.round(w), h: Math.round(h), fill: '#FFFFFF', radius: 0, clip: true, decorative: true, hidden: false, locked: false };
+        host.layout.blocks.push(box); placeInContainer(host, box, { x: lp.x + 1, y: lp.y + 1 });
+        rerenderFrame(host); select(host.id, [box.id]); persist(); updateUndo(); setTool('select'); return;
+      }
       if (d.moved && w * doc.view.zoom > 12 && h * doc.view.zoom > 12) createFrame({ x: Math.min(d.start.x, d.cur.x), y: Math.min(d.start.y, d.cur.y), format: Canvas.customFormat(w, h) });
       else createFrame({ x: d.start.x, y: d.start.y });
       setTool('select'); return;
@@ -373,16 +461,40 @@ const CanvasUI = (() => {
     if (d.type === 'move' && d.moved && dropTarget) {
       const dst = dropTarget; dropTarget = null;
       const ids = Canvas.transferBlocks(d.f, dst, d.blocks, dst.layout.grid.unit).map(b => b.id);
-      if (d.f.autoLayout.mode !== 'none') Canvas.applyAutoLayout(d.f); if (dst.autoLayout.mode !== 'none') Canvas.applyAutoLayout(dst);
+      
       rerenderFrame(d.f); rerenderFrame(dst); select(dst.id, ids, { keepGroupFocus: true }); persist(); updateUndo(); env.toast(`Moved into ${dst.name}`); return;
     }
     dropTarget = null;
+    const hint = dropHint; dropHint = null; if (layoutHold === (d.f && d.f.id)) layoutHold = null;
+    if (d.type === 'move' && d.moved && hint) { dropInto(d.f, d.blocks, hint); return; }
     if (d.type === 'move-frames' && !d.moved && d.clickTo) { select(d.clickTo.id, []); return; }
-    if (d.type === 'resize-frame' && d.moved) { regrid(d.f); if (d.f.autoLayout.mode !== 'none') Canvas.applyAutoLayout(d.f); rerenderFrame(d.f); }
+    if (d.type === 'resize' && d.moved) {
+      // Resizing a hugging or filling block by hand fixes that axis, like Figma.
+      const I = Auto.index(d.f); const b = d.b;
+      if (Math.round(b.w) !== Math.round(d.orig.w) && (Auto.sizing(I, b, 'w') !== 'fixed')) b.sizeW = 'fixed';
+      if (Math.round(b.h) !== Math.round(d.orig.h) && (Auto.sizing(I, b, 'h') !== 'fixed')) b.sizeH = 'fixed';
+      rerenderFrame(d.f);
+    }
+    if (d.type === 'resize-frame' && d.moved) { regrid(d.f); rerenderFrame(d.f); }
     if (d.moved) {
-      if (d.f && d.f.autoLayout && d.f.autoLayout.mode !== 'none' && d.type === 'move') { Canvas.applyAutoLayout(d.f); rerenderFrame(d.f); }
+      if (d.f && d.type === 'move' && (d.flow || Auto.needs(d.f))) rerenderFrame(d.f);
       persist(); updateUndo(); renderLayers(); renderProps(); drawOverlay();
     } else if (hadGuides) drawOverlay();
+  }
+  // Finish a drag that lands in a stack, in another box, or (simple editing) on a free spot of a stacked screen.
+  function dropInto(f, blocks, hint) {
+    if (hint.flatten) {
+      const at = blocks.map(b => ({ b, x: b.x, y: b.y }));
+      Auto.flatten(f); Auto.layout(f); for (const a of at) { a.b.x = a.x; a.b.y = a.y; }
+      env.toast('This screen now uses free positions, so you can place things anywhere. ⌘Z to undo.');
+    } else if (hint.free) {
+      const box = hint.container;
+      for (const b of blocks) { if (box) b.parent = box.id; else delete b.parent; delete b.rx; delete b.ry; delete b.lx; delete b.ly; delete b.absolute; }
+    } else {
+      const pid = hint.container ? hint.container.id : '';
+      for (const b of blocks) { if (hint.before === b) continue; Auto.moveInList(f, b, pid, hint.before); delete b.absolute; delete b.rx; delete b.ry; delete b.lx; delete b.ly; }
+    }
+    rerenderFrame(f); select(f.id, blocks.map(b => b.id), { keepGroupFocus: true }); persist(); updateUndo();
   }
   // An image dropped on a frame becomes an image block there; on empty canvas it becomes a frame of its own size.
   async function dropImage(file) {
@@ -398,12 +510,17 @@ const CanvasUI = (() => {
     const kindMap = { text: 'text', body: 'body', rect: 'rect', ellipse: 'ellipse', button: 'button', image: 'image', icon: 'icon', logo: 'logo' };
     const b = Canvas.newBlock(kindMap[tool] || 'text', f, env.getKit(), { x: p.x - f.x, y: p.y - f.y });
     if (!b) return;
-    f.layout.blocks.push(b);
-    if (f.autoLayout.mode !== 'none') Canvas.applyAutoLayout(f);
+    f.layout.blocks.push(b); placeInContainer(f, b, { x: p.x - f.x, y: p.y - f.y });
     const wasText = tool === 'text';
     select(f.id, [b.id]); setTool('select'); rerenderFrame(f); renderLayers(); renderProps(); drawOverlay(); persist(); updateUndo();
     if (b.kind === 'image') { const inp = $('cvProps').querySelector('[data-file="image"]'); if (inp) inp.click(); }
     if (wasText) startEdit(f, b, { noHistory: true });
+  }
+  // A new block joins the box under the point: in a stack it takes that place in the flow; in a plain box it stays put.
+  function placeInContainer(f, b, lp) {
+    const box = Auto.containerAt(f, lp, [b]); const s = Auto.settingsOf(f, box);
+    if (box) b.parent = box.id;
+    if (Auto.on(s)) { const d = Auto.dropIndex(f, box, lp, [b]); Auto.moveInList(f, b, box ? box.id : '', d.before); if (b.kind === 'text' && Auto.settingsOf(f, box).mode === 'vertical') b.sizeW = 'fill'; }
   }
   // A blank frame of the toolbar's format (or a drawn custom size). With center, it lands in view on a free spot.
   function createFrame({ x, y, format, center, name, bg, history = true } = {}) {
@@ -531,7 +648,6 @@ const CanvasUI = (() => {
     if (f) {
       const b = Canvas.blockById(f, ed.blockId);
       if (b && b.kind === 'text' && !Canvas.sourceText(b).trim() && !cancel) { Canvas.removeBlocks(f, [b.id]); sel.blockIds = sel.blockIds.filter(i => i !== b.id); }
-      if (f.autoLayout.mode !== 'none') Canvas.applyAutoLayout(f);
       rerenderFrame(f);
     }
     persist(); updateUndo(); renderLayers(); renderProps(); drawOverlay();
@@ -553,7 +669,9 @@ const CanvasUI = (() => {
       if (meta && k === 'c') { if (copySelection()) e.preventDefault(); return; }
       if (meta && k === 'x') { if (copySelection()) { e.preventDefault(); deleteSelection(); } return; }
       if (meta && k === 'v') { if (clipboard) { e.preventDefault(); pasteClipboard(); } return; }
+      if (meta && e.altKey && k === 'g') { e.preventDefault(); frameSelection(); return; }
       if (meta && k === 'g') { e.preventDefault(); if (e.shiftKey) ungroupSelection(); else groupSelection(); return; }
+      if (e.shiftKey && !meta && k === 'a') { e.preventDefault(); if (e.altKey) removeAutoLayout(); else addAutoLayout(); return; }
       if (meta && k === 'a') { e.preventDefault(); const f = selFrame(); if (f && selFrames().length === 1) select(f.id, f.layout.blocks.filter(b => !b.hidden && !b.locked).map(b => b.id)); else selectFrames(doc.frames.filter(x => !x.hidden).map(x => x.id)); return; }
       if (e.shiftKey && !meta && k === 'n') { e.preventDefault(); createFrame({ center: true }); return; }
       if (e.shiftKey && !meta && k === 'g') { e.preventDefault(); const fs = selFrames(); const on = !fs.every(f => f.showGrid); fs.forEach(f => { f.showGrid = on; rerenderFrame(f); }); persist(); return; }
@@ -561,6 +679,8 @@ const CanvasUI = (() => {
       if (k === 'enter') {
         e.preventDefault(); const f = selFrame(); const bs = selBlocks();
         if (f && bs.length === 1 && (bs[0].kind === 'text' || bs[0].kind === 'button' || bs[0].kind === 'list')) startEdit(f, bs[0]);
+        else if (f && bs.length && e.shiftKey) { const par = bs[0].parent && Canvas.blockById(f, bs[0].parent); if (par) select(f.id, [par.id]); else select(f.id, []); }
+        else if (f && bs.length && bs.every(b => b.kind === 'box')) { const I = Auto.index(f); const kids = bs.flatMap(b => Auto.childrenOf(I, b.id)).filter(k => !k.hidden); if (kids.length) select(f.id, kids.map(k => k.id)); }
         else if (f && bs.length && bs[0].group && bs.every(b => b.group === bs[0].group)) { groupFocus = bs[0].group; select(f.id, [bs[0].id], { keepGroupFocus: true }); }
         else if (f && !bs.length && selFrames().length === 1) select(f.id, f.layout.blocks.filter(b => !b.hidden && !Canvas.isBackground(f, b)).map(b => b.id));
         return;
@@ -572,7 +692,7 @@ const CanvasUI = (() => {
         const f = selFrame();
         if (tool !== 'select') setTool('select');
         else if (groupFocus && f) { const g = groupFocus; groupFocus = null; select(f.id, f.layout.blocks.filter(b => b.group === g).map(b => b.id)); }
-        else if (sel.blockIds.length) select(sel.frameId, []); else select(null, []);
+        else if (sel.blockIds.length) { const b = selBlocks()[0]; const par = b && b.parent && Canvas.blockById(f, b.parent); select(sel.frameId, par ? [par.id] : []); } else select(null, []);
         return;
       }
       if (k === 'delete' || k === 'backspace') { e.preventDefault(); deleteSelection(); return; }
@@ -597,12 +717,12 @@ const CanvasUI = (() => {
     });
   }
   function setTool(t) { tool = t; document.querySelectorAll('#cvTools [data-tool]').forEach(b => b.classList.toggle('on', b.dataset.tool === t)); stage().style.cursor = t === 'hand' ? 'grab' : t === 'select' ? 'default' : 'crosshair'; }
-  function undo() { if (editing) endEdit(); const d = hist.undo(doc); if (d) { doc = undoMerge ? undoMerge(doc, d) : d; validateSelection(); persist(); renderAll(); } }
-  function redo() { if (editing) endEdit(); const d = hist.redo(doc); if (d) { doc = undoMerge ? undoMerge(doc, d) : d; validateSelection(); persist(); renderAll(); } }
+  function undo() { if (editing) endEdit(); hover = null; const d = hist.undo(doc); if (d) { doc = undoMerge ? undoMerge(doc, d) : d; validateSelection(); persist(); renderAll(); } }
+  function redo() { if (editing) endEdit(); hover = null; const d = hist.redo(doc); if (d) { doc = undoMerge ? undoMerge(doc, d) : d; validateSelection(); persist(); renderAll(); } }
   function deleteSelection() {
     const fs = selFrames(); if (!fs.length) return; hist.push(doc);
     const f = selFrame();
-    if (sel.blockIds.length && f) { Canvas.removeBlocks(f, sel.blockIds); if (f.autoLayout.mode !== 'none') Canvas.applyAutoLayout(f); select(f.id, []); rerenderFrame(f); }
+    if (sel.blockIds.length && f) { Canvas.removeBlocks(f, sel.blockIds); select(f.id, []); rerenderFrame(f); }
     else { const ids = new Set(fs.map(x => x.id)); doc.frames = doc.frames.filter(x => !ids.has(x.id)); select(null, []); renderAll(); }
     persist(); updateUndo(); renderLayers();
   }
@@ -621,15 +741,54 @@ const CanvasUI = (() => {
     hist.push(doc); const g = Canvas.group(f, bs); groupFocus = null; select(f.id, bs.map(b => b.id)); persist(); updateUndo(); env.toast(`Grouped ${bs.length} blocks`); return g;
   }
   function ungroupSelection() {
-    const f = selFrame(); const bs = selBlocks(); if (!f || !bs.some(b => b.group)) return;
+    const f = selFrame(); const bs = selBlocks(); if (!f) return;
+    if (!bs.some(b => b.group)) { if (unwrapSelection()) env.toast('Unwrapped'); return; }
     hist.push(doc); const n = Canvas.ungroup(f, bs); groupFocus = null; select(f.id, bs.map(b => b.id)); persist(); updateUndo(); env.toast(n > 1 ? `Ungrouped ${n} groups` : 'Ungrouped');
+  }
+
+  // ---- Auto layout commands ------------------------------------------------------------------------------------
+  function setEditMode(m) {
+    editMode = m === 'advanced' ? 'advanced' : 'simple';
+    try { localStorage.setItem('lg.editMode', editMode); } catch { }
+    document.body.classList.toggle('cv-simple', editMode === 'simple');
+    document.querySelectorAll('#cvMode [data-edit]').forEach(b => b.classList.toggle('on', b.dataset.edit === editMode));
+    if (active) { renderLayers(); renderProps(); drawOverlay(); }
+  }
+  const needAdvanced = () => { if (advanced()) return false; env.toast('Auto layout lives in Advanced mode (switch at the top left).'); return true; };
+  // ⇧A: a stack around the selected blocks; on one plain box, turn its auto layout on; on a screen, the screen's.
+  function addAutoLayout() {
+    if (needAdvanced()) return;
+    const f = selFrame(); if (!f) return; const bs = Auto.topmost(f, selBlocks());
+    if (!bs.length && Auto.on(Auto.settingsOf(f, null))) { env.toast('This screen already has auto layout'); return; }
+    hist.push(doc); let box = null;
+    if (!bs.length) { Auto.enable(f, null); env.toast('Auto layout on for this screen'); }
+    else if (bs.length === 1 && bs[0].kind === 'box' && !Auto.on(Auto.settingsOf(f, bs[0]))) { Auto.enable(f, bs[0]); box = bs[0]; }
+    else box = Auto.wrap(f, bs, true);
+    rerenderFrame(f); if (box) select(f.id, [box.id]); else select(f.id, []); persist(); updateUndo();
+  }
+  function removeAutoLayout() {
+    if (needAdvanced()) return;
+    const f = selFrame(); if (!f) return; const bs = selBlocks();
+    const targets = bs.length ? bs.filter(b => b.kind === 'box' && Auto.on(Auto.settingsOf(f, b))) : (Auto.on(Auto.settingsOf(f, null)) ? [null] : []);
+    if (!targets.length) return;
+    hist.push(doc); Auto.layout(f); for (const t of targets) Auto.disable(f, t);
+    rerenderFrame(f); renderProps(); persist(); updateUndo(); env.toast('Auto layout removed; everything stays where it is');
+  }
+  // ⌥⌘G: a plain box (no auto layout) around the selection.
+  function frameSelection() {
+    const f = selFrame(); const bs = Auto.topmost(f, selBlocks()); if (!f || !bs.length) return;
+    hist.push(doc); const box = Auto.wrap(f, bs, false); rerenderFrame(f); select(f.id, [box.id]); persist(); updateUndo();
+  }
+  function unwrapSelection() {
+    const f = selFrame(); const boxes = selBlocks().filter(b => b.kind === 'box'); if (!f || !boxes.length) return false;
+    hist.push(doc); Auto.layout(f); const kids = boxes.flatMap(b => Auto.unwrap(f, b)); rerenderFrame(f); select(f.id, kids.map(k => k.id)); persist(); updateUndo(); return true;
   }
 
   // ---- Clipboard: blocks or screens, inside the app and as JSON on the system clipboard -------------------------
   function copySelection() {
     const fs = selFrames(); if (!fs.length) return false;
     const bs = selBlocks();
-    clipboard = bs.length && fs.length === 1 ? { type: 'blocks', frameId: fs[0].id, blocks: bs.map(b => Canvas.clone(b)) } : { type: 'frames', frames: fs.map(f => Canvas.clone(f)) };
+    clipboard = bs.length && fs.length === 1 ? { type: 'blocks', frameId: fs[0].id, blocks: Auto.withDescendants(fs[0], Auto.topmost(fs[0], bs)).map(b => Canvas.clone(b)) } : { type: 'frames', frames: fs.map(f => Canvas.clone(f)) };
     try { if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(JSON.stringify({ lgClip: clipboard })).catch(() => { }); } catch { }
     env.toast(clipboard.type === 'blocks' ? `Copied ${bs.length} block${bs.length > 1 ? 's' : ''}` : fs.length > 1 ? `Copied ${fs.length} screens` : `Copied frame ${fs[0].name}`);
     if (active && !propsFocused()) renderProps();
@@ -649,16 +808,19 @@ const CanvasUI = (() => {
     const f = (selFrames().length === 1 && selFrame()) || (lastPointer && frameAt(lastPointer)) || doc.frames[doc.frames.length - 1];
     if (!f) { env.toast('Add a frame to paste into'); return; }
     const same = f.id === clip.frameId; const u = f.layout.grid.unit;
-    const out = Canvas.pasteBlocks(f, clip.blocks, { dx: same ? 2 * u : 0, dy: same ? 2 * u : 0 });
+    const tgt = sel.frameId === f.id ? selBlocks() : []; const into = tgt.length === 1 && tgt[0].kind === 'box' ? tgt[0].id : null;
+    const inStack = into && Auto.on(Auto.settingsOf(f, tgt[0]));
+    const out = Canvas.pasteBlocks(f, clip.blocks, { dx: same && !inStack ? 2 * u : 0, dy: same && !inStack ? 2 * u : 0, into });
     const groups = new Map(); for (const c of out) if (c.group) { if (!groups.has(c.group)) groups.set(c.group, 'g' + Canvas.uid()); c.group = groups.get(c.group); }
     if (same) clip.blocks.forEach(b => { b.x += 2 * u; b.y += 2 * u; });
-    if (f.autoLayout.mode !== 'none') Canvas.applyAutoLayout(f);
     select(f.id, out.map(b => b.id)); rerenderFrame(f); renderLayers(); persist(); updateUndo();
   }
 
   // ---- Toolbar ------------------------------------------------------------------------------------------------
   function bindToolbar() {
     $('cvTools').addEventListener('click', e => { const b = e.target.closest('[data-tool]'); if (b) setTool(b.dataset.tool); });
+    $('cvMode').addEventListener('click', e => { const b = e.target.closest('[data-edit]'); if (b) { setEditMode(b.dataset.edit); env.toast(advanced() ? 'Advanced: auto layout, sizing, nesting and code' : 'Simple: click any text or image to change it; layouts stay tidy'); } });
+    setEditMode(editMode);
     $('cvNewFrame').addEventListener('click', () => createFrame({ center: true }));
     $('cvZoomIn').addEventListener('click', () => zoomBy(1.25)); $('cvZoomOut').addEventListener('click', () => zoomBy(1 / 1.25)); $('cvFit').addEventListener('click', fit);
     $('cvUndo').addEventListener('click', undo); $('cvRedo').addEventListener('click', redo);
@@ -724,25 +886,42 @@ const CanvasUI = (() => {
   }
 
   // ---- Layers panel ----------------------------------------------------------------------------------------------
-  function label(b) { if (b.label) return b.label; if (b.kind === 'text') return `${b.role || 'text'} · ${Canvas.sourceText(b).slice(0, 28)}`; if (b.kind === 'list') return `${b.role || 'list'} · ${(b.items || []).length} items`; if (b.kind === 'button') return `button · ${b.text}`; if (b.kind === 'image') return 'image'; if (b.kind === 'field') return b.container ? 'card' : 'rectangle'; if (b.kind === 'shape') return b.shape; if (b.kind === 'icon') return `icon · ${b.name}`; if (b.kind === 'vector') return 'vector'; return b.kind; }
-  const KIND_GLYPH = { text: 'T', list: '≡', button: '▭', image: '▣', field: '■', shape: '●', icon: '✦', logo: 'L', scrim: '▒', rule: '—', line: '—', badge: '①', vector: '✎' };
+  function label(b) { if (b.label) return b.label; if (b.kind === 'box') { const m = b.auto && b.auto.mode; return m === 'vertical' ? 'Stack ↓' : m === 'horizontal' ? (b.auto.wrap ? 'Stack ↩' : 'Stack →') : 'Box'; } if (b.kind === 'text') return `${b.role || 'text'} · ${Canvas.sourceText(b).slice(0, 28)}`; if (b.kind === 'list') return `${b.role || 'list'} · ${(b.items || []).length} items`; if (b.kind === 'button') return `button · ${b.text}`; if (b.kind === 'image') return 'image'; if (b.kind === 'field') return b.container ? 'card' : 'rectangle'; if (b.kind === 'shape') return b.shape; if (b.kind === 'icon') return `icon · ${b.name}`; if (b.kind === 'vector') return 'vector'; return b.kind; }
+  const KIND_GLYPH = { text: 'T', list: '≡', button: '▭', image: '▣', field: '■', shape: '●', icon: '✦', logo: 'L', scrim: '▒', rule: '—', line: '—', badge: '①', vector: '✎', box: '⬚' };
+  // One frame's layers as a tree: boxes fold; a stack lists its children in flow order (first on top, like the
+  // code), anything else front-most first. A search shows matching layers flat.
+  function layerRows(f, q) {
+    const I = Auto.index(f); const rows = [];
+    const row = (b, depth) => {
+      const isBox = b.kind === 'box'; const kids = isBox ? Auto.childrenOf(I, b.id) : []; const open = isBox && kids.length && !folded.has(b.id);
+      const stack = isBox && Auto.on(I.S(b.id)); const flow = Auto.inFlow(I, b);
+      return `<div class="cv-layer-row block ${sel.frameId === f.id && sel.blockIds.includes(b.id) ? 'on' : ''} ${b.hidden ? 'hidden-layer' : ''} ${b.group ? 'grouped' : ''}" data-frame="${esc(f.id)}" data-block="${esc(b.id)}" style="padding-left:${6 + depth * 14}px">${isBox && kids.length ? `<button class="fold" data-fold="${esc(b.id)}" title="${open ? 'Collapse' : 'Expand'}">${open ? '▾' : '▸'}</button>` : '<span class="fold-sp"></span>'}<span class="glyph${stack ? ' stack' : ''}">${stack ? (I.S(b.id).mode === 'horizontal' ? '⇥' : '⤓') : KIND_GLYPH[b.kind] || '·'}</span><span class="nm">${esc(label(b))}</span>${b.absolute && I.par.get(b.id) !== undefined && Auto.on(I.S(I.par.get(b.id))) ? '<span class="tag" title="Absolute position">A</span>' : ''}${b.group ? '<span class="tag" title="In a group">G</span>' : ''}${b.locked ? '<span class="dim">🔒</span>' : ''}<button class="eye ${b.hidden ? 'off' : ''}" data-eye="${esc(b.id)}" title="Toggle visibility">${b.hidden ? '◌' : '◉'}</button></div>`;
+    };
+    if (q) { for (const b of f.layout.blocks.slice().reverse()) if (label(b).toLowerCase().includes(q)) rows.push(row(b, 0)); return rows; }
+    const walk = (pid, depth) => {
+      let kids = Auto.childrenOf(I, pid).slice(); if (!Auto.on(I.S(pid))) kids.reverse();
+      for (const b of kids) { rows.push(row(b, depth)); if (b.kind === 'box' && !folded.has(b.id)) walk(b.id, depth + 1); }
+    };
+    walk('', 0); return rows;
+  }
   function renderLayers() {
     if (!active) return;
     const q = ($('cvSearch').value || '').toLowerCase();
     const multi = sel.frameIds.length > 1;
     $('cvLayers').innerHTML = doc.frames.slice().reverse().map(f => {
-      const blocks = f.layout.blocks.slice().reverse().filter(b => !q || label(b).toLowerCase().includes(q));
-      if (q && !blocks.length && !String(f.name).toLowerCase().includes(q)) return '';
+      const rowsHtml = (!multi && sel.frameId === f.id) || q ? layerRows(f, q) : [];
+      if (q && !rowsHtml.length && !String(f.name).toLowerCase().includes(q)) return '';
       const fon = sel.frameIds.includes(f.id) && (!sel.blockIds.length || multi);
       const open = !multi && sel.frameId === f.id || q;
       return `<div class="cv-layer-frame ${fon ? 'on' : ''}" data-frame="${esc(f.id)}">
         <div class="cv-layer-row frame"><button class="eye ${f.hidden ? 'off' : ''}" data-eye-frame="${esc(f.id)}" title="Toggle visibility">${f.hidden ? '◌' : '◉'}</button><span class="nm" title="${esc(f.name)}">${esc(f.name)}</span><span class="dim">${FW(f)}×${FH(f)}</span></div>
-        ${open ? `<div class="cv-layer-children">${blocks.map(b => `<div class="cv-layer-row block ${sel.frameId === f.id && sel.blockIds.includes(b.id) ? 'on' : ''} ${b.hidden ? 'hidden-layer' : ''} ${b.group ? 'grouped' : ''}" data-frame="${esc(f.id)}" data-block="${esc(b.id)}"><span class="glyph">${KIND_GLYPH[b.kind] || '·'}</span><span class="nm">${esc(label(b))}</span>${b.group ? '<span class="tag" title="In a group">G</span>' : ''}${b.locked ? '<span class="dim">🔒</span>' : ''}<button class="eye ${b.hidden ? 'off' : ''}" data-eye="${esc(b.id)}" title="Toggle visibility">${b.hidden ? '◌' : '◉'}</button></div>`).join('')}</div>` : ''}
+        ${open ? `<div class="cv-layer-children">${rowsHtml.join('')}</div>` : ''}
       </div>`;
     }).join('') || '<div class="hint" style="padding:10px">No frames yet. Send layouts here from Single or Deck mode, add a frame with ＋ Frame, or paste from Figma.</div>';
   }
   function bindLayers() {
     $('cvLayers').addEventListener('click', e => {
+      const fold = e.target.closest('[data-fold]'); if (fold) { const id = fold.dataset.fold; if (folded.has(id)) folded.delete(id); else folded.add(id); renderLayers(); return; }
       const eyeF = e.target.closest('[data-eye-frame]'); if (eyeF) { const f = Canvas.frameById(doc, eyeF.dataset.eyeFrame); hist.push(doc); f.hidden = !f.hidden; rerenderFrame(f); renderLayers(); persist(); updateUndo(); return; }
       const eye = e.target.closest('[data-eye]'); if (eye) { const f = Canvas.frameById(doc, eye.closest('[data-frame]').dataset.frame); const b = Canvas.blockById(f, eye.dataset.eye); hist.push(doc); b.hidden = !b.hidden; rerenderFrame(f); renderLayers(); persist(); updateUndo(); return; }
       const row = e.target.closest('.cv-layer-row'); if (!row) return;
@@ -825,6 +1004,46 @@ const CanvasUI = (() => {
       ${variationsSection()}
       ${exportSection(frames.length)}`;
   }
+  // Auto layout for a box (or the screen when box is null), laid out like Figma's panel.
+  function autoSection(f, box) {
+    const s = Auto.settingsOf(f, box); const who = box ? 'this box' : 'this screen';
+    if (!Auto.on(s)) return `<div class="cv-section cv-adv"><h3>Auto layout</h3><div class="cv-row">${btn('al-add', '＋ Auto layout', 'title="Shift+A"')}</div><p class="hint">Stacks ${who}'s content in a row or column with gap and padding. Text edits push things along; drag to reorder.</p>${box ? `<label class="cv-check"><input type="checkbox" data-p="clip" ${box.clip ? 'checked' : ''}> Clip content</label>` : ''}</div>`;
+    const H = s.mode === 'horizontal'; const dir = s.wrap ? 'wrap' : s.mode;
+    const vAxis = H ? (s.cross === 'baseline' ? 'start' : s.cross) : s.main, hAxis = H ? s.main : s.cross;
+    const P = ['start', 'center', 'end']; const glyph = { start: '', center: '', end: '' };
+    const cells = P.map(r => P.map(c => { const onCell = (s.gapAuto ? (H ? vAxis === r : hAxis === c) : (vAxis === r && hAxis === c)); return `<button type="button" class="al-cell${onCell ? ' on' : ''}" data-al-cell="${r},${c}" title="${r === 'start' ? 'Top' : r === 'center' ? 'Middle' : 'Bottom'} ${c === 'start' ? 'left' : c === 'center' ? 'center' : 'right'}">${glyph[c]}</button>`; }).join('')).join('');
+    const nAl = (k, l, v, extra = '') => `<label class="cv-f"><span>${l}</span><input type="number" data-al="${k}" value="${Math.round((Number(v) || 0) * 100) / 100}" step="4" min="0" ${extra}></label>`;
+    return `<div class="cv-section cv-adv"><h3>Auto layout <button type="button" class="btn small ghost al-rm" data-act="al-remove" title="Remove auto layout (⌥⇧A)">−</button></h3>
+      <div class="cv-seg al-dir">${[['vertical', '↓ Vertical'], ['horizontal', '→ Row'], ['wrap', '↩ Wrap']].map(([k, l]) => `<button type="button" data-al-dir="${k}" class="${dir === k ? 'on' : ''}">${l}</button>`).join('')}</div>
+      <div class="al-row"><div class="al-grid" aria-label="Alignment">${cells}</div>
+        <div class="al-fields">${nAl('gap', s.wrap ? 'Gap ↔' : 'Gap', s.gap, s.gapAuto ? 'disabled' : '')}<label class="cv-check"><input type="checkbox" data-al="gapAuto" ${s.gapAuto ? 'checked' : ''}> Auto (space between)</label>${s.wrap ? nAl('counterGap', 'Gap ↕', s.counterGap) : ''}</div></div>
+      <div class="cv-grid4">${nAl('pad.t', 'T', s.pad.t)}${nAl('pad.r', 'R', s.pad.r)}${nAl('pad.b', 'B', s.pad.b)}${nAl('pad.l', 'L', s.pad.l)}</div>
+      ${H ? `<label class="cv-check"><input type="checkbox" data-al="baseline" ${s.cross === 'baseline' ? 'checked' : ''}> Align text baselines</label>` : ''}
+      ${box ? `<label class="cv-check"><input type="checkbox" data-p="clip" ${box.clip ? 'checked' : ''}> Clip content</label>` : ''}
+    </div>`;
+  }
+  // Fixed / Hug / Fill per axis, absolute position and limits: only where they mean something.
+  function sizingSection(f, b) {
+    const I = Auto.index(f); const pid = I.par.get(b.id) || ''; const parentOn = Auto.on(I.S(pid)); const canHug = Auto.canHug(I, b);
+    if (!parentOn && !canHug) return '';
+    const opts = [['fixed', 'Fixed'], ...(canHug ? [['hug', 'Hug contents']] : []), ...(parentOn ? [['fill', 'Fill container']] : [])];
+    const numOpt = (k, l) => `<label class="cv-f"><span>${l}</span><input type="number" data-p="${k}" value="${b[k] != null ? b[k] : ''}" step="8" min="0" placeholder="–"></label>`;
+    return `<div class="cv-section cv-adv"><h3>Resizing</h3><div class="cv-grid2">${selectF('sizeW', 'W', Auto.sizing(I, b, 'w'), opts)}${selectF('sizeH', 'H', Auto.sizing(I, b, 'h'), opts)}</div>
+      ${parentOn ? `<label class="cv-check"><input type="checkbox" data-p="absolute" ${b.absolute ? 'checked' : ''}> Absolute position (ignore the stack)</label>` : ''}
+      <details class="cv-minmax"><summary>Min and max</summary><div class="cv-grid2">${numOpt('minW', 'Min W')}${numOpt('maxW', 'Max W')}${numOpt('minH', 'Min H')}${numOpt('maxH', 'Max H')}</div></details></div>`;
+  }
+  // Selected box, or the screen when nothing inside it is selected: what the auto layout controls change.
+  function autoTarget() { const f = selFrame(); const bs = selBlocks(); if (!f) return null; if (!bs.length) return { f, box: null }; if (bs.length === 1 && bs[0].kind === 'box') return { f, box: bs[0] }; return null; }
+  function setAuto(f, box, key, val) {
+    const s = Auto.settingsOf(f, box);
+    if (key === 'dir') { if (val === 'wrap') { s.mode = 'horizontal'; s.wrap = true; } else { s.mode = val; s.wrap = false; if (val === 'vertical' && s.cross === 'baseline') s.cross = 'start'; } }
+    else if (key === 'cell') { const [r, c] = String(val).split(','); if (s.mode === 'horizontal') { s.cross = r; if (!s.gapAuto) s.main = c; } else { s.cross = c; if (!s.gapAuto) s.main = r; } }
+    else if (key === 'gapAuto' || key === 'counterGapAuto') s[key] = !!val;
+    else if (key === 'baseline') s.cross = val ? 'baseline' : 'start';
+    else if (key.startsWith('pad.')) s.pad[key.slice(4)] = Math.max(0, +val || 0);
+    else if (key === 'gap' || key === 'counterGap') s[key] = Math.max(0, +val || 0);
+    if (box) box.auto = s; else f.autoLayout = s;
+  }
   function alignBar() { return `<div class="cv-row cv-align">${[['left', '⇤'], ['hcenter', '⇔'], ['right', '⇥'], ['top', '⤒'], ['vcenter', '⇕'], ['bottom', '⤓']].map(([m, g]) => `<button class="btn small" data-align="${m}" title="Align ${m}">${g}</button>`).join('')}</div>`; }
   function frameFill(L) {
     const g = L.palette.bgGradient; const type = g ? (g.type || 'linear') : 'solid';
@@ -844,38 +1063,34 @@ const CanvasUI = (() => {
     ${frameFill(L)}
     ${lookSection([f])}
     <div class="cv-section"><h3>Palette</h3>${pairChips()}</div>
-    <div class="cv-section"><h3>Layout</h3>
-      ${selectF('al.mode', 'Flex', al.mode, [['none', 'Off (free)'], ['vertical', 'Vertical stack'], ['horizontal', 'Horizontal row']])}
-      <div class="cv-grid2">${num('al.gap', 'Gap', al.gap, 4)}${num('al.padding', 'Padding', al.padding, 4)}</div>
-      ${selectF('al.align', 'Align', al.align, [['start', 'Start'], ['center', 'Center'], ['end', 'End']])}
-      ${selectF('al.justify', 'Justify', al.justify, [['start', 'Start'], ['center', 'Center'], ['end', 'End'], ['space-between', 'Space between']])}
-      <label class="cv-check"><input type="checkbox" data-f="al.fill" ${al.fill ? 'checked' : ''}> Stretch text to inner width</label>
-      <p class="hint">Flex stacks the frame's content blocks in reading order with gap and padding. Backgrounds stay put.</p>
-    </div>
-    <div class="cv-section"><h3>Add</h3><div class="cv-row wrap">${[['text', 'Headline'], ['body', 'Body'], ['button', 'Button'], ['rect', 'Rectangle'], ['ellipse', 'Ellipse'], ['image', 'Image'], ['icon', 'Icon'], ['logo', 'Logo']].map(([k, l]) => `<button class="btn small" data-add="${k}">${l}</button>`).join('')}</div></div>
+    ${autoSection(f, null)}
+    <div class="cv-section"><h3>Add</h3><div class="cv-row wrap">${[['text', 'Headline'], ['body', 'Body'], ['button', 'Button'], ['rect', 'Rectangle'], ['ellipse', 'Ellipse'], ['image', 'Image'], ['icon', 'Icon'], ['logo', 'Logo']].map(([k, l]) => `<button class="btn small" data-add="${k}">${l}</button>`).join('')}<span class="cv-adv"><button class="btn small" data-add="stack">Stack</button></span></div></div>
     ${variationsSection()}
     ${exportSection(1)}
-    <div class="cv-section"><h3>Code</h3><p class="hint">The frame is this JSON. Edit and apply.</p><textarea class="cv-code" data-code="frame" spellcheck="false">${esc(JSON.stringify(stripLayout(L), null, 1))}</textarea><div class="cv-row">${btn('apply-code', 'Apply JSON')}${btn('copy-code', 'Copy')}</div></div>`;
+    <div class="cv-section cv-adv"><h3>Code</h3><p class="hint">The frame is this JSON. Edit and apply.</p><textarea class="cv-code" data-code="frame" spellcheck="false">${esc(JSON.stringify(stripLayout(L), null, 1))}</textarea><div class="cv-row">${btn('apply-code', 'Apply JSON')}${btn('copy-code', 'Copy')}</div></div>`;
   }
   function blocksProps(f, bs) {
     const grouped = bs[0].group && bs.every(b => b.group === bs[0].group);
     return `<div class="cv-section"><h3>${grouped ? 'Group' : bs.length + ' blocks'}</h3>${alignBar()}
       <div class="cv-row wrap">${btn('dist-h', 'Distribute ↔')}${btn('dist-v', 'Distribute ↕')}</div>
-      <div class="cv-row wrap">${grouped ? btn('ungroup', 'Ungroup ⇧⌘G') : btn('group', 'Group ⌘G')}${btn('copy', 'Copy')}${btn('dup', 'Duplicate')}${btn('del', 'Delete')}</div></div>
+      <div class="cv-row wrap">${grouped ? btn('ungroup', 'Ungroup ⇧⌘G') : btn('group', 'Group ⌘G')}${btn('copy', 'Copy')}${btn('dup', 'Duplicate')}${btn('del', 'Delete')}</div>
+      <div class="cv-row wrap cv-adv">${btn('al-add', 'Auto layout ⇧A')}${btn('frame-sel', 'Frame ⌥⌘G')}</div></div>
       <div class="cv-section"><h3>Fill</h3>${swatches('fill', '')}<p class="hint">Sets the fill (or text color) of every selected block.</p></div>
       <div class="cv-section"><h3>Effects</h3>${num('opacity', 'Opacity', 1, 0.05, 'min="0" max="1"')}<label class="cv-check"><input type="checkbox" data-p="shadow.on"> Drop shadow</label></div>`;
   }
   function fillSection(b) {
+    if (b.kind === 'box' && (!b.fill || b.fill === 'none') && !b.gradient) return `<div class="cv-section"><h3>Fill</h3><label class="cv-check"><input type="checkbox" data-p="hasFill"> Fill</label>${num('radius', 'Radius', b.radius || 0, 4)}</div>`;
     const isText = b.kind === 'text' || b.kind === 'list';
     const g = b.gradient; const type = g ? (g.type || 'linear') : 'solid';
     return `<div class="cv-section"><h3>${isText ? 'Text color' : 'Fill'}</h3>
       ${b.kind !== 'icon' && b.kind !== 'logo' ? selectF('fillType', 'Type', type, [['solid', 'Solid'], ['linear', 'Linear gradient'], ['radial', 'Radial gradient']]) : ''}
       ${type === 'solid' ? color('fill', 'Color', b.fill || '#000000', b.fillToken) : `${color('grad.0', 'Start', g.stops[0].c)}${color('grad.1', 'End', g.stops[g.stops.length - 1].c)}${type === 'linear' ? num('grad.angle', 'Angle', g.angle || 0, 15) : ''}`}
-      ${(b.kind === 'field' || b.kind === 'button' || b.kind === 'image') ? num('radius', 'Radius', b.radius || 0, 4) : ''}${b.kind === 'field' ? num('alpha', 'Fill alpha', b.alpha ?? 1, 0.05, 'min="0" max="1"') : ''}
+      ${b.kind === 'box' ? '<label class="cv-check"><input type="checkbox" data-p="hasFill" checked> Fill</label>' : ''}
+      ${(b.kind === 'field' || b.kind === 'button' || b.kind === 'image' || b.kind === 'box') ? num('radius', 'Radius', b.radius || 0, 4) : ''}${b.kind === 'field' ? num('alpha', 'Fill alpha', b.alpha ?? 1, 0.05, 'min="0" max="1"') : ''}
     </div>`;
   }
   function strokeSection(b) {
-    if (!['field', 'shape', 'vector', 'image', 'button'].includes(b.kind)) return '';
+    if (!['field', 'shape', 'vector', 'image', 'button', 'box'].includes(b.kind)) return '';
     const s = b.stroke || {};
     return `<div class="cv-section"><h3>Stroke</h3><div class="cv-grid2">${num('stroke.width', 'W', s.width || 0, 1, 'min="0"')}</div>${color('stroke.color', 'Color', s.color || '#000000')}</div>`;
   }
@@ -891,11 +1106,12 @@ const CanvasUI = (() => {
     const isText = b.kind === 'text' || b.kind === 'list' || b.kind === 'button';
     const fontNames = Brand.allFontNames();
     const famName = isText && b.font ? String(b.font.family).split(',')[0].replace(/["']/g, '').trim() : '';
-    return `<div class="cv-section"><h3>${esc(b.role || b.kind)}${b.group ? ' <span class="cv-token">in group</span>' : ''}</h3>
+    const I = Auto.index(f); const flow = Auto.inFlow(I, b); const lockXY = flow ? 'disabled title="Placed by the stack. Drag to reorder, or turn on Absolute position."' : '';
+    return `<div class="cv-section"><h3>${esc(kindLabel(f, b))}${b.group ? ' <span class="cv-token">in group</span>' : ''}${flow ? ' <span class="cv-token">in a stack</span>' : ''}</h3>
       <label class="cv-f"><span>Name</span><input type="text" data-p="label" value="${esc(b.label || '')}" placeholder="${esc(label({ ...b, label: '' }))}"></label>
-      <div class="cv-grid2">${num('x', 'X', b.x, 8)}${num('y', 'Y', b.y, 8)}${num('w', 'W', b.w, 8)}${num('h', 'H', b.h, 8)}</div>
+      <div class="cv-grid2">${num('x', 'X', b.x, 8, lockXY)}${num('y', 'Y', b.y, 8, lockXY)}${num('w', 'W', b.w, 8)}${num('h', 'H', b.h, 8)}</div>
       ${alignBar()}
-      <div class="cv-row wrap">${btn('back', '↓ Back', 'title="Send backward ([)"')}${btn('front', '↑ Front', 'title="Bring forward (])"')}${btn('copy', 'Copy', 'title="Copy (⌘C)"')}${btn('paste', 'Paste', `title="Paste (⌘V)" ${clipboard ? '' : 'disabled'}`)}${btn('dup', 'Duplicate', 'title="Duplicate (⌘D)"')}${btn('del', 'Delete', 'title="Delete (⌫)"')}${b.group ? btn('ungroup', 'Ungroup') : ''}</div>
+      <div class="cv-row wrap">${btn('back', flow ? '↑ Earlier' : '↓ Back', `title="${flow ? 'Earlier in the stack' : 'Send backward'} ([)"`)}${btn('front', flow ? '↓ Later' : '↑ Front', `title="${flow ? 'Later in the stack' : 'Bring forward'} (])"`)}${btn('copy', 'Copy', 'title="Copy (⌘C)"')}${btn('paste', 'Paste', `title="Paste (⌘V)" ${clipboard ? '' : 'disabled'}`)}${btn('dup', 'Duplicate', 'title="Duplicate (⌘D)"')}${btn('del', 'Delete', 'title="Delete (⌫)"')}${b.group ? btn('ungroup', 'Ungroup') : ''}${b.kind === 'box' ? `<span class="cv-adv">${btn('unwrap', 'Unwrap ⇧⌘G')}</span>` : ''}</div>
       <label class="cv-check"><input type="checkbox" data-b="locked" ${b.locked ? 'checked' : ''}> Lock</label>
       <label class="cv-check"><input type="checkbox" data-b="decorative" ${b.decorative ? 'checked' : ''}> Decorative (not content)</label>
     </div>
@@ -915,10 +1131,12 @@ const CanvasUI = (() => {
     ${b.kind === 'image' ? genSection(f, b) : ''}
     ${b.kind === 'icon' ? `<div class="cv-section"><h3>Icon</h3>${selectF('name', 'Icon', b.name, Icons.names.map(n => [n, n]))}</div>` : ''}
     ${b.kind === 'shape' ? `<div class="cv-section"><h3>Shape</h3>${selectF('shape', 'Shape', b.shape, [['circle', 'Circle'], ['ellipse', 'Ellipse'], ['pill', 'Pill'], ['quarter', 'Quarter circle']])}</div>` : ''}
+    ${b.kind === 'box' ? autoSection(f, b) : ''}
+    ${sizingSection(f, b)}
     ${b.kind !== 'image' ? fillSection(b) : ''}
     ${strokeSection(b)}
     ${effectsSection(b)}
-    <div class="cv-section"><h3>Code</h3><textarea class="cv-code" data-code="block" spellcheck="false">${esc(JSON.stringify(stripBlock(b), null, 1))}</textarea><div class="cv-row">${btn('apply-code', 'Apply JSON')}${btn('copy-code', 'Copy')}</div></div>`;
+    <div class="cv-section cv-adv"><h3>Code</h3><textarea class="cv-code" data-code="block" spellcheck="false">${esc(JSON.stringify(stripBlock(b), null, 1))}</textarea><div class="cv-row">${btn('apply-code', 'Apply JSON')}${btn('copy-code', 'Copy')}</div></div>`;
   }
   function stripBlock(b) { const c = Canvas.clone(b); delete c.lines; delete c.inkW; delete c.capacity; delete c.gap; delete c.maxLines; delete c.minSize; delete c.overflow; delete c.genPrompt; delete c.genMeta; return c; }
   function stripLayout(L) { const c = Canvas.clone(L); delete c.signature; c.blocks = c.blocks.map(stripBlock); return c; }
@@ -946,6 +1164,11 @@ const CanvasUI = (() => {
     else if (k === 'rotation') { let r = (((+v || 0) % 360) + 360) % 360; if (r > 180) r -= 360; b.rotation = r; }
     else if (k === 'radius' || k === 'alpha') b[k] = +v;
     else if (k === 'asset') b.asset = v || null;
+    else if (k === 'sizeW' || k === 'sizeH') b[k] = v;
+    else if (k === 'absolute') { if (v) b.absolute = true; else delete b.absolute; delete b.rx; delete b.ry; delete b.lx; delete b.ly; }
+    else if (k === 'minW' || k === 'maxW' || k === 'minH' || k === 'maxH') { if (v === '' || v == null) delete b[k]; else b[k] = Math.max(0, +v); }
+    else if (k === 'clip') b.clip = !!v;
+    else if (k === 'hasFill') { if (v) b.fill = '#FFFFFF'; else { b.fill = 'none'; delete b.gradient; delete b.fillToken; } }
     else b[k] = v;
   }
   function setFrameProp(f, k, v) {
@@ -956,8 +1179,7 @@ const CanvasUI = (() => {
     else if (k === 'bg') { P.bg = toHex(v); delete P.bgToken; }
     else if (k === 'bgType') { if (v === 'solid') { if (P.bgGradient) P.bg = P.bgGradient.stops[0].c; delete P.bgGradient; } else P.bgGradient = { type: v, angle: P.bgGradient ? P.bgGradient.angle : 180, stops: P.bgGradient ? P.bgGradient.stops : [{ c: toHex(P.bg), p: 0 }, { c: secondColor(P.bg), p: 1 }] }; }
     else if (k.startsWith('bgGrad.')) { if (!P.bgGradient) return; const kk = k.slice(7); if (kk === 'angle') P.bgGradient.angle = +v; else if (kk === '0') P.bgGradient.stops[0].c = toHex(v); else P.bgGradient.stops[P.bgGradient.stops.length - 1].c = toHex(v); }
-    else if (k.startsWith('al.')) f.autoLayout[k.slice(3)] = typeof v === 'string' && /^-?\d+(\.\d+)?$/.test(v) ? +v : v;
-    if (f.autoLayout.mode !== 'none') Canvas.applyAutoLayout(f);
+    else if (k === 'clip') f.clip = !!v;
   }
   // Recolor a screen around a new background: text and accent are picked from the palette for contrast.
   function recolorBg(f, hex, name) {
@@ -1009,16 +1231,16 @@ const CanvasUI = (() => {
       const val = t.type === 'checkbox' ? t.checked : t.value;
       if (t.dataset.f) {
         if (!live) hist.push(doc);
-        const k = t.dataset.f; if (k.startsWith('al.')) setFrameProp(f, k, t.type === 'checkbox' ? t.checked : t.value); else f[k] = val;
+        const k = t.dataset.f; f[k] = val;
         if (k === 'clip' || k === 'showGrid' || k === 'name') rerenderFrame(f); else rerenderFrame(f);
         renderLayers(); drawOverlay(); persist(); updateUndo(); return;
       }
+      if (t.dataset.al) { const tg = autoTarget(); if (!tg) return; if (!live) hist.push(doc); setAuto(tg.f, tg.box, t.dataset.al, t.type === 'checkbox' ? t.checked : t.value); rerenderFrame(tg.f); drawOverlay(); if (!live) renderProps(); persist(); updateUndo(); return; }
       if (t.dataset.b && bs.length) { hist.push(doc); for (const b of bs) b[t.dataset.b] = t.checked; renderLayers(); drawOverlay(); persist(); updateUndo(); return; }
       const k = t.dataset.p; if (!k) return;
       if (!live) hist.push(doc);
       if (!bs.length) { setFrameProp(f, k, val); rerenderFrame(f); drawOverlay(); if (!live) renderProps(); persist(); updateUndo(); return; }
       for (const b of bs) setBlockProp(b, k, val);
-      if (f.autoLayout.mode !== 'none' && !live) Canvas.applyAutoLayout(f);
       rerenderFrame(f); drawOverlay(); renderLayers(); persist(); updateUndo(); if (!live) renderProps();
     };
     // Live fields (color, textarea, text) snapshot history on their FIRST input event, so undo returns to the value before the edit.
@@ -1052,9 +1274,13 @@ const CanvasUI = (() => {
       const pr = e.target.closest('[data-pair]'); if (pr) { const p = Brand.pairs(env.getKit())[+pr.dataset.pair]; if (p && fs.length) { mutate(() => fs.forEach(fr => { Canvas.recolor(fr, { bg: p.bg, fg: p.fgs[0], accent: p.accents[0], bgName: p.bgName }); fr.layout.palette.bgToken = p.bgName; }), { frames: fs.map(x => x.id) }); env.toast(`${fs.length > 1 ? fs.length + ' screens' : 'Screen'} on ${p.bgName}`); } return; }
       const palRm = e.target.closest('[data-pal="rm"]'); if (palRm) { const colors = env.getKit().colors.filter((_, i) => i !== +palRm.dataset.i); env.updateColors(colors); followTokens(); renderProps(); return; }
       const al = e.target.closest('[data-align]'); if (al && f) { hist.push(doc); Canvas.align(f, bs.length ? bs : [], al.dataset.align); rerenderFrame(f); drawOverlay(); liveProps(); persist(); updateUndo(); return; }
-      const add = e.target.closest('[data-add]'); if (add && f) { hist.push(doc); const b = Canvas.newBlock(add.dataset.add, f, env.getKit(), null); if (b) { f.layout.blocks.push(b); if (f.autoLayout.mode !== 'none') Canvas.applyAutoLayout(f); select(f.id, [b.id]); rerenderFrame(f); persist(); updateUndo(); if (b.kind === 'image') { const inp = $('cvProps').querySelector('[data-file="image"]'); if (inp) inp.click(); } } return; }
+      const add = e.target.closest('[data-add]'); if (add && f) { hist.push(doc); const b = add.dataset.add === 'stack' ? { id: Canvas.uid(), kind: 'box', x: f.layout.grid.mx, y: f.layout.grid.my, w: 480, h: 240, fill: 'none', radius: 0, clip: false, decorative: true, hidden: false, locked: false, sizeW: 'fixed', sizeH: 'hug', auto: { v: 2, mode: 'vertical', wrap: false, gap: 16, gapAuto: false, counterGap: 16, counterGapAuto: false, pad: { t: 24, r: 24, b: 24, l: 24 }, main: 'start', cross: 'start' } } : Canvas.newBlock(add.dataset.add, f, env.getKit(), null); if (b) { f.layout.blocks.push(b); const sb = selBlocks(); const host = sb.length === 1 && sb[0].kind === 'box' ? sb[0] : null; if (host) { b.parent = host.id; if (Auto.on(Auto.settingsOf(f, host))) { Auto.moveInList(f, b, host.id, null); if ((b.kind === 'text' || b.kind === 'list') && Auto.settingsOf(f, host).mode === 'vertical') b.sizeW = 'fill'; } } else if (Auto.on(Auto.settingsOf(f, null))) Auto.moveInList(f, b, '', null); select(f.id, [b.id]); rerenderFrame(f); persist(); updateUndo(); if (b.kind === 'image') { const inp = $('cvProps').querySelector('[data-file="image"]'); if (inp) inp.click(); } } return; }
+      const dirB = e.target.closest('[data-al-dir]'); const cell = e.target.closest('[data-al-cell]');
+      if (dirB || cell) { const tg = autoTarget(); if (!tg) return; hist.push(doc); setAuto(tg.f, tg.box, dirB ? 'dir' : 'cell', dirB ? dirB.dataset.alDir : cell.dataset.alCell); rerenderFrame(tg.f); renderProps(); drawOverlay(); persist(); updateUndo(); return; }
       const act = e.target.closest('[data-act]'); if (!act) return;
       const a = act.dataset.act;
+      if (a === 'al-add') { addAutoLayout(); return; } if (a === 'al-remove') { removeAutoLayout(); return; }
+      if (a === 'frame-sel') { frameSelection(); return; } if (a === 'unwrap') { unwrapSelection(); return; }
       if (a === 'edit-palette') { select(null, []); const sec = el.querySelector('[data-palette]'); if (sec) sec.scrollIntoView({ block: 'start', behavior: 'smooth' }); return; }
       if (a === 'add-color') { const colors = env.getKit().colors.map(c => ({ ...c })); colors.push({ name: 'Color ' + (colors.length + 1), hex: '#888888', role: 'accent' }); env.updateColors(colors); renderProps(); const rows = el.querySelectorAll('.cv-pal-row'); const last = rows.length ? rows[rows.length - 1].querySelector('input[type="text"]') : null; if (last) { last.focus(); last.select(); } return; }
       if (a === 'reset-palette') { if (env.resetColors()) { followTokens(); renderProps(); env.toast('Palette reset to the preset'); } else env.toast('This kit has no preset to reset to'); return; }
