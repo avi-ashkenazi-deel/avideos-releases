@@ -55,24 +55,58 @@ Switch the top-left toggle to **Deck**. The brief becomes an outline (one intent
 
 Pick layouts in Single mode (tick cards, or favorite them) or pick slides in Deck mode, then **Send to canvas**. The canvas is an infinite stage where every frame is one layout spec and editing the frame is editing that JSON.
 
+**Simple and Advanced.** A switch at the top left, kept per person. **Simple** (the default) is for anyone: click a text, image or button to change it; stacks keep themselves tidy in the background (longer text pushes things down, dragging inside a stack reorders); dragging something out to a free spot switches only that screen to free positions, in one undo step. Auto layout controls, sizing and code stay out of the way. **Advanced** is Figma-style: auto layout, Fixed/Hug/Fill, nesting, JSON.
+
 - **Tools.** Select (V), Hand (H), Frame (F), Text (T), Rectangle (R), Ellipse (O), Image (I). Space to pan, ⌘ wheel to zoom, 0 to fit, ⇧2 to zoom to the selection. Drag to move, handles to resize, ⌥ drag to duplicate, marquee to multi-select, arrows to nudge (⇧ for one grid unit), [ and ] to reorder, ⌘Z / ⇧⌘Z undo and redo, ⌘D duplicate, ⌘G / ⇧⌘G group and ungroup, ⌘A select all, Enter to edit text in place (or step into a group), ⇧R tidy, ⇧G grid overlay, ⌘L copy link.
 - **Many screens at once.** Select several frames (shift-click or marquee) and the panel changes all of them in one undo step: brand color pair or background, display and body fonts, find and replace, resize to another format, look (original, wireframe, rebrand), variations, tidy and align, duplicate, export. **✦ Ask agent** hands the selection to the agent.
-- **Layers.** Frames and their blocks, with search, visibility, and lock. Click to select, shift-click to add.
 - **Properties.** Position and size on the pixel grid, align and distribute, order, lock, decorative flag. Typography (font, size, weight, line height, tracking, alignment, case, fit size to box). Fill (solid, linear or radial gradient), stroke, drop shadow, radius, opacity, rotation. Image crop focus and replace. Icon picker. Frame: name, format, size, clip content, grid overlay, solid or gradient background.
-- **Layout (flex).** Turn a frame's auto layout on as a vertical stack or horizontal row with gap, padding, align, justify, and stretch. Content blocks reflow in reading order; backgrounds stay. Drag a block to reorder it.
+- **Layers.** A tree: boxes fold open and closed, stacks list their children in flow order. A Library tab sits next to it.
 - **Code.** Every frame and block shows its JSON. Edit and apply. Export copies a frame as React (Tailwind) or HTML/CSS.
 - **Export.** Selected frames to PNG (1× or 2×), SVG, PDF (one page per frame), an editable PPTX, React or HTML; every frame to PNGs or one PDF; or the whole canvas to one PNG.
 - **Frames.** ＋ Frame adds a blank frame of the chosen format on a free spot in view (⇧N). The Frame tool (F) places one on click or draws one at any size on drag.
 - **Between frames.** Drag a block onto another frame to move it there (⌥ drag copies first). ⌘C, ⌘X and ⌘V copy, cut and paste blocks or a whole frame; the copy also lands on the system clipboard as JSON, so it pastes into another tab or session.
-- **Palette.** Every color field shows the brand palette as swatches; pick one or type any hex. The pencil opens the palette editor on the canvas panel, where colors can be renamed, re-roled, added or removed, and reset to the preset. Edits feed the generator too.
+- **Palette.** Every color field shows the brand palette as a row of small swatches; pick one or type any hex. In the sidebar the kit's colors are one compact strip (a letter marks the role); click a swatch to rename it, change its role or remove it. On the canvas panel the full palette editor is folded under Brand palette. Edits feed the generator too.
+- **Logos.** The kit holds logo variants: for Deel the wordmark (deel.), the symbol (d.), the app icon and a product lockup (deel. Payroll). Pick one in the sidebar to upload its official SVG or PNG; a logo on a screen switches variant in its properties.
 - **Images.** An image block has a Generate section: a prompt drafted from the frame's copy and palette, sent to Google Gemini (Gemini 2.5 Flash Image, Imagen 4) or OpenAI (GPT Image 1, DALL·E 3) with a key from Settings. The provider layer in `js/imagegen.js` is where more models plug in. Like the Claude paths, it runs locally or from your own host, not in the published copy.
 - **Share.** Copy link puts the canvas (layout and copy, not images) into the URL hash. Save and Load move the whole canvas as JSON. The canvas also persists in the browser.
+
+## Auto layout
+
+Works like Figma's. A **box** (a frame inside a screen) can stack its children, and so can a screen itself.
+
+- **Make a stack.** Select blocks and press **⇧A** (or **Auto layout** in the panel): they go into a stack whose direction, gap and alignment are read from how they sit. **⌥⌘G** wraps them in a plain box instead; **⇧⌘G** unwraps. **⌥⇧A** removes auto layout and leaves everything where it is. The Frame tool drawn inside a screen makes a box; **Add → Stack** makes an empty one.
+- **Settings.** Direction (vertical, row, wrap), gap or **Auto** (space between), row gap when wrapping, padding on four sides, a 3×3 alignment grid, text baselines for rows, clip content.
+- **Children.** Each one sizes **Fixed**, **Hug contents** or **Fill container** per axis, with min and max; **Absolute position** takes one out of the flow. Resizing by hand fixes that axis, like Figma.
+- **Editing.** Text edits reflow the stack. Drag to reorder (a pink line shows where it lands); drag into another stack or box to move it there; ⌘-click selects the deepest layer, double-click goes one level in, Esc goes back out, Enter selects children.
+- **Code.** HTML and React exports come out as nested flexbox with the same sizing.
+- **Multiplayer.** Only intent is shared (order, settings, sizing); every viewer computes positions, so stacks never fight over pixels.
+
+## Library
+
+The **Library** tab (next to Layers) holds approved pieces to drop on a screen: click to add to the selected screen or box, or drag onto a screen.
+
+- **Built in, from the brand kit:** logo variants, buttons, tag, stat, quote and feature cards, a person row, payment cards (Deel Card in core and black, Virtual card), phone (iOS and Android) and browser frames, and two starter illustrations. They follow the kit's colors, fonts and logos, and most are auto layout stacks, so edits reflow.
+- **Team items:** **＋ Save selection** turns selected blocks into a reusable item; **＋ Add SVG or PNG** brings in illustrations and other assets. Items can be marked **Approved**, are shared with everyone on the canvas (live rooms and the published copy), and export or import as a library JSON for other canvases.
+
+## Mobile screens
+
+- **Sizes.** Phone (iOS 390×844, Android 412×915), tablet and desktop web screens sit next to the post formats in ＋ Frame and Resize.
+- **Screenshots.** Paste or drop a phone screenshot (from your phone's photos, AirDrop, or a simulator): it becomes a phone-size screen at 1×. Library → Devices adds a phone frame around it.
+- **Rebuild as layers.** Select the screenshot (or any image of a UI, slide or mockup) and press **✦ Rebuild as layers**: Claude reads it and builds an editable copy next to it, with text, shapes, buttons and icons, and photos, avatars and logos cropped from the real pixels. The original stays as a hidden reference layer. Runs in claude.ai on your account, or locally with an API key.
+- **Other routes.** Mobile designs in Figma paste as usual. For a mobile web page, open the browser's device toolbar (DevTools → phone view) before running the capture snippet.
+
+## Slides: PowerPoint and Google Slides
+
+- **In.** Import → **From Google Slides or PowerPoint**: paste a Google Slides link, or choose (or drop) a .pptx. Each slide becomes a screen with its background, editable text (title, body and bullets with the theme's fonts and colors, inherited from the layout and master like PowerPoint does), shapes, pictures (with crops), groups, lines and tables; charts come in as placeholders. Text boxes become stacks unless **Fixed positions** is chosen.
+- **Out.** Export → **Google Slides** sends the selected screens (or all) to your Drive as a new Slides deck. Export → PowerPoint gives the .pptx.
+- **How links work.** In the published copy, links and Save to Google Slides go through your own Google Drive connector in claude.ai (private decks you can open work too; the first use asks to allow it). On the local server, links work for decks shared "Anyone with the link". Elsewhere, download the deck as .pptx in Google Slides (File → Download) and drop it in; to go back, import the .pptx in Google Slides.
 
 ## Import from Figma
 
 - **.fig files.** Load (or Import → Figma file) reads a `.fig` saved from Figma (File → Save local copy), including its images. Each top-level frame becomes a frame on the canvas, with editable text, rectangles, ellipses, vectors, images, gradients, strokes, shadows, groups and component instances.
 - **Paste.** Copy frames or layers in Figma (⌘C) and paste on the canvas (⌘V). Whole frames land as new frames; loose layers go into the selected frame.
-- Fidelity is close, not exact: auto layout becomes fixed positions, masks and blend modes are dropped, and fonts that are not loaded fall back to the kit fonts.
+- **Auto layout or fixed positions.** The Import dialog asks once and remembers (paste uses the same choice). With auto layout, Figma's stacks, padding, gaps, alignment, Hug/Fill sizing, min/max and absolute children come through and keep working. With fixed positions every layer stays exactly where it was drawn; frames inside frames still arrive as boxes.
+- Fidelity is close, not exact: masks and blend modes are dropped, and fonts that are not loaded fall back to the kit fonts.
 
 ## Design on top of a website
 
@@ -81,7 +115,7 @@ A published page cannot fetch other sites, so the page is captured in your own b
 1. Drag the **bookmarklet** to the bookmarks bar, open any page (logged-in pages work), scroll to the part you want, and click it. Or paste the **console snippet** into the page's DevTools console.
 2. The capture is copied to the clipboard. Paste it on the canvas (⌘V).
 
-The page arrives as editable layers: boxes, text, images and SVGs, with real sizes and colors. Three one-click **looks** in the properties panel (also for many screens at once):
+The page arrives as editable layers: boxes, text, images and SVGs, with real sizes and colors. With auto layout chosen, the page's flex and grid containers become stacks (buttons and links hug their text, columns stretch), so edits reflow like on the site. Three one-click **looks** in the properties panel (also for many screens at once):
 
 - **Original** as captured.
 - **Wireframe**: grey boxes, image placeholders, one typeface. Good for restructuring.
@@ -118,7 +152,7 @@ The sync server exposes the canvas as an MCP server, the way Paper and Figma do.
 
 3. Ask Claude Code things like "take the selected screen and make a LinkedIn version" or "build a React component from frame X".
 
-Tools (22): `get_selection`, `get_canvas`, `get_frame`, `get_brand`, `get_screenshot`, `get_code`, `select`, `update_blocks`, `add_blocks`, `delete_blocks`, `create_frame`, `update_frames`, `duplicate_frames`, `delete_frames`, `recolor_frames`, `make_variations`, `apply_look`, `replace_text`, `set_fonts`, `resize_frames`, `generate_image`, `write_layout`. Definitions live in `js/tool-defs.js`, shared by the in-app agent and the server.
+Tools (27): `get_selection`, `get_canvas`, `get_frame`, `get_brand`, `get_screenshot`, `get_code`, `select`, `update_blocks`, `add_blocks`, `delete_blocks`, `create_frame`, `update_frames`, `duplicate_frames`, `delete_frames`, `recolor_frames`, `make_variations`, `apply_look`, `replace_text`, `set_fonts`, `resize_frames`, `generate_image`, `set_auto_layout`, `wrap_in_stack`, `move_into`, `list_components`, `insert_component`, `write_layout`. Definitions live in `js/tool-defs.js`, shared by the in-app agent and the server.
 
 ## Copy that fits
 
@@ -188,8 +222,13 @@ js/engine.js        the generator: eight families, validation, metrics, dedup
 js/render.js        SVG renderer, PNG/SVG export with embedded fonts
 js/icons.js         curated Phosphor icon set (MIT) and keyword picker
 js/deck.js          outline from brief (rules or Claude), per-slide variations, picks
-js/canvas.js        canvas document: frames, block ops, flex auto layout, links, HTML export, history
-js/canvas-ui.js     canvas editor: stage, selection, tools, layers, properties, code view, export
+js/canvas.js        canvas document: frames, block ops, links, HTML/React export (nested flexbox), history
+js/autolayout.js    auto layout engine: boxes, stacks, Fixed/Hug/Fill, wrap, absolute, sync view
+js/canvas-ui.js     canvas editor: stage, selection, tools, layers tree, properties, Simple/Advanced, export
+js/library.js       Library tab: brand-built components, team items, insert and save
+js/trace.js         Rebuild as layers: an image read by Claude into editable layers and crops
+js/pptx-import.js   PowerPoint reader: slides, layouts, masters, theme, text, shapes, pictures, tables
+js/gslides.js       Google Slides in and out (Drive connector, local server, or by hand)
 js/copy.js          rule-based copywriter (brief -> content)
 js/imagegen.js      image model providers (Gemini, OpenAI)
 js/figma.js         .fig and Figma clipboard reader (kiwi schema, zstd/deflate)
@@ -218,4 +257,7 @@ docs/learnings.md   what Presenton and a 2,415-slide corpus taught us
 - The local server has no accounts. On localhost that is fine; beyond it, set `LG_TOKEN` and put it behind HTTPS.
 - Locally, the brief interpreter and the agent call Anthropic directly from the browser with your key. In the published copy the agent uses claude.ai and the brief interpreter stays rule-based.
 - Hex values in the Deel preset were read from the guidelines PDF. Confirm against the Figma library before production use.
+- PowerPoint import keeps one style per text block (the most-used run's), so mixed bold or colored words inside a paragraph take the paragraph's main style; charts, SmartArt and EMF/WMF pictures come in as placeholders.
+- Google Slides links in the published copy need the Google Drive connector connected in claude.ai; Save to Google Slides creates a new deck (it does not update the original).
+- Rebuild as layers is a strong start, not a pixel copy: positions are estimates; check type sizes and spacing, then Shift+A to stack rows.
 - PPTX export references fonts by name; install the brand fonts to see exact type in PowerPoint. Image corner radii and gradient scrims are approximated (scrims and arcs become transparent image layers).

@@ -231,6 +231,18 @@ const server = http.createServer(async (req, res) => {
       if (!out.length) return send(res, 202, '');
       return json(res, 200, Array.isArray(body) ? out : out[0], headers);
     }
+    // A Google Slides deck shared "anyone with the link", exported as .pptx (the browser cannot fetch it itself).
+    if (url.pathname === '/api/gslides') {
+      const id = url.searchParams.get('id') || '';
+      if (!/^[A-Za-z0-9_-]{20,100}$/.test(id)) return send(res, 400, 'Not a Google Slides id');
+      let r;
+      try { r = await fetch(`https://docs.google.com/presentation/d/${id}/export/pptx`, { redirect: 'follow' }); } catch (e) { return send(res, 502, 'Could not reach Google: ' + e.message); }
+      const type = String(r.headers.get('content-type') || '');
+      if (!r.ok || /text\/html/.test(type)) return send(res, 403, 'Google did not share that deck. Set it to "Anyone with the link can view", or download it as .pptx and drop it on the canvas.');
+      const buf = Buffer.from(await r.arrayBuffer());
+      if (buf.length > 150 * 1024 * 1024) return send(res, 413, 'That deck is over 150 MB');
+      return send(res, 200, buf, { 'content-type': 'application/vnd.openxmlformats-officedocument.presentationml.presentation' });
+    }
     if (url.pathname === '/api/assets' && req.method === 'POST') {
       const type = String(req.headers['content-type'] || '').split(';')[0];
       const ext = EXT_BY_TYPE[type]; if (!ext) return json(res, 415, { error: 'images only' });

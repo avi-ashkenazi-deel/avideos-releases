@@ -589,8 +589,8 @@ const CanvasUI = (() => {
     if (!f) { const r = stage().getBoundingClientRect(); f = frameAt(toWorld(r.left + r.width / 2, r.top + r.height / 2)) || doc.frames[doc.frames.length - 1] || null; }
     const copies = Canvas.clone(blocks); const inSet = new Set(copies.map(b => b.id)); const tops = copies.filter(b => !b.parent || !inSet.has(b.parent));
     const bb = Canvas.bounds(tops);
-    if (!f) { f = createFrame({ center: true, format: Canvas.customFormat(bb.w + 160, bb.h + 160), name: opts.name || 'Component' }); }
-    hist.push(doc);
+    if (!f) { f = createFrame({ center: true, format: Canvas.customFormat(bb.w + 160, bb.h + 160), name: opts.name || 'Component', history: opts.history !== false }); opts = { ...opts, history: false }; }
+    if (opts.history !== false) hist.push(doc);
     Auto.remap(copies, null);
     if (lp && !into) into = Auto.containerAt(f, lp, []);
     let tx, ty;
@@ -902,6 +902,7 @@ const CanvasUI = (() => {
       let n = 0; for (const [k, list] of groups) { const blob = await env.buildPptx(list.map(x => x.layout)); if (!(await env.download(blob, `${slug(doc.name)}-${k}.pptx`))) break; n += list.length; }
       if (n) env.toast(`PPTX saved: ${n} slide${n > 1 ? 's' : ''}${groups.size > 1 ? `, one file per size` : ''}`); return;
     }
+    if (what === 'gslides') { if (env.saveToGoogleSlides) await env.saveToGoogleSlides(frames); return; }
     if (what === 'canvas') { const blob = await exportCanvasPNG(); if (blob && await env.download(blob, `${slug(doc.name)}-canvas.png`)) env.toast('Canvas PNG saved'); return; }
     if (what === 'all') return exportAction('png', all);
     if (what === 'allpdf') return exportAction('pdf', all);
@@ -1017,11 +1018,11 @@ const CanvasUI = (() => {
     return `<div class="cv-section"><h3>Canvas</h3><label class="cv-f"><span>Name</span><input type="text" data-doc="name" value="${esc(doc.name)}"></label>
       <div class="cv-row wrap">${btn('new-frame', '＋ New frame')}${btn('paste', 'Paste', clipboard ? '' : 'disabled')}${btn('select-all', 'Select all screens', doc.frames.length ? '' : 'disabled')}${env.openImport ? btn('import', 'Import…') : ''}</div>
       <p class="hint">${doc.frames.length} frames. Click a screen's name to select it; shift-click or drag a box around screens to select several and change them together. Drag a block onto another frame to move it there; ⌥ drag copies. Double-click text to edit it in place.</p>
-      <details class="cv-keys"><summary>Shortcuts</summary><p class="hint">V select · H hand · F frame (drag to draw) · ⇧N new frame · T text · R rectangle · O ellipse · I image · Enter edit text or enter a group · ⌘G group · ⇧⌘G ungroup · ⌘C ⌘X ⌘V copy cut paste · ⌘D duplicate · ⌘A select all · ⇧R tidy screens · ⇧G grid · ⇧1 fit all · ⇧2 fit selection · ⌘Z undo · ⌘L copy link · [ ] reorder · hold ⇧ while dragging to skip snapping.</p></details>
+      <details class="cv-keys"><summary>Shortcuts</summary><p class="hint">V select · H hand · F frame (drag to draw) · ⇧N new frame · T text · R rectangle · O ellipse · I image · Enter edit text, enter a group or select a box's children · Esc up a level · ⌘-click deepest layer · ⇧A auto layout · ⌥⇧A remove auto layout · ⌥⌘G frame selection · ⌘G group · ⇧⌘G ungroup or unwrap · ⌘C ⌘X ⌘V copy cut paste · ⌘D duplicate · ⌘A select all · ⇧R tidy screens · ⇧G grid · ⇧1 fit all · ⇧2 fit selection · ⌘Z undo · ⌘L copy link · [ ] reorder · hold ⇧ while dragging to skip snapping.</p></details>
     </div>${paletteEditor()}`;
   }
   function exportSection(n) {
-    return `<div class="cv-section"><h3>Export${n > 1 ? ` ${n} screens` : ''}</h3><div class="cv-row wrap">${btn('exp-png', 'PNG')}${btn('exp-png2', 'PNG 2×')}${btn('exp-svg', 'SVG')}${btn('exp-pdf', 'PDF')}${btn('exp-pptx', 'PPTX')}</div>${n === 1 ? `<div class="cv-row wrap">${btn('exp-react', 'Copy React + Tailwind')}${btn('exp-html', 'Copy HTML')}</div>` : ''}</div>`;
+    return `<div class="cv-section"><h3>Export${n > 1 ? ` ${n} screens` : ''}</h3><div class="cv-row wrap">${btn('exp-png', 'PNG')}${btn('exp-png2', 'PNG 2×')}${btn('exp-svg', 'SVG')}${btn('exp-pdf', 'PDF')}${btn('exp-pptx', 'PPTX')}${btn('exp-gslides', 'Google Slides')}</div>${n === 1 ? `<div class="cv-row wrap">${btn('exp-react', 'Copy React + Tailwind')}${btn('exp-html', 'Copy HTML')}</div>` : ''}</div>`;
   }
   function lookSection(frames) {
     const cur = frames.length === 1 ? ((frames[0].layout.meta || {}).look || 'original') : null;

@@ -762,7 +762,48 @@
     const frames = added.length ? added : CanvasUI.doc.frames.filter(f => sel.frameIds.includes(f.id));
     if (await ensureFonts(frames)) CanvasUI.mutate(() => { }, { history: false, frames: frames.map(f => f.id) });
   }
+  // ---- Slides in and out: .pptx files, Google Slides links, Save to Google Slides --------------------------------------
+  async function importPptxBytes(bytes, label) {
+    toast(`Reading ${label}…`); $('slidesStatus').textContent = 'Reading…';
+    try {
+      const res = await PptxImport.read(bytes, { addImage: (url, name) => addImage(url, name), layout: importLayout(), onProgress: (i, n) => { $('slidesStatus').textContent = `Slide ${i} of ${n}`; } });
+      if (!res.slides.length) { toast('No slides found in that deck'); return; }
+      await ensureFonts(res.slides.map(sl => ({ layout: { blocks: sl.blocks } })));
+      const items = PptxImport.toFrames(res, state.kit, importLayout());
+      const added = CanvasUI.placeFrames(items); if (state.mode !== 'canvas') setMode('canvas'); updateCanvasBadge(); $('importModal').hidden = true;
+      const st = res.stats; toast(`${label} (${importLayout() === 'auto' ? 'auto layout' : 'fixed positions'}): ${added.length} slide${added.length > 1 ? 's' : ''}${res.total > res.slides.length ? ` of ${res.total}` : ''}, ${st.pictures} pictures${st.tables ? `, ${st.tables} tables` : ''}${st.charts ? `, ${st.charts} charts as placeholders` : ''}${st.missingPictures ? `, ${st.missingPictures} pictures not readable (EMF/WMF)` : ''}`);
+      return added;
+    } catch (err) { console.error(err); toast('Could not read the deck: ' + err.message); }
+    finally { $('slidesStatus').textContent = ''; }
+  }
+  async function importSlidesLink(url) {
+    try { $('slidesStatus').textContent = 'Fetching the deck…'; const bytes = await GSlides.fetchDeck(url); await importPptxBytes(bytes, 'Google Slides'); }
+    catch (err) { toast(err.message); $('slidesStatus').textContent = ''; }
+  }
+  $('gslidesGo').addEventListener('click', () => { const v = $('gslidesUrl').value.trim(); if (!v) { $('gslidesUrl').focus(); return; } importSlidesLink(v); });
+  $('gslidesUrl').addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') $('gslidesGo').click(); });
+  $('pptxFile').addEventListener('change', async e => { const f = e.target.files[0]; if (f) await importPptxBytes(new Uint8Array(await f.arrayBuffer()), f.name); e.target.value = ''; });
+  async function renderSlidesHint() {
+    const r = await GSlides.route();
+    $('slidesHint').textContent = (r === 'connector' ? 'Links open through your Google Drive connector, so private decks you can see work too. ' : r === 'server' ? 'Links work for decks shared “Anyone with the link”. ' : 'For a link, download the deck first (File → Download → Microsoft PowerPoint) and choose the file here. ') + 'Each slide becomes a screen with editable text, shapes, pictures, tables and the theme’s colors and fonts. Charts come in as placeholders.';
+  }
+  // Selected screens -> Google Slides (one deck per slide size), through the Drive connector; else a .pptx to import.
+  async function saveToGoogleSlides(frames) {
+    const groups = new Map(); for (const f of frames) { const k = `${f.layout.format.w}x${f.layout.format.h}`; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(f); }
+    const links = [];
+    for (const [k, list] of groups) {
+      const blob = await ExportPptx.buildDeck(list.map(f => f.layout), { kit: state.kit, assets: state.assets });
+      const title = `${CanvasUI.doc.name || 'Canvas'}${groups.size > 1 ? ' ' + k : ''}`;
+      try { toast('Sending to Google Slides…'); const out = await GSlides.saveDeck(blob, title); if (out.url) links.push(out.url); }
+      catch (err) {
+        if (err.manual) { if (await Render.download(blob, `${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.pptx`)) toast('Saved a .pptx. In Google Slides choose File → Import slides (or open it in Drive) to make it a Slides deck.'); return; }
+        toast(err.message); return;
+      }
+    }
+    if (links.length) { try { await navigator.clipboard.writeText(links.join('\n')); } catch { } toast(`Google Slides created: ${links.length > 1 ? links.length + ' decks' : links[0]} (link copied)`); }
+  }
   async function importFile(file) {
+    if (/\.pptx$/i.test(file.name) || file.type === GSlides.PPTX) { await importPptxBytes(new Uint8Array(await file.arrayBuffer()), file.name); return true; }
     const head = new Uint8Array(await file.slice(0, 8).arrayBuffer()); const sig = String.fromCharCode(...head);
     if (/\.fig$/i.test(file.name) || sig === 'fig-kiwi' || (sig.startsWith('PK') && /\.fig$/i.test(file.name))) {
       toast(`Reading ${file.name}…`);
@@ -785,6 +826,7 @@
       return true;
     }
     if (typeof WebImport !== 'undefined' && WebImport.handlePaste(e)) return true;
+    const plain = dt.getData('text/plain'); if (plain && GSlides.isLink(plain) && plain.length < 500) { e.preventDefault(); importSlidesLink(plain.trim()); return true; }
     const files = [...(dt.files || [])].filter(f => /^image\//.test(f.type));
     if (files.length) { e.preventDefault(); (async () => { for (const f of files) { const a = await addImage(await readAsDataURL(f), f.name || 'pasted image'); const sel = CanvasUI.selection(); if (sel.frameIds.length === 1) { const fr = Canvas.frameById(CanvasUI.doc, sel.frameIds[0]); const s = Math.min(1, fr.layout.format.w * 0.6 / a.w, fr.layout.format.h * 0.6 / a.h); CanvasUI.insertBlocks(fr.id, [{ id: 'x', kind: 'image', x: 0, y: 0, w: Math.round(a.w * s), h: Math.round(a.h * s), asset: a.id, focal: 'xMidYMid', radius: 0, decorative: false, path: 'image_pasted' }]); } else { CanvasUI.screenFromImage(a, (f.name || 'Pasted image').replace(/\.[^.]+$/, ''), null); } } })(); return true; }
     return false;
@@ -794,7 +836,7 @@
     placeFrames: items => { const out = CanvasUI.placeFrames(items); if (state.mode !== 'canvas') setMode('canvas'); updateCanvasBadge(); $('importModal').hidden = true; return out; },
     afterImport: async frames => { if (await ensureFonts(frames)) CanvasUI.mutate(() => { }, { history: false, frames: frames.map(f => f.id) }); },
   });
-  function openImport() { $('importModal').hidden = false; renderImportLayout(); if (typeof WebImport !== 'undefined') WebImport.renderSection($('captureSection')); }
+  function openImport() { $('importModal').hidden = false; renderImportLayout(); renderSlidesHint(); if (typeof WebImport !== 'undefined') WebImport.renderSection($('captureSection')); }
   $('cvImport').addEventListener('click', openImport);
   $('importClose').addEventListener('click', () => { $('importModal').hidden = true; });
   $('importModal').addEventListener('click', e => { if (e.target === $('importModal')) $('importModal').hidden = true; });
@@ -838,6 +880,7 @@
     shareLink: async () => { const link = Sync.roomLink(); if (!link) return false; try { await navigator.clipboard.writeText(link); } catch { } toast('Room link copied: anyone with it edits this canvas with you'); return true; },
     buildPptx: layouts => ExportPptx.buildDeck(layouts, { kit: state.kit, assets: state.assets }),
     libraryDrop: (id, at) => Library.insert(id, at),
+    saveToGoogleSlides: frames => saveToGoogleSlides(frames),
     traceImage: (f, b) => Trace.run(f, b, { getAssets: () => state.assets, getKit: () => state.kit, addImageData: (url, name) => addImage(url, name), toast, canvas: CanvasUI }),
   });
   // ---- Library: approved components, logos, cards, devices, illustrations ------------------------------------------

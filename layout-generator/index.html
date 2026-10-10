@@ -223,6 +223,7 @@
               <button data-export="svg" type="button">SVG</button>
               <button data-export="pdf" type="button">PDF, one page each</button>
               <button data-export="pptx" type="button">PowerPoint, one file per size</button>
+              <button data-export="gslides" type="button">Google Slides</button>
               <span class="cv-menu-h">First selected screen</span>
               <button data-export="react" type="button">Copy React + Tailwind</button>
               <button data-export="html" type="button">Copy HTML/CSS</button>
@@ -332,6 +333,10 @@
         </ol>
         <div class="cv-row"><label class="btn small file">Choose a .fig file<input id="figFile" type="file" accept=".fig,application/octet-stream" hidden></label><span class="hint" id="figStatus"></span></div>
         <p class="hint">Frames, text, shapes, vectors, image fills, gradients, strokes, shadows and components from the same file come through. Variables, constraints and prototypes do not. Fonts we don't ship load from Google Fonts when they exist there.</p>
+        <h4>From Google Slides or PowerPoint</h4>
+        <div class="cv-row"><input id="gslidesUrl" class="input grow" type="url" placeholder="Paste a Google Slides link" aria-label="Google Slides link"><button id="gslidesGo" class="btn small primary" type="button">Import</button></div>
+        <div class="cv-row"><label class="btn small file">Choose a .pptx file<input id="pptxFile" type="file" accept=".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation" hidden></label><span class="hint" id="slidesStatus"></span></div>
+        <p class="hint" id="slidesHint">Each slide becomes a screen with editable text, shapes, pictures, tables and the theme's colors and fonts. Charts come in as placeholders.</p>
         <div id="captureSection"></div>
         <h4>Canvas file</h4>
         <div class="cv-row"><label class="btn small file">Open canvas JSON<input id="canvasFile" type="file" accept="application/json,.json" hidden></label></div>
@@ -391,6 +396,8 @@
 <script src="js/deck.js"></script>
 <script src="js/imagegen.js"></script>
 <script src="js/figma.js"></script>
+<script src="js/pptx-import.js"></script>
+<script src="js/gslides.js"></script>
 <script src="js/looks.js"></script>
 <script src="js/webimport.js"></script>
 <script src="js/canvas.js"></script>

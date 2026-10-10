@@ -36,6 +36,10 @@ const AgentTools = (() => {
     if (b.kind === 'icon') o.icon = b.name;
     if (b.overflow) o.overflow = true; if (b.hidden) o.hidden = true; if (b.locked) o.locked = true;
     if (b.opacity != null && b.opacity < 1) o.opacity = b.opacity;
+    if (b.parent) o.parent = b.parent;
+    if (b.kind === 'box') { const s = Auto.norm(b.auto); if (Auto.on(s)) o.stack = { mode: s.wrap ? 'wrap' : s.mode, gap: s.gapAuto ? 'auto' : s.gap, padding: s.pad, align_main: s.main, align_cross: s.cross }; if (b.clip) o.clip = true; }
+    if (b.sizeW && b.sizeW !== 'fixed') o.size_w = b.sizeW; if (b.sizeH && b.sizeH !== 'fixed' && b.kind !== 'text') o.size_h = b.sizeH; if (b.absolute) o.absolute = true;
+    if (b.kind === 'logo') { o.variant = b.variant || 'wordmark'; if (b.product) o.product = b.product; }
     return o;
   }
   function frameInfo(f, withBlocks) {
@@ -71,6 +75,11 @@ const AgentTools = (() => {
     if ('label' in p) { if (p.label) b.label = String(p.label).slice(0, 80); else delete b.label; }
     if ('icon' in p && b.kind === 'icon') { if (!Icons.has(String(p.icon))) throw new Error(`Unknown icon. Available: ${Icons.names.join(', ')}`); b.name = String(p.icon); }
     if ('shadow' in p) { const s = p.shadow; if (!s) delete b.shadow; else { const o = typeof s === 'object' ? s : {}; b.shadow = { on: true, x: Number(o.x) || 0, y: Number(o.y ?? 8), blur: Number(o.blur ?? 24), color: o.color ? color(o.color).hex : '#000000', alpha: Math.max(0, Math.min(1, Number(o.alpha ?? 0.25))) }; } }
+    if ('size_w' in p) { if (!['fixed', 'hug', 'fill'].includes(p.size_w)) throw new Error('size_w is fixed, hug or fill'); b.sizeW = p.size_w; }
+    if ('size_h' in p) { if (!['fixed', 'hug', 'fill'].includes(p.size_h)) throw new Error('size_h is fixed, hug or fill'); b.sizeH = p.size_h; }
+    if ('absolute' in p) { if (p.absolute) b.absolute = true; else delete b.absolute; delete b.rx; delete b.ry; delete b.lx; delete b.ly; }
+    if ('variant' in p && b.kind === 'logo') { const ids = Brand.logosOf(kit()).map(v => v.id); if (!ids.includes(p.variant)) throw new Error(`Logo variants: ${ids.join(', ')}`); if (p.variant === 'wordmark') delete b.variant; else b.variant = p.variant; const v = Brand.logoVariant(kit(), p.variant); if (v.kind === 'appicon') { b.w = b.h; b.fill = v.fg || '#FFFFFF'; } else b.w = Math.round(b.h * Brand.logoAspectOf(kit(), { ...v, product: b.product || v.product })); }
+    if ('product' in p && b.kind === 'logo') { b.product = String(p.product).slice(0, 40); const v = Brand.logoVariant(kit(), b.variant); b.w = Math.round(b.h * Brand.logoAspectOf(kit(), { ...v, product: b.product })); }
     if ('stroke' in p) { const s = p.stroke; if (!s || !(Number(s.width) > 0)) delete b.stroke; else b.stroke = { width: Number(s.width), color: color(s.color || '#000000').hex }; }
     if ('gradient' in p) { const g = p.gradient; if (!g) delete b.gradient; else { const stops = arr(g.stops).map((c, i, all) => ({ c: color(typeof c === 'object' ? c.color || c.c : c).hex, p: typeof c === 'object' && c.position != null ? Number(c.position) : all.length > 1 ? i / (all.length - 1) : 0 })); if (stops.length < 2) throw new Error('gradient needs at least two stops'); b.gradient = { type: g.type === 'radial' ? 'radial' : 'linear', angle: Number(g.angle ?? 180), stops }; b.fill = stops[0].c; } }
     if (refit) Canvas.refit(b);
@@ -79,7 +88,50 @@ const AgentTools = (() => {
   function framesArg(ids) { const list = arr(ids); if (!list.length) throw new Error('frame_ids is empty'); return list.map(F); }
   const dataUrlOf = blob => new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(blob); });
 
+  const padOf = p => { if (p == null) return null; if (typeof p === 'number') return { t: p, r: p, b: p, l: p }; if (typeof p === 'object') return { t: Number(p.top ?? p.t) || 0, r: Number(p.right ?? p.r) || 0, b: Number(p.bottom ?? p.b) || 0, l: Number(p.left ?? p.l) || 0 }; throw new Error('padding is a number or {top,right,bottom,left}'); };
   const IMPL = {
+    set_auto_layout({ frame_id, box_id, mode, gap, gap_auto, padding, align_main, align_cross, clip }) {
+      const f = F(frame_id); const box = box_id ? Bk(f, box_id) : null; if (box && box.kind !== 'box') throw new Error(`${box_id} is not a box; use wrap_in_stack first`);
+      write(() => {
+        Auto.layout(f);
+        if (mode === 'none') { Auto.disable(f, box); return; }
+        if (!Auto.on(Auto.settingsOf(f, box))) Auto.enable(f, box);
+        const s = Auto.settingsOf(f, box);
+        if (mode === 'wrap') { s.mode = 'horizontal'; s.wrap = true; } else if (mode === 'vertical' || mode === 'horizontal') { s.mode = mode; s.wrap = false; }
+        if (gap != null) s.gap = Math.max(-500, Math.min(2000, Number(gap) || 0)); if (gap_auto != null) s.gapAuto = !!gap_auto;
+        const pd = padOf(padding); if (pd) s.pad = pd;
+        if (align_main) s.main = align_main; if (align_cross) s.cross = align_cross;
+        if (box) { box.auto = s; if (clip != null) box.clip = !!clip; } else f.autoLayout = s;
+      }, [f.id]);
+      const s = Auto.settingsOf(f, box); note(`${mode === 'none' ? 'Auto layout off' : 'Auto layout ' + (s.wrap ? 'wrap' : s.mode)} on ${box ? (box.label || 'a box') : f.name}`);
+      return { frame_id: f.id, box_id: box ? box.id : null, stack: Auto.on(s) ? { mode: s.wrap ? 'wrap' : s.mode, gap: s.gapAuto ? 'auto' : s.gap, padding: s.pad, align_main: s.main, align_cross: s.cross } : 'off' };
+    },
+    wrap_in_stack({ frame_id, block_ids, stack, label }) {
+      const f = F(frame_id); const bs = arr(block_ids).map(id => Bk(f, id)); if (!bs.length) throw new Error('block_ids is empty');
+      const box = write(() => { Auto.layout(f); const b = Auto.wrap(f, Auto.topmost(f, bs), stack !== false); if (label) b.label = String(label).slice(0, 80); return b; }, [f.id]);
+      note(`Wrapped ${bs.length} blocks in a ${stack === false ? 'box' : 'stack'}`);
+      return { box_id: box.id, stack: box.auto ? box.auto.mode : 'none' };
+    },
+    move_into({ frame_id, block_ids, box_id, before_id }) {
+      const f = F(frame_id); const bs = arr(block_ids).map(id => Bk(f, id)); const box = box_id ? Bk(f, box_id) : null;
+      if (box && box.kind !== 'box') throw new Error(`${box_id} is not a box`);
+      if (box && bs.some(b => b.id === box.id || Auto.descendants(f, b).some(d => d.id === box.id))) throw new Error('A box cannot go inside itself');
+      const before = before_id ? Bk(f, before_id) : null;
+      write(() => { Auto.layout(f); for (const b of Auto.topmost(f, bs)) { if (Auto.on(Auto.settingsOf(f, box))) Auto.moveInList(f, b, box ? box.id : '', before); else { if (box) b.parent = box.id; else delete b.parent; } delete b.rx; delete b.ry; delete b.lx; delete b.ly; } }, [f.id]);
+      note(`Moved ${bs.length} block${bs.length === 1 ? '' : 's'} ${box ? 'into ' + (box.label || 'a box') : 'to the top level'}`);
+      return { moved: bs.length };
+    },
+    list_components({ category }) { const items = Library.all(doc(), kit()).filter(i => !category || i.category === category); return { components: items.map(i => ({ id: i.id, name: i.name, category: i.category, approved: !!i.approved, w: i.w, h: i.h })) }; },
+    insert_component({ frame_id, component, box_id }) {
+      const f = F(frame_id); const items = Library.all(doc(), kit()); const q = String(component || '').toLowerCase();
+      const it = items.find(i => i.id === component) || items.find(i => i.name.toLowerCase() === q) || items.find(i => i.name.toLowerCase().includes(q));
+      if (!it) throw new Error(`No component "${component}". Try list_components.`);
+      const box = box_id ? Bk(f, box_id) : null;
+      CanvasUI.select(f.id, box ? [box.id] : []);
+      const tops = CanvasUI.insertComponent(it.blocks, { name: it.name, history: firstWrite() });
+      note(`Added ${it.name}`);
+      return { block_ids: (tops || []).map(b => b.id), component: it.name };
+    },
     get_selection() {
       const s = CanvasUI.selection();
       if (!s.frameIds.length) return { selected: 'nothing', hint: 'Nothing is selected. Use get_canvas to see every screen.', screens: doc().frames.length };
