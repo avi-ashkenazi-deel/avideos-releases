@@ -476,6 +476,58 @@ body.canvas-mode .main { overflow: hidden; background-image: none; }
 .cv-minmax summary { font-size: 12px; color: var(--fg-3); cursor: pointer; margin: 6px 0; }
 input[disabled] { opacity: .5; cursor: not-allowed; }
 
+/* ---- Compact brand palette and logo variants --------------------------------------------------------------- */
+.pal-strip { display: flex; flex-wrap: wrap; gap: 5px; }
+.pal-sw { width: 26px; height: 26px; border-radius: 50%; border: 1px solid rgba(255,255,255,.16); box-shadow: inset 0 0 0 1px rgba(0,0,0,.2); cursor: pointer; padding: 0; position: relative; transition: transform .08s, box-shadow .08s; }
+.pal-sw:hover { transform: scale(1.1); }
+.pal-sw.on { box-shadow: 0 0 0 2px var(--panel), 0 0 0 3.5px var(--accent); }
+.pal-sw i { position: absolute; right: -3px; bottom: -3px; font: 700 8.5px/1 var(--font-mono); font-style: normal; background: var(--panel); color: var(--fg-2); border: 1px solid var(--line-2); border-radius: 4px; padding: 1px 2px; }
+.pal-sw.add { background: transparent; border: 1px dashed var(--line-2); color: var(--fg-3); font-size: 13px; line-height: 1; }
+.pal-sw.add:hover { color: var(--fg); border-color: var(--fg-3); }
+.pal-edit { display: flex; gap: 6px; align-items: center; margin-top: 8px; }
+.pal-edit .colorpick { flex: none; }
+.select.mini { width: auto; min-width: 0; padding: 4px 22px 4px 6px; font-size: 12px; }
+.logo-variants { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 6px; margin-bottom: 8px; }
+.logo-tile { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 4px 5px; background: var(--bg); border: 1px solid var(--line-2); border-radius: 8px; cursor: pointer; color: var(--fg-3); font-size: 10.5px; }
+.logo-tile > svg { width: 100%; height: auto; display: block; }
+.logo-tile:hover { border-color: var(--fg-3); color: var(--fg-2); }
+.logo-tile.on { border-color: var(--accent); color: var(--fg); }
+.row.tight { gap: 8px; align-items: center; flex-wrap: wrap; }
+/* canvas panel: smaller swatches, no extra indent */
+.cv-swatches { gap: 4px; padding-left: 0; margin: 2px 0 4px; }
+.cv-swatches .sw { width: 16px; height: 16px; }
+.cv-pal-row { gap: 4px; }
+.cv-fold > summary { list-style: none; cursor: pointer; }
+.cv-fold > summary::-webkit-details-marker { display: none; }
+.cv-fold > summary h3::after { content: ' ▸'; color: var(--fg-3); }
+.cv-fold[open] > summary h3::after { content: ' ▾'; }
+.cv-section .logo-variants { grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); }
+
+/* ---- Library ------------------------------------------------------------------------------------------------ */
+.cv-lefttabs { grid-template-columns: repeat(2, 1fr); flex: none; }
+.cv-library { overflow-y: auto; min-height: 0; padding: 8px 10px 14px; }
+.lib-cats { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
+.lib-cats button { border: 1px solid var(--line-2); background: var(--bg); color: var(--fg-2); border-radius: 12px; padding: 3px 9px; font-size: 11.5px; cursor: pointer; }
+.lib-cats button:hover { color: var(--fg); border-color: var(--fg-3); }
+.lib-cats button.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+.lib-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.lib-item { background: var(--bg); border: 1px solid var(--line-2); border-radius: 8px; padding: 6px; cursor: grab; display: flex; flex-direction: column; gap: 4px; transition: border-color .1s; }
+.lib-item:hover { border-color: var(--accent); }
+.lib-item:active { cursor: grabbing; }
+.lib-thumb { aspect-ratio: 4 / 3; display: grid; place-items: center; overflow: hidden; border-radius: 5px; background: repeating-conic-gradient(#20202a 0% 25%, #1a1a22 0% 50%) 50% / 14px 14px; }
+.lib-thumb > svg { max-width: 100%; max-height: 100%; width: auto; height: auto; }
+.lib-name { font-size: 11.5px; color: var(--fg-2); line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lib-ok { color: #4CC38A; font-weight: 700; }
+.lib-tag { font-size: 9.5px; color: var(--fg-3); border: 1px solid var(--line-2); border-radius: 3px; padding: 0 3px; }
+.lib-acts { display: flex; gap: 4px; }
+.lib-acts button { flex: 1; border: 1px solid var(--line-2); background: transparent; color: var(--fg-3); border-radius: 4px; font-size: 10.5px; padding: 2px 4px; cursor: pointer; }
+.lib-acts button:hover { color: var(--fg); border-color: var(--fg-3); }
+.lib-acts button:last-child { flex: none; }
+.lib-foot { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.lib-name-row { display: flex; gap: 6px; margin-top: 10px; }
+.lib-hint { margin-top: 8px; }
+.cv-panel-head { gap: 8px; }
+
 </style>
 </head>
 <body>
@@ -514,19 +566,18 @@ input[disabled] { opacity: .5; cursor: not-allowed; }
         <input id="brandName" type="text" class="input">
       </div>
       <div class="field">
-        <label>Logo</label>
-        <div class="logo-row">
-          <div id="logoPreview" class="logo-preview" title="Logo preview"></div>
-          <div class="stack">
-            <label class="btn small file">Upload SVG or PNG<input id="logoFile" type="file" accept=".svg,image/svg+xml,image/png,image/jpeg,image/webp" hidden></label>
-            <label class="check"><input id="logoMono" type="checkbox" checked> Recolor SVG to allowed logo colors</label>
-          </div>
+        <label>Logo <span class="hint">variants · pick one to upload its file</span></label>
+        <div id="logoVariants" class="logo-variants" role="listbox" aria-label="Logo variants"></div>
+        <div class="row tight">
+          <label class="btn small file" data-tip="Upload the official file for the selected variant">Upload SVG or PNG<input id="logoFile" type="file" accept=".svg,image/svg+xml,image/png,image/jpeg,image/webp" hidden></label>
+          <label class="check"><input id="logoMono" type="checkbox" checked> Recolor to logo colors</label>
         </div>
       </div>
       <div class="field">
-        <label>Colors <span class="hint">click a swatch to change its role</span></label>
-        <div id="colorList" class="swatches"></div>
-        <div class="row">
+        <label>Colors <span class="hint" id="colorCount"></span></label>
+        <div id="colorList" class="pal-strip"></div>
+        <div id="colorEdit" class="pal-edit" hidden></div>
+        <div class="row" id="colorAdd" hidden>
           <input id="newColor" type="color" value="#5938B8" class="colorpick" aria-label="New color">
           <input id="newColorName" type="text" class="input grow" placeholder="Name (optional)">
           <button id="addColorBtn" class="btn small" type="button">Add</button>
@@ -706,8 +757,9 @@ input[disabled] { opacity: .5; cursor: not-allowed; }
       </div>
       <div class="cv-body">
         <aside class="cv-layers">
-          <div class="cv-panel-head"><h2>Layers</h2><input id="cvSearch" class="input" type="search" placeholder="Search layers"></div>
+          <div class="cv-panel-head"><div class="cv-seg cv-lefttabs" id="cvLeftTabs" role="tablist"><button type="button" data-left="layers" class="on" role="tab">Layers</button><button type="button" data-left="library" role="tab">Library</button></div><input id="cvSearch" class="input" type="search" placeholder="Search layers"></div>
           <div id="cvLayers"></div>
+          <div id="cvLibrary" class="cv-library" hidden></div>
         </aside>
         <div id="stage" class="cv-stage">
           <div id="world" class="cv-world"></div>
@@ -1024,6 +1076,13 @@ const Brand = (() => {
         { name: 'Black',      hex: '#000000', role: 'neutral' },
       ],
       logo: { kind: 'wordmark', text: 'deel.', allowedColors: ['#5938B8', '#000000', '#FFFFFF'], monochrome: true, clearZone: 1.0, minPx: 20 },
+      // Variants: the wordmark is kit.logo itself; the others can each take their own uploaded SVG or PNG.
+      logos: [
+        { id: 'wordmark', name: 'Wordmark' },
+        { id: 'symbol', name: 'Symbol', kind: 'wordmark', text: 'd.' },
+        { id: 'appicon', name: 'App icon', kind: 'appicon', text: 'd.', bg: '#5938B8', fg: '#FFFFFF' },
+        { id: 'lockup', name: 'Product lockup', kind: 'lockup', text: 'deel.', product: 'Payroll' },
+      ],
       fonts: { display: 'Bricolage Grotesque', body: 'Inter', displayWeight: 600, bodyWeight: 400, headlineCase: 'sentence', tracking: -0.025 },
       grid: { unit: 8, marginRatio: 0.06, gutterUnits: 3, radius: 1 },
       shapes: ['circle', 'pill', 'quarter'],
@@ -1168,9 +1227,33 @@ const Brand = (() => {
     const inner = svg.innerHTML;
     return { viewBox: vb.join(' '), aspect, inner };
   }
+  // Logo variants: wordmark (kit.logo), a symbol, an app icon, a product lockup, or any uploaded SVG/PNG. Kits without
+  // a list get the wordmark plus a symbol and an app icon made from its first letter.
+  function logosOf(kit) {
+    if (Array.isArray(kit.logos) && kit.logos.length) return kit.logos;
+    const t = String((kit.logo && kit.logo.text) || kit.name || 'b').trim(); const first = t.replace(/[^\p{L}\p{N}]/gu, '').slice(0, 1) || 'b';
+    const core = (kit.colors.find(c => c.role === 'core') || kit.colors[0] || { hex: '#000000' }).hex;
+    return [{ id: 'wordmark', name: 'Wordmark' }, { id: 'symbol', name: 'Symbol', kind: 'wordmark', text: first + (t.endsWith('.') ? '.' : '') }, { id: 'appicon', name: 'App icon', kind: 'appicon', text: first, bg: core, fg: '#FFFFFF' }];
+  }
+  function logoVariant(kit, id) {
+    const list = logosOf(kit); const v = list.find(x => x.id === id) || list[0] || { id: 'wordmark' };
+    if (v.id === 'wordmark' || !v.kind) return { ...kit.logo, id: 'wordmark', name: v.name || 'Wordmark' };
+    return { allowedColors: kit.logo.allowedColors, monochrome: kit.logo.monochrome, clearZone: kit.logo.clearZone, ...v };
+  }
+  // Width over height of a variant at its drawn size (wordmarks are measured in the display font).
+  function logoAspectOf(kit, v) {
+    if (!v) v = kit.logo;
+    if (v.kind === 'svg' && v.svg) return v.svg.aspect || 3;
+    if (v.kind === 'image' && v.aspect) return v.aspect;
+    if (v.kind === 'appicon') return 1;
+    const f = { family: fontCss(kit.fonts.display), weight: 700, size: 100, letterSpacing: -0.04 };
+    const w = (typeof Text !== 'undefined' ? Text.width(v.text || kit.name || 'brand', f) : 60 * String(v.text || '').length);
+    if (v.kind === 'lockup') { const pf = { family: fontCss(kit.fonts.body), weight: 500, size: 62, letterSpacing: -0.01 }; return (w + 26 + (typeof Text !== 'undefined' ? Text.width(v.product || 'Product', pf) : 200)) / 74; }
+    return w / 74;
+  }
   // Return inner SVG markup recolored to `color` when monochrome is on.
-  function logoInner(kit, color) {
-    const l = kit.logo;
+  function logoInner(kit, color, variant) {
+    const l = variant || kit.logo;
     if (l.kind !== 'svg' || !l.svg) return '';
     if (!l.monochrome) return l.svg.inner;
     let s = l.svg.inner;
@@ -1226,7 +1309,7 @@ const Brand = (() => {
     return JSON.stringify(k, null, 2);
   }
 
-  return { FONTS, customFonts, fontCss, fontWeights, allFontNames, PRESETS, fromPreset, pairs, parseSvg, logoInner, logoColorFor, makeDemoImage, serialize, clone };
+  return { FONTS, customFonts, fontCss, fontWeights, allFontNames, PRESETS, fromPreset, pairs, parseSvg, logoInner, logoColorFor, logosOf, logoVariant, logoAspectOf, makeDemoImage, serialize, clone };
 })();
 
 /* js/grid.js */
@@ -1241,7 +1324,13 @@ const Grid = (() => {
     { id: 'portrait', name: 'Portrait 4:5',  w: 1080, h: 1350, cols: 8,  ratio: '4:5',    tags: ['portrait', '4:5', 'feed portrait'] },
     { id: 'poster',   name: 'Poster A',      w: 1240, h: 1754, cols: 8,  ratio: '1:1.41', tags: ['poster', 'a4', 'a3', 'print', 'flyer', 'one-pager', 'one pager'] },
     { id: 'banner',   name: 'Wide banner',   w: 2400, h: 800,  cols: 16, ratio: '3:1',    tags: ['banner', 'billboard', 'header', 'email header', 'cover', 'hero', 'wide', 'leaderboard'] },
+    // Screens for app and web design on the canvas (the generator sticks to the formats above)
+    { id: 'phone',    name: 'Phone · iOS',     w: 390,  h: 844,  cols: 4,  ratio: '9:19.5', screen: true, tags: [] },
+    { id: 'android',  name: 'Phone · Android', w: 412,  h: 915,  cols: 4,  ratio: '9:20',   screen: true, tags: [] },
+    { id: 'tablet',   name: 'Tablet',          w: 834,  h: 1194, cols: 8,  ratio: '3:4.3',  screen: true, tags: [] },
+    { id: 'desktop',  name: 'Desktop web',     w: 1440, h: 1024, cols: 12, ratio: '1.4:1',  screen: true, tags: [] },
   ];
+  const POSTS = FORMATS.filter(f => !f.screen);
   const byId = Object.fromEntries(FORMATS.map(f => [f.id, f]));
 
   // Compute a modular grid for a format under the brand's grid rules.
@@ -1291,7 +1380,7 @@ const Grid = (() => {
     if (/\b(all|every) (formats?|sizes?|channels?)\b/.test(t)) return FORMATS.map(f => f.id);
     return [...new Set(found)];
   }
-  return { FORMATS, byId, compute, rect, snap, detectFormats };
+  return { FORMATS, POSTS, byId, compute, rect, snap, detectFormats };
 })();
 
 /* js/text.js */
@@ -2548,13 +2637,24 @@ const Render = (() => {
     const r = Math.min(b.w, b.h) / 2; const size = b.h * 0.46;
     return `<circle cx="${n(b.x + r)}" cy="${n(b.y + r)}" r="${n(r)}" fill="${col(b.fill)}"/><text x="${n(b.x + r)}" y="${n(b.y + r + size * 0.35)}" font-family='${fam(b.font)}' font-size="${n(size)}" font-weight="700" fill="${col(b.color)}" text-anchor="middle">${esc(b.text)}</text>`;
   }
+  // A logo block draws its kit variant: the wordmark (or uploaded logo), a symbol, an app icon or a product lockup.
   function logoEl(b, kit) {
-    const l = kit.logo; const fill = col(b.fill);
-    if (l.kind === 'svg' && l.svg) return `<svg x="${n(b.x)}" y="${n(b.y)}" width="${n(b.w)}" height="${n(b.h)}" viewBox="${esc(l.svg.viewBox)}" preserveAspectRatio="xMidYMid meet" overflow="visible">${Brand.logoInner(kit, fill)}</svg>`;
+    const l = Brand.logoVariant(kit, b.variant); const fill = col(b.fill);
+    const display = Text.quote(Brand.fontCss(kit.fonts.display)).replace(/['<>&]/g, '');
+    if (l.kind === 'svg' && l.svg) return `<svg x="${n(b.x)}" y="${n(b.y)}" width="${n(b.w)}" height="${n(b.h)}" viewBox="${esc(l.svg.viewBox)}" preserveAspectRatio="xMidYMid meet" overflow="visible">${Brand.logoInner(kit, fill, l)}</svg>`;
     if (l.kind === 'image' && l.dataUrl) return `<image x="${n(b.x)}" y="${n(b.y)}" width="${n(b.w)}" height="${n(b.h)}" href="${esc(l.dataUrl)}" preserveAspectRatio="xMidYMid meet"/>`;
+    if (l.kind === 'appicon') {
+      const s = Math.min(b.w, b.h); const x = b.x + (b.w - s) / 2, y = b.y + (b.h - s) / 2; const size = s * 0.56;
+      return `<rect x="${n(x)}" y="${n(y)}" width="${n(s)}" height="${n(s)}" rx="${n(s * 0.23)}" fill="${col(b.bg || l.bg, '#5938B8')}"/><text x="${n(x + s / 2)}" y="${n(y + s / 2 + size * 0.36)}" font-family='${display}' font-size="${n(size)}" font-weight="700" letter-spacing="${n(-0.04 * size)}" fill="${col(b.fill || l.fg, '#FFFFFF')}" text-anchor="middle">${esc(l.text || 'b')}</text>`;
+    }
     const size = b.h / 0.74;
-    const family = Text.quote(Brand.fontCss(kit.fonts.display)).replace(/['<>&]/g, '');
-    return `<text x="${n(b.x)}" y="${n(b.y + b.h)}" font-family='${family}' font-size="${n(size)}" font-weight="700" letter-spacing="${n(-0.04 * size)}" fill="${fill}">${esc(l.text || kit.name)}</text>`;
+    const word = `<text x="${n(b.x)}" y="${n(b.y + b.h)}" font-family='${display}' font-size="${n(size)}" font-weight="700" letter-spacing="${n(-0.04 * size)}" fill="${fill}">${esc(l.text || kit.name)}</text>`;
+    if (l.kind === 'lockup') {
+      const ww = Text.width(l.text || kit.name, { family: Brand.fontCss(kit.fonts.display), weight: 700, size, letterSpacing: -0.04 }); const ps = size * 0.62;
+      const body = Text.quote(Brand.fontCss(kit.fonts.body)).replace(/['<>&]/g, '');
+      return word + `<text x="${n(b.x + ww + size * 0.26)}" y="${n(b.y + b.h)}" font-family='${body}' font-size="${n(ps)}" font-weight="500" letter-spacing="${n(-0.01 * ps)}" fill="${fill}">${esc(b.product || l.product || 'Product')}</text>`;
+    }
+    return word;
   }
   function shapeEl(b, ctx) {
     const fill = paint(b, ctx); const st = strokeAttr(b);
@@ -2799,7 +2899,7 @@ const ExportPptx = (() => {
   const RASTER = new Set(['scrim']);
   // Anything PowerPoint cannot draw natively with the same look is rasterized in place: vectors, gradients, shadows, rotation.
   const hasFx = b => !!(b.gradient || (b.shadow && b.shadow.on !== false && (b.shadow.blur || b.shadow.x || b.shadow.y)) || Number(b.rotation) || (b.opacity != null && b.opacity < 1 && b.kind !== 'text'));
-  const isRaster = b => RASTER.has(b.kind) || b.kind === 'icon' || b.kind === 'line' || b.kind === 'vector' || (b.kind === 'shape' && (b.shape === 'quarter' || b.shape === 'blob')) || (b.kind === 'logo' && b.logoKind === 'svg') || (hasFx(b) && b.kind !== 'text' && b.kind !== 'list');
+  const isRaster = b => RASTER.has(b.kind) || b.kind === 'icon' || b.kind === 'line' || b.kind === 'vector' || (b.kind === 'shape' && (b.shape === 'quarter' || b.shape === 'blob')) || (b.kind === 'logo' && (b.logoKind === 'svg' || (b.variant && b.variant !== 'wordmark'))) || (hasFx(b) && b.kind !== 'text' && b.kind !== 'list');
 
   async function rasterLayer(layout, blocks, opts) {
     const svg = Render.toSVG({ ...layout, blocks }, { kit: opts.kit, assets: opts.assets, forExport: true, transparent: true, showGrid: false });
@@ -2914,7 +3014,7 @@ const Prompt = (() => {
   const INTENT_SCHEMA = {
     type: 'object', additionalProperties: false,
     properties: {
-      formats: { type: 'array', items: { type: 'string', enum: Grid.FORMATS.map(f => f.id) } },
+      formats: { type: 'array', items: { type: 'string', enum: Grid.POSTS.map(f => f.id) } },
       count: { type: 'integer' },
       loud: { type: 'number', description: '0 quiet/minimal .. 1 loud/bold type scale' },
       dark: { type: 'number', description: '-1 prefer light grounds, 0 no preference, 1 prefer dark grounds' },
@@ -2991,7 +3091,7 @@ const Prompt = (() => {
     const brandSummary = {
       name: kit.name,
       colors: kit.colors.map(c => `${c.name} ${Color.normalize(c.hex)} (${c.role})`),
-      formats: Grid.FORMATS.map(f => `${f.id}: ${f.name} ${f.w}x${f.h}`),
+      formats: Grid.POSTS.map(f => `${f.id}: ${f.name} ${f.w}x${f.h}`),
       archetypes: Engine.ARCHETYPES,
       currentContent: kit.content,
     };
@@ -5551,9 +5651,9 @@ const CanvasUI = (() => {
     st.addEventListener('wheel', e => { if (e.target.closest && e.target.closest('.cv-editor')) return; e.preventDefault(); if (e.ctrlKey || e.metaKey) zoomBy(Math.exp(-e.deltaY * 0.0015), e.clientX, e.clientY); else { doc.view.x -= e.deltaX; doc.view.y -= e.deltaY; applyView(); } }, { passive: false });
     st.addEventListener('contextmenu', e => e.preventDefault());
     new ResizeObserver(() => active && drawOverlay()).observe(st);
-    st.addEventListener('dragover', e => { if (e.dataTransfer && [...e.dataTransfer.types].includes('Files')) { e.preventDefault(); st.classList.add('drop'); } });
+    st.addEventListener('dragover', e => { const types = e.dataTransfer ? [...e.dataTransfer.types] : []; if (types.includes('Files') || types.includes('application/x-lg-library')) { e.preventDefault(); st.classList.add('drop'); } });
     st.addEventListener('dragleave', () => st.classList.remove('drop'));
-    st.addEventListener('drop', async e => { st.classList.remove('drop'); const files = e.dataTransfer && [...e.dataTransfer.files]; if (!files || !files.length) return; e.preventDefault(); lastPointer = toWorld(e.clientX, e.clientY); for (const file of files) { try { if (env.importFile && await env.importFile(file)) continue; if (/^image\//.test(file.type)) await dropImage(file); else env.toast(`Can't open ${file.name}`); } catch (err) { env.toast(err.message); } } });
+    st.addEventListener('drop', async e => { st.classList.remove('drop'); const libId = e.dataTransfer && e.dataTransfer.getData('application/x-lg-library'); if (libId && env.libraryDrop) { e.preventDefault(); env.libraryDrop(libId, toWorld(e.clientX, e.clientY)); return; } const files = e.dataTransfer && [...e.dataTransfer.files]; if (!files || !files.length) return; e.preventDefault(); lastPointer = toWorld(e.clientX, e.clientY); for (const file of files) { try { if (env.importFile && await env.importFile(file)) continue; if (/^image\//.test(file.type)) await dropImage(file); else env.toast(`Can't open ${file.name}`); } catch (err) { env.toast(err.message); } } });
   }
   function onDblClick(e) {
     if (e.target.closest && e.target.closest('.cv-editor')) return;
@@ -5771,8 +5871,19 @@ const CanvasUI = (() => {
     const asset = await env.addImage(file); const p = lastPointer || { x: 0, y: 0 }; const f = frameAt(p);
     const w = asset.w || 800, h = asset.h || 600;
     if (f) { hist.push(doc); const s = Math.min(1, (FW(f) * 0.6) / w, (FH(f) * 0.6) / h); const b = { id: Canvas.uid(), kind: 'image', x: Math.round(p.x - f.x - w * s / 2), y: Math.round(p.y - f.y - h * s / 2), w: Math.round(w * s), h: Math.round(h * s), asset: asset.id, focal: 'xMidYMid', radius: 0, decorative: false, path: 'image_' + Canvas.uid() }; f.layout.blocks.push(b); select(f.id, [b.id]); rerenderFrame(f); persist(); updateUndo(); return; }
-    const nf = createFrame({ x: p.x - w / 2, y: p.y - h / 2, format: Canvas.customFormat(w, h), name: file.name.replace(/\.[^.]+$/, '') });
-    mutate(() => { nf.layout.blocks.push({ id: Canvas.uid(), kind: 'image', x: 0, y: 0, w: FW(nf), h: FH(nf), asset: asset.id, focal: 'xMidYMid', radius: 0, decorative: false, path: 'image_1' }); }, { history: false, frames: [nf.id] });
+    screenFromImage(asset, file.name.replace(/\.[^.]+$/, ''), p);
+  }
+  // An image on empty canvas becomes a screen of its own. Phone screenshots (tall, phone-shaped) become a phone-size
+  // screen at 1x, ready for a device frame or for Rebuild as layers.
+  function phoneShaped(w, h) { const r = h / w; return w >= 320 && r >= 1.75 && r <= 2.4; }
+  function screenFromImage(asset, name, at) {
+    const w = asset.w || 800, h = asset.h || 600; const phone = phoneShaped(w, h);
+    const W = phone ? (Math.abs(w / h - 412 / 915) < Math.abs(w / h - 390 / 844) && w % 412 === 0 ? 412 : 390) : w; const H = phone ? Math.round(W * h / w) : h;
+    const fmt = phone ? (Grid.byId.phone.w === W && Math.abs(Grid.byId.phone.h - H) <= 2 ? Grid.byId.phone : Grid.byId.android.w === W && Math.abs(Grid.byId.android.h - H) <= 2 ? Grid.byId.android : Canvas.customFormat(W, H)) : Canvas.customFormat(W, H);
+    const nf = at ? createFrame({ x: at.x - fmt.w / 2, y: at.y - fmt.h / 2, format: fmt, name: phone ? `${name || 'Phone screenshot'} · phone` : name }) : createFrame({ center: true, format: fmt, name: phone ? `${name || 'Phone screenshot'} · phone` : name });
+    mutate(() => { nf.layout.blocks.push({ id: Canvas.uid(), kind: 'image', x: 0, y: 0, w: fmt.w, h: fmt.h, asset: asset.id, focal: 'xMidYMid', radius: 0, decorative: false, path: 'image_1', label: phone ? 'screenshot' : 'image' }); nf.layout.meta = { ...(nf.layout.meta || {}), source: phone ? 'phone-screenshot' : 'image' }; }, { history: false, frames: [nf.id] });
+    if (phone) env.toast('Phone screenshot placed as a phone screen. Select it and use ✦ Rebuild as layers, or add a device frame from Library → Devices.');
+    return nf;
   }
   function placeTool(f, p) {
     if (!f) { env.toast('Click inside a frame to add it there'); return; }
@@ -5837,6 +5948,32 @@ const CanvasUI = (() => {
     const added = items.map(it => { const f = Canvas.addFrame(doc, it.layout, { x: Canvas.snap(ox + (it.x - bx), 8), y: Canvas.snap(oy + (it.y - by), 8), name: it.name, autoLayout: it.autoLayout || undefined }); f.clip = it.clip !== false; return f; });
     selectFrames(added.map(f => f.id)); if (active) { renderAll(); fitTo(added); } persist(); updateUndo();
     return added;
+  }
+  // A library item (blocks from 0,0) into a screen: at a dropped point, into the selected box, or centred in the
+  // selected screen (or the one in view). In a stack it joins the flow there.
+  function insertComponent(blocks, opts = {}) {
+    if (!blocks || !blocks.length) return null;
+    let f = null, into = null, lp = null;
+    if (opts.at) { f = frameAt(opts.at); if (f) lp = { x: opts.at.x - f.x, y: opts.at.y - f.y }; }
+    if (!f) { f = selFrames().length === 1 ? selFrame() : null; const bs = f ? selBlocks() : []; if (bs.length === 1 && bs[0].kind === 'box') into = bs[0]; }
+    if (!f) { const r = stage().getBoundingClientRect(); f = frameAt(toWorld(r.left + r.width / 2, r.top + r.height / 2)) || doc.frames[doc.frames.length - 1] || null; }
+    const copies = Canvas.clone(blocks); const inSet = new Set(copies.map(b => b.id)); const tops = copies.filter(b => !b.parent || !inSet.has(b.parent));
+    const bb = Canvas.bounds(tops);
+    if (!f) { f = createFrame({ center: true, format: Canvas.customFormat(bb.w + 160, bb.h + 160), name: opts.name || 'Component' }); }
+    hist.push(doc);
+    Auto.remap(copies, null);
+    if (lp && !into) into = Auto.containerAt(f, lp, []);
+    let tx, ty;
+    if (lp) { tx = lp.x - bb.w / 2; ty = lp.y - bb.h / 2; }
+    else if (into) { tx = into.x + (into.w - bb.w) / 2; ty = into.y + (into.h - bb.h) / 2; }
+    else { tx = (FW(f) - bb.w) / 2; ty = (FH(f) - bb.h) / 2; }
+    tx = Math.round(tx); ty = Math.round(ty);
+    for (const c of copies) { c.x += tx - bb.x; c.y += ty - bb.y; delete c.lx; delete c.ly; if (c.kind === 'text' || c.kind === 'list') Canvas.refit(c); }
+    f.layout.blocks.push(...copies);
+    if (into) for (const t of tops) { t.parent = into.id; if (Auto.on(Auto.settingsOf(f, into))) { const d = Auto.dropIndex(f, into, lp || { x: into.x + into.w, y: into.y + into.h }, tops); Auto.moveInList(f, t, into.id, d.before); } }
+    else if (Auto.on(Auto.settingsOf(f, null))) for (const t of tops) { const d = Auto.dropIndex(f, null, lp || { x: FW(f), y: FH(f) }, tops); Auto.moveInList(f, t, '', d.before); }
+    rerenderFrame(f); select(f.id, tops.map(t => t.id)); persist(); updateUndo();
+    return tops;
   }
   // Loose layers (no frame of their own) go into a frame, centred, keeping their arrangement.
   function insertBlocks(frameId, blocks) {
@@ -6216,11 +6353,11 @@ const CanvasUI = (() => {
   const ROLES = ['core', 'accent', 'background', 'neutral'];
   function paletteEditor() {
     const kit = env.getKit();
-    return `<div class="cv-section" data-palette><h3>Brand palette</h3>
+    return `<details class="cv-section cv-fold" data-palette><summary><h3>Brand palette <span class="cv-token">${kit.colors.length} colors</span></h3></summary>
       ${kit.colors.map((c, i) => `<div class="cv-pal-row"><input type="color" data-pal="hex" data-i="${i}" value="${toHex(c.hex)}" title="${toHex(c.hex)}"><input type="text" data-pal="name" data-i="${i}" value="${esc(c.name || '')}" placeholder="Name"><select data-pal="role" data-i="${i}" title="Role">${ROLES.map(r => `<option value="${r}" ${c.role === r ? 'selected' : ''}>${r}</option>`).join('')}</select><button type="button" class="btn small ghost" data-pal="rm" data-i="${i}" title="Remove">✕</button></div>`).join('')}
       <div class="cv-row"><button type="button" class="btn small" data-act="add-color">＋ Add color</button><button type="button" class="btn small ghost" data-act="reset-palette">Reset to preset</button></div>
       <p class="hint">These are the swatches in every color field, and the colors the generator may use. Colors picked from a swatch stay bound to it: change a color here and every block using it follows.</p>
-    </div>`;
+    </details>`;
   }
   function pairChips() {
     const pairs = Brand.pairs(env.getKit()).slice(0, 12);
@@ -6276,6 +6413,24 @@ const CanvasUI = (() => {
       ${lookSection(frames)}
       ${variationsSection()}
       ${exportSection(frames.length)}`;
+  }
+  // Logo variants from the brand kit (wordmark, symbol, app icon, lockup...), as small previews.
+  function logoThumb(kit, id, fg) {
+    const v = Brand.logoVariant(kit, id); const asp = Brand.logoAspectOf(kit, v); const h = v.kind === 'appicon' ? 40 : Math.min(22, 112 / asp); const w = Math.round(h * asp);
+    return Render.toSVG({ id: 'lt-' + id, format: { w: 128, h: 52 }, palette: { bg: '#000' }, blocks: [{ id: 'l', kind: 'logo', variant: id, x: Math.round((128 - w) / 2), y: Math.round((52 - h) / 2), w, h, fill: v.kind === 'appicon' ? (v.fg || '#FFFFFF') : fg }] }, { kit, assets: { images: [] }, transparent: true, width: 128 });
+  }
+  function logoSection(f, b) {
+    const kit = env.getKit(); const list = Brand.logosOf(kit); const cur = b.variant || 'wordmark'; const v = Brand.logoVariant(kit, cur);
+    return `<div class="cv-section"><h3>Logo</h3><div class="logo-variants">${list.map(x => `<button type="button" class="logo-tile${cur === x.id ? ' on' : ''}" data-logo-variant="${esc(x.id)}" title="${esc(x.name)}">${logoThumb(kit, x.id, '#ECEBF0')}<span>${esc(x.name)}</span></button>`).join('')}</div>
+      ${v.kind === 'lockup' ? `<label class="cv-f"><span>Product</span><input type="text" data-p="product" value="${esc(b.product || v.product || '')}"></label>` : ''}
+      ${v.kind === 'appicon' ? color('bg', 'Tile', b.bg || v.bg || '#5938B8') : ''}
+      <p class="hint">Logo colors allowed by the kit: ${(kit.logo.allowedColors || []).map(c => `<span class="cv-token" style="border-color:${esc(c)}">${esc(c)}</span>`).join(' ')}. Upload official files per variant in the Brand kit panel.</p></div>`;
+  }
+  function setLogoVariant(f, b, id) {
+    const kit = env.getKit(); const v = Brand.logoVariant(kit, id); const was = Brand.logoVariant(kit, b.variant || 'wordmark');
+    if (id === 'wordmark') delete b.variant; else b.variant = id;
+    if (v.kind === 'appicon') { b.fill = v.fg || '#FFFFFF'; b.w = b.h = Math.max(b.h, 32); }
+    else { if (was.kind === 'appicon') { b.fill = Brand.logoColorFor(kit, f.layout.palette.bg)[0]; b.h = Math.max(16, Math.round(b.h * 0.5)); } b.w = Math.max(8, Math.round(b.h * Brand.logoAspectOf(kit, { ...v, product: b.product || v.product }))); }
   }
   // Auto layout for a box (or the screen when box is null), laid out like Figma's panel.
   function autoSection(f, box) {
@@ -6401,7 +6556,9 @@ const CanvasUI = (() => {
       ${btn('fit-text', 'Fit size to box')}
     </div>` : ''}
     ${b.kind === 'image' ? `<div class="cv-section"><h3>Image</h3>${selectF('focal', 'Crop focus', b.focal || 'xMidYMid', [['xMinYMin', 'Top left'], ['xMidYMin', 'Top'], ['xMaxYMin', 'Top right'], ['xMinYMid', 'Left'], ['xMidYMid', 'Center'], ['xMaxYMid', 'Right'], ['xMinYMax', 'Bottom left'], ['xMidYMax', 'Bottom'], ['xMaxYMax', 'Bottom right']])}${selectF('fit', 'Fit', b.fit || 'cover', [['cover', 'Fill (crop)'], ['contain', 'Fit (letterbox)']])}<label class="btn small file">Replace image<input type="file" accept="image/*" data-file="image" hidden></label>${selectF('asset', 'Asset', b.asset || '', env.getAssets().images.map(a => [a.id, a.name]).concat([['', 'None']]))}</div>` : ''}
+    ${b.kind === 'image' && env.traceImage ? `<div class="cv-section"><h3>Rebuild as layers</h3><p class="hint">Claude reads this image (an app screen, a slide, a mockup) and rebuilds it next to it as editable text, shapes and image crops.</p><div class="cv-row">${btn('trace', '✦ Rebuild as layers')}</div></div>` : ''}
     ${b.kind === 'image' ? genSection(f, b) : ''}
+    ${b.kind === 'logo' ? logoSection(f, b) : ''}
     ${b.kind === 'icon' ? `<div class="cv-section"><h3>Icon</h3>${selectF('name', 'Icon', b.name, Icons.names.map(n => [n, n]))}</div>` : ''}
     ${b.kind === 'shape' ? `<div class="cv-section"><h3>Shape</h3>${selectF('shape', 'Shape', b.shape, [['circle', 'Circle'], ['ellipse', 'Ellipse'], ['pill', 'Pill'], ['quarter', 'Quarter circle']])}</div>` : ''}
     ${b.kind === 'box' ? autoSection(f, b) : ''}
@@ -6438,6 +6595,7 @@ const CanvasUI = (() => {
     else if (k === 'radius' || k === 'alpha') b[k] = +v;
     else if (k === 'asset') b.asset = v || null;
     else if (k === 'sizeW' || k === 'sizeH') b[k] = v;
+    else if (k === 'product') { b.product = String(v).slice(0, 40); const kit = env.getKit(); const lv = Brand.logoVariant(kit, b.variant); b.w = Math.max(8, Math.round(b.h * Brand.logoAspectOf(kit, { ...lv, product: b.product }))); }
     else if (k === 'absolute') { if (v) b.absolute = true; else delete b.absolute; delete b.rx; delete b.ry; delete b.lx; delete b.ly; }
     else if (k === 'minW' || k === 'maxW' || k === 'minH' || k === 'maxH') { if (v === '' || v == null) delete b[k]; else b[k] = Math.max(0, +v); }
     else if (k === 'clip') b.clip = !!v;
@@ -6548,13 +6706,15 @@ const CanvasUI = (() => {
       const palRm = e.target.closest('[data-pal="rm"]'); if (palRm) { const colors = env.getKit().colors.filter((_, i) => i !== +palRm.dataset.i); env.updateColors(colors); followTokens(); renderProps(); return; }
       const al = e.target.closest('[data-align]'); if (al && f) { hist.push(doc); Canvas.align(f, bs.length ? bs : [], al.dataset.align); rerenderFrame(f); drawOverlay(); liveProps(); persist(); updateUndo(); return; }
       const add = e.target.closest('[data-add]'); if (add && f) { hist.push(doc); const b = add.dataset.add === 'stack' ? { id: Canvas.uid(), kind: 'box', x: f.layout.grid.mx, y: f.layout.grid.my, w: 480, h: 240, fill: 'none', radius: 0, clip: false, decorative: true, hidden: false, locked: false, sizeW: 'fixed', sizeH: 'hug', auto: { v: 2, mode: 'vertical', wrap: false, gap: 16, gapAuto: false, counterGap: 16, counterGapAuto: false, pad: { t: 24, r: 24, b: 24, l: 24 }, main: 'start', cross: 'start' } } : Canvas.newBlock(add.dataset.add, f, env.getKit(), null); if (b) { f.layout.blocks.push(b); const sb = selBlocks(); const host = sb.length === 1 && sb[0].kind === 'box' ? sb[0] : null; if (host) { b.parent = host.id; if (Auto.on(Auto.settingsOf(f, host))) { Auto.moveInList(f, b, host.id, null); if ((b.kind === 'text' || b.kind === 'list') && Auto.settingsOf(f, host).mode === 'vertical') b.sizeW = 'fill'; } } else if (Auto.on(Auto.settingsOf(f, null))) Auto.moveInList(f, b, '', null); select(f.id, [b.id]); rerenderFrame(f); persist(); updateUndo(); if (b.kind === 'image') { const inp = $('cvProps').querySelector('[data-file="image"]'); if (inp) inp.click(); } } return; }
+      const lv = e.target.closest('[data-logo-variant]'); if (lv && bs[0] && bs[0].kind === 'logo') { hist.push(doc); setLogoVariant(f, bs[0], lv.dataset.logoVariant); rerenderFrame(f); renderProps(); drawOverlay(); persist(); updateUndo(); return; }
       const dirB = e.target.closest('[data-al-dir]'); const cell = e.target.closest('[data-al-cell]');
       if (dirB || cell) { const tg = autoTarget(); if (!tg) return; hist.push(doc); setAuto(tg.f, tg.box, dirB ? 'dir' : 'cell', dirB ? dirB.dataset.alDir : cell.dataset.alCell); rerenderFrame(tg.f); renderProps(); drawOverlay(); persist(); updateUndo(); return; }
       const act = e.target.closest('[data-act]'); if (!act) return;
       const a = act.dataset.act;
       if (a === 'al-add') { addAutoLayout(); return; } if (a === 'al-remove') { removeAutoLayout(); return; }
       if (a === 'frame-sel') { frameSelection(); return; } if (a === 'unwrap') { unwrapSelection(); return; }
-      if (a === 'edit-palette') { select(null, []); const sec = el.querySelector('[data-palette]'); if (sec) sec.scrollIntoView({ block: 'start', behavior: 'smooth' }); return; }
+      if (a === 'trace' && f && bs[0] && env.traceImage) { act.disabled = true; act.textContent = 'Reading the image…'; try { await env.traceImage(f, bs[0]); } catch (err) { env.toast(err.message || String(err)); } finally { act.disabled = false; act.textContent = '✦ Rebuild as layers'; } return; }
+      if (a === 'edit-palette') { select(null, []); const sec = el.querySelector('[data-palette]'); if (sec) { sec.open = true; sec.scrollIntoView({ block: 'start', behavior: 'smooth' }); } return; }
       if (a === 'add-color') { const colors = env.getKit().colors.map(c => ({ ...c })); colors.push({ name: 'Color ' + (colors.length + 1), hex: '#888888', role: 'accent' }); env.updateColors(colors); renderProps(); const rows = el.querySelectorAll('.cv-pal-row'); const last = rows.length ? rows[rows.length - 1].querySelector('input[type="text"]') : null; if (last) { last.focus(); last.select(); } return; }
       if (a === 'reset-palette') { if (env.resetColors()) { followTokens(); renderProps(); env.toast('Palette reset to the preset'); } else env.toast('This kit has no preset to reset to'); return; }
       if (a === 'new-frame') { createFrame({ center: true }); return; }
@@ -6617,7 +6777,7 @@ const CanvasUI = (() => {
   return {
     init, open, close, addLayouts, count, fit, fitTo: ids => fitTo(ids.map(id => Canvas.frameById(doc, id)).filter(Boolean)),
     get doc() { return doc; }, get active() { return active; },
-    select, selectFrames, selection, setTool, createFrame, placeRow, placeFrames, insertBlocks, mutate, remoteApplied, replaceDoc, renderAll, rerender: ids => ids.forEach(id => { const f = Canvas.frameById(doc, id); if (f) rerenderFrame(f); }),
+    select, selectFrames, selection, setTool, createFrame, placeRow, placeFrames, insertBlocks, insertComponent, screenFromImage, mutate, remoteApplied, replaceDoc, renderAll, rerender: ids => ids.forEach(id => { const f = Canvas.frameById(doc, id); if (f) rerenderFrame(f); }),
     centerOn: (x, y) => { const r = stage().getBoundingClientRect(); doc.view.x = r.width / 2 - x * doc.view.zoom; doc.view.y = r.height / 2 - y * doc.view.zoom; applyView(); },
     regrid, exportAction, makeVariations, resizeScreens, copySelection, pasteClipboard, startEdit: (fid, bid) => { const f = Canvas.frameById(doc, fid); return startEdit(f, f && Canvas.blockById(f, bid)); },
     on: (k, fn) => { hooks[k].push(fn); return () => { hooks[k] = hooks[k].filter(x => x !== fn); }; },
@@ -6625,6 +6785,216 @@ const CanvasUI = (() => {
     setUndoMerge: fn => { undoMerge = fn; },
     _history: () => hist,
   };
+})();
+
+/* js/library.js */
+/* Library: approved pieces to drop on a screen. Built-ins are generated from the brand kit (so they follow its colors,
+   fonts and logos): logo variants, buttons, tags, cards, payment cards, device frames and starter illustrations.
+   Team items live in the canvas document (doc.library), so everyone in a live room sees the same set; they are saved
+   from a selection, or added from SVG/PNG files, and can be marked approved. Items are block lists with positions
+   from 0,0; inserting gives them fresh ids and drops them into the screen or box you pick. */
+const Library = (() => {
+  const CATEGORIES = [['all', 'All'], ['logos', 'Logos'], ['components', 'Components'], ['cards', 'Cards'], ['devices', 'Devices'], ['illustrations', 'Illustrations'], ['saved', 'Team']];
+  const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  let env = null; let cat = 'all'; let query = ''; let el = null; let naming = false;
+
+  // ---- Building blocks ------------------------------------------------------------------------------------------------
+  let seq = 0; const id = p => `${p}${++seq}`;
+  const stackS = (mode, gap, pad, more = {}) => ({ v: 2, mode, wrap: false, gap, gapAuto: false, counterGap: gap, counterGapAuto: false, pad: typeof pad === 'number' ? { t: pad, r: pad, b: pad, l: pad } : pad, main: 'start', cross: 'start', ...more });
+  const box = (props = {}) => ({ id: id('bx'), kind: 'box', x: 0, y: 0, w: 100, h: 100, fill: 'none', radius: 0, clip: false, decorative: true, ...props });
+  function palette(kit) {
+    const C = kit.colors.map(c => ({ ...c, hex: Color.normalize(c.hex) }));
+    const byName = n => (C.find(c => String(c.name).toLowerCase() === n) || {}).hex;
+    const core = C.find(c => c.role === 'core') || C[0] || { hex: '#5938B8' };
+    const darks = C.filter(c => Color.isDark(c.hex)).sort((a, b) => Color.luminance(a.hex) - Color.luminance(b.hex));
+    const lights = C.filter(c => !Color.isDark(c.hex) && c.role === 'background').sort((a, b) => Color.luminance(a.hex) - Color.luminance(b.hex));
+    const accents = C.filter(c => c.role === 'accent');
+    return {
+      core: core.hex, deep: byName('deelberry') || (darks.find(c => c.hex !== '#000000') || darks[0] || { hex: '#191A25' }).hex, ink: (darks[0] || { hex: '#111111' }).hex,
+      light: byName('latte') || (lights[0] || { hex: '#F6F4EE' }).hex, white: '#FFFFFF', soft: byName('smoothie') || (accents.find(c => !Color.isDark(c.hex)) || { hex: '#E4DDFB' }).hex,
+      hot: byName('tangelo') || (accents.find(c => Color.isDark(c.hex) || Color.luminance(c.hex) < 0.5) || { hex: '#ED5E2C' }).hex, sun: byName('cornbread') || (accents.find(c => Color.luminance(c.hex) > 0.5) || { hex: '#FFCF26' }).hex,
+      muted: '#6B6B78',
+    };
+  }
+  function makers(kit) {
+    const P = palette(kit); const D = Brand.fontCss(kit.fonts.display), B = Brand.fontCss(kit.fonts.body); const dW = kit.fonts.displayWeight || 600;
+    const mono = Brand.FONTS['IBM Plex Mono'] ? Brand.fontCss('IBM Plex Mono') : '"IBM Plex Mono", ui-monospace, monospace';
+    const text = (t, size, weight, fill, more = {}) => ({ id: id('t'), kind: 'text', role: more.role || 'text', path: 'text_' + id('p'), text: t, x: 0, y: 0, w: 320, h: size * 1.3, font: { family: more.display ? D : more.mono ? mono : B, weight, size, lineHeight: more.lh || 1.2, letterSpacing: more.ls || 0, ...(more.upper ? { transform: 'upper' } : {}) }, fill, align: more.align || 'left', decorative: false, sizeW: more.sizeW || 'hug', sizeH: 'hug', ...(more.opacity ? { opacity: more.opacity } : {}), ...(more.label ? { label: more.label } : {}) });
+    const logo = (variant, h, fill, more = {}) => { const v = Brand.logoVariant(kit, variant); return { id: id('lg'), kind: 'logo', ...(variant !== 'wordmark' ? { variant } : {}), x: 0, y: 0, h, w: Math.round(h * Brand.logoAspectOf(kit, v)), fill, decorative: true, ...more }; };
+    const circle = (d, fill, more = {}) => ({ id: id('c'), kind: 'shape', shape: 'circle', x: 0, y: 0, w: d, h: d, fill, decorative: true, ...more });
+    const img = (w, h, more = {}) => ({ id: id('im'), kind: 'image', x: 0, y: 0, w, h, asset: null, focal: 'xMidYMid', radius: 0, decorative: false, path: 'image_' + id('p'), placeholder: '#D6D3E4', ...more });
+    const tree = (parent, ...kids) => { const out = [parent]; for (const k of kids) { const list = Array.isArray(k) ? k : [k]; list[0].parent = parent.id; out.push(...list); } return out; };
+    const contactless = (fill) => ({ id: id('v'), kind: 'vector', x: 0, y: 0, w: 26, h: 26, viewBox: [0, 0, 24, 24], svg: `<g fill="none" stroke="${fill}" stroke-width="2" stroke-linecap="round"><path d="M8.5 8.5a5 5 0 0 1 0 7"/><path d="M12 6a8.5 8.5 0 0 1 0 12"/><path d="M15.5 3.5a12 12 0 0 1 0 17"/></g>`, fill, decorative: true, label: 'contactless' });
+    const card = (name, bg, grad, ink, logoFill) => {
+      const root = box({ label: name, w: 428, h: 270, radius: 22, clip: true, fill: bg, ...(grad ? { gradient: grad } : {}), auto: stackS('vertical', 0, 28, { gapAuto: true }), sizeW: 'fixed', sizeH: 'fixed', shadow: { on: true, x: 0, y: 18, blur: 40, color: '#191A25', alpha: 0.25 } });
+      const top = box({ label: 'top', auto: stackS('horizontal', 0, 0, { gapAuto: true, cross: 'center' }), sizeW: 'fill', sizeH: 'hug' });
+      const chip = { id: id('f'), kind: 'field', x: 0, y: 0, w: 52, h: 40, radius: 8, fill: '#E3C27A', gradient: { type: 'linear', angle: 135, stops: [{ c: '#F3D99A', p: 0 }, { c: '#B8893A', p: 1 }] }, decorative: true, label: 'chip' };
+      const num = text('••••  ••••  ••••  4821', 24, 500, ink, { mono: true, ls: 0.06, label: 'card number' });
+      const bottom = box({ label: 'bottom', auto: stackS('horizontal', 0, 0, { gapAuto: true, cross: 'end' }), sizeW: 'fill', sizeH: 'hug' });
+      const holder = box({ label: 'holder', auto: stackS('vertical', 2, 0), sizeW: 'hug', sizeH: 'hug' });
+      const valid = box({ label: 'valid', auto: stackS('vertical', 2, 0), sizeW: 'hug', sizeH: 'hug' });
+      const net = box({ label: 'network', auto: stackS('horizontal', -14, 0, { cross: 'center' }), sizeW: 'hug', sizeH: 'hug' });
+      return tree(root,
+        tree(top, logo('wordmark', 26, logoFill), contactless(ink)),
+        chip, num,
+        tree(bottom, tree(holder, text('CARDHOLDER', 11, 600, ink, { ls: 0.12, opacity: 0.7 }), text('Alex Morgan', 18, 600, ink)), tree(valid, text('VALID THRU', 11, 600, ink, { ls: 0.12, opacity: 0.7 }), text('09/29', 18, 600, ink)), tree(net, circle(34, P.hot, { opacity: 0.95 }), circle(34, P.sun, { opacity: 0.9 }))));
+    };
+    const phone = (name, w, h, r, island) => {
+      const root = box({ label: name, w, h, radius: r, fill: '#0E0E12', clip: true, auto: stackS('vertical', 0, 11), sizeW: 'fixed', sizeH: 'fixed' });
+      const screen = box({ label: 'screen', radius: r - 11, fill: P.white, clip: true, auto: stackS('vertical', 0, 0), sizeW: 'fill', sizeH: 'fill' });
+      const bar = box({ label: 'status bar', auto: stackS('horizontal', 0, { t: 16, r: 30, b: 10, l: 34 }, { gapAuto: true, cross: 'center' }), sizeW: 'fill', sizeH: 'hug' });
+      const icons = { id: id('v'), kind: 'vector', x: 0, y: 0, w: 66, h: 13, viewBox: [0, 0, 66, 13], svg: `<g fill="#111"><rect x="0" y="8" width="3" height="5" rx="1"/><rect x="5" y="6" width="3" height="7" rx="1"/><rect x="10" y="3" width="3" height="10" rx="1"/><rect x="15" y="0" width="3" height="13" rx="1"/><path d="M27 4.5a10 10 0 0 1 13 0l-1.6 1.7a7.6 7.6 0 0 0-9.8 0zM30 7.6a5.6 5.6 0 0 1 7 0L33.5 11z"/><rect x="44" y="1" width="19" height="11" rx="3" fill="none" stroke="#111" stroke-width="1.2"/><rect x="46" y="3" width="13" height="7" rx="1.5"/><rect x="64" y="4.5" width="1.6" height="4" rx=".8"/></g>`, fill: '#111111', decorative: true, label: 'status icons' };
+      const content = img(w - 22, h - 80, { label: 'app screen', sizeW: 'fill', sizeH: 'fill', placeholder: '#EDEBF3' });
+      const kids = [tree(bar, text('9:41', 15, 600, '#111111'), icons), content];
+      const out = tree(root, tree(screen, ...kids));
+      if (island) { const isl = box({ label: 'island', fill: '#0E0E12', radius: 18, w: 120, h: 34, x: Math.round((w - 22 - 120) / 2), y: 11, absolute: true, parent: screen.id }); out.push(isl); }
+      return out;
+    };
+    const items = [];
+    const add = (category, key, name, build, more = {}) => items.push({ id: 'b:' + key, builtin: true, approved: true, category, name, build, ...more });
+    for (const v of Brand.logosOf(kit)) add('logos', 'logo-' + v.id, v.name || v.id, () => [logo(v.id, v.kind === 'appicon' ? 96 : 56, v.kind === 'appicon' ? (v.fg || '#FFFFFF') : P.core)]);
+    add('components', 'btn-primary', 'Button', () => tree(box({ label: 'Button', radius: 999, fill: P.core, auto: stackS('horizontal', 8, { t: 16, r: 30, b: 16, l: 30 }, { main: 'center', cross: 'center' }), sizeW: 'hug', sizeH: 'hug' }), text('Book a demo', 20, 600, P.white)));
+    add('components', 'btn-secondary', 'Button · outline', () => tree(box({ label: 'Button', radius: 999, stroke: { color: P.core, width: 2 }, auto: stackS('horizontal', 8, { t: 14, r: 28, b: 14, l: 28 }, { main: 'center', cross: 'center' }), sizeW: 'hug', sizeH: 'hug' }), text('Learn more', 20, 600, P.core)));
+    add('components', 'tag', 'Tag', () => tree(box({ label: 'Tag', radius: 999, fill: P.soft, auto: stackS('horizontal', 6, { t: 7, r: 14, b: 7, l: 14 }, { cross: 'center' }), sizeW: 'hug', sizeH: 'hug' }), text('New', 14, 600, P.deep, { upper: true, ls: 0.08 })));
+    add('components', 'stat', 'Stat', () => tree(box({ label: 'Stat', auto: stackS('vertical', 4, 0), sizeW: 'hug', sizeH: 'hug' }), text('150+', 96, dW, P.core, { display: true, lh: 1, ls: -0.03, role: 'stat' }), text('countries', 22, 500, P.ink)));
+    add('components', 'quote', 'Quote card', () => { const root = box({ label: 'Quote card', w: 560, radius: 24, fill: P.light, auto: stackS('vertical', 28, 40), sizeW: 'fixed', sizeH: 'hug' }); const who = box({ label: 'person', auto: stackS('horizontal', 16, 0, { cross: 'center' }), sizeW: 'hug', sizeH: 'hug' }); const names = box({ label: 'names', auto: stackS('vertical', 2, 0), sizeW: 'hug', sizeH: 'hug' }); return tree(root, text('“We hired in nine countries in a quarter, without opening a single entity.”', 30, dW, P.ink, { display: true, lh: 1.2, sizeW: 'fill', role: 'quote' }), tree(who, img(56, 56, { radius: 28, label: 'avatar' }), tree(names, text('Jordan Reyes', 19, 600, P.ink), text('VP People, Northwind', 16, 400, P.muted)))); });
+    add('components', 'feature', 'Feature card', () => tree(box({ label: 'Feature card', w: 360, radius: 20, fill: P.white, stroke: { color: '#E6E3EE', width: 1 }, auto: stackS('vertical', 14, 32), sizeW: 'fixed', sizeH: 'hug' }), { id: id('ic'), kind: 'icon', name: 'sparkle', x: 0, y: 0, w: 40, h: 40, fill: P.core, decorative: true }, text('Payroll in minutes', 26, 600, P.ink, { sizeW: 'fill' }), text('Run every country from one place, with local compliance built in.', 18, 400, P.muted, { sizeW: 'fill', lh: 1.45 })));
+    add('components', 'person', 'Person', () => { const root = box({ label: 'Person', auto: stackS('horizontal', 16, 0, { cross: 'center' }), sizeW: 'hug', sizeH: 'hug' }); const names = box({ label: 'names', auto: stackS('vertical', 2, 0), sizeW: 'hug', sizeH: 'hug' }); return tree(root, img(64, 64, { radius: 32, label: 'avatar' }), tree(names, text('Priya Natarajan', 20, 600, P.ink), text('Head of Finance', 16, 400, P.muted))); });
+    add('cards', 'card-core', 'Deel Card · core', () => card('Deel Card', P.core, { type: 'linear', angle: 135, stops: [{ c: P.core, p: 0 }, { c: P.deep, p: 1 }] }, P.white, P.white));
+    add('cards', 'card-black', 'Deel Card · black', () => card('Deel Card', '#111111', { type: 'linear', angle: 135, stops: [{ c: '#2B2B33', p: 0 }, { c: '#050507', p: 1 }] }, P.white, P.white));
+    add('cards', 'card-virtual', 'Virtual card', () => card('Virtual card', P.light, null, P.deep, P.core));
+    add('devices', 'iphone', 'Phone · iOS', () => phone('Phone · iOS', 390, 844, 56, true));
+    add('devices', 'android', 'Phone · Android', () => phone('Phone · Android', 412, 915, 40, false));
+    add('devices', 'browser', 'Browser window', () => { const root = box({ label: 'Browser', w: 1280, h: 800, radius: 12, fill: P.white, stroke: { color: '#D9D7E2', width: 1 }, clip: true, auto: stackS('vertical', 0, 0), sizeW: 'fixed', sizeH: 'fixed', shadow: { on: true, x: 0, y: 20, blur: 50, color: '#191A25', alpha: 0.18 } }); const bar = box({ label: 'toolbar', fill: '#F1F0F5', auto: stackS('horizontal', 8, { t: 12, r: 16, b: 12, l: 16 }, { cross: 'center' }), sizeW: 'fill', sizeH: 'hug' }); const url = box({ label: 'address', fill: P.white, radius: 8, auto: stackS('horizontal', 0, { t: 6, r: 12, b: 6, l: 12 }, { cross: 'center' }), sizeW: 'fill', sizeH: 'hug' }); return tree(root, tree(bar, circle(12, '#FF5F57'), circle(12, '#FEBC2E'), circle(12, '#28C840'), tree(url, text('deel.com', 13, 500, P.muted))), img(1280, 740, { label: 'page', sizeW: 'fill', sizeH: 'fill', placeholder: '#EDEBF3' })); });
+    add('illustrations', 'orbit', 'Orbit (starter)', () => { const root = box({ label: 'Orbit', w: 420, h: 420 }); const big = circle(300, P.core, { x: 60, y: 60 }), small = circle(110, P.hot, { x: 290, y: 40 }), dot = circle(56, P.sun, { x: 40, y: 300 }); const ring = { id: id('v'), kind: 'vector', x: 0, y: 150, w: 420, h: 140, viewBox: [0, 0, 420, 140], svg: `<ellipse cx="210" cy="70" rx="200" ry="56" fill="none" stroke="${P.soft}" stroke-width="10"/>`, fill: P.soft, decorative: true, label: 'ring' }; return tree(root, big, ring, small, dot); }, { starter: true });
+    add('illustrations', 'blocks', 'Color blocks (starter)', () => { const root = box({ label: 'Color blocks', w: 420, h: 300 }); const f = (x, y, w, h, fill, r) => ({ id: id('f'), kind: 'field', x, y, w, h, fill, radius: r, decorative: true }); return tree(root, f(0, 0, 260, 300, P.core, 0), f(260, 0, 160, 150, P.sun, 0), { id: id('q'), kind: 'shape', shape: 'quarter', x: 260, y: 150, w: 160, h: 150, fill: P.hot, decorative: true }, circle(120, P.soft, { x: 70, y: 90 })); }, { starter: true });
+    return items;
+  }
+
+  // ---- Items ------------------------------------------------------------------------------------------------------------
+  const cache = { sig: '', items: [], thumbs: new Map() };
+  const kitSig = kit => JSON.stringify([kit.colors, kit.fonts, (kit.logos || []).map(v => [v.id, v.kind, v.text, v.product, v.bg, v.svg ? v.svg.viewBox : 0]), kit.logo && kit.logo.text, kit.logo && kit.logo.kind, kit.logo && kit.logo.svg ? kit.logo.svg.viewBox : 0]);
+  // Lay out a block list on a scratch screen and move it to 0,0; returns {blocks, w, h}.
+  function settle(blocks) {
+    const f = { id: 'lib', autoLayout: Canvas.defaultAuto(), layout: { format: { w: 4000, h: 4000 }, palette: { bg: '#FFFFFF' }, grid: { unit: 8 }, blocks: Canvas.clone(blocks) } };
+    f.autoLayout.mode = 'none';
+    for (const b of f.layout.blocks) if (b.kind === 'text' || b.kind === 'list') Canvas.refit(b);
+    Auto.layout(f);
+    const I = Auto.index(f); const tops = Auto.childrenOf(I, '');
+    const bb = Canvas.bounds(tops.length ? tops : f.layout.blocks);
+    for (const b of f.layout.blocks) { b.x = Math.round((b.x - bb.x) * 100) / 100; b.y = Math.round((b.y - bb.y) * 100) / 100; delete b.lx; delete b.ly; }
+    return { blocks: f.layout.blocks, w: Math.max(1, Math.ceil(bb.w)), h: Math.max(1, Math.ceil(bb.h)) };
+  }
+  function builtins(kit) {
+    const sig = kitSig(kit);
+    if (cache.sig !== sig) { cache.sig = sig; cache.thumbs.clear(); cache.items = makers(kit).map(it => { const s = settle(it.build()); return { ...it, blocks: s.blocks, w: s.w, h: s.h }; }); }
+    return cache.items;
+  }
+  function all(doc, kit) { return [...builtins(kit), ...((doc && doc.library) || []).map(it => ({ ...it, category: it.category || 'saved', team: true }))]; }
+  function thumb(item, kit) {
+    const key = item.id + ':' + (item.v || 0) + ':' + cache.sig;
+    if (cache.thumbs.has(key)) return cache.thumbs.get(key);
+    const pad = Math.max(item.w, item.h) * 0.08; const W = item.w + pad * 2, H = item.h + pad * 2;
+    const blocks = Canvas.clone(item.blocks).map(b => ({ ...b, x: b.x + pad, y: b.y + pad }));
+    const svg = Render.toSVG({ id: 'th-' + String(item.id).replace(/[^\w-]/g, ''), format: { w: W, h: H }, palette: { bg: '#000' }, blocks }, { kit, assets: env ? env.getAssets() : { images: [] }, transparent: true, width: 120 });
+    cache.thumbs.set(key, svg); return svg;
+  }
+  // Selected blocks (with what is inside boxes) -> a library item.
+  function fromSelection(frame, blocks, name, category) {
+    const tops = Auto.topmost(frame, blocks); const list = Canvas.clone(Auto.withDescendants(frame, tops)); const topIds = new Set(tops.map(b => b.id));
+    for (const b of list) if (topIds.has(b.id)) { delete b.parent; delete b.rx; delete b.ry; delete b.absolute; if (b.sizeW === 'fill') b.sizeW = 'fixed'; if (b.sizeH === 'fill') b.sizeH = 'fixed'; }
+    const s = settle(list);
+    return { id: 'u' + Math.random().toString(36).slice(2, 10), name: String(name || 'Component').slice(0, 60), category: category || 'saved', approved: false, created: Date.now(), v: 1, w: s.w, h: s.h, blocks: s.blocks };
+  }
+
+  // ---- Panel ------------------------------------------------------------------------------------------------------------
+  function init(e) { env = e; }
+  function render(container, q) {
+    el = container || el; if (!el || !env) return; query = (q ?? query).toLowerCase();
+    const kit = env.getKit(); const doc = env.canvas.doc; const list = all(doc, kit);
+    const shown = list.filter(it => (cat === 'all' || it.category === cat || (cat === 'saved' && it.team)) && (!query || `${it.name} ${it.category}`.toLowerCase().includes(query)));
+    const sel = env.canvas.selection(); const canSave = sel.blockIds.length > 0;
+    el.innerHTML = `<div class="lib-cats">${CATEGORIES.map(([k, l]) => `<button type="button" class="${cat === k ? 'on' : ''}" data-cat="${k}">${l}</button>`).join('')}</div>
+      <div class="lib-grid">${shown.map(it => `<div class="lib-item" draggable="true" data-item="${esc(it.id)}" title="${esc(it.name)} · click to add, or drag onto a screen"><div class="lib-thumb">${thumb(it, kit)}</div><div class="lib-name">${esc(it.name)}${it.approved ? ' <span class="lib-ok" title="Approved">✓</span>' : ''}${it.starter ? ' <span class="lib-tag">starter</span>' : ''}</div>${it.team ? `<div class="lib-acts"><button type="button" data-approve="${esc(it.id)}" title="${it.approved ? 'Unmark as approved' : 'Mark as approved'}">${it.approved ? '✓ Approved' : 'Approve'}</button><button type="button" data-remove="${esc(it.id)}" title="Remove from the library">✕</button></div>` : ''}</div>`).join('') || '<p class="hint" style="padding:8px">Nothing here yet.</p>'}</div>
+      ${naming ? `<div class="lib-name-row"><input type="text" class="input grow" data-lib="name" placeholder="Name, e.g. Pricing card" maxlength="60"><button type="button" class="btn small primary" data-lib="save-ok">Save</button><button type="button" class="btn small ghost" data-lib="save-cancel">Cancel</button></div>` : ''}
+      <div class="lib-foot">
+        <button type="button" class="btn small" data-lib="save" ${canSave ? '' : 'disabled'} title="Select blocks on a screen first">＋ Save selection</button>
+        <label class="btn small file">＋ Add SVG or PNG<input type="file" data-lib="files" accept=".svg,image/svg+xml,image/png,image/jpeg,image/webp" multiple hidden></label>
+        <button type="button" class="btn small ghost" data-lib="export" title="Download the team library as JSON">Export</button>
+        <label class="btn small ghost file" title="Add items from a library JSON">Import<input type="file" data-lib="import" accept=".json,application/json" hidden></label>
+      </div>
+      <p class="hint lib-hint">Built-in pieces follow the brand kit. Team items are shared with everyone on this canvas.</p>`;
+  }
+  function find(itemId) { return all(env.canvas.doc, env.getKit()).find(x => x.id === itemId); }
+  function bind(container) {
+    el = container;
+    el.addEventListener('click', async e => {
+      const c = e.target.closest('[data-cat]'); if (c) { cat = c.dataset.cat; render(); return; }
+      const ap = e.target.closest('[data-approve]'); if (ap) { env.canvas.mutate(d => { const it = (d.library || []).find(x => x.id === ap.dataset.approve); if (it) { it.approved = !it.approved; it.v = (it.v || 0) + 1; } }); render(); return; }
+      const rm = e.target.closest('[data-remove]'); if (rm) { env.canvas.mutate(d => { d.library = (d.library || []).filter(x => x.id !== rm.dataset.remove); }); render(); env.toast('Removed from the library'); return; }
+      const act = e.target.closest('[data-lib]');
+      if (act && act.dataset.lib === 'save') { const sel = env.canvas.selection(); if (!sel.blockIds.length) { env.toast('Select blocks on a screen to save them'); return; } naming = true; render(); const inp = el.querySelector('[data-lib="name"]'); if (inp) { const f = Canvas.frameById(env.canvas.doc, sel.frameId); const b = f && Canvas.blockById(f, sel.blockIds[0]); inp.value = b ? (b.label || (b.kind === 'box' ? 'Component' : b.role || b.kind)) : 'Component'; inp.focus(); inp.select(); } return; }
+      if (act && act.dataset.lib === 'save-cancel') { naming = false; render(); return; }
+      if (act && act.dataset.lib === 'save-ok') { const inp = el.querySelector('[data-lib="name"]'); naming = false; saveSelection(inp ? inp.value : ''); return; }
+      if (act && act.dataset.lib === 'export') { exportLibrary(); return; }
+      const it = e.target.closest('[data-item]'); if (it && !act) { insert(it.dataset.item); }
+    });
+    el.addEventListener('keydown', e => { if (e.target.dataset.lib === 'name') { e.stopPropagation(); if (e.key === 'Enter') { naming = false; saveSelection(e.target.value); } else if (e.key === 'Escape') { naming = false; render(); } } });
+    el.addEventListener('change', async e => {
+      const t = e.target;
+      if (t.dataset.lib === 'files') { for (const f of t.files) await addFile(f); t.value = ''; render(); }
+      if (t.dataset.lib === 'import') { try { await importLibrary(JSON.parse(await t.files[0].text())); } catch (err) { env.toast('Could not import: ' + err.message); } t.value = ''; render(); }
+    });
+    el.addEventListener('dragstart', e => { const it = e.target.closest('[data-item]'); if (!it) return; e.dataTransfer.setData('application/x-lg-library', it.dataset.item); e.dataTransfer.effectAllowed = 'copy'; });
+  }
+  // Insert into the selected screen (or box), else the screen in view; at a point when dropped.
+  function insert(itemId, at) {
+    const it = find(itemId); if (!it) return;
+    const out = env.canvas.insertComponent(it.blocks, { at, name: it.name });
+    if (out) env.toast(`${it.name} added${it.approved ? '' : ' (not yet approved)'}`);
+  }
+  function saveSelection(name) {
+    const sel = env.canvas.selection(); const f = sel.frameId && Canvas.frameById(env.canvas.doc, sel.frameId);
+    if (!f || !sel.blockIds.length) { env.toast('Select blocks on a screen to save them'); render(); return; }
+    const blocks = sel.blockIds.map(i => Canvas.blockById(f, i)).filter(Boolean);
+    name = String(name || '').trim() || 'Component';
+    const category = /card/i.test(name) ? 'cards' : /illus|art|shape/i.test(name) ? 'illustrations' : /phone|device|browser/i.test(name) ? 'devices' : 'components';
+    const item = fromSelection(f, blocks, name, category); item.by = env.me ? env.me() : '';
+    env.canvas.mutate(d => { d.library = [...(d.library || []), item]; }, { history: true });
+    cat = 'saved'; render(); env.toast(`Saved “${item.name}” to the team library`);
+  }
+  async function addFile(file) {
+    const name = file.name.replace(/\.[^.]+$/, '').slice(0, 60);
+    let blocks, w, h;
+    if (/svg/.test(file.type) || /\.svg$/i.test(file.name)) {
+      const svg = Brand.parseSvg(await file.text()); if (!svg) { env.toast(`Could not read ${file.name}`); return; }
+      const vb = svg.viewBox.split(/\s+/).map(Number); w = Math.round(Math.min(600, vb[2] || 300)); h = Math.round(w / (svg.aspect || 1));
+      blocks = [{ id: 'v1', kind: 'vector', x: 0, y: 0, w, h, viewBox: vb, svg: svg.inner, keepAspect: true, fill: '#000000', decorative: true, label: name }];
+    } else {
+      const a = await env.addImage(file); w = Math.round(Math.min(600, a.w || 400)); h = Math.round(w * (a.h || 300) / (a.w || 400));
+      blocks = [{ id: 'i1', kind: 'image', x: 0, y: 0, w, h, asset: a.id, focal: 'xMidYMid', fit: 'contain', radius: 0, decorative: true, path: 'image_lib', label: name }];
+    }
+    const item = { id: 'u' + Math.random().toString(36).slice(2, 10), name, category: 'illustrations', approved: false, created: Date.now(), v: 1, w, h, blocks };
+    env.canvas.mutate(d => { d.library = [...(d.library || []), item]; });
+    cat = 'illustrations'; env.toast(`Added ${name} to Illustrations`);
+  }
+  async function exportLibrary() {
+    const doc = env.canvas.doc; const items = doc.library || []; if (!items.length) { env.toast('The team library is empty'); return; }
+    const assets = {}; const imgs = env.getAssets().images;
+    for (const it of items) for (const b of it.blocks) if (b.kind === 'image' && b.asset) { const a = imgs.find(x => x.id === b.asset); if (a && a.dataUrl) assets[b.asset] = { name: a.name, dataUrl: a.dataUrl }; }
+    const blob = new Blob([JSON.stringify({ lgLibrary: { v: 1, kit: env.getKit().name, items, assets } }, null, 1)], { type: 'application/json' });
+    if (await env.download(blob, `${String(env.getKit().name || 'brand').toLowerCase().replace(/[^a-z0-9]+/g, '-')}-library.json`)) env.toast(`Library exported: ${items.length} items`);
+  }
+  async function importLibrary(j) {
+    const L = j && j.lgLibrary; if (!L || !Array.isArray(L.items)) throw new Error('not a library file');
+    const remap = new Map();
+    for (const [oldId, a] of Object.entries(L.assets || {})) { if (a && typeof a.dataUrl === 'string' && /^data:image\//.test(a.dataUrl)) { const added = await env.addImageData(a.dataUrl, a.name || 'library image'); remap.set(oldId, added.id); } }
+    const have = new Set((env.canvas.doc.library || []).map(x => x.id)); let n = 0;
+    const items = L.items.filter(it => it && it.id && Array.isArray(it.blocks) && !have.has(it.id)).slice(0, 300).map(it => { n++; const c = Canvas.clone(it); for (const b of c.blocks) if (b.kind === 'image' && remap.has(b.asset)) b.asset = remap.get(b.asset); return c; });
+    env.canvas.mutate(d => { d.library = [...(d.library || []), ...items]; });
+    env.toast(n ? `Imported ${n} library item${n > 1 ? 's' : ''}` : 'Those items are already here');
+  }
+  return { init, bind, render, all, builtins, thumb, fromSelection, insert, CATEGORIES };
 })();
 
 /* js/sync.js */
@@ -6653,6 +7023,7 @@ const Sync = (() => {
   function toRecords(doc) {
     const out = new Map();
     out.set('meta', { name: doc.name || 'Untitled canvas' });
+    for (const it of doc.library || []) if (it && it.id) out.set('L~' + it.id, it);
     doc.frames.forEach((f, i) => {
       const { blocks, meta, ...layoutRest } = f.layout; const { original, ...metaRest } = meta || {};
       const fr = {}; for (const k of FRAME_KEYS) if (f[k] !== undefined) fr[k] = f[k];
@@ -6685,10 +7056,13 @@ const Sync = (() => {
   function docFrom(map, base) {
     const doc = { ...(base || Canvas.create()), frames: [] };
     const meta = map.get('meta'); if (meta && !meta._del && meta.name) doc.name = meta.name;
+    doc.library = libraryFrom(map);
     const fids = [...map.entries()].filter(([k, r]) => k.startsWith('f~') && !r._del).sort((a, b) => (a[1].z ?? 0) - (b[1].z ?? 0) || a[0].localeCompare(b[0])).map(([k]) => k.slice(2));
     for (const fid of fids) { const f = frameFrom(map, fid); if (f) doc.frames.push(f); }
     return doc;
   }
+  // Team library items, in the order they were made.
+  function libraryFrom(map) { return [...map.entries()].filter(([k, r]) => k.startsWith('L~') && !r._del).map(([, r]) => strip(r)).sort((a, b) => (a.created || 0) - (b.created || 0)); }
   // After the local doc was rebuilt from records, remember its canonical JSON so we never echo it back.
   function markSynced(doc, keys) { const cur = toRecords(doc); for (const k of keys) { if (cur.has(k)) synced.set(k, canon(cur.get(k))); else synced.delete(k); } }
 
@@ -6716,17 +7090,19 @@ const Sync = (() => {
   // ---- incoming ------------------------------------------------------------------------------------------------------
   const newer = (a, b) => !b || a._v > b._v || (a._v === b._v && String(a._by) > String(b._by));
   function applyRemote(list, opts = {}) {
-    const frames = new Set(); let structural = false, meta = false; const assets = [];
+    const frames = new Set(); let structural = false, meta = false, lib = false; const assets = [];
     for (const rec of list) {
       if (!rec || typeof rec._k !== 'string' || typeof rec._v !== 'number') continue;
-      const k = rec._k; if (!/^(meta|[fbo]~[A-Za-z0-9_.:-]+(~[A-Za-z0-9_.:-]+)?|a~[A-Za-z0-9_.-]+)$/.test(k)) continue;
+      const k = rec._k; if (!/^(meta|[fbo]~[A-Za-z0-9_.:-]+(~[A-Za-z0-9_.:-]+)?|a~[A-Za-z0-9_.-]+|L~[A-Za-z0-9_.:-]+)$/.test(k)) continue;
       if (!newer(rec, recs.get(k))) continue;
       recs.set(k, rec);
       if (k === 'meta') meta = true;
+      else if (k.startsWith('L~')) lib = true;
       else if (k.startsWith('a~')) assets.push(rec);
       else { const fid = k.split('~')[1]; frames.add(fid); if (k.startsWith('f~')) structural = true; }
     }
     for (const a of assets) ensureAsset(a);
+    if (lib) { applying = true; try { ui.doc.library = libraryFrom(recs); markSynced(ui.doc, [...recs.keys()].filter(k => k.startsWith('L~'))); if (env.onLibrary) env.onLibrary(); } finally { applying = false; } }
     if (!frames.size && !meta) return;
     applying = true;
     try {
@@ -6772,6 +7148,7 @@ const Sync = (() => {
   async function shareAssets(doc) {
     const assets = env.getAssets().images; const renames = new Map();
     const used = new Set(); for (const f of doc.frames) for (const b of f.layout.blocks) if (b.kind === 'image' && b.asset) used.add(b.asset);
+    for (const it of doc.library || []) for (const b of it.blocks || []) if (b.kind === 'image' && b.asset) used.add(b.asset);
     for (const id of used) {
       if (/^a_[0-9a-f]{16}$/.test(id)) { const r = recs.get('a~' + id); if (r) continue; }
       const a = assets.find(x => x.id === id); if (!a || !a.dataUrl) continue;
@@ -6788,7 +7165,7 @@ const Sync = (() => {
     if (!renames.size) return;
     // the shared id becomes an alias of the local image, so layouts elsewhere that use the local id keep working
     for (const [from, to] of renames) { const a = assets.find(x => x.id === from); if (a && !assets.some(x => x.id === to)) assets.push({ ...a, id: to }); }
-    ui.mutate(d => { for (const f of d.frames) for (const b of f.layout.blocks) if (b.kind === 'image' && renames.has(b.asset)) b.asset = renames.get(b.asset); }, { history: false });
+    ui.mutate(d => { for (const f of d.frames) for (const b of f.layout.blocks) if (b.kind === 'image' && renames.has(b.asset)) b.asset = renames.get(b.asset); for (const it of d.library || []) for (const b of it.blocks || []) if (b.kind === 'image' && renames.has(b.asset)) b.asset = renames.get(b.asset); }, { history: false });
   }
   const loadingAssets = new Set();
   async function ensureAsset(rec) {
@@ -6873,7 +7250,7 @@ const Sync = (() => {
     let metaChain = Promise.resolve();
     function sendRecs(list, live) {
       if (!status.readOnly && db) {
-        const fids = new Set(); for (const r of list) { if (r._k === 'meta') metaChain = metaChain.then(() => db.doc('canvas/meta').set({ rec: r })).catch(() => { }); else if (r._k.startsWith('a~')) db.doc(`assets/${r.id}`).set({ rec: r }).catch(() => { }); else fids.add(r._k.split('~')[1]); }
+        const fids = new Set(); for (const r of list) { if (r._k === 'meta') metaChain = metaChain.then(() => db.doc('canvas/meta').set({ rec: r })).catch(() => { }); else if (r._k.startsWith('a~')) db.doc(`assets/${r.id}`).set({ rec: r }).catch(() => { }); else if (r._k.startsWith('L~')) db.doc(`library/${r._k.slice(2)}`).set({ rec: r }).catch(() => { }); else fids.add(r._k.split('~')[1]); }
         for (const fid of fids) schedule(fid);
       }
       if (room) { for (const r of list) pendingLive.set(r._k, r); if (!liveTimer) liveTimer = setTimeout(flushLive, 120); }
@@ -6913,6 +7290,7 @@ const Sync = (() => {
         applyRemote(changed);
       }, e => console.warn('db frames', e && e.code));
       db.doc('canvas/meta').onSnapshot(s => { const d = s.data(); if (d && d.rec) applyRemote([d.rec]); }, () => { });
+      db.collection('library').onSnapshot(s => { const list = []; for (const d of s.docs) { const v = d.data(); if (v && v.rec) list.push(v.rec); } if (list.length) applyRemote(list); }, () => { });
       db.collection('assets').onSnapshot(s => { for (const d of s.docs) { const v = d.data(); if (v && v.rec) { if (newer(v.rec, recs.get(v.rec._k))) recs.set(v.rec._k, v.rec); ensureAsset(v.rec); } } }, () => { });
       if (user && user.can) user.can('data.write').then(v => { if (v === false) { status.readOnly = true; notify(); } }).catch(() => { });
     }
@@ -7194,7 +7572,7 @@ const Agent = (() => {
   const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const MODEL = 'claude-opus-5-5';
   const SDK = 'https://cdn.jsdelivr.net/npm/@anthropic-ai/sdk@0.128.0';
-  let env = null, sample = null, sampleTools = 0, busy = false, ctl = null, stopped = false;
+  let env = null, sample = null, sampleAny = null, sampleTools = 0, busy = false, ctl = null, stopped = false;
   const turns = [];     // text history for claude.ai sample calls
   const apiTurns = [];  // text history for API calls
   const SYSTEM = `You are the design agent inside Layout Engine, a canvas for brand layouts. The canvas holds screens (frames) made of blocks: text, body text, buttons, images, rectangles (field), shapes, vectors, icons and the logo. Block boxes are pixels from the frame's top left.
@@ -7252,6 +7630,7 @@ Change the canvas with the tools; the person sees each change live and can undo 
     (async () => {
       if (window.claude && typeof window.claude.use === 'function') {
         try { sample = await window.claude.use('sample'); } catch { sample = null; }
+        sampleAny = sample;
         if (sample) { try { const lim = await sample.limits(); sampleTools = lim && lim.tools ? lim.tools.maxCount : 0; if (!sampleTools) sample = null; } catch { sample = null; } }
       }
       renderFoot();
@@ -7353,7 +7732,115 @@ Change the canvas with the tools; the person sees each change live and can undo 
       box.querySelectorAll('.step.pending').forEach(s => s.remove());
     }
   }
-  return { init, show, hide, send, get busy() { return busy; }, _mode: mode };
+  // ---- Vision: one image and a prompt in, parsed JSON out (screenshots and slides rebuilt as layers) -------------------
+  const parseJSON = t => { const m = String(t || '').replace(/^```(?:json)?\s*|\s*```\s*$/g, '').match(/\{[\s\S]*\}/); if (!m) throw new Error('Claude did not return layers'); return JSON.parse(m[0]); };
+  const blobToB64 = blob => new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(String(fr.result).split(',')[1]); fr.onerror = rej; fr.readAsDataURL(blob); });
+  function canSee() { return !!sampleAny || !!apiKey().trim(); }
+  async function vision(prompt, blob, opts = {}) {
+    if (sampleAny) {
+      let lim = null; try { lim = await sampleAny.limits(); } catch { lim = null; }
+      if (lim && lim.images) {
+        try { return await sampleAny.json(prompt, { images: [blob], modelTier: 'complex', signal: opts.signal }); }
+        catch (e) { if (e && e.code === 'invalid_json' && e.text) return parseJSON(e.text); throw new Error(e && e.message ? e.message : 'Claude could not read the image'); }
+      }
+    }
+    if (!apiKey().trim()) throw new Error('Rebuilding needs Claude: open this page in claude.ai, or add an Anthropic API key in Settings.');
+    const { Anthropic } = await loadSdk();
+    const o = { apiKey: apiKey().trim(), dangerouslyAllowBrowser: true }; try { const base = JSON.parse(localStorage.getItem('lg.apiBase') || 'null'); if (base) o.baseURL = base; } catch { }
+    const client = new Anthropic(o);
+    const stream = client.beta.messages.stream({ model: MODEL, max_tokens: 16000, thinking: { type: 'adaptive' }, output_config: { effort: 'medium' }, betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default',
+      messages: [{ role: 'user', content: [{ type: 'image', source: { type: 'base64', media_type: blob.type || 'image/png', data: await blobToB64(blob) } }, { type: 'text', text: prompt }] }] }, { signal: opts.signal });
+    const msg = await stream.finalMessage();
+    if (msg.stop_reason === 'refusal') throw new Error('Claude declined to read this image');
+    return parseJSON(msg.content.filter(c => c.type === 'text').map(c => c.text).join(''));
+  }
+  return { init, show, hide, send, vision, canSee, get busy() { return busy; }, _mode: mode };
+})();
+
+/* js/trace.js */
+/* Rebuild an image as layers: an app screenshot (or a slide, a mockup) goes to Claude with a request for its layers
+   (rectangles, text with exact wording, buttons, icons, pictures) in the image's own coordinates. The answer becomes a
+   new screen next to the original: text and shapes are editable, and pictures are cropped from the image itself, so
+   photos and logos keep their real pixels. The source image rides along as a hidden reference layer. */
+const Trace = (() => {
+  const r2 = v => Math.round(Number(v) * 100) / 100;
+  const hex = (v, d) => { try { return Color.normalize(v); } catch { return d; } };
+  const clampN = (v, lo, hi, d) => { const n = Number(v); return Number.isFinite(n) ? Math.max(lo, Math.min(hi, n)) : d; };
+  async function loadImg(src) { const img = new Image(); img.crossOrigin = 'anonymous'; await new Promise((res, rej) => { img.onload = res; img.onerror = () => rej(new Error('image load')); img.src = src; }); return img; }
+  // The image at up to 1568 px on its long side (what vision reads best), as PNG or JPEG.
+  async function blobOf(img, maxSide = 1568) {
+    const s = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight)); const c = document.createElement('canvas');
+    c.width = Math.round(img.naturalWidth * s); c.height = Math.round(img.naturalHeight * s); c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    return await new Promise(res => c.toBlob(res, 'image/jpeg', 0.9));
+  }
+  function crop(img, sx, sy, sw, sh) {
+    const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(sw)); c.height = Math.max(1, Math.round(sh));
+    c.getContext('2d').drawImage(img, sx, sy, sw, sh, 0, 0, c.width, c.height); return c.toDataURL('image/png');
+  }
+  function prompt(W, H) {
+    return `This image is a user interface (an app screen, a web page, a slide or a mockup). Rebuild it as editable design layers for a ${W}×${H} canvas: use pixel coordinates on that canvas, origin at the top left, and measure carefully.
+Reply with JSON only, no prose: {"background":"#RRGGBB","layers":[ ... ]}, layers from back to front, at most 140.
+Layer kinds:
+- {"type":"rect","x":0,"y":0,"w":0,"h":0,"fill":"#RRGGBB","radius":0,"stroke":"#RRGGBB or null"} for panels, cards, bars, list rows, input fields, chips, dividers (h 1 or 2). Use "fill": null for outline-only shapes.
+- {"type":"text","x":0,"y":0,"w":0,"h":0,"text":"exact wording","size":16,"weight":400,"color":"#RRGGBB","align":"left|center|right"} one per block of lines that share a style; keep the wording exactly, line breaks as \\n; size is the font size in canvas pixels.
+- {"type":"button","x":0,"y":0,"w":0,"h":0,"text":"label","fill":"#RRGGBB","color":"#RRGGBB","radius":0,"size":16} for buttons with a text label.
+- {"type":"image","x":0,"y":0,"w":0,"h":0,"radius":0,"kind":"photo|avatar|illustration|logo|chart|map|status"} for anything pictorial; it is cropped from the image, so box it tightly. The phone status bar (time, signal, battery) is one image layer of kind "status".
+- {"type":"icon","x":0,"y":0,"w":0,"h":0,"name":"one of: ${Icons.names.join(', ')}","color":"#RRGGBB"} for small glyphs; pick the closest name.`;
+  }
+  // JSON layers -> blocks in a W x H frame. imgW/imgH: the source picture's pixel size, for crops.
+  async function build(json, W, H, kit, img, addImage) {
+    const blocks = []; const body = Brand.fontCss(kit.fonts.body), display = Brand.fontCss(kit.fonts.display);
+    const sx = img.naturalWidth / W, sy = img.naturalHeight / H; let crops = 0;
+    for (const L of (Array.isArray(json.layers) ? json.layers : []).slice(0, 160)) {
+      if (!L || typeof L !== 'object') continue;
+      const x = clampN(L.x, -W, W * 2, 0), y = clampN(L.y, -H, H * 2, 0), w = clampN(L.w, 1, W * 2, 10), h = clampN(L.h, 1, H * 2, 10);
+      const base = { id: Canvas.uid(), x: r2(x), y: r2(y), w: r2(w), h: r2(h) };
+      const t = String(L.type || '').toLowerCase();
+      if (t === 'rect') {
+        const fill = L.fill ? hex(L.fill, null) : null; const stroke = L.stroke ? hex(L.stroke, null) : null; if (!fill && !stroke) continue;
+        blocks.push({ ...base, kind: 'field', fill: fill || '#FFFFFF', ...(fill ? {} : { alpha: 0 }), radius: clampN(L.radius, 0, 999, 0), ...(stroke ? { stroke: { color: stroke, width: 1 } } : {}), decorative: true, label: 'rect' });
+      } else if (t === 'text') {
+        const size = clampN(L.size, 6, 400, 16), weight = Math.round(clampN(L.weight, 100, 900, 400) / 100) * 100;
+        const b = { ...base, kind: 'text', role: size >= 28 ? 'headline' : 'text', path: 'text_' + Canvas.uid(), text: String(L.text || '').slice(0, 2000), align: /center|right/.test(L.align) ? L.align : 'left', fill: hex(L.color, '#111111'), decorative: false,
+          font: { family: size >= 24 && weight >= 600 ? display : body, size: r2(size), weight, lineHeight: 1.25, letterSpacing: 0 } };
+        if (!b.text.trim()) continue;
+        Canvas.refit(b); if (b.overflow || (b.lines || []).length > Math.max(1, Math.round(h / (size * 1.25)) + 1)) { const longest = Math.max(...String(b.text).split('\n').map(l => Text.width(l, b.font))); if (longest > b.w && longest < W * 1.2) { if (b.align === 'center') b.x -= (longest - b.w) / 2; else if (b.align === 'right') b.x -= longest - b.w; b.w = Math.ceil(longest) + 2; Canvas.refit(b); } }
+        blocks.push(b);
+      } else if (t === 'button') {
+        const size = clampN(L.size, 8, 80, 16);
+        blocks.push({ ...base, kind: 'button', role: 'cta', path: 'cta_' + Canvas.uid(), text: String(L.text || 'Button').slice(0, 80), fill: hex(L.fill, '#5938B8'), color: hex(L.color, '#FFFFFF'), radius: clampN(L.radius, 0, 999, 8), font: { family: body, weight: 600, size, lineHeight: 1.2 }, decorative: false });
+      } else if (t === 'image') {
+        let asset = null;
+        try { const dataUrl = crop(img, x * sx, y * sy, w * sx, h * sy); asset = await addImage(dataUrl, `crop · ${L.kind || 'image'}`); crops++; } catch { asset = null; }
+        blocks.push({ ...base, kind: 'image', asset: asset ? asset.id : null, focal: 'xMidYMid', fit: 'cover', radius: clampN(L.radius, 0, 999, 0), decorative: L.kind === 'status', path: 'image_' + Canvas.uid(), placeholder: '#D6D3E4', label: L.kind || 'image' });
+      } else if (t === 'icon') {
+        const name = Icons.has(L.name) ? L.name : null; const s = Math.min(w, h);
+        if (name) blocks.push({ ...base, kind: 'icon', name, w: r2(s), h: r2(s), fill: hex(L.color, '#111111'), decorative: true });
+        else blocks.push({ ...base, kind: 'shape', shape: 'circle', w: r2(s), h: r2(s), fill: hex(L.color, '#111111'), decorative: true, label: 'icon' });
+      }
+    }
+    return { blocks, crops };
+  }
+  // Read the image block `b` in frame `f` and lay the rebuilt screen next to it.
+  async function run(f, b, env) {
+    const assets = env.getAssets().images; const a = assets.find(x => x.id === b.asset); if (!a) throw new Error('This image has no picture to read yet');
+    if (!Agent.canSee()) throw new Error('Rebuilding needs Claude: open this page in claude.ai, or add an Anthropic API key in Settings.');
+    const img = await loadImg(a.dataUrl || a.url); const W = Math.round(b.w), H = Math.round(b.h);
+    env.toast('Claude is reading the image… (about half a minute)');
+    const json = await Agent.vision(prompt(W, H), await blobOf(img));
+    const kit = env.getKit();
+    const { blocks, crops } = await build(json, W, H, kit, img, env.addImageData);
+    if (!blocks.length) throw new Error('No layers came back; try again or a sharper image');
+    const ref = { id: Canvas.uid(), kind: 'image', x: 0, y: 0, w: W, h: H, asset: a.id, focal: 'xMidYMid', fit: 'cover', radius: 0, decorative: true, path: 'image_ref', hidden: true, locked: true, label: 'screenshot (reference)' };
+    const fmt = Grid.FORMATS.find(x => x.screen && x.w === W && Math.abs(x.h - H) <= 2) || Canvas.customFormat(W, H);
+    const nf = env.canvas.createFrame({ x: f.x + f.layout.format.w + 120, y: f.y, format: fmt, name: `${String(f.name).replace(/ · phone$/, '')} · layers`, bg: hex(json.background, '#FFFFFF') });
+    env.canvas.mutate(() => { nf.layout.blocks.push(ref, ...blocks); nf.layout.meta = { ...(nf.layout.meta || {}), source: 'trace' }; }, { history: false, frames: [nf.id] });
+    env.canvas.fitTo([f.id, nf.id]); env.canvas.selectFrames([nf.id]);
+    const counts = blocks.reduce((m, x) => (m[x.kind] = (m[x.kind] || 0) + 1, m), {});
+    env.toast(`Rebuilt as ${blocks.length} layers: ${counts.text || 0} text, ${counts.field || 0} shapes, ${counts.button || 0} buttons, ${crops} image crops, ${(counts.icon || 0) + (counts.shape || 0)} icons. The original is a hidden layer at the bottom.`);
+    return nf;
+  }
+  return { run, build, prompt };
 })();
 
 /* js/app.js */
@@ -7410,40 +7897,60 @@ Change the canvas with the tools; the person sees each change live and can undo 
   }
   function persistKit() { const s = Brand.serialize(state.kit); if (s.length < 800000) LS.set('lg.kit', state.kit); LS.set('lg.preset', state.kit.presetId || ''); }
   const ROLES = ['core', 'accent', 'background', 'neutral'];
+  // Colors as one compact strip of swatches (a letter marks the role); clicking one opens a small editor below.
+  let editingColor = -1;
+  const ROLE_TAG = { core: 'C', accent: 'A', background: 'B', neutral: 'N' };
   function renderColors() {
-    $('colorList').innerHTML = state.kit.colors.map((c, i) =>
-      `<span class="swatch" data-i="${i}" title="${c.hex} · click to change role"><span class="chip" style="background:${c.hex}"></span>${c.name || c.hex}<span class="role">${c.role}</span><span class="x" data-x="${i}" title="Remove">✕</span></span>`).join('');
+    const cs = state.kit.colors; const esc = v => String(v ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    $('colorList').innerHTML = cs.map((c, i) => `<button type="button" class="pal-sw${i === editingColor ? ' on' : ''}" data-i="${i}" style="background:${esc(c.hex)}" title="${esc(c.name || c.hex)} · ${esc(c.hex)} · ${esc(c.role)}"><i>${ROLE_TAG[c.role] || ''}</i></button>`).join('') + `<button type="button" class="pal-sw add" data-add="1" title="Add a color">＋</button>`;
+    $('colorCount').textContent = `${cs.length} · C core, A accent, B background, N neutral`;
+    const c = cs[editingColor]; const ed = $('colorEdit');
+    if (!c) { ed.hidden = true; ed.innerHTML = ''; return; }
+    ed.hidden = false;
+    ed.innerHTML = `<input type="color" data-ce="hex" value="${esc(Color.normalize(c.hex))}" class="colorpick" aria-label="Color"><input type="text" class="input grow" data-ce="name" value="${esc(c.name || '')}" placeholder="Name"><select class="select mini" data-ce="role">${ROLES.map(r => `<option value="${r}" ${c.role === r ? 'selected' : ''}>${r}</option>`).join('')}</select><button type="button" class="btn small ghost" data-ce="rm" title="Remove this color">✕</button>`;
   }
   $('colorList').addEventListener('click', e => {
-    const x = e.target.closest('[data-x]'); const s = e.target.closest('.swatch');
-    if (x) { state.kit.colors.splice(+x.dataset.x, 1); renderColors(); persistKit(); return; }
-    if (s) { const c = state.kit.colors[+s.dataset.i]; c.role = ROLES[(ROLES.indexOf(c.role) + 1) % ROLES.length]; renderColors(); persistKit(); }
+    if (e.target.closest('[data-add]')) { $('colorAdd').hidden = !$('colorAdd').hidden; if (!$('colorAdd').hidden) $('newColorName').focus(); return; }
+    const s = e.target.closest('.pal-sw'); if (!s) return;
+    editingColor = editingColor === +s.dataset.i ? -1 : +s.dataset.i; renderColors();
   });
+  $('colorEdit').addEventListener('input', e => {
+    const k = e.target.dataset.ce; const c = state.kit.colors[editingColor]; if (!c || !k) return;
+    if (k === 'hex') c.hex = Color.normalize(e.target.value); else if (k === 'name') c.name = e.target.value; else if (k === 'role') c.role = e.target.value;
+    const sw = $('colorList').querySelector(`[data-i="${editingColor}"]`); if (sw) { sw.style.background = c.hex; sw.querySelector('i').textContent = ROLE_TAG[c.role] || ''; }
+    persistKit();
+  });
+  $('colorEdit').addEventListener('click', e => { if (e.target.dataset.ce === 'rm') { state.kit.colors.splice(editingColor, 1); editingColor = -1; renderColors(); persistKit(); } });
   $('addColorBtn').addEventListener('click', () => {
     const hex = Color.normalize($('newColor').value); const name = $('newColorName').value.trim() || hex;
-    state.kit.colors.push({ name, hex, role: 'accent' }); $('newColorName').value = ''; renderColors(); persistKit();
+    state.kit.colors.push({ name, hex, role: 'accent' }); $('newColorName').value = ''; $('colorAdd').hidden = true; editingColor = state.kit.colors.length - 1; renderColors(); persistKit();
   });
   $('extractedSwatches').addEventListener('click', e => {
     const s = e.target.closest('.swatch'); if (!s) return;
     const hex = s.dataset.hex; if (state.kit.colors.some(c => Color.normalize(c.hex) === hex)) return toast('Already in the kit');
     state.kit.colors.push({ name: 'From image', hex, role: 'accent' }); renderColors(); persistKit(); toast('Added ' + hex);
   });
-  function renderLogo() {
-    const l = state.kit.logo; const el = $('logoPreview');
-    if (l.kind === 'svg' && l.svg) el.innerHTML = `<svg viewBox="${l.svg.viewBox}" width="100%" height="100%">${Brand.logoInner(state.kit, '#ECEBF0')}</svg>`;
-    else if (l.kind === 'image' && l.dataUrl) el.innerHTML = `<img src="${l.dataUrl}" alt="logo">`;
-    else el.innerHTML = `<span class="wordmark" style="font-family:${Brand.fontCss(state.kit.fonts.display)}">${l.text || state.kit.name}</span>`;
+  // Logo variants as small tiles; the selected one takes the next upload.
+  let logoPick = 'wordmark';
+  function logoTile(v) {
+    const kit = state.kit; const L = { id: 'logo-' + v.id, format: { w: 160, h: 64 }, palette: { bg: '#00000000' }, blocks: [] };
+    const asp = Brand.logoAspectOf(kit, Brand.logoVariant(kit, v.id)); const h = v.kind === 'appicon' ? 44 : Math.min(26, 136 / asp); const w = Math.round(h * asp);
+    L.blocks.push({ id: 'l', kind: 'logo', variant: v.id, x: Math.round((160 - w) / 2), y: Math.round((64 - h) / 2), w, h, fill: v.kind === 'appicon' ? '#FFFFFF' : '#ECEBF0' });
+    return Render.toSVG(L, { kit, assets: { images: [] }, transparent: true, width: 160 });
   }
+  function renderLogo() {
+    const list = Brand.logosOf(state.kit); if (!list.some(v => v.id === logoPick)) logoPick = list[0].id;
+    $('logoVariants').innerHTML = list.map(v => `<button type="button" class="logo-tile${v.id === logoPick ? ' on' : ''}" data-logo="${v.id}" role="option" aria-selected="${v.id === logoPick}" title="${v.name}">${logoTile(v)}<span>${v.name}</span></button>`).join('');
+  }
+  $('logoVariants').addEventListener('click', e => { const t = e.target.closest('[data-logo]'); if (!t) return; logoPick = t.dataset.logo; renderLogo(); });
   $('logoFile').addEventListener('change', async e => {
     const f = e.target.files[0]; if (!f) return;
-    if (f.type.includes('svg') || f.name.endsWith('.svg')) {
-      const svg = Brand.parseSvg(await f.text()); if (!svg) return toast('Could not read that SVG');
-      state.kit.logo = { ...state.kit.logo, kind: 'svg', svg, monochrome: $('logoMono').checked };
-    } else {
-      const dataUrl = await readAsDataURL(f); const im = await loadImage(dataUrl);
-      state.kit.logo = { ...state.kit.logo, kind: 'image', dataUrl, aspect: im.naturalWidth / im.naturalHeight };
-    }
-    renderLogo(); persistKit(); toast('Logo updated'); e.target.value = '';
+    let patch;
+    if (f.type.includes('svg') || f.name.endsWith('.svg')) { const svg = Brand.parseSvg(await f.text()); if (!svg) return toast('Could not read that SVG'); patch = { kind: 'svg', svg, monochrome: $('logoMono').checked }; }
+    else { const dataUrl = await readAsDataURL(f); const im = await loadImage(dataUrl); patch = { kind: 'image', dataUrl, aspect: im.naturalWidth / im.naturalHeight }; }
+    if (logoPick === 'wordmark') state.kit.logo = { ...state.kit.logo, ...patch };
+    else { state.kit.logos = Brand.logosOf(state.kit).map(v => v.id === logoPick ? { ...v, ...patch } : v); }
+    renderLogo(); persistKit(); if (CanvasUI.active) CanvasUI.renderAll(); toast(`${(Brand.logosOf(state.kit).find(v => v.id === logoPick) || {}).name || 'Logo'} updated`); e.target.value = '';
   });
   $('logoMono').addEventListener('change', () => { state.kit.logo.monochrome = $('logoMono').checked; renderLogo(); persistKit(); });
   $('displayFont').addEventListener('change', () => { readKit(); renderLogo(); });
@@ -7564,7 +8071,7 @@ Change the canvas with the tools; the person sees each change live and can undo 
 
   // ---- Formats chips --------------------------------------------------------------------
   function renderChips() {
-    $('formatChips').innerHTML = Grid.FORMATS.map(f => `<button type="button" class="chip-btn ${state.formats.includes(f.id) ? 'on' : ''}" data-f="${f.id}">${f.name}<span class="ratio">${f.ratio}</span></button>`).join('');
+    $('formatChips').innerHTML = Grid.POSTS.map(f => `<button type="button" class="chip-btn ${state.formats.includes(f.id) ? 'on' : ''}" data-f="${f.id}">${f.name}<span class="ratio">${f.ratio}</span></button>`).join('');
   }
   $('formatChips').addEventListener('click', e => {
     const b = e.target.closest('[data-f]'); if (!b) return;
@@ -7774,7 +8281,7 @@ Change the canvas with the tools; the person sees each change live and can undo 
   $('detailFamily').addEventListener('click', () => {
     const l = state.detail; if (!l) return;
     const fam = [];
-    for (const f of Grid.FORMATS) {
+    for (const f of Grid.POSTS) {
       if (f.id === l.format.id) { fam.push(l); continue; }
       let L = null;
       for (let k = 0; k < 6 && !L; k++) L = Engine.generate({ intent: { ...state.intent, colorHints: [l.palette.bg, l.palette.accent] }, kit: state.kit, assets: state.assets, format: f, seed: (l.seed + k * 0x9E3779B9) >>> 0, archetype: l.archetype });
@@ -8125,7 +8632,7 @@ Change the canvas with the tools; the person sees each change live and can undo 
     }
     if (typeof WebImport !== 'undefined' && WebImport.handlePaste(e)) return true;
     const files = [...(dt.files || [])].filter(f => /^image\//.test(f.type));
-    if (files.length) { e.preventDefault(); (async () => { for (const f of files) { const a = await addImage(await readAsDataURL(f), f.name || 'pasted image'); const sel = CanvasUI.selection(); if (sel.frameIds.length === 1) { const fr = Canvas.frameById(CanvasUI.doc, sel.frameIds[0]); const s = Math.min(1, fr.layout.format.w * 0.6 / a.w, fr.layout.format.h * 0.6 / a.h); CanvasUI.insertBlocks(fr.id, [{ id: 'x', kind: 'image', x: 0, y: 0, w: Math.round(a.w * s), h: Math.round(a.h * s), asset: a.id, focal: 'xMidYMid', radius: 0, decorative: false, path: 'image_pasted' }]); } else { CanvasUI.placeFrames([{ name: f.name || 'Pasted image', x: 0, y: 0, clip: true, layout: FigmaImport.toLayouts([{ name: 'Pasted image', x: 0, y: 0, w: a.w, h: a.h, bg: '#FFFFFF', clip: true, blocks: [{ id: 'img', kind: 'image', x: 0, y: 0, w: a.w, h: a.h, asset: a.id, focal: 'xMidYMid', radius: 0, decorative: false, path: 'image_1' }] }], state.kit)[0].layout }]); } } })(); return true; }
+    if (files.length) { e.preventDefault(); (async () => { for (const f of files) { const a = await addImage(await readAsDataURL(f), f.name || 'pasted image'); const sel = CanvasUI.selection(); if (sel.frameIds.length === 1) { const fr = Canvas.frameById(CanvasUI.doc, sel.frameIds[0]); const s = Math.min(1, fr.layout.format.w * 0.6 / a.w, fr.layout.format.h * 0.6 / a.h); CanvasUI.insertBlocks(fr.id, [{ id: 'x', kind: 'image', x: 0, y: 0, w: Math.round(a.w * s), h: Math.round(a.h * s), asset: a.id, focal: 'xMidYMid', radius: 0, decorative: false, path: 'image_pasted' }]); } else { CanvasUI.screenFromImage(a, (f.name || 'Pasted image').replace(/\.[^.]+$/, ''), null); } } })(); return true; }
     return false;
   }
   WebImport.init({
@@ -8176,7 +8683,24 @@ Change the canvas with the tools; the person sees each change live and can undo 
     exportSVG: layout => Render.exportSVG(layout, { kit: state.kit, assets: state.assets }),
     shareLink: async () => { const link = Sync.roomLink(); if (!link) return false; try { await navigator.clipboard.writeText(link); } catch { } toast('Room link copied: anyone with it edits this canvas with you'); return true; },
     buildPptx: layouts => ExportPptx.buildDeck(layouts, { kit: state.kit, assets: state.assets }),
+    libraryDrop: (id, at) => Library.insert(id, at),
+    traceImage: (f, b) => Trace.run(f, b, { getAssets: () => state.assets, getKit: () => state.kit, addImageData: (url, name) => addImage(url, name), toast, canvas: CanvasUI }),
   });
+  // ---- Library: approved components, logos, cards, devices, illustrations ------------------------------------------
+  Library.init({ getKit: () => state.kit, getAssets: () => state.assets, toast, canvas: CanvasUI, download: (blob, name) => Render.download(blob, name),
+    addImage: async file => addImage(await readAsDataURL(file), file.name), addImageData: (dataUrl, name) => addImage(dataUrl, name), me: () => (typeof Sync !== 'undefined' && Sync.me.name) || '' });
+  Library.bind($('cvLibrary'));
+  let leftTab = 'layers';
+  const libraryOpen = () => leftTab === 'library' && !$('cvLibrary').hidden;
+  function setLeftTab(t) {
+    leftTab = t; document.querySelectorAll('#cvLeftTabs [data-left]').forEach(b => b.classList.toggle('on', b.dataset.left === t));
+    $('cvLayers').hidden = t !== 'layers'; $('cvLibrary').hidden = t !== 'library';
+    $('cvSearch').placeholder = t === 'library' ? 'Search the library' : 'Search layers'; $('cvSearch').value = '';
+    if (t === 'library') Library.render($('cvLibrary'), ''); else CanvasUI.renderAll();
+  }
+  $('cvLeftTabs').addEventListener('click', e => { const b = e.target.closest('[data-left]'); if (b) setLeftTab(b.dataset.left); });
+  $('cvSearch').addEventListener('input', () => { if (libraryOpen()) Library.render(null, $('cvSearch').value); });
+  CanvasUI.on('select', () => { if (libraryOpen()) Library.render(); });
   // ---- Agent (in-app panel and the tools outside agents call over MCP) ---------------------------------------------
   AgentTools.init({
     getKit: () => state.kit, getAssets: () => state.assets, addImageData: (url, name) => addImage(url, name),
@@ -8188,7 +8712,7 @@ Change the canvas with the tools; the person sees each change live and can undo 
 
   // ---- Multiplayer ------------------------------------------------------------------------------------------------
   Sync.init(CanvasUI, {
-    getAssets: () => state.assets, dataUrlToBlob, addAssetWithId,
+    getAssets: () => state.assets, dataUrlToBlob, addAssetWithId, onLibrary: () => { if (libraryOpen()) Library.render(); },
     toolList: () => (typeof AgentTools !== 'undefined' ? AgentTools.defs() : []),
     onRpc: (name, args) => (typeof AgentTools !== 'undefined' ? AgentTools.call(name, args, { via: 'mcp' }) : Promise.reject(new Error('Agent tools are not loaded'))),
   });
@@ -8233,6 +8757,7 @@ Change the canvas with the tools; the person sees each change live and can undo 
       if (savedKit && savedKit.colors && savedKit.fonts && savedKit.content && savedKit.grid && savedKit.logo) {
         // Saved kits from older versions get the preset's sample deck back.
         if (!savedKit.deck && savedKit.presetId && Brand.PRESETS[savedKit.presetId]) savedKit.deck = Brand.PRESETS[savedKit.presetId].deck;
+        if (!savedKit.logos && savedKit.presetId && Brand.PRESETS[savedKit.presetId] && Brand.PRESETS[savedKit.presetId].logos) savedKit.logos = Brand.clone(Brand.PRESETS[savedKit.presetId].logos);
         loadKit(savedKit); $('presetSelect').value = savedKit.presetId && Brand.PRESETS[savedKit.presetId] ? savedKit.presetId : '__custom';
       } else throw new Error('no saved kit');
     } catch { loadKit(Brand.fromPreset(savedPreset in Brand.PRESETS ? savedPreset : 'deel')); $('presetSelect').value = state.kit.presetId; }

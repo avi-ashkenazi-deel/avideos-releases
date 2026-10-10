@@ -6,7 +6,7 @@ const Agent = (() => {
   const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const MODEL = 'claude-opus-5-5';
   const SDK = 'https://cdn.jsdelivr.net/npm/@anthropic-ai/sdk@0.128.0';
-  let env = null, sample = null, sampleTools = 0, busy = false, ctl = null, stopped = false;
+  let env = null, sample = null, sampleAny = null, sampleTools = 0, busy = false, ctl = null, stopped = false;
   const turns = [];     // text history for claude.ai sample calls
   const apiTurns = [];  // text history for API calls
   const SYSTEM = `You are the design agent inside Layout Engine, a canvas for brand layouts. The canvas holds screens (frames) made of blocks: text, body text, buttons, images, rectangles (field), shapes, vectors, icons and the logo. Block boxes are pixels from the frame's top left.
@@ -64,6 +64,7 @@ Change the canvas with the tools; the person sees each change live and can undo 
     (async () => {
       if (window.claude && typeof window.claude.use === 'function') {
         try { sample = await window.claude.use('sample'); } catch { sample = null; }
+        sampleAny = sample;
         if (sample) { try { const lim = await sample.limits(); sampleTools = lim && lim.tools ? lim.tools.maxCount : 0; if (!sampleTools) sample = null; } catch { sample = null; } }
       }
       renderFoot();
@@ -165,5 +166,27 @@ Change the canvas with the tools; the person sees each change live and can undo 
       box.querySelectorAll('.step.pending').forEach(s => s.remove());
     }
   }
-  return { init, show, hide, send, get busy() { return busy; }, _mode: mode };
+  // ---- Vision: one image and a prompt in, parsed JSON out (screenshots and slides rebuilt as layers) -------------------
+  const parseJSON = t => { const m = String(t || '').replace(/^```(?:json)?\s*|\s*```\s*$/g, '').match(/\{[\s\S]*\}/); if (!m) throw new Error('Claude did not return layers'); return JSON.parse(m[0]); };
+  const blobToB64 = blob => new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(String(fr.result).split(',')[1]); fr.onerror = rej; fr.readAsDataURL(blob); });
+  function canSee() { return !!sampleAny || !!apiKey().trim(); }
+  async function vision(prompt, blob, opts = {}) {
+    if (sampleAny) {
+      let lim = null; try { lim = await sampleAny.limits(); } catch { lim = null; }
+      if (lim && lim.images) {
+        try { return await sampleAny.json(prompt, { images: [blob], modelTier: 'complex', signal: opts.signal }); }
+        catch (e) { if (e && e.code === 'invalid_json' && e.text) return parseJSON(e.text); throw new Error(e && e.message ? e.message : 'Claude could not read the image'); }
+      }
+    }
+    if (!apiKey().trim()) throw new Error('Rebuilding needs Claude: open this page in claude.ai, or add an Anthropic API key in Settings.');
+    const { Anthropic } = await loadSdk();
+    const o = { apiKey: apiKey().trim(), dangerouslyAllowBrowser: true }; try { const base = JSON.parse(localStorage.getItem('lg.apiBase') || 'null'); if (base) o.baseURL = base; } catch { }
+    const client = new Anthropic(o);
+    const stream = client.beta.messages.stream({ model: MODEL, max_tokens: 16000, thinking: { type: 'adaptive' }, output_config: { effort: 'medium' }, betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default',
+      messages: [{ role: 'user', content: [{ type: 'image', source: { type: 'base64', media_type: blob.type || 'image/png', data: await blobToB64(blob) } }, { type: 'text', text: prompt }] }] }, { signal: opts.signal });
+    const msg = await stream.finalMessage();
+    if (msg.stop_reason === 'refusal') throw new Error('Claude declined to read this image');
+    return parseJSON(msg.content.filter(c => c.type === 'text').map(c => c.text).join(''));
+  }
+  return { init, show, hide, send, vision, canSee, get busy() { return busy; }, _mode: mode };
 })();

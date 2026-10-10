@@ -98,13 +98,24 @@ const Render = (() => {
     const r = Math.min(b.w, b.h) / 2; const size = b.h * 0.46;
     return `<circle cx="${n(b.x + r)}" cy="${n(b.y + r)}" r="${n(r)}" fill="${col(b.fill)}"/><text x="${n(b.x + r)}" y="${n(b.y + r + size * 0.35)}" font-family='${fam(b.font)}' font-size="${n(size)}" font-weight="700" fill="${col(b.color)}" text-anchor="middle">${esc(b.text)}</text>`;
   }
+  // A logo block draws its kit variant: the wordmark (or uploaded logo), a symbol, an app icon or a product lockup.
   function logoEl(b, kit) {
-    const l = kit.logo; const fill = col(b.fill);
-    if (l.kind === 'svg' && l.svg) return `<svg x="${n(b.x)}" y="${n(b.y)}" width="${n(b.w)}" height="${n(b.h)}" viewBox="${esc(l.svg.viewBox)}" preserveAspectRatio="xMidYMid meet" overflow="visible">${Brand.logoInner(kit, fill)}</svg>`;
+    const l = Brand.logoVariant(kit, b.variant); const fill = col(b.fill);
+    const display = Text.quote(Brand.fontCss(kit.fonts.display)).replace(/['<>&]/g, '');
+    if (l.kind === 'svg' && l.svg) return `<svg x="${n(b.x)}" y="${n(b.y)}" width="${n(b.w)}" height="${n(b.h)}" viewBox="${esc(l.svg.viewBox)}" preserveAspectRatio="xMidYMid meet" overflow="visible">${Brand.logoInner(kit, fill, l)}</svg>`;
     if (l.kind === 'image' && l.dataUrl) return `<image x="${n(b.x)}" y="${n(b.y)}" width="${n(b.w)}" height="${n(b.h)}" href="${esc(l.dataUrl)}" preserveAspectRatio="xMidYMid meet"/>`;
+    if (l.kind === 'appicon') {
+      const s = Math.min(b.w, b.h); const x = b.x + (b.w - s) / 2, y = b.y + (b.h - s) / 2; const size = s * 0.56;
+      return `<rect x="${n(x)}" y="${n(y)}" width="${n(s)}" height="${n(s)}" rx="${n(s * 0.23)}" fill="${col(b.bg || l.bg, '#5938B8')}"/><text x="${n(x + s / 2)}" y="${n(y + s / 2 + size * 0.36)}" font-family='${display}' font-size="${n(size)}" font-weight="700" letter-spacing="${n(-0.04 * size)}" fill="${col(b.fill || l.fg, '#FFFFFF')}" text-anchor="middle">${esc(l.text || 'b')}</text>`;
+    }
     const size = b.h / 0.74;
-    const family = Text.quote(Brand.fontCss(kit.fonts.display)).replace(/['<>&]/g, '');
-    return `<text x="${n(b.x)}" y="${n(b.y + b.h)}" font-family='${family}' font-size="${n(size)}" font-weight="700" letter-spacing="${n(-0.04 * size)}" fill="${fill}">${esc(l.text || kit.name)}</text>`;
+    const word = `<text x="${n(b.x)}" y="${n(b.y + b.h)}" font-family='${display}' font-size="${n(size)}" font-weight="700" letter-spacing="${n(-0.04 * size)}" fill="${fill}">${esc(l.text || kit.name)}</text>`;
+    if (l.kind === 'lockup') {
+      const ww = Text.width(l.text || kit.name, { family: Brand.fontCss(kit.fonts.display), weight: 700, size, letterSpacing: -0.04 }); const ps = size * 0.62;
+      const body = Text.quote(Brand.fontCss(kit.fonts.body)).replace(/['<>&]/g, '');
+      return word + `<text x="${n(b.x + ww + size * 0.26)}" y="${n(b.y + b.h)}" font-family='${body}' font-size="${n(ps)}" font-weight="500" letter-spacing="${n(-0.01 * ps)}" fill="${fill}">${esc(b.product || l.product || 'Product')}</text>`;
+    }
+    return word;
   }
   function shapeEl(b, ctx) {
     const fill = paint(b, ctx); const st = strokeAttr(b);

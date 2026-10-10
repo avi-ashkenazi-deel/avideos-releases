@@ -281,9 +281,9 @@ const CanvasUI = (() => {
     st.addEventListener('wheel', e => { if (e.target.closest && e.target.closest('.cv-editor')) return; e.preventDefault(); if (e.ctrlKey || e.metaKey) zoomBy(Math.exp(-e.deltaY * 0.0015), e.clientX, e.clientY); else { doc.view.x -= e.deltaX; doc.view.y -= e.deltaY; applyView(); } }, { passive: false });
     st.addEventListener('contextmenu', e => e.preventDefault());
     new ResizeObserver(() => active && drawOverlay()).observe(st);
-    st.addEventListener('dragover', e => { if (e.dataTransfer && [...e.dataTransfer.types].includes('Files')) { e.preventDefault(); st.classList.add('drop'); } });
+    st.addEventListener('dragover', e => { const types = e.dataTransfer ? [...e.dataTransfer.types] : []; if (types.includes('Files') || types.includes('application/x-lg-library')) { e.preventDefault(); st.classList.add('drop'); } });
     st.addEventListener('dragleave', () => st.classList.remove('drop'));
-    st.addEventListener('drop', async e => { st.classList.remove('drop'); const files = e.dataTransfer && [...e.dataTransfer.files]; if (!files || !files.length) return; e.preventDefault(); lastPointer = toWorld(e.clientX, e.clientY); for (const file of files) { try { if (env.importFile && await env.importFile(file)) continue; if (/^image\//.test(file.type)) await dropImage(file); else env.toast(`Can't open ${file.name}`); } catch (err) { env.toast(err.message); } } });
+    st.addEventListener('drop', async e => { st.classList.remove('drop'); const libId = e.dataTransfer && e.dataTransfer.getData('application/x-lg-library'); if (libId && env.libraryDrop) { e.preventDefault(); env.libraryDrop(libId, toWorld(e.clientX, e.clientY)); return; } const files = e.dataTransfer && [...e.dataTransfer.files]; if (!files || !files.length) return; e.preventDefault(); lastPointer = toWorld(e.clientX, e.clientY); for (const file of files) { try { if (env.importFile && await env.importFile(file)) continue; if (/^image\//.test(file.type)) await dropImage(file); else env.toast(`Can't open ${file.name}`); } catch (err) { env.toast(err.message); } } });
   }
   function onDblClick(e) {
     if (e.target.closest && e.target.closest('.cv-editor')) return;
@@ -501,8 +501,19 @@ const CanvasUI = (() => {
     const asset = await env.addImage(file); const p = lastPointer || { x: 0, y: 0 }; const f = frameAt(p);
     const w = asset.w || 800, h = asset.h || 600;
     if (f) { hist.push(doc); const s = Math.min(1, (FW(f) * 0.6) / w, (FH(f) * 0.6) / h); const b = { id: Canvas.uid(), kind: 'image', x: Math.round(p.x - f.x - w * s / 2), y: Math.round(p.y - f.y - h * s / 2), w: Math.round(w * s), h: Math.round(h * s), asset: asset.id, focal: 'xMidYMid', radius: 0, decorative: false, path: 'image_' + Canvas.uid() }; f.layout.blocks.push(b); select(f.id, [b.id]); rerenderFrame(f); persist(); updateUndo(); return; }
-    const nf = createFrame({ x: p.x - w / 2, y: p.y - h / 2, format: Canvas.customFormat(w, h), name: file.name.replace(/\.[^.]+$/, '') });
-    mutate(() => { nf.layout.blocks.push({ id: Canvas.uid(), kind: 'image', x: 0, y: 0, w: FW(nf), h: FH(nf), asset: asset.id, focal: 'xMidYMid', radius: 0, decorative: false, path: 'image_1' }); }, { history: false, frames: [nf.id] });
+    screenFromImage(asset, file.name.replace(/\.[^.]+$/, ''), p);
+  }
+  // An image on empty canvas becomes a screen of its own. Phone screenshots (tall, phone-shaped) become a phone-size
+  // screen at 1x, ready for a device frame or for Rebuild as layers.
+  function phoneShaped(w, h) { const r = h / w; return w >= 320 && r >= 1.75 && r <= 2.4; }
+  function screenFromImage(asset, name, at) {
+    const w = asset.w || 800, h = asset.h || 600; const phone = phoneShaped(w, h);
+    const W = phone ? (Math.abs(w / h - 412 / 915) < Math.abs(w / h - 390 / 844) && w % 412 === 0 ? 412 : 390) : w; const H = phone ? Math.round(W * h / w) : h;
+    const fmt = phone ? (Grid.byId.phone.w === W && Math.abs(Grid.byId.phone.h - H) <= 2 ? Grid.byId.phone : Grid.byId.android.w === W && Math.abs(Grid.byId.android.h - H) <= 2 ? Grid.byId.android : Canvas.customFormat(W, H)) : Canvas.customFormat(W, H);
+    const nf = at ? createFrame({ x: at.x - fmt.w / 2, y: at.y - fmt.h / 2, format: fmt, name: phone ? `${name || 'Phone screenshot'} · phone` : name }) : createFrame({ center: true, format: fmt, name: phone ? `${name || 'Phone screenshot'} · phone` : name });
+    mutate(() => { nf.layout.blocks.push({ id: Canvas.uid(), kind: 'image', x: 0, y: 0, w: fmt.w, h: fmt.h, asset: asset.id, focal: 'xMidYMid', radius: 0, decorative: false, path: 'image_1', label: phone ? 'screenshot' : 'image' }); nf.layout.meta = { ...(nf.layout.meta || {}), source: phone ? 'phone-screenshot' : 'image' }; }, { history: false, frames: [nf.id] });
+    if (phone) env.toast('Phone screenshot placed as a phone screen. Select it and use ✦ Rebuild as layers, or add a device frame from Library → Devices.');
+    return nf;
   }
   function placeTool(f, p) {
     if (!f) { env.toast('Click inside a frame to add it there'); return; }
@@ -567,6 +578,32 @@ const CanvasUI = (() => {
     const added = items.map(it => { const f = Canvas.addFrame(doc, it.layout, { x: Canvas.snap(ox + (it.x - bx), 8), y: Canvas.snap(oy + (it.y - by), 8), name: it.name, autoLayout: it.autoLayout || undefined }); f.clip = it.clip !== false; return f; });
     selectFrames(added.map(f => f.id)); if (active) { renderAll(); fitTo(added); } persist(); updateUndo();
     return added;
+  }
+  // A library item (blocks from 0,0) into a screen: at a dropped point, into the selected box, or centred in the
+  // selected screen (or the one in view). In a stack it joins the flow there.
+  function insertComponent(blocks, opts = {}) {
+    if (!blocks || !blocks.length) return null;
+    let f = null, into = null, lp = null;
+    if (opts.at) { f = frameAt(opts.at); if (f) lp = { x: opts.at.x - f.x, y: opts.at.y - f.y }; }
+    if (!f) { f = selFrames().length === 1 ? selFrame() : null; const bs = f ? selBlocks() : []; if (bs.length === 1 && bs[0].kind === 'box') into = bs[0]; }
+    if (!f) { const r = stage().getBoundingClientRect(); f = frameAt(toWorld(r.left + r.width / 2, r.top + r.height / 2)) || doc.frames[doc.frames.length - 1] || null; }
+    const copies = Canvas.clone(blocks); const inSet = new Set(copies.map(b => b.id)); const tops = copies.filter(b => !b.parent || !inSet.has(b.parent));
+    const bb = Canvas.bounds(tops);
+    if (!f) { f = createFrame({ center: true, format: Canvas.customFormat(bb.w + 160, bb.h + 160), name: opts.name || 'Component' }); }
+    hist.push(doc);
+    Auto.remap(copies, null);
+    if (lp && !into) into = Auto.containerAt(f, lp, []);
+    let tx, ty;
+    if (lp) { tx = lp.x - bb.w / 2; ty = lp.y - bb.h / 2; }
+    else if (into) { tx = into.x + (into.w - bb.w) / 2; ty = into.y + (into.h - bb.h) / 2; }
+    else { tx = (FW(f) - bb.w) / 2; ty = (FH(f) - bb.h) / 2; }
+    tx = Math.round(tx); ty = Math.round(ty);
+    for (const c of copies) { c.x += tx - bb.x; c.y += ty - bb.y; delete c.lx; delete c.ly; if (c.kind === 'text' || c.kind === 'list') Canvas.refit(c); }
+    f.layout.blocks.push(...copies);
+    if (into) for (const t of tops) { t.parent = into.id; if (Auto.on(Auto.settingsOf(f, into))) { const d = Auto.dropIndex(f, into, lp || { x: into.x + into.w, y: into.y + into.h }, tops); Auto.moveInList(f, t, into.id, d.before); } }
+    else if (Auto.on(Auto.settingsOf(f, null))) for (const t of tops) { const d = Auto.dropIndex(f, null, lp || { x: FW(f), y: FH(f) }, tops); Auto.moveInList(f, t, '', d.before); }
+    rerenderFrame(f); select(f.id, tops.map(t => t.id)); persist(); updateUndo();
+    return tops;
   }
   // Loose layers (no frame of their own) go into a frame, centred, keeping their arrangement.
   function insertBlocks(frameId, blocks) {
@@ -946,11 +983,11 @@ const CanvasUI = (() => {
   const ROLES = ['core', 'accent', 'background', 'neutral'];
   function paletteEditor() {
     const kit = env.getKit();
-    return `<div class="cv-section" data-palette><h3>Brand palette</h3>
+    return `<details class="cv-section cv-fold" data-palette><summary><h3>Brand palette <span class="cv-token">${kit.colors.length} colors</span></h3></summary>
       ${kit.colors.map((c, i) => `<div class="cv-pal-row"><input type="color" data-pal="hex" data-i="${i}" value="${toHex(c.hex)}" title="${toHex(c.hex)}"><input type="text" data-pal="name" data-i="${i}" value="${esc(c.name || '')}" placeholder="Name"><select data-pal="role" data-i="${i}" title="Role">${ROLES.map(r => `<option value="${r}" ${c.role === r ? 'selected' : ''}>${r}</option>`).join('')}</select><button type="button" class="btn small ghost" data-pal="rm" data-i="${i}" title="Remove">✕</button></div>`).join('')}
       <div class="cv-row"><button type="button" class="btn small" data-act="add-color">＋ Add color</button><button type="button" class="btn small ghost" data-act="reset-palette">Reset to preset</button></div>
       <p class="hint">These are the swatches in every color field, and the colors the generator may use. Colors picked from a swatch stay bound to it: change a color here and every block using it follows.</p>
-    </div>`;
+    </details>`;
   }
   function pairChips() {
     const pairs = Brand.pairs(env.getKit()).slice(0, 12);
@@ -1006,6 +1043,24 @@ const CanvasUI = (() => {
       ${lookSection(frames)}
       ${variationsSection()}
       ${exportSection(frames.length)}`;
+  }
+  // Logo variants from the brand kit (wordmark, symbol, app icon, lockup...), as small previews.
+  function logoThumb(kit, id, fg) {
+    const v = Brand.logoVariant(kit, id); const asp = Brand.logoAspectOf(kit, v); const h = v.kind === 'appicon' ? 40 : Math.min(22, 112 / asp); const w = Math.round(h * asp);
+    return Render.toSVG({ id: 'lt-' + id, format: { w: 128, h: 52 }, palette: { bg: '#000' }, blocks: [{ id: 'l', kind: 'logo', variant: id, x: Math.round((128 - w) / 2), y: Math.round((52 - h) / 2), w, h, fill: v.kind === 'appicon' ? (v.fg || '#FFFFFF') : fg }] }, { kit, assets: { images: [] }, transparent: true, width: 128 });
+  }
+  function logoSection(f, b) {
+    const kit = env.getKit(); const list = Brand.logosOf(kit); const cur = b.variant || 'wordmark'; const v = Brand.logoVariant(kit, cur);
+    return `<div class="cv-section"><h3>Logo</h3><div class="logo-variants">${list.map(x => `<button type="button" class="logo-tile${cur === x.id ? ' on' : ''}" data-logo-variant="${esc(x.id)}" title="${esc(x.name)}">${logoThumb(kit, x.id, '#ECEBF0')}<span>${esc(x.name)}</span></button>`).join('')}</div>
+      ${v.kind === 'lockup' ? `<label class="cv-f"><span>Product</span><input type="text" data-p="product" value="${esc(b.product || v.product || '')}"></label>` : ''}
+      ${v.kind === 'appicon' ? color('bg', 'Tile', b.bg || v.bg || '#5938B8') : ''}
+      <p class="hint">Logo colors allowed by the kit: ${(kit.logo.allowedColors || []).map(c => `<span class="cv-token" style="border-color:${esc(c)}">${esc(c)}</span>`).join(' ')}. Upload official files per variant in the Brand kit panel.</p></div>`;
+  }
+  function setLogoVariant(f, b, id) {
+    const kit = env.getKit(); const v = Brand.logoVariant(kit, id); const was = Brand.logoVariant(kit, b.variant || 'wordmark');
+    if (id === 'wordmark') delete b.variant; else b.variant = id;
+    if (v.kind === 'appicon') { b.fill = v.fg || '#FFFFFF'; b.w = b.h = Math.max(b.h, 32); }
+    else { if (was.kind === 'appicon') { b.fill = Brand.logoColorFor(kit, f.layout.palette.bg)[0]; b.h = Math.max(16, Math.round(b.h * 0.5)); } b.w = Math.max(8, Math.round(b.h * Brand.logoAspectOf(kit, { ...v, product: b.product || v.product }))); }
   }
   // Auto layout for a box (or the screen when box is null), laid out like Figma's panel.
   function autoSection(f, box) {
@@ -1131,7 +1186,9 @@ const CanvasUI = (() => {
       ${btn('fit-text', 'Fit size to box')}
     </div>` : ''}
     ${b.kind === 'image' ? `<div class="cv-section"><h3>Image</h3>${selectF('focal', 'Crop focus', b.focal || 'xMidYMid', [['xMinYMin', 'Top left'], ['xMidYMin', 'Top'], ['xMaxYMin', 'Top right'], ['xMinYMid', 'Left'], ['xMidYMid', 'Center'], ['xMaxYMid', 'Right'], ['xMinYMax', 'Bottom left'], ['xMidYMax', 'Bottom'], ['xMaxYMax', 'Bottom right']])}${selectF('fit', 'Fit', b.fit || 'cover', [['cover', 'Fill (crop)'], ['contain', 'Fit (letterbox)']])}<label class="btn small file">Replace image<input type="file" accept="image/*" data-file="image" hidden></label>${selectF('asset', 'Asset', b.asset || '', env.getAssets().images.map(a => [a.id, a.name]).concat([['', 'None']]))}</div>` : ''}
+    ${b.kind === 'image' && env.traceImage ? `<div class="cv-section"><h3>Rebuild as layers</h3><p class="hint">Claude reads this image (an app screen, a slide, a mockup) and rebuilds it next to it as editable text, shapes and image crops.</p><div class="cv-row">${btn('trace', '✦ Rebuild as layers')}</div></div>` : ''}
     ${b.kind === 'image' ? genSection(f, b) : ''}
+    ${b.kind === 'logo' ? logoSection(f, b) : ''}
     ${b.kind === 'icon' ? `<div class="cv-section"><h3>Icon</h3>${selectF('name', 'Icon', b.name, Icons.names.map(n => [n, n]))}</div>` : ''}
     ${b.kind === 'shape' ? `<div class="cv-section"><h3>Shape</h3>${selectF('shape', 'Shape', b.shape, [['circle', 'Circle'], ['ellipse', 'Ellipse'], ['pill', 'Pill'], ['quarter', 'Quarter circle']])}</div>` : ''}
     ${b.kind === 'box' ? autoSection(f, b) : ''}
@@ -1168,6 +1225,7 @@ const CanvasUI = (() => {
     else if (k === 'radius' || k === 'alpha') b[k] = +v;
     else if (k === 'asset') b.asset = v || null;
     else if (k === 'sizeW' || k === 'sizeH') b[k] = v;
+    else if (k === 'product') { b.product = String(v).slice(0, 40); const kit = env.getKit(); const lv = Brand.logoVariant(kit, b.variant); b.w = Math.max(8, Math.round(b.h * Brand.logoAspectOf(kit, { ...lv, product: b.product }))); }
     else if (k === 'absolute') { if (v) b.absolute = true; else delete b.absolute; delete b.rx; delete b.ry; delete b.lx; delete b.ly; }
     else if (k === 'minW' || k === 'maxW' || k === 'minH' || k === 'maxH') { if (v === '' || v == null) delete b[k]; else b[k] = Math.max(0, +v); }
     else if (k === 'clip') b.clip = !!v;
@@ -1278,13 +1336,15 @@ const CanvasUI = (() => {
       const palRm = e.target.closest('[data-pal="rm"]'); if (palRm) { const colors = env.getKit().colors.filter((_, i) => i !== +palRm.dataset.i); env.updateColors(colors); followTokens(); renderProps(); return; }
       const al = e.target.closest('[data-align]'); if (al && f) { hist.push(doc); Canvas.align(f, bs.length ? bs : [], al.dataset.align); rerenderFrame(f); drawOverlay(); liveProps(); persist(); updateUndo(); return; }
       const add = e.target.closest('[data-add]'); if (add && f) { hist.push(doc); const b = add.dataset.add === 'stack' ? { id: Canvas.uid(), kind: 'box', x: f.layout.grid.mx, y: f.layout.grid.my, w: 480, h: 240, fill: 'none', radius: 0, clip: false, decorative: true, hidden: false, locked: false, sizeW: 'fixed', sizeH: 'hug', auto: { v: 2, mode: 'vertical', wrap: false, gap: 16, gapAuto: false, counterGap: 16, counterGapAuto: false, pad: { t: 24, r: 24, b: 24, l: 24 }, main: 'start', cross: 'start' } } : Canvas.newBlock(add.dataset.add, f, env.getKit(), null); if (b) { f.layout.blocks.push(b); const sb = selBlocks(); const host = sb.length === 1 && sb[0].kind === 'box' ? sb[0] : null; if (host) { b.parent = host.id; if (Auto.on(Auto.settingsOf(f, host))) { Auto.moveInList(f, b, host.id, null); if ((b.kind === 'text' || b.kind === 'list') && Auto.settingsOf(f, host).mode === 'vertical') b.sizeW = 'fill'; } } else if (Auto.on(Auto.settingsOf(f, null))) Auto.moveInList(f, b, '', null); select(f.id, [b.id]); rerenderFrame(f); persist(); updateUndo(); if (b.kind === 'image') { const inp = $('cvProps').querySelector('[data-file="image"]'); if (inp) inp.click(); } } return; }
+      const lv = e.target.closest('[data-logo-variant]'); if (lv && bs[0] && bs[0].kind === 'logo') { hist.push(doc); setLogoVariant(f, bs[0], lv.dataset.logoVariant); rerenderFrame(f); renderProps(); drawOverlay(); persist(); updateUndo(); return; }
       const dirB = e.target.closest('[data-al-dir]'); const cell = e.target.closest('[data-al-cell]');
       if (dirB || cell) { const tg = autoTarget(); if (!tg) return; hist.push(doc); setAuto(tg.f, tg.box, dirB ? 'dir' : 'cell', dirB ? dirB.dataset.alDir : cell.dataset.alCell); rerenderFrame(tg.f); renderProps(); drawOverlay(); persist(); updateUndo(); return; }
       const act = e.target.closest('[data-act]'); if (!act) return;
       const a = act.dataset.act;
       if (a === 'al-add') { addAutoLayout(); return; } if (a === 'al-remove') { removeAutoLayout(); return; }
       if (a === 'frame-sel') { frameSelection(); return; } if (a === 'unwrap') { unwrapSelection(); return; }
-      if (a === 'edit-palette') { select(null, []); const sec = el.querySelector('[data-palette]'); if (sec) sec.scrollIntoView({ block: 'start', behavior: 'smooth' }); return; }
+      if (a === 'trace' && f && bs[0] && env.traceImage) { act.disabled = true; act.textContent = 'Reading the image…'; try { await env.traceImage(f, bs[0]); } catch (err) { env.toast(err.message || String(err)); } finally { act.disabled = false; act.textContent = '✦ Rebuild as layers'; } return; }
+      if (a === 'edit-palette') { select(null, []); const sec = el.querySelector('[data-palette]'); if (sec) { sec.open = true; sec.scrollIntoView({ block: 'start', behavior: 'smooth' }); } return; }
       if (a === 'add-color') { const colors = env.getKit().colors.map(c => ({ ...c })); colors.push({ name: 'Color ' + (colors.length + 1), hex: '#888888', role: 'accent' }); env.updateColors(colors); renderProps(); const rows = el.querySelectorAll('.cv-pal-row'); const last = rows.length ? rows[rows.length - 1].querySelector('input[type="text"]') : null; if (last) { last.focus(); last.select(); } return; }
       if (a === 'reset-palette') { if (env.resetColors()) { followTokens(); renderProps(); env.toast('Palette reset to the preset'); } else env.toast('This kit has no preset to reset to'); return; }
       if (a === 'new-frame') { createFrame({ center: true }); return; }
@@ -1347,7 +1407,7 @@ const CanvasUI = (() => {
   return {
     init, open, close, addLayouts, count, fit, fitTo: ids => fitTo(ids.map(id => Canvas.frameById(doc, id)).filter(Boolean)),
     get doc() { return doc; }, get active() { return active; },
-    select, selectFrames, selection, setTool, createFrame, placeRow, placeFrames, insertBlocks, mutate, remoteApplied, replaceDoc, renderAll, rerender: ids => ids.forEach(id => { const f = Canvas.frameById(doc, id); if (f) rerenderFrame(f); }),
+    select, selectFrames, selection, setTool, createFrame, placeRow, placeFrames, insertBlocks, insertComponent, screenFromImage, mutate, remoteApplied, replaceDoc, renderAll, rerender: ids => ids.forEach(id => { const f = Canvas.frameById(doc, id); if (f) rerenderFrame(f); }),
     centerOn: (x, y) => { const r = stage().getBoundingClientRect(); doc.view.x = r.width / 2 - x * doc.view.zoom; doc.view.y = r.height / 2 - y * doc.view.zoom; applyView(); },
     regrid, exportAction, makeVariations, resizeScreens, copySelection, pasteClipboard, startEdit: (fid, bid) => { const f = Canvas.frameById(doc, fid); return startEdit(f, f && Canvas.blockById(f, bid)); },
     on: (k, fn) => { hooks[k].push(fn); return () => { hooks[k] = hooks[k].filter(x => x !== fn); }; },

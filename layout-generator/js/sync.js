@@ -23,6 +23,7 @@ const Sync = (() => {
   function toRecords(doc) {
     const out = new Map();
     out.set('meta', { name: doc.name || 'Untitled canvas' });
+    for (const it of doc.library || []) if (it && it.id) out.set('L~' + it.id, it);
     doc.frames.forEach((f, i) => {
       const { blocks, meta, ...layoutRest } = f.layout; const { original, ...metaRest } = meta || {};
       const fr = {}; for (const k of FRAME_KEYS) if (f[k] !== undefined) fr[k] = f[k];
@@ -55,10 +56,13 @@ const Sync = (() => {
   function docFrom(map, base) {
     const doc = { ...(base || Canvas.create()), frames: [] };
     const meta = map.get('meta'); if (meta && !meta._del && meta.name) doc.name = meta.name;
+    doc.library = libraryFrom(map);
     const fids = [...map.entries()].filter(([k, r]) => k.startsWith('f~') && !r._del).sort((a, b) => (a[1].z ?? 0) - (b[1].z ?? 0) || a[0].localeCompare(b[0])).map(([k]) => k.slice(2));
     for (const fid of fids) { const f = frameFrom(map, fid); if (f) doc.frames.push(f); }
     return doc;
   }
+  // Team library items, in the order they were made.
+  function libraryFrom(map) { return [...map.entries()].filter(([k, r]) => k.startsWith('L~') && !r._del).map(([, r]) => strip(r)).sort((a, b) => (a.created || 0) - (b.created || 0)); }
   // After the local doc was rebuilt from records, remember its canonical JSON so we never echo it back.
   function markSynced(doc, keys) { const cur = toRecords(doc); for (const k of keys) { if (cur.has(k)) synced.set(k, canon(cur.get(k))); else synced.delete(k); } }
 
@@ -86,17 +90,19 @@ const Sync = (() => {
   // ---- incoming ------------------------------------------------------------------------------------------------------
   const newer = (a, b) => !b || a._v > b._v || (a._v === b._v && String(a._by) > String(b._by));
   function applyRemote(list, opts = {}) {
-    const frames = new Set(); let structural = false, meta = false; const assets = [];
+    const frames = new Set(); let structural = false, meta = false, lib = false; const assets = [];
     for (const rec of list) {
       if (!rec || typeof rec._k !== 'string' || typeof rec._v !== 'number') continue;
-      const k = rec._k; if (!/^(meta|[fbo]~[A-Za-z0-9_.:-]+(~[A-Za-z0-9_.:-]+)?|a~[A-Za-z0-9_.-]+)$/.test(k)) continue;
+      const k = rec._k; if (!/^(meta|[fbo]~[A-Za-z0-9_.:-]+(~[A-Za-z0-9_.:-]+)?|a~[A-Za-z0-9_.-]+|L~[A-Za-z0-9_.:-]+)$/.test(k)) continue;
       if (!newer(rec, recs.get(k))) continue;
       recs.set(k, rec);
       if (k === 'meta') meta = true;
+      else if (k.startsWith('L~')) lib = true;
       else if (k.startsWith('a~')) assets.push(rec);
       else { const fid = k.split('~')[1]; frames.add(fid); if (k.startsWith('f~')) structural = true; }
     }
     for (const a of assets) ensureAsset(a);
+    if (lib) { applying = true; try { ui.doc.library = libraryFrom(recs); markSynced(ui.doc, [...recs.keys()].filter(k => k.startsWith('L~'))); if (env.onLibrary) env.onLibrary(); } finally { applying = false; } }
     if (!frames.size && !meta) return;
     applying = true;
     try {
@@ -142,6 +148,7 @@ const Sync = (() => {
   async function shareAssets(doc) {
     const assets = env.getAssets().images; const renames = new Map();
     const used = new Set(); for (const f of doc.frames) for (const b of f.layout.blocks) if (b.kind === 'image' && b.asset) used.add(b.asset);
+    for (const it of doc.library || []) for (const b of it.blocks || []) if (b.kind === 'image' && b.asset) used.add(b.asset);
     for (const id of used) {
       if (/^a_[0-9a-f]{16}$/.test(id)) { const r = recs.get('a~' + id); if (r) continue; }
       const a = assets.find(x => x.id === id); if (!a || !a.dataUrl) continue;
@@ -158,7 +165,7 @@ const Sync = (() => {
     if (!renames.size) return;
     // the shared id becomes an alias of the local image, so layouts elsewhere that use the local id keep working
     for (const [from, to] of renames) { const a = assets.find(x => x.id === from); if (a && !assets.some(x => x.id === to)) assets.push({ ...a, id: to }); }
-    ui.mutate(d => { for (const f of d.frames) for (const b of f.layout.blocks) if (b.kind === 'image' && renames.has(b.asset)) b.asset = renames.get(b.asset); }, { history: false });
+    ui.mutate(d => { for (const f of d.frames) for (const b of f.layout.blocks) if (b.kind === 'image' && renames.has(b.asset)) b.asset = renames.get(b.asset); for (const it of d.library || []) for (const b of it.blocks || []) if (b.kind === 'image' && renames.has(b.asset)) b.asset = renames.get(b.asset); }, { history: false });
   }
   const loadingAssets = new Set();
   async function ensureAsset(rec) {
@@ -243,7 +250,7 @@ const Sync = (() => {
     let metaChain = Promise.resolve();
     function sendRecs(list, live) {
       if (!status.readOnly && db) {
-        const fids = new Set(); for (const r of list) { if (r._k === 'meta') metaChain = metaChain.then(() => db.doc('canvas/meta').set({ rec: r })).catch(() => { }); else if (r._k.startsWith('a~')) db.doc(`assets/${r.id}`).set({ rec: r }).catch(() => { }); else fids.add(r._k.split('~')[1]); }
+        const fids = new Set(); for (const r of list) { if (r._k === 'meta') metaChain = metaChain.then(() => db.doc('canvas/meta').set({ rec: r })).catch(() => { }); else if (r._k.startsWith('a~')) db.doc(`assets/${r.id}`).set({ rec: r }).catch(() => { }); else if (r._k.startsWith('L~')) db.doc(`library/${r._k.slice(2)}`).set({ rec: r }).catch(() => { }); else fids.add(r._k.split('~')[1]); }
         for (const fid of fids) schedule(fid);
       }
       if (room) { for (const r of list) pendingLive.set(r._k, r); if (!liveTimer) liveTimer = setTimeout(flushLive, 120); }
@@ -283,6 +290,7 @@ const Sync = (() => {
         applyRemote(changed);
       }, e => console.warn('db frames', e && e.code));
       db.doc('canvas/meta').onSnapshot(s => { const d = s.data(); if (d && d.rec) applyRemote([d.rec]); }, () => { });
+      db.collection('library').onSnapshot(s => { const list = []; for (const d of s.docs) { const v = d.data(); if (v && v.rec) list.push(v.rec); } if (list.length) applyRemote(list); }, () => { });
       db.collection('assets').onSnapshot(s => { for (const d of s.docs) { const v = d.data(); if (v && v.rec) { if (newer(v.rec, recs.get(v.rec._k))) recs.set(v.rec._k, v.rec); ensureAsset(v.rec); } } }, () => { });
       if (user && user.can) user.can('data.write').then(v => { if (v === false) { status.readOnly = true; notify(); } }).catch(() => { });
     }

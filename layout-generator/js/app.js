@@ -51,40 +51,60 @@
   }
   function persistKit() { const s = Brand.serialize(state.kit); if (s.length < 800000) LS.set('lg.kit', state.kit); LS.set('lg.preset', state.kit.presetId || ''); }
   const ROLES = ['core', 'accent', 'background', 'neutral'];
+  // Colors as one compact strip of swatches (a letter marks the role); clicking one opens a small editor below.
+  let editingColor = -1;
+  const ROLE_TAG = { core: 'C', accent: 'A', background: 'B', neutral: 'N' };
   function renderColors() {
-    $('colorList').innerHTML = state.kit.colors.map((c, i) =>
-      `<span class="swatch" data-i="${i}" title="${c.hex} · click to change role"><span class="chip" style="background:${c.hex}"></span>${c.name || c.hex}<span class="role">${c.role}</span><span class="x" data-x="${i}" title="Remove">✕</span></span>`).join('');
+    const cs = state.kit.colors; const esc = v => String(v ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    $('colorList').innerHTML = cs.map((c, i) => `<button type="button" class="pal-sw${i === editingColor ? ' on' : ''}" data-i="${i}" style="background:${esc(c.hex)}" title="${esc(c.name || c.hex)} · ${esc(c.hex)} · ${esc(c.role)}"><i>${ROLE_TAG[c.role] || ''}</i></button>`).join('') + `<button type="button" class="pal-sw add" data-add="1" title="Add a color">＋</button>`;
+    $('colorCount').textContent = `${cs.length} · C core, A accent, B background, N neutral`;
+    const c = cs[editingColor]; const ed = $('colorEdit');
+    if (!c) { ed.hidden = true; ed.innerHTML = ''; return; }
+    ed.hidden = false;
+    ed.innerHTML = `<input type="color" data-ce="hex" value="${esc(Color.normalize(c.hex))}" class="colorpick" aria-label="Color"><input type="text" class="input grow" data-ce="name" value="${esc(c.name || '')}" placeholder="Name"><select class="select mini" data-ce="role">${ROLES.map(r => `<option value="${r}" ${c.role === r ? 'selected' : ''}>${r}</option>`).join('')}</select><button type="button" class="btn small ghost" data-ce="rm" title="Remove this color">✕</button>`;
   }
   $('colorList').addEventListener('click', e => {
-    const x = e.target.closest('[data-x]'); const s = e.target.closest('.swatch');
-    if (x) { state.kit.colors.splice(+x.dataset.x, 1); renderColors(); persistKit(); return; }
-    if (s) { const c = state.kit.colors[+s.dataset.i]; c.role = ROLES[(ROLES.indexOf(c.role) + 1) % ROLES.length]; renderColors(); persistKit(); }
+    if (e.target.closest('[data-add]')) { $('colorAdd').hidden = !$('colorAdd').hidden; if (!$('colorAdd').hidden) $('newColorName').focus(); return; }
+    const s = e.target.closest('.pal-sw'); if (!s) return;
+    editingColor = editingColor === +s.dataset.i ? -1 : +s.dataset.i; renderColors();
   });
+  $('colorEdit').addEventListener('input', e => {
+    const k = e.target.dataset.ce; const c = state.kit.colors[editingColor]; if (!c || !k) return;
+    if (k === 'hex') c.hex = Color.normalize(e.target.value); else if (k === 'name') c.name = e.target.value; else if (k === 'role') c.role = e.target.value;
+    const sw = $('colorList').querySelector(`[data-i="${editingColor}"]`); if (sw) { sw.style.background = c.hex; sw.querySelector('i').textContent = ROLE_TAG[c.role] || ''; }
+    persistKit();
+  });
+  $('colorEdit').addEventListener('click', e => { if (e.target.dataset.ce === 'rm') { state.kit.colors.splice(editingColor, 1); editingColor = -1; renderColors(); persistKit(); } });
   $('addColorBtn').addEventListener('click', () => {
     const hex = Color.normalize($('newColor').value); const name = $('newColorName').value.trim() || hex;
-    state.kit.colors.push({ name, hex, role: 'accent' }); $('newColorName').value = ''; renderColors(); persistKit();
+    state.kit.colors.push({ name, hex, role: 'accent' }); $('newColorName').value = ''; $('colorAdd').hidden = true; editingColor = state.kit.colors.length - 1; renderColors(); persistKit();
   });
   $('extractedSwatches').addEventListener('click', e => {
     const s = e.target.closest('.swatch'); if (!s) return;
     const hex = s.dataset.hex; if (state.kit.colors.some(c => Color.normalize(c.hex) === hex)) return toast('Already in the kit');
     state.kit.colors.push({ name: 'From image', hex, role: 'accent' }); renderColors(); persistKit(); toast('Added ' + hex);
   });
-  function renderLogo() {
-    const l = state.kit.logo; const el = $('logoPreview');
-    if (l.kind === 'svg' && l.svg) el.innerHTML = `<svg viewBox="${l.svg.viewBox}" width="100%" height="100%">${Brand.logoInner(state.kit, '#ECEBF0')}</svg>`;
-    else if (l.kind === 'image' && l.dataUrl) el.innerHTML = `<img src="${l.dataUrl}" alt="logo">`;
-    else el.innerHTML = `<span class="wordmark" style="font-family:${Brand.fontCss(state.kit.fonts.display)}">${l.text || state.kit.name}</span>`;
+  // Logo variants as small tiles; the selected one takes the next upload.
+  let logoPick = 'wordmark';
+  function logoTile(v) {
+    const kit = state.kit; const L = { id: 'logo-' + v.id, format: { w: 160, h: 64 }, palette: { bg: '#00000000' }, blocks: [] };
+    const asp = Brand.logoAspectOf(kit, Brand.logoVariant(kit, v.id)); const h = v.kind === 'appicon' ? 44 : Math.min(26, 136 / asp); const w = Math.round(h * asp);
+    L.blocks.push({ id: 'l', kind: 'logo', variant: v.id, x: Math.round((160 - w) / 2), y: Math.round((64 - h) / 2), w, h, fill: v.kind === 'appicon' ? '#FFFFFF' : '#ECEBF0' });
+    return Render.toSVG(L, { kit, assets: { images: [] }, transparent: true, width: 160 });
   }
+  function renderLogo() {
+    const list = Brand.logosOf(state.kit); if (!list.some(v => v.id === logoPick)) logoPick = list[0].id;
+    $('logoVariants').innerHTML = list.map(v => `<button type="button" class="logo-tile${v.id === logoPick ? ' on' : ''}" data-logo="${v.id}" role="option" aria-selected="${v.id === logoPick}" title="${v.name}">${logoTile(v)}<span>${v.name}</span></button>`).join('');
+  }
+  $('logoVariants').addEventListener('click', e => { const t = e.target.closest('[data-logo]'); if (!t) return; logoPick = t.dataset.logo; renderLogo(); });
   $('logoFile').addEventListener('change', async e => {
     const f = e.target.files[0]; if (!f) return;
-    if (f.type.includes('svg') || f.name.endsWith('.svg')) {
-      const svg = Brand.parseSvg(await f.text()); if (!svg) return toast('Could not read that SVG');
-      state.kit.logo = { ...state.kit.logo, kind: 'svg', svg, monochrome: $('logoMono').checked };
-    } else {
-      const dataUrl = await readAsDataURL(f); const im = await loadImage(dataUrl);
-      state.kit.logo = { ...state.kit.logo, kind: 'image', dataUrl, aspect: im.naturalWidth / im.naturalHeight };
-    }
-    renderLogo(); persistKit(); toast('Logo updated'); e.target.value = '';
+    let patch;
+    if (f.type.includes('svg') || f.name.endsWith('.svg')) { const svg = Brand.parseSvg(await f.text()); if (!svg) return toast('Could not read that SVG'); patch = { kind: 'svg', svg, monochrome: $('logoMono').checked }; }
+    else { const dataUrl = await readAsDataURL(f); const im = await loadImage(dataUrl); patch = { kind: 'image', dataUrl, aspect: im.naturalWidth / im.naturalHeight }; }
+    if (logoPick === 'wordmark') state.kit.logo = { ...state.kit.logo, ...patch };
+    else { state.kit.logos = Brand.logosOf(state.kit).map(v => v.id === logoPick ? { ...v, ...patch } : v); }
+    renderLogo(); persistKit(); if (CanvasUI.active) CanvasUI.renderAll(); toast(`${(Brand.logosOf(state.kit).find(v => v.id === logoPick) || {}).name || 'Logo'} updated`); e.target.value = '';
   });
   $('logoMono').addEventListener('change', () => { state.kit.logo.monochrome = $('logoMono').checked; renderLogo(); persistKit(); });
   $('displayFont').addEventListener('change', () => { readKit(); renderLogo(); });
@@ -205,7 +225,7 @@
 
   // ---- Formats chips --------------------------------------------------------------------
   function renderChips() {
-    $('formatChips').innerHTML = Grid.FORMATS.map(f => `<button type="button" class="chip-btn ${state.formats.includes(f.id) ? 'on' : ''}" data-f="${f.id}">${f.name}<span class="ratio">${f.ratio}</span></button>`).join('');
+    $('formatChips').innerHTML = Grid.POSTS.map(f => `<button type="button" class="chip-btn ${state.formats.includes(f.id) ? 'on' : ''}" data-f="${f.id}">${f.name}<span class="ratio">${f.ratio}</span></button>`).join('');
   }
   $('formatChips').addEventListener('click', e => {
     const b = e.target.closest('[data-f]'); if (!b) return;
@@ -415,7 +435,7 @@
   $('detailFamily').addEventListener('click', () => {
     const l = state.detail; if (!l) return;
     const fam = [];
-    for (const f of Grid.FORMATS) {
+    for (const f of Grid.POSTS) {
       if (f.id === l.format.id) { fam.push(l); continue; }
       let L = null;
       for (let k = 0; k < 6 && !L; k++) L = Engine.generate({ intent: { ...state.intent, colorHints: [l.palette.bg, l.palette.accent] }, kit: state.kit, assets: state.assets, format: f, seed: (l.seed + k * 0x9E3779B9) >>> 0, archetype: l.archetype });
@@ -766,7 +786,7 @@
     }
     if (typeof WebImport !== 'undefined' && WebImport.handlePaste(e)) return true;
     const files = [...(dt.files || [])].filter(f => /^image\//.test(f.type));
-    if (files.length) { e.preventDefault(); (async () => { for (const f of files) { const a = await addImage(await readAsDataURL(f), f.name || 'pasted image'); const sel = CanvasUI.selection(); if (sel.frameIds.length === 1) { const fr = Canvas.frameById(CanvasUI.doc, sel.frameIds[0]); const s = Math.min(1, fr.layout.format.w * 0.6 / a.w, fr.layout.format.h * 0.6 / a.h); CanvasUI.insertBlocks(fr.id, [{ id: 'x', kind: 'image', x: 0, y: 0, w: Math.round(a.w * s), h: Math.round(a.h * s), asset: a.id, focal: 'xMidYMid', radius: 0, decorative: false, path: 'image_pasted' }]); } else { CanvasUI.placeFrames([{ name: f.name || 'Pasted image', x: 0, y: 0, clip: true, layout: FigmaImport.toLayouts([{ name: 'Pasted image', x: 0, y: 0, w: a.w, h: a.h, bg: '#FFFFFF', clip: true, blocks: [{ id: 'img', kind: 'image', x: 0, y: 0, w: a.w, h: a.h, asset: a.id, focal: 'xMidYMid', radius: 0, decorative: false, path: 'image_1' }] }], state.kit)[0].layout }]); } } })(); return true; }
+    if (files.length) { e.preventDefault(); (async () => { for (const f of files) { const a = await addImage(await readAsDataURL(f), f.name || 'pasted image'); const sel = CanvasUI.selection(); if (sel.frameIds.length === 1) { const fr = Canvas.frameById(CanvasUI.doc, sel.frameIds[0]); const s = Math.min(1, fr.layout.format.w * 0.6 / a.w, fr.layout.format.h * 0.6 / a.h); CanvasUI.insertBlocks(fr.id, [{ id: 'x', kind: 'image', x: 0, y: 0, w: Math.round(a.w * s), h: Math.round(a.h * s), asset: a.id, focal: 'xMidYMid', radius: 0, decorative: false, path: 'image_pasted' }]); } else { CanvasUI.screenFromImage(a, (f.name || 'Pasted image').replace(/\.[^.]+$/, ''), null); } } })(); return true; }
     return false;
   }
   WebImport.init({
@@ -817,7 +837,24 @@
     exportSVG: layout => Render.exportSVG(layout, { kit: state.kit, assets: state.assets }),
     shareLink: async () => { const link = Sync.roomLink(); if (!link) return false; try { await navigator.clipboard.writeText(link); } catch { } toast('Room link copied: anyone with it edits this canvas with you'); return true; },
     buildPptx: layouts => ExportPptx.buildDeck(layouts, { kit: state.kit, assets: state.assets }),
+    libraryDrop: (id, at) => Library.insert(id, at),
+    traceImage: (f, b) => Trace.run(f, b, { getAssets: () => state.assets, getKit: () => state.kit, addImageData: (url, name) => addImage(url, name), toast, canvas: CanvasUI }),
   });
+  // ---- Library: approved components, logos, cards, devices, illustrations ------------------------------------------
+  Library.init({ getKit: () => state.kit, getAssets: () => state.assets, toast, canvas: CanvasUI, download: (blob, name) => Render.download(blob, name),
+    addImage: async file => addImage(await readAsDataURL(file), file.name), addImageData: (dataUrl, name) => addImage(dataUrl, name), me: () => (typeof Sync !== 'undefined' && Sync.me.name) || '' });
+  Library.bind($('cvLibrary'));
+  let leftTab = 'layers';
+  const libraryOpen = () => leftTab === 'library' && !$('cvLibrary').hidden;
+  function setLeftTab(t) {
+    leftTab = t; document.querySelectorAll('#cvLeftTabs [data-left]').forEach(b => b.classList.toggle('on', b.dataset.left === t));
+    $('cvLayers').hidden = t !== 'layers'; $('cvLibrary').hidden = t !== 'library';
+    $('cvSearch').placeholder = t === 'library' ? 'Search the library' : 'Search layers'; $('cvSearch').value = '';
+    if (t === 'library') Library.render($('cvLibrary'), ''); else CanvasUI.renderAll();
+  }
+  $('cvLeftTabs').addEventListener('click', e => { const b = e.target.closest('[data-left]'); if (b) setLeftTab(b.dataset.left); });
+  $('cvSearch').addEventListener('input', () => { if (libraryOpen()) Library.render(null, $('cvSearch').value); });
+  CanvasUI.on('select', () => { if (libraryOpen()) Library.render(); });
   // ---- Agent (in-app panel and the tools outside agents call over MCP) ---------------------------------------------
   AgentTools.init({
     getKit: () => state.kit, getAssets: () => state.assets, addImageData: (url, name) => addImage(url, name),
@@ -829,7 +866,7 @@
 
   // ---- Multiplayer ------------------------------------------------------------------------------------------------
   Sync.init(CanvasUI, {
-    getAssets: () => state.assets, dataUrlToBlob, addAssetWithId,
+    getAssets: () => state.assets, dataUrlToBlob, addAssetWithId, onLibrary: () => { if (libraryOpen()) Library.render(); },
     toolList: () => (typeof AgentTools !== 'undefined' ? AgentTools.defs() : []),
     onRpc: (name, args) => (typeof AgentTools !== 'undefined' ? AgentTools.call(name, args, { via: 'mcp' }) : Promise.reject(new Error('Agent tools are not loaded'))),
   });
@@ -874,6 +911,7 @@
       if (savedKit && savedKit.colors && savedKit.fonts && savedKit.content && savedKit.grid && savedKit.logo) {
         // Saved kits from older versions get the preset's sample deck back.
         if (!savedKit.deck && savedKit.presetId && Brand.PRESETS[savedKit.presetId]) savedKit.deck = Brand.PRESETS[savedKit.presetId].deck;
+        if (!savedKit.logos && savedKit.presetId && Brand.PRESETS[savedKit.presetId] && Brand.PRESETS[savedKit.presetId].logos) savedKit.logos = Brand.clone(Brand.PRESETS[savedKit.presetId].logos);
         loadKit(savedKit); $('presetSelect').value = savedKit.presetId && Brand.PRESETS[savedKit.presetId] ? savedKit.presetId : '__custom';
       } else throw new Error('no saved kit');
     } catch { loadKit(Brand.fromPreset(savedPreset in Brand.PRESETS ? savedPreset : 'deel')); $('presetSelect').value = state.kit.presetId; }

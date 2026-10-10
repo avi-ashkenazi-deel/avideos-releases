@@ -9,7 +9,13 @@ const Grid = (() => {
     { id: 'portrait', name: 'Portrait 4:5',  w: 1080, h: 1350, cols: 8,  ratio: '4:5',    tags: ['portrait', '4:5', 'feed portrait'] },
     { id: 'poster',   name: 'Poster A',      w: 1240, h: 1754, cols: 8,  ratio: '1:1.41', tags: ['poster', 'a4', 'a3', 'print', 'flyer', 'one-pager', 'one pager'] },
     { id: 'banner',   name: 'Wide banner',   w: 2400, h: 800,  cols: 16, ratio: '3:1',    tags: ['banner', 'billboard', 'header', 'email header', 'cover', 'hero', 'wide', 'leaderboard'] },
+    // Screens for app and web design on the canvas (the generator sticks to the formats above)
+    { id: 'phone',    name: 'Phone · iOS',     w: 390,  h: 844,  cols: 4,  ratio: '9:19.5', screen: true, tags: [] },
+    { id: 'android',  name: 'Phone · Android', w: 412,  h: 915,  cols: 4,  ratio: '9:20',   screen: true, tags: [] },
+    { id: 'tablet',   name: 'Tablet',          w: 834,  h: 1194, cols: 8,  ratio: '3:4.3',  screen: true, tags: [] },
+    { id: 'desktop',  name: 'Desktop web',     w: 1440, h: 1024, cols: 12, ratio: '1.4:1',  screen: true, tags: [] },
   ];
+  const POSTS = FORMATS.filter(f => !f.screen);
   const byId = Object.fromEntries(FORMATS.map(f => [f.id, f]));
 
   // Compute a modular grid for a format under the brand's grid rules.
@@ -59,5 +65,5 @@ const Grid = (() => {
     if (/\b(all|every) (formats?|sizes?|channels?)\b/.test(t)) return FORMATS.map(f => f.id);
     return [...new Set(found)];
   }
-  return { FORMATS, byId, compute, rect, snap, detectFormats };
+  return { FORMATS, POSTS, byId, compute, rect, snap, detectFormats };
 })();

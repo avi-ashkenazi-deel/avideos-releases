@@ -3,7 +3,7 @@ const Prompt = (() => {
   const INTENT_SCHEMA = {
     type: 'object', additionalProperties: false,
     properties: {
-      formats: { type: 'array', items: { type: 'string', enum: Grid.FORMATS.map(f => f.id) } },
+      formats: { type: 'array', items: { type: 'string', enum: Grid.POSTS.map(f => f.id) } },
       count: { type: 'integer' },
       loud: { type: 'number', description: '0 quiet/minimal .. 1 loud/bold type scale' },
       dark: { type: 'number', description: '-1 prefer light grounds, 0 no preference, 1 prefer dark grounds' },
@@ -80,7 +80,7 @@ const Prompt = (() => {
     const brandSummary = {
       name: kit.name,
       colors: kit.colors.map(c => `${c.name} ${Color.normalize(c.hex)} (${c.role})`),
-      formats: Grid.FORMATS.map(f => `${f.id}: ${f.name} ${f.w}x${f.h}`),
+      formats: Grid.POSTS.map(f => `${f.id}: ${f.name} ${f.w}x${f.h}`),
       archetypes: Engine.ARCHETYPES,
       currentContent: kit.content,
     };

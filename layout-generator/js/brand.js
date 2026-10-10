@@ -35,6 +35,13 @@ const Brand = (() => {
         { name: 'Black',      hex: '#000000', role: 'neutral' },
       ],
       logo: { kind: 'wordmark', text: 'deel.', allowedColors: ['#5938B8', '#000000', '#FFFFFF'], monochrome: true, clearZone: 1.0, minPx: 20 },
+      // Variants: the wordmark is kit.logo itself; the others can each take their own uploaded SVG or PNG.
+      logos: [
+        { id: 'wordmark', name: 'Wordmark' },
+        { id: 'symbol', name: 'Symbol', kind: 'wordmark', text: 'd.' },
+        { id: 'appicon', name: 'App icon', kind: 'appicon', text: 'd.', bg: '#5938B8', fg: '#FFFFFF' },
+        { id: 'lockup', name: 'Product lockup', kind: 'lockup', text: 'deel.', product: 'Payroll' },
+      ],
       fonts: { display: 'Bricolage Grotesque', body: 'Inter', displayWeight: 600, bodyWeight: 400, headlineCase: 'sentence', tracking: -0.025 },
       grid: { unit: 8, marginRatio: 0.06, gutterUnits: 3, radius: 1 },
       shapes: ['circle', 'pill', 'quarter'],
@@ -179,9 +186,33 @@ const Brand = (() => {
     const inner = svg.innerHTML;
     return { viewBox: vb.join(' '), aspect, inner };
   }
+  // Logo variants: wordmark (kit.logo), a symbol, an app icon, a product lockup, or any uploaded SVG/PNG. Kits without
+  // a list get the wordmark plus a symbol and an app icon made from its first letter.
+  function logosOf(kit) {
+    if (Array.isArray(kit.logos) && kit.logos.length) return kit.logos;
+    const t = String((kit.logo && kit.logo.text) || kit.name || 'b').trim(); const first = t.replace(/[^\p{L}\p{N}]/gu, '').slice(0, 1) || 'b';
+    const core = (kit.colors.find(c => c.role === 'core') || kit.colors[0] || { hex: '#000000' }).hex;
+    return [{ id: 'wordmark', name: 'Wordmark' }, { id: 'symbol', name: 'Symbol', kind: 'wordmark', text: first + (t.endsWith('.') ? '.' : '') }, { id: 'appicon', name: 'App icon', kind: 'appicon', text: first, bg: core, fg: '#FFFFFF' }];
+  }
+  function logoVariant(kit, id) {
+    const list = logosOf(kit); const v = list.find(x => x.id === id) || list[0] || { id: 'wordmark' };
+    if (v.id === 'wordmark' || !v.kind) return { ...kit.logo, id: 'wordmark', name: v.name || 'Wordmark' };
+    return { allowedColors: kit.logo.allowedColors, monochrome: kit.logo.monochrome, clearZone: kit.logo.clearZone, ...v };
+  }
+  // Width over height of a variant at its drawn size (wordmarks are measured in the display font).
+  function logoAspectOf(kit, v) {
+    if (!v) v = kit.logo;
+    if (v.kind === 'svg' && v.svg) return v.svg.aspect || 3;
+    if (v.kind === 'image' && v.aspect) return v.aspect;
+    if (v.kind === 'appicon') return 1;
+    const f = { family: fontCss(kit.fonts.display), weight: 700, size: 100, letterSpacing: -0.04 };
+    const w = (typeof Text !== 'undefined' ? Text.width(v.text || kit.name || 'brand', f) : 60 * String(v.text || '').length);
+    if (v.kind === 'lockup') { const pf = { family: fontCss(kit.fonts.body), weight: 500, size: 62, letterSpacing: -0.01 }; return (w + 26 + (typeof Text !== 'undefined' ? Text.width(v.product || 'Product', pf) : 200)) / 74; }
+    return w / 74;
+  }
   // Return inner SVG markup recolored to `color` when monochrome is on.
-  function logoInner(kit, color) {
-    const l = kit.logo;
+  function logoInner(kit, color, variant) {
+    const l = variant || kit.logo;
     if (l.kind !== 'svg' || !l.svg) return '';
     if (!l.monochrome) return l.svg.inner;
     let s = l.svg.inner;
@@ -237,5 +268,5 @@ const Brand = (() => {
     return JSON.stringify(k, null, 2);
   }
 
-  return { FONTS, customFonts, fontCss, fontWeights, allFontNames, PRESETS, fromPreset, pairs, parseSvg, logoInner, logoColorFor, makeDemoImage, serialize, clone };
+  return { FONTS, customFonts, fontCss, fontWeights, allFontNames, PRESETS, fromPreset, pairs, parseSvg, logoInner, logoColorFor, logosOf, logoVariant, logoAspectOf, makeDemoImage, serialize, clone };
 })();

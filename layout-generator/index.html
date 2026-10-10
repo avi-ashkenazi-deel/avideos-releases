@@ -46,19 +46,18 @@
         <input id="brandName" type="text" class="input">
       </div>
       <div class="field">
-        <label>Logo</label>
-        <div class="logo-row">
-          <div id="logoPreview" class="logo-preview" title="Logo preview"></div>
-          <div class="stack">
-            <label class="btn small file">Upload SVG or PNG<input id="logoFile" type="file" accept=".svg,image/svg+xml,image/png,image/jpeg,image/webp" hidden></label>
-            <label class="check"><input id="logoMono" type="checkbox" checked> Recolor SVG to allowed logo colors</label>
-          </div>
+        <label>Logo <span class="hint">variants · pick one to upload its file</span></label>
+        <div id="logoVariants" class="logo-variants" role="listbox" aria-label="Logo variants"></div>
+        <div class="row tight">
+          <label class="btn small file" data-tip="Upload the official file for the selected variant">Upload SVG or PNG<input id="logoFile" type="file" accept=".svg,image/svg+xml,image/png,image/jpeg,image/webp" hidden></label>
+          <label class="check"><input id="logoMono" type="checkbox" checked> Recolor to logo colors</label>
         </div>
       </div>
       <div class="field">
-        <label>Colors <span class="hint">click a swatch to change its role</span></label>
-        <div id="colorList" class="swatches"></div>
-        <div class="row">
+        <label>Colors <span class="hint" id="colorCount"></span></label>
+        <div id="colorList" class="pal-strip"></div>
+        <div id="colorEdit" class="pal-edit" hidden></div>
+        <div class="row" id="colorAdd" hidden>
           <input id="newColor" type="color" value="#5938B8" class="colorpick" aria-label="New color">
           <input id="newColorName" type="text" class="input grow" placeholder="Name (optional)">
           <button id="addColorBtn" class="btn small" type="button">Add</button>
@@ -238,8 +237,9 @@
       </div>
       <div class="cv-body">
         <aside class="cv-layers">
-          <div class="cv-panel-head"><h2>Layers</h2><input id="cvSearch" class="input" type="search" placeholder="Search layers"></div>
+          <div class="cv-panel-head"><div class="cv-seg cv-lefttabs" id="cvLeftTabs" role="tablist"><button type="button" data-left="layers" class="on" role="tab">Layers</button><button type="button" data-left="library" role="tab">Library</button></div><input id="cvSearch" class="input" type="search" placeholder="Search layers"></div>
           <div id="cvLayers"></div>
+          <div id="cvLibrary" class="cv-library" hidden></div>
         </aside>
         <div id="stage" class="cv-stage">
           <div id="world" class="cv-world"></div>
@@ -396,10 +396,12 @@
 <script src="js/canvas.js"></script>
 <script src="js/autolayout.js"></script>
 <script src="js/canvas-ui.js"></script>
+<script src="js/library.js"></script>
 <script src="js/sync.js"></script>
 <script src="js/tool-defs.js"></script>
 <script src="js/agent-tools.js"></script>
 <script src="js/agent.js"></script>
+<script src="js/trace.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

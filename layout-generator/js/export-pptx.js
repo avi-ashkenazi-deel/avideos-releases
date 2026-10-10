@@ -23,7 +23,7 @@ const ExportPptx = (() => {
   const RASTER = new Set(['scrim']);
   // Anything PowerPoint cannot draw natively with the same look is rasterized in place: vectors, gradients, shadows, rotation.
   const hasFx = b => !!(b.gradient || (b.shadow && b.shadow.on !== false && (b.shadow.blur || b.shadow.x || b.shadow.y)) || Number(b.rotation) || (b.opacity != null && b.opacity < 1 && b.kind !== 'text'));
-  const isRaster = b => RASTER.has(b.kind) || b.kind === 'icon' || b.kind === 'line' || b.kind === 'vector' || (b.kind === 'shape' && (b.shape === 'quarter' || b.shape === 'blob')) || (b.kind === 'logo' && b.logoKind === 'svg') || (hasFx(b) && b.kind !== 'text' && b.kind !== 'list');
+  const isRaster = b => RASTER.has(b.kind) || b.kind === 'icon' || b.kind === 'line' || b.kind === 'vector' || (b.kind === 'shape' && (b.shape === 'quarter' || b.shape === 'blob')) || (b.kind === 'logo' && (b.logoKind === 'svg' || (b.variant && b.variant !== 'wordmark'))) || (hasFx(b) && b.kind !== 'text' && b.kind !== 'list');
 
   async function rasterLayer(layout, blocks, opts) {
     const svg = Render.toSVG({ ...layout, blocks }, { kit: opts.kit, assets: opts.assets, forExport: true, transparent: true, showGrid: false });
