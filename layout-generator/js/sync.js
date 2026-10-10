@@ -144,13 +144,17 @@ const Sync = (() => {
   // ---- shared images -------------------------------------------------------------------------------------------------
   let sharing = false, shareAgain = false;
   async function sha(text) { const buf = await crypto.subtle.digest('SHA-1', new TextEncoder().encode(text)); return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join(''); }
-  function queueAssetShare(doc) { if (!adapter || !adapter.uploadAsset || status.readOnly) return; if (sharing) { shareAgain = true; return; } sharing = true; shareAssets(doc).catch(e => console.warn('asset share', e)).finally(() => { sharing = false; if (shareAgain) { shareAgain = false; queueAssetShare(ui.doc); } }); }
+  function queueAssetShare(doc) { if (!adapter || (!adapter.uploadAsset && !env.knownAsset) || status.readOnly) return; if (sharing) { shareAgain = true; return; } sharing = true; shareAssets(doc).catch(e => console.warn('asset share', e)).finally(() => { sharing = false; if (shareAgain) { shareAgain = false; queueAssetShare(ui.doc); } }); }
   async function shareAssets(doc) {
     const assets = env.getAssets().images; const renames = new Map();
     const used = new Set(); for (const f of doc.frames) for (const b of f.layout.blocks) if (b.kind === 'image' && b.asset) used.add(b.asset);
     for (const it of doc.library || []) for (const b of it.blocks || []) if (b.kind === 'image' && b.asset) used.add(b.asset);
     for (const id of used) {
       if (/^a_[0-9a-f]{16}$/.test(id)) { const r = recs.get('a~' + id); if (r) continue; }
+      // a shared library picture already has a home: point to it instead of uploading a copy
+      const known = env.knownAsset ? env.knownAsset(id) : null;
+      if (known && known.url && (!/^data:/.test(known.url) || known.url.length < 180000)) { const rec = { _k: 'a~' + id, _v: now(), _by: me.id, id, url: known.url, name: String(known.name || '').slice(0, 80), w: known.w, h: known.h }; recs.set(rec._k, rec); synced.set(rec._k, 'asset'); adapter.send([rec], false); continue; }
+      if (!adapter.uploadAsset) continue; // people who may not upload still share library pictures (above)
       const a = assets.find(x => x.id === id); if (!a || !a.dataUrl) continue;
       const gid = /^a_[0-9a-f]{16}$/.test(id) ? id : 'a_' + (await sha(a.dataUrl)).slice(0, 16);
       if (!recs.get('a~' + gid)) {
@@ -205,6 +209,7 @@ const Sync = (() => {
         else if (m.t === 'presence') { const p = peerMap.get(m.id) || { id: m.id }; Object.assign(p, sanitizePresence(m.p)); peerMap.set(m.id, p); setPeers([...peerMap.values()]); }
         else if (m.t === 'leave') { peerMap.delete(m.id); setPeers([...peerMap.values()]); }
         else if (m.t === 'peers') { peerMap = new Map((m.list || []).filter(p => p.id !== me.id).map(p => [p.id, { id: p.id, ...sanitizePresence(p.p) }])); setPeers([...peerMap.values()]); }
+        else if (m.t === 'libs' && env.onLibs) env.onLibs();
         else if (m.t === 'rpc' && env.onRpc) { Promise.resolve().then(() => env.onRpc(m.name, m.args || {})).then(result => send({ t: 'rpc-result', id: m.id, result }), err => send({ t: 'rpc-result', id: m.id, error: String(err && err.message || err) })); }
       };
       ws.onclose = () => { status.connected = false; notify(); if (closed) return; setTimeout(connect, Math.min(8000, 500 * 2 ** retry++)); };

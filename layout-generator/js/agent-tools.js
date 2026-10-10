@@ -34,6 +34,7 @@ const AgentTools = (() => {
     if (b.align && b.align !== 'left') o.align = b.align;
     if (b.kind === 'image') o.image = b.asset ? 'set' : 'empty';
     if (b.kind === 'icon') o.icon = b.name;
+    if (b.code) o.code = { component: b.code.name, from: b.code.pkg, props: b.code.props || {} };
     if (b.overflow) o.overflow = true; if (b.hidden) o.hidden = true; if (b.locked) o.locked = true;
     if (b.opacity != null && b.opacity < 1) o.opacity = b.opacity;
     if (b.parent) o.parent = b.parent;
@@ -121,16 +122,27 @@ const AgentTools = (() => {
       note(`Moved ${bs.length} block${bs.length === 1 ? '' : 's'} ${box ? 'into ' + (box.label || 'a box') : 'to the top level'}`);
       return { moved: bs.length };
     },
-    list_components({ category }) { const items = Library.all(doc(), kit()).filter(i => !category || i.category === category); return { components: items.map(i => ({ id: i.id, name: i.name, category: i.category, approved: !!i.approved, w: i.w, h: i.h })) }; },
-    insert_component({ frame_id, component, box_id }) {
+    list_components({ category, library, query }) {
+      const q = String(query || '').toLowerCase(); const lib = String(library || '').toLowerCase();
+      const items = Library.all(doc(), kit()).filter(i => (!category || i.category === category) && (!lib || i.libName.toLowerCase() === lib || i.libId === library) && (!q || `${i.name} ${i.code ? i.code.name : ''}`.toLowerCase().includes(q)));
+      const libs = Library.sources(doc(), kit()).map(s => ({ id: s.id, name: s.name, on: LibStore.isOn(s.id), items: s.items.length }));
+      return { libraries: libs, components: items.slice(0, 300).map(i => ({ id: i.id, name: i.name, library: i.libName, category: i.category, approved: !!i.approved, w: i.w, h: i.h, ...(i.code ? { code: `<${i.code.name}> from ${i.code.pkg}`, props: i.code.spec ? i.code.spec.props.filter(p => p.values || /boolean|string|number/.test(p.type)).slice(0, 20).map(p => p.values ? `${p.name}: ${p.values.join('|')}` : `${p.name}: ${p.type}`) : undefined } : {}) })), ...(items.length > 300 ? { more: items.length - 300 } : {}) };
+    },
+    insert_component({ frame_id, component, box_id, props, text }) {
       const f = F(frame_id); const items = Library.all(doc(), kit()); const q = String(component || '').toLowerCase();
-      const it = items.find(i => i.id === component) || items.find(i => i.name.toLowerCase() === q) || items.find(i => i.name.toLowerCase().includes(q));
-      if (!it) throw new Error(`No component "${component}". Try list_components.`);
+      const it = items.find(i => i.id === component) || items.find(i => i.name.toLowerCase() === q) || items.find(i => i.code && i.code.name.toLowerCase() === q) || items.find(i => i.name.toLowerCase().includes(q));
+      if (!it) throw new Error(`No component "${component}". Try list_components (libraries that are off are not searched).`);
       const box = box_id ? Bk(f, box_id) : null;
+      let blocks = it.blocks;
+      // a code component with props or text: draw its stand-in for them
+      if (it.code && it.code.spec && (props || text != null)) {
+        const spec = { name: it.code.name, pkg: it.code.pkg, ...it.code.spec }; const p = { ...CodeKit.defaultProps(spec), ...(props && typeof props === 'object' ? props : {}) };
+        blocks = Library.settle(CodeKit.standIn(spec, p, kit(), text != null ? [String(text)] : undefined)).blocks;
+      }
       CanvasUI.select(f.id, box ? [box.id] : []);
-      const tops = CanvasUI.insertComponent(it.blocks, { name: it.name, history: firstWrite() });
+      const tops = CanvasUI.insertComponent(blocks, { name: it.name, history: firstWrite() });
       note(`Added ${it.name}`);
-      return { block_ids: (tops || []).map(b => b.id), component: it.name };
+      return { block_ids: (tops || []).map(b => b.id), component: it.name, ...(it.code ? { code: it.code.name } : {}) };
     },
     get_selection() {
       const s = CanvasUI.selection();

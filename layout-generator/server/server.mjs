@@ -6,6 +6,8 @@
 //   PORT=9000 HOST=0.0.0.0 LG_TOKEN=secret node server/server.mjs
 //
 // Rooms live in memory and are saved to server/data/rooms/<id>.json. Images go to server/data/assets/.
+// Shared libraries (the same for every room) are saved to server/data/libraries.json; LG_ADMIN_KEY=… limits editing
+// them to people who have the key.
 // MCP: claude mcp add layout --transport http http://127.0.0.1:8787/mcp
 // Tool calls are carried out by a browser tab that has the room open (the canvas engine runs there), so keep one open.
 import http from 'node:http';
@@ -21,6 +23,7 @@ const DATA = path.resolve(process.env.LG_DATA || path.join(ROOT, 'server', 'data
 const PORT = +(process.env.PORT || 8787);
 const HOST = process.env.HOST || '127.0.0.1';
 const TOKEN = process.env.LG_TOKEN || '';
+const ADMIN_KEY = process.env.LG_ADMIN_KEY || '';
 const LOCAL = /^(127\.0\.0\.1|localhost|::1)$/.test(HOST);
 const VERSION = '1.0.0';
 const MAX_MSG = 64 * 1024 * 1024;
@@ -140,6 +143,33 @@ async function joinRoom(conn, roomId) {
   };
   conn.onClose = () => { room.clients.delete(conn); for (const c of room.clients) sendJSON(c, { t: 'leave', id: conn.id }); log(`leave ${room.id} ${conn.id} (${room.clients.size} here)`); };
 }
+// ---- Shared libraries --------------------------------------------------------------------------------------------------
+const LIB_ID = /^[A-Za-z0-9_.:-]{1,64}$/;
+let libs = null; let libSave = null;
+async function getLibs() {
+  if (libs) return libs;
+  libs = { libraries: new Map(), items: new Map() };
+  try { const j = JSON.parse(await readFile(path.join(DATA, 'libraries.json'), 'utf8')); for (const l of j.libraries || []) if (l && LIB_ID.test(l.id)) libs.libraries.set(l.id, l); for (const it of j.items || []) if (it && LIB_ID.test(it.id)) libs.items.set(it.id, it); } catch { }
+  return libs;
+}
+function saveLibs() {
+  clearTimeout(libSave);
+  libSave = setTimeout(async () => {
+    try { await mkdir(DATA, { recursive: true }); const file = path.join(DATA, 'libraries.json'); await writeFile(file + '.tmp', JSON.stringify({ v: 1, saved: new Date().toISOString(), libraries: [...libs.libraries.values()], items: [...libs.items.values()] })); await rename(file + '.tmp', file); } catch (e) { log('library save failed', e.message); }
+  }, 300);
+}
+const libsBody = L => ({ lgLibraries: 1, keyRequired: !!ADMIN_KEY, libraries: [...L.libraries.values()], items: [...L.items.values()] });
+function libOp(L, m) {
+  if (m.op === 'check') return;
+  if (m.op === 'putLib') { const l = m.lib; if (!l || !LIB_ID.test(l.id) || typeof l.name !== 'string') throw new Error('bad library'); L.libraries.set(l.id, { id: l.id, name: l.name.slice(0, 60), description: String(l.description || '').slice(0, 200), order: +l.order || 0, defaultOn: l.defaultOn !== false, updated: Date.now(), by: String(l.by || '').slice(0, 80) }); return; }
+  if (m.op === 'delLib') { L.libraries.delete(m.id); for (const [k, it] of L.items) if (it.lib === m.id) L.items.delete(k); return; }
+  if (m.op === 'putItem') { const it = m.item; if (!it || !LIB_ID.test(it.id) || !LIB_ID.test(it.lib) || !Array.isArray(it.blocks)) throw new Error('bad item'); if (!L.libraries.has(it.lib)) throw new Error('no such library'); if (JSON.stringify(it).length > 2 * 1024 * 1024) throw new Error('item over 2 MB'); L.items.set(it.id, it); return; }
+  if (m.op === 'delItem') { L.items.delete(m.id); return; }
+  throw new Error('unknown op');
+}
+let libPush = null;
+function broadcastLibs() { clearTimeout(libPush); libPush = setTimeout(() => { for (const r of rooms.values()) for (const c of r.clients) sendJSON(c, { t: 'libs' }); }, 400); }
+
 // The browser tab that carries out agent calls: the most recently active one in the room (or anywhere).
 function hostFor(roomId) {
   const all = roomId && rooms.get(roomId) ? [...rooms.get(roomId).clients] : [...rooms.values()].flatMap(r => [...r.clients]);
@@ -242,6 +272,17 @@ const server = http.createServer(async (req, res) => {
       const buf = Buffer.from(await r.arrayBuffer());
       if (buf.length > 150 * 1024 * 1024) return send(res, 413, 'That deck is over 150 MB');
       return send(res, 200, buf, { 'content-type': 'application/vnd.openxmlformats-officedocument.presentationml.presentation' });
+    }
+    if (url.pathname === '/api/libraries') {
+      const L = await getLibs();
+      if (req.method === 'GET') return json(res, 200, libsBody(L));
+      if (req.method !== 'POST') return send(res, 405, '', { allow: 'GET, POST' });
+      if (ADMIN_KEY && String(req.headers['x-lg-admin'] || '') !== ADMIN_KEY) return send(res, 401, 'admin key required');
+      const m = JSON.parse((await readBody(req, 4 * 1024 * 1024)).toString('utf8') || 'null') || {};
+      try { libOp(L, m); } catch (e) { return send(res, 400, e.message); }
+      if (m.op !== 'check') { saveLibs(); broadcastLibs(); }
+      // item writes answer small (a big import is hundreds of them); library changes send everything back
+      return json(res, 200, m.op === 'putItem' || m.op === 'delItem' ? { ok: true } : libsBody(L));
     }
     if (url.pathname === '/api/assets' && req.method === 'POST') {
       const type = String(req.headers['content-type'] || '').split(';')[0];

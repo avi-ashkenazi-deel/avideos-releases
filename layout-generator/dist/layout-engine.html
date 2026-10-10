@@ -514,14 +514,50 @@ input[disabled] { opacity: .5; cursor: not-allowed; }
 .lib-name { font-size: 11.5px; color: var(--fg-2); line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lib-ok { color: #4CC38A; font-weight: 700; }
 .lib-tag { font-size: 9.5px; color: var(--fg-3); border: 1px solid var(--line-2); border-radius: 3px; padding: 0 3px; }
-.lib-acts { display: flex; gap: 4px; }
+.lib-acts { display: none; gap: 4px; }
+.lib-item:hover .lib-acts, .lib-item:focus-within .lib-acts { display: flex; }
+@media (hover: none) { .lib-acts { display: flex; } }
 .lib-acts button { flex: 1; border: 1px solid var(--line-2); background: transparent; color: var(--fg-3); border-radius: 4px; font-size: 10.5px; padding: 2px 4px; cursor: pointer; }
 .lib-acts button:hover { color: var(--fg); border-color: var(--fg-3); }
 .lib-acts button:last-child { flex: none; }
 .lib-foot { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
 .lib-name-row { display: flex; gap: 6px; margin-top: 10px; }
+.lib-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.lib-top .hint { font-size: 11px; }
+.lib-sec { margin-bottom: 10px; }
+.lib-sec-head { display: flex; align-items: center; gap: 6px; width: 100%; background: none; border: 0; color: var(--fg); font: inherit; font-size: 12px; font-weight: 600; padding: 4px 0; cursor: pointer; text-align: left; }
+.lib-sec-head:hover { color: var(--accent); }
+.lib-caret { width: 10px; color: var(--fg-3); font-size: 10px; }
+.lib-count { color: var(--fg-3); font-weight: 400; }
+.lib-more { margin-top: 6px; width: 100%; }
+.lib-form { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; padding: 8px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--bg); }
+.lib-form .cv-row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.lib-form select { max-width: 100%; }
+.libs-modal { max-width: 560px; }
+.libs-list { display: flex; flex-direction: column; gap: 2px; margin-bottom: 12px; }
+.libs-row { display: flex; align-items: center; gap: 12px; padding: 8px 6px; border-radius: 8px; }
+.libs-row:hover { background: var(--bg-2, rgba(127,127,127,.06)); }
+.libs-main { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.libs-main .hint { font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; }
+.libs-row:not(.on) .libs-main b { color: var(--fg-3); }
+.libs-switch { position: relative; width: 34px; height: 20px; flex: none; cursor: pointer; }
+.libs-switch input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.libs-switch span { position: absolute; inset: 0; border-radius: 10px; background: var(--line-2); transition: background .15s; }
+.libs-switch span::after { content: ''; position: absolute; left: 3px; top: 3px; width: 14px; height: 14px; border-radius: 50%; background: #fff; transition: transform .15s; }
+.libs-switch input:checked + span { background: var(--accent); }
+.libs-switch input:checked + span::after { transform: translateX(14px); }
+.libs-switch input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+.libs-edit { display: flex; flex-direction: column; gap: 6px; margin: 0 6px 8px 52px; padding: 10px; border: 1px solid var(--line-2); border-radius: 8px; }
+.libs-new { margin: 4px 0 14px; }
+.libs-people { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.libs-person { display: inline-flex; align-items: center; gap: 2px; border: 1px solid var(--line-2); border-radius: 14px; padding: 2px 4px 2px 10px; font-size: 12.5px; }
+.libs-person .btn.icon { padding: 0 4px; min-width: 0; height: 20px; }
+.libs-hits { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0; }
+.btn.danger { border-color: var(--danger, #D93D3D); color: var(--danger, #D93D3D); }
 .lib-hint { margin-top: 8px; }
 .cv-panel-head { gap: 8px; }
+.cv-codename { margin: 0 0 8px; font-size: 13px; }
+.cv-codename code { color: var(--accent); font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12.5px; }
 
 </style>
 
@@ -854,6 +890,16 @@ input[disabled] { opacity: .5; cursor: not-allowed; }
         <h4>Canvas file</h4>
         <div class="cv-row"><label class="btn small file">Open canvas JSON<input id="canvasFile" type="file" accept="application/json,.json" hidden></label></div>
       </div>
+    </div>
+  </div>
+
+  <div id="libsModal" class="modal" hidden>
+    <div class="modal-inner about libs-modal">
+      <div class="detail-head">
+        <h3>Libraries</h3>
+        <button class="btn ghost icon" data-libs-close type="button" aria-label="Close">✕</button>
+      </div>
+      <div class="prose libs-body"></div>
     </div>
   </div>
 
@@ -5247,6 +5293,8 @@ const Canvas = (() => {
       nd.box = { left: Math.round(b.x - origin.x), top: Math.round(b.y - origin.y), width: Math.round(b.w), height: Math.round(Math.max(b.h, nd.minH || 0)) };
       if (flow) { const main = parentFlex.dir === 'row' ? 'w' : 'h'; nd.size = { w: Auto.sizing(I, b, 'w'), h: Auto.sizing(I, b, 'h'), main }; for (const k of ['minW', 'maxW', 'minH', 'maxH']) if (b[k] != null) nd[k] = b[k]; }
       if (b.kind === 'box') { nd.flex = flexOf(I.S(b.id)); nd.children = build(b.id, { x: b.x, y: b.y }, nd.flex); }
+      // a code component: React writes the real component; HTML keeps the stand-in and names it
+      if (b.code && b.code.name) nd.code = { ...b.code, label: typeof CodeKit !== 'undefined' ? CodeKit.textOf(frame, b) : '' };
       return nd;
     }).filter(Boolean);
     const flex = flexOf(I.rootS);
@@ -5289,7 +5337,8 @@ const Canvas = (() => {
     const parts = [`<div class="frame" style="${style(rootCss(frame, tree))}">`];
     const emitNode = (nd, depth) => {
       const pad = '  '.repeat(depth); const s = style(cssOf(nd));
-      if (nd.children) { parts.push(`${pad}<div data-name="${e(nd.role)}" style="${s}">`); nd.children.forEach(c => emitNode(c, depth + 1)); parts.push(`${pad}</div>`); return; }
+      const comp = nd.code ? ` data-component="${e(nd.code.name)}" data-props="${e(JSON.stringify(nd.code.props || {})).replace(/"/g, '&quot;')}"` : '';
+      if (nd.children) { parts.push(`${pad}<div data-name="${e(nd.role)}"${comp} style="${s}">`); nd.children.forEach(c => emitNode(c, depth + 1)); parts.push(`${pad}</div>`); return; }
       if (nd.tag === 'img') parts.push(`${pad}<img src="${e(nd.src)}" alt="" style="${s}">`);
       else if (nd.tag === 'svg') parts.push(`${pad}<svg viewBox="${nd.viewBox}" preserveAspectRatio="none" style="${s}">${nd.inner}</svg>`);
       else if (nd.tag === 'ul' || nd.tag === 'ol') parts.push(`${pad}<${nd.tag} style="${s}">${nd.items.map(i => `<li>${e(i)}</li>`).join('')}</${nd.tag}>`);
@@ -5328,8 +5377,21 @@ const Canvas = (() => {
     const tree = codeTree(frame, env);
     const attrs = st => { const { cls, style } = twClasses(st); const sx = Object.keys(style).length ? ` style={{ ${Object.entries(style).map(([k, v]) => `${k}: ${JSON.stringify(v)}`).join(', ')} }}` : ''; return ` className="${cls.join(' ')}"${sx}`; };
     const lines = [`export default function ${name}() {`, `  return (`, `    <div${attrs(rootCss(frame, tree))}>`];
+    const imports = new Map(); // package -> component names
+    // A code component goes out as itself; a wrapper only carries where it sits (absolute, or filling its stack).
+    const emitComponent = (nd, pad) => {
+      const C = nd.code; const nm = String(C.name).replace(/[^A-Za-z0-9_]/g, '') || 'Component'; const pkg = String(C.pkg || 'components');
+      if (!imports.has(pkg)) imports.set(pkg, new Set()); imports.get(pkg).add(nm);
+      const props = { ...(C.props || {}) }; const tp = C.text; let kids = '';
+      if (tp && C.label) { if (tp === 'children') kids = e(C.label); else if (props[tp] == null) props[tp] = C.label; }
+      const tag = `<${nm}${typeof CodeKit !== 'undefined' ? CodeKit.jsxProps(props) : ''}${kids ? `>${kids}</${nm}>` : ' />'}`;
+      const PLACE = new Set(['left', 'top', 'flex', 'align-self', 'min-width', 'min-height']);
+      const place = cssOf(nd).filter(([k, v]) => k === 'position' ? v === 'absolute' : PLACE.has(k));
+      if (place.length) lines.push(`${pad}<div${attrs(place)}>`, `${pad}  ${tag}`, `${pad}</div>`); else lines.push(`${pad}${tag}`);
+    };
     const emitNode = (nd, depth) => {
       const pad = '  '.repeat(depth + 2); const c = attrs(cssOf(nd));
+      if (nd.code) { emitComponent(nd, pad); return; }
       if (nd.children) { lines.push(`${pad}<div${c}>`); nd.children.forEach(ch => emitNode(ch, depth + 1)); lines.push(`${pad}</div>`); return; }
       if (nd.tag === 'img') lines.push(`${pad}<img src="/${e(nd.src).replace(/[^A-Za-z0-9._-]+/g, '-')}" alt=""${c} />`);
       else if (nd.tag === 'svg') lines.push(`${pad}<svg viewBox="${nd.viewBox}" preserveAspectRatio="none"${c} dangerouslySetInnerHTML={{ __html: ${JSON.stringify(nd.inner)} }} />`);
@@ -5338,7 +5400,8 @@ const Canvas = (() => {
     };
     tree.children.forEach(nd => emitNode(nd, 1));
     lines.push('    </div>', '  );', '}');
-    return lines.join('\n');
+    const head = [...imports].map(([pkg, names]) => `import { ${[...names].sort().join(', ')} } from ${JSON.stringify(pkg)};`);
+    return (head.length ? head.join('\n') + '\n\n' : '') + lines.join('\n');
   }
 
   // ---- Batch edits for one or many frames -------------------------------------------------------------------------
@@ -6997,6 +7060,24 @@ const CanvasUI = (() => {
       <div class="cv-section"><h3>Fill</h3>${swatches('fill', '')}<p class="hint">Sets the fill (or text color) of every selected block.</p></div>
       <div class="cv-section"><h3>Effects</h3>${num('opacity', 'Opacity', 1, 0.05, 'min="0" max="1"')}<label class="cv-check"><input type="checkbox" data-p="shadow.on"> Drop shadow</label></div>`;
   }
+  // A code component (from a design-system manifest): its real name and props. Changing a prop redraws the stand-in.
+  function codeSection(f, b) {
+    if (typeof CodeKit === 'undefined') return '';
+    const root = CodeKit.ownerOf(f, b); if (!root) return '';
+    const C = root.code; const spec = typeof Library !== 'undefined' ? Library.specFor(C) : null; const props = C.props || {};
+    const skip = p => p.name === C.text || p.name === 'children' || p.name === 'className' || p.name === 'sx' || p.name === 'style' || /^on[A-Z]/.test(p.name) || /ReactNode|=>|Element|Ref|function/i.test(p.type || '');
+    const ctl = p => {
+      const v = props[p.name]; const lab = `<span title="${esc((p.type || '') + (p.description ? ' — ' + p.description : ''))}">${esc(p.name)}${p.required ? '*' : ''}</span>`;
+      if (p.values && p.values.length) return `<label class="cv-f">${lab}<select data-cprop="${esc(p.name)}"><option value="">${p.default ? `default (${esc(p.default)})` : '—'}</option>${p.values.map(x => `<option value="${esc(x)}" ${String(v) === x ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></label>`;
+      if (CodeKit.isBool(p)) return `<label class="cv-check"><input type="checkbox" data-cprop="${esc(p.name)}" data-ctype="bool" ${v === true ? 'checked' : ''}> ${esc(p.name)}</label>`;
+      return `<label class="cv-f">${lab}<input type="text" data-cprop="${esc(p.name)}" value="${esc(v == null ? '' : typeof v === 'object' ? JSON.stringify(v) : v)}" placeholder="${esc(p.default || '')}"></label>`;
+    };
+    const list = spec ? spec.props.filter(p => !skip(p)) : Object.keys(props).map(n => ({ name: n, type: typeof props[n] === 'boolean' ? 'boolean' : 'string' }));
+    return `<div class="cv-section"><h3>Code component</h3>
+      <p class="cv-codename"><code>&lt;${esc(C.name)}&gt;</code> <span class="hint">${esc(C.pkg || '')}</span>${spec && spec.story ? ` <a href="${esc(spec.story)}" target="_blank" rel="noopener" class="hint">Storybook ↗</a>` : ''}</p>
+      ${root !== b ? `<div class="cv-row">${btn('code-select', 'Select the component')}</div>` : list.slice(0, 40).map(ctl).join('')}
+      <p class="hint">${spec ? '' : 'Turn on the library that has this component to see all its props. '}${C.standIn ? 'The stand-in redraws when a prop changes; ' : ''}React export writes the real &lt;${esc(C.name)}&gt; with these props${C.text ? ` and the text as ${esc(C.text)}` : ''}.</p></div>`;
+  }
   function fillSection(b) {
     if (b.kind === 'box' && (!b.fill || b.fill === 'none') && !b.gradient) return `<div class="cv-section"><h3>Fill</h3><label class="cv-check"><input type="checkbox" data-p="hasFill"> Fill</label>${num('radius', 'Radius', b.radius || 0, 4)}</div>`;
     const isText = b.kind === 'text' || b.kind === 'list';
@@ -7034,6 +7115,7 @@ const CanvasUI = (() => {
       <label class="cv-check"><input type="checkbox" data-b="locked" ${b.locked ? 'checked' : ''}> Lock</label>
       <label class="cv-check"><input type="checkbox" data-b="decorative" ${b.decorative ? 'checked' : ''}> Decorative (not content)</label>
     </div>
+    ${codeSection(f, b)}
     ${b.kind === 'text' ? `<div class="cv-section"><h3>Text</h3><textarea class="cv-text" data-p="text" rows="3" spellcheck="true">${esc(Canvas.sourceText(b))}</textarea><p class="hint">Or double-click the text on the canvas.</p>${b.overflow ? '<p class="hint" style="color:var(--danger)">Text is wider than its box. Widen the box or lower the size.</p>' : ''}</div>` : ''}
     ${b.kind === 'list' ? `<div class="cv-section"><h3>Items</h3><textarea class="cv-text" data-p="items" rows="4" spellcheck="true">${esc((b.items || []).join('\n'))}</textarea>${selectF('marker', 'Marker', b.marker || 'bullet', [['bullet', 'Bullet'], ['number', 'Number'], ['none', 'None']])}</div>` : ''}
     ${b.kind === 'button' ? `<div class="cv-section"><h3>Label</h3><input type="text" class="cv-text" data-p="text" value="${esc(b.text)}">${color('color', 'Text color', b.color, b.colorToken)}</div>` : ''}
@@ -7058,6 +7140,16 @@ const CanvasUI = (() => {
     ${strokeSection(b)}
     ${effectsSection(b)}
     <div class="cv-section cv-adv"><h3>Code</h3><textarea class="cv-code" data-code="block" spellcheck="false">${esc(JSON.stringify(stripBlock(b), null, 1))}</textarea><div class="cv-row">${btn('apply-code', 'Apply JSON')}${btn('copy-code', 'Copy')}</div></div>`;
+  }
+  function setCodeProp(f, b, k, v) {
+    const root = CodeKit.ownerOf(f, b); if (!root) return;
+    hist.push(doc);
+    const props = { ...(root.code.props || {}) };
+    if (v === '' || v === false) delete props[k]; else if (v === true) props[k] = true; else { const t = String(v).trim(); props[k] = /^-?\d+(\.\d+)?$/.test(t) ? +t : /^[[{]/.test(t) ? (() => { try { return JSON.parse(t); } catch { return t; } })() : t; }
+    root.code = { ...root.code, props };
+    const spec = Library.specFor(root.code);
+    if (root.code.standIn && spec) { CodeKit.restyle(f, root, spec, env.getKit()); select(f.id, [root.id]); }
+    rerenderFrame(f); renderLayers(); drawOverlay(); renderProps(); persist(); updateUndo();
   }
   function stripBlock(b) { const c = Canvas.clone(b); delete c.lines; delete c.inkW; delete c.capacity; delete c.gap; delete c.maxLines; delete c.minSize; delete c.overflow; delete c.genPrompt; delete c.genMeta; return c; }
   function stripLayout(L) { const c = Canvas.clone(L); delete c.signature; c.blocks = c.blocks.map(stripBlock); return c; }
@@ -7158,6 +7250,7 @@ const CanvasUI = (() => {
         renderLayers(); drawOverlay(); persist(); updateUndo(); return;
       }
       if (t.dataset.al) { const tg = autoTarget(); if (!tg) return; if (!live) hist.push(doc); setAuto(tg.f, tg.box, t.dataset.al, t.type === 'checkbox' ? t.checked : t.value); rerenderFrame(tg.f); drawOverlay(); if (!live) renderProps(); persist(); updateUndo(); return; }
+      if (t.dataset.cprop && bs.length === 1) { if (live) return; setCodeProp(f, bs[0], t.dataset.cprop, t.dataset.ctype === 'bool' ? t.checked : t.value); return; }
       if (t.dataset.b && bs.length) { hist.push(doc); for (const b of bs) b[t.dataset.b] = t.checked; renderLayers(); drawOverlay(); persist(); updateUndo(); return; }
       const k = t.dataset.p; if (!k) return;
       if (!live) hist.push(doc);
@@ -7203,6 +7296,7 @@ const CanvasUI = (() => {
       const act = e.target.closest('[data-act]'); if (!act) return;
       const a = act.dataset.act;
       if (a === 'al-add') { addAutoLayout(); return; } if (a === 'al-remove') { removeAutoLayout(); return; }
+      if (a === 'code-select' && f && bs[0]) { const root = CodeKit.ownerOf(f, bs[0]); if (root) select(f.id, [root.id]); return; }
       if (a === 'frame-sel') { frameSelection(); return; } if (a === 'unwrap') { unwrapSelection(); return; }
       if (a === 'trace' && f && bs[0] && env.traceImage) { act.disabled = true; act.textContent = 'Reading the image…'; try { await env.traceImage(f, bs[0]); } catch (err) { env.toast(err.message || String(err)); } finally { act.disabled = false; act.textContent = '✦ Rebuild as layers'; } return; }
       if (a === 'edit-palette') { select(null, []); const sec = el.querySelector('[data-palette]'); if (sec) { sec.open = true; sec.scrollIntoView({ block: 'start', behavior: 'smooth' }); } return; }
@@ -7278,16 +7372,422 @@ const CanvasUI = (() => {
   };
 })();
 
+/* js/libstore.js */
+/* Shared libraries: named sets of approved pieces (Brand, Product design, Sales…) that live outside any one canvas,
+   so everyone sees the same set. Admins (a named list the page owner keeps) create libraries and curate their items;
+   everyone else browses them and turns each library on or off for themselves, like enabling a library in Figma.
+   Libraries an admin marks "on by default" start on for everyone; a person's own choice wins after that.
+   Three homes, picked at start:
+   - claude.ai artifact: the page's shared database (collections libraries and libitems, the admin list in
+     config/admins), pictures in the page's shared assets. The page's database rules let only Editors write
+     libraries; the admin list picks which of them curate. Each person's on/off choices are private to them.
+   - self-hosted server: /api/libraries, saved to server/data/libraries.json and pushed to every open tab; when the
+     server sets LG_ADMIN_KEY, editing needs that key.
+   - neither: this browser's storage; libraries move between people as JSON (Export / Import). */
+const LibStore = (() => {
+  const LS = { get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch { return d; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch { return false; } } };
+  const ID = /^[A-Za-z0-9_.:-]{1,64}$/;
+  const MAX_ITEM = 240 * 1024;
+  let env = null, backend = null, started = null;
+  const S = { mode: 'local', libs: new Map(), items: new Map(), admins: [], uid: null, owner: false, canEdit: null, keyRequired: false, keyOk: false, ready: false, error: '' };
+  let prefs = LS.get('lg.libsOn', {}) || {};
+  const listeners = new Set();
+  const emit = () => { for (const fn of listeners) { try { fn(); } catch (e) { console.error(e); } } };
+  const uid = p => p + Math.random().toString(36).slice(2, 10);
+  const clone = v => JSON.parse(JSON.stringify(v));
+
+  // ---- incoming data --------------------------------------------------------------------------------------------------
+  function cleanLib(l) {
+    if (!l || typeof l !== 'object' || !ID.test(String(l.id || ''))) return null;
+    return { id: String(l.id), name: String(l.name || 'Library').slice(0, 60), description: String(l.description || '').slice(0, 200), order: Number.isFinite(+l.order) ? +l.order : 0, defaultOn: l.defaultOn !== false, updated: +l.updated || 0, by: typeof l.by === 'string' ? l.by.slice(0, 80) : '' };
+  }
+  function cleanItem(it) {
+    if (!it || typeof it !== 'object' || !ID.test(String(it.id || '')) || !ID.test(String(it.lib || '')) || !Array.isArray(it.blocks)) return null;
+    const out = { ...it, id: String(it.id), lib: String(it.lib), name: String(it.name || 'Component').slice(0, 60), category: String(it.category || 'components').slice(0, 24), approved: !!it.approved, w: Math.max(1, +it.w || 100), h: Math.max(1, +it.h || 100), v: +it.v || 1 };
+    if (it.assets && typeof it.assets === 'object') { out.assets = {}; for (const [k, a] of Object.entries(it.assets)) if (/^a_[0-9a-f]{16}$/.test(k) && a && (typeof a.url === 'string' || typeof a.dataUrl === 'string')) out.assets[k] = { url: typeof a.url === 'string' ? a.url : undefined, dataUrl: typeof a.dataUrl === 'string' && /^data:image\//.test(a.dataUrl) ? a.dataUrl : undefined, name: String(a.name || '').slice(0, 80), w: +a.w || 0, h: +a.h || 0 }; }
+    return out;
+  }
+  function setAll({ libraries, items, admins }) {
+    if (libraries) { S.libs.clear(); for (const l of libraries) { const c = cleanLib(l); if (c) S.libs.set(c.id, c); } }
+    if (items) { S.items.clear(); for (const it of items) { const c = cleanItem(it); if (c) S.items.set(c.id, c); } }
+    if (admins) S.admins = admins.filter(x => typeof x === 'string').slice(0, 100);
+    S.ready = true; loadAssets(); emit();
+  }
+  function upsert(kind, list, removed = []) {
+    const map = kind === 'lib' ? S.libs : S.items; const clean = kind === 'lib' ? cleanLib : cleanItem;
+    for (const x of list) { const c = clean(x); if (c) map.set(c.id, c); }
+    for (const id of removed) map.delete(id);
+    S.ready = true; if (kind === 'item') loadAssets(); emit();
+  }
+  // Pictures inside shared items: each viewer loads them once, under the shared id the blocks use.
+  const loaded = new Set();
+  function loadAssets() {
+    if (!env || !env.ensureImage) return;
+    for (const it of S.items.values()) for (const [id, a] of Object.entries(it.assets || {})) {
+      if (loaded.has(id)) continue; loaded.add(id);
+      Promise.resolve(env.ensureImage({ id, url: a.url, dataUrl: a.dataUrl, name: a.name || it.name })).catch(() => loaded.delete(id));
+    }
+  }
+  function assetInfo(id) { for (const it of S.items.values()) { const a = it.assets && it.assets[id]; if (a && a.url) return { id, ...a }; } return null; }
+
+  // ---- backends -------------------------------------------------------------------------------------------------------
+  async function artifactBackend() {
+    if (!(window.claude && typeof window.claude.use === 'function')) return null;
+    const [db, user, assets] = await Promise.all(['db', 'user', 'assets'].map(n => window.claude.use(n).catch(() => null)));
+    if (!db) return null;
+    try { S.uid = user && user.id ? await user.id() : null; } catch { S.uid = null; }
+    try { S.owner = !!(user && await user.isOwner()); } catch { S.owner = false; }
+    try { S.canEdit = user && user.canEdit ? await user.canEdit() : null; } catch { S.canEdit = null; }
+    const denied = e => e && (e.code === 'invalid_argument' || e.code === 'not_granted' || e.code === 'permission_denied');
+    const why = e => denied(e) ? new Error(S.owner ? 'The page refused the change. Republish it with its library rules, then try again.' : 'Only library admins with Editor access to this page can change shared libraries. Ask the page owner to add you as an admin and give you Editor in Share.') : (e instanceof Error ? e : new Error((e && e.message) || String(e)));
+    const write = async fn => { try { return await fn(); } catch (e) { throw why(e); } };
+    const ready = { libs: false, items: false };
+    const done = () => { if (ready.libs && ready.items && !S.ready) { S.ready = true; loadAssets(); emit(); } };
+    db.collection('libraries').onSnapshot(snap => {
+      const list = []; for (const d of snap.docs) { const v = d.data(); if (v) list.push({ ...v, id: d.id }); }
+      if (!ready.libs && snap.metadata && snap.metadata.fromCache && !snap.size) return;
+      ready.libs = true; S.libs.clear(); upsert('lib', list); done();
+    }, e => { S.error = (e && e.code) || 'db'; emit(); });
+    db.collection('libitems').onSnapshot(snap => {
+      const list = []; for (const d of snap.docs) { const v = d.data(); if (v) list.push({ ...v, id: d.id }); }
+      if (!ready.items && snap.metadata && snap.metadata.fromCache && !snap.size) return;
+      ready.items = true; S.items.clear(); upsert('item', list); done();
+    }, e => { S.error = (e && e.code) || 'db'; emit(); });
+    db.doc('config/admins').onSnapshot(s => { const d = s.data(); S.admins = d && Array.isArray(d.ids) ? d.ids.filter(x => typeof x === 'string') : []; emit(); }, () => { });
+    // Each person's on/off choices: private to them, so they follow them across devices.
+    if (S.uid) {
+      const ref = db.doc(`data/users/${S.uid}/prefs`);
+      ref.onSnapshot(s => { const d = s.data(); if (d && d.libsOn && typeof d.libsOn === 'object') { prefs = { ...d.libsOn }; LS.set('lg.libsOn', prefs); emit(); } }, () => { });
+      backend_savePrefs = p => ref.set({ libsOn: p }).catch(() => { });
+    }
+    return {
+      kind: 'artifact',
+      putLib: lib => write(() => db.doc(`libraries/${lib.id}`).set(lib)),
+      delLib: id => write(() => db.doc(`libraries/${id}`).delete()),
+      putItem: it => write(() => db.doc(`libitems/${it.id}`).set(it)),
+      delItem: id => write(() => db.doc(`libitems/${id}`).delete()),
+      setAdmins: ids => write(() => db.doc('config/admins').set({ ids })),
+      uploadImage: assets ? async blob => { const r = await assets.upload(blob); return { url: r.url }; } : null,
+      profiles: user && user.profiles ? ids => user.profiles(ids) : null,
+      search: user && user.search ? q => user.search(q) : null,
+    };
+  }
+  let backend_savePrefs = null;
+  async function serverBackend() {
+    if (window.claude || !/^https?:$/.test(location.protocol)) return null;
+    let j; try { const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 1500); const r = await fetch('/api/libraries', { cache: 'no-store', signal: ctl.signal }); clearTimeout(t); if (!r.ok) return null; j = await r.json(); } catch { return null; }
+    if (!j || !j.lgLibraries) return null;
+    S.keyRequired = !!j.keyRequired;
+    const key = () => LS.get('lg.adminKey', '') || '';
+    const apply = j => { S.keyRequired = !!j.keyRequired; setAll({ libraries: j.libraries || [], items: j.items || [] }); };
+    apply(j);
+    async function op(body) {
+      const r = await fetch('/api/libraries', { method: 'POST', headers: { 'content-type': 'application/json', 'x-lg-admin': key() }, body: JSON.stringify(body) });
+      if (r.status === 401) { S.keyOk = false; emit(); throw new Error('This server needs the library admin key to change libraries. Enter it under Libraries → Admins.'); }
+      if (!r.ok) throw new Error((await r.text()).slice(0, 200) || 'The server refused that change');
+      const out = await r.json(); if (out && out.lgLibraries) apply(out); return out;
+    }
+    if (S.keyRequired && key()) op({ op: 'check' }).then(() => { S.keyOk = true; emit(); }).catch(() => { });
+    return {
+      kind: 'server',
+      refresh: (() => { let t = 0; return () => { clearTimeout(t); t = setTimeout(async () => { try { const r = await fetch('/api/libraries', { cache: 'no-store' }); if (r.ok) apply(await r.json()); } catch { } }, 250); }; })(),
+      checkKey: async k => { LS.set('lg.adminKey', k); await op({ op: 'check' }); S.keyOk = true; emit(); },
+      putLib: lib => op({ op: 'putLib', lib }),
+      delLib: id => op({ op: 'delLib', id }),
+      putItem: item => op({ op: 'putItem', item }),
+      delItem: id => op({ op: 'delItem', id }),
+      uploadImage: async (blob, name) => { const r = await fetch('/api/assets?room=library', { method: 'POST', headers: { 'content-type': blob.type || 'image/png', 'x-name': encodeURIComponent(name || '') }, body: blob }); if (!r.ok) throw new Error('Image upload failed (' + r.status + ')'); const o = await r.json(); return { url: o.url }; },
+    };
+  }
+  function localBackend() {
+    const KEY = 'lg.libs.v1';
+    const load = () => { const j = LS.get(KEY, null) || {}; setAll({ libraries: j.libraries || [], items: j.items || [] }); };
+    const save = () => { if (!LS.set(KEY, { libraries: [...S.libs.values()], items: [...S.items.values()] })) throw new Error('This browser\'s storage is full. Export the libraries, remove some pictures, and try again.'); };
+    load();
+    window.addEventListener('storage', e => { if (e.key === KEY) load(); });
+    const change = fn => { fn(); save(); emit(); };
+    return {
+      kind: 'local',
+      putLib: lib => change(() => S.libs.set(lib.id, cleanLib(lib))),
+      delLib: id => change(() => S.libs.delete(id)),
+      putItem: it => change(() => S.items.set(it.id, cleanItem(it))),
+      delItem: id => change(() => S.items.delete(id)),
+      uploadImage: null, // pictures ride inside the item as data URLs
+    };
+  }
+
+  // ---- public ---------------------------------------------------------------------------------------------------------
+  function init(e) { env = e; }
+  function start() {
+    if (started) return started;
+    started = (async () => {
+      backend = (await artifactBackend()) || (await serverBackend()) || localBackend();
+      S.mode = backend.kind; emit(); return S.mode;
+    })();
+    return started;
+  }
+  const libraries = () => [...S.libs.values()].sort((a, b) => a.order - b.order || a.name.localeCompare(b.name));
+  const items = libId => [...S.items.values()].filter(it => !libId || it.lib === libId).sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || (a.created || 0) - (b.created || 0));
+  function isOn(libId, defaultOn = true) { if (Object.prototype.hasOwnProperty.call(prefs, libId)) return !!prefs[libId]; const l = S.libs.get(libId); return l ? l.defaultOn !== false : defaultOn; }
+  function setOn(libId, on) { prefs = { ...prefs, [libId]: !!on }; LS.set('lg.libsOn', prefs); if (backend_savePrefs) backend_savePrefs(prefs); emit(); }
+  // Who may change shared libraries here.
+  function role() {
+    if (S.mode === 'artifact') {
+      const listed = !!S.uid && S.admins.includes(S.uid);
+      const admin = S.owner || (listed && S.canEdit !== false);
+      return { admin, owner: S.owner, listed, needsEditor: listed && S.canEdit === false, mode: S.mode };
+    }
+    if (S.mode === 'server') return { admin: !S.keyRequired || S.keyOk, owner: false, listed: false, needsKey: S.keyRequired && !S.keyOk, mode: S.mode };
+    return { admin: true, owner: true, listed: false, mode: S.mode };
+  }
+  const must = () => { if (!backend) throw new Error('Libraries are still loading'); if (!role().admin) throw new Error(role().needsEditor ? 'You are on the admin list, but this page gives you no Editor access yet. Ask the owner to make you an Editor in Share.' : 'Only library admins can change shared libraries.'); };
+  async function createLibrary({ name, description = '', defaultOn = true }) {
+    must(); const libs = libraries();
+    const lib = { id: uid('l'), name: String(name || 'New library').trim().slice(0, 60) || 'New library', description: String(description).slice(0, 200), order: libs.length ? Math.max(...libs.map(l => l.order)) + 1 : 1, defaultOn: !!defaultOn, updated: Date.now(), by: S.uid || '' };
+    await backend.putLib(lib); S.libs.set(lib.id, lib); emit(); return lib;
+  }
+  async function updateLibrary(id, patch) { must(); const cur = S.libs.get(id); if (!cur) throw new Error('No such library'); const lib = cleanLib({ ...cur, ...patch, id, updated: Date.now() }); await backend.putLib(lib); S.libs.set(id, lib); emit(); return lib; }
+  async function deleteLibrary(id) { must(); for (const it of items(id)) await backend.delItem(it.id); await backend.delLib(id); S.libs.delete(id); for (const it of items(id)) S.items.delete(it.id); emit(); }
+  // Pictures in an item become shared ones (uploaded once, keyed by content) before the item is saved.
+  async function sha16(text) { const buf = await crypto.subtle.digest('SHA-1', new TextEncoder().encode(text)); return [...new Uint8Array(buf)].slice(0, 8).map(b => b.toString(16).padStart(2, '0')).join(''); }
+  async function shareImages(item) {
+    const imgs = env.getAssets().images; item.assets = { ...(item.assets || {}) };
+    for (const b of item.blocks) {
+      if (b.kind !== 'image' || !b.asset) continue;
+      if (item.assets[b.asset]) continue;
+      const known = assetInfo(b.asset); if (known) { item.assets[b.asset] = { url: known.url, name: known.name, w: known.w, h: known.h }; continue; }
+      const a = imgs.find(x => x.id === b.asset); if (!a || !a.dataUrl) continue;
+      const gid = /^a_[0-9a-f]{16}$/.test(b.asset) ? b.asset : 'a_' + await sha16(a.dataUrl);
+      if (!item.assets[gid]) {
+        if (backend.uploadImage) { if (!/^data:/.test(a.dataUrl)) item.assets[gid] = { url: a.dataUrl, name: a.name, w: a.w, h: a.h }; else { const up = await backend.uploadImage(env.dataUrlToBlob(a.dataUrl), a.name); item.assets[gid] = { url: up.url, name: String(a.name || '').slice(0, 80), w: a.w || 0, h: a.h || 0 }; } }
+        else item.assets[gid] = { dataUrl: a.dataUrl, name: String(a.name || '').slice(0, 80), w: a.w || 0, h: a.h || 0 };
+      }
+      if (gid !== b.asset) { if (!imgs.some(x => x.id === gid)) imgs.push({ ...a, id: gid }); b.asset = gid; }
+      loaded.add(gid);
+    }
+    if (!Object.keys(item.assets).length) delete item.assets;
+    return item;
+  }
+  async function putItem(item, { images = true } = {}) {
+    must(); if (!S.libs.has(item.lib)) throw new Error('Pick a library first');
+    const it = clone({ ...item, id: item.id && ID.test(item.id) ? item.id : uid('i'), updated: Date.now(), v: (item.v || 0) + 1, by: S.uid || item.by || '' });
+    if (images) await shareImages(it);
+    const size = JSON.stringify(it).length; if (size > MAX_ITEM && backend.kind !== 'local') throw new Error(`“${it.name}” is ${Math.round(size / 1024)} KB, over the ${Math.round(MAX_ITEM / 1024)} KB a shared item can hold. Simplify its vectors or use a picture instead.`);
+    await backend.putItem(it); S.items.set(it.id, cleanItem(it)); emit(); return it;
+  }
+  async function updateItem(id, patch) { const cur = S.items.get(id); if (!cur) throw new Error('No such item'); return putItem({ ...cur, ...patch, id }, { images: !!patch.blocks }); }
+  async function deleteItem(id) { must(); await backend.delItem(id); S.items.delete(id); emit(); }
+  async function setAdmins(ids) { if (S.mode !== 'artifact' || !backend.setAdmins) throw new Error('Admins are kept by the page owner in claude.ai'); if (!S.owner) throw new Error('Only the page owner changes the admin list'); const list = [...new Set(ids.filter(x => typeof x === 'string'))].slice(0, 100); await backend.setAdmins(list); S.admins = list; emit(); }
+  // Libraries as JSON, with pictures inside, for moving them between homes (or backing them up).
+  function exportJSON(libIds) {
+    const libs = libraries().filter(l => !libIds || libIds.includes(l.id)); const ids = new Set(libs.map(l => l.id));
+    return { lgLibrary: { v: 2, libraries: libs, items: [...S.items.values()].filter(it => ids.has(it.lib)) } };
+  }
+  async function importJSON(j, { into } = {}) {
+    must(); const L = j && j.lgLibrary; if (!L) throw new Error('not a library file');
+    const libs = Array.isArray(L.libraries) ? L.libraries : []; const list = Array.isArray(L.items) ? L.items : [];
+    const map = new Map(); let nl = 0, ni = 0;
+    for (const l of libs) { const c = cleanLib(l); if (!c) continue; if (into) { map.set(c.id, into); continue; } const ex = libraries().find(x => x.name.toLowerCase() === c.name.toLowerCase()); if (ex) map.set(c.id, ex.id); else { const made = await createLibrary(c); map.set(c.id, made.id); nl++; } }
+    for (const it of list.slice(0, 500)) {
+      const lib = map.get(it.lib) || into; if (!lib) continue;
+      const c = cleanItem({ ...it, lib }); if (!c) continue;
+      // pictures that came as data URLs become this home's own shared pictures
+      if (c.assets) for (const [id, a] of Object.entries(c.assets)) if (a.dataUrl && !env.getAssets().images.some(x => x.id === id)) await env.ensureImage({ id, dataUrl: a.dataUrl, name: a.name });
+      const fresh = S.items.has(c.id) && S.items.get(c.id).lib === lib ? c : { ...c, id: uid('i') };
+      if (fresh.assets) for (const k of Object.keys(fresh.assets)) if (fresh.assets[k].dataUrl && backend.uploadImage) delete fresh.assets[k];
+      await putItem(fresh); ni++;
+    }
+    return { libraries: nl, items: ni };
+  }
+  async function people(ids) { if (!backend || !backend.profiles || !ids.length) return {}; try { return await backend.profiles(ids); } catch { return {}; } }
+  async function searchPeople(q) { if (!backend || !backend.search) return []; try { return await backend.search(q); } catch { return []; } }
+  return {
+    init, start, libraries, items, isOn, setOn, role, createLibrary, updateLibrary, deleteLibrary, putItem, updateItem, deleteItem, setAdmins,
+    exportJSON, importJSON, people, searchPeople, assetInfo,
+    refresh: () => backend && backend.refresh ? backend.refresh() : null,
+    checkKey: k => backend && backend.checkKey ? backend.checkKey(k) : Promise.reject(new Error('No admin key here')),
+    on: fn => { listeners.add(fn); return () => listeners.delete(fn); },
+    get mode() { return S.mode; }, get ready() { return S.ready; }, get admins() { return S.admins.slice(); }, get me() { return S.uid; }, get error() { return S.error; },
+    _state: S,
+  };
+})();
+
+/* js/codekit.js */
+/* Code components: pieces of a coded design system (React components such as a Button with variant="primary") placed
+   on the canvas. A manifest lists the components, how to import them and their props with allowed values; importing it
+   into a shared library makes one item per component. On the canvas each one is a stand-in drawn from its name and
+   props (a pill for a Button, a field for an Input, a card for a Card…), tied to the real component by `code` on its
+   top box: {pkg, name, props, text}. Changing a prop in the panel redraws the stand-in; React export writes the real
+   component (<Button variant="primary">Save</Button>) with its import instead of divs.
+   Manifest: {lgComponents: {v: 1, name, components: [{name, import, group, props: [{name, type, values, default,
+   required, description}], story}]}} — tools/ds-manifest.mjs builds one from a design-system repo. */
+const CodeKit = (() => {
+  const SKIP = /(Provider|Context|ApiRef|Ref|Props|Theme|Hook|Utils?)$|^use[A-Z]|^Use[A-Z]/;
+  const TEXT_PROPS = ['label', 'title', 'header', 'heading', 'text', 'children', 'content', 'message', 'description'];
+  // When a component documents no text prop (often inherited ones), the usual one for its kind.
+  const TEXT_BY_KIND = { chip: 'label', tooltip: 'title', input: 'label', checkbox: 'label', radio: 'label', switch: 'label', avatar: 'children', iconbutton: null, divider: null, loader: null, icon: null, table: null, generic: null, layout: null };
+  const KINDS = [
+    ['iconbutton', /IconButton|Fab$/], ['button', /Button|CTA|^Link$|Action$/], ['chip', /Chip|Tag|Badge|Pill|Status|Lozenge/],
+    ['avatar', /Avatar/], ['switch', /Switch|Toggle/], ['checkbox', /Checkbox/], ['radio', /Radio/],
+    ['input', /Input|TextField|Field$|Autocomplete|Select|Dropdown|DatePicker|TimePicker|Search|Combobox|TextArea|Textarea|Composer|Upload/],
+    ['dialog', /Modal|Dialog|Drawer|Sheet|Popover|Window$/], ['table', /Table|DataGrid/], ['tabs', /Tabs?$|Segmented/],
+    ['alert', /Alert|Banner|Toast|Snackbar|Notice|Callout|Announcement/], ['card', /Card|Tile|Panel|Widget/],
+    ['heading', /^H[1-6]$|Heading|Title$|PageHeader|Header$/], ['text', /^P$|Caption|Text$|Typography|Paragraph|RichText/],
+    ['loader', /Loader|Spinner|Progress|Skeleton|Thinking|Typing|Indicator/], ['divider', /Divider|Separator/],
+    ['steps', /Stepper|Steps?$|Breadcrumb|Timeline/], ['accordion', /Accordion|Collapse|Expand|Disclosure/], ['tooltip', /Tooltip/],
+    ['menu', /Menu|List$|Nav/], ['icon', /Icon$|Logo$/], ['layout', /Layout|Page$|Stack|Box$|Wrapper|Container|Grid$|Shell/],
+  ];
+  const kindOf = name => (KINDS.find(([, re]) => re.test(name)) || ['generic'])[0];
+  const esc = s => String(s ?? '');
+  // ---- manifest ---------------------------------------------------------------------------------------------------------
+  function readManifest(j) {
+    const M = j && (j.lgComponents || j);
+    if (!M || !Array.isArray(M.components)) throw new Error('not a component manifest (lgComponents)');
+    const out = [];
+    for (const c of M.components.slice(0, 1500)) {
+      const name = String(c && c.name || '').trim(); if (!/^[A-Z][A-Za-z0-9]{0,60}$/.test(name) || SKIP.test(name)) continue;
+      const props = (Array.isArray(c.props) ? c.props : []).filter(p => p && /^[A-Za-z_$][\w$]{0,40}$/.test(p.name)).slice(0, 60).map(p => ({ name: p.name, type: String(p.type || '').slice(0, 200), values: Array.isArray(p.values) ? p.values.map(String).filter(v => v.length < 40).slice(0, 30) : undefined, default: p.default != null && p.default !== '-' ? String(p.default).replace(/^`+|`+$/g, '').replace(/^'(.*)'$/, '$1').slice(0, 60) : undefined, required: !!p.required, description: p.description ? String(p.description).slice(0, 160) : undefined }));
+      out.push({ name, pkg: String(c.import || M.import || '').slice(0, 80) || 'components', group: String(c.group || name).slice(0, 60), props, story: /^https:\/\/[^\s"'<>]+$/.test(String(c.story || '')) ? String(c.story).slice(0, 300) : undefined });
+    }
+    return { name: String(M.name || 'Components').slice(0, 60), components: out };
+  }
+  function textPropOf(spec) {
+    const names = new Set((spec.props || []).map(p => p.name)); const named = TEXT_PROPS.find(n => names.has(n)); if (named) return named;
+    const k = kindOf(spec.name); return k in TEXT_BY_KIND ? TEXT_BY_KIND[k] : 'children';
+  }
+  const isBool = p => /^boolean$/.test(String(p.type).replace(/[`\s]/g, ''));
+  // What a prop is when nobody sets it (from the documented defaults).
+  function specDefaults(spec) {
+    const out = {};
+    for (const p of spec.props || []) { if (p.values && p.default && p.values.includes(p.default)) out[p.name] = p.default; else if (isBool(p) && /^(true|false)$/.test(p.default || '')) out[p.name] = p.default === 'true'; }
+    return out;
+  }
+  // Props a fresh stand-in sets explicitly: the first allowed value of a style prop that has no default.
+  function defaultProps(spec) {
+    const out = {}; const tp = textPropOf(spec);
+    for (const p of spec.props || []) if (p.name !== tp && p.values && p.values.length && !(p.default && p.values.includes(p.default)) && (p.required || /^(variant|size|color|type|kind|appearance|intent|status)$/.test(p.name))) out[p.name] = p.values[0];
+    return out;
+  }
+  const sampleText = (name, kind) => ({ button: name.replace(/Button$/, '') || 'Button', iconbutton: '', chip: 'Label', heading: 'Page title', text: 'Body text that explains the screen.', input: 'Label', alert: 'Something to know about this page.', tooltip: 'Helpful hint', card: name.replace(/([a-z])([A-Z])/g, '$1 $2'), dialog: 'Dialog title', tabs: 'Overview', accordion: 'Section', menu: 'Menu item', steps: 'Step', avatar: 'AM', checkbox: 'Option', radio: 'Option', switch: 'Setting' }[kind] || name.replace(/([a-z])([A-Z])/g, '$1 $2'));
+  // ---- stand-ins --------------------------------------------------------------------------------------------------------
+  let seq = 0; const nid = p => `${p}${Date.now().toString(36).slice(-3)}${(++seq).toString(36)}`;
+  const stackS = (mode, gap, pad, more = {}) => ({ v: 2, mode, wrap: false, gap, gapAuto: false, counterGap: gap, counterGapAuto: false, pad: typeof pad === 'number' ? { t: pad, r: pad, b: pad, l: pad } : pad, main: 'start', cross: 'start', ...more });
+  function tone(props, P) {
+    const all = Object.values(props).map(v => String(v).toLowerCase()).join(' ');
+    const intent = /danger|error|destructive|critical|negative/.test(all) ? '#D93D3D' : /success|positive|approved/.test(all) ? '#1C8C5E' : /warning|caution|pending/.test(all) ? '#C77A00' : /info|neutral/.test(all) ? '#2F6FDB' : P.core;
+    const style = /outline|secondary|stroked/.test(all) ? 'outline' : /tertiary|text|ghost|link|plain|minimal/.test(all) ? 'text' : /soft|subtle|light|tonal/.test(all) ? 'soft' : 'solid';
+    const scale = /\b(x?small|sm|xs|compact|dense)\b/.test(all) ? 0.82 : /\b(large|lg|xl)\b/.test(all) ? 1.18 : 1;
+    return { intent, style, scale, disabled: props.disabled === true || /disabled/.test(all) };
+  }
+  // A stand-in for one component: a block list whose first block is the top box carrying `code`.
+  function standIn(spec, props, kit, texts) {
+    const P = Library.palette(kit); const B = Brand.fontCss(kit.fonts.body); const D = Brand.fontCss(kit.fonts.display);
+    const kind = kindOf(spec.name); const tp = textPropOf(spec); props = props || defaultProps(spec);
+    const T = tone({ ...specDefaults(spec), ...props }, P); const s = v => Math.round(v * T.scale);
+    const ink = '#1B1B23', muted = '#6B6B78', line = '#DCDAE5', soft = '#EFEBFA';
+    const queue = Array.isArray(texts) ? texts.slice() : [];
+    const label = (fallback) => queue.length ? queue.shift() : (tp && props[tp] != null && typeof props[tp] !== 'object' ? String(props[tp]) : fallback);
+    const text = (t, size, weight, fill, more = {}) => ({ id: nid('t'), kind: 'text', role: more.role || 'text', path: 'text_' + nid('p'), text: label(t), x: 0, y: 0, w: more.w || 280, h: size * 1.3, font: { family: more.display ? D : B, weight, size, lineHeight: more.lh || 1.3, letterSpacing: 0 }, fill, align: 'left', decorative: false, sizeW: more.sizeW || 'hug', sizeH: 'hug', ...(more.label ? { label: more.label } : {}) });
+    const box = (props2 = {}) => ({ id: nid('bx'), kind: 'box', x: 0, y: 0, w: 100, h: 100, fill: 'none', radius: 0, clip: false, decorative: true, ...props2 });
+    const field = (w, h, fill, more = {}) => ({ id: nid('f'), kind: 'field', x: 0, y: 0, w, h, fill, radius: 0, decorative: true, ...more });
+    const circle = (d, fill, more = {}) => ({ id: nid('c'), kind: 'shape', shape: 'circle', x: 0, y: 0, w: d, h: d, fill, decorative: true, ...more });
+    const tree = (parent, ...kids) => { const out = [parent]; for (const k of kids) { if (!k) continue; const list = Array.isArray(k) ? k : [k]; list[0].parent = parent.id; out.push(...list); } return out; };
+    const solid = T.style === 'solid', outline = T.style === 'outline', plain = T.style === 'text', tint = T.style === 'soft';
+    const bg = solid ? T.intent : tint ? soft : 'none'; const fg = solid ? '#FFFFFF' : T.intent;
+    let root, list;
+    switch (kind) {
+      case 'button': root = box({ radius: 999, fill: bg, ...(outline ? { stroke: { color: T.intent, width: 1.5 } } : {}), auto: stackS('horizontal', 8, plain ? { t: s(8), r: s(4), b: s(8), l: s(4) } : { t: s(10), r: s(20), b: s(10), l: s(20) }, { main: 'center', cross: 'center' }), sizeW: 'hug', sizeH: 'hug' }); list = tree(root, text(sampleText(spec.name, kind), s(15), 600, fg)); break;
+      case 'iconbutton': root = box({ radius: 999, fill: solid ? T.intent : soft, w: s(40), h: s(40), auto: stackS('horizontal', 0, 0, { main: 'center', cross: 'center' }), sizeW: 'fixed', sizeH: 'fixed' }); list = tree(root, { id: nid('ic'), kind: 'icon', name: 'plus', x: 0, y: 0, w: s(20), h: s(20), fill: solid ? '#FFFFFF' : T.intent, decorative: true }); break;
+      case 'chip': root = box({ radius: 999, fill: solid && T.intent !== P.core ? T.intent : soft, ...(outline ? { fill: 'none', stroke: { color: line, width: 1 } } : {}), auto: stackS('horizontal', 6, { t: s(4), r: s(10), b: s(4), l: s(10) }, { cross: 'center' }), sizeW: 'hug', sizeH: 'hug' }); list = tree(root, text(sampleText(spec.name, kind), s(13), 600, solid && T.intent !== P.core ? '#FFFFFF' : T.intent === P.core ? P.deep : T.intent)); break;
+      case 'avatar': root = box({ radius: 999, fill: soft, w: s(40), h: s(40), auto: stackS('horizontal', 0, 0, { main: 'center', cross: 'center' }), sizeW: 'fixed', sizeH: 'fixed', clip: true }); list = tree(root, text('AM', s(15), 600, P.deep)); break;
+      case 'switch': { root = box({ auto: stackS('horizontal', 10, 0, { cross: 'center' }), sizeW: 'hug', sizeH: 'hug' }); const track = box({ radius: 999, fill: T.intent, w: 40, h: 24, auto: stackS('horizontal', 0, 3, { main: 'end', cross: 'center' }), sizeW: 'fixed', sizeH: 'fixed' }); list = tree(root, tree(track, circle(18, '#FFFFFF')), text(sampleText(spec.name, kind), 15, 400, ink)); break; }
+      case 'checkbox': case 'radio': { root = box({ auto: stackS('horizontal', 10, 0, { cross: 'center' }), sizeW: 'hug', sizeH: 'hug' }); list = tree(root, field(20, 20, T.intent, { radius: kind === 'radio' ? 10 : 5 }), text(sampleText(spec.name, kind), 15, 400, ink)); break; }
+      case 'input': { root = box({ w: 320, auto: stackS('vertical', 6, 0), sizeW: 'fixed', sizeH: 'hug' }); const f = box({ radius: 8, fill: '#FFFFFF', stroke: { color: T.intent !== P.core ? T.intent : line, width: 1 }, auto: stackS('horizontal', 8, { t: 11, r: 14, b: 11, l: 14 }, { cross: 'center' }), sizeW: 'fill', sizeH: 'hug' }); list = tree(root, text(sampleText(spec.name, kind), 13, 600, ink), tree(f, text(/Search/.test(spec.name) ? 'Search' : /Select|Dropdown|Autocomplete|Combobox/.test(spec.name) ? 'Choose…' : /Date/.test(spec.name) ? 'DD/MM/YYYY' : 'Placeholder', 15, 400, muted, { sizeW: 'fill', w: 260 }))); break; }
+      case 'dialog': { root = box({ w: 480, radius: 16, fill: '#FFFFFF', shadow: { on: true, x: 0, y: 16, blur: 40, color: '#191A25', alpha: 0.18 }, auto: stackS('vertical', 16, 24), sizeW: 'fixed', sizeH: 'hug' }); const acts = box({ auto: stackS('horizontal', 8, 0, { main: 'end' }), sizeW: 'fill', sizeH: 'hug' }); list = tree(root, text(sampleText(spec.name, kind), 22, 600, ink, { display: true }), text('Supporting text for this dialog goes here.', 15, 400, muted, { sizeW: 'fill', w: 420 }), tree(acts, tree(box({ radius: 999, stroke: { color: line, width: 1 }, auto: stackS('horizontal', 0, { t: 9, r: 18, b: 9, l: 18 }), sizeW: 'hug', sizeH: 'hug' }), text('Cancel', 14, 600, ink)), tree(box({ radius: 999, fill: P.core, auto: stackS('horizontal', 0, { t: 9, r: 18, b: 9, l: 18 }), sizeW: 'hug', sizeH: 'hug' }), text('Confirm', 14, 600, '#FFFFFF')))); break; }
+      case 'table': { root = box({ w: 560, radius: 12, fill: '#FFFFFF', stroke: { color: line, width: 1 }, clip: true, auto: stackS('vertical', 0, 0), sizeW: 'fixed', sizeH: 'hug' }); const row = (cells, head) => tree(box({ fill: head ? '#F6F5FA' : 'none', auto: stackS('horizontal', 0, { t: 12, r: 16, b: 12, l: 16 }), sizeW: 'fill', sizeH: 'hug' }), ...cells.map(c => text(c, 14, head ? 600 : 400, head ? muted : ink, { sizeW: 'fill', w: 160 }))); list = tree(root, row(['Name', 'Country', 'Status'], true), row(['Alex Morgan', 'Portugal', 'Active']), row(['Priya Natarajan', 'India', 'Onboarding']), row(['Jordan Reyes', 'Mexico', 'Active'])); break; }
+      case 'tabs': { root = box({ auto: stackS('horizontal', 24, 0), sizeW: 'hug', sizeH: 'hug' }); const tab = (t, on) => tree(box({ auto: stackS('vertical', 8, 0), sizeW: 'hug', sizeH: 'hug' }), text(t, 15, on ? 600 : 400, on ? ink : muted), field(on ? 56 : 1, 2, on ? T.intent : 'none', { alpha: on ? 1 : 0, sizeW: 'fill' })); list = tree(root, tab(sampleText(spec.name, kind), true), tab('Details', false), tab('Activity', false)); break; }
+      case 'alert': { root = box({ w: 520, radius: 10, fill: T.intent === P.core ? soft : T.intent + '1A', stroke: { color: T.intent, width: 1 }, auto: stackS('horizontal', 12, { t: 12, r: 16, b: 12, l: 16 }, { cross: 'center' }), sizeW: 'fixed', sizeH: 'hug' }); list = tree(root, { id: nid('ic'), kind: 'icon', name: 'info', x: 0, y: 0, w: 20, h: 20, fill: T.intent, decorative: true }, text(sampleText(spec.name, kind), 15, 400, ink, { sizeW: 'fill', w: 440 })); break; }
+      case 'card': { root = box({ w: 360, radius: 16, fill: '#FFFFFF', stroke: { color: line, width: 1 }, auto: stackS('vertical', 8, 20), sizeW: 'fixed', sizeH: 'hug' }); list = tree(root, text(sampleText(spec.name, kind), 18, 600, ink, { sizeW: 'fill', w: 320 }), text('Short supporting text for this card.', 14, 400, muted, { sizeW: 'fill', w: 320 })); break; }
+      case 'heading': root = box({ auto: stackS('vertical', 0, 0), sizeW: 'hug', sizeH: 'hug' }); list = tree(root, text(sampleText(spec.name, kind), /H1/.test(spec.name) ? 40 : /H2/.test(spec.name) ? 32 : /H4/.test(spec.name) ? 20 : 26, 600, ink, { display: true, lh: 1.15, role: 'headline' })); break;
+      case 'text': root = box({ auto: stackS('vertical', 0, 0), sizeW: 'hug', sizeH: 'hug' }); list = tree(root, text(sampleText(spec.name, kind), /Caption/.test(spec.name) ? 12 : 15, 400, /Caption/.test(spec.name) ? muted : ink)); break;
+      case 'loader': root = box({ auto: stackS('horizontal', 6, 0, { cross: 'center' }), sizeW: 'hug', sizeH: 'hug' }); list = tree(root, circle(10, T.intent), circle(10, T.intent, { opacity: 0.6 }), circle(10, T.intent, { opacity: 0.3 })); break;
+      case 'divider': root = box({ w: 320, auto: stackS('vertical', 0, { t: 8, r: 0, b: 8, l: 0 }), sizeW: 'fixed', sizeH: 'hug' }); list = tree(root, field(320, 1, line, { sizeW: 'fill' })); break;
+      case 'steps': { root = box({ auto: stackS('horizontal', 10, 0, { cross: 'center' }), sizeW: 'hug', sizeH: 'hug' }); const step = (n, on) => tree(box({ auto: stackS('horizontal', 8, 0, { cross: 'center' }), sizeW: 'hug', sizeH: 'hug' }), tree(box({ radius: 999, fill: on ? T.intent : '#ECEAF2', w: 24, h: 24, auto: stackS('horizontal', 0, 0, { main: 'center', cross: 'center' }), sizeW: 'fixed', sizeH: 'fixed' }), text(String(n), 12, 600, on ? '#FFFFFF' : muted)), text(n === 1 ? sampleText(spec.name, kind) : 'Step', 14, on ? 600 : 400, on ? ink : muted)); list = tree(root, step(1, true), field(32, 1, line), step(2, false), field(32, 1, line), step(3, false)); break; }
+      case 'accordion': { root = box({ w: 480, radius: 10, stroke: { color: line, width: 1 }, auto: stackS('horizontal', 0, { t: 14, r: 16, b: 14, l: 16 }, { gapAuto: true, cross: 'center' }), sizeW: 'fixed', sizeH: 'hug' }); list = tree(root, text(sampleText(spec.name, kind), 15, 600, ink), { id: nid('ic'), kind: 'icon', name: 'caret-down', x: 0, y: 0, w: 18, h: 18, fill: muted, decorative: true }); break; }
+      case 'tooltip': root = box({ radius: 6, fill: '#1B1B23', auto: stackS('horizontal', 0, { t: 6, r: 10, b: 6, l: 10 }), sizeW: 'hug', sizeH: 'hug' }); list = tree(root, text(sampleText(spec.name, kind), 13, 500, '#FFFFFF')); break;
+      case 'menu': { root = box({ w: 240, radius: 10, fill: '#FFFFFF', stroke: { color: line, width: 1 }, auto: stackS('vertical', 0, 6), sizeW: 'fixed', sizeH: 'hug', shadow: { on: true, x: 0, y: 8, blur: 24, color: '#191A25', alpha: 0.12 } }); const it = t => tree(box({ radius: 6, auto: stackS('horizontal', 0, { t: 9, r: 10, b: 9, l: 10 }), sizeW: 'fill', sizeH: 'hug' }), text(t, 14, 400, ink)); list = tree(root, it(sampleText(spec.name, kind)), it('Rename'), it('Duplicate')); break; }
+      case 'icon': root = box({ w: 32, h: 32, auto: stackS('horizontal', 0, 0, { main: 'center', cross: 'center' }), sizeW: 'fixed', sizeH: 'fixed' }); list = tree(root, { id: nid('ic'), kind: 'icon', name: 'sparkle', x: 0, y: 0, w: 28, h: 28, fill: T.intent, decorative: true }); break;
+      default: { root = box({ w: kind === 'layout' ? 480 : 240, radius: 10, fill: '#FAFAFD', stroke: { color: '#B9B4D0', width: 1 }, auto: stackS('vertical', 4, 16, { main: 'center', cross: 'center' }), sizeW: 'fixed', sizeH: 'hug' }); list = tree(root, text('<' + spec.name + ' />', 14, 600, P.deep), text(spec.group && spec.group !== spec.name ? spec.group : 'component', 12, 400, muted)); }
+    }
+    if (T.disabled) root.opacity = 0.45;
+    root.label = spec.name;
+    root.code = { pkg: spec.pkg, name: spec.name, props: { ...props }, ...(tp ? { text: tp } : {}), standIn: true };
+    return list;
+  }
+  // Manifest -> library items (settled at 0,0 so thumbnails and inserts are right).
+  function itemsFrom(manifest, kit, libId) {
+    const M = readManifest(manifest); const out = [];
+    for (const spec of M.components) {
+      const s = Library.settle(standIn(spec, null, kit));
+      out.push({ id: ('c' + libId + '-' + (spec.pkg + '-' + spec.name).replace(/[^A-Za-z0-9]+/g, '-')).slice(0, 64), lib: libId, name: spec.name, category: 'code', approved: true, created: Date.now(), w: s.w, h: s.h, blocks: s.blocks, code: { pkg: spec.pkg, name: spec.name, spec: { group: spec.group, props: spec.props, story: spec.story } } });
+    }
+    return { name: M.name, items: out };
+  }
+  // ---- on the canvas ----------------------------------------------------------------------------------------------------
+  // The spec for a placed component, from whichever library item carries it.
+  function specFor(code, items) {
+    if (!code) return null;
+    const it = (items || []).find(x => x.code && x.code.name === code.name && x.code.pkg === code.pkg && x.code.spec);
+    return it ? { name: code.name, pkg: code.pkg, ...it.code.spec } : null;
+  }
+  // The code component a block belongs to: itself or its nearest boxed ancestor with `code`.
+  function ownerOf(frame, b) { let cur = b; const seen = new Set(); while (cur && !seen.has(cur.id)) { if (cur.code) return cur; seen.add(cur.id); cur = cur.parent ? frame.layout.blocks.find(x => x.id === cur.parent) : null; } return null; }
+  // Redraw a stand-in after its props changed, keeping its place, its sizing and the words people typed.
+  function restyle(frame, root, spec, kit) {
+    if (!root || !root.code || !root.code.standIn || !spec) return false;
+    const all = frame.layout.blocks; const I = Auto.index(frame);
+    const sub = Auto.withDescendants(frame, [root]); const subIds = new Set(sub.map(b => b.id));
+    const texts = sub.filter(b => b.kind === 'text' && b.id !== root.id).map(b => b.text);
+    const fresh = standIn({ ...spec, name: root.code.name, pkg: root.code.pkg }, root.code.props, kit, texts);
+    const top = fresh[0]; const freshTop = top.id; const keep = ['id', 'x', 'y', 'parent', 'absolute', 'rx', 'ry', 'lx', 'ly', 'label', 'locked', 'hidden', 'minW', 'maxW', 'minH', 'maxH', 'rotation'];
+    for (const k of keep) if (root[k] !== undefined) top[k] = root[k]; else delete top[k];
+    // sizing someone chose stays: fill stays fill, a fixed width they set stays (a hugging stand-in keeps hugging)
+    for (const [k, d] of [['sizeW', 'w'], ['sizeH', 'h']]) { if (root[k] === 'fill' && Auto.inFlow(I, root)) top[k] = 'fill'; else if (root[k] === 'fixed' && top[k] === 'fixed') top[d] = root[d]; }
+    for (const b of fresh.slice(1)) if (b.parent === freshTop) b.parent = root.id;
+    top.code.props = { ...root.code.props };
+    const at = all.findIndex(b => b.id === root.id);
+    const rest = all.filter(b => !subIds.has(b.id));
+    const idx = rest.findIndex((b, i) => all.indexOf(b) > at); const pos = idx < 0 ? rest.length : idx;
+    for (const b of fresh) { delete b.lx; delete b.ly; if (b.kind === 'text') Canvas.refit(b); }
+    for (const b of fresh.slice(1)) { b.x += root.x; b.y += root.y; }
+    frame.layout.blocks = [...rest.slice(0, pos), ...fresh, ...rest.slice(pos)];
+    return true;
+  }
+  // The text a component passes on as its label or children: its first visible text.
+  function textOf(frame, root) { const t = Auto.withDescendants(frame, [root]).find(b => b.kind === 'text' && !b.hidden && b.id !== root.id); return t ? Canvas.sourceText(t).trim() : ''; }
+  // JSX attributes for props: strings quoted, booleans bare, numbers and the rest in braces.
+  function jsxProps(props) {
+    return Object.entries(props || {}).filter(([k, v]) => /^[A-Za-z_$][\w$]*$/.test(k) && v !== undefined && v !== null && v !== '').map(([k, v]) => v === true ? ` ${k}` : typeof v === 'string' ? ` ${k}=${JSON.stringify(v)}` : ` ${k}={${JSON.stringify(v)}}`).join('');
+  }
+  return { readManifest, itemsFrom, standIn, restyle, specFor, ownerOf, textOf, jsxProps, defaultProps, specDefaults, textPropOf, kindOf, isBool };
+})();
+
 /* js/library.js */
-/* Library: approved pieces to drop on a screen. Built-ins are generated from the brand kit (so they follow its colors,
-   fonts and logos): logo variants, buttons, tags, cards, payment cards, device frames and starter illustrations.
-   Team items live in the canvas document (doc.library), so everyone in a live room sees the same set; they are saved
-   from a selection, or added from SVG/PNG files, and can be marked approved. Items are block lists with positions
-   from 0,0; inserting gives them fresh ids and drops them into the screen or box you pick. */
+/* Library panel: approved pieces to drop on a screen, from three kinds of source, each a section you can fold:
+   - Brand kit (built in): generated from the brand kit, so it follows its colors, fonts and logos — logo variants,
+     buttons, tags, cards, payment cards, device frames and starter illustrations.
+   - Shared libraries (Brand, Product design, Sales…): the same for everyone (see LibStore). Admins make them and
+     curate their items; everyone turns each one on or off for themselves in the Libraries window, like Figma.
+   - This canvas: pieces saved in the current canvas only (doc.library), which anyone editing it can add.
+   Items are block lists with positions from 0,0; inserting gives them fresh ids and drops them into the screen or box
+   you pick. Code components (from a design-system manifest, see CodeKit) are items whose top box names the real
+   component. */
 const Library = (() => {
-  const CATEGORIES = [['all', 'All'], ['logos', 'Logos'], ['components', 'Components'], ['cards', 'Cards'], ['devices', 'Devices'], ['illustrations', 'Illustrations'], ['saved', 'Team']];
+  const CATEGORIES = [['all', 'All'], ['logos', 'Logos'], ['components', 'Components'], ['code', 'Code'], ['cards', 'Cards'], ['devices', 'Devices'], ['illustrations', 'Illustrations']];
   const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-  let env = null; let cat = 'all'; let query = ''; let el = null; let naming = false;
+  let env = null; let cat = 'all'; let query = ''; let el = null; let naming = false; let pendingManifest = null; let publishing = null; let mgr = null; let editing = null; let confirmDel = null; let peopleHits = []; let names = {};
+  const LS = { get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch { return d; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { } } };
+  const folded = new Set(LS.get('lg.libFolded', [])); const expanded = new Set(); let imgEpoch = 0;
 
   // ---- Building blocks ------------------------------------------------------------------------------------------------
   let seq = 0; const id = p => `${p}${++seq}`;
@@ -7381,78 +7881,169 @@ const Library = (() => {
     if (cache.sig !== sig) { cache.sig = sig; cache.thumbs.clear(); cache.items = makers(kit).map(it => { const s = settle(it.build()); return { ...it, blocks: s.blocks, w: s.w, h: s.h }; }); }
     return cache.items;
   }
-  function all(doc, kit) { return [...builtins(kit), ...((doc && doc.library) || []).map(it => ({ ...it, category: it.category || 'saved', team: true }))]; }
   function thumb(item, kit) {
-    const key = item.id + ':' + (item.v || 0) + ':' + cache.sig;
+    const key = item.id + ':' + (item.v || 0) + ':' + cache.sig + ':' + (item.assets ? imgEpoch : 0);
     if (cache.thumbs.has(key)) return cache.thumbs.get(key);
     const pad = Math.max(item.w, item.h) * 0.08; const W = item.w + pad * 2, H = item.h + pad * 2;
     const blocks = Canvas.clone(item.blocks).map(b => ({ ...b, x: b.x + pad, y: b.y + pad }));
-    const svg = Render.toSVG({ id: 'th-' + String(item.id).replace(/[^\w-]/g, ''), format: { w: W, h: H }, palette: { bg: '#000' }, blocks }, { kit, assets: env ? env.getAssets() : { images: [] }, transparent: true, width: 120 });
+    // code components are product UI: shown on a light page so dark text reads
+    const light = !!item.code;
+    const svg = Render.toSVG({ id: 'th-' + String(item.id).replace(/[^\w-]/g, ''), format: { w: W, h: H }, palette: { bg: light ? '#F6F5FA' : '#000' }, blocks }, { kit, assets: env ? env.getAssets() : { images: [] }, transparent: !light, width: 120 });
     cache.thumbs.set(key, svg); return svg;
   }
+  // ---- Sources ----------------------------------------------------------------------------------------------------------
+  // Every library this person could see, in panel order: the brand kit, the shared ones, then this canvas.
+  function sources(doc, kit) {
+    const role = LibStore.role();
+    return [
+      { id: 'kit', name: 'Brand kit', note: 'Built in · follows the brand kit', builtin: true, editable: false, items: builtins(kit) },
+      ...LibStore.libraries().map(l => ({ id: l.id, name: l.name, note: l.description, shared: true, lib: l, editable: role.admin, items: LibStore.items(l.id) })),
+      { id: 'canvas', name: 'This canvas', note: 'Saved in this canvas only', local: true, editable: true, items: ((doc && doc.library) || []).map(it => ({ ...it, category: it.category && it.category !== 'saved' ? it.category : 'components' })) },
+    ];
+  }
+  const tag = (src, it) => ({ ...it, libId: src.id, libName: src.name, team: !!src.local, shared: !!src.shared, editable: src.editable });
+  // Items from the libraries this person has on (all of them with {any: true}).
+  function all(doc, kit, opts = {}) { return sources(doc, kit).filter(s => opts.any || LibStore.isOn(s.id)).flatMap(s => s.items.map(it => tag(s, it))); }
+  function find(itemId) { return all(env.canvas.doc, env.getKit(), { any: true }).find(x => x.id === itemId); }
+  // Every code component spec any library knows about (for the props panel and for binding).
+  function codeSpecs() { return all(env.canvas.doc, env.getKit(), { any: true }).filter(it => it.code && it.code.spec); }
+  function specFor(code) { return CodeKit.specFor(code, codeSpecs()); }
+
   // Selected blocks (with what is inside boxes) -> a library item.
   function fromSelection(frame, blocks, name, category) {
     const tops = Auto.topmost(frame, blocks); const list = Canvas.clone(Auto.withDescendants(frame, tops)); const topIds = new Set(tops.map(b => b.id));
     for (const b of list) if (topIds.has(b.id)) { delete b.parent; delete b.rx; delete b.ry; delete b.absolute; if (b.sizeW === 'fill') b.sizeW = 'fixed'; if (b.sizeH === 'fill') b.sizeH = 'fixed'; }
     const s = settle(list);
-    return { id: 'u' + Math.random().toString(36).slice(2, 10), name: String(name || 'Component').slice(0, 60), category: category || 'saved', approved: false, created: Date.now(), v: 1, w: s.w, h: s.h, blocks: s.blocks };
+    const item = { id: 'u' + Math.random().toString(36).slice(2, 10), name: String(name || 'Component').slice(0, 60), category: category || 'components', approved: false, created: Date.now(), v: 1, w: s.w, h: s.h, blocks: s.blocks };
+    // a code component keeps its tie to the real one
+    const top = tops.length === 1 ? s.blocks.find(b => b.id === tops[0].id) : null;
+    if (top && top.code) { const spec = specFor(top.code); item.code = { pkg: top.code.pkg, name: top.code.name, ...(spec ? { spec: { group: spec.group, props: spec.props, story: spec.story } } : {}) }; item.category = 'code'; }
+    return item;
   }
 
   // ---- Panel ------------------------------------------------------------------------------------------------------------
-  function init(e) { env = e; }
+  function init(e) { env = e; LibStore.on(() => { refresh(); }); }
+  const isOpen = () => !!(el && !el.hidden && el.offsetParent !== null);
+  let rq = 0; function refresh() { if (rq) return; rq = requestAnimationFrame(() => { rq = 0; if (isOpen()) render(); if (mgr && !mgr.hidden) renderManager(); }); }
+  function imagesChanged() { imgEpoch++; refresh(); }
+  const MODE_NOTE = { artifact: 'Shared with everyone who opens this page', server: 'Shared with everyone on this server', local: 'Kept in this browser' };
+  function itemCard(it, kit) {
+    const acts = [];
+    if (it.editable && (it.team || it.shared)) acts.push(`<button type="button" data-approve="${esc(it.id)}" data-src="${esc(it.libId)}" title="${it.approved ? 'Unmark as approved' : 'Mark as approved'}">${it.approved ? '✓ Approved' : 'Approve'}</button>`);
+    if (it.team && LibStore.role().admin && LibStore.libraries().length) acts.push(`<button type="button" data-publish="${esc(it.id)}" title="Publish to a shared library">↗</button>`);
+    if (it.editable && (it.team || it.shared)) acts.push(`<button type="button" data-remove="${esc(it.id)}" data-src="${esc(it.libId)}" title="Remove from ${esc(it.libName)}">✕</button>`);
+    const badge = it.code ? ` <span class="lib-tag" title="${esc(it.code.pkg)}">code</span>` : it.starter ? ' <span class="lib-tag">starter</span>' : '';
+    return `<div class="lib-item" draggable="true" data-item="${esc(it.id)}" title="${esc(it.name)}${it.code ? ` · <${esc(it.code.name)}> from ${esc(it.code.pkg)}` : ''} · click to add, or drag onto a screen"><div class="lib-thumb">${thumb(it, kit)}</div><div class="lib-name">${esc(it.name)}${it.approved ? ' <span class="lib-ok" title="Approved">✓</span>' : ''}${badge}</div>${acts.length ? `<div class="lib-acts">${acts.join('')}</div>` : ''}</div>`;
+  }
   function render(container, q) {
     el = container || el; if (!el || !env) return; query = (q ?? query).toLowerCase();
-    const kit = env.getKit(); const doc = env.canvas.doc; const list = all(doc, kit);
-    const shown = list.filter(it => (cat === 'all' || it.category === cat || (cat === 'saved' && it.team)) && (!query || `${it.name} ${it.category}`.toLowerCase().includes(query)));
+    const kit = env.getKit(); const doc = env.canvas.doc; const srcs = sources(doc, kit); const role = LibStore.role();
+    const on = srcs.filter(s => LibStore.isOn(s.id));
     const sel = env.canvas.selection(); const canSave = sel.blockIds.length > 0;
-    el.innerHTML = `<div class="lib-cats">${CATEGORIES.map(([k, l]) => `<button type="button" class="${cat === k ? 'on' : ''}" data-cat="${k}">${l}</button>`).join('')}</div>
-      <div class="lib-grid">${shown.map(it => `<div class="lib-item" draggable="true" data-item="${esc(it.id)}" title="${esc(it.name)} · click to add, or drag onto a screen"><div class="lib-thumb">${thumb(it, kit)}</div><div class="lib-name">${esc(it.name)}${it.approved ? ' <span class="lib-ok" title="Approved">✓</span>' : ''}${it.starter ? ' <span class="lib-tag">starter</span>' : ''}</div>${it.team ? `<div class="lib-acts"><button type="button" data-approve="${esc(it.id)}" title="${it.approved ? 'Unmark as approved' : 'Mark as approved'}">${it.approved ? '✓ Approved' : 'Approve'}</button><button type="button" data-remove="${esc(it.id)}" title="Remove from the library">✕</button></div>` : ''}</div>`).join('') || '<p class="hint" style="padding:8px">Nothing here yet.</p>'}</div>
-      ${naming ? `<div class="lib-name-row"><input type="text" class="input grow" data-lib="name" placeholder="Name, e.g. Pricing card" maxlength="60"><button type="button" class="btn small primary" data-lib="save-ok">Save</button><button type="button" class="btn small ghost" data-lib="save-cancel">Cancel</button></div>` : ''}
+    const match = it => (cat === 'all' || it.category === cat) && (!query || `${it.name} ${it.category} ${it.code ? it.code.name + ' ' + (it.code.spec && it.code.spec.group || '') : ''}`.toLowerCase().includes(query));
+    const sections = on.map(s => {
+      const list = s.items.map(it => tag(s, it)).filter(match); if (!list.length && (query || cat !== 'all' || s.builtin)) return '';
+      const fold = folded.has(s.id) && !query; const max = expanded.has(s.id) || query ? 400 : 24;
+      return `<section class="lib-sec"><button type="button" class="lib-sec-head" data-fold="${esc(s.id)}" aria-expanded="${!fold}"><span class="lib-caret">${fold ? '▸' : '▾'}</span>${esc(s.name)} <span class="lib-count">${list.length}</span>${s.shared ? '' : s.builtin ? ' <span class="lib-tag">built in</span>' : ' <span class="lib-tag">local</span>'}</button>
+        ${fold ? '' : `<div class="lib-grid">${list.slice(0, max).map(it => itemCard(it, kit)).join('') || '<p class="hint" style="padding:6px 8px">Nothing here yet.</p>'}</div>${list.length > max ? `<button type="button" class="btn small ghost lib-more" data-more="${esc(s.id)}">Show all ${list.length}</button>` : ''}`}</section>`;
+    }).join('');
+    const dests = [{ id: 'canvas', name: 'This canvas' }, ...(role.admin ? LibStore.libraries().map(l => ({ id: l.id, name: l.name })) : [])];
+    const lastDest = LS.get('lg.libDest', 'canvas'); const dest = dests.some(d => d.id === lastDest) ? lastDest : 'canvas';
+    const destSel = (attr, cur, list) => `<select class="input cv-mini" data-lib="${attr}" aria-label="Save to">${list.map(d => `<option value="${esc(d.id)}" ${d.id === cur ? 'selected' : ''}>${esc(d.name)}</option>`).join('')}</select>`;
+    const codeNames = [...new Map(codeSpecs().map(it => [it.code.pkg + ':' + it.code.name, it.code])).values()];
+    el.innerHTML = `<div class="lib-top"><button type="button" class="btn small" data-lib="manage" title="Turn libraries on or off${role.admin ? ', make new ones' : ''}">Libraries · ${on.length} of ${srcs.length} on</button><span class="hint">${esc(MODE_NOTE[LibStore.mode] || '')}${role.admin && LibStore.mode !== 'local' ? ' · you can edit' : ''}</span></div>
+      <div class="lib-cats">${CATEGORIES.map(([k, l]) => `<button type="button" class="${cat === k ? 'on' : ''}" data-cat="${k}">${l}</button>`).join('')}</div>
+      ${sections || `<p class="hint" style="padding:8px">${query ? 'Nothing matches.' : 'Every library is off. Turn some on under Libraries.'}</p>`}
+      ${naming ? `<div class="lib-form"><input type="text" class="input" data-lib="name" placeholder="Name, e.g. Pricing card" maxlength="60"><div class="cv-row">${destSel('dest', dest, dests)}${codeNames.length ? `<input type="text" class="input grow" data-lib="bind" list="libCodeNames" placeholder="Code component (optional)"><datalist id="libCodeNames">${codeNames.map(c => `<option value="${esc(c.name)}">${esc(c.pkg)}</option>`).join('')}</datalist>` : ''}</div><div class="cv-row"><button type="button" class="btn small primary" data-lib="save-ok">Save</button><button type="button" class="btn small ghost" data-lib="save-cancel">Cancel</button></div></div>` : ''}
+      ${publishing ? `<div class="lib-form"><span class="hint">Publish “${esc((find(publishing) || {}).name || '')}” to</span><div class="cv-row">${destSel('pub-dest', LibStore.libraries().some(l => l.id === lastDest) ? lastDest : (LibStore.libraries()[0] || {}).id, LibStore.libraries())}<button type="button" class="btn small primary" data-lib="pub-ok">Publish</button><button type="button" class="btn small ghost" data-lib="pub-cancel">Cancel</button></div></div>` : ''}
+      ${pendingManifest ? `<div class="lib-form"><span class="hint">${pendingManifest.count} code components from “${esc(pendingManifest.name)}”. Add them to</span><div class="cv-row">${destSel('man-dest', (LibStore.libraries().find(l => /product|design|code|ui/i.test(l.name)) || LibStore.libraries()[0] || { id: '__new' }).id, [...LibStore.libraries(), { id: '__new', name: '＋ New library: ' + pendingManifest.name }])}<button type="button" class="btn small primary" data-lib="man-ok">Add</button><button type="button" class="btn small ghost" data-lib="man-cancel">Cancel</button></div></div>` : ''}
       <div class="lib-foot">
         <button type="button" class="btn small" data-lib="save" ${canSave ? '' : 'disabled'} title="Select blocks on a screen first">＋ Save selection</button>
         <label class="btn small file">＋ Add SVG or PNG<input type="file" data-lib="files" accept=".svg,image/svg+xml,image/png,image/jpeg,image/webp" multiple hidden></label>
-        <button type="button" class="btn small ghost" data-lib="export" title="Download the team library as JSON">Export</button>
-        <label class="btn small ghost file" title="Add items from a library JSON">Import<input type="file" data-lib="import" accept=".json,application/json" hidden></label>
+        <label class="btn small ghost file" title="A library file, or a code component manifest (lgComponents)">Import<input type="file" data-lib="import" accept=".json,application/json" hidden></label>
+        <button type="button" class="btn small ghost" data-lib="export" title="Download this canvas's pieces as JSON">Export</button>
       </div>
-      <p class="hint lib-hint">Built-in pieces follow the brand kit. Team items are shared with everyone on this canvas.</p>`;
+      <p class="hint lib-hint">${role.admin ? 'Save a selection to a shared library to make it the same for everyone; This canvas keeps it here only.' : 'Shared libraries are curated by admins. Save your own pieces to This canvas.'}</p>`;
   }
-  function find(itemId) { return all(env.canvas.doc, env.getKit()).find(x => x.id === itemId); }
   function bind(container) {
     el = container;
     el.addEventListener('click', async e => {
       const c = e.target.closest('[data-cat]'); if (c) { cat = c.dataset.cat; render(); return; }
-      const ap = e.target.closest('[data-approve]'); if (ap) { env.canvas.mutate(d => { const it = (d.library || []).find(x => x.id === ap.dataset.approve); if (it) { it.approved = !it.approved; it.v = (it.v || 0) + 1; } }); render(); return; }
-      const rm = e.target.closest('[data-remove]'); if (rm) { env.canvas.mutate(d => { d.library = (d.library || []).filter(x => x.id !== rm.dataset.remove); }); render(); env.toast('Removed from the library'); return; }
-      const act = e.target.closest('[data-lib]');
-      if (act && act.dataset.lib === 'save') { const sel = env.canvas.selection(); if (!sel.blockIds.length) { env.toast('Select blocks on a screen to save them'); return; } naming = true; render(); const inp = el.querySelector('[data-lib="name"]'); if (inp) { const f = Canvas.frameById(env.canvas.doc, sel.frameId); const b = f && Canvas.blockById(f, sel.blockIds[0]); inp.value = b ? (b.label || (b.kind === 'box' ? 'Component' : b.role || b.kind)) : 'Component'; inp.focus(); inp.select(); } return; }
-      if (act && act.dataset.lib === 'save-cancel') { naming = false; render(); return; }
-      if (act && act.dataset.lib === 'save-ok') { const inp = el.querySelector('[data-lib="name"]'); naming = false; saveSelection(inp ? inp.value : ''); return; }
-      if (act && act.dataset.lib === 'export') { exportLibrary(); return; }
+      const fo = e.target.closest('[data-fold]'); if (fo) { const id = fo.dataset.fold; folded.has(id) ? folded.delete(id) : folded.add(id); LS.set('lg.libFolded', [...folded]); render(); return; }
+      const mo = e.target.closest('[data-more]'); if (mo) { expanded.add(mo.dataset.more); render(); return; }
+      const ap = e.target.closest('[data-approve]'); if (ap) { await guard(() => setApproved(ap.dataset.src, ap.dataset.approve)); return; }
+      const rm = e.target.closest('[data-remove]'); if (rm) { await guard(() => removeItem(rm.dataset.src, rm.dataset.remove)); return; }
+      const pb = e.target.closest('[data-publish]'); if (pb) { publishing = pb.dataset.publish; naming = false; render(); return; }
+      const act = e.target.closest('[data-lib]'); const a = act && act.dataset.lib;
+      if (a === 'manage') { openManager(); return; }
+      if (a === 'save') { const sel = env.canvas.selection(); if (!sel.blockIds.length) { env.toast('Select blocks on a screen to save them'); return; } naming = true; publishing = null; render(); const inp = el.querySelector('[data-lib="name"]'); if (inp) { const f = Canvas.frameById(env.canvas.doc, sel.frameId); const b = f && Canvas.blockById(f, sel.blockIds[0]); inp.value = b ? (b.label || (b.kind === 'box' ? 'Component' : b.role || b.kind)) : 'Component'; inp.focus(); inp.select(); } return; }
+      if (a === 'save-cancel') { naming = false; render(); return; }
+      if (a === 'save-ok') { await submitSave(); return; }
+      if (a === 'pub-cancel') { publishing = null; render(); return; }
+      if (a === 'pub-ok') { const lib = el.querySelector('[data-lib="pub-dest"]').value; const id = publishing; publishing = null; await guard(() => publish(id, lib)); return; }
+      if (a === 'man-cancel') { pendingManifest = null; render(); return; }
+      if (a === 'man-ok') { const lib = el.querySelector('[data-lib="man-dest"]').value; const m = pendingManifest; pendingManifest = null; render(); await guard(() => addManifest(m, lib)); return; }
+      if (a === 'export') { exportLibrary(); return; }
       const it = e.target.closest('[data-item]'); if (it && !act) { insert(it.dataset.item); }
     });
-    el.addEventListener('keydown', e => { if (e.target.dataset.lib === 'name') { e.stopPropagation(); if (e.key === 'Enter') { naming = false; saveSelection(e.target.value); } else if (e.key === 'Escape') { naming = false; render(); } } });
+    el.addEventListener('keydown', e => { if (e.target.dataset.lib === 'name' || e.target.dataset.lib === 'bind') { e.stopPropagation(); if (e.key === 'Enter') submitSave(); else if (e.key === 'Escape') { naming = false; render(); } } });
     el.addEventListener('change', async e => {
       const t = e.target;
-      if (t.dataset.lib === 'files') { for (const f of t.files) await addFile(f); t.value = ''; render(); }
-      if (t.dataset.lib === 'import') { try { await importLibrary(JSON.parse(await t.files[0].text())); } catch (err) { env.toast('Could not import: ' + err.message); } t.value = ''; render(); }
+      if (t.dataset.lib === 'dest') LS.set('lg.libDest', t.value);
+      if (t.dataset.lib === 'files') { for (const f of t.files) await guard(() => addFile(f)); t.value = ''; render(); }
+      if (t.dataset.lib === 'import') { const f = t.files[0]; t.value = ''; if (f) await guard(async () => importFile(JSON.parse(await f.text()))); render(); }
     });
     el.addEventListener('dragstart', e => { const it = e.target.closest('[data-item]'); if (!it) return; e.dataTransfer.setData('application/x-lg-library', it.dataset.item); e.dataTransfer.effectAllowed = 'copy'; });
   }
+  async function guard(fn) { try { return await fn(); } catch (err) { env.toast(err && err.message ? err.message : String(err)); render(); return null; } }
   // Insert into the selected screen (or box), else the screen in view; at a point when dropped.
   function insert(itemId, at) {
     const it = find(itemId); if (!it) return;
     const out = env.canvas.insertComponent(it.blocks, { at, name: it.name });
     if (out) env.toast(`${it.name} added${it.approved ? '' : ' (not yet approved)'}`);
   }
-  function saveSelection(name) {
+  async function submitSave() {
+    const inp = el.querySelector('[data-lib="name"]'); const d = el.querySelector('[data-lib="dest"]'); const bnd = el.querySelector('[data-lib="bind"]');
+    const name = inp ? inp.value : ''; const dest = d ? d.value : 'canvas'; const bindTo = bnd ? bnd.value.trim() : '';
+    naming = false; LS.set('lg.libDest', dest);
+    await guard(() => saveSelection(name, dest, bindTo));
+  }
+  async function saveSelection(name, dest = 'canvas', bindTo = '') {
     const sel = env.canvas.selection(); const f = sel.frameId && Canvas.frameById(env.canvas.doc, sel.frameId);
     if (!f || !sel.blockIds.length) { env.toast('Select blocks on a screen to save them'); render(); return; }
     const blocks = sel.blockIds.map(i => Canvas.blockById(f, i)).filter(Boolean);
     name = String(name || '').trim() || 'Component';
-    const category = /card/i.test(name) ? 'cards' : /illus|art|shape/i.test(name) ? 'illustrations' : /phone|device|browser/i.test(name) ? 'devices' : 'components';
+    const category = /card/i.test(name) ? 'cards' : /illus|art|shape/i.test(name) ? 'illustrations' : /phone|device|browser/i.test(name) ? 'devices' : /logo/i.test(name) ? 'logos' : 'components';
     const item = fromSelection(f, blocks, name, category); item.by = env.me ? env.me() : '';
-    env.canvas.mutate(d => { d.library = [...(d.library || []), item]; }, { history: true });
-    cat = 'saved'; render(); env.toast(`Saved “${item.name}” to the team library`);
+    if (bindTo) bindCode(item, bindTo);
+    if (dest === 'canvas') { env.canvas.mutate(d2 => { d2.library = [...(d2.library || []), item]; }, { history: true }); render(); env.toast(`Saved “${item.name}” to This canvas`); return; }
+    env.toast('Saving to the shared library…');
+    const saved = await LibStore.putItem({ ...item, lib: dest, id: undefined });
+    env.toast(`Saved “${saved.name}” to ${(LibStore.libraries().find(l => l.id === dest) || {}).name || 'the library'}`);
+  }
+  // Tie an item (often captured from Storybook or a live page) to a code component by name.
+  function bindCode(item, nameOrPkgName) {
+    const n = nameOrPkgName.replace(/^<|\s*\/?>$/g, '').trim(); const spec = codeSpecs().find(it => it.code.name === n || `${it.code.pkg}:${it.code.name}` === n);
+    const code = spec ? spec.code : { pkg: 'components', name: n.replace(/[^A-Za-z0-9_]/g, '') || 'Component' };
+    const tops = item.blocks.filter(b => !b.parent); let top = tops.length === 1 ? tops[0] : null;
+    if (!top) { const bb = { w: item.w, h: item.h }; top = { id: 'bx' + Math.random().toString(36).slice(2, 8), kind: 'box', x: 0, y: 0, w: bb.w, h: bb.h, fill: 'none', radius: 0, clip: false, decorative: true }; for (const b of tops) b.parent = top.id; item.blocks.unshift(top); }
+    const tp = spec && spec.code.spec ? CodeKit.textPropOf(spec.code.spec) : 'children';
+    top.code = { pkg: code.pkg, name: code.name, props: {}, ...(tp ? { text: tp } : {}) }; top.label = top.label || code.name;
+    item.code = { pkg: code.pkg, name: code.name, ...(spec && spec.code.spec ? { spec: spec.code.spec } : {}) }; item.category = 'code';
+  }
+  async function setApproved(src, id) {
+    if (src === 'canvas') { env.canvas.mutate(d => { const it = (d.library || []).find(x => x.id === id); if (it) { it.approved = !it.approved; it.v = (it.v || 0) + 1; } }); render(); return; }
+    const it = LibStore.items().find(x => x.id === id); if (it) await LibStore.updateItem(id, { approved: !it.approved });
+  }
+  async function removeItem(src, id) {
+    if (src === 'canvas') { env.canvas.mutate(d => { d.library = (d.library || []).filter(x => x.id !== id); }); render(); env.toast('Removed from This canvas'); return; }
+    const it = LibStore.items().find(x => x.id === id); await LibStore.deleteItem(id); env.toast(`Removed “${it ? it.name : 'item'}”`);
+  }
+  async function publish(id, lib) {
+    const it = (env.canvas.doc.library || []).find(x => x.id === id); if (!it || !lib) return;
+    env.toast('Publishing…'); LS.set('lg.libDest', lib);
+    const saved = await LibStore.putItem({ ...Canvas.clone(it), lib, id: undefined, approved: true });
+    env.toast(`Published “${saved.name}” to ${(LibStore.libraries().find(l => l.id === lib) || {}).name}`);
   }
   async function addFile(file) {
     const name = file.name.replace(/\.[^.]+$/, '').slice(0, 60);
@@ -7466,26 +8057,112 @@ const Library = (() => {
       blocks = [{ id: 'i1', kind: 'image', x: 0, y: 0, w, h, asset: a.id, focal: 'xMidYMid', fit: 'contain', radius: 0, decorative: true, path: 'image_lib', label: name }];
     }
     const item = { id: 'u' + Math.random().toString(36).slice(2, 10), name, category: 'illustrations', approved: false, created: Date.now(), v: 1, w, h, blocks };
-    env.canvas.mutate(d => { d.library = [...(d.library || []), item]; });
-    cat = 'illustrations'; env.toast(`Added ${name} to Illustrations`);
+    const dest = LS.get('lg.libDest', 'canvas');
+    if (dest !== 'canvas' && LibStore.role().admin && LibStore.libraries().some(l => l.id === dest)) { await LibStore.putItem({ ...item, lib: dest, id: undefined }); env.toast(`Added ${name} to ${(LibStore.libraries().find(l => l.id === dest) || {}).name}`); }
+    else { env.canvas.mutate(d => { d.library = [...(d.library || []), item]; }); env.toast(`Added ${name} to This canvas`); }
+    cat = 'illustrations';
   }
   async function exportLibrary() {
-    const doc = env.canvas.doc; const items = doc.library || []; if (!items.length) { env.toast('The team library is empty'); return; }
+    const doc = env.canvas.doc; const items = doc.library || []; if (!items.length) { env.toast('This canvas has no saved pieces. Shared libraries export from Libraries.'); return; }
     const assets = {}; const imgs = env.getAssets().images;
     for (const it of items) for (const b of it.blocks) if (b.kind === 'image' && b.asset) { const a = imgs.find(x => x.id === b.asset); if (a && a.dataUrl) assets[b.asset] = { name: a.name, dataUrl: a.dataUrl }; }
     const blob = new Blob([JSON.stringify({ lgLibrary: { v: 1, kit: env.getKit().name, items, assets } }, null, 1)], { type: 'application/json' });
-    if (await env.download(blob, `${String(env.getKit().name || 'brand').toLowerCase().replace(/[^a-z0-9]+/g, '-')}-library.json`)) env.toast(`Library exported: ${items.length} items`);
+    if (await env.download(blob, `${String(env.getKit().name || 'brand').toLowerCase().replace(/[^a-z0-9]+/g, '-')}-canvas-pieces.json`)) env.toast(`Exported ${items.length} pieces`);
   }
-  async function importLibrary(j) {
-    const L = j && j.lgLibrary; if (!L || !Array.isArray(L.items)) throw new Error('not a library file');
+  // A JSON file: a code component manifest, shared libraries (v2), or a canvas's pieces (v1).
+  async function importFile(j) {
+    if (j && j.lgComponents) {
+      if (!LibStore.role().admin) throw new Error('Only library admins can add code components to shared libraries');
+      const M = CodeKit.readManifest(j); if (!M.components.length) throw new Error('No components in that manifest');
+      pendingManifest = { name: M.name, count: M.components.length, json: j }; naming = false; publishing = null; render(); return;
+    }
+    const L = j && j.lgLibrary; if (!L) throw new Error('Not a library or component file');
+    if (L.v >= 2 && Array.isArray(L.libraries)) { const r = await LibStore.importJSON(j); env.toast(`Imported ${r.items} items${r.libraries ? ` into ${r.libraries} new librar${r.libraries > 1 ? 'ies' : 'y'}` : ''}`); return; }
+    if (!Array.isArray(L.items)) throw new Error('not a library file');
     const remap = new Map();
     for (const [oldId, a] of Object.entries(L.assets || {})) { if (a && typeof a.dataUrl === 'string' && /^data:image\//.test(a.dataUrl)) { const added = await env.addImageData(a.dataUrl, a.name || 'library image'); remap.set(oldId, added.id); } }
     const have = new Set((env.canvas.doc.library || []).map(x => x.id)); let n = 0;
     const items = L.items.filter(it => it && it.id && Array.isArray(it.blocks) && !have.has(it.id)).slice(0, 300).map(it => { n++; const c = Canvas.clone(it); for (const b of c.blocks) if (b.kind === 'image' && remap.has(b.asset)) b.asset = remap.get(b.asset); return c; });
     env.canvas.mutate(d => { d.library = [...(d.library || []), ...items]; });
-    env.toast(n ? `Imported ${n} library item${n > 1 ? 's' : ''}` : 'Those items are already here');
+    env.toast(n ? `Imported ${n} piece${n > 1 ? 's' : ''} into This canvas` : 'Those pieces are already here');
   }
-  return { init, bind, render, all, builtins, thumb, fromSelection, insert, CATEGORIES };
+  async function addManifest(m, libId) {
+    if (libId === '__new') libId = (await LibStore.createLibrary({ name: m.name, description: 'Code components', defaultOn: true })).id;
+    const { items } = CodeKit.itemsFrom(m.json, env.getKit(), libId);
+    const have = new Map(LibStore.items(libId).filter(x => x.code).map(x => [x.code.pkg + ':' + x.code.name, x.id]));
+    let n = 0; env.toast(`Adding ${items.length} code components…`);
+    for (let i = 0; i < items.length; i += 6) {
+      await Promise.all(items.slice(i, i + 6).map(async it => { const prev = have.get(it.code.pkg + ':' + it.code.name); await LibStore.putItem({ ...it, id: prev || it.id }, { images: false }); n++; }));
+      if (items.length > 30 && i % 60 === 0) env.toast(`Adding code components… ${n} of ${items.length}`);
+    }
+    folded.delete(libId); render();
+    env.toast(`${n} code components in ${(LibStore.libraries().find(l => l.id === libId) || {}).name}. Their props show in the panel when you select one.`);
+  }
+
+  // ---- Libraries window: on/off, create and edit (admins), the admin list (owner) ---------------------------------------
+  function openManager() { mgr = mgr || document.getElementById('libsModal'); if (!mgr) return; mgr.hidden = false; editing = null; confirmDel = null; renderManager(); loadNames(); }
+  async function loadNames() { const ids = LibStore.admins; if (!ids.length) return; const ps = await LibStore.people(ids); for (const id of ids) names[id] = (ps[id] && ps[id].name) || names[id] || ''; renderManager(); }
+  function renderManager() {
+    const body = mgr && mgr.querySelector('.libs-body'); if (!body) return;
+    const kit = env.getKit(); const srcs = sources(env.canvas.doc, kit); const role = LibStore.role(); const mode = LibStore.mode;
+    const row = s => {
+      const on = LibStore.isOn(s.id); const ed = editing === s.id && s.shared && role.admin;
+      const meta = [s.note, `${s.items.length} item${s.items.length === 1 ? '' : 's'}`, s.shared && s.lib.defaultOn ? 'on for everyone by default' : s.shared ? 'off by default' : ''].filter(Boolean).map(esc).join(' · ');
+      return `<div class="libs-row${on ? ' on' : ''}"><label class="libs-switch" title="${on ? 'Turn off for me' : 'Turn on for me'}"><input type="checkbox" data-on="${esc(s.id)}" ${on ? 'checked' : ''}><span></span></label>
+        <div class="libs-main"><b>${esc(s.name)}</b><span class="hint">${meta}</span></div>
+        ${s.shared && role.admin && !ed ? `<button type="button" class="btn small ghost" data-edit="${esc(s.id)}">Edit</button>` : ''}</div>
+        ${ed ? `<div class="libs-edit"><label class="cv-f"><span>Name</span><input type="text" class="input" data-le="name" value="${esc(s.lib.name)}" maxlength="60"></label><label class="cv-f"><span>About</span><input type="text" class="input" data-le="description" value="${esc(s.lib.description)}" maxlength="200" placeholder="What belongs here"></label><label class="cv-check"><input type="checkbox" data-le="defaultOn" ${s.lib.defaultOn ? 'checked' : ''}> On for everyone by default</label>
+          <div class="cv-row wrap"><button type="button" class="btn small primary" data-le-save="${esc(s.id)}">Save</button><button type="button" class="btn small ghost" data-le-cancel>Cancel</button><button type="button" class="btn small ghost" data-le-export="${esc(s.id)}">Export</button>${confirmDel === s.id ? `<span class="hint">Delete ${s.items.length} items for everyone?</span><button type="button" class="btn small danger" data-le-del-ok="${esc(s.id)}">Delete</button>` : `<button type="button" class="btn small ghost" data-le-del="${esc(s.id)}">Delete library</button>`}</div></div>` : ''}`;
+    };
+    let admins = '';
+    if (mode === 'artifact') {
+      const list = LibStore.admins;
+      const who = list.length ? list.map(id => `<span class="libs-person">${esc(names[id] || 'Someone')}${role.owner ? ` <button type="button" class="btn ghost icon" data-unadmin="${esc(id)}" aria-label="Remove ${esc(names[id] || 'admin')}">✕</button>` : ''}</span>`).join('') : '<span class="hint">No one yet besides the page owner.</span>';
+      admins = `<h4>Admins</h4><p class="hint">${role.owner ? 'You own this page, so you are always an admin.' : role.admin ? 'You are a library admin.' : role.needsEditor ? 'You are on the admin list, but this page gives you no Editor access yet: ask the owner to add you as an Editor in Share.' : 'Admins make libraries and decide what goes in them. You can turn each library on or off for yourself.'}</p>
+        <div class="libs-people">${who}</div>
+        ${role.owner ? `<div class="cv-row"><input type="search" class="input grow" data-people="q" placeholder="Add an admin: search people" autocomplete="off"></div><div class="libs-hits">${peopleHits.filter(p => !list.includes(p.id)).slice(0, 6).map(p => `<button type="button" class="btn small ghost" data-addadmin="${esc(p.id)}" data-name="${esc(p.name)}">＋ ${esc(p.name)}${p.email ? ` <span class="hint">${esc(p.email)}</span>` : ''}</button>`).join('')}</div>
+        <p class="hint">Admins also need <b>Editor</b> access to this page (claude.ai → Share). The page only accepts library changes from Editors, so people who are not on the list cannot change libraries, even by other means.</p>` : ''}`;
+    } else if (mode === 'server') {
+      admins = `<h4>Admins</h4>${LibStore._state.keyRequired ? (role.admin ? '<p class="hint">Library editing is unlocked in this browser.</p>' : `<p class="hint">This server limits library editing to people with the admin key.</p><div class="cv-row"><input type="password" class="input grow" data-lib-key placeholder="Admin key"><button type="button" class="btn small" data-lib-unlock>Unlock</button></div>`) : '<p class="hint">Anyone using this server can edit libraries. To limit it, start the server with LG_ADMIN_KEY=… and share the key with your admins.</p>'}`;
+    } else admins = '<h4>Sharing</h4><p class="hint">Libraries live in this browser. Export one and import it elsewhere, or open the page in claude.ai or from the Layout Engine server to share them with everyone.</p>';
+    body.innerHTML = `<div class="libs-list">${srcs.map(row).join('')}</div>
+      ${role.admin ? `<div class="cv-row libs-new"><input type="text" class="input grow" data-new-lib placeholder="New library, e.g. Sales" maxlength="60"><button type="button" class="btn small primary" data-create-lib>Create</button></div>` : ''}
+      ${admins}
+      ${role.admin ? '<h4>Code components</h4><p class="hint">Import a component manifest (Library → Import) to add your design system\'s coded components to a library. On the canvas they are stand-ins with real props; React export writes the real components.</p>' : ''}
+      <div class="cv-row wrap"><button type="button" class="btn small ghost" data-libs-export>Export shared libraries</button>${role.admin ? '<label class="btn small ghost file">Import libraries<input type="file" data-libs-import accept=".json,application/json" hidden></label>' : ''}</div>`;
+  }
+  function bindManager(root) {
+    mgr = root;
+    root.addEventListener('click', async e => {
+      if (e.target === root || e.target.closest('[data-libs-close]')) { root.hidden = true; return; }
+      const t = e.target;
+      const ed = t.closest('[data-edit]'); if (ed) { editing = ed.dataset.edit; confirmDel = null; renderManager(); return; }
+      if (t.closest('[data-le-cancel]')) { editing = null; confirmDel = null; renderManager(); return; }
+      const sv = t.closest('[data-le-save]'); if (sv) { const box = sv.closest('.libs-edit'); const v = k => box.querySelector(`[data-le="${k}"]`); await guard(() => LibStore.updateLibrary(sv.dataset.leSave, { name: v('name').value.trim() || 'Library', description: v('description').value, defaultOn: v('defaultOn').checked })); editing = null; renderManager(); return; }
+      const dl = t.closest('[data-le-del]'); if (dl) { confirmDel = dl.dataset.leDel; renderManager(); return; }
+      const dok = t.closest('[data-le-del-ok]'); if (dok) { await guard(() => LibStore.deleteLibrary(dok.dataset.leDelOk)); editing = null; confirmDel = null; renderManager(); env.toast('Library deleted'); return; }
+      const ex = t.closest('[data-le-export]'); if (ex) { await downloadLibs([ex.dataset.leExport]); return; }
+      if (t.closest('[data-libs-export]')) { if (!LibStore.libraries().length) { env.toast('No shared libraries yet'); return; } await downloadLibs(null); return; }
+      if (t.closest('[data-create-lib]')) { const inp = root.querySelector('[data-new-lib]'); const name = inp.value.trim(); if (!name) { inp.focus(); return; } const lib = await guard(() => LibStore.createLibrary({ name })); if (lib) { env.toast(`${lib.name} created. Save pieces to it from the Library panel.`); LS.set('lg.libDest', lib.id); } renderManager(); return; }
+      const ad = t.closest('[data-addadmin]'); if (ad) { names[ad.dataset.addadmin] = ad.dataset.name; await guard(() => LibStore.setAdmins([...LibStore.admins, ad.dataset.addadmin])); peopleHits = []; renderManager(); return; }
+      const un = t.closest('[data-unadmin]'); if (un) { await guard(() => LibStore.setAdmins(LibStore.admins.filter(x => x !== un.dataset.unadmin))); renderManager(); return; }
+      if (t.closest('[data-lib-unlock]')) { const k = root.querySelector('[data-lib-key]').value; await guard(async () => { await LibStore.checkKey(k); env.toast('Library editing unlocked'); }); renderManager(); return; }
+    });
+    root.addEventListener('change', async e => {
+      const t = e.target;
+      if (t.dataset.on) { LibStore.setOn(t.dataset.on, t.checked); refresh(); return; }
+      if (t.hasAttribute('data-libs-import')) { const f = t.files[0]; t.value = ''; if (f) await guard(async () => { const j = JSON.parse(await f.text()); if (j && j.lgComponents) { root.hidden = true; await importFile(j); return; } const r = await LibStore.importJSON(j); env.toast(`Imported ${r.items} items`); }); renderManager(); }
+    });
+    root.addEventListener('input', async e => { if (e.target.dataset.people === 'q') { const q = e.target.value; peopleHits = q.trim() ? await LibStore.searchPeople(q) : []; const pos = e.target.selectionStart; renderManager(); const inp = root.querySelector('[data-people="q"]'); if (inp) { inp.value = q; inp.focus(); try { inp.setSelectionRange(pos, pos); } catch { } } } });
+    root.addEventListener('focusin', async e => { if (e.target.dataset.people === 'q' && !e.target.value && !peopleHits.length) { peopleHits = await LibStore.searchPeople(''); const inp = e.target; renderManager(); const again = root.querySelector('[data-people="q"]'); if (again && again !== inp) again.focus(); } });
+    root.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Escape') root.hidden = true; if (e.key === 'Enter' && e.target.hasAttribute('data-new-lib')) root.querySelector('[data-create-lib]').click(); });
+  }
+  async function downloadLibs(ids) {
+    const j = LibStore.exportJSON(ids); const blob = new Blob([JSON.stringify(j, null, 1)], { type: 'application/json' });
+    const nm = ids && ids.length === 1 ? (LibStore.libraries().find(l => l.id === ids[0]) || {}).name : 'libraries';
+    if (await env.download(blob, `${String(nm || 'libraries').toLowerCase().replace(/[^a-z0-9]+/g, '-')}.json`)) env.toast(`Exported ${j.lgLibrary.items.length} items`);
+  }
+  return { init, bind, bindManager, render, refresh, imagesChanged, openManager, all, sources, builtins, thumb, fromSelection, insert, specFor, codeSpecs, palette, settle, CATEGORIES };
 })();
 
 /* js/sync.js */
@@ -7635,13 +8312,17 @@ const Sync = (() => {
   // ---- shared images -------------------------------------------------------------------------------------------------
   let sharing = false, shareAgain = false;
   async function sha(text) { const buf = await crypto.subtle.digest('SHA-1', new TextEncoder().encode(text)); return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join(''); }
-  function queueAssetShare(doc) { if (!adapter || !adapter.uploadAsset || status.readOnly) return; if (sharing) { shareAgain = true; return; } sharing = true; shareAssets(doc).catch(e => console.warn('asset share', e)).finally(() => { sharing = false; if (shareAgain) { shareAgain = false; queueAssetShare(ui.doc); } }); }
+  function queueAssetShare(doc) { if (!adapter || (!adapter.uploadAsset && !env.knownAsset) || status.readOnly) return; if (sharing) { shareAgain = true; return; } sharing = true; shareAssets(doc).catch(e => console.warn('asset share', e)).finally(() => { sharing = false; if (shareAgain) { shareAgain = false; queueAssetShare(ui.doc); } }); }
   async function shareAssets(doc) {
     const assets = env.getAssets().images; const renames = new Map();
     const used = new Set(); for (const f of doc.frames) for (const b of f.layout.blocks) if (b.kind === 'image' && b.asset) used.add(b.asset);
     for (const it of doc.library || []) for (const b of it.blocks || []) if (b.kind === 'image' && b.asset) used.add(b.asset);
     for (const id of used) {
       if (/^a_[0-9a-f]{16}$/.test(id)) { const r = recs.get('a~' + id); if (r) continue; }
+      // a shared library picture already has a home: point to it instead of uploading a copy
+      const known = env.knownAsset ? env.knownAsset(id) : null;
+      if (known && known.url && (!/^data:/.test(known.url) || known.url.length < 180000)) { const rec = { _k: 'a~' + id, _v: now(), _by: me.id, id, url: known.url, name: String(known.name || '').slice(0, 80), w: known.w, h: known.h }; recs.set(rec._k, rec); synced.set(rec._k, 'asset'); adapter.send([rec], false); continue; }
+      if (!adapter.uploadAsset) continue; // people who may not upload still share library pictures (above)
       const a = assets.find(x => x.id === id); if (!a || !a.dataUrl) continue;
       const gid = /^a_[0-9a-f]{16}$/.test(id) ? id : 'a_' + (await sha(a.dataUrl)).slice(0, 16);
       if (!recs.get('a~' + gid)) {
@@ -7696,6 +8377,7 @@ const Sync = (() => {
         else if (m.t === 'presence') { const p = peerMap.get(m.id) || { id: m.id }; Object.assign(p, sanitizePresence(m.p)); peerMap.set(m.id, p); setPeers([...peerMap.values()]); }
         else if (m.t === 'leave') { peerMap.delete(m.id); setPeers([...peerMap.values()]); }
         else if (m.t === 'peers') { peerMap = new Map((m.list || []).filter(p => p.id !== me.id).map(p => [p.id, { id: p.id, ...sanitizePresence(p.p) }])); setPeers([...peerMap.values()]); }
+        else if (m.t === 'libs' && env.onLibs) env.onLibs();
         else if (m.t === 'rpc' && env.onRpc) { Promise.resolve().then(() => env.onRpc(m.name, m.args || {})).then(result => send({ t: 'rpc-result', id: m.id, result }), err => send({ t: 'rpc-result', id: m.id, error: String(err && err.message || err) })); }
       };
       ws.onclose = () => { status.connected = false; notify(); if (closed) return; setTimeout(connect, Math.min(8000, 500 * 2 ** retry++)); };
@@ -7879,9 +8561,9 @@ const TOOL_DEFS = [
     inputSchema: { type: 'object', properties: { frame_id: { type: 'string' }, block_ids: { type: 'array', items: { type: 'string' } }, stack: { type: 'boolean' }, label: { type: 'string' } }, required: ['frame_id', 'block_ids'] } },
   { name: 'move_into', description: 'Move blocks into a box (box_id) or to the top level of the screen (box_id empty). In a stack they join the flow, before the block named in before_id or at the end.',
     inputSchema: { type: 'object', properties: { frame_id: { type: 'string' }, block_ids: { type: 'array', items: { type: 'string' } }, box_id: { type: 'string' }, before_id: { type: 'string' } }, required: ['frame_id', 'block_ids'] } },
-  { name: 'list_components', description: 'The library: approved logos, buttons, cards (including payment cards), device frames, illustrations and team components. Returns id, name and category.', inputSchema: { type: 'object', properties: { category: { type: 'string' } } } },
-  { name: 'insert_component', description: 'Insert a library component (id or name from list_components) into a screen, centred, or into a box (box_id); in a stack it joins the flow. Returns the new top block ids.',
-    inputSchema: { type: 'object', properties: { frame_id: { type: 'string' }, component: { type: 'string' }, box_id: { type: 'string' } }, required: ['frame_id', 'component'] } },
+  { name: 'list_components', description: 'The libraries that are on for this person (brand kit, shared libraries such as Brand or Product design, and this canvas) and their pieces: logos, buttons, cards (including payment cards), device frames, illustrations and code components from the design system (with their props). Filter by category (logos, components, code, cards, devices, illustrations), library name or a query.', inputSchema: { type: 'object', properties: { category: { type: 'string' }, library: { type: 'string' }, query: { type: 'string' } } } },
+  { name: 'insert_component', description: 'Insert a library component (id or name from list_components) into a screen, centred, or into a box (box_id); in a stack it joins the flow. For a code component, props (e.g. {"variant":"secondary"}) and text set it up; React export then writes the real component. Returns the new top block ids.',
+    inputSchema: { type: 'object', properties: { frame_id: { type: 'string' }, component: { type: 'string' }, box_id: { type: 'string' }, props: { type: 'object' }, text: { type: 'string' } }, required: ['frame_id', 'component'] } },
   { name: 'write_layout', description: 'Replace a screen\'s whole layout JSON (format, palette, blocks), as get_frame with full=true returns it. For rebuilding a screen from scratch; prefer the smaller tools for edits.', inputSchema: { type: 'object', properties: { frame_id: { type: 'string' }, layout: { type: 'object' } }, required: ['frame_id', 'layout'] } },
 ];
 
@@ -7922,6 +8604,7 @@ const AgentTools = (() => {
     if (b.align && b.align !== 'left') o.align = b.align;
     if (b.kind === 'image') o.image = b.asset ? 'set' : 'empty';
     if (b.kind === 'icon') o.icon = b.name;
+    if (b.code) o.code = { component: b.code.name, from: b.code.pkg, props: b.code.props || {} };
     if (b.overflow) o.overflow = true; if (b.hidden) o.hidden = true; if (b.locked) o.locked = true;
     if (b.opacity != null && b.opacity < 1) o.opacity = b.opacity;
     if (b.parent) o.parent = b.parent;
@@ -8009,16 +8692,27 @@ const AgentTools = (() => {
       note(`Moved ${bs.length} block${bs.length === 1 ? '' : 's'} ${box ? 'into ' + (box.label || 'a box') : 'to the top level'}`);
       return { moved: bs.length };
     },
-    list_components({ category }) { const items = Library.all(doc(), kit()).filter(i => !category || i.category === category); return { components: items.map(i => ({ id: i.id, name: i.name, category: i.category, approved: !!i.approved, w: i.w, h: i.h })) }; },
-    insert_component({ frame_id, component, box_id }) {
+    list_components({ category, library, query }) {
+      const q = String(query || '').toLowerCase(); const lib = String(library || '').toLowerCase();
+      const items = Library.all(doc(), kit()).filter(i => (!category || i.category === category) && (!lib || i.libName.toLowerCase() === lib || i.libId === library) && (!q || `${i.name} ${i.code ? i.code.name : ''}`.toLowerCase().includes(q)));
+      const libs = Library.sources(doc(), kit()).map(s => ({ id: s.id, name: s.name, on: LibStore.isOn(s.id), items: s.items.length }));
+      return { libraries: libs, components: items.slice(0, 300).map(i => ({ id: i.id, name: i.name, library: i.libName, category: i.category, approved: !!i.approved, w: i.w, h: i.h, ...(i.code ? { code: `<${i.code.name}> from ${i.code.pkg}`, props: i.code.spec ? i.code.spec.props.filter(p => p.values || /boolean|string|number/.test(p.type)).slice(0, 20).map(p => p.values ? `${p.name}: ${p.values.join('|')}` : `${p.name}: ${p.type}`) : undefined } : {}) })), ...(items.length > 300 ? { more: items.length - 300 } : {}) };
+    },
+    insert_component({ frame_id, component, box_id, props, text }) {
       const f = F(frame_id); const items = Library.all(doc(), kit()); const q = String(component || '').toLowerCase();
-      const it = items.find(i => i.id === component) || items.find(i => i.name.toLowerCase() === q) || items.find(i => i.name.toLowerCase().includes(q));
-      if (!it) throw new Error(`No component "${component}". Try list_components.`);
+      const it = items.find(i => i.id === component) || items.find(i => i.name.toLowerCase() === q) || items.find(i => i.code && i.code.name.toLowerCase() === q) || items.find(i => i.name.toLowerCase().includes(q));
+      if (!it) throw new Error(`No component "${component}". Try list_components (libraries that are off are not searched).`);
       const box = box_id ? Bk(f, box_id) : null;
+      let blocks = it.blocks;
+      // a code component with props or text: draw its stand-in for them
+      if (it.code && it.code.spec && (props || text != null)) {
+        const spec = { name: it.code.name, pkg: it.code.pkg, ...it.code.spec }; const p = { ...CodeKit.defaultProps(spec), ...(props && typeof props === 'object' ? props : {}) };
+        blocks = Library.settle(CodeKit.standIn(spec, p, kit(), text != null ? [String(text)] : undefined)).blocks;
+      }
       CanvasUI.select(f.id, box ? [box.id] : []);
-      const tops = CanvasUI.insertComponent(it.blocks, { name: it.name, history: firstWrite() });
+      const tops = CanvasUI.insertComponent(blocks, { name: it.name, history: firstWrite() });
       note(`Added ${it.name}`);
-      return { block_ids: (tops || []).map(b => b.id), component: it.name };
+      return { block_ids: (tops || []).map(b => b.id), component: it.name, ...(it.code ? { code: it.code.name } : {}) };
     },
     get_selection() {
       const s = CanvasUI.selection();
@@ -8129,7 +8823,7 @@ const Agent = (() => {
   const apiTurns = [];  // text history for API calls
   const SYSTEM = `You are the design agent inside Layout Engine, a canvas for brand layouts. The canvas holds screens (frames) made of blocks: text, body text, buttons, images, rectangles (field), shapes, vectors, icons and the logo. Block boxes are pixels from the frame's top left.
 
-Change the canvas with the tools; the person sees each change live and can undo your whole run in one step. Work on the selected screens unless they say otherwise. Stay on brand: palette colors (by name or hex), brand fonts, sentence-case headlines, no exclamation marks, no invented facts or numbers. Prefer the broadest tool that does the job: recolor_frames, apply_look, replace_text, make_variations and duplicate_frames before editing blocks one by one. Boxes can hold blocks (parent); a box or the screen with auto layout stacks its children like Figma (set_auto_layout, wrap_in_stack, size_w/size_h fixed|hug|fill). Approved pieces (logos, cards, device frames) come from list_components and insert_component. Keep text inside its box: when copy grows, widen the box or lower the size. When you are done, say in one or two short sentences what you changed.`;
+Change the canvas with the tools; the person sees each change live and can undo your whole run in one step. Work on the selected screens unless they say otherwise. Stay on brand: palette colors (by name or hex), brand fonts, sentence-case headlines, no exclamation marks, no invented facts or numbers. Prefer the broadest tool that does the job: recolor_frames, apply_look, replace_text, make_variations and duplicate_frames before editing blocks one by one. Boxes can hold blocks (parent); a box or the screen with auto layout stacks its children like Figma (set_auto_layout, wrap_in_stack, size_w/size_h fixed|hug|fill). Approved pieces (logos, cards, device frames, design-system code components) come from list_components and insert_component; prefer them over drawing your own, and give code components props rather than restyling their blocks. Keep text inside its box: when copy grows, widen the box or lower the size. When you are done, say in one or two short sentences what you changed.`;
 
   // ---- availability -----------------------------------------------------------------------------------------------
   const apiKey = () => (document.getElementById('apiKey') || {}).value || (() => { try { return JSON.parse(localStorage.getItem('lg.apiKey') || '""'); } catch { return ''; } })();
@@ -8574,7 +9268,7 @@ Layer kinds:
 
   // ---- Images -------------------------------------------------------------------------
   const readAsDataURL = f => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(f); });
-  const loadImage = src => new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => rej(new Error('image failed to decode')); im.src = src; });
+  const loadImage = (src, cors) => new Promise((res, rej) => { const im = new Image(); if (cors) im.crossOrigin = 'anonymous'; im.onload = () => res(im); im.onerror = () => rej(new Error('image failed to decode')); im.src = src; });
   function dataUrlToBlob(dataUrl) {
     const m = /^data:([^;,]+)?(;base64)?,(.*)$/s.exec(dataUrl); if (!m) throw new Error('not a data URL');
     const mime = m[1] || 'application/octet-stream';
@@ -9257,6 +9951,19 @@ Layer kinds:
     const im = await loadImage(url);
     state.assets.images.push({ id, name, url, dataUrl: url, w: im.naturalWidth, h: im.naturalHeight, lum: null, placeholder: false, palette: [] }); renderImages();
   }
+  // A picture a shared library item uses, under its shared id: from a data URL, or read from its URL (kept as a URL
+  // when the browser may not read its pixels).
+  async function ensureImage({ id, url, dataUrl, name }) {
+    if (state.assets.images.some(a => a.id === id)) return;
+    if (dataUrl) await addImage(dataUrl, name || 'library image', false, id);
+    else if (url) {
+      let data = null;
+      try { const im = await loadImage(url, true); const c = document.createElement('canvas'); c.width = im.naturalWidth; c.height = im.naturalHeight; c.getContext('2d').drawImage(im, 0, 0); data = c.toDataURL(/\.jpe?g/i.test(url + name) ? 'image/jpeg' : 'image/png', 0.9); } catch { data = null; }
+      await addAssetWithId(id, data, url, name || 'library image');
+    } else return;
+    Library.imagesChanged();
+    const fids = CanvasUI.doc.frames.filter(f => f.layout.blocks.some(b => b.asset === id)).map(f => f.id); if (fids.length) CanvasUI.rerender(fids);
+  }
   CanvasUI.init({
     getKit: () => state.kit, getAssets: () => state.assets, toast,
     addImage: async file => addImage(await readAsDataURL(file), file.name),
@@ -9284,7 +9991,9 @@ Layer kinds:
   // ---- Library: approved components, logos, cards, devices, illustrations ------------------------------------------
   Library.init({ getKit: () => state.kit, getAssets: () => state.assets, toast, canvas: CanvasUI, download: (blob, name) => Render.download(blob, name),
     addImage: async file => addImage(await readAsDataURL(file), file.name), addImageData: (dataUrl, name) => addImage(dataUrl, name), me: () => (typeof Sync !== 'undefined' && Sync.me.name) || '' });
-  Library.bind($('cvLibrary'));
+  Library.bind($('cvLibrary')); Library.bindManager($('libsModal'));
+  LibStore.init({ getAssets: () => state.assets, dataUrlToBlob, ensureImage });
+  LibStore.start();
   let leftTab = 'layers';
   const libraryOpen = () => leftTab === 'library' && !$('cvLibrary').hidden;
   function setLeftTab(t) {
@@ -9308,6 +10017,7 @@ Layer kinds:
   // ---- Multiplayer ------------------------------------------------------------------------------------------------
   Sync.init(CanvasUI, {
     getAssets: () => state.assets, dataUrlToBlob, addAssetWithId, onLibrary: () => { if (libraryOpen()) Library.render(); },
+    knownAsset: id => LibStore.assetInfo(id), onLibs: () => LibStore.refresh(),
     toolList: () => (typeof AgentTools !== 'undefined' ? AgentTools.defs() : []),
     onRpc: (name, args) => (typeof AgentTools !== 'undefined' ? AgentTools.call(name, args, { via: 'mcp' }) : Promise.reject(new Error('Agent tools are not loaded'))),
   });

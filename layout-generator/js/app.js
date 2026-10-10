@@ -176,7 +176,7 @@
 
   // ---- Images -------------------------------------------------------------------------
   const readAsDataURL = f => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(f); });
-  const loadImage = src => new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => rej(new Error('image failed to decode')); im.src = src; });
+  const loadImage = (src, cors) => new Promise((res, rej) => { const im = new Image(); if (cors) im.crossOrigin = 'anonymous'; im.onload = () => res(im); im.onerror = () => rej(new Error('image failed to decode')); im.src = src; });
   function dataUrlToBlob(dataUrl) {
     const m = /^data:([^;,]+)?(;base64)?,(.*)$/s.exec(dataUrl); if (!m) throw new Error('not a data URL');
     const mime = m[1] || 'application/octet-stream';
@@ -859,6 +859,19 @@
     const im = await loadImage(url);
     state.assets.images.push({ id, name, url, dataUrl: url, w: im.naturalWidth, h: im.naturalHeight, lum: null, placeholder: false, palette: [] }); renderImages();
   }
+  // A picture a shared library item uses, under its shared id: from a data URL, or read from its URL (kept as a URL
+  // when the browser may not read its pixels).
+  async function ensureImage({ id, url, dataUrl, name }) {
+    if (state.assets.images.some(a => a.id === id)) return;
+    if (dataUrl) await addImage(dataUrl, name || 'library image', false, id);
+    else if (url) {
+      let data = null;
+      try { const im = await loadImage(url, true); const c = document.createElement('canvas'); c.width = im.naturalWidth; c.height = im.naturalHeight; c.getContext('2d').drawImage(im, 0, 0); data = c.toDataURL(/\.jpe?g/i.test(url + name) ? 'image/jpeg' : 'image/png', 0.9); } catch { data = null; }
+      await addAssetWithId(id, data, url, name || 'library image');
+    } else return;
+    Library.imagesChanged();
+    const fids = CanvasUI.doc.frames.filter(f => f.layout.blocks.some(b => b.asset === id)).map(f => f.id); if (fids.length) CanvasUI.rerender(fids);
+  }
   CanvasUI.init({
     getKit: () => state.kit, getAssets: () => state.assets, toast,
     addImage: async file => addImage(await readAsDataURL(file), file.name),
@@ -886,7 +899,9 @@
   // ---- Library: approved components, logos, cards, devices, illustrations ------------------------------------------
   Library.init({ getKit: () => state.kit, getAssets: () => state.assets, toast, canvas: CanvasUI, download: (blob, name) => Render.download(blob, name),
     addImage: async file => addImage(await readAsDataURL(file), file.name), addImageData: (dataUrl, name) => addImage(dataUrl, name), me: () => (typeof Sync !== 'undefined' && Sync.me.name) || '' });
-  Library.bind($('cvLibrary'));
+  Library.bind($('cvLibrary')); Library.bindManager($('libsModal'));
+  LibStore.init({ getAssets: () => state.assets, dataUrlToBlob, ensureImage });
+  LibStore.start();
   let leftTab = 'layers';
   const libraryOpen = () => leftTab === 'library' && !$('cvLibrary').hidden;
   function setLeftTab(t) {
@@ -910,6 +925,7 @@
   // ---- Multiplayer ------------------------------------------------------------------------------------------------
   Sync.init(CanvasUI, {
     getAssets: () => state.assets, dataUrlToBlob, addAssetWithId, onLibrary: () => { if (libraryOpen()) Library.render(); },
+    knownAsset: id => LibStore.assetInfo(id), onLibs: () => LibStore.refresh(),
     toolList: () => (typeof AgentTools !== 'undefined' ? AgentTools.defs() : []),
     onRpc: (name, args) => (typeof AgentTools !== 'undefined' ? AgentTools.call(name, args, { via: 'mcp' }) : Promise.reject(new Error('Agent tools are not loaded'))),
   });

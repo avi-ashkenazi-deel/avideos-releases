@@ -29,9 +29,10 @@ cd layout-generator
 npm start                      # http://127.0.0.1:8787
 PORT=9000 npm start            # another port
 HOST=0.0.0.0 LG_TOKEN=secret npm start   # reachable by others; MCP clients then send the token
+LG_ADMIN_KEY=… npm start       # only people with this key edit shared libraries
 ```
 
-Rooms are saved to `server/data/` (git-ignored) and survive restarts.
+Rooms and shared libraries are saved to `server/data/` (git-ignored) and survive restarts.
 
 ## What it does
 
@@ -83,10 +84,30 @@ Works like Figma's. A **box** (a frame inside a screen) can stack its children, 
 
 ## Library
 
-The **Library** tab (next to Layers) holds approved pieces to drop on a screen: click to add to the selected screen or box, or drag onto a screen.
+The **Library** tab (next to Layers) holds approved pieces to drop on a screen: click to add to the selected screen or box, or drag onto a screen. Each library is a section you can fold; search covers them all.
 
-- **Built in, from the brand kit:** logo variants, buttons, tag, stat, quote and feature cards, a person row, payment cards (Deel Card in core and black, Virtual card), phone (iOS and Android) and browser frames, and two starter illustrations. They follow the kit's colors, fonts and logos, and most are auto layout stacks, so edits reflow.
-- **Team items:** **＋ Save selection** turns selected blocks into a reusable item; **＋ Add SVG or PNG** brings in illustrations and other assets. Items can be marked **Approved**, are shared with everyone on the canvas (live rooms and the published copy), and export or import as a library JSON for other canvases.
+- **Brand kit (built in):** logo variants, buttons, tag, stat, quote and feature cards, a person row, payment cards (Deel Card in core and black, Virtual card), phone (iOS and Android) and browser frames, and two starter illustrations. They follow the kit's colors, fonts and logos, and most are auto layout stacks, so edits reflow.
+- **Shared libraries** (for example Brand, Product design, Sales) are the same for everyone, across canvases. Admins make them and decide what goes in; everyone else browses them.
+- **This canvas** keeps pieces saved in the current canvas only. Anyone editing the canvas can add to it.
+
+**Turning libraries on and off.** **Libraries** (top of the tab) lists every library with a switch, like enabling a library in Figma. Your switches are yours alone and follow you across devices in claude.ai. Admins mark each shared library *on for everyone by default* or not; your own choice wins after that.
+
+**Admins.** In the published copy (claude.ai), the page owner is always an admin and adds others by name under **Libraries → Admins**. Admins also need **Editor** access to the page (claude.ai → Share): the page's database rules only accept library changes from Editors, so people who are not admins cannot change libraries, even outside the app. On the self-hosted server, start it with `LG_ADMIN_KEY=…` and give admins the key (they enter it once under Libraries → Admins); without a key, anyone on the server can edit. Opened from disk, libraries live in that browser.
+
+**Adding pieces.** **＋ Save selection** turns selected blocks into an item, saved to *This canvas* or (admins) a shared library. **＋ Add SVG or PNG** brings in illustrations and other assets. Pictures in shared items are uploaded once and shared. Items can be marked **Approved**; on *This canvas* items, admins get **↗** to publish them to a shared library. Shared libraries export and import as JSON (Libraries → Export / Import), which also moves them between claude.ai, the server and a browser.
+
+## Code components (design system)
+
+Coded components (React, for example `@deel-ui/core`) can sit in a library next to the visual pieces:
+
+1. **Make a manifest** from the design-system repo: `node tools/ds-manifest.mjs path/to/repo --name "Deel UI" --out deel-ui.json`. It reads what the repo already documents (a generated TypeScript props reference, `.tsx` components that export `XProps` types, and a Storybook reference for links). Nothing is installed or run, so the private packages are not needed.
+2. **Import it** (Library → Import, as an admin) into a library such as *Product design*. Each component becomes an item.
+3. **Use it.** On the canvas each one is a stand-in drawn from its kind and props (a pill for a Button, a field for a Text Field, a card for a Card…). Select it to see **Code component** in the panel: its props with their allowed values (variant, size, booleans…). Changing a prop redraws the stand-in and keeps the words you typed.
+4. **Export.** *Copy React + Tailwind* writes the real components with their imports, for example `import { Chip } from "@deel-ui/core";` and `<Chip variant="outlined" selected label="Approved" />`; layout around them stays flexbox. HTML export keeps the stand-ins and marks them with `data-component` and `data-props`.
+
+Anything can be tied to a component: when saving a selection (say a capture of a Storybook story or a live page), name the code component in the save form and the item exports as that component.
+
+The agent sees the same: `list_components` returns code components with their props, and `insert_component` takes `props` and `text`.
 
 ## Mobile screens
 
@@ -225,7 +246,9 @@ js/deck.js          outline from brief (rules or Claude), per-slide variations, 
 js/canvas.js        canvas document: frames, block ops, links, HTML/React export (nested flexbox), history
 js/autolayout.js    auto layout engine: boxes, stacks, Fixed/Hug/Fill, wrap, absolute, sync view
 js/canvas-ui.js     canvas editor: stage, selection, tools, layers tree, properties, Simple/Advanced, export
-js/library.js       Library tab: brand-built components, team items, insert and save
+js/library.js       Library tab: sections per library, save/insert, the Libraries window (on/off, admins)
+js/libstore.js      shared libraries: claude.ai database, server /api/libraries, or this browser
+js/codekit.js       code components: manifest, stand-ins, props, React output
 js/trace.js         Rebuild as layers: an image read by Claude into editable layers and crops
 js/pptx-import.js   PowerPoint reader: slides, layouts, masters, theme, text, shapes, pictures, tables
 js/gslides.js       Google Slides in and out (Drive connector, local server, or by hand)
@@ -244,6 +267,7 @@ js/prompt.js        brief parser + optional Claude interpreter
 js/app.js           UI state and wiring
 build.mjs           single-file bundler
 tools/pptx_to_kit.py  deck -> brand-kit draft + layout priors
+tools/ds-manifest.mjs design-system repo -> component manifest (lgComponents)
 docs/pitch.md       the case for building this properly
 docs/landscape.md   research: how other tools generate layouts
 docs/learnings.md   what Presenton and a 2,415-slide corpus taught us
@@ -259,5 +283,7 @@ docs/learnings.md   what Presenton and a 2,415-slide corpus taught us
 - Hex values in the Deel preset were read from the guidelines PDF. Confirm against the Figma library before production use.
 - PowerPoint import keeps one style per text block (the most-used run's), so mixed bold or colored words inside a paragraph take the paragraph's main style; charts, SmartArt and EMF/WMF pictures come in as placeholders.
 - Google Slides links in the published copy need the Google Drive connector connected in claude.ai; Save to Google Slides creates a new deck (it does not update the original).
+- Code components are stand-ins on the canvas, not the real rendered components (those need the private package and its theme at runtime). Props that take components or functions (icons, handlers) are left to the code. Components the reference does not document come in without props.
+- A shared library item holds up to about 240 KB in claude.ai (large vector illustrations may need to be pictures).
 - Rebuild as layers is a strong start, not a pixel copy: positions are estimates; check type sizes and spacing, then Shift+A to stack rows.
 - PPTX export references fonts by name; install the brand fonts to see exact type in PowerPoint. Image corner radii and gradient scrims are approximated (scrims and arcs become transparent image layers).

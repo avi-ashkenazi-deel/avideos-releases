@@ -1137,6 +1137,24 @@ const CanvasUI = (() => {
       <div class="cv-section"><h3>Fill</h3>${swatches('fill', '')}<p class="hint">Sets the fill (or text color) of every selected block.</p></div>
       <div class="cv-section"><h3>Effects</h3>${num('opacity', 'Opacity', 1, 0.05, 'min="0" max="1"')}<label class="cv-check"><input type="checkbox" data-p="shadow.on"> Drop shadow</label></div>`;
   }
+  // A code component (from a design-system manifest): its real name and props. Changing a prop redraws the stand-in.
+  function codeSection(f, b) {
+    if (typeof CodeKit === 'undefined') return '';
+    const root = CodeKit.ownerOf(f, b); if (!root) return '';
+    const C = root.code; const spec = typeof Library !== 'undefined' ? Library.specFor(C) : null; const props = C.props || {};
+    const skip = p => p.name === C.text || p.name === 'children' || p.name === 'className' || p.name === 'sx' || p.name === 'style' || /^on[A-Z]/.test(p.name) || /ReactNode|=>|Element|Ref|function/i.test(p.type || '');
+    const ctl = p => {
+      const v = props[p.name]; const lab = `<span title="${esc((p.type || '') + (p.description ? ' — ' + p.description : ''))}">${esc(p.name)}${p.required ? '*' : ''}</span>`;
+      if (p.values && p.values.length) return `<label class="cv-f">${lab}<select data-cprop="${esc(p.name)}"><option value="">${p.default ? `default (${esc(p.default)})` : '—'}</option>${p.values.map(x => `<option value="${esc(x)}" ${String(v) === x ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></label>`;
+      if (CodeKit.isBool(p)) return `<label class="cv-check"><input type="checkbox" data-cprop="${esc(p.name)}" data-ctype="bool" ${v === true ? 'checked' : ''}> ${esc(p.name)}</label>`;
+      return `<label class="cv-f">${lab}<input type="text" data-cprop="${esc(p.name)}" value="${esc(v == null ? '' : typeof v === 'object' ? JSON.stringify(v) : v)}" placeholder="${esc(p.default || '')}"></label>`;
+    };
+    const list = spec ? spec.props.filter(p => !skip(p)) : Object.keys(props).map(n => ({ name: n, type: typeof props[n] === 'boolean' ? 'boolean' : 'string' }));
+    return `<div class="cv-section"><h3>Code component</h3>
+      <p class="cv-codename"><code>&lt;${esc(C.name)}&gt;</code> <span class="hint">${esc(C.pkg || '')}</span>${spec && spec.story ? ` <a href="${esc(spec.story)}" target="_blank" rel="noopener" class="hint">Storybook ↗</a>` : ''}</p>
+      ${root !== b ? `<div class="cv-row">${btn('code-select', 'Select the component')}</div>` : list.slice(0, 40).map(ctl).join('')}
+      <p class="hint">${spec ? '' : 'Turn on the library that has this component to see all its props. '}${C.standIn ? 'The stand-in redraws when a prop changes; ' : ''}React export writes the real &lt;${esc(C.name)}&gt; with these props${C.text ? ` and the text as ${esc(C.text)}` : ''}.</p></div>`;
+  }
   function fillSection(b) {
     if (b.kind === 'box' && (!b.fill || b.fill === 'none') && !b.gradient) return `<div class="cv-section"><h3>Fill</h3><label class="cv-check"><input type="checkbox" data-p="hasFill"> Fill</label>${num('radius', 'Radius', b.radius || 0, 4)}</div>`;
     const isText = b.kind === 'text' || b.kind === 'list';
@@ -1174,6 +1192,7 @@ const CanvasUI = (() => {
       <label class="cv-check"><input type="checkbox" data-b="locked" ${b.locked ? 'checked' : ''}> Lock</label>
       <label class="cv-check"><input type="checkbox" data-b="decorative" ${b.decorative ? 'checked' : ''}> Decorative (not content)</label>
     </div>
+    ${codeSection(f, b)}
     ${b.kind === 'text' ? `<div class="cv-section"><h3>Text</h3><textarea class="cv-text" data-p="text" rows="3" spellcheck="true">${esc(Canvas.sourceText(b))}</textarea><p class="hint">Or double-click the text on the canvas.</p>${b.overflow ? '<p class="hint" style="color:var(--danger)">Text is wider than its box. Widen the box or lower the size.</p>' : ''}</div>` : ''}
     ${b.kind === 'list' ? `<div class="cv-section"><h3>Items</h3><textarea class="cv-text" data-p="items" rows="4" spellcheck="true">${esc((b.items || []).join('\n'))}</textarea>${selectF('marker', 'Marker', b.marker || 'bullet', [['bullet', 'Bullet'], ['number', 'Number'], ['none', 'None']])}</div>` : ''}
     ${b.kind === 'button' ? `<div class="cv-section"><h3>Label</h3><input type="text" class="cv-text" data-p="text" value="${esc(b.text)}">${color('color', 'Text color', b.color, b.colorToken)}</div>` : ''}
@@ -1198,6 +1217,16 @@ const CanvasUI = (() => {
     ${strokeSection(b)}
     ${effectsSection(b)}
     <div class="cv-section cv-adv"><h3>Code</h3><textarea class="cv-code" data-code="block" spellcheck="false">${esc(JSON.stringify(stripBlock(b), null, 1))}</textarea><div class="cv-row">${btn('apply-code', 'Apply JSON')}${btn('copy-code', 'Copy')}</div></div>`;
+  }
+  function setCodeProp(f, b, k, v) {
+    const root = CodeKit.ownerOf(f, b); if (!root) return;
+    hist.push(doc);
+    const props = { ...(root.code.props || {}) };
+    if (v === '' || v === false) delete props[k]; else if (v === true) props[k] = true; else { const t = String(v).trim(); props[k] = /^-?\d+(\.\d+)?$/.test(t) ? +t : /^[[{]/.test(t) ? (() => { try { return JSON.parse(t); } catch { return t; } })() : t; }
+    root.code = { ...root.code, props };
+    const spec = Library.specFor(root.code);
+    if (root.code.standIn && spec) { CodeKit.restyle(f, root, spec, env.getKit()); select(f.id, [root.id]); }
+    rerenderFrame(f); renderLayers(); drawOverlay(); renderProps(); persist(); updateUndo();
   }
   function stripBlock(b) { const c = Canvas.clone(b); delete c.lines; delete c.inkW; delete c.capacity; delete c.gap; delete c.maxLines; delete c.minSize; delete c.overflow; delete c.genPrompt; delete c.genMeta; return c; }
   function stripLayout(L) { const c = Canvas.clone(L); delete c.signature; c.blocks = c.blocks.map(stripBlock); return c; }
@@ -1298,6 +1327,7 @@ const CanvasUI = (() => {
         renderLayers(); drawOverlay(); persist(); updateUndo(); return;
       }
       if (t.dataset.al) { const tg = autoTarget(); if (!tg) return; if (!live) hist.push(doc); setAuto(tg.f, tg.box, t.dataset.al, t.type === 'checkbox' ? t.checked : t.value); rerenderFrame(tg.f); drawOverlay(); if (!live) renderProps(); persist(); updateUndo(); return; }
+      if (t.dataset.cprop && bs.length === 1) { if (live) return; setCodeProp(f, bs[0], t.dataset.cprop, t.dataset.ctype === 'bool' ? t.checked : t.value); return; }
       if (t.dataset.b && bs.length) { hist.push(doc); for (const b of bs) b[t.dataset.b] = t.checked; renderLayers(); drawOverlay(); persist(); updateUndo(); return; }
       const k = t.dataset.p; if (!k) return;
       if (!live) hist.push(doc);
@@ -1343,6 +1373,7 @@ const CanvasUI = (() => {
       const act = e.target.closest('[data-act]'); if (!act) return;
       const a = act.dataset.act;
       if (a === 'al-add') { addAutoLayout(); return; } if (a === 'al-remove') { removeAutoLayout(); return; }
+      if (a === 'code-select' && f && bs[0]) { const root = CodeKit.ownerOf(f, bs[0]); if (root) select(f.id, [root.id]); return; }
       if (a === 'frame-sel') { frameSelection(); return; } if (a === 'unwrap') { unwrapSelection(); return; }
       if (a === 'trace' && f && bs[0] && env.traceImage) { act.disabled = true; act.textContent = 'Reading the image…'; try { await env.traceImage(f, bs[0]); } catch (err) { env.toast(err.message || String(err)); } finally { act.disabled = false; act.textContent = '✦ Rebuild as layers'; } return; }
       if (a === 'edit-palette') { select(null, []); const sec = el.querySelector('[data-palette]'); if (sec) { sec.open = true; sec.scrollIntoView({ block: 'start', behavior: 'smooth' }); } return; }

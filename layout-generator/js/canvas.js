@@ -256,6 +256,8 @@ const Canvas = (() => {
       nd.box = { left: Math.round(b.x - origin.x), top: Math.round(b.y - origin.y), width: Math.round(b.w), height: Math.round(Math.max(b.h, nd.minH || 0)) };
       if (flow) { const main = parentFlex.dir === 'row' ? 'w' : 'h'; nd.size = { w: Auto.sizing(I, b, 'w'), h: Auto.sizing(I, b, 'h'), main }; for (const k of ['minW', 'maxW', 'minH', 'maxH']) if (b[k] != null) nd[k] = b[k]; }
       if (b.kind === 'box') { nd.flex = flexOf(I.S(b.id)); nd.children = build(b.id, { x: b.x, y: b.y }, nd.flex); }
+      // a code component: React writes the real component; HTML keeps the stand-in and names it
+      if (b.code && b.code.name) nd.code = { ...b.code, label: typeof CodeKit !== 'undefined' ? CodeKit.textOf(frame, b) : '' };
       return nd;
     }).filter(Boolean);
     const flex = flexOf(I.rootS);
@@ -298,7 +300,8 @@ const Canvas = (() => {
     const parts = [`<div class="frame" style="${style(rootCss(frame, tree))}">`];
     const emitNode = (nd, depth) => {
       const pad = '  '.repeat(depth); const s = style(cssOf(nd));
-      if (nd.children) { parts.push(`${pad}<div data-name="${e(nd.role)}" style="${s}">`); nd.children.forEach(c => emitNode(c, depth + 1)); parts.push(`${pad}</div>`); return; }
+      const comp = nd.code ? ` data-component="${e(nd.code.name)}" data-props="${e(JSON.stringify(nd.code.props || {})).replace(/"/g, '&quot;')}"` : '';
+      if (nd.children) { parts.push(`${pad}<div data-name="${e(nd.role)}"${comp} style="${s}">`); nd.children.forEach(c => emitNode(c, depth + 1)); parts.push(`${pad}</div>`); return; }
       if (nd.tag === 'img') parts.push(`${pad}<img src="${e(nd.src)}" alt="" style="${s}">`);
       else if (nd.tag === 'svg') parts.push(`${pad}<svg viewBox="${nd.viewBox}" preserveAspectRatio="none" style="${s}">${nd.inner}</svg>`);
       else if (nd.tag === 'ul' || nd.tag === 'ol') parts.push(`${pad}<${nd.tag} style="${s}">${nd.items.map(i => `<li>${e(i)}</li>`).join('')}</${nd.tag}>`);
@@ -337,8 +340,21 @@ const Canvas = (() => {
     const tree = codeTree(frame, env);
     const attrs = st => { const { cls, style } = twClasses(st); const sx = Object.keys(style).length ? ` style={{ ${Object.entries(style).map(([k, v]) => `${k}: ${JSON.stringify(v)}`).join(', ')} }}` : ''; return ` className="${cls.join(' ')}"${sx}`; };
     const lines = [`export default function ${name}() {`, `  return (`, `    <div${attrs(rootCss(frame, tree))}>`];
+    const imports = new Map(); // package -> component names
+    // A code component goes out as itself; a wrapper only carries where it sits (absolute, or filling its stack).
+    const emitComponent = (nd, pad) => {
+      const C = nd.code; const nm = String(C.name).replace(/[^A-Za-z0-9_]/g, '') || 'Component'; const pkg = String(C.pkg || 'components');
+      if (!imports.has(pkg)) imports.set(pkg, new Set()); imports.get(pkg).add(nm);
+      const props = { ...(C.props || {}) }; const tp = C.text; let kids = '';
+      if (tp && C.label) { if (tp === 'children') kids = e(C.label); else if (props[tp] == null) props[tp] = C.label; }
+      const tag = `<${nm}${typeof CodeKit !== 'undefined' ? CodeKit.jsxProps(props) : ''}${kids ? `>${kids}</${nm}>` : ' />'}`;
+      const PLACE = new Set(['left', 'top', 'flex', 'align-self', 'min-width', 'min-height']);
+      const place = cssOf(nd).filter(([k, v]) => k === 'position' ? v === 'absolute' : PLACE.has(k));
+      if (place.length) lines.push(`${pad}<div${attrs(place)}>`, `${pad}  ${tag}`, `${pad}</div>`); else lines.push(`${pad}${tag}`);
+    };
     const emitNode = (nd, depth) => {
       const pad = '  '.repeat(depth + 2); const c = attrs(cssOf(nd));
+      if (nd.code) { emitComponent(nd, pad); return; }
       if (nd.children) { lines.push(`${pad}<div${c}>`); nd.children.forEach(ch => emitNode(ch, depth + 1)); lines.push(`${pad}</div>`); return; }
       if (nd.tag === 'img') lines.push(`${pad}<img src="/${e(nd.src).replace(/[^A-Za-z0-9._-]+/g, '-')}" alt=""${c} />`);
       else if (nd.tag === 'svg') lines.push(`${pad}<svg viewBox="${nd.viewBox}" preserveAspectRatio="none"${c} dangerouslySetInnerHTML={{ __html: ${JSON.stringify(nd.inner)} }} />`);
@@ -347,7 +363,8 @@ const Canvas = (() => {
     };
     tree.children.forEach(nd => emitNode(nd, 1));
     lines.push('    </div>', '  );', '}');
-    return lines.join('\n');
+    const head = [...imports].map(([pkg, names]) => `import { ${[...names].sort().join(', ')} } from ${JSON.stringify(pkg)};`);
+    return (head.length ? head.join('\n') + '\n\n' : '') + lines.join('\n');
   }
 
   // ---- Batch edits for one or many frames -------------------------------------------------------------------------
