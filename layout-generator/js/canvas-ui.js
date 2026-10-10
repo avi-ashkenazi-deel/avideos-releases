@@ -406,7 +406,7 @@ const CanvasUI = (() => {
     if (wasText) startEdit(f, b, { noHistory: true });
   }
   // A blank frame of the toolbar's format (or a drawn custom size). With center, it lands in view on a free spot.
-  function createFrame({ x, y, format, center, name, bg } = {}) {
+  function createFrame({ x, y, format, center, name, bg, history = true } = {}) {
     const kit = env.getKit(); const fmt = format || Grid.byId[$('cvFrameFormat').value] || Grid.byId.slide;
     const bgs = kit.colors.filter(c => c.role === 'background').map(c => c.hex).sort((a, b) => Color.luminance(b) - Color.luminance(a));
     let fx = x ?? 0, fy = y ?? 0;
@@ -414,7 +414,7 @@ const CanvasUI = (() => {
       const r = stage().getBoundingClientRect(); const c = r.width ? toWorld(r.left + r.width / 2, r.top + r.height / 2) : { x: 0, y: 0 }; fx = c.x - fmt.w / 2; fy = c.y - fmt.h / 2;
       const spot = freeSpot(fx, fy, fmt.w, fmt.h); fx = spot.x; fy = spot.y;
     }
-    hist.push(doc);
+    if (history) hist.push(doc);
     const nf = Canvas.blankFrame(doc, fmt, kit, { x: Canvas.snap(fx, 8), y: Canvas.snap(fy, 8), bg: bg || bgs[0] || '#FFFFFF', name });
     select(nf.id, []); if (active) renderAll(); persist(); updateUndo();
     if (center && active) { const r = stage().getBoundingClientRect(); const a = toScreen(nf.x, nf.y), b = toScreen(nf.x + fmt.w, nf.y + fmt.h); if (a.x < 0 || a.y < 0 || b.x > r.width || b.y > r.height) fitTo([nf]); }
@@ -430,7 +430,7 @@ const CanvasUI = (() => {
   // A row of new frames below a source frame (or at a free spot), used by variations and imports.
   function placeRow(layouts, anchor, opts = {}) {
     if (!layouts.length) return [];
-    hist.push(doc);
+    if (opts.history !== false) hist.push(doc);
     const W = layouts.reduce((t, L) => t + L.format.w, 0) + 160 * (layouts.length - 1); const H = Math.max(...layouts.map(L => L.format.h));
     let x = anchor ? anchor.x : 0, y = anchor ? anchor.y + FH(anchor) + 200 : (doc.frames.length ? Math.max(...doc.frames.map(f => f.y + FH(f))) + 240 : 0);
     let guard = 0; while (doc.frames.some(f => !f.hidden && !(x + W <= f.x || x >= f.x + FW(f) || y + H <= f.y || y >= f.y + FH(f))) && guard++ < 100) y += 160;
@@ -443,7 +443,7 @@ const CanvasUI = (() => {
   // Imported screens keep their relative positions and land below everything already on the canvas.
   function placeFrames(items, opts = {}) {
     if (!items.length) return [];
-    hist.push(doc);
+    if (opts.history !== false) hist.push(doc);
     const bx = Math.min(...items.map(i => i.x)), by = Math.min(...items.map(i => i.y));
     const ox = doc.frames.length ? Math.min(...doc.frames.map(f => f.x)) : 0;
     const oy = doc.frames.length ? Math.max(...doc.frames.map(f => f.y + FH(f))) + 320 : 0;
@@ -987,9 +987,9 @@ const CanvasUI = (() => {
     }
     env.toast(made ? `${made} variation${made > 1 ? 's' : ''} below` : 'No variations fit these rules');
   }
-  async function resizeScreens(frames, fmtId) {
+  async function resizeScreens(frames, fmtId, opts = {}) {
     const fm = Grid.byId[fmtId]; if (!fm) { env.toast('Pick a format first'); return; }
-    hist.push(doc); let relaid = 0;
+    if (opts.history !== false) hist.push(doc); let relaid = 0;
     for (const f of frames) {
       const L = env.relayout ? env.relayout(f, fm) : null;
       if (L) { const keep = { bgToken: f.layout.palette.bgToken }; f.layout = Canvas.clone(L); for (const b of f.layout.blocks) if (!b.id) b.id = Canvas.uid(); if (keep.bgToken) f.layout.palette.bgToken = keep.bgToken; relaid++; }

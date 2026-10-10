@@ -172,7 +172,7 @@ async function mcpHandle(msg, roomId) {
   if (method === 'initialize') {
     const v = params && MCP_VERSIONS.includes(params.protocolVersion) ? params.protocolVersion : MCP_VERSIONS[0];
     return reply({ protocolVersion: v, capabilities: { tools: { listChanged: false } }, serverInfo: { name: 'layout-engine', title: 'Layout Engine canvas', version: VERSION },
-      instructions: 'Tools read and change the Layout Engine canvas open in a browser tab: frames (screens) made of blocks (text, images, shapes, vectors, buttons). Start with get_selection or get_canvas, use get_screenshot to look, and prefer update_blocks / set_text / recolor_frames for edits. Every change is one undo step for the person at the canvas.' });
+      instructions: 'Tools read and change the Layout Engine canvas open in a browser tab: frames (screens) made of blocks (text, images, shapes, vectors, buttons). Start with get_selection or get_canvas, use get_screenshot to look, and prefer update_blocks, replace_text and recolor_frames for edits. Each tool call is one undo step for the person at the canvas.' });
   }
   if (method.startsWith('notifications/')) return null;
   if (method === 'ping') return reply({});
@@ -222,7 +222,8 @@ const server = http.createServer(async (req, res) => {
       if (req.method === 'DELETE') { sessions.delete(req.headers['mcp-session-id']); return send(res, 200, ''); }
       if (req.method !== 'POST') return send(res, 405, '', { allow: 'POST' });
       const body = JSON.parse((await readBody(req, 4 * 1024 * 1024)).toString('utf8') || 'null');
-      const roomId = validRoom(url.searchParams.get('room')) ? url.searchParams.get('room') : null;
+      const sess = sessions.get(req.headers['mcp-session-id']);
+      const roomId = validRoom(url.searchParams.get('room')) ? url.searchParams.get('room') : (sess && sess.roomId) || null;
       const msgs = Array.isArray(body) ? body : [body];
       const headers = {};
       if (msgs.some(m => m && m.method === 'initialize')) { const sid = randomBytes(12).toString('hex'); sessions.set(sid, { roomId, at: Date.now() }); headers['mcp-session-id'] = sid; }

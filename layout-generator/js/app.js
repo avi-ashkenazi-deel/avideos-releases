@@ -794,6 +794,7 @@
     importFile: file => importFile(file),
     onPaste: e => onCanvasPaste(e),
     openImport: () => openImport(),
+    openAgent: () => Agent.show(),
     addImageData: (dataUrl, name) => addImage(dataUrl, name),
     updateColors: colors => { state.kit.colors = colors.map(c => ({ name: c.name || c.hex, hex: Color.normalize(c.hex), role: c.role || 'accent' })); renderColors(); persistKit(); },
     resetColors: () => { const preset = Brand.PRESETS[state.kit.presetId]; if (!preset) return false; state.kit.colors = preset.colors.map(c => ({ ...c })); renderColors(); persistKit(); return true; },
@@ -808,6 +809,15 @@
     shareLink: async () => { const link = Sync.roomLink(); if (!link) return false; try { await navigator.clipboard.writeText(link); } catch { } toast('Room link copied: anyone with it edits this canvas with you'); return true; },
     buildPptx: layouts => ExportPptx.buildDeck(layouts, { kit: state.kit, assets: state.assets }),
   });
+  // ---- Agent (in-app panel and the tools outside agents call over MCP) ---------------------------------------------
+  AgentTools.init({
+    getKit: () => state.kit, getAssets: () => state.assets, addImageData: (url, name) => addImage(url, name),
+    exportPNG: (layout, scale) => Render.exportPNG(layout, { kit: state.kit, assets: state.assets }, scale || 1),
+    variations: opts => makeVariations(opts),
+    onExternal: name => toast(`Outside agent: ${name.replace(/_/g, ' ')}`),
+  });
+  Agent.init({ getKit: () => state.kit, toast, openSettings: () => { $('settings').hidden = false; } });
+
   // ---- Multiplayer ------------------------------------------------------------------------------------------------
   Sync.init(CanvasUI, {
     getAssets: () => state.assets, dataUrlToBlob, addAssetWithId,

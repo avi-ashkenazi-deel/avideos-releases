@@ -205,6 +205,7 @@
         <div class="cv-right">
           <button id="cvUndo" class="btn small" type="button" title="Undo (⌘Z)" disabled>Undo</button>
           <button id="cvRedo" class="btn small" type="button" title="Redo (⇧⌘Z)" disabled>Redo</button>
+          <button id="cvAgent" class="btn small agent-btn" type="button" data-tip="Ask Claude to change the canvas · ⌘K">✦ Agent</button>
           <div id="cvPeers" class="cv-peers" hidden></div>
           <button id="cvLive" class="btn small" type="button" hidden data-tip="Start a shared room on this server">Go live</button>
           <button id="cvLink" class="btn small" type="button" title="Copy a link that carries this canvas (⌘L)">Copy link</button>
@@ -242,6 +243,13 @@
           <div id="cvEmpty" class="cv-empty" hidden><p class="big">Nothing on the canvas yet.</p><p>Pick layouts in Single or Deck mode and send them here, or add a blank frame with <b>＋ Frame</b> above. Press <b>F</b> and drag to draw one at any size.</p></div>
         </div>
         <aside class="cv-props" id="cvProps"></aside>
+        <div id="agentPanel" class="agent-panel" hidden role="dialog" aria-label="Agent">
+          <div class="agent-head"><b>✦ Agent</b><span id="agentCtx" class="agent-ctx"></span><button id="agentClose" class="btn ghost icon small" type="button" aria-label="Close">✕</button></div>
+          <div id="agentLog" class="agent-log" aria-live="polite"></div>
+          <div id="agentSuggest" class="agent-suggest"></div>
+          <form id="agentForm" class="agent-form"><textarea id="agentInput" rows="2" spellcheck="true" placeholder="Ask for a change"></textarea><button class="btn small primary" id="agentSend" type="submit">Send</button></form>
+          <div id="agentFoot" class="agent-foot"></div>
+        </div>
       </div>
     </div>
     <div id="empty" class="empty">
@@ -379,6 +387,9 @@
 <script src="js/canvas.js"></script>
 <script src="js/canvas-ui.js"></script>
 <script src="js/sync.js"></script>
+<script src="js/tool-defs.js"></script>
+<script src="js/agent-tools.js"></script>
+<script src="js/agent.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

@@ -420,6 +420,34 @@ body.canvas-mode .main { overflow: hidden; background-image: none; }
 .cv-av:hover { transform: translateY(-1px) scale(1.06); z-index: 1; }
 .cv-av.me { outline: 1.5px solid var(--fg-3); outline-offset: 1px; margin-left: 6px; }
 .cv-av.more { background: var(--line-2); cursor: default; }
+/* ---- Agent panel ---- */
+.cv-body { position: relative; }
+.agent-btn.active, .agent-btn:hover { border-color: var(--accent); color: var(--accent); }
+.agent-panel { position: absolute; left: 252px; bottom: 16px; width: min(420px, calc(100% - 32px)); max-height: min(70vh, 640px); display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line-2); border-radius: 12px; box-shadow: 0 18px 50px rgba(0,0,0,.5); z-index: 20; overflow: hidden; }
+.agent-head { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+.agent-head b { color: var(--accent); font-size: 13.5px; }
+.agent-ctx { flex: 1; font-size: 12px; color: var(--fg-3); }
+.agent-log { overflow-y: auto; padding: 10px 12px; display: flex; flex-direction: column; gap: 10px; min-height: 0; flex: 1; }
+.agent-log:empty { display: none; }
+.agent-msg .txt { white-space: pre-wrap; font-size: 13.5px; line-height: 1.45; }
+.agent-msg.user { align-self: flex-end; max-width: 85%; background: var(--panel-2); border: 1px solid var(--line-2); border-radius: 10px 10px 2px 10px; padding: 8px 10px; }
+.agent-msg.assistant .txt.thinking { color: var(--fg-3); }
+.agent-msg .steps { display: flex; flex-direction: column; gap: 2px; margin-bottom: 4px; }
+.agent-msg .step { font-size: 12px; color: #16B88A; font-family: var(--font-mono); }
+.agent-msg .step.pending { color: var(--fg-3); }
+.agent-suggest { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 12px 0; }
+.agent-suggest:empty { display: none; }
+.agent-suggest .chip { border: 1px solid var(--line-2); background: var(--bg); color: var(--fg-2); border-radius: 14px; padding: 5px 10px; font-size: 12px; cursor: pointer; transition: border-color .12s, color .12s; }
+.agent-suggest .chip:hover { border-color: var(--accent); color: var(--fg); }
+.agent-form { display: flex; gap: 8px; align-items: flex-end; padding: 10px 12px; }
+.agent-form textarea { flex: 1; resize: none; background: var(--bg); border: 1px solid var(--line-2); border-radius: 8px; color: var(--fg); padding: 8px 10px; font: inherit; font-size: 13.5px; min-height: 40px; max-height: 140px; }
+.agent-form textarea:focus { outline: none; border-color: var(--accent); }
+.agent-form .btn.stop { background: var(--danger, #e5484d); border-color: var(--danger, #e5484d); color: #fff; }
+.agent-foot { padding: 0 12px 10px; font-size: 11.5px; color: var(--fg-3); line-height: 1.45; }
+.agent-foot a { color: var(--accent); }
+.agent-mcp { margin-top: 6px; }
+.agent-mcp code { font-family: var(--font-mono); font-size: 10.5px; color: var(--fg-2); background: var(--bg); padding: 2px 5px; border-radius: 4px; word-break: break-all; }
+@media (max-width: 960px) { .agent-panel { left: 16px; } }
 
 
 </style>
@@ -619,6 +647,7 @@ body.canvas-mode .main { overflow: hidden; background-image: none; }
         <div class="cv-right">
           <button id="cvUndo" class="btn small" type="button" title="Undo (⌘Z)" disabled>Undo</button>
           <button id="cvRedo" class="btn small" type="button" title="Redo (⇧⌘Z)" disabled>Redo</button>
+          <button id="cvAgent" class="btn small agent-btn" type="button" data-tip="Ask Claude to change the canvas · ⌘K">✦ Agent</button>
           <div id="cvPeers" class="cv-peers" hidden></div>
           <button id="cvLive" class="btn small" type="button" hidden data-tip="Start a shared room on this server">Go live</button>
           <button id="cvLink" class="btn small" type="button" title="Copy a link that carries this canvas (⌘L)">Copy link</button>
@@ -656,6 +685,13 @@ body.canvas-mode .main { overflow: hidden; background-image: none; }
           <div id="cvEmpty" class="cv-empty" hidden><p class="big">Nothing on the canvas yet.</p><p>Pick layouts in Single or Deck mode and send them here, or add a blank frame with <b>＋ Frame</b> above. Press <b>F</b> and drag to draw one at any size.</p></div>
         </div>
         <aside class="cv-props" id="cvProps"></aside>
+        <div id="agentPanel" class="agent-panel" hidden role="dialog" aria-label="Agent">
+          <div class="agent-head"><b>✦ Agent</b><span id="agentCtx" class="agent-ctx"></span><button id="agentClose" class="btn ghost icon small" type="button" aria-label="Close">✕</button></div>
+          <div id="agentLog" class="agent-log" aria-live="polite"></div>
+          <div id="agentSuggest" class="agent-suggest"></div>
+          <form id="agentForm" class="agent-form"><textarea id="agentInput" rows="2" spellcheck="true" placeholder="Ask for a change"></textarea><button class="btn small primary" id="agentSend" type="submit">Send</button></form>
+          <div id="agentFoot" class="agent-foot"></div>
+        </div>
       </div>
     </div>
     <div id="empty" class="empty">
@@ -4970,7 +5006,7 @@ const CanvasUI = (() => {
     if (wasText) startEdit(f, b, { noHistory: true });
   }
   // A blank frame of the toolbar's format (or a drawn custom size). With center, it lands in view on a free spot.
-  function createFrame({ x, y, format, center, name, bg } = {}) {
+  function createFrame({ x, y, format, center, name, bg, history = true } = {}) {
     const kit = env.getKit(); const fmt = format || Grid.byId[$('cvFrameFormat').value] || Grid.byId.slide;
     const bgs = kit.colors.filter(c => c.role === 'background').map(c => c.hex).sort((a, b) => Color.luminance(b) - Color.luminance(a));
     let fx = x ?? 0, fy = y ?? 0;
@@ -4978,7 +5014,7 @@ const CanvasUI = (() => {
       const r = stage().getBoundingClientRect(); const c = r.width ? toWorld(r.left + r.width / 2, r.top + r.height / 2) : { x: 0, y: 0 }; fx = c.x - fmt.w / 2; fy = c.y - fmt.h / 2;
       const spot = freeSpot(fx, fy, fmt.w, fmt.h); fx = spot.x; fy = spot.y;
     }
-    hist.push(doc);
+    if (history) hist.push(doc);
     const nf = Canvas.blankFrame(doc, fmt, kit, { x: Canvas.snap(fx, 8), y: Canvas.snap(fy, 8), bg: bg || bgs[0] || '#FFFFFF', name });
     select(nf.id, []); if (active) renderAll(); persist(); updateUndo();
     if (center && active) { const r = stage().getBoundingClientRect(); const a = toScreen(nf.x, nf.y), b = toScreen(nf.x + fmt.w, nf.y + fmt.h); if (a.x < 0 || a.y < 0 || b.x > r.width || b.y > r.height) fitTo([nf]); }
@@ -4994,7 +5030,7 @@ const CanvasUI = (() => {
   // A row of new frames below a source frame (or at a free spot), used by variations and imports.
   function placeRow(layouts, anchor, opts = {}) {
     if (!layouts.length) return [];
-    hist.push(doc);
+    if (opts.history !== false) hist.push(doc);
     const W = layouts.reduce((t, L) => t + L.format.w, 0) + 160 * (layouts.length - 1); const H = Math.max(...layouts.map(L => L.format.h));
     let x = anchor ? anchor.x : 0, y = anchor ? anchor.y + FH(anchor) + 200 : (doc.frames.length ? Math.max(...doc.frames.map(f => f.y + FH(f))) + 240 : 0);
     let guard = 0; while (doc.frames.some(f => !f.hidden && !(x + W <= f.x || x >= f.x + FW(f) || y + H <= f.y || y >= f.y + FH(f))) && guard++ < 100) y += 160;
@@ -5007,7 +5043,7 @@ const CanvasUI = (() => {
   // Imported screens keep their relative positions and land below everything already on the canvas.
   function placeFrames(items, opts = {}) {
     if (!items.length) return [];
-    hist.push(doc);
+    if (opts.history !== false) hist.push(doc);
     const bx = Math.min(...items.map(i => i.x)), by = Math.min(...items.map(i => i.y));
     const ox = doc.frames.length ? Math.min(...doc.frames.map(f => f.x)) : 0;
     const oy = doc.frames.length ? Math.max(...doc.frames.map(f => f.y + FH(f))) + 320 : 0;
@@ -5551,9 +5587,9 @@ const CanvasUI = (() => {
     }
     env.toast(made ? `${made} variation${made > 1 ? 's' : ''} below` : 'No variations fit these rules');
   }
-  async function resizeScreens(frames, fmtId) {
+  async function resizeScreens(frames, fmtId, opts = {}) {
     const fm = Grid.byId[fmtId]; if (!fm) { env.toast('Pick a format first'); return; }
-    hist.push(doc); let relaid = 0;
+    if (opts.history !== false) hist.push(doc); let relaid = 0;
     for (const f of frames) {
       const L = env.relayout ? env.relayout(f, fm) : null;
       if (L) { const keep = { bgToken: f.layout.palette.bgToken }; f.layout = Canvas.clone(L); for (const b of f.layout.blocks) if (!b.id) b.id = Canvas.uid(); if (keep.bgToken) f.layout.palette.bgToken = keep.bgToken; relaid++; }
@@ -6036,6 +6072,386 @@ const Sync = (() => {
     announceTools: list => { if (adapter && adapter.announceTools) adapter.announceTools(list); },
     _debug: { recs, synced, toRecords, docFrom, undoMerge },
   };
+})();
+
+/* js/tool-defs.js */
+/* Canvas tools for agents: one definition list shared by the in-app agent (claude.ai sample or the Claude API) and the
+   MCP server (Claude Code, Cursor, Codex). Plain data, no dependencies; the server reads this file directly.
+   `core: true` marks the compact set offered where rounds and tool counts are tight (the claude.ai page). */
+const TOOL_DEFS = [
+  { name: 'get_selection', core: true, description: 'What the person has selected on the canvas: the selected screens (frames) with their blocks, and any selected block ids. Start here when asked to change "this" or "these".', inputSchema: { type: 'object', properties: {} } },
+  { name: 'get_canvas', core: true, description: 'Every screen on the canvas: id, name, position, size, look and block count. Use it to find frame ids.', inputSchema: { type: 'object', properties: {} } },
+  { name: 'get_frame', core: true, description: 'One screen in detail: every block with id, kind, role, box (x, y, w, h in px from the frame\'s top left), text, colors and type.', inputSchema: { type: 'object', properties: { frame_id: { type: 'string' } }, required: ['frame_id'] } },
+  { name: 'get_brand', core: true, description: 'The brand kit: palette colors (name, hex, role), approved background/text/accent pairs, display and body fonts, and the fonts available.', inputSchema: { type: 'object', properties: {} } },
+  { name: 'get_screenshot', description: 'A PNG of one screen, to check how it looks after changes.', inputSchema: { type: 'object', properties: { frame_id: { type: 'string' }, scale: { type: 'number', description: '0.25 to 1, default 0.5' } }, required: ['frame_id'] } },
+  { name: 'get_code', description: 'One screen as code: React with Tailwind classes, or plain HTML/CSS.', inputSchema: { type: 'object', properties: { frame_id: { type: 'string' }, format: { type: 'string', enum: ['react', 'html'] } }, required: ['frame_id'] } },
+  { name: 'select', description: 'Select screens, or blocks inside one screen, so the person sees what you mean.', inputSchema: { type: 'object', properties: { frame_ids: { type: 'array', items: { type: 'string' } }, block_ids: { type: 'array', items: { type: 'string' }, description: 'Only with exactly one frame id' } } } },
+  { name: 'update_blocks', core: true, description: 'Change blocks. Each update names frame_id, block_id and the props to set: text, items, x, y, w, h, fill (hex or brand color name), color (button label), font_size, font_weight, font_family, line_height, letter_spacing, align, case, opacity, radius, rotation, hidden, label, shadow, stroke, gradient, z. Returns overflow ids when text no longer fits its box.',
+    inputSchema: { type: 'object', properties: { updates: { type: 'array', items: { type: 'object', properties: { frame_id: { type: 'string' }, block_id: { type: 'string' }, props: { type: 'object', description: 'e.g. {"text":"New headline","font_size":72} or {"fill":"Acai"} or {"shadow":{"y":8,"blur":24,"alpha":0.2}} or {"gradient":{"type":"linear","angle":180,"stops":["#5938B8","#191A25"]}} or {"z":"front"}' } }, required: ['frame_id', 'block_id', 'props'] } } }, required: ['updates'] } },
+  { name: 'add_blocks', core: true, description: 'Add blocks to a screen. kind is text, body, button, rect, ellipse, image, icon or logo; then any props update_blocks takes. Returns the new block ids.',
+    inputSchema: { type: 'object', properties: { frame_id: { type: 'string' }, blocks: { type: 'array', items: { type: 'object', properties: { kind: { type: 'string', enum: ['text', 'body', 'button', 'rect', 'ellipse', 'image', 'icon', 'logo'] }, props: { type: 'object' } }, required: ['kind'] } } }, required: ['frame_id', 'blocks'] } },
+  { name: 'delete_blocks', core: true, description: 'Remove blocks from a screen.', inputSchema: { type: 'object', properties: { frame_id: { type: 'string' }, block_ids: { type: 'array', items: { type: 'string' } } }, required: ['frame_id', 'block_ids'] } },
+  { name: 'create_frame', description: 'Add a blank screen. format is one of square, story, linkedin, x, slide, portrait, poster, banner; or give width and height. Returns its id.', inputSchema: { type: 'object', properties: { format: { type: 'string' }, width: { type: 'number' }, height: { type: 'number' }, name: { type: 'string' }, background: { type: 'string', description: 'hex or brand color name' } } } },
+  { name: 'update_frames', core: true, description: 'Rename, move or recolor the background of screens. Each update: frame_id plus name, x, y, background (hex or brand color name).', inputSchema: { type: 'object', properties: { updates: { type: 'array', items: { type: 'object', properties: { frame_id: { type: 'string' }, name: { type: 'string' }, x: { type: 'number' }, y: { type: 'number' }, background: { type: 'string' } }, required: ['frame_id'] } } }, required: ['updates'] } },
+  { name: 'duplicate_frames', core: true, description: 'Copy screens next to the originals. Returns the new frame ids, in order.', inputSchema: { type: 'object', properties: { frame_ids: { type: 'array', items: { type: 'string' } }, copies: { type: 'number', description: '1 to 6 copies of each, default 1' } }, required: ['frame_ids'] } },
+  { name: 'delete_frames', description: 'Remove screens. Only when the person asked for it.', inputSchema: { type: 'object', properties: { frame_ids: { type: 'array', items: { type: 'string' } } }, required: ['frame_ids'] } },
+  { name: 'recolor_frames', core: true, description: 'Move screens onto a brand background: every fill that used the old background, text or accent color takes the new one. background is a brand color name or hex; text and accent are picked for contrast unless given.', inputSchema: { type: 'object', properties: { frame_ids: { type: 'array', items: { type: 'string' } }, background: { type: 'string' }, text: { type: 'string' }, accent: { type: 'string' } }, required: ['frame_ids', 'background'] } },
+  { name: 'make_variations', core: true, description: 'New takes on a screen, placed below it with the same copy. mode: similar (same layout idea), explore (other layouts) or palette (color swaps). Returns the new frame ids.', inputSchema: { type: 'object', properties: { frame_id: { type: 'string' }, count: { type: 'number', description: '1 to 6, default 3' }, mode: { type: 'string', enum: ['similar', 'explore', 'palette'] } }, required: ['frame_id'] } },
+  { name: 'apply_look', core: true, description: 'Switch screens between original, wireframe (grey boxes, one typeface) and rebrand (colors and type moved onto the brand kit). Lossless: original always comes back.', inputSchema: { type: 'object', properties: { frame_ids: { type: 'array', items: { type: 'string' } }, look: { type: 'string', enum: ['original', 'wireframe', 'rebrand'] } }, required: ['frame_ids', 'look'] } },
+  { name: 'replace_text', core: true, description: 'Find and replace words across screens (text, buttons, lists). Case-insensitive. Returns how many replacements were made.', inputSchema: { type: 'object', properties: { frame_ids: { type: 'array', items: { type: 'string' } }, find: { type: 'string' }, replace: { type: 'string' } }, required: ['frame_ids', 'find', 'replace'] } },
+  { name: 'set_fonts', description: 'Set the display font (headlines, numbers, eyebrows) and body font on screens. Names from get_brand.', inputSchema: { type: 'object', properties: { frame_ids: { type: 'array', items: { type: 'string' } }, display: { type: 'string' }, body: { type: 'string' } }, required: ['frame_ids'] } },
+  { name: 'resize_frames', description: 'Resize screens to another format (square, story, linkedin, x, slide, portrait, poster, banner). Generated layouts are laid out again; other screens scale.', inputSchema: { type: 'object', properties: { frame_ids: { type: 'array', items: { type: 'string' } }, format: { type: 'string' } }, required: ['frame_ids', 'format'] } },
+  { name: 'generate_image', description: 'Generate a picture into an image block with the image model set in Settings (Gemini or OpenAI). Only works where outbound requests are allowed.', inputSchema: { type: 'object', properties: { frame_id: { type: 'string' }, block_id: { type: 'string' }, prompt: { type: 'string' } }, required: ['frame_id', 'block_id', 'prompt'] } },
+  { name: 'write_layout', description: 'Replace a screen\'s whole layout JSON (format, palette, blocks), as get_frame with full=true returns it. For rebuilding a screen from scratch; prefer the smaller tools for edits.', inputSchema: { type: 'object', properties: { frame_id: { type: 'string' }, layout: { type: 'object' } }, required: ['frame_id', 'layout'] } },
+];
+
+/* js/agent-tools.js */
+/* Canvas tools, implemented over the editor. Used by the in-app agent and, through the server, by outside agents (MCP).
+   During one agent run every change is a single undo step; each MCP call is its own step. */
+const AgentTools = (() => {
+  let env = null; let run = null;
+  const doc = () => CanvasUI.doc;
+  const MAX_TEXT = 240;
+  function F(id) { const f = Canvas.frameById(doc(), String(id || '')); if (!f) throw new Error(`No screen with id "${id}". Call get_canvas or get_selection for ids.`); return f; }
+  function Bk(f, id) { const b = Canvas.blockById(f, String(id || '')); if (!b) throw new Error(`No block "${id}" in screen ${f.id}. Call get_frame for block ids.`); return b; }
+  const arr = v => Array.isArray(v) ? v : v == null ? [] : [v];
+  const kit = () => env.getKit();
+  // A color: hex, or a brand palette name (case-insensitive). Returns {hex, name}.
+  function color(v) {
+    if (v == null || v === '') throw new Error('Missing color');
+    const s = String(v).trim(); const c = kit().colors.find(x => String(x.name || '').toLowerCase() === s.toLowerCase());
+    if (c) return { hex: Color.normalize(c.hex), name: c.name };
+    try { return { hex: Color.normalize(s), name: null }; } catch { throw new Error(`"${s}" is not a hex color or a brand color name (${kit().colors.map(x => x.name).join(', ')})`); }
+  }
+  // One write = one undo step per run (the first write of a run snapshots the canvas).
+  // One agent run is one undo step: only its first write saves history.
+  function firstWrite() { const first = !run || !run.wrote; if (run) run.wrote = true; return first; }
+  function write(fn, frames) { return CanvasUI.mutate(fn, { history: firstWrite(), frames }); }
+  const note = (s) => { if (run && run.onStep) run.onStep(s); };
+
+  function blockInfo(b) {
+    const o = { id: b.id, kind: b.kind };
+    if (b.role) o.role = b.role; if (b.label) o.label = b.label; if (b.group) o.group = b.group;
+    Object.assign(o, { x: Math.round(b.x), y: Math.round(b.y), w: Math.round(b.w), h: Math.round(b.h) });
+    if (b.kind === 'text') o.text = Canvas.sourceText(b).slice(0, MAX_TEXT);
+    if (b.kind === 'button') o.text = String(b.text || '').slice(0, MAX_TEXT);
+    if (b.kind === 'list') o.items = (b.items || []).map(i => String(i).slice(0, 120)).slice(0, 12);
+    if (b.fill) o.fill = b.fillToken ? `${b.fill} (${b.fillToken})` : b.fill;
+    if (b.color) o.color = b.color;
+    if (b.font) o.font = { family: String(b.font.family).split(',')[0].replace(/["']/g, ''), size: b.font.size, weight: b.font.weight };
+    if (b.align && b.align !== 'left') o.align = b.align;
+    if (b.kind === 'image') o.image = b.asset ? 'set' : 'empty';
+    if (b.kind === 'icon') o.icon = b.name;
+    if (b.overflow) o.overflow = true; if (b.hidden) o.hidden = true; if (b.locked) o.locked = true;
+    if (b.opacity != null && b.opacity < 1) o.opacity = b.opacity;
+    return o;
+  }
+  function frameInfo(f, withBlocks) {
+    const L = f.layout;
+    const o = { id: f.id, name: f.name, x: Math.round(f.x), y: Math.round(f.y), w: L.format.w, h: L.format.h, format: L.format.id, background: L.palette.bgToken ? `${L.palette.bg} (${L.palette.bgToken})` : L.palette.bg, look: (L.meta && L.meta.look) || 'original', kind: L.archetypeLabel || L.archetype || 'frame' };
+    if (withBlocks) o.blocks = L.blocks.map(blockInfo); else o.blocks = L.blocks.length;
+    return o;
+  }
+  // Props an agent can set on a block, in plain words.
+  function applyProps(b, p) {
+    if (!p || typeof p !== 'object') throw new Error('props must be an object');
+    const num = (k, min = -1e6, max = 1e6) => { const v = Number(p[k]); if (!Number.isFinite(v)) throw new Error(`${k} must be a number`); return Math.max(min, Math.min(max, v)); };
+    let refit = false;
+    if ('text' in p) { if (b.kind === 'button') b.text = String(p.text).slice(0, 80); else if (b.kind === 'text') { b.text = String(p.text).slice(0, 4000); refit = true; } }
+    if ('items' in p && b.kind === 'list') { b.items = arr(p.items).map(String).slice(0, 20); refit = true; }
+    for (const k of ['x', 'y']) if (k in p) b[k] = Math.round(num(k));
+    for (const k of ['w', 'h']) if (k in p) { b[k] = Math.round(num(k, 4, 20000)); refit = true; }
+    if ('fill' in p) { const c = color(p.fill); b.fill = c.hex; if (c.name) b.fillToken = c.name; else delete b.fillToken; delete b.gradient; }
+    if ('color' in p) { const c = color(p.color); b.color = c.hex; if (c.name) b.colorToken = c.name; else delete b.colorToken; }
+    if (b.font) {
+      if ('font_size' in p) { b.font.size = Math.round(num('font_size', 6, 800)); refit = true; }
+      if ('font_weight' in p) { b.font.weight = Math.round(num('font_weight', 100, 900) / 100) * 100; refit = true; }
+      if ('font_family' in p) { const name = String(p.font_family); if (!Brand.allFontNames().includes(name)) throw new Error(`Unknown font "${name}". Available: ${Brand.allFontNames().join(', ')}`); b.font.family = Brand.fontCss(name); const ws = Brand.fontWeights(name); if (!ws.includes(b.font.weight)) b.font.weight = ws.reduce((q, c) => Math.abs(c - b.font.weight) < Math.abs(q - b.font.weight) ? c : q, ws[0]); refit = true; }
+      if ('line_height' in p) { b.font.lineHeight = num('line_height', 0.6, 4); refit = true; }
+      if ('letter_spacing' in p) { b.font.letterSpacing = num('letter_spacing', -0.2, 1); refit = true; }
+      if ('case' in p) { b.font.transform = p.case === 'upper' ? 'upper' : p.case === 'lower' ? 'lower' : undefined; if (!b.font.transform) delete b.font.transform; refit = true; }
+    }
+    if ('align' in p && b.kind === 'text') b.align = ['left', 'center', 'right'].includes(p.align) ? p.align : 'left';
+    if ('opacity' in p) b.opacity = num('opacity', 0, 1);
+    if ('radius' in p) b.radius = Math.round(num('radius', 0, 2000));
+    if ('rotation' in p) { let r = num('rotation') % 360; if (r > 180) r -= 360; if (r < -180) r += 360; b.rotation = r; }
+    if ('hidden' in p) b.hidden = !!p.hidden;
+    if ('label' in p) { if (p.label) b.label = String(p.label).slice(0, 80); else delete b.label; }
+    if ('icon' in p && b.kind === 'icon') { if (!Icons.has(String(p.icon))) throw new Error(`Unknown icon. Available: ${Icons.names.join(', ')}`); b.name = String(p.icon); }
+    if ('shadow' in p) { const s = p.shadow; if (!s) delete b.shadow; else { const o = typeof s === 'object' ? s : {}; b.shadow = { on: true, x: Number(o.x) || 0, y: Number(o.y ?? 8), blur: Number(o.blur ?? 24), color: o.color ? color(o.color).hex : '#000000', alpha: Math.max(0, Math.min(1, Number(o.alpha ?? 0.25))) }; } }
+    if ('stroke' in p) { const s = p.stroke; if (!s || !(Number(s.width) > 0)) delete b.stroke; else b.stroke = { width: Number(s.width), color: color(s.color || '#000000').hex }; }
+    if ('gradient' in p) { const g = p.gradient; if (!g) delete b.gradient; else { const stops = arr(g.stops).map((c, i, all) => ({ c: color(typeof c === 'object' ? c.color || c.c : c).hex, p: typeof c === 'object' && c.position != null ? Number(c.position) : all.length > 1 ? i / (all.length - 1) : 0 })); if (stops.length < 2) throw new Error('gradient needs at least two stops'); b.gradient = { type: g.type === 'radial' ? 'radial' : 'linear', angle: Number(g.angle ?? 180), stops }; b.fill = stops[0].c; } }
+    if (refit) Canvas.refit(b);
+    return b;
+  }
+  function framesArg(ids) { const list = arr(ids); if (!list.length) throw new Error('frame_ids is empty'); return list.map(F); }
+  const dataUrlOf = blob => new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(blob); });
+
+  const IMPL = {
+    get_selection() {
+      const s = CanvasUI.selection();
+      if (!s.frameIds.length) return { selected: 'nothing', hint: 'Nothing is selected. Use get_canvas to see every screen.', screens: doc().frames.length };
+      const frames = s.frameIds.map(F);
+      return { screens: frames.map(f => frameInfo(f, frames.length <= 4)), selected_blocks: s.blockIds };
+    },
+    get_canvas() { return { name: doc().name, screens: doc().frames.map(f => frameInfo(f, false)) }; },
+    get_frame({ frame_id, full }) { const f = F(frame_id); if (full) { const L = Canvas.clone(f.layout); delete L.signature; if (L.meta) delete L.meta.original; L.blocks = L.blocks.map(b => { delete b.lines; delete b.inkW; delete b.capacity; return b; }); return { id: f.id, name: f.name, layout: L }; } return frameInfo(f, true); },
+    get_brand() {
+      const k = kit();
+      return { name: k.name, colors: k.colors.map(c => ({ name: c.name, hex: Color.normalize(c.hex), role: c.role })), pairs: Brand.pairs(k).slice(0, 12).map(p => ({ background: p.bgName, bg: p.bg, text: p.fgs[0], accent: p.accents[0] })), fonts: { display: k.fonts.display, body: k.fonts.body, available: Brand.allFontNames() }, voice: k.note || 'Clear, confident, human. Sentence case. No exclamation marks.', copy: k.content };
+    },
+    async get_screenshot({ frame_id, scale }) { const f = F(frame_id); const s = Math.max(0.25, Math.min(1, Number(scale) || 0.5)); const blob = await env.exportPNG(f.layout, s); return { image: await dataUrlOf(blob), frame_id: f.id, width: Math.round(f.layout.format.w * s), height: Math.round(f.layout.format.h * s) }; },
+    get_code({ frame_id, format }) { const f = F(frame_id); const e = { assets: env.getAssets(), kit: kit() }; return format === 'html' ? Canvas.toHTML(f, e) : Canvas.toReact(f, e); },
+    select({ frame_ids, block_ids }) { const ids = arr(frame_ids).map(id => F(id).id); if (ids.length === 1 && arr(block_ids).length) CanvasUI.select(ids[0], arr(block_ids).map(String)); else CanvasUI.selectFrames(ids); return { selected: CanvasUI.selection() }; },
+    update_blocks({ updates }) {
+      const list = arr(updates).slice(0, 300); if (!list.length) throw new Error('updates is empty');
+      const touched = new Set(); const overflow = []; const errors = [];
+      write(() => { for (const u of list) { try { const f = F(u.frame_id); const b = Bk(f, u.block_id); applyProps(b, u.props); touched.add(f.id); if (b.overflow) overflow.push(b.id); } catch (e) { errors.push(`${u.block_id}: ${e.message}`); } } }, null);
+      note(`Updated ${list.length - errors.length} block${list.length - errors.length === 1 ? '' : 's'}`);
+      return { updated: list.length - errors.length, overflow, errors };
+    },
+    add_blocks({ frame_id, blocks }) {
+      const f = F(frame_id); const ids = []; const errors = [];
+      write(() => { for (const spec of arr(blocks).slice(0, 50)) { try { const b = Canvas.newBlock(spec.kind, f, kit(), null); if (!b) throw new Error(`unknown kind ${spec.kind}`); applyProps(b, spec.props || {}); f.layout.blocks.push(b); ids.push(b.id); } catch (e) { errors.push(e.message); } } if (f.autoLayout.mode !== 'none') Canvas.applyAutoLayout(f); }, [f.id]);
+      note(`Added ${ids.length} block${ids.length === 1 ? '' : 's'} to ${f.name}`);
+      return { block_ids: ids, errors };
+    },
+    delete_blocks({ frame_id, block_ids }) { const f = F(frame_id); const ids = arr(block_ids).map(String); const before = f.layout.blocks.length; write(() => Canvas.removeBlocks(f, ids), [f.id]); const n = before - f.layout.blocks.length; note(`Removed ${n} block${n === 1 ? '' : 's'}`); return { removed: n }; },
+    create_frame({ format, width, height, name, background }) {
+      const fmt = format && Grid.byId[format] ? Grid.byId[format] : (Number(width) > 0 && Number(height) > 0 ? Canvas.customFormat(Number(width), Number(height)) : Grid.byId.square);
+      const bg = background ? color(background).hex : undefined;
+      const f = CanvasUI.createFrame({ center: true, format: fmt, name: name ? String(name).slice(0, 80) : undefined, bg, history: firstWrite() });
+      note(`Created ${f.name}`); return { frame_id: f.id, w: fmt.w, h: fmt.h };
+    },
+    update_frames({ updates }) {
+      const list = arr(updates); const ids = [];
+      write(() => { for (const u of list) { const f = F(u.frame_id); if (u.name) f.name = String(u.name).slice(0, 80); if (Number.isFinite(Number(u.x)) && u.x != null) f.x = Math.round(Number(u.x)); if (Number.isFinite(Number(u.y)) && u.y != null) f.y = Math.round(Number(u.y)); if (u.background) { const c = color(u.background); f.layout.palette.bg = c.hex; if (c.name) { f.layout.palette.bgToken = c.name; f.layout.palette.bgName = c.name; } delete f.layout.palette.bgGradient; } ids.push(f.id); } }, null);
+      note(`Updated ${ids.length} screen${ids.length === 1 ? '' : 's'}`); return { updated: ids.length };
+    },
+    duplicate_frames({ frame_ids, copies }) {
+      const frames = framesArg(frame_ids); const n = Math.max(1, Math.min(6, Number(copies) || 1)); const out = [];
+      write(() => { for (const f of frames) { let x = f.x + f.layout.format.w + 160; for (let i = 0; i < n; i++) { const c = Canvas.pasteFrames(doc(), [f], { x, y: f.y })[0]; out.push(c.id); x += f.layout.format.w + 160; } } }, null);
+      note(`Duplicated ${frames.length} screen${frames.length === 1 ? '' : 's'}`); return { frame_ids: out };
+    },
+    delete_frames({ frame_ids }) { const ids = new Set(framesArg(frame_ids).map(f => f.id)); write(d => { d.frames = d.frames.filter(f => !ids.has(f.id)); }, null); note(`Deleted ${ids.size} screen${ids.size === 1 ? '' : 's'}`); return { deleted: ids.size }; },
+    recolor_frames({ frame_ids, background, text, accent }) {
+      const frames = framesArg(frame_ids); const bg = color(background); const cols = kit().colors.map(c => Color.normalize(c.hex));
+      const fg = text ? color(text).hex : Color.bestForeground(bg.hex, cols, 4.5)[0];
+      const acc = accent ? color(accent).hex : Color.normalize((kit().colors.find(c => (c.role === 'accent' || c.role === 'core') && Color.normalize(c.hex) !== bg.hex && Color.contrast(bg.hex, c.hex) >= 3) || { hex: fg }).hex);
+      write(() => frames.forEach(f => { Canvas.recolor(f, { bg: bg.hex, fg, accent: acc, bgName: bg.name || undefined }); if (bg.name) f.layout.palette.bgToken = bg.name; }), frames.map(f => f.id));
+      note(`Recolored ${frames.length} screen${frames.length === 1 ? '' : 's'} on ${bg.name || bg.hex}`); return { recolored: frames.length, background: bg.hex, text: fg, accent: acc };
+    },
+    async make_variations({ frame_id, count, mode }) {
+      const f = F(frame_id); const n = Math.max(1, Math.min(6, Number(count) || 3)); const m = ['similar', 'explore', 'palette'].includes(mode) ? mode : 'explore';
+      const layouts = await env.variations({ frame: f, count: n, mode: m });
+      if (!layouts || !layouts.length) return { frame_ids: [], note: 'No variations fit the brand rules for this screen' };
+      const added = CanvasUI.placeRow(layouts, f, { history: firstWrite(), names: layouts.map((L, i) => `${f.name.replace(/ · v\d+$/, '')} · v${i + 1}`) });
+      note(`Made ${added.length} variation${added.length === 1 ? '' : 's'} of ${f.name}`); return { frame_ids: added.map(x => x.id) };
+    },
+    apply_look({ frame_ids, look }) { const frames = framesArg(frame_ids); if (!['original', 'wireframe', 'rebrand'].includes(look)) throw new Error('look is original, wireframe or rebrand'); let n = 0; write(() => { for (const f of frames) if (Looks.apply(f, look, kit())) n++; }, frames.map(f => f.id)); note(`${look[0].toUpperCase() + look.slice(1)} look on ${frames.length} screen${frames.length === 1 ? '' : 's'}`); return { changed: n }; },
+    replace_text({ frame_ids, find, replace }) { const frames = framesArg(frame_ids); if (!find) throw new Error('find is empty'); const n = write(() => Canvas.replaceText(frames, String(find), String(replace ?? '')), frames.map(f => f.id)); note(`Replaced “${find}” ${n} time${n === 1 ? '' : 's'}`); return { replaced: n }; },
+    set_fonts({ frame_ids, display, body }) { const frames = framesArg(frame_ids); for (const n of [display, body]) if (n && !Brand.allFontNames().includes(n)) throw new Error(`Unknown font "${n}". Available: ${Brand.allFontNames().join(', ')}`); write(() => Canvas.setFonts(frames, { display, body, kit: kit() }), frames.map(f => f.id)); note(`Fonts set on ${frames.length} screen${frames.length === 1 ? '' : 's'}`); return { updated: frames.length }; },
+    async resize_frames({ frame_ids, format }) { const frames = framesArg(frame_ids); if (!Grid.byId[format]) throw new Error(`Unknown format. Use one of ${Grid.FORMATS.map(f => f.id).join(', ')}`); await CanvasUI.resizeScreens(frames, format, { history: firstWrite() }); note(`Resized ${frames.length} screen${frames.length === 1 ? '' : 's'} to ${Grid.byId[format].name}`); return { resized: frames.length }; },
+    async generate_image({ frame_id, block_id, prompt }) {
+      const f = F(frame_id); const b = Bk(f, block_id); if (b.kind !== 'image') throw new Error('That block is not an image');
+      if (!ImageGen.ready()) throw new Error('No image model is set up. The person can pick Gemini or OpenAI and add a key in Settings.');
+      const out = await ImageGen.generate({ prompt: String(prompt), aspect: ImageGen.aspectOf(b.w, b.h) });
+      const asset = await env.addImageData(out.dataUrl, `generated · ${out.provider}`);
+      write(() => { b.asset = asset.id; b.genPrompt = String(prompt); b.genMeta = { provider: out.provider, model: out.model, ms: out.ms }; }, [f.id]);
+      note('Generated an image'); return { ok: true, model: out.model };
+    },
+    write_layout({ frame_id, layout }) {
+      const f = F(frame_id); const L = layout && typeof layout === 'object' ? Canvas.clone(layout) : null;
+      if (!L || !L.format || !(L.format.w > 0 && L.format.h > 0) || !Array.isArray(L.blocks)) throw new Error('layout needs format {w, h} and a blocks array');
+      L.palette = { ...f.layout.palette, ...(L.palette || {}) }; L.grid = L.grid || f.layout.grid; L.type = L.type || f.layout.type; L.meta = { ...(L.meta || {}) };
+      L.blocks = L.blocks.slice(0, 1500).map(b => { const c = { ...b }; if (!c.id) c.id = Canvas.uid(); if (!Number.isFinite(c.x)) c.x = 0; if (!Number.isFinite(c.y)) c.y = 0; if (!(c.w > 0)) c.w = 100; if (!(c.h > 0)) c.h = 40; if ((c.kind === 'text' || c.kind === 'list' || c.kind === 'button') && !c.font) c.font = { family: Brand.fontCss(kit().fonts.body), size: 24, weight: 400, lineHeight: 1.3 }; if (c.kind === 'text' || c.kind === 'list') Canvas.refit(c); return c; });
+      write(() => { f.layout = L; CanvasUI.regrid(f); }, [f.id]);
+      note(`Rebuilt ${f.name}`); return { blocks: L.blocks.length };
+    },
+  };
+
+  function defs(opts = {}) { return TOOL_DEFS.filter(d => (!opts.core || d.core) && (!opts.exclude || !opts.exclude.includes(d.name))).map(d => ({ name: d.name, description: d.description, inputSchema: d.name === 'get_frame' ? { ...d.inputSchema, properties: { ...d.inputSchema.properties, full: { type: 'boolean', description: 'Whole layout JSON, for write_layout' } } } : d.inputSchema })); }
+  async function call(name, input, ctx = {}) {
+    const fn = IMPL[name]; if (!fn) throw new Error(`Unknown tool ${name}`);
+    const out = await fn(input && typeof input === 'object' ? input : {});
+    if (ctx.via === 'mcp' && env.onExternal && !/^(get_|select$)/.test(name)) env.onExternal(name, input);
+    return out;
+  }
+  // A run groups an agent's calls: one undo step, and step notes for the panel.
+  function beginRun(onStep) { run = { wrote: false, onStep }; }
+  function endRun() { run = null; }
+  return { init: e => { env = e; }, defs, call, beginRun, endRun, color };
+})();
+
+/* js/agent.js */
+/* The in-app agent: a chat panel on the canvas that acts on what is selected, through the same tools outside agents
+   use over MCP. Inside claude.ai it asks Claude with the page's `sample` capability (the viewer's own account, no key);
+   anywhere else it runs the Anthropic SDK's tool runner with the API key from Settings. Every run is one undo step. */
+const Agent = (() => {
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const MODEL = 'claude-opus-5-5';
+  const SDK = 'https://cdn.jsdelivr.net/npm/@anthropic-ai/sdk@0.128.0';
+  let env = null, sample = null, sampleTools = 0, busy = false, ctl = null, stopped = false;
+  const turns = [];     // text history for claude.ai sample calls
+  const apiTurns = [];  // text history for API calls
+  const SYSTEM = `You are the design agent inside Layout Engine, a canvas for brand layouts. The canvas holds screens (frames) made of blocks: text, body text, buttons, images, rectangles (field), shapes, vectors, icons and the logo. Block boxes are pixels from the frame's top left.
+
+Change the canvas with the tools; the person sees each change live and can undo your whole run in one step. Work on the selected screens unless they say otherwise. Stay on brand: palette colors (by name or hex), brand fonts, sentence-case headlines, no exclamation marks, no invented facts or numbers. Prefer the broadest tool that does the job: recolor_frames, apply_look, replace_text, make_variations and duplicate_frames before editing blocks one by one. Keep text inside its box: when copy grows, widen the box or lower the size. When you are done, say in one or two short sentences what you changed.`;
+
+  // ---- availability -----------------------------------------------------------------------------------------------
+  const apiKey = () => (document.getElementById('apiKey') || {}).value || (() => { try { return JSON.parse(localStorage.getItem('lg.apiKey') || '""'); } catch { return ''; } })();
+  function mode() { if (sample) return 'sample'; if (apiKey().trim()) return 'api'; return null; }
+  let sdkP = null;
+  function loadSdk() {
+    if (!sdkP) sdkP = Promise.all([import(`${SDK}/+esm`), import(`${SDK}/helpers/beta/json-schema/+esm`)])
+      .then(([a, h]) => ({ Anthropic: a.default || a.Anthropic, betaTool: h.betaTool }))
+      .catch(e => { sdkP = null; throw new Error('Could not load the Anthropic SDK: ' + e.message); });
+    return sdkP;
+  }
+
+  // ---- context the model reads up front (saves a round) -----------------------------------------------------------
+  function context() {
+    const d = CanvasUI.doc; const sel = CanvasUI.selection(); const kit = env.getKit() || { name: '', colors: [], fonts: {} };
+    const lines = [`Canvas "${d.name}": ${d.frames.length} screen${d.frames.length === 1 ? '' : 's'}.`];
+    if (!sel.frameIds.length) lines.push('Nothing is selected; act on the whole canvas or ask which screen.');
+    else {
+      lines.push(`Selected: ${sel.frameIds.length} screen${sel.frameIds.length === 1 ? '' : 's'}${sel.blockIds.length ? `, blocks ${sel.blockIds.join(', ')}` : ''}.`);
+      for (const id of sel.frameIds.slice(0, 3)) {
+        const f = Canvas.frameById(d, id); if (!f) continue; const L = f.layout;
+        lines.push(`- screen ${f.id} "${f.name}" ${L.format.w}×${L.format.h}, background ${L.palette.bg}${L.palette.bgToken ? ' (' + L.palette.bgToken + ')' : ''}, look ${(L.meta && L.meta.look) || 'original'}`);
+        if (sel.frameIds.length <= 2) for (const b of L.blocks.slice(0, 40)) { const t = b.kind === 'text' ? ` "${Canvas.sourceText(b).slice(0, 80)}"` : b.kind === 'button' ? ` "${String(b.text).slice(0, 40)}"` : ''; lines.push(`  · ${b.id} ${b.kind}${b.role ? '/' + b.role : ''}${t} @${Math.round(b.x)},${Math.round(b.y)} ${Math.round(b.w)}×${Math.round(b.h)}${b.fill ? ' ' + b.fill : ''}${b.font ? ` ${String(b.font.family).split(',')[0].replace(/["']/g, '')} ${b.font.size}/${b.font.weight}` : ''}`); }
+      }
+      if (sel.frameIds.length > 3) lines.push(`  (and ${sel.frameIds.length - 3} more: ${sel.frameIds.slice(3).join(', ')})`);
+    }
+    lines.push(`Brand ${kit.name}: ${kit.colors.map(c => `${c.name} ${Color.normalize(c.hex)} (${c.role})`).join(', ')}. Fonts: ${kit.fonts.display} (display), ${kit.fonts.body} (body).`);
+    return lines.join('\n');
+  }
+  // Tool results for claude.ai stay small (32 KB cap): trim long lists.
+  function compact(out) {
+    let s = JSON.stringify(out); if (s.length < 30000) return out;
+    if (out && Array.isArray(out.blocks)) return { ...out, blocks: out.blocks.slice(0, 120), note: `trimmed to 120 of ${out.blocks.length} blocks` };
+    if (out && Array.isArray(out.screens)) return { ...out, screens: out.screens.slice(0, 60).map(x => ({ ...x, blocks: Array.isArray(x.blocks) ? x.blocks.length : x.blocks })), note: 'trimmed' };
+    return s.slice(0, 30000);
+  }
+  const STEP = { get_selection: 'Reading the selection', get_canvas: 'Reading the canvas', get_frame: 'Reading a screen', get_brand: 'Reading the brand kit', get_screenshot: 'Looking at a screen', get_code: 'Reading the code' };
+
+  // ---- UI -----------------------------------------------------------------------------------------------------------
+  function init(e) {
+    env = e;
+    $('agentClose').addEventListener('click', hide);
+    $('agentForm').addEventListener('submit', ev => { ev.preventDefault(); if (busy) stop(); else { const t = $('agentInput').value.trim(); if (t) { $('agentInput').value = ''; send(t); } } });
+    $('agentInput').addEventListener('keydown', ev => { ev.stopPropagation(); if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); $('agentForm').requestSubmit(); } if (ev.key === 'Escape') hide(); });
+    $('agentSuggest').addEventListener('click', ev => { const b = ev.target.closest('[data-suggest]'); if (b) send(b.dataset.suggest); });
+    $('agentFoot').addEventListener('click', async ev => { const c = ev.target.closest('[data-copy]'); if (c) { try { await navigator.clipboard.writeText(c.dataset.copy); env.toast('Copied'); } catch { } } const s = ev.target.closest('[data-settings]'); if (s) { ev.preventDefault(); env.openSettings(); } });
+    $('cvAgent').addEventListener('click', () => ($('agentPanel').hidden ? show() : hide()));
+    document.addEventListener('keydown', ev => { if ((ev.metaKey || ev.ctrlKey) && ev.key.toLowerCase() === 'k' && document.body.classList.contains('canvas-mode')) { ev.preventDefault(); $('agentPanel').hidden ? show() : hide(); } });
+    CanvasUI.on('select', () => { if (!$('agentPanel').hidden) renderContext(); });
+    (async () => {
+      if (window.claude && typeof window.claude.use === 'function') {
+        try { sample = await window.claude.use('sample'); } catch { sample = null; }
+        if (sample) { try { const lim = await sample.limits(); sampleTools = lim && lim.tools ? lim.tools.maxCount : 0; if (!sampleTools) sample = null; } catch { sample = null; } }
+      }
+      renderFoot();
+    })();
+    renderFoot();
+  }
+  function show() { $('agentPanel').hidden = false; $('cvAgent').classList.add('active'); renderContext(); renderFoot(); renderSuggest(); setTimeout(() => $('agentInput').focus(), 0); }
+  function hide() { $('agentPanel').hidden = true; $('cvAgent').classList.remove('active'); }
+  function renderContext() {
+    const s = CanvasUI.selection(); const n = s.frameIds.length;
+    $('agentCtx').textContent = n ? (s.blockIds.length ? `${s.blockIds.length} block${s.blockIds.length > 1 ? 's' : ''} selected` : `${n} screen${n > 1 ? 's' : ''} selected`) : 'Whole canvas';
+    if (!$('agentLog').children.length) renderSuggest();
+  }
+  function renderSuggest() {
+    const n = CanvasUI.selection().frameIds.length; const kit = env.getKit(); if (!kit) return;
+    const dark = (kit.colors.find(c => c.role === 'background' && Color.luminance(Color.normalize(c.hex)) < 0.1) || kit.colors.find(c => Color.luminance(Color.normalize(c.hex)) < 0.08) || { name: 'dark' }).name;
+    const list = n ? ['Make 3 variations of this', `Put these on ${dark}`, 'Shorten the headline, keep the meaning', 'Translate the copy to Spanish', 'Make the call to action stand out more', 'Turn these into a wireframe']
+      : ['Create a square post announcing Akai', 'Tidy every screen into a grid', 'Make a story version of the first screen', 'Rebrand every screen'];
+    $('agentSuggest').innerHTML = $('agentLog').children.length ? '' : list.map(t => `<button type="button" class="chip" data-suggest="${esc(t)}">${esc(t)}</button>`).join('');
+  }
+  function renderFoot() {
+    const m = mode(); const room = typeof Sync !== 'undefined' && Sync.status.mode === 'server' ? Sync.status.room : null;
+    const mcp = `claude mcp add layout --transport http ${location.origin}/mcp${room ? '?room=' + room : ''}`;
+    let html = m === 'sample' ? 'Claude, on your claude.ai account. Each request uses your Claude usage.'
+      : m === 'api' ? `Claude Opus 5.5 with the API key from <a href="#" data-settings>Settings</a>. If Claude declines, another model takes over.`
+      : `To use the agent here, add an Anthropic API key in <a href="#" data-settings>Settings</a>, or open the published page on claude.ai.`;
+    if (typeof Sync !== 'undefined' && Sync.status.mode === 'server') html += `<div class="agent-mcp">Claude Code, Cursor or Codex can drive this canvas too: <code>${esc(mcp)}</code> <button type="button" class="btn small ghost" data-copy="${esc(mcp)}">Copy</button></div>`;
+    $('agentFoot').innerHTML = html;
+    $('agentInput').placeholder = m ? 'Ask for a change: "make 3 variations", "put these on Deelberry"…' : 'Add an API key in Settings to talk to the agent';
+  }
+  function bubble(role, text) {
+    const el = document.createElement('div'); el.className = 'agent-msg ' + role;
+    el.innerHTML = role === 'assistant' ? '<div class="steps"></div><div class="txt thinking">Thinking…</div>' : `<div class="txt">${esc(text)}</div>`;
+    $('agentLog').appendChild(el); $('agentSuggest').innerHTML = ''; scroll(); return el;
+  }
+  const scroll = () => { const l = $('agentLog'); l.scrollTop = l.scrollHeight; };
+  function setText(el, t) { const x = el.querySelector('.txt'); x.classList.remove('thinking'); x.textContent = t; scroll(); }
+  function step(el, t, pending) { const s = document.createElement('div'); s.className = 'step' + (pending ? ' pending' : ''); s.textContent = (pending ? '… ' : '✓ ') + t; el.querySelector('.steps').appendChild(s); scroll(); return s; }
+  function setBusy(b) { busy = b; $('agentSend').textContent = b ? 'Stop' : 'Send'; $('agentSend').classList.toggle('stop', b); }
+  function stop() { stopped = true; if (ctl) ctl.abort(); }
+
+  // ---- runs -----------------------------------------------------------------------------------------------------------
+  async function send(text) {
+    if (busy) return; const m = mode();
+    if ($('agentPanel').hidden) show();
+    bubble('user', text); const box = bubble('assistant');
+    if (!m) { setText(box, 'Add an Anthropic API key in Settings to use the agent here, or open the published page on claude.ai where it runs on your account.'); return; }
+    setBusy(true); stopped = false; ctl = new AbortController();
+    AgentTools.beginRun(s => step(box, s));
+    const pendingOf = name => STEP[name] ? step(box, STEP[name], true) : null;
+    const runTool = async (name, input) => {
+      if (stopped) throw new Error('Stopped by the person');
+      const p = pendingOf(name);
+      try { return await AgentTools.call(name, input); } finally { if (p) p.remove(); }
+    };
+    try {
+      if (m === 'sample') {
+        const tools = AgentTools.defs({ core: true }).slice(0, sampleTools).map(d => ({ name: d.name, description: d.description.slice(0, 1000), inputSchema: d.inputSchema, execute: async (input, c) => { if (c && c.signal && c.signal.aborted) throw new Error('Stopped'); return compact(await runTool(d.name, input)); } }));
+        const input = [{ role: 'user', content: SYSTEM }, ...turns.slice(-8), { role: 'user', content: `${context()}\n\nRequest: ${text}` }];
+        const res = await sample(input, { tools, signal: ctl.signal, cache: false, onText: ({ text: t }) => setText(box, t) });
+        setText(box, res.text + (res.truncated ? '\n(Cut short.)' : ''));
+        turns.push({ role: 'user', content: text }, { role: 'assistant', content: res.text.slice(-2000) });
+      } else {
+        const { Anthropic, betaTool } = await loadSdk();
+        const opts = { apiKey: apiKey().trim(), dangerouslyAllowBrowser: true }; try { const base = JSON.parse(localStorage.getItem('lg.apiBase') || 'null'); if (base) opts.baseURL = base; } catch { }
+        const client = new Anthropic(opts);
+        const tools = AgentTools.defs().map(d => betaTool({
+          name: d.name, description: d.description, inputSchema: d.inputSchema,
+          run: async input => {
+            const out = await runTool(d.name, input);
+            if (out && typeof out.image === 'string') { const { image, ...rest } = out; return [{ type: 'image', source: { type: 'base64', media_type: 'image/png', data: image.split(',')[1] } }, { type: 'text', text: JSON.stringify(rest) }]; }
+            return typeof out === 'string' ? out : JSON.stringify(out);
+          },
+        }));
+        const messages = [...apiTurns.slice(-8), { role: 'user', content: `${context()}\n\nRequest: ${text}` }];
+        const runner = client.beta.messages.toolRunner({
+          model: MODEL, max_tokens: 16000, system: SYSTEM, messages, tools, max_iterations: 16,
+          thinking: { type: 'adaptive' }, output_config: { effort: 'medium' },
+          betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default',
+        });
+        let last = null, said = '';
+        for await (const msg of runner) {
+          last = msg; if (stopped) break;
+          const t = msg.content.filter(b => b.type === 'text').map(b => b.text).join('\n').trim(); if (t) { said = t; setText(box, t); }
+          if (msg.stop_reason === 'refusal') break;
+        }
+        if (last && last.stop_reason === 'refusal') setText(box, 'Claude declined this request. Try asking for it differently.');
+        else if (stopped) setText(box, (said ? said + '\n' : '') + 'Stopped.');
+        else if (!said) setText(box, 'Done.');
+        apiTurns.push({ role: 'user', content: text }, { role: 'assistant', content: (said || 'Done.').slice(-2000) });
+      }
+    } catch (e) {
+      const code = e && e.code; const msg = e && (e.message || String(e));
+      const copy = code === 'cancelled' ? 'Stopped.' : code === 'not_granted' ? 'Claude is not allowed for this page. You can allow it from the prompt that appears on the next request.' : code === 'rate_limited' ? 'Too many requests right now. Try again in a moment.' : code === 'refused' ? 'Claude declined this request. Try asking for it differently.' : code === 'tools_unavailable' ? 'This view cannot run canvas tools.' : (e && e.status === 401) ? 'The API key was not accepted. Check it in Settings.' : stopped ? 'Stopped.' : 'Something went wrong: ' + msg;
+      setText(box, (e && e.text ? e.text + '\n\n' : '') + copy);
+      if (code === 'not_granted' || code === 'sampling_disabled') { sample = null; renderFoot(); }
+    } finally {
+      AgentTools.endRun(); setBusy(false); ctl = null;
+      box.querySelectorAll('.step.pending').forEach(s => s.remove());
+    }
+  }
+  return { init, show, hide, send, get busy() { return busy; }, _mode: mode };
 })();
 
 /* js/app.js */
@@ -6835,6 +7251,7 @@ const Sync = (() => {
     importFile: file => importFile(file),
     onPaste: e => onCanvasPaste(e),
     openImport: () => openImport(),
+    openAgent: () => Agent.show(),
     addImageData: (dataUrl, name) => addImage(dataUrl, name),
     updateColors: colors => { state.kit.colors = colors.map(c => ({ name: c.name || c.hex, hex: Color.normalize(c.hex), role: c.role || 'accent' })); renderColors(); persistKit(); },
     resetColors: () => { const preset = Brand.PRESETS[state.kit.presetId]; if (!preset) return false; state.kit.colors = preset.colors.map(c => ({ ...c })); renderColors(); persistKit(); return true; },
@@ -6849,6 +7266,15 @@ const Sync = (() => {
     shareLink: async () => { const link = Sync.roomLink(); if (!link) return false; try { await navigator.clipboard.writeText(link); } catch { } toast('Room link copied: anyone with it edits this canvas with you'); return true; },
     buildPptx: layouts => ExportPptx.buildDeck(layouts, { kit: state.kit, assets: state.assets }),
   });
+  // ---- Agent (in-app panel and the tools outside agents call over MCP) ---------------------------------------------
+  AgentTools.init({
+    getKit: () => state.kit, getAssets: () => state.assets, addImageData: (url, name) => addImage(url, name),
+    exportPNG: (layout, scale) => Render.exportPNG(layout, { kit: state.kit, assets: state.assets }, scale || 1),
+    variations: opts => makeVariations(opts),
+    onExternal: name => toast(`Outside agent: ${name.replace(/_/g, ' ')}`),
+  });
+  Agent.init({ getKit: () => state.kit, toast, openSettings: () => { $('settings').hidden = false; } });
+
   // ---- Multiplayer ------------------------------------------------------------------------------------------------
   Sync.init(CanvasUI, {
     getAssets: () => state.assets, dataUrlToBlob, addAssetWithId,
