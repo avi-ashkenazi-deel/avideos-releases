@@ -564,7 +564,7 @@ const CanvasUI = (() => {
     const bx = Math.min(...items.map(i => i.x)), by = Math.min(...items.map(i => i.y));
     const ox = doc.frames.length ? Math.min(...doc.frames.map(f => f.x)) : 0;
     const oy = doc.frames.length ? Math.max(...doc.frames.map(f => f.y + FH(f))) + 320 : 0;
-    const added = items.map(it => { const f = Canvas.addFrame(doc, it.layout, { x: Canvas.snap(ox + (it.x - bx), 8), y: Canvas.snap(oy + (it.y - by), 8), name: it.name }); f.clip = it.clip !== false; return f; });
+    const added = items.map(it => { const f = Canvas.addFrame(doc, it.layout, { x: Canvas.snap(ox + (it.x - bx), 8), y: Canvas.snap(oy + (it.y - by), 8), name: it.name, autoLayout: it.autoLayout || undefined }); f.clip = it.clip !== false; return f; });
     selectFrames(added.map(f => f.id)); if (active) { renderAll(); fitTo(added); } persist(); updateUndo();
     return added;
   }
@@ -573,7 +573,10 @@ const CanvasUI = (() => {
     const f = Canvas.frameById(doc, frameId); if (!f || !blocks.length) return [];
     hist.push(doc);
     const bb = Canvas.bounds(blocks); const dx = Math.round(Math.max(0, (FW(f) - bb.w) / 2) - bb.x), dy = Math.round(Math.max(0, (FH(f) - bb.h) / 2) - bb.y);
-    const ids = blocks.map(b => { const c = Canvas.clone(b); c.id = Canvas.uid(); c.x += dx; c.y += dy; if (c.kind === 'text' || c.kind === 'list') Canvas.refit(c); f.layout.blocks.push(c); return c.id; });
+    const copies = Canvas.clone(blocks); const inSet = new Set(copies.map(b => b.id)); const tops = copies.filter(b => !b.parent || !inSet.has(b.parent));
+    Auto.remap(copies, null);
+    for (const c of copies) { c.x += dx; c.y += dy; if (c.kind === 'text' || c.kind === 'list') Canvas.refit(c); f.layout.blocks.push(c); }
+    const ids = tops.map(c => c.id);
     select(f.id, ids); rerenderFrame(f); renderLayers(); persist(); updateUndo();
     return ids;
   }

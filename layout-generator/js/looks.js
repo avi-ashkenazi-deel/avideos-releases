@@ -10,7 +10,7 @@ const Looks = (() => {
   const center = b => ({ x: b.x + b.w / 2, y: b.y + b.h / 2 });
   const inside = (p, b) => p.x >= b.x && p.y >= b.y && p.x <= b.x + b.w && p.y <= b.y + b.h;
   // The fill under a block: the last field, shape or image before it that contains its centre, else the page.
-  function under(blocks, i, pageBg, fillOf) { const c = center(blocks[i]); for (let j = i - 1; j >= 0; j--) { const u = blocks[j]; if (u.hidden) continue; if ((u.kind === 'field' && (u.alpha ?? 1) > 0.3) || u.kind === 'shape' || u.kind === 'image') { if (inside(c, u)) return u.kind === 'image' ? 'image' : fillOf(u, j); } } return pageBg; }
+  function under(blocks, i, pageBg, fillOf) { const c = center(blocks[i]); for (let j = i - 1; j >= 0; j--) { const u = blocks[j]; if (u.hidden) continue; if (((u.kind === 'field' || (u.kind === 'box' && u.fill && u.fill !== 'none')) && (u.alpha ?? 1) > 0.3) || u.kind === 'shape' || u.kind === 'image') { if (inside(c, u)) return u.kind === 'image' ? 'image' : fillOf(u, j); } } return pageBg; }
   const isText = b => b.kind === 'text' || b.kind === 'list' || b.kind === 'button';
 
   function apply(frame, look, kit) {
@@ -38,7 +38,13 @@ const Looks = (() => {
     src.forEach((b, i) => {
       delete b.gradient; delete b.shadow; delete b.fillToken; delete b.colorToken; if (b.opacity != null && b.opacity < 0.5) b.opacity = 0.5; else delete b.opacity;
       const area = (b.w * b.h) / (W * H);
-      if (b.kind === 'field' || b.kind === 'rule') {
+      // a layer made here keeps its place in the tree (parent, stack position, sizing)
+      const place = { parent: b.parent, absolute: b.absolute, sizeW: b.sizeW, sizeH: b.sizeH, rx: b.rx, ry: b.ry };
+      if (b.kind === 'box') {
+        if (b.fill && b.fill !== 'none') { const was = norm(b.fill); const chromatic = was && sat(was) > 0.35 && lum(was) < 0.75; b.fill = area > 0.3 ? WF.panel : (chromatic && area < 0.06) ? WF.solid : WF.box; if (area <= 0.3) b.stroke = { color: WF.line, width: 1 }; else delete b.stroke; delete b.fillAlpha; fillOf.set(i, b.fill); }
+        else if (b.stroke) b.stroke = { color: WF.line, width: 1 };
+        out.push(b);
+      } else if (b.kind === 'field' || b.kind === 'rule') {
         const was = norm(b.fill); const chromatic = was && sat(was) > 0.35 && lum(was) < 0.75; const darkSmall = was && lum(was) < 0.25 && area < 0.08;
         if ((b.alpha ?? 1) < 0.15 && !b.stroke) { b.hidden = true; }
         else if (area > 0.3) { b.fill = WF.panel; delete b.stroke; }
@@ -49,8 +55,8 @@ const Looks = (() => {
       else if (b.kind === 'shape') { b.fill = WF.line; delete b.stroke; fillOf.set(i, b.fill); out.push(b); }
       else if (b.kind === 'image') {
         b.asset = null; b.placeholder = WF.img; b.stroke = { color: WF.line, width: 1 }; out.push(b); fillOf.set(i, WF.img);
-        if (b.w > 72 && b.h > 48) out.push({ id: Canvas.uid(), kind: 'icon', name: Icons.has('image') ? 'image' : 'squares-four', x: Math.round(b.x + b.w / 2 - 16), y: Math.round(b.y + b.h / 2 - 16), w: 32, h: 32, fill: WF.soft, decorative: true, label: 'placeholder' });
-      } else if (b.kind === 'vector') { out.push({ id: b.id, kind: 'field', x: b.x, y: b.y, w: b.w, h: b.h, radius: Math.min(6, Math.min(b.w, b.h) / 4), fill: WF.line, decorative: true, label: b.label, opacity: b.opacity }); }
+        if (b.w > 72 && b.h > 48) out.push({ ...place, absolute: b.parent ? true : undefined, sizeW: undefined, sizeH: undefined, rx: undefined, ry: undefined, id: Canvas.uid(), kind: 'icon', name: Icons.has('image') ? 'image' : 'squares-four', x: Math.round(b.x + b.w / 2 - 16), y: Math.round(b.y + b.h / 2 - 16), w: 32, h: 32, fill: WF.soft, decorative: true, label: 'placeholder' });
+      } else if (b.kind === 'vector') { out.push({ ...place, id: b.id, kind: 'field', x: b.x, y: b.y, w: b.w, h: b.h, radius: Math.min(6, Math.min(b.w, b.h) / 4), fill: WF.line, decorative: true, label: b.label, opacity: b.opacity }); }
       else if (b.kind === 'icon' || b.kind === 'badge') { b.fill = WF.soft; if (b.color) b.color = '#FFFFFF'; out.push(b); }
       else if (b.kind === 'logo') { b.fill = WF.ink; out.push(b); }
       else if (b.kind === 'line') { b.fill = WF.line; out.push(b); }
@@ -91,7 +97,8 @@ const Looks = (() => {
     const fills = new Map(); const out = [];
     src.forEach((b, i) => {
       delete b.fillToken; delete b.colorToken;
-      if (b.kind === 'field' || b.kind === 'shape' || b.kind === 'rule' || b.kind === 'line') { b.fill = mapColor(b.fill); if (b.stroke) b.stroke.color = mapColor(b.stroke.color); if (b.gradient) b.gradient.stops.forEach(s => { s.c = mapColor(s.c); }); fills.set(i, b.fill); }
+      if (b.kind === 'box') { if (b.fill && b.fill !== 'none') b.fill = mapColor(b.fill); if (b.stroke) b.stroke.color = mapColor(b.stroke.color); if (b.gradient) b.gradient.stops.forEach(s => { s.c = mapColor(s.c); }); if (b.fill !== 'none') fills.set(i, b.fill); }
+      else if (b.kind === 'field' || b.kind === 'shape' || b.kind === 'rule' || b.kind === 'line') { b.fill = mapColor(b.fill); if (b.stroke) b.stroke.color = mapColor(b.stroke.color); if (b.gradient) b.gradient.stops.forEach(s => { s.c = mapColor(s.c); }); fills.set(i, b.fill); }
       else if (b.kind === 'button') { b.fill = chromaMap.get(norm(b.fill)) || (ranked[0] || { hex: b.fill }).hex; b.color = Color.bestForeground(b.fill, brandAll, 4.5)[0]; if (b.font) b.font.family = body; fills.set(i, b.fill); }
       else if (b.kind === 'text' || b.kind === 'list') {
         const bgU = under(src, i, newPage, (u, j) => fills.get(j) || mapColor(u.fill));

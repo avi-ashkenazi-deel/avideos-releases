@@ -174,11 +174,11 @@ const Render = (() => {
       if (b.kind !== 'box') { const el = blockEl(b); return el ? fx(b, el, ctx) : ''; }
       const hasFill = (b.fill && b.fill !== 'none') || (b.gradient && Array.isArray(b.gradient.stops) && b.gradient.stops.length >= 2);
       const st = strokeAttr(b);
-      const rect = hasFill || st ? `<rect x="${n(b.x)}" y="${n(b.y)}" width="${n(b.w)}" height="${n(b.h)}" rx="${n(b.radius || 0)}" fill="${hasFill ? paint(b, ctx) : 'none'}"${st}/>` : '';
+      const rect = hasFill || st ? `<rect x="${n(b.x)}" y="${n(b.y)}" width="${n(b.w)}" height="${n(b.h)}" rx="${n(b.radius || 0)}" fill="${hasFill ? paint(b, ctx) : 'none'}"${b.fillAlpha != null && b.fillAlpha < 1 ? ` fill-opacity="${n(clamp01(b.fillAlpha))}"` : ''}${st}/>` : '';
       let kids = drawList(b.id);
       if (b.clip && kids) { const id = ctx.id('k'); ctx.defs.push(`<clipPath id="${id}"><rect x="${n(b.x)}" y="${n(b.y)}" width="${n(b.w)}" height="${n(b.h)}" rx="${n(b.radius || 0)}"/></clipPath>`); kids = `<g clip-path="url(#${id})">${kids}</g>`; }
-      const bg = rect ? fx({ x: b.x, y: b.y, w: b.w, h: b.h, shadow: b.shadow }, rect, ctx) : '';
-      return fx({ x: b.x, y: b.y, w: b.w, h: b.h, opacity: b.opacity, rotation: b.rotation }, bg + kids, ctx);
+      const bg = rect ? fx({ x: b.x, y: b.y, w: b.w, h: b.h, shadow: b.shadow, rotation: b.rotation }, rect, ctx) : '';
+      return fx({ x: b.x, y: b.y, w: b.w, h: b.h, opacity: b.opacity }, bg + kids, ctx);
     };
     parts.push(drawList(''));
     if (opts.showGrid) parts.push(gridOverlay(layout));

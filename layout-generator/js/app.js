@@ -717,8 +717,17 @@
     for (const f of frames) for (const b of f.layout.blocks) if (b.kind === 'text' || b.kind === 'list') Canvas.refit(b);
     return fams.size;
   }
+  // Imports keep auto layout (stacks reflow when text changes) or fixed positions (every layer stays where it was
+  // drawn). Remembered per person; paste uses the same choice.
+  const importLayout = () => LS.get('lg.importLayout', 'auto') === 'fixed' ? 'fixed' : 'auto';
+  function renderImportLayout() {
+    const v = importLayout();
+    document.querySelectorAll('#importLayout [data-il]').forEach(b => b.classList.toggle('on', b.dataset.il === v));
+    $('importLayoutHint').textContent = v === 'auto' ? 'Stacks from Figma, web pages and slides stay stacks: edit text and the rest moves along. Simple mode keeps them tidy for anyone.' : 'Every layer stays exactly where it was drawn, with no stacks. Easiest to drag around.';
+  }
+  $('importLayout').addEventListener('click', e => { const b = e.target.closest('[data-il]'); if (!b) return; LS.set('lg.importLayout', b.dataset.il); renderImportLayout(); });
   async function importFigmaData(data, how) {
-    const res = await FigmaImport.convert(data, { addImage: (url, name) => addImage(url, name) });
+    const res = await FigmaImport.convert(data, { addImage: (url, name) => addImage(url, name) }, { layout: importLayout() });
     const items = FigmaImport.toLayouts(res.frames, state.kit);
     if (!items.length) { toast('Nothing visible to import'); return; }
     const MAX = 80; const list = items.slice(0, MAX);
@@ -729,7 +738,7 @@
     if (state.mode !== 'canvas') setMode('canvas');
     updateCanvasBadge();
     const s = res.stats; const skipped = Object.entries(s.skipped).map(([k, v]) => `${v} ${k.toLowerCase()}`).join(', ');
-    toast(`${how}: ${list.length > 1 || !list[0].loose ? `${list.length} frame${list.length > 1 ? 's' : ''}` : 'layers'}, ${s.blocks} layers${s.images ? `, ${s.images} images` : ''}${s.missingImages ? `, ${s.missingImages} images not included` : ''}${items.length > MAX ? `, first ${MAX} frames only` : ''}${skipped ? ` · skipped ${skipped}` : ''}`);
+    toast(`${how} (${importLayout() === 'auto' ? 'auto layout' : 'fixed positions'}): ${list.length > 1 || !list[0].loose ? `${list.length} frame${list.length > 1 ? 's' : ''}` : 'layers'}, ${s.blocks} layers${s.images ? `, ${s.images} images` : ''}${s.missingImages ? `, ${s.missingImages} images not included` : ''}${items.length > MAX ? `, first ${MAX} frames only` : ''}${skipped ? ` · skipped ${skipped}` : ''}`);
     const frames = added.length ? added : CanvasUI.doc.frames.filter(f => sel.frameIds.includes(f.id));
     if (await ensureFonts(frames)) CanvasUI.mutate(() => { }, { history: false, frames: frames.map(f => f.id) });
   }
@@ -761,11 +770,11 @@
     return false;
   }
   WebImport.init({
-    getKit: () => state.kit, toast, addImage: (url, name) => addImage(url, name),
+    getKit: () => state.kit, toast, addImage: (url, name) => addImage(url, name), layoutChoice: importLayout,
     placeFrames: items => { const out = CanvasUI.placeFrames(items); if (state.mode !== 'canvas') setMode('canvas'); updateCanvasBadge(); $('importModal').hidden = true; return out; },
     afterImport: async frames => { if (await ensureFonts(frames)) CanvasUI.mutate(() => { }, { history: false, frames: frames.map(f => f.id) }); },
   });
-  function openImport() { $('importModal').hidden = false; if (typeof WebImport !== 'undefined') WebImport.renderSection($('captureSection')); }
+  function openImport() { $('importModal').hidden = false; renderImportLayout(); if (typeof WebImport !== 'undefined') WebImport.renderSection($('captureSection')); }
   $('cvImport').addEventListener('click', openImport);
   $('importClose').addEventListener('click', () => { $('importModal').hidden = true; });
   $('importModal').addEventListener('click', e => { if (e.target === $('importModal')) $('importModal').hidden = true; });

@@ -788,6 +788,11 @@ input[disabled] { opacity: .5; cursor: not-allowed; }
         <button class="btn ghost icon" id="importClose" type="button" aria-label="Close">✕</button>
       </div>
       <div class="prose import-body">
+        <div class="import-layout">
+          <h4>Layout</h4>
+          <div class="cv-seg" id="importLayout" role="group" aria-label="Imported layout"><button type="button" data-il="auto">Auto layout</button><button type="button" data-il="fixed">Fixed positions</button></div>
+          <p class="hint" id="importLayoutHint"></p>
+        </div>
         <h4>From Figma</h4>
         <ol>
           <li><b>Paste:</b> select frames or layers in Figma, press ⌘C, come back to the canvas and press ⌘V. Layers without a frame go into the selected frame.</li>
@@ -2619,11 +2624,11 @@ const Render = (() => {
       if (b.kind !== 'box') { const el = blockEl(b); return el ? fx(b, el, ctx) : ''; }
       const hasFill = (b.fill && b.fill !== 'none') || (b.gradient && Array.isArray(b.gradient.stops) && b.gradient.stops.length >= 2);
       const st = strokeAttr(b);
-      const rect = hasFill || st ? `<rect x="${n(b.x)}" y="${n(b.y)}" width="${n(b.w)}" height="${n(b.h)}" rx="${n(b.radius || 0)}" fill="${hasFill ? paint(b, ctx) : 'none'}"${st}/>` : '';
+      const rect = hasFill || st ? `<rect x="${n(b.x)}" y="${n(b.y)}" width="${n(b.w)}" height="${n(b.h)}" rx="${n(b.radius || 0)}" fill="${hasFill ? paint(b, ctx) : 'none'}"${b.fillAlpha != null && b.fillAlpha < 1 ? ` fill-opacity="${n(clamp01(b.fillAlpha))}"` : ''}${st}/>` : '';
       let kids = drawList(b.id);
       if (b.clip && kids) { const id = ctx.id('k'); ctx.defs.push(`<clipPath id="${id}"><rect x="${n(b.x)}" y="${n(b.y)}" width="${n(b.w)}" height="${n(b.h)}" rx="${n(b.radius || 0)}"/></clipPath>`); kids = `<g clip-path="url(#${id})">${kids}</g>`; }
-      const bg = rect ? fx({ x: b.x, y: b.y, w: b.w, h: b.h, shadow: b.shadow }, rect, ctx) : '';
-      return fx({ x: b.x, y: b.y, w: b.w, h: b.h, opacity: b.opacity, rotation: b.rotation }, bg + kids, ctx);
+      const bg = rect ? fx({ x: b.x, y: b.y, w: b.w, h: b.h, shadow: b.shadow, rotation: b.rotation }, rect, ctx) : '';
+      return fx({ x: b.x, y: b.y, w: b.w, h: b.h, opacity: b.opacity }, bg + kids, ctx);
     };
     parts.push(drawList(''));
     if (opts.showGrid) parts.push(gridOverlay(layout));
@@ -3690,8 +3695,18 @@ const FigmaImport = (() => {
   // ---- conversion ----------------------------------------------------------------------------------------------------
   const CONTAINERS = new Set(['FRAME', 'GROUP', 'SYMBOL', 'INSTANCE', 'SECTION']);
   const VECTORS = new Set(['VECTOR', 'STAR', 'LINE', 'REGULAR_POLYGON', 'BOOLEAN_OPERATION']);
-  // message -> { frames: [{name, x, y, layout, clip}], loose: bool, imagesNeeded }
-  async function convert(data, env) {
+  // Figma auto layout -> our stack settings (null when the node does not stack its children).
+  const ALIGN = { MIN: 'start', CENTER: 'center', MAX: 'end' };
+  function autoOf(n) {
+    const mode = n.stackMode === 'HORIZONTAL' || n.stackMode === 'GRID' ? 'horizontal' : n.stackMode === 'VERTICAL' ? 'vertical' : null; if (!mode) return null;
+    const legacy = n.stackPadding || 0; const l = n.stackHorizontalPadding ?? legacy, t = n.stackVerticalPadding ?? legacy; const r = n.stackPaddingRight ?? l, b = n.stackPaddingBottom ?? t;
+    const just = n.stackPrimaryAlignItems || n.stackJustify || 'MIN'; const cross = n.stackCounterAlignItems || 'MIN';
+    return { v: 2, mode, wrap: n.stackWrap === 'WRAP' || n.stackMode === 'GRID', gap: r2(n.stackSpacing || 0), gapAuto: just === 'SPACE_BETWEEN' || just === 'SPACE_EVENLY', counterGap: r2(n.stackCounterSpacing ?? n.stackSpacing ?? 0), counterGapAuto: n.stackCounterAlignContent === 'SPACE_BETWEEN', pad: { t: r2(t), r: r2(r), b: r2(b), l: r2(l) }, main: ALIGN[just] || 'start', cross: cross === 'BASELINE' ? 'baseline' : ALIGN[cross] || 'start' };
+  }
+  // message -> { frames: [{name, x, y, layout, clip, autoLayout}], stats }. opts.layout: 'auto' keeps Figma's auto
+  // layout (stacks reflow here too); 'fixed' keeps every position as drawn. Frames inside frames are boxes either way.
+  async function convert(data, env, opts = {}) {
+    const AUTO = opts.layout !== 'fixed';
     const { message } = data; const blobs = message.blobs || [];
     const nodes = (message.nodeChanges || []).filter(n => n && n.guid && n.phase !== 'REMOVED');
     const byId = new Map(nodes.map(n => [idOf(n.guid), n]));
@@ -3720,8 +3735,23 @@ const FigmaImport = (() => {
     const skip = t => { stats.skipped[t] = (stats.skipped[t] || 0) + 1; };
 
     // Walk a subtree; m is the transform from this node's parent space into frame space.
-    async function walk(n, m, opacity, out, overrides, depth) {
+    // Sizing from Figma: text auto-resize, hugging stacks, and Fill / absolute for children of a stack.
+    function applySizing(n, b, parentNode) {
+      if (!AUTO) return;
+      if (n.type === 'TEXT') { const r = n.textAutoResize; if (r === 'WIDTH_AND_HEIGHT') { b.sizeW = 'hug'; b.sizeH = 'hug'; } else if (r === 'HEIGHT') b.sizeH = 'hug'; else b.sizeH = 'fixed'; }
+      if (b.kind === 'box' && b.auto) { const prim = n.stackPrimarySizing && n.stackPrimarySizing !== 'FIXED' ? 'hug' : 'fixed', cnt = n.stackCounterSizing && n.stackCounterSizing !== 'FIXED' ? 'hug' : 'fixed'; if (b.auto.mode === 'horizontal') { b.sizeW = prim; b.sizeH = cnt; } else { b.sizeH = prim; b.sizeW = cnt; } }
+      const ps = parentNode && autoOf(parentNode); if (!ps) return;
+      if (n.stackPositioning === 'ABSOLUTE') { b.absolute = true; return; }
+      const H = ps.mode === 'horizontal';
+      if ((n.stackChildPrimaryGrow || 0) > 0) { if (H) b.sizeW = 'fill'; else b.sizeH = 'fill'; }
+      if (n.stackChildAlignSelf === 'STRETCH') { if (H) b.sizeH = 'fill'; else b.sizeW = 'fill'; }
+      const mn = n.minSize && n.minSize.value, mx = n.maxSize && n.maxSize.value;
+      if (mn) { if (mn.x > 0) b.minW = r2(mn.x); if (mn.y > 0) b.minH = r2(mn.y); } if (mx) { if (mx.x > 0 && mx.x < 1e6) b.maxW = r2(mx.x); if (mx.y > 0 && mx.y < 1e6) b.maxH = r2(mx.y); }
+    }
+    let out = null;
+    async function walk(n, m, opacity, outList, overrides, depth, parentId, parentNode) {
       if (depth > 40 || n.visible === false || n.mask) return;
+      out = outList;
       const ov = overrides && overrides.get(idOf(n.guid)); if (ov) n = { ...n, ...ov };
       n = inheritFromMain(n);
       if (n.visible === false) return;
@@ -3729,11 +3759,16 @@ const FigmaImport = (() => {
       const w = n.size ? n.size.x : 0, h = n.size ? n.size.y : 0;
       const box = boxOf(M, w, h);
       const op = opacity * (n.opacity ?? 1);
-      const common = b => { if (box.rotation) b.rotation = box.rotation; if (op < 0.999) b.opacity = r2(op); const sh = shadowOf(n.effects); if (sh) b.shadow = sh; if (n.name) b.label = String(n.name).slice(0, 80); stats.blocks++; out.push(b); return b; };
+      // The first block a node makes takes its place in the parent's stack; any extra layers ride along absolutely.
+      let made = 0;
+      const common = b => { if (box.rotation) b.rotation = box.rotation; if (op < 0.999 && b.kind !== 'box') b.opacity = r2(op); else if (op < 0.999) b.opacity = r2(n.opacity ?? 1); const sh = shadowOf(n.effects); if (sh) b.shadow = sh; if (n.name) b.label = String(n.name).slice(0, 80); if (parentId) b.parent = parentId; if (made++ === 0) applySizing(n, b, parentNode); else if (parentNode && AUTO && autoOf(parentNode)) b.absolute = true; stats.blocks++; out.push(b); return b; };
       const t = n.type;
       if (t === 'TEXT') { textBlock(n, box, common); return; }
-      if (t === 'RECTANGLE' || t === 'ROUNDED_RECTANGLE' || (CONTAINERS.has(t) && t !== 'GROUP')) {
-        await fillBlocks(n, box, common, t === 'FRAME' || t === 'SYMBOL' || t === 'INSTANCE' || t === 'SECTION' ? 'container' : 'rect');
+      let boxId = null;
+      if (CONTAINERS.has(t)) {
+        boxId = await containerBox(n, box, common, t, op);
+      } else if (t === 'RECTANGLE' || t === 'ROUNDED_RECTANGLE') {
+        await fillBlocks(n, box, common, 'rect');
       } else if (t === 'ELLIPSE') {
         const p = mainPaint(n.fillPaints); const st = strokeOf(n);
         if (p && p.type === 'IMAGE') await imageBlock(n, box, common, p, Math.min(box.w, box.h) / 2);
@@ -3741,26 +3776,43 @@ const FigmaImport = (() => {
       } else if (VECTORS.has(t)) {
         vectorBlock(n, box, common, w, h);
         if (t === 'BOOLEAN_OPERATION') return; // operands are already inside its geometry
-      } else if (t === 'GROUP') { /* children only */ }
-      else if (t === 'INSTANCE' || t === 'SYMBOL') { /* handled above */ }
-      else { skip(t); }
+      } else { skip(t); }
+      const kidParent = boxId || parentId; const kidNode = boxId ? n : parentNode;
+      // inside a box, opacity lives on the box
+      const kidOp = boxId ? 1 : op;
       // children
       if (t === 'INSTANCE') {
         stats.instances++;
         const sym = n.symbolData && byId.get(idOf(n.symbolData.symbolID));
         const own = childrenOf(n);
-        if (own.length) { for (const c of own) await walk(c, M, op, out, overrides, depth + 1); }
+        if (own.length) { for (const c of own) await walk(c, M, kidOp, out, overrides, depth + 1, kidParent, kidNode); }
         else if (sym) {
           // expand the main component inside the instance box; overrides keyed by the last guid of their path
           const ovs = new Map(overrides || []);
           for (const o of (n.symbolData.symbolOverrides || [])) { const path = o.guidPath && o.guidPath.guids; if (!path || !path.length) continue; const { guidPath, ...fields } = o; ovs.set(idOf(path[path.length - 1]), fields); }
           const sw = sym.size ? sym.size.x : w, shh = sym.size ? sym.size.y : h;
           const scale = { m00: sw ? w / sw : 1, m01: 0, m02: 0, m10: 0, m11: shh ? h / shh : 1, m12: 0 };
-          for (const c of childrenOf(sym)) await walk(c, mul(M, scale), op, out, ovs, depth + 1);
+          for (const c of childrenOf(sym)) await walk(c, mul(M, scale), kidOp, out, ovs, depth + 1, kidParent, kidNode);
         }
         return;
       }
-      if (CONTAINERS.has(t)) for (const c of childrenOf(n)) await walk(c, M, op, out, overrides, depth + 1);
+      if (CONTAINERS.has(t)) for (const c of childrenOf(n)) await walk(c, M, kidOp, out, overrides, depth + 1, kidParent, kidNode);
+    }
+    // A frame, component, instance or group inside a screen becomes a box: its first solid or gradient paint is the
+    // box's fill, image paints become an image inside it, and (when kept) its auto layout drives its children.
+    async function containerBox(n, box, common, t, op) {
+      const paints = t === 'GROUP' ? [] : visiblePaints(n.fillPaints);
+      const radius = r2(n.cornerRadius || Math.max(n.rectangleTopLeftCornerRadius || 0, n.rectangleTopRightCornerRadius || 0, n.rectangleBottomLeftCornerRadius || 0, n.rectangleBottomRightCornerRadius || 0) || 0);
+      const b = { id: uid(), kind: 'box', x: box.x, y: box.y, w: Math.max(1, box.w), h: Math.max(1, box.h), fill: 'none', radius, clip: t !== 'GROUP' && !n.frameMaskDisabled, decorative: true };
+      const main = paints.filter(p => p.type === 'SOLID' || /^GRADIENT/.test(p.type));
+      if (main.length) { const p = main[main.length - 1]; if (p.type === 'SOLID') { b.fill = colorHex(p.color); const a = (p.color.a ?? 1) * (p.opacity ?? 1); if (a < 0.999) b.fillAlpha = r2(a); } else { const g = gradientOf(p, n.size ? n.size.x : 0, n.size ? n.size.y : 0); if (g) { b.gradient = g; b.fill = g.stops[0].c; } } }
+      const st = t === 'GROUP' ? null : strokeOf(n); if (st) b.stroke = st;
+      const auto = AUTO && t !== 'GROUP' ? autoOf(n) : null; if (auto) b.auto = auto;
+      if (op < 0.999) b.opacity = r2(op);
+      common(b);
+      // image fills sit inside the box, behind its content
+      for (const p of paints) if (p.type === 'IMAGE') { const asset = await imageAsset(p); if (asset) stats.images++; else stats.missingImages++; stats.blocks++; out.push({ id: uid(), kind: 'image', parent: b.id, absolute: auto ? true : undefined, x: box.x, y: box.y, w: box.w, h: box.h, asset: asset ? asset.id : null, focal: 'xMidYMid', fit: p.imageScaleMode === 'FIT' ? 'contain' : 'cover', radius, decorative: false, path: 'image_' + uid(), placeholder: '#D9D9DE' }); }
+      return b.id;
     }
     async function fillBlocks(n, box, common, role) {
       const paints = visiblePaints(n.fillPaints);
@@ -3774,7 +3826,7 @@ const FigmaImport = (() => {
         else { const g = gradientOf(p, n.size ? n.size.x : 0, n.size ? n.size.y : 0); if (!g) continue; b.gradient = g; b.fill = g.stops[0].c; }
         common(b);
       }
-      if (st && (role !== 'container' || paints.length || st)) { const b = { id: uid(), kind: 'field', x: box.x, y: box.y, w: box.w, h: box.h, radius, fill: 'none', alpha: 0, stroke: st, decorative: true }; common(b); }
+      if (st) { const last = out && out[out.length - 1]; if (paints.length && last && last.kind === 'field' && last.x === box.x && last.y === box.y && !last.stroke) last.stroke = st; else common({ id: uid(), kind: 'field', x: box.x, y: box.y, w: box.w, h: box.h, radius, fill: 'none', alpha: 0, stroke: st, decorative: true }); }
     }
     async function imageBlock(n, box, common, p, radius) {
       const asset = await imageAsset(p);
@@ -3807,14 +3859,15 @@ const FigmaImport = (() => {
       if (n.textDecoration === 'UNDERLINE') b.decoration = 'underline'; else if (n.textDecoration === 'STRIKETHROUGH') b.decoration = 'line-through';
       if (!b.font.transform) delete b.font.transform; if (!b.font.style) delete b.font.style;
       // Auto-width text never wraps in Figma; give it room for font substitution.
-      if (n.textAutoResize === 'WIDTH_AND_HEIGHT' && !/\n/.test(chars)) { const extra = b.w * 0.15; if (b.align === 'center') b.x -= extra / 2; else if (b.align === 'right') b.x -= extra; b.w += extra; }
+      if (n.textAutoResize === 'WIDTH_AND_HEIGHT' && !/\n/.test(chars) && !AUTO) { const extra = b.w * 0.15; if (b.align === 'center') b.x -= extra / 2; else if (b.align === 'right') b.x -= extra; b.w += extra; }
       if (/^(headline|title|heading|h1|h2|hero)/i.test(n.name || '') || size >= 40) b.role = 'headline';
       if (typeof Canvas !== 'undefined') Canvas.refit(b);
       common(b);
     }
     const uid = () => Math.random().toString(36).slice(2, 8);
     // An instance without its own paints shows its main component's.
-    const VISUAL = ['fillPaints', 'strokePaints', 'strokeWeight', 'cornerRadius', 'effects', 'rectangleTopLeftCornerRadius', 'rectangleTopRightCornerRadius', 'rectangleBottomLeftCornerRadius', 'rectangleBottomRightCornerRadius', 'opacity'];
+    const VISUAL = ['fillPaints', 'strokePaints', 'strokeWeight', 'cornerRadius', 'effects', 'rectangleTopLeftCornerRadius', 'rectangleTopRightCornerRadius', 'rectangleBottomLeftCornerRadius', 'rectangleBottomRightCornerRadius', 'opacity', 'frameMaskDisabled',
+      'stackMode', 'stackSpacing', 'stackPadding', 'stackHorizontalPadding', 'stackVerticalPadding', 'stackPaddingRight', 'stackPaddingBottom', 'stackPrimarySizing', 'stackCounterSizing', 'stackPrimaryAlignItems', 'stackCounterAlignItems', 'stackWrap', 'stackCounterSpacing', 'stackCounterAlignContent'];
     function inheritFromMain(n) {
       if (n.type !== 'INSTANCE' || !n.symbolData) return n;
       const sym = byId.get(idOf(n.symbolData.symbolID)); if (!sym) return n;
@@ -3838,14 +3891,15 @@ const FigmaImport = (() => {
       const paints = visiblePaints(n.fillPaints); const solid = paints.length === 1 && paints[0].type === 'SOLID' ? paints[0] : null;
       const grad = paints.length === 1 && /^GRADIENT/.test(paints[0].type) ? gradientOf(paints[0], W, H) : null;
       const bg = solid ? colorHex(solid.color) : grad ? grad.stops[0].c : '#FFFFFF';
-      if (!solid && !grad && paints.length) { const tmp = { ...n, transform: I, effects: null, strokePaints: null }; await fillBlocks(tmp, { x: 0, y: 0, w: W, h: H, rotation: 0 }, b => { stats.blocks++; blocks.push(b); return b; }, 'rect'); }
-      if (n.type === 'INSTANCE') await walk({ ...n, transform: I, fillPaints: [], effects: null, strokePaints: null, opacity: 1 }, I, 1, blocks, null, 0);
-      else for (const c of childrenOf(n)) await walk(c, I, 1, blocks, null, 1);
-      frames.push({ name: String(n.name || 'Figma frame').slice(0, 80), x: Math.round(T.m02), y: Math.round(T.m12), w: W, h: H, bg, bgGradient: grad, clip: !n.frameMaskDisabled, blocks, page: pageOf(n) });
+      const rootAuto = AUTO ? autoOf(n) : null;
+      if (!solid && !grad && paints.length) { const tmp = { ...n, transform: I, effects: null, strokePaints: null }; out = blocks; await fillBlocks(tmp, { x: 0, y: 0, w: W, h: H, rotation: 0 }, b => { if (rootAuto) b.absolute = true; stats.blocks++; blocks.push(b); return b; }, 'rect'); }
+      if (n.type === 'INSTANCE') { const sym = n.symbolData && byId.get(idOf(n.symbolData.symbolID)); const own = childrenOf(n); const src = own.length ? own : sym ? childrenOf(sym) : []; const sw = sym && sym.size ? sym.size.x : W, sh = sym && sym.size ? sym.size.y : H; const sc = own.length ? I : { m00: sw ? W / sw : 1, m01: 0, m02: 0, m10: 0, m11: sh ? H / sh : 1, m12: 0 }; const ovs = new Map(); if (!own.length) for (const o of (n.symbolData.symbolOverrides || [])) { const path = o.guidPath && o.guidPath.guids; if (!path || !path.length) continue; const { guidPath, ...fields } = o; ovs.set(idOf(path[path.length - 1]), fields); } for (const c of src) await walk(c, sc, 1, blocks, ovs, 1, null, n); }
+      else for (const c of childrenOf(n)) await walk(c, I, 1, blocks, null, 1, null, n);
+      frames.push({ name: String(n.name || 'Figma frame').slice(0, 80), x: Math.round(T.m02), y: Math.round(T.m12), w: W, h: H, bg, bgGradient: grad, clip: !n.frameMaskDisabled, blocks, page: pageOf(n), autoLayout: rootAuto });
     }
     if (loose.length) {
       const blocks = [];
-      for (const n of loose) await walk(n, I, 1, blocks, null, 1);
+      for (const n of loose) await walk(n, I, 1, blocks, null, 1, null, null);
       if (blocks.length) {
         const x0 = Math.min(...blocks.map(b => b.x)), y0 = Math.min(...blocks.map(b => b.y)), x1 = Math.max(...blocks.map(b => b.x + b.w)), y1 = Math.max(...blocks.map(b => b.y + b.h));
         for (const b of blocks) { b.x = r2(b.x - x0); b.y = r2(b.y - y0); }
@@ -3866,7 +3920,7 @@ const FigmaImport = (() => {
         palette: { bg: F.bg, fg: fg ? fg.fill : '#000000', accent: (F.blocks.find(b => b.kind === 'field' && b.fill && b.fill !== F.bg && b.fill !== 'none') || { fill: fg ? fg.fill : '#000000' }).fill, bgName: 'Figma', ...(F.bgGradient ? { bgGradient: F.bgGradient } : {}) },
         type: { level: 2, headline: 48, body: 16, display: kit.fonts.display, body_font: kit.fonts.body }, brand: kit.name, blocks: F.blocks, meta: { source: 'figma', page: F.page || '' }, metrics: { whitespace: 0, density: 0, balance: 0 },
       };
-      return { name: F.name, x: F.x, y: F.y, layout, clip: F.clip, loose: !!F.loose };
+      return { name: F.name, x: F.x, y: F.y, layout, clip: F.clip, loose: !!F.loose, autoLayout: F.autoLayout || null };
     });
   }
   return { readFile, readClipboardHTML, hasFigmaHTML, convert, toLayouts, _kiwi: { decodeSchema, compile, BB }, _pathOf: pathOf, readArchive };
@@ -3885,7 +3939,7 @@ const Looks = (() => {
   const center = b => ({ x: b.x + b.w / 2, y: b.y + b.h / 2 });
   const inside = (p, b) => p.x >= b.x && p.y >= b.y && p.x <= b.x + b.w && p.y <= b.y + b.h;
   // The fill under a block: the last field, shape or image before it that contains its centre, else the page.
-  function under(blocks, i, pageBg, fillOf) { const c = center(blocks[i]); for (let j = i - 1; j >= 0; j--) { const u = blocks[j]; if (u.hidden) continue; if ((u.kind === 'field' && (u.alpha ?? 1) > 0.3) || u.kind === 'shape' || u.kind === 'image') { if (inside(c, u)) return u.kind === 'image' ? 'image' : fillOf(u, j); } } return pageBg; }
+  function under(blocks, i, pageBg, fillOf) { const c = center(blocks[i]); for (let j = i - 1; j >= 0; j--) { const u = blocks[j]; if (u.hidden) continue; if (((u.kind === 'field' || (u.kind === 'box' && u.fill && u.fill !== 'none')) && (u.alpha ?? 1) > 0.3) || u.kind === 'shape' || u.kind === 'image') { if (inside(c, u)) return u.kind === 'image' ? 'image' : fillOf(u, j); } } return pageBg; }
   const isText = b => b.kind === 'text' || b.kind === 'list' || b.kind === 'button';
 
   function apply(frame, look, kit) {
@@ -3913,7 +3967,13 @@ const Looks = (() => {
     src.forEach((b, i) => {
       delete b.gradient; delete b.shadow; delete b.fillToken; delete b.colorToken; if (b.opacity != null && b.opacity < 0.5) b.opacity = 0.5; else delete b.opacity;
       const area = (b.w * b.h) / (W * H);
-      if (b.kind === 'field' || b.kind === 'rule') {
+      // a layer made here keeps its place in the tree (parent, stack position, sizing)
+      const place = { parent: b.parent, absolute: b.absolute, sizeW: b.sizeW, sizeH: b.sizeH, rx: b.rx, ry: b.ry };
+      if (b.kind === 'box') {
+        if (b.fill && b.fill !== 'none') { const was = norm(b.fill); const chromatic = was && sat(was) > 0.35 && lum(was) < 0.75; b.fill = area > 0.3 ? WF.panel : (chromatic && area < 0.06) ? WF.solid : WF.box; if (area <= 0.3) b.stroke = { color: WF.line, width: 1 }; else delete b.stroke; delete b.fillAlpha; fillOf.set(i, b.fill); }
+        else if (b.stroke) b.stroke = { color: WF.line, width: 1 };
+        out.push(b);
+      } else if (b.kind === 'field' || b.kind === 'rule') {
         const was = norm(b.fill); const chromatic = was && sat(was) > 0.35 && lum(was) < 0.75; const darkSmall = was && lum(was) < 0.25 && area < 0.08;
         if ((b.alpha ?? 1) < 0.15 && !b.stroke) { b.hidden = true; }
         else if (area > 0.3) { b.fill = WF.panel; delete b.stroke; }
@@ -3924,8 +3984,8 @@ const Looks = (() => {
       else if (b.kind === 'shape') { b.fill = WF.line; delete b.stroke; fillOf.set(i, b.fill); out.push(b); }
       else if (b.kind === 'image') {
         b.asset = null; b.placeholder = WF.img; b.stroke = { color: WF.line, width: 1 }; out.push(b); fillOf.set(i, WF.img);
-        if (b.w > 72 && b.h > 48) out.push({ id: Canvas.uid(), kind: 'icon', name: Icons.has('image') ? 'image' : 'squares-four', x: Math.round(b.x + b.w / 2 - 16), y: Math.round(b.y + b.h / 2 - 16), w: 32, h: 32, fill: WF.soft, decorative: true, label: 'placeholder' });
-      } else if (b.kind === 'vector') { out.push({ id: b.id, kind: 'field', x: b.x, y: b.y, w: b.w, h: b.h, radius: Math.min(6, Math.min(b.w, b.h) / 4), fill: WF.line, decorative: true, label: b.label, opacity: b.opacity }); }
+        if (b.w > 72 && b.h > 48) out.push({ ...place, absolute: b.parent ? true : undefined, sizeW: undefined, sizeH: undefined, rx: undefined, ry: undefined, id: Canvas.uid(), kind: 'icon', name: Icons.has('image') ? 'image' : 'squares-four', x: Math.round(b.x + b.w / 2 - 16), y: Math.round(b.y + b.h / 2 - 16), w: 32, h: 32, fill: WF.soft, decorative: true, label: 'placeholder' });
+      } else if (b.kind === 'vector') { out.push({ ...place, id: b.id, kind: 'field', x: b.x, y: b.y, w: b.w, h: b.h, radius: Math.min(6, Math.min(b.w, b.h) / 4), fill: WF.line, decorative: true, label: b.label, opacity: b.opacity }); }
       else if (b.kind === 'icon' || b.kind === 'badge') { b.fill = WF.soft; if (b.color) b.color = '#FFFFFF'; out.push(b); }
       else if (b.kind === 'logo') { b.fill = WF.ink; out.push(b); }
       else if (b.kind === 'line') { b.fill = WF.line; out.push(b); }
@@ -3966,7 +4026,8 @@ const Looks = (() => {
     const fills = new Map(); const out = [];
     src.forEach((b, i) => {
       delete b.fillToken; delete b.colorToken;
-      if (b.kind === 'field' || b.kind === 'shape' || b.kind === 'rule' || b.kind === 'line') { b.fill = mapColor(b.fill); if (b.stroke) b.stroke.color = mapColor(b.stroke.color); if (b.gradient) b.gradient.stops.forEach(s => { s.c = mapColor(s.c); }); fills.set(i, b.fill); }
+      if (b.kind === 'box') { if (b.fill && b.fill !== 'none') b.fill = mapColor(b.fill); if (b.stroke) b.stroke.color = mapColor(b.stroke.color); if (b.gradient) b.gradient.stops.forEach(s => { s.c = mapColor(s.c); }); if (b.fill !== 'none') fills.set(i, b.fill); }
+      else if (b.kind === 'field' || b.kind === 'shape' || b.kind === 'rule' || b.kind === 'line') { b.fill = mapColor(b.fill); if (b.stroke) b.stroke.color = mapColor(b.stroke.color); if (b.gradient) b.gradient.stops.forEach(s => { s.c = mapColor(s.c); }); fills.set(i, b.fill); }
       else if (b.kind === 'button') { b.fill = chromaMap.get(norm(b.fill)) || (ranked[0] || { hex: b.fill }).hex; b.color = Color.bestForeground(b.fill, brandAll, 4.5)[0]; if (b.font) b.font.family = body; fills.set(i, b.fill); }
       else if (b.kind === 'text' || b.kind === 'list') {
         const bgU = under(src, i, newPage, (u, j) => fills.get(j) || mapColor(u.fill));
@@ -4013,12 +4074,12 @@ const WebImport = (() => {
     function shadowOf(cs) { const s = cs.boxShadow; if (!s || s === 'none') return null; const m = /(rgba?\([^)]*\))\s+(-?[\d.]+)px\s+(-?[\d.]+)px\s+([\d.]+)px/.exec(s); if (!m || /inset/.test(s.split(m[0])[0])) return null; const c = hexA(m[1]); return c && c.a > 0.01 ? { color: c.hex, alpha: c.a, x: +m[2], y: +m[3], blur: +m[4] } : null; }
     function radiusOf(cs, r) { const v = cs.borderTopLeftRadius; if (!v || v === '0px') return 0; return /%$/.test(v) ? Math.min(r.w, r.h) * parseFloat(v) / 100 : px(v); }
     function imgRef(src) { if (!src || /^data:image\/svg/.test(src) && src.length > 400000) return null; if (!imgs.has(src)) imgs.set(src, null); return src; }
-    function pushText(el, cs, op, text, box, fixed) {
+    function pushText(el, cs, op, text, box, fixed, p, flow) {
       text = text.replace(/[ \t ]+/g, ' ').replace(/ *\n */g, '\n').trim(); if (!text) return;
       fonts.add(famOf(cs.fontFamily));
       const c = hexA(cs.color) || { hex: '#000000', a: 1 }; const size = px(cs.fontSize) || 16;
       const lh = cs.lineHeight === 'normal' ? 1.2 : Math.round(px(cs.lineHeight) / size * 100) / 100;
-      out.push({ t: 'text', name: nameOf(el), ...box, text, color: c.hex, alpha: c.a * op, family: famOf(cs.fontFamily), size, weight: parseInt(cs.fontWeight, 10) || 400, italic: cs.fontStyle === 'italic', lh: lh || 1.2, ls: cs.letterSpacing === 'normal' ? 0 : Math.round(px(cs.letterSpacing) / size * 1000) / 1000, align: /center/.test(cs.textAlign) ? 'center' : /right|end/.test(cs.textAlign) ? 'right' : 'left', transform: cs.textTransform === 'uppercase' ? 'upper' : cs.textTransform === 'lowercase' ? 'lower' : '', deco: /underline/.test(cs.textDecorationLine) ? 'underline' : /line-through/.test(cs.textDecorationLine) ? 'line-through' : '', fixed: !!fixed });
+      out.push({ t: 'text', name: nameOf(el), ...box, text, color: c.hex, alpha: c.a * op, family: famOf(cs.fontFamily), size, weight: parseInt(cs.fontWeight, 10) || 400, italic: cs.fontStyle === 'italic', lh: lh || 1.2, ls: cs.letterSpacing === 'normal' ? 0 : Math.round(px(cs.letterSpacing) / size * 1000) / 1000, align: /center/.test(cs.textAlign) ? 'center' : /right|end/.test(cs.textAlign) ? 'right' : 'left', transform: cs.textTransform === 'uppercase' ? 'upper' : cs.textTransform === 'lowercase' ? 'lower' : '', deco: /underline/.test(cs.textDecorationLine) ? 'underline' : /line-through/.test(cs.textDecorationLine) ? 'line-through' : '', fixed: !!fixed, p: fixed ? 0 : p || 0, flow: !!flow && !fixed });
     }
     function svgMarkup(svg) {
       const clone = svg.cloneNode(true); const src = svg.querySelectorAll('*'); const dst = clone.querySelectorAll('*');
@@ -4027,7 +4088,17 @@ const WebImport = (() => {
       const cs = getComputedStyle(svg); const vb = svg.getAttribute('viewBox'); const r = svg.getBoundingClientRect();
       return { inner: clone.innerHTML.slice(0, 200000), viewBox: vb ? vb.split(/[\s,]+/).map(Number) : [0, 0, r.width, r.height], color: (hexA(cs.color) || {}).hex };
     }
-    function walk(el, op, clip, fixed, depth) {
+    // Structure: flex containers and their items become frames (with padding, gap and alignment) so the canvas can
+    // rebuild them as stacks; every other layer records the frame it sits in (p) and whether it is in the flow.
+    let fseq = 0;
+    function visualsOf(el, cs, r) {
+      const bg = hexA(cs.backgroundColor); const bi = cs.backgroundImage;
+      const bw = [cs.borderTopWidth, cs.borderRightWidth, cs.borderBottomWidth, cs.borderLeftWidth].map(px);
+      const bc = [cs.borderTopColor, cs.borderRightColor, cs.borderBottomColor, cs.borderLeftColor].map(hexA);
+      const sides = bw.map((w, i) => w > 0 && bc[i] && bc[i].a > 0.02 && cs[['borderTopStyle', 'borderRightStyle', 'borderBottomStyle', 'borderLeftStyle'][i]] !== 'none');
+      return { bg, bi, bw, bc, sides, radius: radiusOf(cs, r), sh: shadowOf(cs), grad: bi && /gradient\(/.test(bi) ? bi.slice(0, 600) : null, uniform: sides.every(Boolean) && bw.every(w => w === bw[0]) };
+    }
+    function walk(el, op, clip, fixed, depth, fid, flexParent) {
       if (out.length > MAX_NODES || depth > 60) return;
       const tag = el.tagName; if (!tag) return;
       if (/^(SCRIPT|STYLE|NOSCRIPT|TEMPLATE|HEAD|META|LINK|TITLE)$/.test(tag) || el.id === '__lg_capture_panel') return;
@@ -4037,29 +4108,39 @@ const WebImport = (() => {
       const isFixed = fixed || cs.position === 'fixed' || cs.position === 'sticky';
       if ((cs.position === 'fixed' || cs.position === 'sticky') && isCookie(el) && (OPTS && OPTS.dropCookies !== false)) return;
       const r = rectOf(el); const vis = visible(r, clip);
-      if (tag === 'svg' || el instanceof SVGSVGElement) { if (vis) { const m = svgMarkup(el); out.push({ t: 'svg', name: nameOf(el), ...r, svg: m.inner, viewBox: m.viewBox, color: m.color, alpha: o, fixed: isFixed }); } return; }
-      if (tag === 'IFRAME' || tag === 'EMBED' || tag === 'OBJECT') { if (vis) out.push({ t: 'box', name: nameOf(el), ...r, bg: '#E4E4EA', bga: 1, radius: 0, alpha: o, fixed: isFixed }); return; }
+      const P = isFixed ? 0 : (fid || 0);
+      const outOfFlow = cs.position === 'absolute' || cs.position === 'fixed';
+      const item = !!flexParent && vis && !isFixed && !outOfFlow;
+      const it = item ? { grow: parseFloat(cs.flexGrow) || 0, self: cs.alignSelf } : undefined;
+      if (tag === 'svg' || el instanceof SVGSVGElement) { if (vis) { const m = svgMarkup(el); out.push({ t: 'svg', name: nameOf(el), ...r, svg: m.inner, viewBox: m.viewBox, color: m.color, alpha: o, fixed: isFixed, p: P, flow: item, it }); } return; }
+      if (tag === 'IFRAME' || tag === 'EMBED' || tag === 'OBJECT') { if (vis) out.push({ t: 'box', name: nameOf(el), ...r, bg: '#E4E4EA', bga: 1, radius: 0, alpha: o, fixed: isFixed, p: P, flow: item, it }); return; }
+      const leaf = tag === 'IMG' || tag === 'VIDEO' || tag === 'CANVAS' || tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+      // grids read as stacks too: several columns wrap like a row, one column stacks vertically
+      const isGrid = /^(grid|inline-grid)$/.test(cs.display); const cols = isGrid ? String(cs.gridTemplateColumns || '').split(/\s+(?![^(]*\))/).filter(v => v && v !== 'none').length : 0;
+      const isFlex = /^(flex|inline-flex)$/.test(cs.display) || (isGrid && cols > 0);
+      let frame = null, myP = P;
+      if (vis && !isFixed && !leaf && (isFlex || item) && fseq < 800) {
+        const v = visualsOf(el, cs, r);
+        frame = { t: 'frame', id: ++fseq, p: P, name: nameOf(el), ...r, alpha: o, flow: item, it, bg: v.bg && v.bg.a > 0.02 ? v.bg.hex : null, bga: v.bg ? v.bg.a : 0, grad: v.grad, radius: v.radius, border: v.uniform ? { w: v.bw[0], c: v.bc[0].hex } : null, shadow: v.sh,
+          clip: cs.overflowX !== 'visible' || cs.overflowY !== 'visible', pad: [px(cs.paddingTop) + v.bw[0], px(cs.paddingRight) + v.bw[1], px(cs.paddingBottom) + v.bw[2], px(cs.paddingLeft) + v.bw[3]], textAlign: cs.textAlign };
+        if (isFlex) frame.flex = isGrid ? { dir: cols > 1 ? 'row' : 'column', wrap: cols > 1, gapC: px(cs.columnGap), gapR: px(cs.rowGap), justify: cs.justifyContent, align: cs.alignItems, grid: cols } : { dir: cs.flexDirection, wrap: cs.flexWrap !== 'nowrap', gapC: px(cs.columnGap), gapR: px(cs.rowGap), justify: cs.justifyContent, align: cs.alignItems };
+        out.push(frame); myP = frame.id;
+      }
       if (vis) {
-        const bg = hexA(cs.backgroundColor); const bi = cs.backgroundImage;
-        const bw = [cs.borderTopWidth, cs.borderRightWidth, cs.borderBottomWidth, cs.borderLeftWidth].map(px);
-        const bc = [cs.borderTopColor, cs.borderRightColor, cs.borderBottomColor, cs.borderLeftColor].map(hexA);
-        const sides = bw.map((w, i) => w > 0 && bc[i] && bc[i].a > 0.02 && cs[['borderTopStyle', 'borderRightStyle', 'borderBottomStyle', 'borderLeftStyle'][i]] !== 'none');
-        const radius = radiusOf(cs, r); const sh = shadowOf(cs);
-        const grad = bi && /gradient\(/.test(bi) ? bi.slice(0, 600) : null;
-        const uniform = sides.every(Boolean) && bw.every(w => w === bw[0]);
-        if ((bg && bg.a > 0.02) || grad || uniform || sh) out.push({ t: 'box', name: nameOf(el), ...r, bg: bg && bg.a > 0.02 ? bg.hex : null, bga: bg ? bg.a : 0, grad, radius, border: uniform ? { w: bw[0], c: bc[0].hex } : null, shadow: sh, alpha: o, fixed: isFixed });
-        if (!uniform) sides.forEach((on, i) => { if (!on) return; const w = bw[i]; const b = i === 0 ? { x: r.x, y: r.y, w: r.w, h: w } : i === 1 ? { x: r.x + r.w - w, y: r.y, w, h: r.h } : i === 2 ? { x: r.x, y: r.y + r.h - w, w: r.w, h: w } : { x: r.x, y: r.y, w, h: r.h }; out.push({ t: 'box', name: nameOf(el) + ' border', ...b, bg: bc[i].hex, bga: bc[i].a, radius: 0, alpha: o, fixed: isFixed }); });
+        const v = visualsOf(el, cs, r); const { bg, bi, bw, bc, sides, radius, sh, grad, uniform } = v;
+        if (!frame && ((bg && bg.a > 0.02) || grad || uniform || sh)) out.push({ t: 'box', name: nameOf(el), ...r, bg: bg && bg.a > 0.02 ? bg.hex : null, bga: bg ? bg.a : 0, grad, radius, border: uniform ? { w: bw[0], c: bc[0].hex } : null, shadow: sh, alpha: o, fixed: isFixed, p: P, flow: false });
+        if (!uniform) sides.forEach((on, i) => { if (!on) return; const w = bw[i]; const b = i === 0 ? { x: r.x, y: r.y, w: r.w, h: w } : i === 1 ? { x: r.x + r.w - w, y: r.y, w, h: r.h } : i === 2 ? { x: r.x, y: r.y + r.h - w, w: r.w, h: w } : { x: r.x, y: r.y, w, h: r.h }; out.push({ t: 'box', name: nameOf(el) + ' border', ...b, bg: bc[i].hex, bga: bc[i].a, radius: 0, alpha: o, fixed: isFixed, p: myP, flow: false }); });
         const url = bi && /url\(/.test(bi) ? (/url\(["']?([^"')]+)["']?\)/.exec(bi) || [])[1] : null;
-        if (url) out.push({ t: 'img', name: nameOf(el) + ' bg', ...r, src: imgRef(new URL(url, location.href).href), fit: cs.backgroundSize === 'contain' ? 'contain' : 'cover', radius, alpha: o, fixed: isFixed });
+        if (url) out.push({ t: 'img', name: nameOf(el) + ' bg', ...r, src: imgRef(new URL(url, location.href).href), fit: cs.backgroundSize === 'contain' ? 'contain' : 'cover', radius, alpha: o, fixed: isFixed, p: myP, flow: false });
         if (tag === 'IMG' || tag === 'VIDEO' || tag === 'CANVAS') {
           let src = tag === 'IMG' ? (el.currentSrc || el.src) : tag === 'VIDEO' ? el.poster : null;
           if (tag === 'CANVAS') { try { src = el.toDataURL('image/png'); } catch { src = null; } }
-          out.push({ t: 'img', name: nameOf(el), ...r, src: src ? imgRef(src) : null, fit: cs.objectFit === 'contain' ? 'contain' : 'cover', radius, alpha: o, fixed: isFixed });
+          out.push({ t: 'img', name: nameOf(el), ...r, src: src ? imgRef(src) : null, fit: cs.objectFit === 'contain' ? 'contain' : 'cover', radius, alpha: o, fixed: isFixed, p: P, flow: item, it });
           return;
         }
         if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
-          const v = tag === 'SELECT' ? (el.options[el.selectedIndex] || {}).text || '' : (el.type === 'password' ? '••••••' : el.value || el.placeholder || '');
-          if (v && el.type !== 'checkbox' && el.type !== 'radio' && el.type !== 'hidden') { const pl = px(cs.paddingLeft), pt = px(cs.paddingTop); pushText(el, cs, el.value ? o : o * 0.6, v, { x: r.x + pl, y: r.y + Math.max(pt, (r.h - px(cs.fontSize) * 1.2) / 2), w: Math.max(4, r.w - pl - px(cs.paddingRight)), h: px(cs.fontSize) * 1.3 }); }
+          const val = tag === 'SELECT' ? (el.options[el.selectedIndex] || {}).text || '' : (el.type === 'password' ? '••••••' : el.value || el.placeholder || '');
+          if (val && el.type !== 'checkbox' && el.type !== 'radio' && el.type !== 'hidden') { const pl = px(cs.paddingLeft), pt = px(cs.paddingTop); pushText(el, cs, el.value ? o : o * 0.6, val, { x: r.x + pl, y: r.y + Math.max(pt, (r.h - px(cs.fontSize) * 1.2) / 2), w: Math.max(4, r.w - pl - px(cs.paddingRight)), h: px(cs.fontSize) * 1.3 }, isFixed, P, false); }
           return;
         }
       }
@@ -4077,28 +4158,29 @@ const WebImport = (() => {
           const cl = r.x + px(cs.borderLeftWidth) + px(cs.paddingLeft); const cw = r.w - px(cs.borderLeftWidth) - px(cs.borderRightWidth) - px(cs.paddingLeft) - px(cs.paddingRight);
           if (cw > box.w) { box.x = r1(cl); box.w = r1(cw); }
         }
-        if (visible(box, clip)) { pushText(el, cs, o, el.innerText || el.textContent || '', box, isFixed); textDone = true; }
+        if (visible(box, clip)) { pushText(el, cs, o, el.innerText || el.textContent || '', box, isFixed, myP, !!frame || item); textDone = true; }
       } else if (hasText && vis) {
         // mixed content: each direct text run on its own
-        for (const k of kids) if (k.nodeType === 3 && k.nodeValue.trim()) { const range = document.createRange(); range.selectNodeContents(k); const rr = range.getBoundingClientRect(); const box = { x: r1(rr.left + sx), y: r1(rr.top + sy), w: r1(rr.width), h: r1(rr.height) }; if (visible(box, clip)) pushText(el, cs, o, k.nodeValue, box, isFixed); }
+        for (const k of kids) if (k.nodeType === 3 && k.nodeValue.trim()) { const range = document.createRange(); range.selectNodeContents(k); const rr = range.getBoundingClientRect(); const box = { x: r1(rr.left + sx), y: r1(rr.top + sy), w: r1(rr.width), h: r1(rr.height) }; if (visible(box, clip)) pushText(el, cs, o, k.nodeValue, box, isFixed, myP, !!(frame && frame.flex)); }
       }
       const clips = cs.overflowX !== 'visible' || cs.overflowY !== 'visible';
       const nextClip = clips && r.w > 0 && r.h > 0 ? (clip ? { x: Math.max(clip.x, r.x), y: Math.max(clip.y, r.y), w: Math.min(clip.x + clip.w, r.x + r.w) - Math.max(clip.x, r.x), h: Math.min(clip.y + clip.h, r.y + r.h) - Math.max(clip.y, r.y) } : r) : clip;
       for (const k of el.children) {
         // children of a text layer are already in its text: collect only their boxes, icons and images
-        if (textDone && !(k instanceof SVGSVGElement) && k.tagName !== 'IMG') { walkBoxesOnly(k, o, nextClip, isFixed, depth + 1); continue; }
-        walk(k, o, nextClip, isFixed, depth + 1);
+        if (textDone && !(k instanceof SVGSVGElement) && k.tagName !== 'IMG') { walkBoxesOnly(k, o, nextClip, isFixed, depth + 1, myP); continue; }
+        walk(k, o, nextClip, isFixed, depth + 1, myP, frame && frame.flex ? frame : null);
       }
     }
     // Inside a text layer: backgrounds, icons and images of inline children, no text.
-    function walkBoxesOnly(el, op, clip, fixed, depth) {
+    function walkBoxesOnly(el, op, clip, fixed, depth, p) {
       if (out.length > MAX_NODES || depth > 60 || !el.tagName) return;
       const cs = getComputedStyle(el); if (cs.display === 'none' || cs.visibility === 'hidden') return;
       const o = op * (parseFloat(cs.opacity) || 0); const r = rectOf(el); if (!visible(r, clip)) return;
-      if (el instanceof SVGSVGElement) { const m = svgMarkup(el); out.push({ t: 'svg', name: nameOf(el), ...r, svg: m.inner, viewBox: m.viewBox, color: m.color, alpha: o, fixed }); return; }
-      if (el.tagName === 'IMG') { out.push({ t: 'img', name: nameOf(el), ...r, src: imgRef(el.currentSrc || el.src), fit: cs.objectFit === 'contain' ? 'contain' : 'cover', radius: radiusOf(cs, r), alpha: o, fixed }); return; }
-      const bg = hexA(cs.backgroundColor); if (bg && bg.a > 0.02) out.push({ t: 'box', name: nameOf(el), ...r, bg: bg.hex, bga: bg.a, radius: radiusOf(cs, r), alpha: o, fixed });
-      for (const k of el.children) walkBoxesOnly(k, o, clip, fixed, depth + 1);
+      const P = fixed ? 0 : p || 0;
+      if (el instanceof SVGSVGElement) { const m = svgMarkup(el); out.push({ t: 'svg', name: nameOf(el), ...r, svg: m.inner, viewBox: m.viewBox, color: m.color, alpha: o, fixed, p: P, flow: false }); return; }
+      if (el.tagName === 'IMG') { out.push({ t: 'img', name: nameOf(el), ...r, src: imgRef(el.currentSrc || el.src), fit: cs.objectFit === 'contain' ? 'contain' : 'cover', radius: radiusOf(cs, r), alpha: o, fixed, p: P, flow: false }); return; }
+      const bg = hexA(cs.backgroundColor); if (bg && bg.a > 0.02) out.push({ t: 'box', name: nameOf(el), ...r, bg: bg.hex, bga: bg.a, radius: radiusOf(cs, r), alpha: o, fixed, p: P, flow: false });
+      for (const k of el.children) walkBoxesOnly(k, o, clip, fixed, depth + 1, p);
     }
     async function embed(src) {
       if (/^data:/.test(src)) return src.length < MAX_IMG * 1.4 ? src : null;
@@ -4129,7 +4211,7 @@ const WebImport = (() => {
     }
     panel('Capturing this page…');
     try {
-      walk(document.documentElement, 1, null, false, 0);
+      walk(document.documentElement, 1, null, false, 0, 0, null);
       const fixedLast = out.filter(n => !n.fixed).concat(out.filter(n => n.fixed));
       const bgEl = [document.body, document.documentElement].map(e => e && hexA(getComputedStyle(e).backgroundColor)).find(c => c && c.a > 0.5);
       return (async () => {
@@ -4139,7 +4221,7 @@ const WebImport = (() => {
           const batch = await Promise.all(list.slice(i, i + 6).map(embed));
           batch.forEach((d, j) => { if (d && total + d.length < MAX_TOTAL) { imgs.set(list[i + j], d); total += d.length; ok++; } else failed++; });
         }
-        const cap = { v: 1, url: location.href, title: document.title, w: W, h: H, scrollY: sy, bg: bgEl ? bgEl.hex : '#FFFFFF', fonts: [...fonts], nodes: fixedLast, images: Object.fromEntries([...imgs].filter(([, d]) => d)) };
+        const cap = { v: 2, url: location.href, title: document.title, w: W, h: H, scrollY: sy, bg: bgEl ? bgEl.hex : '#FFFFFF', fonts: [...fonts], nodes: fixedLast, images: Object.fromEntries([...imgs].filter(([, d]) => d)) };
         const json = JSON.stringify({ lgCapture: cap });
         panel(`Captured <b>${fixedLast.length}</b> layers from ${W}×${H}px${list.length ? `, ${ok} of ${list.length} images embedded` : ''}.`, json, root => { if (failed) root.querySelector('#s').textContent = `${failed} image${failed > 1 ? 's' : ''} could not be read from this page; they become placeholders.`; });
         return cap;
@@ -4195,51 +4277,123 @@ const WebImport = (() => {
     if (stops.length < 2) return null; stops.forEach((s, i) => { if (s.p == null) s.p = i / (stops.length - 1); });
     return { type: m[1], angle, stops };
   }
-  // Capture -> one frame with a layer per node; the original look is kept so Looks can rebuild from it.
+  // CSS flexbox -> stack settings.
+  function autoFromCss(n) {
+    const f = n.flex; const row = /^row/.test(f.dir || 'row');
+    const J = v => /space-(between|around|evenly)/.test(v) ? 'auto' : /center/.test(v) ? 'center' : /(^|-)end$|right/.test(v) ? 'end' : 'start';
+    const A = v => /center/.test(v) ? 'center' : /(^|-)end$/.test(v) ? 'end' : /baseline/.test(v) ? 'baseline' : 'start';
+    const j = J(f.justify || ''); const pd = (n.pad || [0, 0, 0, 0]).map(v => r2(Math.max(0, v)));
+    return { v: 2, mode: row ? 'horizontal' : 'vertical', wrap: row && !!f.wrap, gap: r2(row ? f.gapC : f.gapR) || 0, gapAuto: j === 'auto', counterGap: r2(row ? f.gapR : f.gapC) || 0, counterGapAuto: false, pad: { t: pd[0], r: pd[1], b: pd[2], l: pd[3] }, main: j === 'auto' ? 'start' : j, cross: A(f.align || '') };
+  }
+  // Capture -> one frame. Flex containers and their items are boxes; with auto layout chosen they become stacks whose
+  // sizing (Hug, Fill, Fixed) is read from how the browser had laid them out. The original look is kept for Looks.
   async function importCapture(cap) {
     if (!cap || !Array.isArray(cap.nodes)) throw new Error('empty capture');
     const kit = env.getKit(); const W = Math.max(64, Math.round(cap.w || 1280)), H = Math.max(64, Math.round(cap.h || 800));
+    const AUTO = (env.layoutChoice ? env.layoutChoice() : 'auto') === 'auto';
     const assetBySrc = new Map(); let embedded = 0, missing = 0;
     for (const [src, data] of Object.entries(cap.images || {})) { if (typeof data === 'string' && /^data:image\//.test(data)) { try { const a = await env.addImage(data, 'web · ' + String(src).split('/').pop().split('?')[0].slice(0, 40)); assetBySrc.set(src, a); embedded++; } catch { } } }
     const uid = () => Math.random().toString(36).slice(2, 8);
-    const blocks = [];
+    const blocks = []; const frameIds = new Map(); const meta = new Map(); // block id -> {n}
+    const visuals = (b, n) => {
+      const g = parseGradient(n.grad);
+      if (g) b.gradient = g;
+      if (n.border && n.border.w > 0 && safeHex(n.border.c)) b.stroke = { color: safeHex(n.border.c), width: r2(n.border.w) };
+      if (n.shadow && safeHex(n.shadow.color)) b.shadow = { on: true, x: r2(n.shadow.x), y: r2(n.shadow.y), blur: r2(n.shadow.blur), color: safeHex(n.shadow.color), alpha: r2(n.shadow.alpha) };
+      return g;
+    };
     for (const n of cap.nodes) {
       const x = r2(n.x), y = r2(n.y), w = r2(Math.max(1, n.w)), h = r2(Math.max(1, n.h)); if (!(w > 0 && h > 0) || y > H || x > W) continue;
       const base = { id: uid(), x, y, w, h, label: String(n.name || n.t).slice(0, 60) };
+      const pid = n.p && !n.fixed ? frameIds.get(n.p) : null; if (pid) base.parent = pid;
       if (n.alpha != null && n.alpha < 0.999) base.opacity = r2(n.alpha);
-      if (n.t === 'box') {
-        const g = parseGradient(n.grad);
-        const b = { ...base, kind: 'field', fill: safeHex(n.bg) || (g ? g.stops[0].c : '#FFFFFF'), radius: r2(n.radius || 0), decorative: true };
+      let b = null;
+      if (n.t === 'frame') {
+        b = { ...base, kind: 'box', fill: safeHex(n.bg) || 'none', radius: r2(n.radius || 0), clip: !!n.clip, decorative: true };
+        const g = visuals(b, n); if (g) b.fill = g.stops[0].c; if (n.bg && n.bga != null && n.bga < 0.999) b.fillAlpha = r2(n.bga);
+        if (AUTO && n.flex) b.auto = autoFromCss(n);
+        frameIds.set(n.id, b.id);
+      } else if (n.t === 'box') {
+        b = { ...base, kind: 'field', fill: safeHex(n.bg) || '#FFFFFF', radius: r2(n.radius || 0), decorative: true };
+        const g = visuals(b, n);
         if (!n.bg && !g) { b.fill = '#FFFFFF'; b.alpha = 0; } else if (n.bga != null && n.bga < 0.999) b.alpha = r2(n.bga);
-        if (g) { b.gradient = g; delete b.alpha; }
-        if (n.border && n.border.w > 0 && safeHex(n.border.c)) b.stroke = { color: safeHex(n.border.c), width: r2(n.border.w) };
-        if (n.shadow && safeHex(n.shadow.color)) b.shadow = { on: true, x: r2(n.shadow.x), y: r2(n.shadow.y), blur: r2(n.shadow.blur), color: safeHex(n.shadow.color), alpha: r2(n.shadow.alpha) };
+        if (g) { b.fill = g.stops[0].c; delete b.alpha; }
         if (b.alpha === 0 && !b.stroke && !b.shadow) continue;
-        blocks.push(b);
       } else if (n.t === 'img') {
         const a = n.src && assetBySrc.get(n.src); if (!a) missing++;
-        blocks.push({ ...base, kind: 'image', asset: a ? a.id : null, focal: 'xMidYMid', fit: n.fit === 'contain' ? 'contain' : 'cover', radius: r2(n.radius || 0), decorative: false, path: 'image_' + uid(), placeholder: '#D6D6DC', src: typeof n.src === 'string' && /^https?:/.test(n.src) ? n.src.slice(0, 500) : undefined });
+        b = { ...base, kind: 'image', asset: a ? a.id : null, focal: 'xMidYMid', fit: n.fit === 'contain' ? 'contain' : 'cover', radius: r2(n.radius || 0), decorative: false, path: 'image_' + uid(), placeholder: '#D6D6DC', src: typeof n.src === 'string' && /^https?:/.test(n.src) ? n.src.slice(0, 500) : undefined };
       } else if (n.t === 'svg') {
-        blocks.push({ ...base, kind: 'vector', svg: String(n.svg || '').slice(0, 200000), viewBox: Array.isArray(n.viewBox) && n.viewBox.length === 4 ? n.viewBox.map(Number) : [0, 0, w, h], keepAspect: true, fill: safeHex(n.color) || '#000000', decorative: true });
+        b = { ...base, kind: 'vector', svg: String(n.svg || '').slice(0, 200000), viewBox: Array.isArray(n.viewBox) && n.viewBox.length === 4 ? n.viewBox.map(Number) : [0, 0, w, h], keepAspect: true, fill: safeHex(n.color) || '#000000', decorative: true };
       } else if (n.t === 'text') {
         const size = r2(Math.max(4, n.size || 16)); const fam = String(n.family || 'Inter').replace(/["'<>]/g, '');
         const lines = Math.max(1, Math.round(h / (size * (n.lh || 1.2))));
-        const b = { ...base, kind: 'text', role: size >= 32 ? 'headline' : 'text', path: 'text_' + uid(), text: String(n.text || '').slice(0, 4000), align: n.align || 'left', fill: safeHex(n.color) || '#000000', decorative: false,
+        b = { ...base, kind: 'text', role: size >= 32 ? 'headline' : 'text', path: 'text_' + uid(), text: String(n.text || '').slice(0, 4000), align: n.align || 'left', fill: safeHex(n.color) || '#000000', decorative: false,
           font: { family: Brand.FONTS[fam] || Brand.customFonts[fam] ? Brand.fontCss(fam) : `"${fam}", Inter, system-ui, sans-serif`, size, weight: n.weight || 400, lineHeight: r2(n.lh || 1.2), letterSpacing: r2(n.ls || 0) } };
         if (n.italic) b.font.style = 'italic'; if (n.transform) b.font.transform = n.transform; if (n.deco) b.decoration = n.deco;
-        // single lines get room for font substitution
-        if (lines === 1 && !/\n/.test(b.text)) { const extra = b.w * 0.12 + 4; if (b.align === 'center') b.x -= extra / 2; else if (b.align === 'right') b.x -= extra; b.w += extra; }
+        // single lines get room for font substitution, unless a stack will size them
+        if (lines === 1 && !/\n/.test(b.text) && !(AUTO && n.flow)) { const extra = b.w * 0.12 + 4; if (b.align === 'center') b.x -= extra / 2; else if (b.align === 'right') b.x -= extra; b.w += extra; }
         Canvas.refit(b);
-        blocks.push(b);
       }
+      if (b) { blocks.push(b); meta.set(b.id, n); }
     }
+    if (AUTO) stackUp(blocks, meta);
     const host = (() => { try { return new URL(cap.url).hostname.replace(/^www\./, ''); } catch { return 'web page'; } })();
     const layout = FigmaImport.toLayouts([{ name: host, x: 0, y: 0, w: W, h: H, bg: safeHex(cap.bg) || '#FFFFFF', clip: true, blocks }], kit)[0].layout;
     layout.archetype = 'web'; layout.archetypeLabel = 'Web page'; layout.meta = { source: 'web', url: String(cap.url || '').slice(0, 500), title: String(cap.title || '').slice(0, 200), look: 'original' };
+    const stacks = blocks.filter(b => b.auto).length;
     const [f] = env.placeFrames([{ name: `${host}${cap.title ? ' · ' + String(cap.title).slice(0, 40) : ''}`, x: 0, y: 0, layout, clip: true }]);
-    env.toast(`Captured ${host}: ${blocks.length} layers${embedded ? `, ${embedded} images` : ''}${missing ? `, ${missing} image placeholders` : ''}. Try Look → Wireframe or Rebrand.`);
+    env.toast(`Captured ${host}: ${blocks.length} layers${AUTO && stacks ? `, ${stacks} stacks` : ''}${embedded ? `, ${embedded} images` : ''}${missing ? `, ${missing} image placeholders` : ''}. Try Look → Wireframe or Rebrand.`);
     if (env.afterImport) await env.afterImport([f]);
     return f;
+  }
+  // Auto layout from the captured geometry: what was out of the flow becomes absolute, a box holding only its own text
+  // becomes a small stack (buttons, tags, links), and each side is Hug, Fill or Fixed depending on how it measured.
+  function stackUp(blocks, meta) {
+    const byId = new Map(blocks.map(b => [b.id, b])); const kids = new Map();
+    for (const b of blocks) if (b.parent) { if (!kids.has(b.parent)) kids.set(b.parent, []); kids.get(b.parent).push(b); }
+    const near = (a, b, t = 1.5) => Math.abs(a - b) <= t;
+    // text-only items become stacks around their text
+    for (const b of blocks) {
+      if (b.kind !== 'box' || b.auto) continue; const n = meta.get(b.id); const ks = (kids.get(b.id) || []);
+      const flowKids = ks.filter(k => meta.get(k.id).flow);
+      if (flowKids.length === 1 && flowKids[0].kind === 'text' && ks.every(k => k === flowKids[0] || !meta.get(k.id).flow)) {
+        const t = flowKids[0]; const pd = (n.pad || [0, 0, 0, 0]).map(v => r2(Math.max(0, v)));
+        const innerH = b.h - pd[0] - pd[2];
+        b.auto = { v: 2, mode: 'vertical', wrap: false, gap: 0, gapAuto: false, counterGap: 0, counterGapAuto: false, pad: { t: pd[0], r: pd[1], b: pd[2], l: pd[3] }, main: t.h < innerH - 2 ? (near(t.y - b.y - pd[0], (innerH - t.h) / 2, 3) ? 'center' : t.y - b.y - pd[0] > innerH - t.h - 3 ? 'end' : 'start') : 'start', cross: /center/.test(n.textAlign || '') ? 'center' : /right|end/.test(n.textAlign || '') ? 'end' : 'start' };
+        b._textStack = true;
+      }
+    }
+    const isStack = b => b && b.kind === 'box' && b.auto && b.auto.mode !== 'none';
+    for (const b of blocks) { const P = b.parent && byId.get(b.parent); if (isStack(P) && !meta.get(b.id).flow) b.absolute = true; }
+    // 1. order and spacing per stack, and whether each stack hugged its content in the browser
+    const list = blocks; const stacks = blocks.filter(isStack); const hug = new Map();
+    const flowOf = P => (kids.get(P.id) || []).filter(k => !k.absolute);
+    for (const P of stacks) {
+      const s = P.auto; const row = s.mode === 'horizontal'; const flow = flowOf(P);
+      if (!flow.length) continue;
+      const sorted = flow.slice().sort((a, b) => row ? (s.wrap ? (a.y - b.y) || (a.x - b.x) : a.x - b.x) : a.y - b.y);
+      const slots = flow.map(k => list.indexOf(k)).sort((a, b) => a - b); sorted.forEach((k, i) => { list[slots[i]] = k; });
+      if (!s.gap && !s.gapAuto && sorted.length > 1 && !s.wrap) { const gaps = []; for (let i = 1; i < sorted.length; i++) gaps.push(row ? sorted[i].x - (sorted[i - 1].x + sorted[i - 1].w) : sorted[i].y - (sorted[i - 1].y + sorted[i - 1].h)); gaps.sort((a, b) => a - b); const g = gaps[Math.floor(gaps.length / 2)]; if (g > 0) s.gap = r2(g); }
+      const g = s.gapAuto ? 0 : s.gap;
+      const ext = row ? { main: flow.reduce((t, k) => t + k.w, 0) + g * (flow.length - 1), cross: Math.max(...flow.map(k => k.h)) } : { main: flow.reduce((t, k) => t + k.h, 0) + g * (flow.length - 1), cross: Math.max(...flow.map(k => k.w)) };
+      hug.set(P.id, { w: !s.wrap && !s.gapAuto && near(P.w, (row ? ext.main : ext.cross) + s.pad.l + s.pad.r, 2), h: near(P.h, (row ? ext.cross : ext.main) + s.pad.t + s.pad.b, 2) });
+    }
+    // 2. sizing of every child in a flow: Fill where it grew or stretched, Hug where it fit its content, else Fixed
+    for (const P of stacks) {
+      const s = P.auto; const row = s.mode === 'horizontal'; const flow = flowOf(P); if (!flow.length) continue;
+      const innerW = P.w - s.pad.l - s.pad.r, innerH = P.h - s.pad.t - s.pad.b; const stretch = /stretch|normal/.test((meta.get(P.id).flex || {}).align || '');
+      for (const k of flow) {
+        const it = meta.get(k.id).it || {}; const own = hug.get(k.id) || {};
+        const huggyW = k.kind === 'text' || k._textStack || own.w, huggyH = k.kind === 'text' || k._textStack || own.h;
+        const crossFill = (stretch && (!it.self || /auto|stretch|normal/.test(it.self))) || it.self === 'stretch';
+        if (row) { k.sizeW = it.grow > 0 ? 'fill' : huggyW ? 'hug' : 'fixed'; k.sizeH = crossFill && near(k.h, innerH) && !k._textStack && !own.h ? 'fill' : huggyH ? 'hug' : 'fixed'; }
+        else { k.sizeH = it.grow > 0 ? 'fill' : huggyH ? 'hug' : 'fixed'; k.sizeW = crossFill && near(k.w, innerW) ? 'fill' : huggyW ? 'hug' : 'fixed'; }
+        if (k.kind === 'text' && k.sizeW === 'hug' && (k.lines || []).length > 1) k.sizeW = row ? 'fixed' : (near(k.w, innerW, 3) ? 'fill' : 'fixed');
+      }
+    }
+    // 3. stacks outside any flow hug where they did
+    for (const P of stacks) { const own = hug.get(P.id); if (!own) continue; if (!P.sizeW && own.w) P.sizeW = 'hug'; if (!P.sizeH && own.h) P.sizeH = 'hug'; }
+    for (const b of blocks) delete b._textStack;
   }
   return { init, capturePage, source, bookmarklet, renderSection, handlePaste, importCapture, parseGradient };
 })();
@@ -5680,7 +5834,7 @@ const CanvasUI = (() => {
     const bx = Math.min(...items.map(i => i.x)), by = Math.min(...items.map(i => i.y));
     const ox = doc.frames.length ? Math.min(...doc.frames.map(f => f.x)) : 0;
     const oy = doc.frames.length ? Math.max(...doc.frames.map(f => f.y + FH(f))) + 320 : 0;
-    const added = items.map(it => { const f = Canvas.addFrame(doc, it.layout, { x: Canvas.snap(ox + (it.x - bx), 8), y: Canvas.snap(oy + (it.y - by), 8), name: it.name }); f.clip = it.clip !== false; return f; });
+    const added = items.map(it => { const f = Canvas.addFrame(doc, it.layout, { x: Canvas.snap(ox + (it.x - bx), 8), y: Canvas.snap(oy + (it.y - by), 8), name: it.name, autoLayout: it.autoLayout || undefined }); f.clip = it.clip !== false; return f; });
     selectFrames(added.map(f => f.id)); if (active) { renderAll(); fitTo(added); } persist(); updateUndo();
     return added;
   }
@@ -5689,7 +5843,10 @@ const CanvasUI = (() => {
     const f = Canvas.frameById(doc, frameId); if (!f || !blocks.length) return [];
     hist.push(doc);
     const bb = Canvas.bounds(blocks); const dx = Math.round(Math.max(0, (FW(f) - bb.w) / 2) - bb.x), dy = Math.round(Math.max(0, (FH(f) - bb.h) / 2) - bb.y);
-    const ids = blocks.map(b => { const c = Canvas.clone(b); c.id = Canvas.uid(); c.x += dx; c.y += dy; if (c.kind === 'text' || c.kind === 'list') Canvas.refit(c); f.layout.blocks.push(c); return c.id; });
+    const copies = Canvas.clone(blocks); const inSet = new Set(copies.map(b => b.id)); const tops = copies.filter(b => !b.parent || !inSet.has(b.parent));
+    Auto.remap(copies, null);
+    for (const c of copies) { c.x += dx; c.y += dy; if (c.kind === 'text' || c.kind === 'list') Canvas.refit(c); f.layout.blocks.push(c); }
+    const ids = tops.map(c => c.id);
     select(f.id, ids); rerenderFrame(f); renderLayers(); persist(); updateUndo();
     return ids;
   }
@@ -7919,8 +8076,17 @@ Change the canvas with the tools; the person sees each change live and can undo 
     for (const f of frames) for (const b of f.layout.blocks) if (b.kind === 'text' || b.kind === 'list') Canvas.refit(b);
     return fams.size;
   }
+  // Imports keep auto layout (stacks reflow when text changes) or fixed positions (every layer stays where it was
+  // drawn). Remembered per person; paste uses the same choice.
+  const importLayout = () => LS.get('lg.importLayout', 'auto') === 'fixed' ? 'fixed' : 'auto';
+  function renderImportLayout() {
+    const v = importLayout();
+    document.querySelectorAll('#importLayout [data-il]').forEach(b => b.classList.toggle('on', b.dataset.il === v));
+    $('importLayoutHint').textContent = v === 'auto' ? 'Stacks from Figma, web pages and slides stay stacks: edit text and the rest moves along. Simple mode keeps them tidy for anyone.' : 'Every layer stays exactly where it was drawn, with no stacks. Easiest to drag around.';
+  }
+  $('importLayout').addEventListener('click', e => { const b = e.target.closest('[data-il]'); if (!b) return; LS.set('lg.importLayout', b.dataset.il); renderImportLayout(); });
   async function importFigmaData(data, how) {
-    const res = await FigmaImport.convert(data, { addImage: (url, name) => addImage(url, name) });
+    const res = await FigmaImport.convert(data, { addImage: (url, name) => addImage(url, name) }, { layout: importLayout() });
     const items = FigmaImport.toLayouts(res.frames, state.kit);
     if (!items.length) { toast('Nothing visible to import'); return; }
     const MAX = 80; const list = items.slice(0, MAX);
@@ -7931,7 +8097,7 @@ Change the canvas with the tools; the person sees each change live and can undo 
     if (state.mode !== 'canvas') setMode('canvas');
     updateCanvasBadge();
     const s = res.stats; const skipped = Object.entries(s.skipped).map(([k, v]) => `${v} ${k.toLowerCase()}`).join(', ');
-    toast(`${how}: ${list.length > 1 || !list[0].loose ? `${list.length} frame${list.length > 1 ? 's' : ''}` : 'layers'}, ${s.blocks} layers${s.images ? `, ${s.images} images` : ''}${s.missingImages ? `, ${s.missingImages} images not included` : ''}${items.length > MAX ? `, first ${MAX} frames only` : ''}${skipped ? ` · skipped ${skipped}` : ''}`);
+    toast(`${how} (${importLayout() === 'auto' ? 'auto layout' : 'fixed positions'}): ${list.length > 1 || !list[0].loose ? `${list.length} frame${list.length > 1 ? 's' : ''}` : 'layers'}, ${s.blocks} layers${s.images ? `, ${s.images} images` : ''}${s.missingImages ? `, ${s.missingImages} images not included` : ''}${items.length > MAX ? `, first ${MAX} frames only` : ''}${skipped ? ` · skipped ${skipped}` : ''}`);
     const frames = added.length ? added : CanvasUI.doc.frames.filter(f => sel.frameIds.includes(f.id));
     if (await ensureFonts(frames)) CanvasUI.mutate(() => { }, { history: false, frames: frames.map(f => f.id) });
   }
@@ -7963,11 +8129,11 @@ Change the canvas with the tools; the person sees each change live and can undo 
     return false;
   }
   WebImport.init({
-    getKit: () => state.kit, toast, addImage: (url, name) => addImage(url, name),
+    getKit: () => state.kit, toast, addImage: (url, name) => addImage(url, name), layoutChoice: importLayout,
     placeFrames: items => { const out = CanvasUI.placeFrames(items); if (state.mode !== 'canvas') setMode('canvas'); updateCanvasBadge(); $('importModal').hidden = true; return out; },
     afterImport: async frames => { if (await ensureFonts(frames)) CanvasUI.mutate(() => { }, { history: false, frames: frames.map(f => f.id) }); },
   });
-  function openImport() { $('importModal').hidden = false; if (typeof WebImport !== 'undefined') WebImport.renderSection($('captureSection')); }
+  function openImport() { $('importModal').hidden = false; renderImportLayout(); if (typeof WebImport !== 'undefined') WebImport.renderSection($('captureSection')); }
   $('cvImport').addEventListener('click', openImport);
   $('importClose').addEventListener('click', () => { $('importModal').hidden = true; });
   $('importModal').addEventListener('click', e => { if (e.target === $('importModal')) $('importModal').hidden = true; });

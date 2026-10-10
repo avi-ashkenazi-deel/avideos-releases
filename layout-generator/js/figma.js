@@ -191,8 +191,18 @@ const FigmaImport = (() => {
   // ---- conversion ----------------------------------------------------------------------------------------------------
   const CONTAINERS = new Set(['FRAME', 'GROUP', 'SYMBOL', 'INSTANCE', 'SECTION']);
   const VECTORS = new Set(['VECTOR', 'STAR', 'LINE', 'REGULAR_POLYGON', 'BOOLEAN_OPERATION']);
-  // message -> { frames: [{name, x, y, layout, clip}], loose: bool, imagesNeeded }
-  async function convert(data, env) {
+  // Figma auto layout -> our stack settings (null when the node does not stack its children).
+  const ALIGN = { MIN: 'start', CENTER: 'center', MAX: 'end' };
+  function autoOf(n) {
+    const mode = n.stackMode === 'HORIZONTAL' || n.stackMode === 'GRID' ? 'horizontal' : n.stackMode === 'VERTICAL' ? 'vertical' : null; if (!mode) return null;
+    const legacy = n.stackPadding || 0; const l = n.stackHorizontalPadding ?? legacy, t = n.stackVerticalPadding ?? legacy; const r = n.stackPaddingRight ?? l, b = n.stackPaddingBottom ?? t;
+    const just = n.stackPrimaryAlignItems || n.stackJustify || 'MIN'; const cross = n.stackCounterAlignItems || 'MIN';
+    return { v: 2, mode, wrap: n.stackWrap === 'WRAP' || n.stackMode === 'GRID', gap: r2(n.stackSpacing || 0), gapAuto: just === 'SPACE_BETWEEN' || just === 'SPACE_EVENLY', counterGap: r2(n.stackCounterSpacing ?? n.stackSpacing ?? 0), counterGapAuto: n.stackCounterAlignContent === 'SPACE_BETWEEN', pad: { t: r2(t), r: r2(r), b: r2(b), l: r2(l) }, main: ALIGN[just] || 'start', cross: cross === 'BASELINE' ? 'baseline' : ALIGN[cross] || 'start' };
+  }
+  // message -> { frames: [{name, x, y, layout, clip, autoLayout}], stats }. opts.layout: 'auto' keeps Figma's auto
+  // layout (stacks reflow here too); 'fixed' keeps every position as drawn. Frames inside frames are boxes either way.
+  async function convert(data, env, opts = {}) {
+    const AUTO = opts.layout !== 'fixed';
     const { message } = data; const blobs = message.blobs || [];
     const nodes = (message.nodeChanges || []).filter(n => n && n.guid && n.phase !== 'REMOVED');
     const byId = new Map(nodes.map(n => [idOf(n.guid), n]));
@@ -221,8 +231,23 @@ const FigmaImport = (() => {
     const skip = t => { stats.skipped[t] = (stats.skipped[t] || 0) + 1; };
 
     // Walk a subtree; m is the transform from this node's parent space into frame space.
-    async function walk(n, m, opacity, out, overrides, depth) {
+    // Sizing from Figma: text auto-resize, hugging stacks, and Fill / absolute for children of a stack.
+    function applySizing(n, b, parentNode) {
+      if (!AUTO) return;
+      if (n.type === 'TEXT') { const r = n.textAutoResize; if (r === 'WIDTH_AND_HEIGHT') { b.sizeW = 'hug'; b.sizeH = 'hug'; } else if (r === 'HEIGHT') b.sizeH = 'hug'; else b.sizeH = 'fixed'; }
+      if (b.kind === 'box' && b.auto) { const prim = n.stackPrimarySizing && n.stackPrimarySizing !== 'FIXED' ? 'hug' : 'fixed', cnt = n.stackCounterSizing && n.stackCounterSizing !== 'FIXED' ? 'hug' : 'fixed'; if (b.auto.mode === 'horizontal') { b.sizeW = prim; b.sizeH = cnt; } else { b.sizeH = prim; b.sizeW = cnt; } }
+      const ps = parentNode && autoOf(parentNode); if (!ps) return;
+      if (n.stackPositioning === 'ABSOLUTE') { b.absolute = true; return; }
+      const H = ps.mode === 'horizontal';
+      if ((n.stackChildPrimaryGrow || 0) > 0) { if (H) b.sizeW = 'fill'; else b.sizeH = 'fill'; }
+      if (n.stackChildAlignSelf === 'STRETCH') { if (H) b.sizeH = 'fill'; else b.sizeW = 'fill'; }
+      const mn = n.minSize && n.minSize.value, mx = n.maxSize && n.maxSize.value;
+      if (mn) { if (mn.x > 0) b.minW = r2(mn.x); if (mn.y > 0) b.minH = r2(mn.y); } if (mx) { if (mx.x > 0 && mx.x < 1e6) b.maxW = r2(mx.x); if (mx.y > 0 && mx.y < 1e6) b.maxH = r2(mx.y); }
+    }
+    let out = null;
+    async function walk(n, m, opacity, outList, overrides, depth, parentId, parentNode) {
       if (depth > 40 || n.visible === false || n.mask) return;
+      out = outList;
       const ov = overrides && overrides.get(idOf(n.guid)); if (ov) n = { ...n, ...ov };
       n = inheritFromMain(n);
       if (n.visible === false) return;
@@ -230,11 +255,16 @@ const FigmaImport = (() => {
       const w = n.size ? n.size.x : 0, h = n.size ? n.size.y : 0;
       const box = boxOf(M, w, h);
       const op = opacity * (n.opacity ?? 1);
-      const common = b => { if (box.rotation) b.rotation = box.rotation; if (op < 0.999) b.opacity = r2(op); const sh = shadowOf(n.effects); if (sh) b.shadow = sh; if (n.name) b.label = String(n.name).slice(0, 80); stats.blocks++; out.push(b); return b; };
+      // The first block a node makes takes its place in the parent's stack; any extra layers ride along absolutely.
+      let made = 0;
+      const common = b => { if (box.rotation) b.rotation = box.rotation; if (op < 0.999 && b.kind !== 'box') b.opacity = r2(op); else if (op < 0.999) b.opacity = r2(n.opacity ?? 1); const sh = shadowOf(n.effects); if (sh) b.shadow = sh; if (n.name) b.label = String(n.name).slice(0, 80); if (parentId) b.parent = parentId; if (made++ === 0) applySizing(n, b, parentNode); else if (parentNode && AUTO && autoOf(parentNode)) b.absolute = true; stats.blocks++; out.push(b); return b; };
       const t = n.type;
       if (t === 'TEXT') { textBlock(n, box, common); return; }
-      if (t === 'RECTANGLE' || t === 'ROUNDED_RECTANGLE' || (CONTAINERS.has(t) && t !== 'GROUP')) {
-        await fillBlocks(n, box, common, t === 'FRAME' || t === 'SYMBOL' || t === 'INSTANCE' || t === 'SECTION' ? 'container' : 'rect');
+      let boxId = null;
+      if (CONTAINERS.has(t)) {
+        boxId = await containerBox(n, box, common, t, op);
+      } else if (t === 'RECTANGLE' || t === 'ROUNDED_RECTANGLE') {
+        await fillBlocks(n, box, common, 'rect');
       } else if (t === 'ELLIPSE') {
         const p = mainPaint(n.fillPaints); const st = strokeOf(n);
         if (p && p.type === 'IMAGE') await imageBlock(n, box, common, p, Math.min(box.w, box.h) / 2);
@@ -242,26 +272,43 @@ const FigmaImport = (() => {
       } else if (VECTORS.has(t)) {
         vectorBlock(n, box, common, w, h);
         if (t === 'BOOLEAN_OPERATION') return; // operands are already inside its geometry
-      } else if (t === 'GROUP') { /* children only */ }
-      else if (t === 'INSTANCE' || t === 'SYMBOL') { /* handled above */ }
-      else { skip(t); }
+      } else { skip(t); }
+      const kidParent = boxId || parentId; const kidNode = boxId ? n : parentNode;
+      // inside a box, opacity lives on the box
+      const kidOp = boxId ? 1 : op;
       // children
       if (t === 'INSTANCE') {
         stats.instances++;
         const sym = n.symbolData && byId.get(idOf(n.symbolData.symbolID));
         const own = childrenOf(n);
-        if (own.length) { for (const c of own) await walk(c, M, op, out, overrides, depth + 1); }
+        if (own.length) { for (const c of own) await walk(c, M, kidOp, out, overrides, depth + 1, kidParent, kidNode); }
         else if (sym) {
           // expand the main component inside the instance box; overrides keyed by the last guid of their path
           const ovs = new Map(overrides || []);
           for (const o of (n.symbolData.symbolOverrides || [])) { const path = o.guidPath && o.guidPath.guids; if (!path || !path.length) continue; const { guidPath, ...fields } = o; ovs.set(idOf(path[path.length - 1]), fields); }
           const sw = sym.size ? sym.size.x : w, shh = sym.size ? sym.size.y : h;
           const scale = { m00: sw ? w / sw : 1, m01: 0, m02: 0, m10: 0, m11: shh ? h / shh : 1, m12: 0 };
-          for (const c of childrenOf(sym)) await walk(c, mul(M, scale), op, out, ovs, depth + 1);
+          for (const c of childrenOf(sym)) await walk(c, mul(M, scale), kidOp, out, ovs, depth + 1, kidParent, kidNode);
         }
         return;
       }
-      if (CONTAINERS.has(t)) for (const c of childrenOf(n)) await walk(c, M, op, out, overrides, depth + 1);
+      if (CONTAINERS.has(t)) for (const c of childrenOf(n)) await walk(c, M, kidOp, out, overrides, depth + 1, kidParent, kidNode);
+    }
+    // A frame, component, instance or group inside a screen becomes a box: its first solid or gradient paint is the
+    // box's fill, image paints become an image inside it, and (when kept) its auto layout drives its children.
+    async function containerBox(n, box, common, t, op) {
+      const paints = t === 'GROUP' ? [] : visiblePaints(n.fillPaints);
+      const radius = r2(n.cornerRadius || Math.max(n.rectangleTopLeftCornerRadius || 0, n.rectangleTopRightCornerRadius || 0, n.rectangleBottomLeftCornerRadius || 0, n.rectangleBottomRightCornerRadius || 0) || 0);
+      const b = { id: uid(), kind: 'box', x: box.x, y: box.y, w: Math.max(1, box.w), h: Math.max(1, box.h), fill: 'none', radius, clip: t !== 'GROUP' && !n.frameMaskDisabled, decorative: true };
+      const main = paints.filter(p => p.type === 'SOLID' || /^GRADIENT/.test(p.type));
+      if (main.length) { const p = main[main.length - 1]; if (p.type === 'SOLID') { b.fill = colorHex(p.color); const a = (p.color.a ?? 1) * (p.opacity ?? 1); if (a < 0.999) b.fillAlpha = r2(a); } else { const g = gradientOf(p, n.size ? n.size.x : 0, n.size ? n.size.y : 0); if (g) { b.gradient = g; b.fill = g.stops[0].c; } } }
+      const st = t === 'GROUP' ? null : strokeOf(n); if (st) b.stroke = st;
+      const auto = AUTO && t !== 'GROUP' ? autoOf(n) : null; if (auto) b.auto = auto;
+      if (op < 0.999) b.opacity = r2(op);
+      common(b);
+      // image fills sit inside the box, behind its content
+      for (const p of paints) if (p.type === 'IMAGE') { const asset = await imageAsset(p); if (asset) stats.images++; else stats.missingImages++; stats.blocks++; out.push({ id: uid(), kind: 'image', parent: b.id, absolute: auto ? true : undefined, x: box.x, y: box.y, w: box.w, h: box.h, asset: asset ? asset.id : null, focal: 'xMidYMid', fit: p.imageScaleMode === 'FIT' ? 'contain' : 'cover', radius, decorative: false, path: 'image_' + uid(), placeholder: '#D9D9DE' }); }
+      return b.id;
     }
     async function fillBlocks(n, box, common, role) {
       const paints = visiblePaints(n.fillPaints);
@@ -275,7 +322,7 @@ const FigmaImport = (() => {
         else { const g = gradientOf(p, n.size ? n.size.x : 0, n.size ? n.size.y : 0); if (!g) continue; b.gradient = g; b.fill = g.stops[0].c; }
         common(b);
       }
-      if (st && (role !== 'container' || paints.length || st)) { const b = { id: uid(), kind: 'field', x: box.x, y: box.y, w: box.w, h: box.h, radius, fill: 'none', alpha: 0, stroke: st, decorative: true }; common(b); }
+      if (st) { const last = out && out[out.length - 1]; if (paints.length && last && last.kind === 'field' && last.x === box.x && last.y === box.y && !last.stroke) last.stroke = st; else common({ id: uid(), kind: 'field', x: box.x, y: box.y, w: box.w, h: box.h, radius, fill: 'none', alpha: 0, stroke: st, decorative: true }); }
     }
     async function imageBlock(n, box, common, p, radius) {
       const asset = await imageAsset(p);
@@ -308,14 +355,15 @@ const FigmaImport = (() => {
       if (n.textDecoration === 'UNDERLINE') b.decoration = 'underline'; else if (n.textDecoration === 'STRIKETHROUGH') b.decoration = 'line-through';
       if (!b.font.transform) delete b.font.transform; if (!b.font.style) delete b.font.style;
       // Auto-width text never wraps in Figma; give it room for font substitution.
-      if (n.textAutoResize === 'WIDTH_AND_HEIGHT' && !/\n/.test(chars)) { const extra = b.w * 0.15; if (b.align === 'center') b.x -= extra / 2; else if (b.align === 'right') b.x -= extra; b.w += extra; }
+      if (n.textAutoResize === 'WIDTH_AND_HEIGHT' && !/\n/.test(chars) && !AUTO) { const extra = b.w * 0.15; if (b.align === 'center') b.x -= extra / 2; else if (b.align === 'right') b.x -= extra; b.w += extra; }
       if (/^(headline|title|heading|h1|h2|hero)/i.test(n.name || '') || size >= 40) b.role = 'headline';
       if (typeof Canvas !== 'undefined') Canvas.refit(b);
       common(b);
     }
     const uid = () => Math.random().toString(36).slice(2, 8);
     // An instance without its own paints shows its main component's.
-    const VISUAL = ['fillPaints', 'strokePaints', 'strokeWeight', 'cornerRadius', 'effects', 'rectangleTopLeftCornerRadius', 'rectangleTopRightCornerRadius', 'rectangleBottomLeftCornerRadius', 'rectangleBottomRightCornerRadius', 'opacity'];
+    const VISUAL = ['fillPaints', 'strokePaints', 'strokeWeight', 'cornerRadius', 'effects', 'rectangleTopLeftCornerRadius', 'rectangleTopRightCornerRadius', 'rectangleBottomLeftCornerRadius', 'rectangleBottomRightCornerRadius', 'opacity', 'frameMaskDisabled',
+      'stackMode', 'stackSpacing', 'stackPadding', 'stackHorizontalPadding', 'stackVerticalPadding', 'stackPaddingRight', 'stackPaddingBottom', 'stackPrimarySizing', 'stackCounterSizing', 'stackPrimaryAlignItems', 'stackCounterAlignItems', 'stackWrap', 'stackCounterSpacing', 'stackCounterAlignContent'];
     function inheritFromMain(n) {
       if (n.type !== 'INSTANCE' || !n.symbolData) return n;
       const sym = byId.get(idOf(n.symbolData.symbolID)); if (!sym) return n;
@@ -339,14 +387,15 @@ const FigmaImport = (() => {
       const paints = visiblePaints(n.fillPaints); const solid = paints.length === 1 && paints[0].type === 'SOLID' ? paints[0] : null;
       const grad = paints.length === 1 && /^GRADIENT/.test(paints[0].type) ? gradientOf(paints[0], W, H) : null;
       const bg = solid ? colorHex(solid.color) : grad ? grad.stops[0].c : '#FFFFFF';
-      if (!solid && !grad && paints.length) { const tmp = { ...n, transform: I, effects: null, strokePaints: null }; await fillBlocks(tmp, { x: 0, y: 0, w: W, h: H, rotation: 0 }, b => { stats.blocks++; blocks.push(b); return b; }, 'rect'); }
-      if (n.type === 'INSTANCE') await walk({ ...n, transform: I, fillPaints: [], effects: null, strokePaints: null, opacity: 1 }, I, 1, blocks, null, 0);
-      else for (const c of childrenOf(n)) await walk(c, I, 1, blocks, null, 1);
-      frames.push({ name: String(n.name || 'Figma frame').slice(0, 80), x: Math.round(T.m02), y: Math.round(T.m12), w: W, h: H, bg, bgGradient: grad, clip: !n.frameMaskDisabled, blocks, page: pageOf(n) });
+      const rootAuto = AUTO ? autoOf(n) : null;
+      if (!solid && !grad && paints.length) { const tmp = { ...n, transform: I, effects: null, strokePaints: null }; out = blocks; await fillBlocks(tmp, { x: 0, y: 0, w: W, h: H, rotation: 0 }, b => { if (rootAuto) b.absolute = true; stats.blocks++; blocks.push(b); return b; }, 'rect'); }
+      if (n.type === 'INSTANCE') { const sym = n.symbolData && byId.get(idOf(n.symbolData.symbolID)); const own = childrenOf(n); const src = own.length ? own : sym ? childrenOf(sym) : []; const sw = sym && sym.size ? sym.size.x : W, sh = sym && sym.size ? sym.size.y : H; const sc = own.length ? I : { m00: sw ? W / sw : 1, m01: 0, m02: 0, m10: 0, m11: sh ? H / sh : 1, m12: 0 }; const ovs = new Map(); if (!own.length) for (const o of (n.symbolData.symbolOverrides || [])) { const path = o.guidPath && o.guidPath.guids; if (!path || !path.length) continue; const { guidPath, ...fields } = o; ovs.set(idOf(path[path.length - 1]), fields); } for (const c of src) await walk(c, sc, 1, blocks, ovs, 1, null, n); }
+      else for (const c of childrenOf(n)) await walk(c, I, 1, blocks, null, 1, null, n);
+      frames.push({ name: String(n.name || 'Figma frame').slice(0, 80), x: Math.round(T.m02), y: Math.round(T.m12), w: W, h: H, bg, bgGradient: grad, clip: !n.frameMaskDisabled, blocks, page: pageOf(n), autoLayout: rootAuto });
     }
     if (loose.length) {
       const blocks = [];
-      for (const n of loose) await walk(n, I, 1, blocks, null, 1);
+      for (const n of loose) await walk(n, I, 1, blocks, null, 1, null, null);
       if (blocks.length) {
         const x0 = Math.min(...blocks.map(b => b.x)), y0 = Math.min(...blocks.map(b => b.y)), x1 = Math.max(...blocks.map(b => b.x + b.w)), y1 = Math.max(...blocks.map(b => b.y + b.h));
         for (const b of blocks) { b.x = r2(b.x - x0); b.y = r2(b.y - y0); }
@@ -367,7 +416,7 @@ const FigmaImport = (() => {
         palette: { bg: F.bg, fg: fg ? fg.fill : '#000000', accent: (F.blocks.find(b => b.kind === 'field' && b.fill && b.fill !== F.bg && b.fill !== 'none') || { fill: fg ? fg.fill : '#000000' }).fill, bgName: 'Figma', ...(F.bgGradient ? { bgGradient: F.bgGradient } : {}) },
         type: { level: 2, headline: 48, body: 16, display: kit.fonts.display, body_font: kit.fonts.body }, brand: kit.name, blocks: F.blocks, meta: { source: 'figma', page: F.page || '' }, metrics: { whitespace: 0, density: 0, balance: 0 },
       };
-      return { name: F.name, x: F.x, y: F.y, layout, clip: F.clip, loose: !!F.loose };
+      return { name: F.name, x: F.x, y: F.y, layout, clip: F.clip, loose: !!F.loose, autoLayout: F.autoLayout || null };
     });
   }
   return { readFile, readClipboardHTML, hasFigmaHTML, convert, toLayouts, _kiwi: { decodeSchema, compile, BB }, _pathOf: pathOf, readArchive };
