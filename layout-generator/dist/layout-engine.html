@@ -6045,7 +6045,7 @@ const Sync = (() => {
     return true;
   }
   async function serverAvailable() {
-    if (!/^https?:$/.test(location.protocol)) return false;
+    if (!/^https?:$/.test(location.protocol) || window.claude) return false; // file:// or inside claude.ai: no sync server there
     try { const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 1500); const r = await fetch('/api/ping', { cache: 'no-store', signal: ctl.signal }); clearTimeout(t); if (!r.ok) return false; const j = await r.json(); return !!(j && j.lg); } catch { return false; }
   }
   function roomFromUrl() { const m = /[?&#]room=([A-Za-z0-9_-]{4,64})/.exec(location.search + location.hash); return m ? m[1] : null; }

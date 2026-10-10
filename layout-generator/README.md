@@ -2,7 +2,7 @@
 
 Structured randomization for brand layouts. Give it a brief and your brand assets, get up to 360 on-grid variations you can scan, compare, favorite, and export.
 
-Prototype status: **visual generation only**. Editing, Figma export, and per-design-system connectors come next. The layout JSON is written so those can be added without changing the engine.
+Then work on the results like in Paper or Figma: an infinite canvas with frames, multi-screen edits, Figma import, captured web pages, live multiplayer, and a design agent (in the app and over MCP).
 
 ![Gallery](docs/gallery.png)
 
@@ -21,6 +21,17 @@ Single-file build for sharing (produces `dist/layout-engine.html` for publishing
 ```bash
 node build.mjs
 ```
+
+With the sync server (live multiplayer, shared images, and the MCP endpoint for agents). Node 18+, no dependencies:
+
+```bash
+cd layout-generator
+npm start                      # http://127.0.0.1:8787
+PORT=9000 npm start            # another port
+HOST=0.0.0.0 LG_TOKEN=secret npm start   # reachable by others; MCP clients then send the token
+```
+
+Rooms are saved to `server/data/` (git-ignored) and survive restarts.
 
 ## What it does
 
@@ -44,17 +55,70 @@ Switch the top-left toggle to **Deck**. The brief becomes an outline (one intent
 
 Pick layouts in Single mode (tick cards, or favorite them) or pick slides in Deck mode, then **Send to canvas**. The canvas is an infinite stage where every frame is one layout spec and editing the frame is editing that JSON.
 
-- **Tools.** Select (V), Hand (H), Frame (F), Text (T), Rectangle (R), Ellipse (O), Image (I). Space to pan, ⌘ wheel to zoom, 0 to fit. Drag to move, handles to resize, ⌥ drag to duplicate, marquee to multi-select, arrows to nudge (⇧ for one grid unit), [ and ] to reorder, ⌘Z / ⇧⌘Z undo and redo, ⌘D duplicate, ⌘L copy link.
+- **Tools.** Select (V), Hand (H), Frame (F), Text (T), Rectangle (R), Ellipse (O), Image (I). Space to pan, ⌘ wheel to zoom, 0 to fit, ⇧2 to zoom to the selection. Drag to move, handles to resize, ⌥ drag to duplicate, marquee to multi-select, arrows to nudge (⇧ for one grid unit), [ and ] to reorder, ⌘Z / ⇧⌘Z undo and redo, ⌘D duplicate, ⌘G / ⇧⌘G group and ungroup, ⌘A select all, Enter to edit text in place (or step into a group), ⇧R tidy, ⇧G grid overlay, ⌘L copy link.
+- **Many screens at once.** Select several frames (shift-click or marquee) and the panel changes all of them in one undo step: brand color pair or background, display and body fonts, find and replace, resize to another format, look (original, wireframe, rebrand), variations, tidy and align, duplicate, export. **✦ Ask agent** hands the selection to the agent.
 - **Layers.** Frames and their blocks, with search, visibility, and lock. Click to select, shift-click to add.
-- **Properties.** Position and size on the pixel grid, align and distribute, order, lock, decorative flag. Typography (font, size, weight, line height, tracking, alignment, case, fit size to box). Fill, radius, opacity. Image crop focus and replace. Icon picker. Frame: name, format, clip content, grid overlay, background.
+- **Properties.** Position and size on the pixel grid, align and distribute, order, lock, decorative flag. Typography (font, size, weight, line height, tracking, alignment, case, fit size to box). Fill (solid, linear or radial gradient), stroke, drop shadow, radius, opacity, rotation. Image crop focus and replace. Icon picker. Frame: name, format, size, clip content, grid overlay, solid or gradient background.
 - **Layout (flex).** Turn a frame's auto layout on as a vertical stack or horizontal row with gap, padding, align, justify, and stretch. Content blocks reflow in reading order; backgrounds stay. Drag a block to reorder it.
-- **Code.** Every frame and block shows its JSON. Edit and apply. Export copies a frame as HTML/CSS.
-- **Export.** Frame to PNG or SVG, all frames of one format to an editable PPTX, every frame to PNGs, or the whole canvas to one PNG.
+- **Code.** Every frame and block shows its JSON. Edit and apply. Export copies a frame as React (Tailwind) or HTML/CSS.
+- **Export.** Selected frames to PNG (1× or 2×), SVG, PDF (one page per frame), an editable PPTX, React or HTML; every frame to PNGs or one PDF; or the whole canvas to one PNG.
 - **Frames.** ＋ Frame adds a blank frame of the chosen format on a free spot in view (⇧N). The Frame tool (F) places one on click or draws one at any size on drag.
 - **Between frames.** Drag a block onto another frame to move it there (⌥ drag copies first). ⌘C, ⌘X and ⌘V copy, cut and paste blocks or a whole frame; the copy also lands on the system clipboard as JSON, so it pastes into another tab or session.
 - **Palette.** Every color field shows the brand palette as swatches; pick one or type any hex. The pencil opens the palette editor on the canvas panel, where colors can be renamed, re-roled, added or removed, and reset to the preset. Edits feed the generator too.
 - **Images.** An image block has a Generate section: a prompt drafted from the frame's copy and palette, sent to Google Gemini (Gemini 2.5 Flash Image, Imagen 4) or OpenAI (GPT Image 1, DALL·E 3) with a key from Settings. The provider layer in `js/imagegen.js` is where more models plug in. Like the Claude paths, it runs locally or from your own host, not in the published copy.
 - **Share.** Copy link puts the canvas (layout and copy, not images) into the URL hash. Save and Load move the whole canvas as JSON. The canvas also persists in the browser.
+
+## Import from Figma
+
+- **.fig files.** Load (or Import → Figma file) reads a `.fig` saved from Figma (File → Save local copy), including its images. Each top-level frame becomes a frame on the canvas, with editable text, rectangles, ellipses, vectors, images, gradients, strokes, shadows, groups and component instances.
+- **Paste.** Copy frames or layers in Figma (⌘C) and paste on the canvas (⌘V). Whole frames land as new frames; loose layers go into the selected frame.
+- Fidelity is close, not exact: auto layout becomes fixed positions, masks and blend modes are dropped, and fonts that are not loaded fall back to the kit fonts.
+
+## Design on top of a website
+
+A published page cannot fetch other sites, so the page is captured in your own browser instead. Import → **From a web page** gives two ways:
+
+1. Drag the **bookmarklet** to the bookmarks bar, open any page (logged-in pages work), scroll to the part you want, and click it. Or paste the **console snippet** into the page's DevTools console.
+2. The capture is copied to the clipboard. Paste it on the canvas (⌘V).
+
+The page arrives as editable layers: boxes, text, images and SVGs, with real sizes and colors. Three one-click **looks** in the properties panel (also for many screens at once):
+
+- **Original** as captured.
+- **Wireframe**: grey boxes, image placeholders, one typeface. Good for restructuring.
+- **Rebrand**: colors move onto the brand palette by usage (backgrounds, text, accents) and type onto the kit's display and body fonts.
+
+Looks are lossless: switching back to Original restores the capture.
+
+## Multiplayer
+
+Several people can edit one canvas at the same time, with live cursors, selections, names, and per-person undo (⌘Z undoes only your own changes).
+
+- **Published copy (claude.ai).** Everyone who opens the artifact shares one canvas. Changes are stored with the artifact and move live between open tabs. People shared as Contributor or Editor can edit; Viewers watch.
+- **Own server.** Run `npm start`, open the canvas, and click **Go live**. Copy the room link and send it; anyone who can reach the server joins. Images are uploaded once and shared by content hash.
+
+Edits merge per block and per frame (last write wins), so two people editing different blocks of the same frame never overwrite each other.
+
+## Agent
+
+**✦ Agent** (⌘K) opens a chat that works on what you have selected: "make these three darker", "write a hiring version of this", "wireframe all of them and make two variations of the first". It reads the selection, brand kit and screenshots, then edits through the same operations the editor uses. Each request is one undo step, and the steps it took are listed under the reply.
+
+- **In the published copy**, it runs on Claude through claude.ai (each viewer uses their own account and is asked once).
+- **Locally**, it calls the Claude API with the key from Settings.
+
+### Use the canvas from Claude Code, Cursor or other MCP clients
+
+The sync server exposes the canvas as an MCP server, the way Paper and Figma do. Tools run in the browser tab you have open, so you watch the changes happen.
+
+1. `npm start`, open http://127.0.0.1:8787 and click **Go live**.
+2. Open the agent panel; its footer shows the command with your room, for example:
+
+   ```bash
+   claude mcp add layout --transport http http://127.0.0.1:8787/mcp?room=<room>
+   ```
+
+3. Ask Claude Code things like "take the selected screen and make a LinkedIn version" or "build a React component from frame X".
+
+Tools (22): `get_selection`, `get_canvas`, `get_frame`, `get_brand`, `get_screenshot`, `get_code`, `select`, `update_blocks`, `add_blocks`, `delete_blocks`, `create_frame`, `update_frames`, `duplicate_frames`, `delete_frames`, `recolor_frames`, `make_variations`, `apply_look`, `replace_text`, `set_fonts`, `resize_frames`, `generate_image`, `write_layout`. Definitions live in `js/tool-defs.js`, shared by the in-app agent and the server.
 
 ## Copy that fits
 
@@ -126,6 +190,16 @@ js/icons.js         curated Phosphor icon set (MIT) and keyword picker
 js/deck.js          outline from brief (rules or Claude), per-slide variations, picks
 js/canvas.js        canvas document: frames, block ops, flex auto layout, links, HTML export, history
 js/canvas-ui.js     canvas editor: stage, selection, tools, layers, properties, code view, export
+js/copy.js          rule-based copywriter (brief -> content)
+js/imagegen.js      image model providers (Gemini, OpenAI)
+js/figma.js         .fig and Figma clipboard reader (kiwi schema, zstd/deflate)
+js/webimport.js     web page capture snippet and import
+js/looks.js         original / wireframe / rebrand looks
+js/sync.js          multiplayer: claude.ai room + db, or the WebSocket server
+js/tool-defs.js     agent tool definitions (shared with the server)
+js/agent-tools.js   agent tool implementations on the canvas
+js/agent.js         agent panel (claude.ai sample or Claude API)
+server/server.mjs   zero-dependency sync + asset + MCP server
 js/export-pptx.js   layout spec -> editable PowerPoint (pptxgenjs)
 js/prompt.js        brief parser + optional Claude interpreter
 js/app.js           UI state and wiring
@@ -139,7 +213,9 @@ docs/learnings.md   what Presenton and a 2,415-slide corpus taught us
 ## Known limits
 
 - In the published copy, exports go through the viewer's save prompt and PNGs use fallback fonts (font files cannot be fetched there). Run locally for exact type.
-- Canvas share links carry layout and copy only; images are referenced by id and need the same session's assets. A hosted link with assets is the next step.
-- The Claude interpreter calls Anthropic directly from the browser with your key. It is off by default and never used in published copies.
+- Canvas share links carry layout and copy only; images are referenced by id and need the same session's assets. Use Go live (or the published copy) to share with images.
+- The published copy cannot capture web pages or reach MCP clients by itself: capture runs in your browser through the snippet, and MCP needs the local server.
+- The local server has no accounts. On localhost that is fine; beyond it, set `LG_TOKEN` and put it behind HTTPS.
+- Locally, the brief interpreter and the agent call Anthropic directly from the browser with your key. In the published copy the agent uses claude.ai and the brief interpreter stays rule-based.
 - Hex values in the Deel preset were read from the guidelines PDF. Confirm against the Figma library before production use.
 - PPTX export references fonts by name; install the brand fonts to see exact type in PowerPoint. Image corner radii and gradient scrims are approximated (scrims and arcs become transparent image layers).
