@@ -396,3 +396,8 @@ body.canvas-mode .main { overflow: hidden; background-image: none; }
 .cv-stage.drop { outline: 2px dashed var(--accent); outline-offset: -8px; }
 .import-body ol { padding-left: 20px; display: grid; gap: 6px; }
 .import-body .cv-row { margin: 8px 0; }
+.cv-seg { display: grid; grid-template-columns: repeat(3, 1fr); background: var(--bg); border: 1px solid var(--line-2); border-radius: 6px; padding: 2px; gap: 2px; }
+.cv-seg button { border: 0; background: transparent; color: var(--fg-2); padding: 6px 4px; border-radius: 4px; font-size: 12.5px; cursor: pointer; }
+.cv-seg button:hover { color: var(--fg); background: var(--panel-2); }
+.cv-seg button.on { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
+.import-body .bm { cursor: grab; }

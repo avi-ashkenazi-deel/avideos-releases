@@ -230,7 +230,7 @@ const FigmaImport = (() => {
       const w = n.size ? n.size.x : 0, h = n.size ? n.size.y : 0;
       const box = boxOf(M, w, h);
       const op = opacity * (n.opacity ?? 1);
-      const common = b => { if (box.rotation) b.rotation = box.rotation; if (op < 0.999) b.opacity = r2(op); const sh = shadowOf(n.effects); if (sh) b.shadow = sh; if (n.name) b.name = String(n.name).slice(0, 80); stats.blocks++; out.push(b); return b; };
+      const common = b => { if (box.rotation) b.rotation = box.rotation; if (op < 0.999) b.opacity = r2(op); const sh = shadowOf(n.effects); if (sh) b.shadow = sh; if (n.name) b.label = String(n.name).slice(0, 80); stats.blocks++; out.push(b); return b; };
       const t = n.type;
       if (t === 'TEXT') { textBlock(n, box, common); return; }
       if (t === 'RECTANGLE' || t === 'ROUNDED_RECTANGLE' || (CONTAINERS.has(t) && t !== 'GROUP')) {

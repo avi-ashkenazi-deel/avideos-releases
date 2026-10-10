@@ -742,7 +742,7 @@
     }
     if (/\.json$/i.test(file.name) || file.type === 'application/json') {
       const text = await file.text(); let j; try { j = JSON.parse(text); } catch { return false; }
-      if (j && j.lgCapture && window.WebImport) { await WebImport.importCapture(j.lgCapture); return true; }
+      if (j && j.lgCapture && typeof WebImport !== 'undefined') { await WebImport.importCapture(j.lgCapture); return true; }
       if (j && Array.isArray(j.frames)) { CanvasUI.replaceDoc(Canvas.deserialize(j), { keepView: false }); CanvasUI.fit(); toast('Canvas loaded'); updateCanvasBadge(); return true; }
     }
     return false;
@@ -755,12 +755,17 @@
       FigmaImport.readClipboardHTML(html).then(d => importFigmaData(d, 'Pasted from Figma')).catch(err => { console.error(err); toast('Could not read the Figma paste: ' + err.message); });
       return true;
     }
-    if (window.WebImport && WebImport.handlePaste(e)) return true;
+    if (typeof WebImport !== 'undefined' && WebImport.handlePaste(e)) return true;
     const files = [...(dt.files || [])].filter(f => /^image\//.test(f.type));
     if (files.length) { e.preventDefault(); (async () => { for (const f of files) { const a = await addImage(await readAsDataURL(f), f.name || 'pasted image'); const sel = CanvasUI.selection(); if (sel.frameIds.length === 1) { const fr = Canvas.frameById(CanvasUI.doc, sel.frameIds[0]); const s = Math.min(1, fr.layout.format.w * 0.6 / a.w, fr.layout.format.h * 0.6 / a.h); CanvasUI.insertBlocks(fr.id, [{ id: 'x', kind: 'image', x: 0, y: 0, w: Math.round(a.w * s), h: Math.round(a.h * s), asset: a.id, focal: 'xMidYMid', radius: 0, decorative: false, path: 'image_pasted' }]); } else { CanvasUI.placeFrames([{ name: f.name || 'Pasted image', x: 0, y: 0, clip: true, layout: FigmaImport.toLayouts([{ name: 'Pasted image', x: 0, y: 0, w: a.w, h: a.h, bg: '#FFFFFF', clip: true, blocks: [{ id: 'img', kind: 'image', x: 0, y: 0, w: a.w, h: a.h, asset: a.id, focal: 'xMidYMid', radius: 0, decorative: false, path: 'image_1' }] }], state.kit)[0].layout }]); } } })(); return true; }
     return false;
   }
-  function openImport() { $('importModal').hidden = false; if (window.WebImport) WebImport.renderSection($('captureSection')); }
+  WebImport.init({
+    getKit: () => state.kit, toast, addImage: (url, name) => addImage(url, name),
+    placeFrames: items => { const out = CanvasUI.placeFrames(items); if (state.mode !== 'canvas') setMode('canvas'); updateCanvasBadge(); $('importModal').hidden = true; return out; },
+    afterImport: async frames => { if (await ensureFonts(frames)) CanvasUI.mutate(() => { }, { history: false, frames: frames.map(f => f.id) }); },
+  });
+  function openImport() { $('importModal').hidden = false; if (typeof WebImport !== 'undefined') WebImport.renderSection($('captureSection')); }
   $('cvImport').addEventListener('click', openImport);
   $('importClose').addEventListener('click', () => { $('importModal').hidden = true; });
   $('importModal').addEventListener('click', e => { if (e.target === $('importModal')) $('importModal').hidden = true; });

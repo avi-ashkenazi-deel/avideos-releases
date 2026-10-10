@@ -724,7 +724,7 @@ const CanvasUI = (() => {
   }
 
   // ---- Layers panel ----------------------------------------------------------------------------------------------
-  function label(b) { if (b.name) return b.name; if (b.kind === 'text') return `${b.role || 'text'} · ${Canvas.sourceText(b).slice(0, 28)}`; if (b.kind === 'list') return `${b.role || 'list'} · ${(b.items || []).length} items`; if (b.kind === 'button') return `button · ${b.text}`; if (b.kind === 'image') return 'image'; if (b.kind === 'field') return b.container ? 'card' : 'rectangle'; if (b.kind === 'shape') return b.shape; if (b.kind === 'icon') return `icon · ${b.name}`; if (b.kind === 'vector') return 'vector'; return b.kind; }
+  function label(b) { if (b.label) return b.label; if (b.kind === 'text') return `${b.role || 'text'} · ${Canvas.sourceText(b).slice(0, 28)}`; if (b.kind === 'list') return `${b.role || 'list'} · ${(b.items || []).length} items`; if (b.kind === 'button') return `button · ${b.text}`; if (b.kind === 'image') return 'image'; if (b.kind === 'field') return b.container ? 'card' : 'rectangle'; if (b.kind === 'shape') return b.shape; if (b.kind === 'icon') return `icon · ${b.name}`; if (b.kind === 'vector') return 'vector'; return b.kind; }
   const KIND_GLYPH = { text: 'T', list: '≡', button: '▭', image: '▣', field: '■', shape: '●', icon: '✦', logo: 'L', scrim: '▒', rule: '—', line: '—', badge: '①', vector: '✎' };
   function renderLayers() {
     if (!active) return;
@@ -804,6 +804,10 @@ const CanvasUI = (() => {
   function exportSection(n) {
     return `<div class="cv-section"><h3>Export${n > 1 ? ` ${n} screens` : ''}</h3><div class="cv-row wrap">${btn('exp-png', 'PNG')}${btn('exp-png2', 'PNG 2×')}${btn('exp-svg', 'SVG')}${btn('exp-pdf', 'PDF')}${btn('exp-pptx', 'PPTX')}</div>${n === 1 ? `<div class="cv-row wrap">${btn('exp-react', 'Copy React + Tailwind')}${btn('exp-html', 'Copy HTML')}</div>` : ''}</div>`;
   }
+  function lookSection(frames) {
+    const cur = frames.length === 1 ? ((frames[0].layout.meta || {}).look || 'original') : null;
+    return `<div class="cv-section"><h3>Look</h3><div class="cv-seg">${Looks.LOOKS.map(([k, l]) => `<button type="button" class="${cur === k ? 'on' : ''}" data-act="look-${k}">${l}</button>`).join('')}</div><p class="hint">Wireframe strips to grey boxes and one typeface; Rebrand moves colors and type onto the brand kit. Both rebuild from the original, so switching back is safe; edits made inside a look are replaced when you switch.</p></div>`;
+  }
   function variationsSection() {
     return `<div class="cv-section"><h3>Variations</h3><div class="cv-row wrap"><select data-var="count" class="cv-mini" aria-label="How many">${[2, 3, 4, 6].map(n => `<option value="${n}" ${n === 3 ? 'selected' : ''}>${n}</option>`).join('')}</select><select data-var="mode" class="cv-mini" aria-label="Kind">${[['similar', 'Similar layout'], ['explore', 'Explore layouts'], ['palette', 'Palette swaps']].map(o => `<option value="${o[0]}">${o[1]}</option>`).join('')}</select>${btn('variations', 'Make')}</div><p class="hint">New screens land below, with the same copy. Imported and hand-built frames get palette swaps.</p></div>`;
   }
@@ -817,6 +821,7 @@ const CanvasUI = (() => {
       <div class="cv-section"><h3>Type</h3>${selectF('batch-display', 'Display', kit.fonts.display, fonts.map(n => [n, n]))}${selectF('batch-body', 'Body', kit.fonts.body, fonts.map(n => [n, n]))}<div class="cv-row">${btn('batch-fonts', 'Apply fonts')}</div></div>
       <div class="cv-section"><h3>Find and replace</h3><label class="cv-f"><span>Find</span><input type="text" data-fr="find" placeholder="payroll"></label><label class="cv-f"><span>Replace</span><input type="text" data-fr="repl" placeholder="Akai"></label><div class="cv-row">${btn('replace', 'Replace in all')}</div></div>
       <div class="cv-section"><h3>Resize</h3>${selectF('batch-format', 'Format', '', [['', 'Pick a format…']].concat(Grid.FORMATS.map(x => [x.id, `${x.name} ${x.w}×${x.h}`])))}<div class="cv-row">${btn('batch-resize', 'Resize screens')}</div><p class="hint">Generated layouts are laid out again for the new size; other frames scale.</p></div>
+      ${lookSection(frames)}
       ${variationsSection()}
       ${exportSection(frames.length)}`;
   }
@@ -837,6 +842,7 @@ const CanvasUI = (() => {
       <div class="cv-row wrap">${btn('copy', 'Copy')}${btn('paste', 'Paste', clipboard ? '' : 'disabled')}${btn('dup', 'Duplicate')}${btn('del', 'Delete')}${env.openAgent ? btn('agent', '✦ Ask agent') : ''}</div>
     </div>
     ${frameFill(L)}
+    ${lookSection([f])}
     <div class="cv-section"><h3>Palette</h3>${pairChips()}</div>
     <div class="cv-section"><h3>Layout</h3>
       ${selectF('al.mode', 'Flex', al.mode, [['none', 'Off (free)'], ['vertical', 'Vertical stack'], ['horizontal', 'Horizontal row']])}
@@ -886,7 +892,7 @@ const CanvasUI = (() => {
     const fontNames = Brand.allFontNames();
     const famName = isText && b.font ? String(b.font.family).split(',')[0].replace(/["']/g, '').trim() : '';
     return `<div class="cv-section"><h3>${esc(b.role || b.kind)}${b.group ? ' <span class="cv-token">in group</span>' : ''}</h3>
-      <label class="cv-f"><span>Name</span><input type="text" data-p="name" value="${esc(b.name || '')}" placeholder="${esc(label({ ...b, name: '' }))}"></label>
+      <label class="cv-f"><span>Name</span><input type="text" data-p="label" value="${esc(b.label || '')}" placeholder="${esc(label({ ...b, label: '' }))}"></label>
       <div class="cv-grid2">${num('x', 'X', b.x, 8)}${num('y', 'Y', b.y, 8)}${num('w', 'W', b.w, 8)}${num('h', 'H', b.h, 8)}</div>
       ${alignBar()}
       <div class="cv-row wrap">${btn('back', '↓ Back', 'title="Send backward ([)"')}${btn('front', '↑ Front', 'title="Bring forward (])"')}${btn('copy', 'Copy', 'title="Copy (⌘C)"')}${btn('paste', 'Paste', `title="Paste (⌘V)" ${clipboard ? '' : 'disabled'}`)}${btn('dup', 'Duplicate', 'title="Duplicate (⌘D)"')}${btn('del', 'Delete', 'title="Delete (⌫)"')}${b.group ? btn('ungroup', 'Ungroup') : ''}</div>
@@ -926,7 +932,7 @@ const CanvasUI = (() => {
   function setBlockProp(b, k, v) {
     if (k === 'text') { b.text = v; Canvas.refit(b); }
     else if (k === 'items') { b.items = String(v).split('\n').map(x => x.trim()).filter(Boolean); Canvas.refit(b); }
-    else if (k === 'name') { if (v) b.name = String(v).slice(0, 80); else delete b.name; }
+    else if (k === 'label') { if (v) b.label = String(v).slice(0, 80); else delete b.label; }
     else if (k === 'font.familyName') { b.font.family = Brand.fontCss(v); const ws = Brand.fontWeights(v); if (!ws.includes(b.font.weight)) b.font.weight = ws.reduce((p, c) => Math.abs(c - b.font.weight) < Math.abs(p - b.font.weight) ? c : p, ws[0]); Canvas.refit(b); }
     else if (k.startsWith('font.')) { const kk = k.slice(5); b.font[kk] = (kk === 'transform' || kk === 'style') ? v : +v; Canvas.refit(b); }
     else if (k === 'x' || k === 'y') b[k] = +v;
@@ -1034,7 +1040,7 @@ const CanvasUI = (() => {
       const t = e.target;
       if (t.dataset.gen) { const b = selBlocks()[0]; if (b) { b.genPrompt = t.value; persist(); } return; }
       if (t.dataset.pal || t.dataset.fr || t.dataset.var) return;
-      if (t.type === 'color' || t.type === 'range' || (t.tagName === 'TEXTAREA' && t.dataset.p) || (t.type === 'text' && (t.dataset.p === 'text' || t.dataset.f === 'name' || t.dataset.p === 'name'))) {
+      if (t.type === 'color' || t.type === 'range' || (t.tagName === 'TEXTAREA' && t.dataset.p) || (t.type === 'text' && (t.dataset.p === 'text' || t.dataset.f === 'name' || t.dataset.p === 'label'))) {
         if (liveField !== t) { hist.push(doc); liveField = t; updateUndo(); }
         if (t.type === 'color') { const hex = t.parentElement.querySelector('.hex'); if (hex) hex.value = t.value; }
         apply(e, true);
@@ -1061,6 +1067,7 @@ const CanvasUI = (() => {
       if (a === 'agent') { env.openAgent && env.openAgent(selection()); return; }
       if (a.startsWith('exp-')) { act.disabled = true; try { await exportAction(a.slice(4)); } catch (err) { console.error(err); env.toast('Export failed: ' + err.message); } finally { act.disabled = false; } return; }
       if (a === 'variations') { const n = +el.querySelector('[data-var="count"]').value; const mode = el.querySelector('[data-var="mode"]').value; act.disabled = true; act.textContent = '…'; try { await makeVariations(fs, n, mode); } finally { act.disabled = false; act.textContent = 'Make'; } return; }
+      if (a.startsWith('look-')) { const look = a.slice(5); const n = mutate(() => fs.filter(x => Looks.apply(x, look, env.getKit())).length, { frames: fs.map(x => x.id) }); renderProps(); env.toast(n ? `${n > 1 ? n + ' screens' : 'Screen'}: ${look}` : `Already ${look}`); return; }
       if (a === 'tidy-row' || a === 'tidy-grid') { mutate(() => Canvas.tidy(fs, a === 'tidy-row' ? 'row' : 'grid')); return; }
       if (a === 'align-tops') { const y = Math.min(...fs.map(x => x.y)); mutate(() => fs.forEach(x => { x.y = y; })); return; }
       if (a === 'align-lefts') { const x = Math.min(...fs.map(v => v.x)); mutate(() => fs.forEach(v => { v.x = x; })); return; }
