@@ -21,3 +21,6 @@ VoiceInbox.xcodeproj/
 # Secrets — never commit real OAuth credentials.
 Secrets.xcconfig
 GoogleService-Info.plist
+
+# Layout Engine server data (rooms, shared images)
+layout-generator/server/data/

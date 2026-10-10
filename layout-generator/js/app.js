@@ -165,10 +165,10 @@
     for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
     return new Blob([bytes], { type: mime });
   }
-  async function addImage(dataUrl, name, placeholder = false) {
+  async function addImage(dataUrl, name, placeholder = false, forcedId = null) {
     const im = await loadImage(dataUrl);
     const blob = dataUrlToBlob(dataUrl);
-    const asset = { id: 'img' + (imgSeq++), name, url: URL.createObjectURL(blob), dataUrl, w: im.naturalWidth, h: im.naturalHeight, lum: Color.luminanceMap(im), placeholder, palette: Color.extractPalette(im) };
+    const asset = { id: forcedId || 'img' + (imgSeq++), name, url: URL.createObjectURL(blob), dataUrl, w: im.naturalWidth, h: im.naturalHeight, lum: Color.luminanceMap(im), placeholder, palette: Color.extractPalette(im) };
     state.assets.images.push(asset); renderImages();
     return asset;
   }
@@ -781,6 +781,13 @@
   $('toCanvasBtn').addEventListener('click', () => { const ids = state.picks.size ? state.picks : state.favs; sendToCanvas(state.layouts.filter(l => ids.has(l.id))); });
   $('deckCanvasBtn').addEventListener('click', () => { if (state.deck) sendToCanvas(Deck.picks(state.deck)); });
   $('detailCanvas').addEventListener('click', () => { if (state.detail) { const l = state.detail; $('detail').hidden = true; sendToCanvas([l]); } });
+  // An image another person shared: by data URL when it could be read, else by its URL only (shows, but exports skip it).
+  async function addAssetWithId(id, dataUrl, url, name) {
+    if (state.assets.images.some(a => a.id === id)) return;
+    if (dataUrl) { await addImage(dataUrl, name, false, id); return; }
+    const im = await loadImage(url);
+    state.assets.images.push({ id, name, url, dataUrl: url, w: im.naturalWidth, h: im.naturalHeight, lum: null, placeholder: false, palette: [] }); renderImages();
+  }
   CanvasUI.init({
     getKit: () => state.kit, getAssets: () => state.assets, toast,
     addImage: async file => addImage(await readAsDataURL(file), file.name),
@@ -798,8 +805,46 @@
     variations: async opts => makeVariations(opts),
     relayout: (frame, fmt) => relayout(frame, fmt),
     exportSVG: layout => Render.exportSVG(layout, { kit: state.kit, assets: state.assets }),
+    shareLink: async () => { const link = Sync.roomLink(); if (!link) return false; try { await navigator.clipboard.writeText(link); } catch { } toast('Room link copied: anyone with it edits this canvas with you'); return true; },
     buildPptx: layouts => ExportPptx.buildDeck(layouts, { kit: state.kit, assets: state.assets }),
   });
+  // ---- Multiplayer ------------------------------------------------------------------------------------------------
+  Sync.init(CanvasUI, {
+    getAssets: () => state.assets, dataUrlToBlob, addAssetWithId,
+    toolList: () => (typeof AgentTools !== 'undefined' ? AgentTools.defs() : []),
+    onRpc: (name, args) => (typeof AgentTools !== 'undefined' ? AgentTools.call(name, args, { via: 'mcp' }) : Promise.reject(new Error('Agent tools are not loaded'))),
+  });
+  const initials = n => String(n || '?').trim().split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase() || '?';
+  function renderPeers(st, peers) {
+    const el = $('cvPeers'); const me = Sync.me;
+    const live = st.mode !== 'local';
+    el.hidden = !live;
+    if (live) el.innerHTML = `<span class="cv-live ${st.connected ? 'on' : ''}" title="${escapeHtml(st.label)}${st.readOnly ? ' · view only' : ''}">${st.connected ? 'Live' : 'Connecting…'}${st.readOnly ? ' · view only' : ''}</span>`
+      + peers.slice(0, 8).map(p => `<button type="button" class="cv-av" data-peer="${escapeHtml(p.id)}" title="${escapeHtml(p.name || 'Someone')}${p.cursor ? ' · click to go to their cursor' : ''}" style="background:${Render.col(p.color, '#7C5CFF')}">${escapeHtml(initials(p.name || 'Someone'))}</button>`).join('')
+      + (peers.length > 8 ? `<span class="cv-av more">+${peers.length - 8}</span>` : '')
+      + (st.mode === 'server' ? `<button type="button" class="cv-av me" data-me title="You: ${escapeHtml(me.name || 'set your name')}. Click to rename." style="background:${me.color}">${escapeHtml(initials(me.name || 'You'))}</button>` : '');
+    const btn = $('cvLive'); btn.hidden = !serverHere; btn.textContent = st.mode === 'server' ? 'Copy room link' : 'Go live';
+  }
+  let serverHere = false;
+  Sync.onStatus(renderPeers);
+  $('cvPeers').addEventListener('click', e => {
+    const p = e.target.closest('[data-peer]'); if (p) { const peer = Sync.peers.find(x => x.id === p.dataset.peer); if (peer && peer.cursor) CanvasUI.centerOn(peer.cursor.x, peer.cursor.y); else toast('Their cursor is not on the canvas right now'); return; }
+    if (e.target.closest('[data-me]')) { const n = prompt('Your name, as others in this room see it', Sync.me.name || ''); if (n != null) Sync.setName(n); }
+  });
+  $('cvLive').addEventListener('click', async () => {
+    if (Sync.status.mode === 'server') { const link = Sync.roomLink(); try { await navigator.clipboard.writeText(link); } catch { } toast('Room link copied'); return; }
+    if (!Sync.me.name) { const n = prompt('Your name, as others in this room see it', ''); if (n) Sync.setName(n); }
+    const id = Sync.joinServer(Sync.newRoomId());
+    try { await navigator.clipboard.writeText(Sync.roomLink()); } catch { }
+    toast(`Live room ${id} started; link copied. Anyone with it edits this canvas with you.`);
+  });
+  (async () => {
+    if (await Sync.startArtifact()) return;
+    serverHere = await Sync.serverAvailable();
+    if (serverHere) { const room = Sync.roomFromUrl(); if (room) { if (!Sync.me.name) Sync.setName('Guest ' + Sync.me.id.slice(-3).toUpperCase()); Sync.joinServer(room); if (state.mode !== 'canvas') setMode('canvas'); } }
+    renderPeers(Sync.status, Sync.peers);
+  })();
+
   $('cvFrameFormat').innerHTML = Grid.FORMATS.map(f => `<option value="${f.id}" ${f.id === 'slide' ? 'selected' : ''}>${f.name}</option>`).join('');
 
   // ---- Init --------------------------------------------------------------------------------------

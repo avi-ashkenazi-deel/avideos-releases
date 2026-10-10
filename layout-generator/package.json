@@ -1,0 +1,11 @@
+{
+  "name": "layout-engine",
+  "private": true,
+  "type": "module",
+  "description": "Structured-randomization layout generator with a multiplayer canvas, Figma and web import, and an MCP endpoint for agents.",
+  "scripts": {
+    "start": "node server/server.mjs",
+    "build": "node build.mjs"
+  },
+  "engines": { "node": ">=18" }
+}

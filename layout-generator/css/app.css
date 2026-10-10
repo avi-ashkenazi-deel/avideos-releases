@@ -401,3 +401,14 @@ body.canvas-mode .main { overflow: hidden; background-image: none; }
 .cv-seg button:hover { color: var(--fg); background: var(--panel-2); }
 .cv-seg button.on { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
 .import-body .bm { cursor: grab; }
+/* ---- Multiplayer ---- */
+.cv-peers { display: flex; align-items: center; gap: 4px; }
+.cv-live { font-size: 11.5px; font-weight: 600; color: var(--fg-3); padding: 3px 8px; border-radius: 10px; border: 1px solid var(--line-2); margin-right: 4px; }
+.cv-live.on { color: #16B88A; border-color: rgba(22,184,138,.45); }
+.cv-live.on::before { content: ''; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #16B88A; margin-right: 6px; vertical-align: 1px; }
+.cv-av { width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--panel); color: #fff; font: 700 10.5px/1 var(--font-ui, system-ui); display: grid; place-items: center; cursor: pointer; margin-left: -6px; padding: 0; transition: transform .08s; }
+.cv-av:first-of-type { margin-left: 0; }
+.cv-av:hover { transform: translateY(-1px) scale(1.06); z-index: 1; }
+.cv-av.me { outline: 1.5px solid var(--fg-3); outline-offset: 1px; margin-left: 6px; }
+.cv-av.more { background: var(--line-2); cursor: default; }
+

@@ -205,6 +205,8 @@
         <div class="cv-right">
           <button id="cvUndo" class="btn small" type="button" title="Undo (⌘Z)" disabled>Undo</button>
           <button id="cvRedo" class="btn small" type="button" title="Redo (⇧⌘Z)" disabled>Redo</button>
+          <div id="cvPeers" class="cv-peers" hidden></div>
+          <button id="cvLive" class="btn small" type="button" hidden data-tip="Start a shared room on this server">Go live</button>
           <button id="cvLink" class="btn small" type="button" title="Copy a link that carries this canvas (⌘L)">Copy link</button>
           <button id="cvSave" class="btn small" type="button">Save JSON</button>
           <button id="cvImport" class="btn small" type="button" data-tip="Figma, web pages, canvas files">Import</button>
@@ -376,6 +378,7 @@
 <script src="js/webimport.js"></script>
 <script src="js/canvas.js"></script>
 <script src="js/canvas-ui.js"></script>
+<script src="js/sync.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>
