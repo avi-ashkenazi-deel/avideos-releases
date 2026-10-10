@@ -64,7 +64,7 @@ const Canvas = (() => {
     if (kind === 'text') return refit({ id: uid(), kind: 'text', role: 'text', path: 'text_' + uid(), text: 'New text', x, y, w: Math.min(L.format.w - x - L.grid.mx, 12 * u * 4), h: head, font: { family: Brand.fontCss(kit.fonts.display), weight: kit.fonts.displayWeight || 600, size: head, lineHeight: 1.1, letterSpacing: kit.fonts.tracking ?? -0.02 }, fill: pal.fg, align: 'left', decorative: false });
     if (kind === 'body') return refit({ id: uid(), kind: 'text', role: 'body', path: 'body_' + uid(), text: 'Body copy goes here. Edit it in the properties panel.', x, y, w: Math.min(L.format.w - x - L.grid.mx, 12 * u * 4), h: body * 3, font: { family: Brand.fontCss(kit.fonts.body), weight: kit.fonts.bodyWeight || 400, size: body, lineHeight: 1.4, letterSpacing: 0 }, fill: pal.fg, align: 'left', decorative: false });
     if (kind === 'rect') return { id: uid(), kind: 'field', x, y, w: 24 * u, h: 16 * u, fill: pal.accent, radius: 0, decorative: true };
-    if (kind === 'ellipse') return { id: uid(), kind: 'shape', shape: 'circle', x, y, w: 20 * u, h: 20 * u, fill: pal.accent, decorative: true };
+    if (kind === 'ellipse') return { id: uid(), kind: 'shape', shape: 'ellipse', x, y, w: 20 * u, h: 20 * u, fill: pal.accent, decorative: true };
     if (kind === 'button') return { id: uid(), kind: 'button', role: 'cta', path: 'cta_' + uid(), text: 'Learn more', x, y, w: Math.round(body * 9), h: Math.round(body * 2.7), font: { family: Brand.fontCss(kit.fonts.body), weight: 600, size: body, lineHeight: 1.2 }, fill: pal.accent, color: Color.contrast(pal.accent, '#FFFFFF') >= Color.contrast(pal.accent, '#000000') ? '#FFFFFF' : '#000000', radius: Math.round(body * 1.35), decorative: false };
     if (kind === 'image') return { id: uid(), kind: 'image', x, y, w: 40 * u, h: 30 * u, asset: null, focal: 'xMidYMid', radius: 0, decorative: false, path: 'image_' + uid() };
     if (kind === 'icon') return { id: uid(), kind: 'icon', name: 'sparkle', x, y, w: 8 * u, h: 8 * u, fill: pal.accent, decorative: true };
@@ -188,27 +188,203 @@ const Canvas = (() => {
   function b64url(bytes) { let bin = ''; for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000)); return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
   function unb64url(s) { const bin = atob(s.replace(/-/g, '+').replace(/_/g, '/')); const out = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i); return out; }
 
-  // HTML/CSS for one frame: what "copy as code" means here. Absolute positions on a fixed-size frame.
-  function toHTML(frame, env) {
-    const L = frame.layout; const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
-    const px = v => `${Math.round(v)}px`;
-    const parts = [`<div class="frame" style="position:relative;width:${px(L.format.w)};height:${px(L.format.h)};background:${L.palette.bg};overflow:${frame.clip ? 'hidden' : 'visible'}">`];
+  // ---- Code: HTML/CSS and React + Tailwind for one frame ----------------------------------------------------
+  const cssColor = v => (typeof v === 'string' && /^(#[0-9a-fA-F]{3,8}|rgba?\([\d\s.,%]+\)|[a-zA-Z]{3,24})$/.test(v.trim())) ? v.trim() : '#000000';
+  function cssGradient(g) { if (!g || !Array.isArray(g.stops) || g.stops.length < 2) return null; const st = g.stops.map(x => `${cssColor(x.c)} ${Math.round((x.p || 0) * 100)}%`).join(', '); return g.type === 'radial' ? `radial-gradient(circle, ${st})` : `linear-gradient(${Math.round(g.angle || 0)}deg, ${st})`; }
+  function cssFx(b) {
+    const out = [];
+    if (b.opacity != null && b.opacity < 1) out.push(`opacity:${b.opacity}`);
+    if (b.rotation) out.push(`transform:rotate(${b.rotation}deg)`);
+    const s = b.shadow; if (s && s.on !== false && (s.blur || s.x || s.y)) out.push(`box-shadow:${s.x || 0}px ${s.y || 0}px ${s.blur || 0}px ${hexAlpha(cssColor(s.color || '#000000'), s.alpha ?? 0.25)}`);
+    if (b.stroke && b.stroke.width > 0) out.push(`border:${b.stroke.width}px solid ${cssColor(b.stroke.color)}`);
+    return out;
+  }
+  function hexAlpha(hex, a) { if (!/^#[0-9a-fA-F]{6}$/.test(hex)) return hex; return hex + Math.round(Math.max(0, Math.min(1, a)) * 255).toString(16).padStart(2, '0'); }
+  function famName(f) { return String((f && f.family) || 'sans-serif').split(',')[0].replace(/["']/g, '').trim(); }
+  // One intermediate description per block; HTML and React render from it.
+  function codeNodes(frame, env) {
+    const L = frame.layout; const nodes = [];
     for (const b of L.blocks) {
       if (b.hidden) continue;
-      const pos = `position:absolute;left:${px(b.x)};top:${px(b.y)};width:${px(b.w)};height:${px(b.h)};`;
-      if (b.kind === 'field') parts.push(`  <div style="${pos}background:${b.fill};border-radius:${px(b.radius || 0)};${b.alpha != null ? `opacity:${b.alpha};` : ''}"></div>`);
-      else if (b.kind === 'shape') parts.push(`  <div style="${pos}background:${b.fill};border-radius:${b.shape === 'pill' ? '999px' : b.shape === 'circle' ? '50%' : '0 100% 0 0'};"></div>`);
-      else if (b.kind === 'image') { const a = env && env.assets.images.find(i => i.id === b.asset); parts.push(`  <img src="${a ? a.dataUrl.slice(0, 40) + '…' : 'image.jpg'}" alt="" style="${pos}object-fit:cover;border-radius:${px(b.radius || 0)};">`); }
-      else if (b.kind === 'text') { const f = b.font; parts.push(`  <p style="${pos}margin:0;font-family:${f.family};font-size:${px(f.size)};font-weight:${f.weight};line-height:${f.lineHeight || 1.2};letter-spacing:${f.letterSpacing || 0}em;color:${b.fill};text-align:${b.align || 'left'}">${b.lines.map(esc).join('<br>')}</p>`); }
-      else if (b.kind === 'list') { const f = b.font; parts.push(`  <${b.marker === 'number' ? 'ol' : 'ul'} style="${pos}margin:0;padding-left:${px(b.indent)};font-family:${f.family};font-size:${px(f.size)};line-height:${f.lineHeight || 1.3};color:${b.fill}">${(b.items || []).map(i => `<li>${esc(i)}</li>`).join('')}</${b.marker === 'number' ? 'ol' : 'ul'}>`); }
-      else if (b.kind === 'button') { const f = b.font; parts.push(`  <a href="#" style="${pos}display:flex;align-items:center;justify-content:center;background:${b.fill};color:${b.color};border-radius:${px(b.radius || 0)};font-family:${f.family};font-size:${px(f.size)};font-weight:600;text-decoration:none">${esc(b.text)}</a>`); }
-      else if (b.kind === 'logo') parts.push(`  <div class="logo" style="${pos}color:${b.fill}"><!-- logo --></div>`);
-      else if (b.kind === 'rule' || b.kind === 'line') parts.push(`  <div style="${pos}background:${b.fill};min-height:2px"></div>`);
-      else if (b.kind === 'icon') parts.push(`  <svg viewBox="0 0 256 256" style="${pos}color:${b.fill}">${(Icons.SET[b.name] || '')}</svg>`);
-      else if (b.kind === 'badge') parts.push(`  <div style="${pos}display:grid;place-items:center;border-radius:50%;background:${b.fill};color:${b.color};font-weight:700">${esc(b.text)}</div>`);
+      const box = { left: Math.round(b.x), top: Math.round(b.y), width: Math.round(b.w), height: Math.round(b.h) };
+      const fxs = cssFx(b); const bg = cssGradient(b.gradient);
+      const f = b.font || {};
+      const type = { family: famName(f), size: Math.round(f.size || 16), weight: f.weight || 400, lh: f.lineHeight || 1.2, ls: f.letterSpacing || 0, italic: f.style === 'italic' };
+      if (b.kind === 'field' || b.kind === 'rule') nodes.push({ tag: 'div', box, bg: bg || cssColor(b.fill), radius: b.radius || 0, alpha: b.alpha, fxs, role: b.role || b.kind });
+      else if (b.kind === 'shape') nodes.push({ tag: 'div', box, bg: bg || cssColor(b.fill), radius: b.shape === 'pill' ? 9999 : (b.shape === 'circle' || b.shape === 'ellipse') ? '50%' : '0 100% 0 0', fxs, role: b.shape });
+      else if (b.kind === 'image') { const a = env && env.assets && env.assets.images.find(i => i.id === b.asset); nodes.push({ tag: 'img', box, src: a ? (a.name || 'image') : 'image.jpg', radius: b.radius || 0, fit: b.fit === 'contain' ? 'contain' : 'cover', fxs, role: 'image' }); }
+      else if (b.kind === 'text') nodes.push({ tag: /^(headline|stat|quote)$/.test(b.role) ? 'h2' : 'p', box, text: sourceText(b), color: cssColor(b.fill), bgText: bg, type, align: b.align || 'left', upper: f.transform === 'upper', fxs, role: b.role || 'text' });
+      else if (b.kind === 'list') nodes.push({ tag: b.marker === 'number' ? 'ol' : 'ul', box, items: b.items || [], color: cssColor(b.fill), type, indent: b.indent || 24, fxs, role: b.role || 'list' });
+      else if (b.kind === 'button') nodes.push({ tag: 'a', box, text: b.text, color: cssColor(b.color), bg: bg || cssColor(b.fill), radius: b.radius || 0, type: { ...type, weight: f.weight || 600 }, fxs, role: 'cta' });
+      else if (b.kind === 'icon') nodes.push({ tag: 'svg', box, inner: (Icons.SET[b.name] || '').replace(/currentColor/g, cssColor(b.fill)), viewBox: '0 0 256 256', fxs, role: 'icon ' + b.name });
+      else if (b.kind === 'vector') nodes.push({ tag: 'svg', box, inner: b.d ? `<path d="${String(b.d).replace(/[^MmLlHhVvCcSsQqTtAaZz0-9eE.,\s+-]/g, '')}" fill="${cssColor(b.fill)}"/>` : (typeof Render !== 'undefined' ? Render.sanitizeSvgInner(b.svg) : ''), viewBox: Array.isArray(b.viewBox) ? b.viewBox.join(' ') : `0 0 ${b.vw || b.w} ${b.vh || b.h}`, fxs, role: 'vector' });
+      else if (b.kind === 'logo') nodes.push({ tag: 'div', box, text: (env && env.kit && env.kit.logo && env.kit.logo.text) || 'logo', color: cssColor(b.fill), type: { ...type, weight: 700, size: Math.round(b.h / 0.74) }, fxs, role: 'logo' });
+      else if (b.kind === 'line') nodes.push({ tag: 'div', box: { ...box, height: Math.max(2, box.height) }, bg: cssColor(b.fill), fxs, role: 'line' });
+      else if (b.kind === 'badge') nodes.push({ tag: 'div', box, text: b.text, color: cssColor(b.color), bg: cssColor(b.fill), radius: '50%', type: { ...type, weight: 700 }, fxs, role: 'badge' });
+    }
+    return nodes;
+  }
+  function toHTML(frame, env) {
+    const L = frame.layout; const e = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
+    const px = v => typeof v === 'number' ? `${v}px` : v;
+    const bgFrame = cssGradient(L.palette.bgGradient) || cssColor(L.palette.bg);
+    const parts = [`<div class="frame" style="position:relative;width:${L.format.w}px;height:${L.format.h}px;background:${bgFrame};overflow:${frame.clip ? 'hidden' : 'visible'}">`];
+    for (const nd of codeNodes(frame, env)) {
+      const st = [`position:absolute`, `left:${nd.box.left}px`, `top:${nd.box.top}px`, `width:${nd.box.width}px`, `height:${nd.box.height}px`];
+      if (nd.bg) st.push(`background:${nd.bg}`); if (nd.radius) st.push(`border-radius:${px(nd.radius)}`); if (nd.alpha != null && nd.alpha < 1) st.push(`opacity:${nd.alpha}`);
+      if (nd.type) st.push(`margin:0`, `font-family:'${nd.type.family}'`, `font-size:${nd.type.size}px`, `font-weight:${nd.type.weight}`, `line-height:${nd.type.lh}`, ...(nd.type.ls ? [`letter-spacing:${nd.type.ls}em`] : []), ...(nd.type.italic ? ['font-style:italic'] : []));
+      if (nd.color) st.push(`color:${nd.color}`); if (nd.align && nd.align !== 'left') st.push(`text-align:${nd.align}`); if (nd.upper) st.push('text-transform:uppercase');
+      if (nd.tag === 'a') st.push('display:flex', 'align-items:center', 'justify-content:center', 'text-decoration:none');
+      if (nd.tag === 'img') st.push(`object-fit:${nd.fit}`);
+      if (nd.tag === 'ul' || nd.tag === 'ol') st.push(`padding-left:${nd.indent}px`);
+      st.push(...nd.fxs);
+      const style = st.join(';');
+      if (nd.tag === 'img') parts.push(`  <img src="${e(nd.src)}" alt="" style="${style}">`);
+      else if (nd.tag === 'svg') parts.push(`  <svg viewBox="${nd.viewBox}" preserveAspectRatio="none" style="${style}">${nd.inner}</svg>`);
+      else if (nd.tag === 'ul' || nd.tag === 'ol') parts.push(`  <${nd.tag} style="${style}">${nd.items.map(i => `<li>${e(i)}</li>`).join('')}</${nd.tag}>`);
+      else parts.push(`  <${nd.tag}${nd.tag === 'a' ? ' href="#"' : ''} style="${style}">${e(nd.text || '')}</${nd.tag}>`);
     }
     parts.push('</div>');
     return parts.join('\n');
+  }
+  // React + Tailwind: arbitrary values keep the exact pixels; fonts and effects go to style where Tailwind has no utility.
+  function toReact(frame, env) {
+    const L = frame.layout; const e = s => String(s ?? '').replace(/[{}<>]/g, c => ({ '{': '&#123;', '}': '&#125;', '<': '&lt;', '>': '&gt;' }[c]));
+    const tw = v => String(v).replace(/\s+/g, '_');
+    const comp = (frame.name || 'Frame').replace(/[^A-Za-z0-9]+(.)?/g, (_, c) => c ? c.toUpperCase() : '').replace(/^[^A-Za-z]+/, '') || 'Frame';
+    const name = comp[0].toUpperCase() + comp.slice(1);
+    const bgFrame = cssGradient(L.palette.bgGradient);
+    const lines = [`export default function ${name}() {`, `  return (`, `    <div className="relative w-[${L.format.w}px] h-[${L.format.h}px] ${frame.clip ? 'overflow-hidden ' : ''}${bgFrame ? '' : `bg-[${cssColor(L.palette.bg)}]`}"${bgFrame ? ` style={{ background: '${bgFrame}' }}` : ''}>`];
+    for (const nd of codeNodes(frame, env)) {
+      const cls = ['absolute', `left-[${nd.box.left}px]`, `top-[${nd.box.top}px]`, `w-[${nd.box.width}px]`, `h-[${nd.box.height}px]`];
+      const style = {};
+      if (nd.bg) { if (/gradient/.test(nd.bg)) style.background = nd.bg; else cls.push(`bg-[${nd.bg}]`); }
+      if (nd.radius) cls.push(nd.radius === 9999 ? 'rounded-full' : nd.radius === '50%' ? 'rounded-[50%]' : `rounded-[${tw(typeof nd.radius === 'number' ? nd.radius + 'px' : nd.radius)}]`);
+      if (nd.alpha != null && nd.alpha < 1) cls.push(`opacity-[${nd.alpha}]`);
+      if (nd.type) { cls.push('m-0', `text-[${nd.type.size}px]`, `font-[${nd.type.weight}]`, `leading-[${nd.type.lh}]`); if (nd.type.ls) cls.push(`tracking-[${nd.type.ls}em]`); if (nd.type.italic) cls.push('italic'); style.fontFamily = nd.type.family; }
+      if (nd.color) cls.push(`text-[${nd.color}]`); if (nd.align === 'center') cls.push('text-center'); if (nd.align === 'right') cls.push('text-right'); if (nd.upper) cls.push('uppercase');
+      if (nd.tag === 'a') cls.push('flex', 'items-center', 'justify-center', 'no-underline');
+      if (nd.tag === 'img') cls.push(nd.fit === 'contain' ? 'object-contain' : 'object-cover');
+      if (nd.tag === 'ul' || nd.tag === 'ol') cls.push(`pl-[${nd.indent}px]`, nd.tag === 'ul' ? 'list-disc' : 'list-decimal');
+      for (const x of nd.fxs) { const [k, v] = x.split(/:(.+)/); style[k.replace(/-([a-z])/g, (_, c) => c.toUpperCase())] = v; }
+      const st = Object.keys(style).length ? ` style={{ ${Object.entries(style).map(([k, v]) => `${k}: ${JSON.stringify(v)}`).join(', ')} }}` : '';
+      const c = ` className="${cls.join(' ')}"${st}`;
+      if (nd.tag === 'img') lines.push(`      <img src="/${e(nd.src).replace(/[^A-Za-z0-9._-]+/g, '-')}" alt=""${c} />`);
+      else if (nd.tag === 'svg') lines.push(`      <svg viewBox="${nd.viewBox}" preserveAspectRatio="none"${c} dangerouslySetInnerHTML={{ __html: ${JSON.stringify(nd.inner)} }} />`);
+      else if (nd.tag === 'ul' || nd.tag === 'ol') lines.push(`      <${nd.tag}${c}>`, ...nd.items.map(i => `        <li>${e(i)}</li>`), `      </${nd.tag}>`);
+      else lines.push(`      <${nd.tag}${nd.tag === 'a' ? ' href="#"' : ''}${c}>${e(nd.text || '')}</${nd.tag}>`);
+    }
+    lines.push('    </div>', '  );', '}');
+    return lines.join('\n');
+  }
+
+  // ---- Batch edits for one or many frames -------------------------------------------------------------------------
+  const norm = v => { try { return Color.normalize(v); } catch { return null; } };
+  // Swap a frame's palette: every fill that matched the old bg, fg or accent takes the new one.
+  function recolor(frame, to) {
+    const L = frame.layout; const from = { ...L.palette };
+    const map = new Map();
+    for (const k of ['bg', 'fg', 'accent']) { const a = norm(from[k]), b = norm(to[k]); if (a && b && !map.has(a)) map.set(a, b); }
+    const sw = v => { const k = norm(v); return k && map.has(k) ? map.get(k) : v; };
+    for (const b of L.blocks) {
+      if (b.fill) b.fill = sw(b.fill); if (b.color) b.color = sw(b.color);
+      if (b.gradient && b.gradient.stops) b.gradient.stops.forEach(st => { st.c = sw(st.c); });
+      if (b.stroke && b.stroke.color) b.stroke.color = sw(b.stroke.color);
+      delete b.fillToken; delete b.colorToken;
+    }
+    L.palette = { ...L.palette, bg: norm(to.bg) || L.palette.bg, fg: norm(to.fg) || L.palette.fg, accent: norm(to.accent) || L.palette.accent, bgName: to.bgName || L.palette.bgName };
+    delete L.palette.bgToken;
+  }
+  // The copy a layout carries, rebuilt from its blocks' content paths (what Engine.hydrate takes back).
+  function extractContent(layout) {
+    const out = {};
+    const set = (path, v) => { const ks = path.split('.'); let t = out; for (let i = 0; i < ks.length - 1; i++) { const k = /^\d+$/.test(ks[i]) ? +ks[i] : ks[i]; const nextArr = /^\d+$/.test(ks[i + 1]); if (t[k] == null) t[k] = nextArr ? [] : {}; t = t[k]; } t[/^\d+$/.test(ks[ks.length - 1]) ? +ks[ks.length - 1] : ks[ks.length - 1]] = v; };
+    for (const b of layout.blocks) {
+      if (!b.path || b.decorative || b.hidden) continue;
+      if (b.kind === 'text') set(b.path, sourceText(b).replace(/\s+→$/, ''));
+      else if (b.kind === 'button') set(b.path, b.text || '');
+      else if (b.kind === 'list') set(b.path, (b.items || []).slice());
+    }
+    return out;
+  }
+  // Resize a frame to another format by scaling its blocks; text sizes scale with the smaller ratio and refit.
+  function scaleFrame(frame, format) {
+    const L = frame.layout; const sx = format.w / L.format.w, sy = format.h / L.format.h; const sf = Math.min(sx, sy);
+    for (const b of L.blocks) {
+      b.x = Math.round(b.x * sx); b.y = Math.round(b.y * sy); b.w = Math.max(4, Math.round(b.w * sx)); b.h = Math.max(4, Math.round(b.h * sy));
+      if (b.font) { b.font.size = Math.max(8, Math.round(b.font.size * sf)); }
+      if (b.kind === 'icon' || b.kind === 'badge' || b.kind === 'logo' || (b.kind === 'shape' && b.shape === 'circle')) { const s = Math.round(Math.min(b.w, b.h)); if (b.kind !== 'logo') { b.w = s; b.h = s; } else { b.h = Math.max(8, Math.round(b.h * sf / sy)); } }
+      if (b.radius) b.radius = Math.round(b.radius * sf);
+      if (b.kind === 'text' || b.kind === 'list' || b.kind === 'button') refit(b);
+    }
+    L.format = { id: format.id, name: format.name, w: format.w, h: format.h };
+  }
+  // Colors bound to a palette name follow the palette when it changes.
+  function applyTokens(doc, kit) {
+    const byName = new Map(kit.colors.map(c => [String(c.name || '').toLowerCase(), norm(c.hex)]));
+    let n = 0;
+    const res = t => t ? byName.get(String(t).toLowerCase()) : null;
+    for (const f of doc.frames) {
+      const pb = res(f.layout.palette.bgToken); if (pb && pb !== f.layout.palette.bg) { f.layout.palette.bg = pb; n++; } else if (f.layout.palette.bgToken && !byName.has(String(f.layout.palette.bgToken).toLowerCase())) delete f.layout.palette.bgToken;
+      for (const b of f.layout.blocks) {
+        for (const [tk, key] of [['fillToken', 'fill'], ['colorToken', 'color']]) {
+          if (!b[tk]) continue; const hx = res(b[tk]);
+          if (hx) { if (hx !== norm(b[key])) { b[key] = hx; n++; } } else delete b[tk];
+        }
+      }
+    }
+    return n;
+  }
+  function group(frame, blocks) { const g = 'g' + uid(); for (const b of blocks) b.group = g; return g; }
+  function ungroup(frame, blocks) { const gs = new Set(blocks.map(b => b.group).filter(Boolean)); for (const b of frame.layout.blocks) if (gs.has(b.group)) delete b.group; return gs.size; }
+  function groupMembers(frame, b) { return b && b.group ? frame.layout.blocks.filter(x => x.group === b.group) : (b ? [b] : []); }
+  // Arrange frames: a row, or a grid about as wide as it is tall.
+  function tidy(frames, mode = 'row', gap = 160) {
+    if (!frames.length) return;
+    const list = frames.slice().sort((a, b) => (a.y - b.y) || (a.x - b.x));
+    const x0 = Math.min(...list.map(f => f.x)), y0 = Math.min(...list.map(f => f.y));
+    const cols = mode === 'grid' ? Math.max(1, Math.round(Math.sqrt(list.length * 1.6))) : list.length;
+    let x = x0, y = y0, rowH = 0;
+    list.forEach((f, i) => {
+      if (i && i % cols === 0) { x = x0; y += rowH + gap; rowH = 0; }
+      f.x = snap(x, 8); f.y = snap(y, 8); x += f.layout.format.w + gap; rowH = Math.max(rowH, f.layout.format.h);
+    });
+  }
+  function replaceText(frames, find, repl, opts = {}) {
+    if (!find) return 0; let n = 0;
+    const re = new RegExp(find.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), opts.caseSensitive ? 'g' : 'gi');
+    for (const f of frames) for (const b of f.layout.blocks) {
+      if (b.kind === 'text') { const t = sourceText(b); const nt = t.replace(re, () => { n++; return repl; }); if (nt !== t) { b.text = nt; refit(b); } }
+      else if (b.kind === 'button') { const nt = String(b.text || '').replace(re, () => { n++; return repl; }); if (nt !== b.text) { b.text = nt; refit(b); } }
+      else if (b.kind === 'list') { const items = (b.items || []).map(i => String(i).replace(re, () => { n++; return repl; })); if (items.join('\n') !== (b.items || []).join('\n')) { b.items = items; refit(b); } }
+    }
+    return n;
+  }
+  const DISPLAY_ROLES = /^(headline|stat|eyebrow|quote|title|text)$/;
+  function setFonts(frames, { display, body, kit }) {
+    for (const f of frames) for (const b of f.layout.blocks) {
+      if (!b.font || !(b.kind === 'text' || b.kind === 'list' || b.kind === 'button' || b.kind === 'badge')) continue;
+      const isDisplay = b.kind === 'text' && DISPLAY_ROLES.test(b.role || 'text') && b.role !== 'body';
+      const name = isDisplay ? display : body; if (!name) continue;
+      b.font.family = Brand.fontCss(name);
+      const ws = Brand.fontWeights(name); if (!ws.includes(b.font.weight)) b.font.weight = ws.reduce((p, c) => Math.abs(c - b.font.weight) < Math.abs(p - b.font.weight) ? c : p, ws[0]);
+      refit(b);
+    }
+  }
+  function pasteFrames(doc, frames, at) {
+    const out = []; const x0 = Math.min(...frames.map(f => f.x)), y0 = Math.min(...frames.map(f => f.y));
+    for (const src of frames) {
+      const c = addFrame(doc, src.layout, { x: snap(at.x + (src.x - x0), 8), y: snap(at.y + (src.y - y0), 8), name: String(src.name || 'Frame').replace(/ copy( \d+)?$/, '') + ' copy' });
+      c.autoLayout = clone(src.autoLayout || c.autoLayout); c.clip = src.clip !== false;
+      for (const b of c.layout.blocks) b.id = uid();
+      out.push(c);
+    }
+    return out;
+  }
+  function framesBounds(frames) {
+    const x0 = Math.min(...frames.map(f => f.x)), y0 = Math.min(...frames.map(f => f.y));
+    const x1 = Math.max(...frames.map(f => f.x + f.layout.format.w)), y1 = Math.max(...frames.map(f => f.y + f.layout.format.h));
+    return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
   }
 
   // ---- History ----------------------------------------------------------------------------------
@@ -223,5 +399,5 @@ const Canvas = (() => {
     };
   }
 
-  return { create, addFrame, blankFrame, frameById, blockById, refit, sourceText, newBlock, moveBlock, resizeBlock, reorder, duplicateBlock, removeBlocks, transferBlocks, pasteBlocks, customFormat, align, distribute, bounds, applyAutoLayout, isBackground, serialize, deserialize, toLink, fromHash, toHTML, history, snap, uid, clone };
+  return { create, addFrame, blankFrame, frameById, blockById, refit, sourceText, newBlock, moveBlock, resizeBlock, reorder, duplicateBlock, removeBlocks, transferBlocks, pasteBlocks, customFormat, align, distribute, bounds, applyAutoLayout, isBackground, serialize, deserialize, toLink, fromHash, toHTML, toReact, recolor, extractContent, scaleFrame, applyTokens, group, ungroup, groupMembers, tidy, replaceText, setFonts, pasteFrames, framesBounds, cssGradient, history, snap, uid, clone };
 })();

@@ -669,6 +669,37 @@
 
   // ---- Canvas integration ---------------------------------------------------------------------------
   function updateCanvasBadge() { const n = CanvasUI.count(); const b = $('canvasBadge'); b.hidden = !n; b.textContent = n; }
+  // Variations of a canvas frame. Generated layouts re-run the engine with the frame's own copy; anything else
+  // (imported, hand-built) gets palette swaps from the brand's approved pairs.
+  const isEngineLayout = L => !!(L && L.archetype && L.archetype !== 'blank' && Engine.ARCH_LABEL[L.archetype] && Grid.byId[L.format.id] && Grid.byId[L.format.id].w === L.format.w && Grid.byId[L.format.id].h === L.format.h);
+  function makeVariations({ frame, count, mode }) {
+    const L = frame.layout; const kit = state.kit; const out = [];
+    let seed = (Date.now() ^ Math.floor(Math.random() * 1e9)) >>> 0;
+    if (mode === 'palette' || !isEngineLayout(L)) {
+      const cur = Color.normalize(L.palette.bg);
+      const pairs = RNG.make(seed).shuffle(Brand.pairs(kit).filter(p => p.bg !== cur));
+      for (const p of pairs.slice(0, count)) { const tmp = { layout: Canvas.clone(L) }; Canvas.recolor(tmp, { bg: p.bg, fg: p.fgs[0], accent: p.accents[0], bgName: p.bgName }); tmp.layout.palette.bgToken = p.bgName; tmp.layout.id = (L.id || 'v') + '-' + p.bgName.replace(/\W+/g, ''); out.push(tmp.layout); }
+      return out;
+    }
+    const intent = { ...state.intent, content: Canvas.extractContent(L), slideIntent: L.slideIntent || undefined, formats: [L.format.id] };
+    if (mode === 'similar') intent.level = L.type && L.type.level;
+    const fmt = Grid.byId[L.format.id]; const seen = new Set([L.signature]); const used = new Map();
+    for (let tries = 0; out.length < count && tries < count * 30; tries++) {
+      seed = (seed + 0x9E3779B9) >>> 0;
+      const V = Engine.generate({ intent, kit, assets: state.assets, format: fmt, seed, archetype: mode === 'similar' ? L.archetype : undefined });
+      if (!V || seen.has(V.signature)) continue;
+      if (mode === 'explore' && tries < count * 15 && (V.archetype === L.archetype || (used.get(V.archetype) || 0) >= 1)) continue;
+      seen.add(V.signature); used.set(V.archetype, (used.get(V.archetype) || 0) + 1); out.push(V);
+    }
+    return out;
+  }
+  // The same layout idea in another format: same archetype, copy, palette and type step.
+  function relayout(frame, fmt) {
+    const L = frame.layout; if (!isEngineLayout(L)) return null;
+    const intent = { ...state.intent, content: Canvas.extractContent(L), lockPalette: L.palette, level: L.type && L.type.level, slideIntent: L.slideIntent || undefined };
+    for (let k = 0; k < 10; k++) { const V = Engine.generate({ intent, kit: state.kit, assets: state.assets, format: fmt, seed: (L.seed + k * 0x9E3779B9) >>> 0, archetype: L.archetype }); if (V) return V; }
+    return null;
+  }
   function sendToCanvas(layouts) {
     if (!layouts.length) return;
     CanvasUI.addLayouts(layouts);
@@ -687,7 +718,10 @@
     openSettings: () => { $('settings').hidden = false; $('imgProvider').focus(); },
     download: (blob, name) => Render.download(blob, name),
     renderSVG: (layout, opts) => Render.toSVG(layout, { kit: state.kit, assets: state.assets, showGrid: !!(opts && opts.showGrid) }),
-    exportPNG: layout => Render.exportPNG(layout, { kit: state.kit, assets: state.assets }),
+    exportPNG: (layout, scale) => Render.exportPNG(layout, { kit: state.kit, assets: state.assets }, scale || 1),
+    exportPDF: layouts => Render.exportPDF(layouts, { kit: state.kit, assets: state.assets }),
+    variations: async opts => makeVariations(opts),
+    relayout: (frame, fmt) => relayout(frame, fmt),
     exportSVG: layout => Render.exportSVG(layout, { kit: state.kit, assets: state.assets }),
     buildPptx: layouts => ExportPptx.buildDeck(layouts, { kit: state.kit, assets: state.assets }),
   });

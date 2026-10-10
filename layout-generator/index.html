@@ -210,12 +210,19 @@
           <label class="btn small file">Load<input id="cvLoad" type="file" accept="application/json,.json" hidden></label>
           <details class="cv-menu" id="cvExport"><summary class="btn small primary">Export</summary>
             <div class="cv-menu-list">
-              <button data-export="png" type="button">Frame → PNG</button>
-              <button data-export="svg" type="button">Frame → SVG</button>
-              <button data-export="pptx" type="button">Frames of this format → PPTX</button>
-              <button data-export="html" type="button">Frame → copy HTML/CSS</button>
+              <span class="cv-menu-h">Selected screens (or all)</span>
+              <button data-export="png" type="button">PNG</button>
+              <button data-export="png2" type="button">PNG at 2×</button>
+              <button data-export="svg" type="button">SVG</button>
+              <button data-export="pdf" type="button">PDF, one page each</button>
+              <button data-export="pptx" type="button">PowerPoint, one file per size</button>
+              <span class="cv-menu-h">First selected screen</span>
+              <button data-export="react" type="button">Copy React + Tailwind</button>
+              <button data-export="html" type="button">Copy HTML/CSS</button>
+              <span class="cv-menu-h">Everything</span>
               <button data-export="all" type="button">Every frame → PNGs</button>
-              <button data-export="canvas" type="button">Whole canvas → PNG</button>
+              <button data-export="allpdf" type="button">Every frame → one PDF</button>
+              <button data-export="canvas" type="button">Whole canvas → one PNG</button>
             </div>
           </details>
           <button id="cvClear" class="btn small ghost" type="button" title="Remove every frame">Clear</button>

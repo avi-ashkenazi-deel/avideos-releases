@@ -21,7 +21,9 @@ const ExportPptx = (() => {
   const stripData = d => String(d).replace(/^data:/, '');
   const fontName = css => String(css).split(',')[0].replace(/["']/g, '').trim();
   const RASTER = new Set(['scrim']);
-  const isRaster = b => RASTER.has(b.kind) || b.kind === 'icon' || b.kind === 'line' || (b.kind === 'shape' && (b.shape === 'quarter' || b.shape === 'blob')) || (b.kind === 'logo' && b.logoKind === 'svg');
+  // Anything PowerPoint cannot draw natively with the same look is rasterized in place: vectors, gradients, shadows, rotation.
+  const hasFx = b => !!(b.gradient || (b.shadow && b.shadow.on !== false && (b.shadow.blur || b.shadow.x || b.shadow.y)) || Number(b.rotation) || (b.opacity != null && b.opacity < 1 && b.kind !== 'text'));
+  const isRaster = b => RASTER.has(b.kind) || b.kind === 'icon' || b.kind === 'line' || b.kind === 'vector' || (b.kind === 'shape' && (b.shape === 'quarter' || b.shape === 'blob')) || (b.kind === 'logo' && b.logoKind === 'svg') || (hasFx(b) && b.kind !== 'text' && b.kind !== 'list');
 
   async function rasterLayer(layout, blocks, opts) {
     const svg = Render.toSVG({ ...layout, blocks }, { kit: opts.kit, assets: opts.assets, forExport: true, transparent: true, showGrid: false });
@@ -41,6 +43,7 @@ const ExportPptx = (() => {
       pending = [];
     };
     for (const b of blocks) {
+      if (b.hidden) continue;
       if (isRaster(b)) { pending.push(b); continue; }
       await flush();
       const box = { x: inch(b.x), y: inch(b.y), w: inch(b.w), h: inch(b.h) };
@@ -51,7 +54,7 @@ const ExportPptx = (() => {
         slide.addShape(pptx.ShapeType.rect, { ...box, fill: { color: hex(b.fill) }, line: { color: hex(b.fill), transparency: 100 } });
       } else if (b.kind === 'shape') {
         const o = { ...box, fill: { color: hex(b.fill) }, line: { color: hex(b.fill), transparency: 100 } };
-        if (b.shape === 'circle') slide.addShape(pptx.ShapeType.ellipse, o);
+        if (b.shape === 'circle' || b.shape === 'ellipse') slide.addShape(pptx.ShapeType.ellipse, o);
         else { o.rectRadius = inch(Math.min(b.w, b.h) / 2); slide.addShape(pptx.ShapeType.roundRect, o); }
       } else if (b.kind === 'image') {
         const a = opts.assets.images.find(i => i.id === b.asset);
