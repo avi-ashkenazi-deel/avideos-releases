@@ -12,7 +12,7 @@
 // Tool calls are carried out by a browser tab that has the room open (the canvas engine runs there), so keep one open.
 import http from 'node:http';
 import { createHash, randomBytes } from 'node:crypto';
-import { readFile, writeFile, mkdir, stat, rename } from 'node:fs/promises';
+import { readFile, writeFile, appendFile, mkdir, stat, rename } from 'node:fs/promises';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
@@ -198,6 +198,59 @@ function libOp(L, m) {
 let libPush = null;
 function broadcastLibs() { clearTimeout(libPush); libPush = setTimeout(() => { for (const r of rooms.values()) broadcast(r.clients, { t: 'libs' }); }, 400); }
 
+// ---- Projects and folders (the Home screen's index) -------------------------------------------------------------------
+let projects = null; let projSave = null;
+async function getProjects() {
+  if (projects) return projects;
+  projects = { projects: new Map(), folders: new Map() };
+  try { const j = JSON.parse(await readFile(path.join(DATA, 'projects.json'), 'utf8')); for (const p of j.projects || []) if (p && LIB_ID.test(p.id)) projects.projects.set(p.id, p); for (const f of j.folders || []) if (f && LIB_ID.test(f.id)) projects.folders.set(f.id, f); } catch { }
+  return projects;
+}
+function saveProjects() {
+  clearTimeout(projSave);
+  projSave = setTimeout(async () => { try { await mkdir(DATA, { recursive: true }); const file = path.join(DATA, 'projects.json'); await writeFile(file + '.tmp', JSON.stringify({ v: 1, saved: new Date().toISOString(), projects: [...projects.projects.values()], folders: [...projects.folders.values()] })); await rename(file + '.tmp', file); } catch (e) { log('projects save failed', e.message); } }, 300);
+}
+const projectsBody = P => ({ lgProjects: 1, projects: [...P.projects.values()], folders: [...P.folders.values()] });
+const str = (v, n) => String(v == null ? '' : v).slice(0, n);
+function projectOp(P, m) {
+  if (m.op === 'put') { const p = m.project; if (!p || !LIB_ID.test(p.id) || typeof p.name !== 'string') throw new Error('bad project'); P.projects.set(p.id, { id: p.id, name: str(p.name, 80), folder: LIB_ID.test(String(p.folder || '')) ? p.folder : '', created: +p.created || Date.now(), by: str(p.by, 80), byName: str(p.byName, 80), updated: Date.now(), updatedBy: str(p.updatedBy, 80), frames: +p.frames || 0, cover: typeof p.cover === 'string' && p.cover.length < 60000 ? p.cover : '', archived: !!p.archived, kind: p.kind === 'deck' ? 'deck' : 'canvas' }); return; }
+  if (m.op === 'patch') { const cur = P.projects.get(m.id); if (!cur) throw new Error('no such project'); const a = m.patch || {}; for (const k of ['name', 'folder', 'frames', 'cover', 'archived', 'updated', 'updatedBy']) if (k in a) cur[k] = k === 'name' ? str(a[k], 80) : k === 'folder' ? (LIB_ID.test(String(a[k] || '')) ? a[k] : '') : k === 'frames' ? (+a[k] || 0) : k === 'cover' ? (typeof a[k] === 'string' && a[k].length < 60000 ? a[k] : '') : k === 'archived' ? !!a[k] : k === 'updated' ? (+a[k] || Date.now()) : str(a[k], 80); return; }
+  if (m.op === 'del') { P.projects.delete(m.id); return; }
+  if (m.op === 'putFolder') { const f = m.folder; if (!f || !LIB_ID.test(f.id)) throw new Error('bad folder'); P.folders.set(f.id, { id: f.id, name: str(f.name || 'Folder', 60), order: +f.order || 0, by: str(f.by, 80) }); return; }
+  if (m.op === 'delFolder') { P.folders.delete(m.id); for (const p of P.projects.values()) if (p.folder === m.id) p.folder = ''; return; }
+  throw new Error('unknown op');
+}
+function broadcastProjects() { for (const r of rooms.values()) broadcast(r.clients, { t: 'projects' }); }
+
+// ---- Usage analytics: each person's page sends month summaries; admins read them summed up -----------------------------
+const MONTH = /^\d{6}$/;
+function mergeSummary(stored, mine) {
+  if (!stored) return mine;
+  const add = (a, b) => { for (const [k, v] of Object.entries(b || {})) a[k] = (a[k] || 0) + v; return a; };
+  const out = { ...stored, name: mine.name || stored.name, last: Math.max(stored.last || 0, mine.last || 0), first: Math.min(stored.first || mine.first || 0, mine.first || stored.first || 0) };
+  out.counts = add({ ...(stored.counts || {}) }, mine.counts);
+  out.days = { ...(stored.days || {}) }; for (const [d, v] of Object.entries(mine.days || {})) { const s = out.days[d] || { actions: 0, minutes: 0, counts: {}, projects: {} }; out.days[d] = { actions: s.actions + (v.actions || 0), minutes: s.minutes + (v.minutes || 0), counts: add({ ...s.counts }, v.counts), projects: add({ ...s.projects }, v.projects) }; }
+  out.projects = { ...(stored.projects || {}) }; for (const [p, v] of Object.entries(mine.projects || {})) { const s = out.projects[p] || { actions: 0, minutes: 0, counts: {}, first: v.first, last: v.last }; out.projects[p] = { actions: s.actions + (v.actions || 0), minutes: s.minutes + (v.minutes || 0), counts: add({ ...s.counts }, v.counts), first: Math.min(s.first || v.first, v.first || s.first), last: Math.max(s.last || 0, v.last || 0) }; }
+  out.recent = [...(stored.recent || []), ...(mine.recent || [])].slice(-120);
+  return out;
+}
+async function appendEvents(m) {
+  const sm = m && m.summary; if (!sm || !MONTH.test(String(sm.month || '')) || !m.uid) throw new Error('bad summary');
+  const line = JSON.stringify({ uid: str(m.uid, 80), name: str(m.name, 80), summary: { month: sm.month, days: sm.days || {}, projects: sm.projects || {}, counts: sm.counts || {}, recent: Array.isArray(sm.recent) ? sm.recent.slice(-120) : [], first: +sm.first || 0, last: +sm.last || 0 } });
+  if (line.length > 512 * 1024) throw new Error('summary too large');
+  await mkdir(path.join(DATA, 'stats'), { recursive: true });
+  await appendFile(path.join(DATA, 'stats', sm.month + '.jsonl'), line + '\n');
+}
+async function analytics(months) {
+  const out = new Map();
+  for (const m of months) {
+    if (!MONTH.test(m)) continue;
+    let text = ''; try { text = await readFile(path.join(DATA, 'stats', m + '.jsonl'), 'utf8'); } catch { continue; }
+    for (const line of text.split('\n')) { if (!line.trim()) continue; let j; try { j = JSON.parse(line); } catch { continue; } const key = j.uid + '~' + m; const s = { ...j.summary, uid: j.uid, name: j.name }; out.set(key, mergeSummary(out.get(key), s)); }
+  }
+  return [...out.values()];
+}
+
 // The browser tab that carries out agent calls: the most recently active one in the room (or anywhere).
 function hostFor(roomId) {
   const all = roomId && rooms.get(roomId) ? [...rooms.get(roomId).clients] : [...rooms.values()].flatMap(r => [...r.clients]);
@@ -306,6 +359,25 @@ const server = http.createServer(async (req, res) => {
       const buf = Buffer.from(await r.arrayBuffer());
       if (buf.length > 150 * 1024 * 1024) return send(res, 413, 'That deck is over 150 MB');
       return send(res, 200, buf, { 'content-type': 'application/vnd.openxmlformats-officedocument.presentationml.presentation' });
+    }
+    if (url.pathname === '/api/projects') {
+      const P = await getProjects();
+      if (req.method === 'GET') return json(res, 200, projectsBody(P));
+      if (req.method !== 'POST') return send(res, 405, '', { allow: 'GET, POST' });
+      const m = JSON.parse((await readBody(req, 2 * 1024 * 1024)).toString('utf8') || 'null') || {};
+      try { projectOp(P, m); } catch (e) { return send(res, 400, e.message); }
+      saveProjects(); broadcastProjects();
+      return json(res, 200, projectsBody(P));
+    }
+    if (url.pathname === '/api/events' && req.method === 'POST') {
+      const m = JSON.parse((await readBody(req, 1024 * 1024)).toString('utf8') || 'null');
+      try { await appendEvents(m); } catch (e) { return send(res, 400, e.message); }
+      return json(res, 200, { ok: true });
+    }
+    if (url.pathname === '/api/analytics') {
+      if (ADMIN_KEY && String(req.headers['x-lg-admin'] || '') !== ADMIN_KEY) return send(res, 401, 'admin key required');
+      const months = String(url.searchParams.get('months') || '').split(',').filter(Boolean).slice(0, 12);
+      return json(res, 200, { summaries: await analytics(months) });
     }
     if (url.pathname === '/api/libraries') {
       const L = await getLibs();
