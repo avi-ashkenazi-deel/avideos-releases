@@ -102,7 +102,7 @@ function connect(name) {
   const expected = sent * (N - 1); const delivered = clients.reduce((t, c) => t + c.recsIn, 0);
   const cpu = s0 && s1 ? ((s1.cpuMs - s0.cpuMs) / (secs * 1000) * 100) : null;
   const out = { clients: N, editsPerSec: EDITS, cursorHz: CURSOR, frames: FRAMES, blocks: BLOCKS, sameFrame: SAME, seconds: +secs.toFixed(1), joinAllMs: joinAll, snapshotKB: +(clients[0].snapshotBytes / 1024).toFixed(0),
-    editsSent: sent, editsPerSecTotal: +(sent / secs).toFixed(1), delivered: +(delivered / Math.max(1, expected) * 100).toFixed(1), latencyMs: { p50: pct(lat, 0.5), p95: pct(lat, 0.95), p99: pct(lat, 0.99), max: lat.length ? Math.max(...lat) : 0, samples: lat.length },
+    editsSent: sent, editsPerSecTotal: +(sent / secs).toFixed(1), delivered: +(delivered / Math.max(1, expected) * 100).toFixed(1), latencyMs: { p50: pct(lat, 0.5), p95: pct(lat, 0.95), p99: pct(lat, 0.99), max: lat.reduce((m, x) => x > m ? x : m, 0), samples: lat.length },
     inbound: { msgsPerSec: +(got / secs).toFixed(0), kbPerSec: +(bytes / secs / 1024).toFixed(0), perClientMsgsPerSec: +(got / secs / N).toFixed(0) },
     server: s1 ? { cpuPct: cpu == null ? null : +cpu.toFixed(0), rssMB: +(s1.rssMB).toFixed(0), heapMB: +(s1.heapMB).toFixed(0), outMsgsPerSec: s0 ? +((s1.msgsOut - s0.msgsOut) / secs).toFixed(0) : null, outMBPerSec: s0 ? +((s1.bytesOut - s0.bytesOut) / secs / 1048576).toFixed(2) : null, loopLagMaxMs: s1.loopLagMaxMs, loopLagP95Ms: s1.loopLagP95Ms, saves: s0 ? s1.saves - s0.saves : null, saveMsMax: s1.saveMsMax, dropped: s0 ? (s1.dropped || 0) - (s0.dropped || 0) : null, version: s1.version } : null,
     closed: clients.filter(c => c.closed).length };
