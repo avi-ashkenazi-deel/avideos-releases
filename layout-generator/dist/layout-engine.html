@@ -5513,7 +5513,7 @@ const Canvas = (() => {
     L.palette = { ...L.palette, bg: norm(to.bg) || L.palette.bg, fg: norm(to.fg) || L.palette.fg, accent: norm(to.accent) || L.palette.accent, bgName: to.bgName || L.palette.bgName };
     delete L.palette.bgToken;
     if (Array.isArray(to.colors) && to.colors.length) return fixContrast(frame, to.colors.map(norm).filter(Boolean));
-    return 0;
+    return [];
   }
   // What a block is read against: its nearest filled box, else the last filled shape painted under its centre, else
   // the screen. null when a picture is under it (nothing to judge by).
@@ -5533,21 +5533,21 @@ const Canvas = (() => {
     const P = L.palette; return norm(P.bgGradient && P.bgGradient.stops ? P.bgGradient.stops[0].c : P.bg);
   }
   function fixContrast(frame, colors) {
-    const order = typeof Auto !== 'undefined' ? Auto.paintOrder(frame) : frame.layout.blocks; let n = 0;
+    const order = typeof Auto !== 'undefined' ? Auto.paintOrder(frame) : frame.layout.blocks; const changed = [];
     const big = b => b.font && (b.font.size >= 24 || (b.font.size >= 19 && b.font.weight >= 600));
     for (const b of order) {
       if (b.hidden) continue;
       if (b.kind === 'text' || b.kind === 'list') {
         if (!isColor(b.fill) || b.gradient) continue; const bg = backdropOf(frame, b, order); if (!bg) continue;
         const need = big(b) ? 3 : 4.5; if (Color.contrast(bg, norm(b.fill)) >= need) continue;
-        b.fill = Color.bestForeground(bg, colors, need)[0]; delete b.fillToken; n++;
+        b.fill = Color.bestForeground(bg, colors, need)[0]; delete b.fillToken; changed.push(b.id);
       } else if (b.kind === 'button' && isColor(b.fill) && isColor(b.color)) {
-        if (Color.contrast(norm(b.fill), norm(b.color)) >= 4.5) continue; b.color = Color.bestForeground(norm(b.fill), colors, 4.5)[0]; delete b.colorToken; n++;
+        if (Color.contrast(norm(b.fill), norm(b.color)) >= 4.5) continue; b.color = Color.bestForeground(norm(b.fill), colors, 4.5)[0]; delete b.colorToken; changed.push(b.id);
       } else if ((b.kind === 'line' || b.kind === 'rule') && isColor(b.fill)) {
-        const bg = backdropOf(frame, b, order); if (!bg || Color.contrast(bg, norm(b.fill)) >= 1.5) continue; b.fill = Color.bestForeground(bg, colors, 3)[0]; n++;
+        const bg = backdropOf(frame, b, order); if (!bg || Color.contrast(bg, norm(b.fill)) >= 1.5) continue; b.fill = Color.bestForeground(bg, colors, 3)[0]; changed.push(b.id);
       }
     }
-    return n;
+    return changed;
   }
   // The copy a layout carries, rebuilt from its blocks' content paths (what Engine.hydrate takes back).
   function extractContent(layout) {
@@ -6225,7 +6225,8 @@ const CanvasUI = (() => {
   function frameSVG(f) {
     if (layoutHold !== f.id && Auto.needs(f)) Auto.layout(f);
     const L = editing && editing.frameId === f.id && editing.hide ? { ...f.layout, blocks: f.layout.blocks.filter(b => b.id !== editing.blockId) } : f.layout;
-    return env.renderSVG(L, { showGrid: !!f.showGrid });
+    // ids inside the drawing (clips, gradients) are namespaced by screen: copies of one layout share its id
+    return env.renderSVG({ ...L, id: 'fr' + f.id }, { showGrid: !!f.showGrid });
   }
   function positionFrame(f) {
     const el = $('world').querySelector(`.cv-frame[data-id="${CSS.escape(f.id)}"]`); if (el) { el.style.left = f.x + 'px'; el.style.top = f.y + 'px'; }
@@ -9092,16 +9093,16 @@ const TOOL_DEFS = [
   { name: 'get_screenshot', description: 'A PNG of one screen, to check how it looks after changes.', inputSchema: { type: 'object', properties: { frame_id: { type: 'string' }, scale: { type: 'number', description: '0.25 to 1, default 0.5' } }, required: ['frame_id'] } },
   { name: 'get_code', description: 'One screen as code: React with Tailwind classes, or plain HTML/CSS.', inputSchema: { type: 'object', properties: { frame_id: { type: 'string' }, format: { type: 'string', enum: ['react', 'html'] } }, required: ['frame_id'] } },
   { name: 'select', description: 'Select screens, or blocks inside one screen, so the person sees what you mean.', inputSchema: { type: 'object', properties: { frame_ids: { type: 'array', items: { type: 'string' } }, block_ids: { type: 'array', items: { type: 'string' }, description: 'Only with exactly one frame id' } } } },
-  { name: 'update_blocks', core: true, description: 'Change blocks. Each update names frame_id, block_id and the props to set: text, items, x, y, w, h, fill (hex or brand color name; \"none\" for no fill on boxes and rectangles), color (button label), font_size, font_weight, font_family, line_height (multiple of the size, e.g. 1.2), letter_spacing (in em, e.g. 0.02; 0.1 is already wide), align, case, opacity, radius, rotation, hidden, label, shadow, stroke, gradient, z, size_w / size_h (fixed, hug, fill: sizing inside a stack), absolute (true: ignore the stack), variant and product (logo: wordmark, symbol, appicon, lockup). Returns overflow ids when text no longer fits its box.',
+  { name: 'update_blocks', core: true, description: 'Change blocks. Each update names frame_id, block_id and the props to set: text, items, x, y, w, h, fill (hex or brand color name; \"none\" for no fill on boxes and rectangles), stroke ({width, color}; width 0 removes it), padding (stacks: a number or {top,right,bottom,left}), color (button label), font_size, font_weight, font_family, line_height (multiple of the size, e.g. 1.2), letter_spacing (in em, e.g. 0.02; 0.1 is already wide), align, case, opacity, radius, rotation, hidden, label, shadow, stroke, gradient, z, size_w / size_h (fixed, hug, fill: sizing inside a stack), absolute (true: ignore the stack), variant and product (logo: wordmark, symbol, appicon, lockup). Moving a box moves everything inside it. Returns overflow ids when text no longer fits its box.',
     inputSchema: { type: 'object', properties: { updates: { type: 'array', items: { type: 'object', properties: { frame_id: { type: 'string' }, block_id: { type: 'string' }, props: { type: 'object', description: 'e.g. {"text":"New headline","font_size":72} or {"fill":"Acai"} or {"shadow":{"y":8,"blur":24,"alpha":0.2}} or {"gradient":{"type":"linear","angle":180,"stops":["#5938B8","#191A25"]}} or {"z":"front"}' } }, required: ['frame_id', 'block_id', 'props'] } } }, required: ['updates'] } },
-  { name: 'add_blocks', core: true, description: 'Add blocks to a screen. kind is text, body, button, rect, ellipse, image, icon or logo; then any props update_blocks takes. Returns the new block ids.',
-    inputSchema: { type: 'object', properties: { frame_id: { type: 'string' }, blocks: { type: 'array', items: { type: 'object', properties: { kind: { type: 'string', enum: ['text', 'body', 'button', 'rect', 'ellipse', 'image', 'icon', 'logo'] }, props: { type: 'object' } }, required: ['kind'] } } }, required: ['frame_id', 'blocks'] } },
+  { name: 'add_blocks', core: true, description: 'Add blocks to a screen. kind is text, body, button, rect, ellipse, image, icon or logo; then any props update_blocks takes. box_id puts a block straight into a box (in a stack it joins the flow, before before_id or at the end). Returns the new block ids.',
+    inputSchema: { type: 'object', properties: { frame_id: { type: 'string' }, blocks: { type: 'array', items: { type: 'object', properties: { kind: { type: 'string', enum: ['text', 'body', 'button', 'rect', 'ellipse', 'image', 'icon', 'logo'] }, props: { type: 'object' }, box_id: { type: 'string' }, before_id: { type: 'string' } }, required: ['kind'] } } }, required: ['frame_id', 'blocks'] } },
   { name: 'delete_blocks', core: true, description: 'Remove blocks from a screen.', inputSchema: { type: 'object', properties: { frame_id: { type: 'string' }, block_ids: { type: 'array', items: { type: 'string' } } }, required: ['frame_id', 'block_ids'] } },
   { name: 'create_frame', description: 'Add a blank screen. format is one of square, story, linkedin, x, slide, portrait, poster, banner; or give width and height. Returns its id.', inputSchema: { type: 'object', properties: { format: { type: 'string' }, width: { type: 'number' }, height: { type: 'number' }, name: { type: 'string' }, background: { type: 'string', description: 'hex or brand color name' } } } },
   { name: 'update_frames', core: true, description: 'Rename, move or recolor the background of screens. Each update: frame_id plus name, x, y, background (hex or brand color name).', inputSchema: { type: 'object', properties: { updates: { type: 'array', items: { type: 'object', properties: { frame_id: { type: 'string' }, name: { type: 'string' }, x: { type: 'number' }, y: { type: 'number' }, background: { type: 'string' } }, required: ['frame_id'] } } }, required: ['updates'] } },
   { name: 'duplicate_frames', core: true, description: 'Copy screens, keeping their arrangement. They land at x, y (top left of the copied group) when given, else in free space below everything on the canvas. name_prefix names the copies (e.g. "A · " gives "A · <original name>"). Returns frame_ids and, per copy, its original (from), position and a map from the original block ids to the copy\'s block ids.', inputSchema: { type: 'object', properties: { frame_ids: { type: 'array', items: { type: 'string' } }, copies: { type: 'number', description: '1 to 6 copies of the group, default 1' }, x: { type: 'number' }, y: { type: 'number' }, name_prefix: { type: 'string' } }, required: ['frame_ids'] } },
   { name: 'delete_frames', description: 'Remove screens. Only when the person asked for it.', inputSchema: { type: 'object', properties: { frame_ids: { type: 'array', items: { type: 'string' } } }, required: ['frame_ids'] } },
-  { name: 'recolor_frames', core: true, description: 'Move screens onto a brand background: every fill that used the old background, text or accent color takes the new one (no-fill boxes stay without fill); then any text left unreadable on what sits behind it (its card, box or the screen) takes the most readable brand color, and contrast_fixes counts those. background is a brand color name or hex; text and accent are picked for contrast unless given.', inputSchema: { type: 'object', properties: { frame_ids: { type: 'array', items: { type: 'string' } }, background: { type: 'string' }, text: { type: 'string' }, accent: { type: 'string' } }, required: ['frame_ids', 'background'] } },
+  { name: 'recolor_frames', core: true, description: 'Move screens onto a brand background: every fill that used the old background, text or accent color takes the new one (no-fill boxes stay without fill); then any text left unreadable on what sits behind it (its card, box or the screen) takes the most readable brand color, and contrast_fixes / fixed_blocks say which. background is a brand color name or hex; text and accent are picked for contrast unless given.', inputSchema: { type: 'object', properties: { frame_ids: { type: 'array', items: { type: 'string' } }, background: { type: 'string' }, text: { type: 'string' }, accent: { type: 'string' } }, required: ['frame_ids', 'background'] } },
   { name: 'make_variations', core: true, description: 'New takes on a screen, placed below it with the same copy. mode: similar (same layout idea), explore (other layouts) or palette (color swaps). Returns the new frame ids.', inputSchema: { type: 'object', properties: { frame_id: { type: 'string' }, count: { type: 'number', description: '1 to 6, default 3' }, mode: { type: 'string', enum: ['similar', 'explore', 'palette'] } }, required: ['frame_id'] } },
   { name: 'apply_look', core: true, description: 'Switch screens between original, wireframe (grey boxes, one typeface) and rebrand (colors and type moved onto the brand kit). Lossless: original always comes back.', inputSchema: { type: 'object', properties: { frame_ids: { type: 'array', items: { type: 'string' } }, look: { type: 'string', enum: ['original', 'wireframe', 'rebrand'] } }, required: ['frame_ids', 'look'] } },
   { name: 'replace_text', core: true, description: 'Find and replace words across screens (text, buttons, lists). Case-insensitive. Returns how many replacements were made.', inputSchema: { type: 'object', properties: { frame_ids: { type: 'array', items: { type: 'string' } }, find: { type: 'string' }, replace: { type: 'string' } }, required: ['frame_ids', 'find', 'replace'] } },
@@ -9207,6 +9208,13 @@ const AgentTools = (() => {
     if ('label' in p) { if (p.label) b.label = String(p.label).slice(0, 80); else delete b.label; }
     if ('icon' in p && b.kind === 'icon') { if (!Icons.has(String(p.icon))) throw new Error(`Unknown icon. Available: ${Icons.names.join(', ')}`); b.name = String(p.icon); }
     if ('shadow' in p) { const s = p.shadow; if (!s) delete b.shadow; else { const o = typeof s === 'object' ? s : {}; b.shadow = { on: true, x: Number(o.x) || 0, y: Number(o.y ?? 8), blur: Number(o.blur ?? 24), color: o.color ? color(o.color).hex : '#000000', alpha: Math.max(0, Math.min(1, Number(o.alpha ?? 0.25))) }; } }
+    // padding of a stack (auto layout box): a number or {top,right,bottom,left}
+    if ('padding' in p) {
+      if (b.kind !== 'box') throw new Error('padding is for boxes (stacks)');
+      const pd = padOf(p.padding); const s = Auto.norm(b.auto);
+      if (!Auto.on(s)) throw new Error(`${b.id} is not a stack yet: set_auto_layout on it first (or give padding there)`);
+      b.auto = { ...s, pad: pd };
+    }
     if ('size_w' in p) { if (!['fixed', 'hug', 'fill'].includes(p.size_w)) throw new Error('size_w is fixed, hug or fill'); b.sizeW = p.size_w; }
     if ('size_h' in p) { if (!['fixed', 'hug', 'fill'].includes(p.size_h)) throw new Error('size_h is fixed, hug or fill'); b.sizeH = p.size_h; }
     if ('absolute' in p) { if (p.absolute) b.absolute = true; else delete b.absolute; delete b.rx; delete b.ry; delete b.lx; delete b.ly; }
@@ -9223,7 +9231,7 @@ const AgentTools = (() => {
   const padOf = p => { if (p == null) return null; if (typeof p === 'number') return { t: p, r: p, b: p, l: p }; if (typeof p === 'object') return { t: Number(p.top ?? p.t) || 0, r: Number(p.right ?? p.r) || 0, b: Number(p.bottom ?? p.b) || 0, l: Number(p.left ?? p.l) || 0 }; throw new Error('padding is a number or {top,right,bottom,left}'); };
   const IMPL = {
     set_auto_layout(args) {
-      if (Array.isArray(args.box_ids) && args.box_ids.length) { let last = null; for (const id of args.box_ids.slice(0, 60)) last = IMPL.set_auto_layout({ ...args, box_ids: undefined, box_id: id }); return { ...last, boxes: args.box_ids.length }; }
+      if (Array.isArray(args.box_ids) && args.box_ids.length) { let last = null; const done = []; for (const id of args.box_ids.slice(0, 60)) { last = IMPL._setAutoLayoutOne({ ...args, box_ids: undefined, box_id: id }); done.push(id); } return { frame_id: last.frame_id, box_ids: done, stack: last.stack }; }
       return IMPL._setAutoLayoutOne(args);
     },
     _setAutoLayoutOne({ frame_id, box_id, mode, gap, gap_auto, padding, align_main, align_cross, clip }) {
@@ -9297,13 +9305,17 @@ const AgentTools = (() => {
     update_blocks({ updates }) {
       const list = arr(updates).slice(0, 300); if (!list.length) throw new Error('updates is empty');
       const touched = new Set(); const overflow = []; const errors = [];
-      write(() => { for (const u of list) { try { const f = F(u.frame_id); const b = Bk(f, u.block_id); applyProps(b, u.props); touched.add(f.id); if (b.overflow) overflow.push(b.id); } catch (e) { errors.push(`${u.block_id}: ${e.message}`); } } }, null);
+      // props nested ({frame_id, block_id, props: {...}}) or flat ({frame_id, block_id, fill: ...}) both work
+      const propsOf = u => { if (u.props && typeof u.props === 'object') return u.props; const { frame_id, block_id, props, ...rest } = u; return Object.keys(rest).length ? rest : u.props; };
+      write(() => { for (const u of list) { try { const f = F(u.frame_id); const b = Bk(f, u.block_id); applyProps(b, propsOf(u)); touched.add(f.id); if (b.overflow) overflow.push(b.id); } catch (e) { errors.push(`${u.block_id}: ${e.message}`); } } }, null);
       note(`Updated ${list.length - errors.length} block${list.length - errors.length === 1 ? '' : 's'}`);
       return { updated: list.length - errors.length, overflow, errors };
     },
     add_blocks({ frame_id, blocks }) {
       const f = F(frame_id); const ids = []; const errors = [];
-      write(() => { for (const spec of arr(blocks).slice(0, 50)) { try { const b = Canvas.newBlock(spec.kind, f, kit(), null); if (!b) throw new Error(`unknown kind ${spec.kind}`); applyProps(b, spec.props || {}); f.layout.blocks.push(b); ids.push(b.id); } catch (e) { errors.push(e.message); } } if (f.autoLayout.mode !== 'none') Canvas.applyAutoLayout(f); }, [f.id]);
+      write(() => { for (const spec of arr(blocks).slice(0, 50)) { try { const b = Canvas.newBlock(spec.kind, f, kit(), null); if (!b) throw new Error(`unknown kind ${spec.kind}`); applyProps(b, spec.props || {}); f.layout.blocks.push(b); ids.push(b.id);
+        // straight into a box: in a stack it joins the flow (before before_id, or at the end)
+        if (spec.box_id) { const box = Bk(f, spec.box_id); if (box.kind !== 'box') throw new Error(`${spec.box_id} is not a box`); if (Auto.on(Auto.settingsOf(f, box))) Auto.moveInList(f, b, box.id, spec.before_id || null); else b.parent = box.id; } } catch (e) { errors.push(e.message); } } if (f.autoLayout.mode !== 'none') Canvas.applyAutoLayout(f); }, [f.id]);
       note(`Added ${ids.length} block${ids.length === 1 ? '' : 's'} to ${f.name}`);
       return { block_ids: ids, errors };
     },
@@ -9345,9 +9357,9 @@ const AgentTools = (() => {
       const frames = framesArg(frame_ids); const bg = color(background); const cols = kit().colors.map(c => Color.normalize(c.hex));
       const fg = text ? color(text).hex : Color.bestForeground(bg.hex, cols, 4.5)[0];
       const acc = accent ? color(accent).hex : Color.normalize((kit().colors.find(c => (c.role === 'accent' || c.role === 'core') && Color.normalize(c.hex) !== bg.hex && Color.contrast(bg.hex, c.hex) >= 3) || { hex: fg }).hex);
-      let fixed = 0;
-      write(() => frames.forEach(f => { fixed += Canvas.recolor(f, { bg: bg.hex, fg, accent: acc, bgName: bg.name || undefined, colors: kit().colors.map(c => c.hex) }) || 0; if (bg.name) f.layout.palette.bgToken = bg.name; }), frames.map(f => f.id));
-      note(`Recolored ${frames.length} screen${frames.length === 1 ? '' : 's'} on ${bg.name || bg.hex}`); return { recolored: frames.length, background: bg.hex, text: fg, accent: acc, contrast_fixes: fixed };
+      const fixed = [];
+      write(() => frames.forEach(f => { const ids = Canvas.recolor(f, { bg: bg.hex, fg, accent: acc, bgName: bg.name || undefined, colors: kit().colors.map(c => c.hex) }); for (const id of ids || []) fixed.push({ frame_id: f.id, block_id: id }); if (bg.name) f.layout.palette.bgToken = bg.name; }), frames.map(f => f.id));
+      note(`Recolored ${frames.length} screen${frames.length === 1 ? '' : 's'} on ${bg.name || bg.hex}`); return { recolored: frames.length, background: bg.hex, text: fg, accent: acc, contrast_fixes: fixed.length, fixed_blocks: fixed.slice(0, 200) };
     },
     async make_variations({ frame_id, count, mode }) {
       const f = F(frame_id); const n = Math.max(1, Math.min(6, Number(count) || 3)); const m = ['similar', 'explore', 'palette'].includes(mode) ? mode : 'explore';
@@ -10211,6 +10223,7 @@ Layer kinds:
 
   // ---- Deck mode -----------------------------------------------------------------------------------
   function setMode(mode) {
+    if (mode === 'canvas' && PROJ.ready && !PROJ.id && Projects.mode !== 'local') { toast('Pick a project, or make a new one'); mode = 'home'; }
     state.mode = mode;
     document.querySelectorAll('#modeSeg button').forEach(b => b.classList.toggle('on', b.dataset.mode === mode));
     const canvas = mode === 'canvas'; const home = mode === 'home';
@@ -10525,8 +10538,9 @@ Layer kinds:
   $('figFile').addEventListener('change', async e => { const f = e.target.files[0]; if (!f) return; $('figStatus').textContent = 'Reading…'; await importFile(f); $('figStatus').textContent = ''; $('importModal').hidden = true; e.target.value = ''; });
   $('canvasFile').addEventListener('change', async e => { const f = e.target.files[0]; if (!f) return; if (!(await importFile(f))) toast('Not a canvas file'); $('importModal').hidden = true; e.target.value = ''; });
 
-  function sendToCanvas(layouts) {
+  async function sendToCanvas(layouts) {
     if (!layouts.length) return;
+    if (!PROJ.id && !(await ensureProject($('prompt').value.split(/[,.:\n]/)[0]))) return;
     Stats.track('to-canvas', { detail: layouts.length + ' layouts' });
     CanvasUI.addLayouts(layouts);
     setMode('canvas'); updateCanvasBadge();
@@ -10556,7 +10570,7 @@ Layer kinds:
     const fids = CanvasUI.doc.frames.filter(f => f.layout.blocks.some(b => b.asset === id)).map(f => f.id); if (fids.length) CanvasUI.rerender(fids);
   }
   // The open project: its canvas is backed up in this browser under its own key.
-  const PROJ = { id: null };
+  const PROJ = { id: null, ready: false };
   function backupKey() { return PROJ.id ? `lg.canvas.${PROJ.id}` : 'lg.canvas'; }
   CanvasUI.init({
     getKit: () => state.kit, getAssets: () => state.assets, toast, backupKey,
@@ -10644,14 +10658,32 @@ Layer kinds:
   Projects.init({ me: () => ({ id: Sync.me.id, name: Sync.me.name }) });
   Stats.init({ currentProject: () => PROJ.id });
   const ago = t => { if (!t) return 'new'; const m = Math.round((Date.now() - t) / 60000); if (m < 2) return 'just now'; if (m < 60) return m + ' min ago'; const h = Math.round(m / 60); if (h < 36) return h + ' h ago'; return Math.round(h / 24) + ' d ago'; };
+  // Which project to open on load: the one in the link, else the one this person had open, else (when nothing exists
+  // yet) a first one. On a shared page or server, someone who has not picked a project is not dropped into whatever
+  // someone else touched last: they start on Home, and their first canvas work makes them a project of their own.
   async function startProject() {
     const fromUrl = serverHere ? Sync.roomFromUrl() : null;
     if (fromUrl && !Projects.get(fromUrl)) { try { await Projects.create({ id: fromUrl, name: 'Room ' + fromUrl }); } catch { } }
     let id = fromUrl || Projects.current; let keepDoc = false;
-    if (!id || !Projects.get(id)) id = (Projects.projects()[0] || {}).id || null;
-    if (!id) { id = await firstProject(); keepDoc = true; }
+    if (id && !Projects.get(id)) id = null;
+    if (!id) {
+      const any = Projects.projects();
+      if (!any.length) { id = await firstProject(); keepDoc = true; }
+      else if (Projects.mode === 'local') id = any[0].id;
+      else { PROJ.ready = true; renderProjectName(); if (state.mode === 'canvas') setMode('home'); return; }
+    }
     await openProject(id, { quiet: true, keepDoc });
+    PROJ.ready = true;
     if (fromUrl && state.mode !== 'canvas') setMode('canvas');
+  }
+  // Canvas work with no project open: a new project for it (named after the brief), opened.
+  async function ensureProject(name) {
+    if (PROJ.id) return true;
+    try {
+      const p = await Projects.create({ name: String(name || '').trim().slice(0, 60) || 'Untitled project' });
+      Stats.track('project.create', { project: p.id, detail: p.name });
+      await openProject(p.id, { quiet: true }); toast(`New project “${p.name}” for this work; Home lists every project.`); return true;
+    } catch (e) { toast(e && e.message ? e.message : String(e)); return false; }
   }
   // Nothing yet: what this browser already holds becomes the first project (in claude.ai, the page's own canvas).
   async function firstProject() {
@@ -10683,7 +10715,7 @@ Layer kinds:
     if (!opts.quiet) { setMode('canvas'); Stats.track('project.open', { project: id, detail: name }); }
     return true;
   }
-  function renderProjectName() { const p = Projects.get(PROJ.id); $('cvProject').textContent = '⌂ ' + (p ? p.name : PROJ.id === '_root' ? 'Shared canvas' : 'Project'); }
+  function renderProjectName() { const p = Projects.get(PROJ.id); $('cvProject').textContent = '⌂ ' + (p ? p.name : PROJ.id === '_root' ? 'Shared canvas' : PROJ.id ? 'Project' : 'Projects'); }
   $('cvProject').addEventListener('click', () => setMode('home'));
   // Project bookkeeping from the canvas: screen count and a small cover, at most every 20 s.
   let touchTimer = 0;
@@ -10726,6 +10758,9 @@ Layer kinds:
     $('homeNewFolder').innerHTML = `<option value="">No folder</option>` + folders.map(f => `<option value="${escapeHtml(f.id)}" ${homeFolder === f.id ? 'selected' : ''}>${escapeHtml(f.name)}</option>`).join('');
   }
   Projects.on(() => { renderHome(); if (PROJ.id) renderProjectName(); });
+  // The server only pushes project changes to people inside a room; on Home, ask for them.
+  setInterval(() => { if (state.mode === 'home' && !document.hidden && Projects.mode === 'server' && Sync.status.mode !== 'server') Projects.refresh(); }, 4000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && Projects.mode === 'server') Projects.refresh(); });
   const guardHome = async fn => { try { await fn(); } catch (e) { toast(e && e.message ? e.message : String(e)); } renderHome(); };
   $('homeView').addEventListener('click', async e => {
     const t = e.target;

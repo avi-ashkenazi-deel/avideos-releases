@@ -84,6 +84,13 @@ const AgentTools = (() => {
     if ('label' in p) { if (p.label) b.label = String(p.label).slice(0, 80); else delete b.label; }
     if ('icon' in p && b.kind === 'icon') { if (!Icons.has(String(p.icon))) throw new Error(`Unknown icon. Available: ${Icons.names.join(', ')}`); b.name = String(p.icon); }
     if ('shadow' in p) { const s = p.shadow; if (!s) delete b.shadow; else { const o = typeof s === 'object' ? s : {}; b.shadow = { on: true, x: Number(o.x) || 0, y: Number(o.y ?? 8), blur: Number(o.blur ?? 24), color: o.color ? color(o.color).hex : '#000000', alpha: Math.max(0, Math.min(1, Number(o.alpha ?? 0.25))) }; } }
+    // padding of a stack (auto layout box): a number or {top,right,bottom,left}
+    if ('padding' in p) {
+      if (b.kind !== 'box') throw new Error('padding is for boxes (stacks)');
+      const pd = padOf(p.padding); const s = Auto.norm(b.auto);
+      if (!Auto.on(s)) throw new Error(`${b.id} is not a stack yet: set_auto_layout on it first (or give padding there)`);
+      b.auto = { ...s, pad: pd };
+    }
     if ('size_w' in p) { if (!['fixed', 'hug', 'fill'].includes(p.size_w)) throw new Error('size_w is fixed, hug or fill'); b.sizeW = p.size_w; }
     if ('size_h' in p) { if (!['fixed', 'hug', 'fill'].includes(p.size_h)) throw new Error('size_h is fixed, hug or fill'); b.sizeH = p.size_h; }
     if ('absolute' in p) { if (p.absolute) b.absolute = true; else delete b.absolute; delete b.rx; delete b.ry; delete b.lx; delete b.ly; }
@@ -100,7 +107,7 @@ const AgentTools = (() => {
   const padOf = p => { if (p == null) return null; if (typeof p === 'number') return { t: p, r: p, b: p, l: p }; if (typeof p === 'object') return { t: Number(p.top ?? p.t) || 0, r: Number(p.right ?? p.r) || 0, b: Number(p.bottom ?? p.b) || 0, l: Number(p.left ?? p.l) || 0 }; throw new Error('padding is a number or {top,right,bottom,left}'); };
   const IMPL = {
     set_auto_layout(args) {
-      if (Array.isArray(args.box_ids) && args.box_ids.length) { let last = null; for (const id of args.box_ids.slice(0, 60)) last = IMPL.set_auto_layout({ ...args, box_ids: undefined, box_id: id }); return { ...last, boxes: args.box_ids.length }; }
+      if (Array.isArray(args.box_ids) && args.box_ids.length) { let last = null; const done = []; for (const id of args.box_ids.slice(0, 60)) { last = IMPL._setAutoLayoutOne({ ...args, box_ids: undefined, box_id: id }); done.push(id); } return { frame_id: last.frame_id, box_ids: done, stack: last.stack }; }
       return IMPL._setAutoLayoutOne(args);
     },
     _setAutoLayoutOne({ frame_id, box_id, mode, gap, gap_auto, padding, align_main, align_cross, clip }) {
@@ -174,13 +181,17 @@ const AgentTools = (() => {
     update_blocks({ updates }) {
       const list = arr(updates).slice(0, 300); if (!list.length) throw new Error('updates is empty');
       const touched = new Set(); const overflow = []; const errors = [];
-      write(() => { for (const u of list) { try { const f = F(u.frame_id); const b = Bk(f, u.block_id); applyProps(b, u.props); touched.add(f.id); if (b.overflow) overflow.push(b.id); } catch (e) { errors.push(`${u.block_id}: ${e.message}`); } } }, null);
+      // props nested ({frame_id, block_id, props: {...}}) or flat ({frame_id, block_id, fill: ...}) both work
+      const propsOf = u => { if (u.props && typeof u.props === 'object') return u.props; const { frame_id, block_id, props, ...rest } = u; return Object.keys(rest).length ? rest : u.props; };
+      write(() => { for (const u of list) { try { const f = F(u.frame_id); const b = Bk(f, u.block_id); applyProps(b, propsOf(u)); touched.add(f.id); if (b.overflow) overflow.push(b.id); } catch (e) { errors.push(`${u.block_id}: ${e.message}`); } } }, null);
       note(`Updated ${list.length - errors.length} block${list.length - errors.length === 1 ? '' : 's'}`);
       return { updated: list.length - errors.length, overflow, errors };
     },
     add_blocks({ frame_id, blocks }) {
       const f = F(frame_id); const ids = []; const errors = [];
-      write(() => { for (const spec of arr(blocks).slice(0, 50)) { try { const b = Canvas.newBlock(spec.kind, f, kit(), null); if (!b) throw new Error(`unknown kind ${spec.kind}`); applyProps(b, spec.props || {}); f.layout.blocks.push(b); ids.push(b.id); } catch (e) { errors.push(e.message); } } if (f.autoLayout.mode !== 'none') Canvas.applyAutoLayout(f); }, [f.id]);
+      write(() => { for (const spec of arr(blocks).slice(0, 50)) { try { const b = Canvas.newBlock(spec.kind, f, kit(), null); if (!b) throw new Error(`unknown kind ${spec.kind}`); applyProps(b, spec.props || {}); f.layout.blocks.push(b); ids.push(b.id);
+        // straight into a box: in a stack it joins the flow (before before_id, or at the end)
+        if (spec.box_id) { const box = Bk(f, spec.box_id); if (box.kind !== 'box') throw new Error(`${spec.box_id} is not a box`); if (Auto.on(Auto.settingsOf(f, box))) Auto.moveInList(f, b, box.id, spec.before_id || null); else b.parent = box.id; } } catch (e) { errors.push(e.message); } } if (f.autoLayout.mode !== 'none') Canvas.applyAutoLayout(f); }, [f.id]);
       note(`Added ${ids.length} block${ids.length === 1 ? '' : 's'} to ${f.name}`);
       return { block_ids: ids, errors };
     },
@@ -222,9 +233,9 @@ const AgentTools = (() => {
       const frames = framesArg(frame_ids); const bg = color(background); const cols = kit().colors.map(c => Color.normalize(c.hex));
       const fg = text ? color(text).hex : Color.bestForeground(bg.hex, cols, 4.5)[0];
       const acc = accent ? color(accent).hex : Color.normalize((kit().colors.find(c => (c.role === 'accent' || c.role === 'core') && Color.normalize(c.hex) !== bg.hex && Color.contrast(bg.hex, c.hex) >= 3) || { hex: fg }).hex);
-      let fixed = 0;
-      write(() => frames.forEach(f => { fixed += Canvas.recolor(f, { bg: bg.hex, fg, accent: acc, bgName: bg.name || undefined, colors: kit().colors.map(c => c.hex) }) || 0; if (bg.name) f.layout.palette.bgToken = bg.name; }), frames.map(f => f.id));
-      note(`Recolored ${frames.length} screen${frames.length === 1 ? '' : 's'} on ${bg.name || bg.hex}`); return { recolored: frames.length, background: bg.hex, text: fg, accent: acc, contrast_fixes: fixed };
+      const fixed = [];
+      write(() => frames.forEach(f => { const ids = Canvas.recolor(f, { bg: bg.hex, fg, accent: acc, bgName: bg.name || undefined, colors: kit().colors.map(c => c.hex) }); for (const id of ids || []) fixed.push({ frame_id: f.id, block_id: id }); if (bg.name) f.layout.palette.bgToken = bg.name; }), frames.map(f => f.id));
+      note(`Recolored ${frames.length} screen${frames.length === 1 ? '' : 's'} on ${bg.name || bg.hex}`); return { recolored: frames.length, background: bg.hex, text: fg, accent: acc, contrast_fixes: fixed.length, fixed_blocks: fixed.slice(0, 200) };
     },
     async make_variations({ frame_id, count, mode }) {
       const f = F(frame_id); const n = Math.max(1, Math.min(6, Number(count) || 3)); const m = ['similar', 'explore', 'palette'].includes(mode) ? mode : 'explore';

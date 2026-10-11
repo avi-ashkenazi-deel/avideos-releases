@@ -536,6 +536,7 @@
 
   // ---- Deck mode -----------------------------------------------------------------------------------
   function setMode(mode) {
+    if (mode === 'canvas' && PROJ.ready && !PROJ.id && Projects.mode !== 'local') { toast('Pick a project, or make a new one'); mode = 'home'; }
     state.mode = mode;
     document.querySelectorAll('#modeSeg button').forEach(b => b.classList.toggle('on', b.dataset.mode === mode));
     const canvas = mode === 'canvas'; const home = mode === 'home';
@@ -850,8 +851,9 @@
   $('figFile').addEventListener('change', async e => { const f = e.target.files[0]; if (!f) return; $('figStatus').textContent = 'Reading…'; await importFile(f); $('figStatus').textContent = ''; $('importModal').hidden = true; e.target.value = ''; });
   $('canvasFile').addEventListener('change', async e => { const f = e.target.files[0]; if (!f) return; if (!(await importFile(f))) toast('Not a canvas file'); $('importModal').hidden = true; e.target.value = ''; });
 
-  function sendToCanvas(layouts) {
+  async function sendToCanvas(layouts) {
     if (!layouts.length) return;
+    if (!PROJ.id && !(await ensureProject($('prompt').value.split(/[,.:\n]/)[0]))) return;
     Stats.track('to-canvas', { detail: layouts.length + ' layouts' });
     CanvasUI.addLayouts(layouts);
     setMode('canvas'); updateCanvasBadge();
@@ -881,7 +883,7 @@
     const fids = CanvasUI.doc.frames.filter(f => f.layout.blocks.some(b => b.asset === id)).map(f => f.id); if (fids.length) CanvasUI.rerender(fids);
   }
   // The open project: its canvas is backed up in this browser under its own key.
-  const PROJ = { id: null };
+  const PROJ = { id: null, ready: false };
   function backupKey() { return PROJ.id ? `lg.canvas.${PROJ.id}` : 'lg.canvas'; }
   CanvasUI.init({
     getKit: () => state.kit, getAssets: () => state.assets, toast, backupKey,
@@ -969,14 +971,32 @@
   Projects.init({ me: () => ({ id: Sync.me.id, name: Sync.me.name }) });
   Stats.init({ currentProject: () => PROJ.id });
   const ago = t => { if (!t) return 'new'; const m = Math.round((Date.now() - t) / 60000); if (m < 2) return 'just now'; if (m < 60) return m + ' min ago'; const h = Math.round(m / 60); if (h < 36) return h + ' h ago'; return Math.round(h / 24) + ' d ago'; };
+  // Which project to open on load: the one in the link, else the one this person had open, else (when nothing exists
+  // yet) a first one. On a shared page or server, someone who has not picked a project is not dropped into whatever
+  // someone else touched last: they start on Home, and their first canvas work makes them a project of their own.
   async function startProject() {
     const fromUrl = serverHere ? Sync.roomFromUrl() : null;
     if (fromUrl && !Projects.get(fromUrl)) { try { await Projects.create({ id: fromUrl, name: 'Room ' + fromUrl }); } catch { } }
     let id = fromUrl || Projects.current; let keepDoc = false;
-    if (!id || !Projects.get(id)) id = (Projects.projects()[0] || {}).id || null;
-    if (!id) { id = await firstProject(); keepDoc = true; }
+    if (id && !Projects.get(id)) id = null;
+    if (!id) {
+      const any = Projects.projects();
+      if (!any.length) { id = await firstProject(); keepDoc = true; }
+      else if (Projects.mode === 'local') id = any[0].id;
+      else { PROJ.ready = true; renderProjectName(); if (state.mode === 'canvas') setMode('home'); return; }
+    }
     await openProject(id, { quiet: true, keepDoc });
+    PROJ.ready = true;
     if (fromUrl && state.mode !== 'canvas') setMode('canvas');
+  }
+  // Canvas work with no project open: a new project for it (named after the brief), opened.
+  async function ensureProject(name) {
+    if (PROJ.id) return true;
+    try {
+      const p = await Projects.create({ name: String(name || '').trim().slice(0, 60) || 'Untitled project' });
+      Stats.track('project.create', { project: p.id, detail: p.name });
+      await openProject(p.id, { quiet: true }); toast(`New project “${p.name}” for this work; Home lists every project.`); return true;
+    } catch (e) { toast(e && e.message ? e.message : String(e)); return false; }
   }
   // Nothing yet: what this browser already holds becomes the first project (in claude.ai, the page's own canvas).
   async function firstProject() {
@@ -1008,7 +1028,7 @@
     if (!opts.quiet) { setMode('canvas'); Stats.track('project.open', { project: id, detail: name }); }
     return true;
   }
-  function renderProjectName() { const p = Projects.get(PROJ.id); $('cvProject').textContent = '⌂ ' + (p ? p.name : PROJ.id === '_root' ? 'Shared canvas' : 'Project'); }
+  function renderProjectName() { const p = Projects.get(PROJ.id); $('cvProject').textContent = '⌂ ' + (p ? p.name : PROJ.id === '_root' ? 'Shared canvas' : PROJ.id ? 'Project' : 'Projects'); }
   $('cvProject').addEventListener('click', () => setMode('home'));
   // Project bookkeeping from the canvas: screen count and a small cover, at most every 20 s.
   let touchTimer = 0;
@@ -1051,6 +1071,9 @@
     $('homeNewFolder').innerHTML = `<option value="">No folder</option>` + folders.map(f => `<option value="${escapeHtml(f.id)}" ${homeFolder === f.id ? 'selected' : ''}>${escapeHtml(f.name)}</option>`).join('');
   }
   Projects.on(() => { renderHome(); if (PROJ.id) renderProjectName(); });
+  // The server only pushes project changes to people inside a room; on Home, ask for them.
+  setInterval(() => { if (state.mode === 'home' && !document.hidden && Projects.mode === 'server' && Sync.status.mode !== 'server') Projects.refresh(); }, 4000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && Projects.mode === 'server') Projects.refresh(); });
   const guardHome = async fn => { try { await fn(); } catch (e) { toast(e && e.message ? e.message : String(e)); } renderHome(); };
   $('homeView').addEventListener('click', async e => {
     const t = e.target;

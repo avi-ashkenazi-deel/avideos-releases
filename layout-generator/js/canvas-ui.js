@@ -172,7 +172,8 @@ const CanvasUI = (() => {
   function frameSVG(f) {
     if (layoutHold !== f.id && Auto.needs(f)) Auto.layout(f);
     const L = editing && editing.frameId === f.id && editing.hide ? { ...f.layout, blocks: f.layout.blocks.filter(b => b.id !== editing.blockId) } : f.layout;
-    return env.renderSVG(L, { showGrid: !!f.showGrid });
+    // ids inside the drawing (clips, gradients) are namespaced by screen: copies of one layout share its id
+    return env.renderSVG({ ...L, id: 'fr' + f.id }, { showGrid: !!f.showGrid });
   }
   function positionFrame(f) {
     const el = $('world').querySelector(`.cv-frame[data-id="${CSS.escape(f.id)}"]`); if (el) { el.style.left = f.x + 'px'; el.style.top = f.y + 'px'; }

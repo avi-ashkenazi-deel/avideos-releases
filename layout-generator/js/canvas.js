@@ -390,7 +390,7 @@ const Canvas = (() => {
     L.palette = { ...L.palette, bg: norm(to.bg) || L.palette.bg, fg: norm(to.fg) || L.palette.fg, accent: norm(to.accent) || L.palette.accent, bgName: to.bgName || L.palette.bgName };
     delete L.palette.bgToken;
     if (Array.isArray(to.colors) && to.colors.length) return fixContrast(frame, to.colors.map(norm).filter(Boolean));
-    return 0;
+    return [];
   }
   // What a block is read against: its nearest filled box, else the last filled shape painted under its centre, else
   // the screen. null when a picture is under it (nothing to judge by).
@@ -410,21 +410,21 @@ const Canvas = (() => {
     const P = L.palette; return norm(P.bgGradient && P.bgGradient.stops ? P.bgGradient.stops[0].c : P.bg);
   }
   function fixContrast(frame, colors) {
-    const order = typeof Auto !== 'undefined' ? Auto.paintOrder(frame) : frame.layout.blocks; let n = 0;
+    const order = typeof Auto !== 'undefined' ? Auto.paintOrder(frame) : frame.layout.blocks; const changed = [];
     const big = b => b.font && (b.font.size >= 24 || (b.font.size >= 19 && b.font.weight >= 600));
     for (const b of order) {
       if (b.hidden) continue;
       if (b.kind === 'text' || b.kind === 'list') {
         if (!isColor(b.fill) || b.gradient) continue; const bg = backdropOf(frame, b, order); if (!bg) continue;
         const need = big(b) ? 3 : 4.5; if (Color.contrast(bg, norm(b.fill)) >= need) continue;
-        b.fill = Color.bestForeground(bg, colors, need)[0]; delete b.fillToken; n++;
+        b.fill = Color.bestForeground(bg, colors, need)[0]; delete b.fillToken; changed.push(b.id);
       } else if (b.kind === 'button' && isColor(b.fill) && isColor(b.color)) {
-        if (Color.contrast(norm(b.fill), norm(b.color)) >= 4.5) continue; b.color = Color.bestForeground(norm(b.fill), colors, 4.5)[0]; delete b.colorToken; n++;
+        if (Color.contrast(norm(b.fill), norm(b.color)) >= 4.5) continue; b.color = Color.bestForeground(norm(b.fill), colors, 4.5)[0]; delete b.colorToken; changed.push(b.id);
       } else if ((b.kind === 'line' || b.kind === 'rule') && isColor(b.fill)) {
-        const bg = backdropOf(frame, b, order); if (!bg || Color.contrast(bg, norm(b.fill)) >= 1.5) continue; b.fill = Color.bestForeground(bg, colors, 3)[0]; n++;
+        const bg = backdropOf(frame, b, order); if (!bg || Color.contrast(bg, norm(b.fill)) >= 1.5) continue; b.fill = Color.bestForeground(bg, colors, 3)[0]; changed.push(b.id);
       }
     }
-    return n;
+    return changed;
   }
   // The copy a layout carries, rebuilt from its blocks' content paths (what Engine.hydrate takes back).
   function extractContent(layout) {
