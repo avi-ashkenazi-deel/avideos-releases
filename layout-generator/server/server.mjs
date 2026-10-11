@@ -24,6 +24,10 @@ const PORT = +(process.env.PORT || 8787);
 const HOST = process.env.HOST || '127.0.0.1';
 const TOKEN = process.env.LG_TOKEN || '';
 const ADMIN_KEY = process.env.LG_ADMIN_KEY || '';
+// Behind a sign-in proxy (oauth2-proxy, an ingress with SSO…): the header it sets with the person's email or user name.
+// Folder sharing then knows people for sure; without it the server goes by the id each browser makes up.
+const USER_HEADER = String(process.env.LG_USER_HEADER || '').toLowerCase();
+const NAME_HEADER = String(process.env.LG_NAME_HEADER || '').toLowerCase();
 const LOCAL = /^(127\.0\.0\.1|localhost|::1)$/.test(HOST);
 const VERSION = '1.0.0';
 const MAX_MSG = 64 * 1024 * 1024;
@@ -153,6 +157,7 @@ async function joinRoom(conn, roomId) {
     conn.lastActive = Date.now();
     if (m.t === 'hello') {
       conn.client = cleanPresence(m.client); conn.p = { ...conn.p, ...conn.client };
+      if (conn.who) remember(conn.who, conn.client.name).catch(() => { });
       if (Array.isArray(m.tools)) conn.tools = m.tools.slice(0, 100);
       sendJSON(conn, { t: 'snapshot', recs: [...room.recs.values()] });
       sendJSON(conn, { t: 'peers', list: others().map(c => ({ id: c.id, p: c.p })) });
@@ -210,15 +215,73 @@ function saveProjects() {
   clearTimeout(projSave);
   projSave = setTimeout(async () => { try { await mkdir(DATA, { recursive: true }); const file = path.join(DATA, 'projects.json'); await writeFile(file + '.tmp', JSON.stringify({ v: 1, saved: new Date().toISOString(), projects: [...projects.projects.values()], folders: [...projects.folders.values()] })); await rename(file + '.tmp', file); } catch (e) { log('projects save failed', e.message); } }, 300);
 }
-const projectsBody = P => ({ lgProjects: 1, projects: [...P.projects.values()], folders: [...P.folders.values()] });
 const str = (v, n) => String(v == null ? '' : v).slice(0, n);
-function projectOp(P, m) {
-  if (m.op === 'put') { const p = m.project; if (!p || !LIB_ID.test(p.id) || typeof p.name !== 'string') throw new Error('bad project'); P.projects.set(p.id, { id: p.id, name: str(p.name, 80), folder: LIB_ID.test(String(p.folder || '')) ? p.folder : '', created: +p.created || Date.now(), by: str(p.by, 80), byName: str(p.byName, 80), updated: Date.now(), updatedBy: str(p.updatedBy, 80), frames: +p.frames || 0, cover: typeof p.cover === 'string' && p.cover.length < 60000 ? p.cover : '', archived: !!p.archived, kind: p.kind === 'deck' ? 'deck' : 'canvas' }); return; }
-  if (m.op === 'patch') { const cur = P.projects.get(m.id); if (!cur) throw new Error('no such project'); const a = m.patch || {}; for (const k of ['name', 'folder', 'frames', 'cover', 'archived', 'updated', 'updatedBy']) if (k in a) cur[k] = k === 'name' ? str(a[k], 80) : k === 'folder' ? (LIB_ID.test(String(a[k] || '')) ? a[k] : '') : k === 'frames' ? (+a[k] || 0) : k === 'cover' ? (typeof a[k] === 'string' && a[k].length < 60000 ? a[k] : '') : k === 'archived' ? !!a[k] : k === 'updated' ? (+a[k] || Date.now()) : str(a[k], 80); return; }
-  if (m.op === 'del') { P.projects.delete(m.id); return; }
-  if (m.op === 'putFolder') { const f = m.folder; if (!f || !LIB_ID.test(f.id)) throw new Error('bad folder'); P.folders.set(f.id, { id: f.id, name: str(f.name || 'Folder', 60), order: +f.order || 0, by: str(f.by, 80) }); return; }
-  if (m.op === 'delFolder') { P.folders.delete(m.id); for (const p of P.projects.values()) if (p.folder === m.id) p.folder = ''; return; }
+// ---- Who is asking, and what they may see ------------------------------------------------------------------------------
+function whoOf(req, url) {
+  if (USER_HEADER) {
+    const v = String(req.headers[USER_HEADER] || '').trim().toLowerCase().slice(0, 100);
+    return v ? { id: 'sso:' + v, name: str(NAME_HEADER && req.headers[NAME_HEADER] ? req.headers[NAME_HEADER] : v.split('@')[0], 80), trusted: true } : { id: '', name: '', trusted: true };
+  }
+  const id = String(req.headers['x-lg-user'] || (url && url.searchParams.get('u')) || '').slice(0, 120);
+  let name = ''; try { name = decodeURIComponent(String(req.headers['x-lg-name'] || '')).replace(/[\u0000-\u001f<>]/g, '').slice(0, 80); } catch { }
+  return { id: /^[A-Za-z0-9_.:@+-]{1,120}$/.test(id) ? id : '', name, trusted: false };
+}
+const isAdminReq = req => !ADMIN_KEY || String(req.headers['x-lg-admin'] || '') === ADMIN_KEY;
+const ACCESS = ['all', 'people', 'me'];
+function canSeeFolder(f, who) { if (!f || !f.access || f.access === 'all') return true; if (!who.id) return false; return f.by === who.id || (f.access === 'people' && Array.isArray(f.people) && f.people.includes(who.id)); }
+const canSeeProject = (P, p, who) => canSeeFolder(p.folder ? P.folders.get(p.folder) : null, who);
+const projectsBody = (P, who) => ({ lgProjects: 1, me: { id: who.id, trusted: who.trusted }, projects: [...P.projects.values()].filter(p => canSeeProject(P, p, who)), folders: [...P.folders.values()].filter(f => canSeeFolder(f, who)) });
+// People this server has seen (for the "share with" picker): id and the name they go by.
+let people = null; let peopleSave = null;
+async function getPeople() { if (people) return people; people = new Map(); try { for (const p of JSON.parse(await readFile(path.join(DATA, 'people.json'), 'utf8')).people || []) if (p && p.id) people.set(p.id, p); } catch { } return people; }
+async function remember(who, name) {
+  if (!who.id) return; const P = await getPeople(); const n = str(who.trusted ? who.name : (name || who.name), 80); const cur = P.get(who.id);
+  if (cur && cur.name === (n || cur.name) && Date.now() - cur.seen < 3600e3) return;
+  P.set(who.id, { id: who.id, name: n || (cur && cur.name) || '', seen: Date.now() });
+  clearTimeout(peopleSave); peopleSave = setTimeout(async () => { try { await mkdir(DATA, { recursive: true }); const file = path.join(DATA, 'people.json'); await writeFile(file + '.tmp', JSON.stringify({ v: 1, people: [...P.values()] })); await rename(file + '.tmp', file); } catch (e) { log('people save failed', e.message); } }, 1000);
+}
+function projectOp(P, m, who, admin) {
+  const mayChange = p => admin || !p.by || p.by === who.id;
+  const folderOk = id => { if (!id) return true; const f = P.folders.get(id); if (!f || !canSeeFolder(f, who)) throw new Error('No such folder'); return f; };
+  if (m.op === 'put') {
+    const p = m.project; if (!p || !LIB_ID.test(p.id) || typeof p.name !== 'string') throw new Error('bad project');
+    const cur = P.projects.get(p.id); if (cur && !canSeeProject(P, cur, who)) throw new Error('That project is not shared with you');
+    const folder = LIB_ID.test(String(p.folder || '')) ? p.folder : ''; const f = folderOk(folder);
+    const by = cur ? cur.by : (who.id || str(p.by, 120));
+    if (f && f.access === 'me' && by !== who.id) throw new Error('Only your own projects go in an “Only me” folder');
+    P.projects.set(p.id, { id: p.id, name: str(p.name, 80), folder, created: cur ? cur.created : (+p.created || Date.now()), by, byName: cur ? cur.byName : str(who.trusted ? who.name : p.byName, 80), updated: Date.now(), updatedBy: who.id || str(p.updatedBy, 120), frames: +p.frames || 0, cover: typeof p.cover === 'string' && p.cover.length < 60000 ? p.cover : '', archived: !!p.archived, kind: p.kind === 'deck' ? 'deck' : 'canvas' }); return;
+  }
+  if (m.op === 'patch') {
+    const cur = P.projects.get(m.id); if (!cur || !canSeeProject(P, cur, who)) throw new Error('no such project'); const a = m.patch || {};
+    if (('name' in a || 'folder' in a || 'archived' in a) && !mayChange(cur)) throw new Error('Only the person who made this project (or an admin) can change it');
+    if ('folder' in a) { const f = folderOk(LIB_ID.test(String(a.folder || '')) ? a.folder : ''); if (f && f.access === 'me' && cur.by !== who.id) throw new Error('Only your own projects go in an “Only me” folder'); }
+    for (const k of ['name', 'folder', 'frames', 'cover', 'archived', 'updated', 'updatedBy']) if (k in a) cur[k] = k === 'name' ? str(a[k], 80) : k === 'folder' ? (LIB_ID.test(String(a[k] || '')) ? a[k] : '') : k === 'frames' ? (+a[k] || 0) : k === 'cover' ? (typeof a[k] === 'string' && a[k].length < 60000 ? a[k] : '') : k === 'archived' ? !!a[k] : k === 'updated' ? (+a[k] || Date.now()) : str(a[k], 120); return;
+  }
+  if (m.op === 'del') { const cur = P.projects.get(m.id); if (!cur) return; if (!canSeeProject(P, cur, who) || !mayChange(cur)) throw new Error('Only the person who made this project (or an admin) can remove it'); P.projects.delete(m.id); return; }
+  if (m.op === 'putFolder') {
+    const f = m.folder; if (!f || !LIB_ID.test(f.id)) throw new Error('bad folder');
+    const cur = P.folders.get(f.id); if (cur && !canSeeFolder(cur, who)) throw new Error('No such folder');
+    const access = ACCESS.includes(f.access) ? f.access : 'all';
+    const list = access === 'people' && Array.isArray(f.people) ? [...new Set(f.people.filter(x => typeof x === 'string' && x && x.length <= 120))].slice(0, 100) : [];
+    const by = cur ? cur.by : (who.id || str(f.by, 120));
+    const sharingChanged = !cur ? access !== 'all' : (access !== (cur.access || 'all') || JSON.stringify(list) !== JSON.stringify(cur.people || []));
+    if (sharingChanged) {
+      if (!who.id) throw new Error('Sharing needs to know who you are');
+      if (cur && !(by === who.id || ((cur.access || 'all') === 'all' && admin && access !== 'me'))) throw new Error('Only whoever made this folder can change who sees it');
+      if (access === 'me') { if (by !== who.id) throw new Error('Only the person who made this folder can make it “Only me”'); const others = [...P.projects.values()].filter(p => p.folder === f.id && p.by && p.by !== who.id); if (others.length) throw new Error(`${others.length} project(s) in this folder were made by someone else: move them out first`); }
+    }
+    P.folders.set(f.id, { id: f.id, name: str(f.name || 'Folder', 60), order: +f.order || 0, by, access, people: list.filter(x => x !== by) }); return;
+  }
+  if (m.op === 'delFolder') {
+    const cur = P.folders.get(m.id); if (!cur) return; if (!canSeeFolder(cur, who) || !(admin || cur.by === who.id)) throw new Error('Only whoever made this folder (or an admin) can remove it');
+    const inside = [...P.projects.values()].filter(p => p.folder === m.id); if ((cur.access || 'all') !== 'all' && inside.length) throw new Error('This folder still holds projects: move or remove them first');
+    P.folders.delete(m.id); for (const p of inside) p.folder = ''; return;
+  }
   throw new Error('unknown op');
+}
+// After a sharing change: whoever is in a project's room but may no longer see it is told so and let go.
+function enforceRooms(P) {
+  for (const r of rooms.values()) { const pr = P.projects.get(r.id); if (!pr) continue; for (const c of [...r.clients]) if (c.who && !canSeeProject(P, pr, c.who)) { sendJSON(c, { t: 'denied', reason: 'This project is no longer shared with you' }); setTimeout(() => closeConn(c), 50); } }
 }
 function broadcastProjects() { for (const r of rooms.values()) broadcast(r.clients, { t: 'projects' }); }
 
@@ -361,13 +424,20 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, buf, { 'content-type': 'application/vnd.openxmlformats-officedocument.presentationml.presentation' });
     }
     if (url.pathname === '/api/projects') {
-      const P = await getProjects();
-      if (req.method === 'GET') return json(res, 200, projectsBody(P));
+      const P = await getProjects(); const who = whoOf(req, url); remember(who).catch(() => { });
+      if (req.method === 'GET') return json(res, 200, projectsBody(P, who));
       if (req.method !== 'POST') return send(res, 405, '', { allow: 'GET, POST' });
       const m = JSON.parse((await readBody(req, 2 * 1024 * 1024)).toString('utf8') || 'null') || {};
-      try { projectOp(P, m); } catch (e) { return send(res, 400, e.message); }
-      saveProjects(); broadcastProjects();
-      return json(res, 200, projectsBody(P));
+      try { projectOp(P, m, who, isAdminReq(req)); } catch (e) { return send(res, 400, e.message); }
+      saveProjects(); broadcastProjects(); if (m.op === 'putFolder' || m.op === 'patch' || m.op === 'put') enforceRooms(P);
+      return json(res, 200, projectsBody(P, who));
+    }
+    // The "share with" picker: people this server has seen, by name (8 at most), or the names for some ids.
+    if (url.pathname === '/api/people') {
+      const P = await getPeople(); const q = String(url.searchParams.get('q') || '').trim().toLowerCase().slice(0, 80);
+      const ids = String(url.searchParams.get('ids') || '').split(',').filter(Boolean).slice(0, 200);
+      let list = ids.length ? ids.map(id => P.get(id)).filter(Boolean) : [...P.values()].filter(p => p.name && (!q || p.name.toLowerCase().includes(q) || (p.id.startsWith('sso:') && p.id.includes(q)))).sort((a, b) => b.seen - a.seen).slice(0, 8);
+      return json(res, 200, { people: list.map(p => ({ id: p.id, name: p.name })) });
     }
     if (url.pathname === '/api/events' && req.method === 'POST') {
       const m = JSON.parse((await readBody(req, 1024 * 1024)).toString('utf8') || 'null');
@@ -407,6 +477,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (url.pathname.startsWith('/api/rooms/')) {
       const id = url.pathname.slice('/api/rooms/'.length); if (!validRoom(id)) return send(res, 404, 'not found');
+      const P = await getProjects(); const pr = P.projects.get(id); if (pr && !canSeeProject(P, pr, whoOf(req, url))) return send(res, 404, 'not found');
       const r = await getRoom(id); return json(res, 200, { id, clients: r.clients.size, recs: [...r.recs.values()] });
     }
     // static files from the app folder
@@ -421,7 +492,11 @@ server.on('upgrade', async (req, socket) => {
   const url = new URL(req.url, 'http://x');
   if (url.pathname !== '/sync' || !hostOk(req) || String(req.headers.upgrade || '').toLowerCase() !== 'websocket') { socket.destroy(); return; }
   const roomId = url.searchParams.get('room'); if (!validRoom(roomId)) { socket.destroy(); return; }
-  const conn = wsAccept(req, socket); if (conn) await joinRoom(conn, roomId);
+  // A project's room is open to whoever may see the project.
+  const who = whoOf(req, url); const P = await getProjects(); const pr = P.projects.get(roomId);
+  const conn = wsAccept(req, socket); if (!conn) return; conn.who = who;
+  if (pr && !canSeeProject(P, pr, who)) { sendJSON(conn, { t: 'denied', reason: 'This project is not shared with you' }); setTimeout(() => closeConn(conn), 50); return; }
+  await joinRoom(conn, roomId);
 });
 server.listen(PORT, HOST, () => {
   log(`Layout Engine on http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}`);

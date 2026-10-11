@@ -244,7 +244,7 @@ const Sync = (() => {
     const send = msg => { const s = JSON.stringify(msg); if (ws && ws.readyState === 1) ws.send(s); else outbox.push(s); };
     function connect() {
       const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-      ws = new WebSocket(`${proto}//${location.host}/sync?room=${encodeURIComponent(roomId)}`);
+      ws = new WebSocket(`${proto}//${location.host}/sync?room=${encodeURIComponent(roomId)}&u=${encodeURIComponent((env.userId && env.userId()) || me.id)}`);
       ws.onopen = () => { retry = 0; status.connected = true; notify(); send({ t: 'hello', client: { id: me.id, name: me.name || '', color: me.color }, tools: env.toolList ? env.toolList() : [] }); for (const s of outbox.splice(0)) ws.send(s); };
       ws.onmessage = ev => {
         let m; try { m = JSON.parse(ev.data); } catch { return; }
@@ -256,6 +256,7 @@ const Sync = (() => {
         else if (m.t === 'peers') { peerMap = new Map((m.list || []).filter(p => p.id !== me.id).map(p => [p.id, { id: p.id, ...sanitizePresence(p.p) }])); setPeers([...peerMap.values()]); }
         else if (m.t === 'libs' && env.onLibs) env.onLibs();
         else if (m.t === 'projects' && env.onProjects) env.onProjects();
+        else if (m.t === 'denied') { closed = true; if (env.onDenied) env.onDenied(roomId, m.reason || ''); }
         else if (m.t === 'rpc' && env.onRpc) { Promise.resolve().then(() => env.onRpc(m.name, m.args || {})).then(result => send({ t: 'rpc-result', id: m.id, result }), err => send({ t: 'rpc-result', id: m.id, error: String(err && err.message || err) })); }
       };
       ws.onclose = () => { status.connected = false; notify(); if (closed) return; setTimeout(connect, Math.min(8000, 500 * 2 ** retry++)); };
@@ -281,8 +282,10 @@ const Sync = (() => {
     const [lobby, db, user, assets] = caps;
     if (!db && !lobby) return null;
     const base = opts.base ? String(opts.base).replace(/\/?$/, '/') : '';
-    let room = lobby; let named = null;
-    if (lobby && opts.room) { try { named = await lobby.join(String(opts.room).slice(0, 64)); room = named; } catch (e) { console.warn('room join', e && e.code); room = null; } }
+    // A private canvas (opts.solo) has no live room at all: the lobby is everyone's. Its pictures stay under it.
+    const assetsAt = opts.solo ? base + 'assets' : 'assets';
+    let room = opts.solo ? null : lobby; let named = null;
+    if (lobby && opts.room && !opts.solo) { try { named = await lobby.join(String(opts.room).slice(0, 64)); room = named; } catch (e) { console.warn('room join', e && e.code); room = null; } }
     const unsubs = []; const sub = (u) => { if (typeof u === 'function') unsubs.push(u); };
     const writeQueue = new Map(); let firstSnap = true; const docVersions = new Map();
     // A frame and its blocks pack into one database document (or a few, past 200 KB), keyed by frame id.
@@ -312,7 +315,7 @@ const Sync = (() => {
     let metaChain = Promise.resolve();
     function sendRecs(list, live) {
       if (!status.readOnly && db) {
-        const fids = new Set(); for (const r of list) { if (r._k === 'meta') metaChain = metaChain.then(() => db.doc(`${base}canvas/meta`).set({ rec: r })).catch(() => { }); else if (r._k.startsWith('a~')) db.doc(`assets/${r.id}`).set({ rec: r }).catch(() => { }); else if (r._k.startsWith('L~')) db.doc(`library/${r._k.slice(2)}`).set({ rec: r }).catch(() => { }); else fids.add(r._k.split('~')[1]); }
+        const fids = new Set(); for (const r of list) { if (r._k === 'meta') metaChain = metaChain.then(() => db.doc(`${base}canvas/meta`).set({ rec: r })).catch(() => { }); else if (r._k.startsWith('a~')) db.doc(`${assetsAt}/${r.id}`).set({ rec: r }).catch(() => { }); else if (r._k.startsWith('L~')) db.doc(`library/${r._k.slice(2)}`).set({ rec: r }).catch(() => { }); else fids.add(r._k.split('~')[1]); }
         for (const fid of fids) schedule(fid);
       }
       if (room) { for (const r of list) pendingLive.set(r._k, r); if (!liveTimer) liveTimer = setTimeout(flushLive, 120); }
@@ -357,6 +360,7 @@ const Sync = (() => {
         applyRemote(changed);
       }, e => console.warn('db frames', e && e.code)));
       sub(db.doc(`${base}canvas/meta`).onSnapshot(s => { const d = s.data(); if (d && d.rec) applyRemote([d.rec]); }, () => { }));
+      if (opts.solo) sub(db.collection(assetsAt).onSnapshot(s => { for (const d of s.docs) { const v = d.data(); if (v && v.rec) { if (newer(v.rec, recs.get(v.rec._k))) recs.set(v.rec._k, v.rec); ensureAsset(v.rec); } } }, () => { }));
       if (!globalSubs) {
         globalSubs = true;
         db.collection('library').onSnapshot(s => { const list = []; for (const d of s.docs) { const v = d.data(); if (v && v.rec) list.push(v.rec); } if (list.length) applyRemote(list); }, () => { });
@@ -369,6 +373,8 @@ const Sync = (() => {
       send: sendRecs,
       presence: p => { if (room) room.presence(p).catch(() => { }); },
       uploadAsset: assets ? async blob => { const r = await assets.upload(blob); return { id: r.id, url: r.url }; } : null,
+      // Screens waiting to be saved are saved now (before this canvas is let go).
+      flush: async () => { for (const [fid, q] of writeQueue) if (q.timer) { clearTimeout(q.timer); q.timer = 0; q.chain = q.chain.then(() => writeFrame(fid)).catch(e => console.warn('db write', e)); } await Promise.all([...writeQueue.values()].map(q => q.chain)); await metaChain; },
       close: () => { for (const u of unsubs) { try { u(); } catch { } } for (const q of writeQueue.values()) clearTimeout(q.timer); if (named && named.leave) { try { named.leave(); } catch { } } },
     };
   }
@@ -398,28 +404,30 @@ const Sync = (() => {
   }
   async function startArtifact(opts = {}) {
     const a = await artifactAdapter(opts); if (!a) return false;
-    attach(a, { mode: 'artifact', room: opts.room || 'artifact', label: opts.room ? 'Everyone who opens this project edits it with you' : 'Everyone with this page open edits the same canvas' });
+    attach(a, { mode: 'artifact', room: opts.room || (opts.solo ? 'private' : 'artifact'), label: opts.label || (opts.room ? 'Everyone who opens this project edits it with you' : 'Everyone with this page open edits the same canvas') });
     return true;
   }
   const canArtifact = () => !!(window.claude && typeof window.claude.use === 'function');
+  // Waits (a few seconds at most) until this canvas's pending saves are written.
+  async function flushWrites() { if (!adapter || !adapter.flush) return; await Promise.race([adapter.flush().catch(() => { }), new Promise(r => setTimeout(r, 4000))]); }
   function leave() { if (adapter) { attach(null, { mode: 'local', room: null, label: '', readOnly: false }); } }
   async function serverAvailable() {
     if (!/^https?:$/.test(location.protocol) || window.claude) return false; // file:// or inside claude.ai: no sync server there
     try { const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 1500); const r = await fetch('/api/ping', { cache: 'no-store', signal: ctl.signal }); clearTimeout(t); if (!r.ok) return false; const j = await r.json(); return !!(j && j.lg); } catch { return false; }
   }
   function roomFromUrl() { const m = /[?&#]room=([A-Za-z0-9_-]{4,64})/.exec(location.search + location.hash); return m ? m[1] : null; }
-  function joinServer(roomId) {
+  function joinServer(roomId, label) {
     if (adapter) resetState();
     status.room = roomId;
     const url = new URL(location.href); url.searchParams.set('room', roomId); history.replaceState(null, '', url);
-    attach(serverAdapter(roomId), { mode: 'server', room: roomId, label: 'Anyone with this link edits the same canvas' });
+    attach(serverAdapter(roomId), { mode: 'server', room: roomId, label: label || 'Anyone with this link edits the same canvas' });
     return roomId;
   }
   function newRoomId() { const a = 'abcdefghijkmnpqrstuvwxyz23456789'; let s = ''; const r = crypto.getRandomValues(new Uint8Array(10)); for (const x of r) s += a[x % a.length]; return s; }
   function roomLink() { if (status.mode !== 'server' || !status.room) return null; const u = new URL(location.href); u.hash = ''; u.searchParams.set('room', status.room); return u.toString(); }
   function setName(n) { me.name = String(n || '').replace(/[\u0000-\u001f<>]/g, '').slice(0, 40); LS.set('lg.name', me.name); if (adapter) adapter.presence({ name: me.name }); notify(); }
   return {
-    init, startArtifact, canArtifact, serverAvailable, roomFromUrl, joinServer, newRoomId, roomLink, setName, flush: flushInbox, resetState, leave,
+    init, startArtifact, canArtifact, serverAvailable, roomFromUrl, joinServer, newRoomId, roomLink, setName, flush: flushInbox, flushWrites, resetState, leave,
     get me() { return me; }, get status() { return status; }, get peers() { return peers; },
     onStatus: fn => { listeners.push(fn); fn(status, peers); },
     announceTools: list => { if (adapter && adapter.announceTools) adapter.announceTools(list); },

@@ -13,7 +13,7 @@ const Admin = (() => {
   const ago = t => { if (!t) return '—'; const d = Date.now() - t; const m = Math.round(d / 60000); if (m < 2) return 'just now'; if (m < 60) return m + ' min ago'; const h = Math.round(m / 60); if (h < 36) return h + ' h ago'; return Math.round(h / 24) + ' d ago'; };
   const when = t => t ? new Date(t).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
   const hours = m => m >= 90 ? (m / 60).toFixed(1) + ' h' : m + ' min';
-  const projName = id => { const p = typeof Projects !== 'undefined' && Projects.get(id); return p ? p.name : (id === '_root' ? 'Shared canvas' : id || '—'); };
+  const projName = id => { const p = typeof Projects !== 'undefined' && Projects.get(id); return p ? (Projects.accessOf(p) === 'all' ? p.name : p.name + ' (private)') : (id === '_root' ? 'Shared canvas' : id ? 'A private or removed project' : '—'); };
   const folderName = id => { const p = typeof Projects !== 'undefined' && Projects.get(id); const f = p && p.folder && Projects.folders().find(x => x.id === p.folder); return f ? f.name : ''; };
 
   // One series of bars per day: thin marks, rounded tops anchored to the baseline, a hover readout, no legend

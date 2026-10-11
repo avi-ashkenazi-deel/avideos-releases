@@ -579,11 +579,11 @@ input[disabled] { opacity: .5; cursor: not-allowed; }
 .home-newf { display: flex; gap: 6px; margin-top: 10px; }
 .home-newf .input { min-width: 0; flex: 1; }
 .home-main { padding: 18px 22px; }
-.home-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+.home-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
 .home-head h2 { margin: 0; font-size: 20px; flex: 1; }
 .home-head .input { width: 240px; }
 .home-new { display: flex; gap: 8px; align-items: center; margin-bottom: 14px; padding: 10px; border: 1px solid var(--line-2); border-radius: 10px; background: var(--panel); }
-.home-new #homeNewName { flex: 1 1 auto; width: auto; min-width: 0; }
+.home-new #homeNewName, .home-new #homeOpenInput { flex: 1 1 auto; width: auto; min-width: 0; }
 .home-new select { flex: 0 0 220px; width: 220px; }
 .home-new .btn { flex: none; }
 .home-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; }
@@ -601,6 +601,31 @@ input[disabled] { opacity: .5; cursor: not-allowed; }
 .home-foot { margin-top: 18px; }
 .home-archived .home-cover { filter: grayscale(1); opacity: .6; }
 .cv-project { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* sharing */
+.home-ico { width: 13px; height: 13px; vertical-align: -2px; margin-right: 5px; flex: none; }
+.home-f b { font-weight: inherit; display: flex; align-items: center; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.home-newacc { margin-top: 6px; width: 100%; font-size: 12px; }
+.home-access { color: var(--fg-3); font-size: 12.5px; display: flex; align-items: center; white-space: nowrap; }
+.home-access .linkish, .linkish { background: none; border: 0; padding: 0 0 0 4px; color: var(--accent); font: inherit; cursor: pointer; text-decoration: underline; }
+.share-modal { max-width: 520px; }
+.share-opts { display: grid; gap: 8px; margin: 12px 0; }
+.share-opt { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--line-2); border-radius: 10px; cursor: pointer; }
+.share-opt.on { border-color: var(--accent); background: rgba(216,201,163,.08); }
+.share-opt input { margin-top: 3px; accent-color: var(--accent); }
+.share-opt b { display: flex; align-items: center; font-size: 13.5px; }
+.share-opt small { display: block; color: var(--fg-3); font-size: 12px; margin-top: 2px; }
+.share-people { display: grid; gap: 8px; margin-bottom: 8px; }
+.share-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.share-chip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 4px 3px 10px; border-radius: 999px; background: rgba(127,127,127,.14); font-size: 12.5px; }
+.share-chip button { background: none; border: 0; color: var(--fg-3); cursor: pointer; padding: 0 4px; font-size: 11px; }
+.share-hits { display: flex; flex-wrap: wrap; gap: 6px; min-height: 4px; }
+.share-hit { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px 4px 4px; border-radius: 999px; border: 1px solid var(--line-2); background: none; color: var(--fg); font: inherit; font-size: 12.5px; cursor: pointer; }
+.share-hit:hover { border-color: var(--accent); }
+.share-hit img { width: 20px; height: 20px; border-radius: 50%; }
+.share-note { margin: 10px 0 14px; }
+.share-actions { display: flex; gap: 8px; }
+.share-page { margin-top: 16px; font-size: 12.5px; color: var(--fg-3); }
+.share-page summary { cursor: pointer; }
 @media (max-width: 800px) { .home { grid-template-columns: 1fr; } .home-side { border-right: 0; border-bottom: 1px solid var(--line-2); } }
 /* ---- Admin ---- */
 .modal-inner.admin-modal { width: min(1040px, 100%); }
@@ -803,7 +828,8 @@ input[disabled] { opacity: .5; cursor: not-allowed; }
     <section id="homeView" class="home" hidden>
       <aside class="home-side" id="homeSide"></aside>
       <div class="home-main">
-        <div class="home-head"><h2 id="homeTitle">Projects</h2><input id="homeSearch" class="input" type="search" placeholder="Search projects" aria-label="Search projects"><button id="homeNewBtn" class="btn primary" type="button">＋ New project</button></div>
+        <div class="home-head"><h2 id="homeTitle">Projects</h2><span id="homeAccess" class="home-access" hidden></span><input id="homeSearch" class="input" type="search" placeholder="Search projects" aria-label="Search projects"><button id="homeOpenBtn" class="btn ghost" type="button" hidden>Open a link</button><button id="homeNewBtn" class="btn primary" type="button">＋ New project</button></div>
+        <div id="homeOpenRow" class="home-new" hidden><input id="homeOpenInput" class="input grow" type="text" placeholder="Paste a project link" aria-label="Project link"><button id="homeOpenGo" class="btn primary" type="button">Open</button><button id="homeOpenCancel" class="btn ghost" type="button">Cancel</button></div>
         <div id="homeNew" class="home-new" hidden><input id="homeNewName" class="input grow" type="text" placeholder="Project name, e.g. Payroll launch" maxlength="80"><select id="homeNewFolder" class="input" aria-label="Folder"></select><button id="homeCreate" class="btn primary" type="button">Create</button><button id="homeCancel" class="btn ghost" type="button">Cancel</button></div>
         <div id="homeGrid" class="home-grid"></div>
         <p class="hint home-foot"><button id="homeArchived" class="btn small ghost" type="button">Show archived</button> <span id="homeNote"></span></p>
@@ -976,6 +1002,15 @@ input[disabled] { opacity: .5; cursor: not-allowed; }
     </div>
   </div>
 
+  <div id="shareModal" class="modal" hidden>
+    <div class="modal-inner about share-modal" role="dialog" aria-modal="true" aria-labelledby="shareTitle">
+      <div class="detail-head">
+        <h3 id="shareTitle">Share folder</h3>
+        <button class="btn ghost icon" data-share-close type="button" aria-label="Close">✕</button>
+      </div>
+      <div class="share-body"></div>
+    </div>
+  </div>
   <div id="libsModal" class="modal" hidden>
     <div class="modal-inner about libs-modal">
       <div class="detail-head">
@@ -8345,19 +8380,30 @@ const Library = (() => {
    - claude.ai: the page's database (projects/{id}, folders/{id}); the canvas itself under projects/{id}/frames
    - server: /api/projects (server/data/projects.json); the canvas is the room with the project's id
    - neither: this browser (lg.projects), one saved canvas per project
-   Anyone who can edit may create projects; a project is removed by whoever made it or an admin. */
+   Anyone who can edit may create projects; a project is removed by whoever made it or an admin.
+   Sharing is per folder: Everyone (the default), Specific people (its maker plus the people listed) or Only me.
+   Unfiled projects are everyone's.
+   - claude.ai: an "Only me" folder and its projects (index, screens, pictures) live in the maker's private part of
+     the database (private/<id>/…), which nobody else can read, the page's owner included, and its canvas has no
+     live room. "Specific people" hides the folder from everyone else in the app, but its data sits in the shared
+     database: it is not a lock against someone who reads the page's data directly.
+   - server: the server filters what it sends and refuses rooms and changes, by the person's id: trusted when the
+     server sits behind a sign-in proxy (LG_USER_HEADER), otherwise the id this browser made up. */
 const Projects = (() => {
   const LS = { get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch { return d; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch { return false; } } };
   const ID = /^[A-Za-z0-9_.:-]{1,64}$/;
+  const ACCESS = ['all', 'people', 'me'];
   let env = null, backend = null, started = null;
-  const S = { mode: 'local', projects: new Map(), folders: new Map(), uid: null, owner: false, canEdit: null, canWrite: null, ready: false, current: LS.get('lg.project', null) };
+  // projects/folders: the shared index; pprojects/pfolders: this person's private ones (claude.ai "Only me")
+  const S = { mode: 'local', projects: new Map(), folders: new Map(), pprojects: new Map(), pfolders: new Map(), uid: null, trusted: false, owner: false, canEdit: null, canWrite: null, ready: false, pageLink: '', current: LS.get('lg.project', null) };
   const listeners = new Set(); const emit = () => { for (const fn of listeners) { try { fn(); } catch (e) { console.error(e); } } };
   // The first answer from wherever projects live (or a timeout): opening "the last project" before the list arrives
   // would make a new one instead.
   function whenReady(ms = 5000) { if (S.ready) return Promise.resolve(true); return new Promise(res => { const t = setTimeout(() => { off(); res(false); }, ms); const fn = () => { if (S.ready) { clearTimeout(t); off(); res(true); } }; listeners.add(fn); const off = () => listeners.delete(fn); }); }
   const uid = () => 'p' + Math.random().toString(36).slice(2, 10);
-  const clean = p => (p && typeof p === 'object' && ID.test(String(p.id || ''))) ? { id: String(p.id), name: String(p.name || 'Untitled').slice(0, 80), folder: ID.test(String(p.folder || '')) ? String(p.folder) : '', created: +p.created || 0, by: typeof p.by === 'string' ? p.by.slice(0, 80) : '', byName: typeof p.byName === 'string' ? p.byName.slice(0, 80) : '', updated: +p.updated || 0, updatedBy: typeof p.updatedBy === 'string' ? p.updatedBy.slice(0, 80) : '', frames: +p.frames || 0, cover: typeof p.cover === 'string' && /^data:image\/(jpeg|png|webp);base64,/.test(p.cover) && p.cover.length < 60000 ? p.cover : '', archived: !!p.archived, kind: p.kind === 'deck' ? 'deck' : 'canvas' } : null;
-  const cleanFolder = f => (f && typeof f === 'object' && ID.test(String(f.id || ''))) ? { id: String(f.id), name: String(f.name || 'Folder').slice(0, 60), order: +f.order || 0, by: typeof f.by === 'string' ? f.by.slice(0, 80) : '' } : null;
+  const clean = p => (p && typeof p === 'object' && ID.test(String(p.id || ''))) ? { id: String(p.id), name: String(p.name || 'Untitled').slice(0, 80), folder: ID.test(String(p.folder || '')) ? String(p.folder) : '', created: +p.created || 0, by: typeof p.by === 'string' ? p.by.slice(0, 120) : '', byName: typeof p.byName === 'string' ? p.byName.slice(0, 80) : '', updated: +p.updated || 0, updatedBy: typeof p.updatedBy === 'string' ? p.updatedBy.slice(0, 120) : '', frames: +p.frames || 0, cover: typeof p.cover === 'string' && /^data:image\/(jpeg|png|webp);base64,/.test(p.cover) && p.cover.length < 60000 ? p.cover : '', archived: !!p.archived, kind: p.kind === 'deck' ? 'deck' : 'canvas' } : null;
+  const cleanPeople = a => Array.isArray(a) ? [...new Set(a.filter(x => typeof x === 'string' && x && x.length <= 120))].slice(0, 100) : [];
+  const cleanFolder = f => (f && typeof f === 'object' && ID.test(String(f.id || ''))) ? { id: String(f.id), name: String(f.name || 'Folder').slice(0, 60), order: +f.order || 0, by: typeof f.by === 'string' ? f.by.slice(0, 120) : '', access: ACCESS.includes(f.access) ? f.access : 'all', people: f.access === 'people' ? cleanPeople(f.people) : [] } : null;
   function setAll({ projects, folders }) {
     if (projects) { S.projects.clear(); for (const p of projects) { const c = clean(p); if (c) S.projects.set(c.id, c); } }
     if (folders) { S.folders.clear(); for (const f of folders) { const c = cleanFolder(f); if (c) S.folders.set(c.id, c); } }
@@ -8373,37 +8419,76 @@ const Projects = (() => {
     try { S.owner = !!(user && await user.isOwner()); } catch { S.owner = false; }
     try { S.canEdit = user && user.canEdit ? await user.canEdit() : null; } catch { S.canEdit = null; }
     try { S.canWrite = user && user.can ? await user.can('data.write') : null; } catch { S.canWrite = null; }
+    S.trusted = !!S.uid;
     const why = e => (e && (e.code === 'invalid_argument' || e.code === 'not_granted')) ? new Error('This page does not let you change projects (you may be a viewer). Ask the owner for Contributor access.') : (e instanceof Error ? e : new Error((e && e.message) || String(e)));
     const write = async fn => { try { return await fn(); } catch (e) { throw why(e); } };
-    const ready = { p: false, f: false }; const done = () => { if (ready.p && ready.f) { S.ready = true; emit(); } };
-    db.collection('projects').onSnapshot(snap => { if (!ready.p && snap.metadata && snap.metadata.fromCache && !snap.size) return; ready.p = true; const list = []; for (const d of snap.docs) { const v = d.data(); if (v) list.push({ ...v, id: d.id }); } S.projects.clear(); for (const p of list) { const c = clean(p); if (c) S.projects.set(c.id, c); } done(); emit(); }, () => { });
-    db.collection('folders').onSnapshot(snap => { if (!ready.f && snap.metadata && snap.metadata.fromCache && !snap.size) return; ready.f = true; const list = []; for (const d of snap.docs) { const v = d.data(); if (v) list.push({ ...v, id: d.id }); } S.folders.clear(); for (const f of list) { const c = cleanFolder(f); if (c) S.folders.set(c.id, c); } done(); emit(); }, () => { });
+    // The shared index, plus (with an id) this person's private one; ready once every part has answered.
+    const mine = S.uid ? `private/${S.uid}/` : null;
+    const ready = { p: false, f: false, pp: !mine, pf: !mine }; const done = () => { if (Object.values(ready).every(Boolean) && !S.ready) { S.ready = true; emit(); } };
+    const watch = (path, key, map, fn) => db.collection(path).onSnapshot(snap => {
+      if (!ready[key] && snap.metadata && snap.metadata.fromCache && !snap.size) return;
+      ready[key] = true; map.clear(); for (const d of snap.docs) { const v = d.data(); const c = v && fn({ ...v, id: d.id }); if (c) map.set(c.id, c); } done(); emit();
+    }, () => { ready[key] = true; done(); });
+    watch('projects', 'p', S.projects, clean); watch('folders', 'f', S.folders, cleanFolder);
+    if (mine) { watch(mine + 'projects', 'pp', S.pprojects, clean); watch(mine + 'folders', 'pf', S.pfolders, cleanFolder); }
+    // The page's own address (the owner sets it once), for project links.
+    db.doc('config/page').onSnapshot(s => { const d = s.data(); S.pageLink = d && typeof d.link === 'string' && /^https:\/\/[^\s#]+$/.test(d.link) ? d.link : ''; emit(); }, () => { });
+    const at = priv => priv ? mine : '';
+    // Where a canvas keeps its screens, settings and pictures. Shared projects keep pictures in the page-wide assets
+    // collection; private ones keep their own.
+    const parts = base => [['frames', base + 'frames'], ['canvas', base + 'canvas'], ['assets', base.startsWith('private/') ? base + 'assets' : 'assets']];
+    async function readAll(path) { try { const snap = await db.collection(path).limit(1000).get(); return snap.docs.map(d => [d.id, d.data()]).filter(([, v]) => v); } catch { return []; } }
     return {
       kind: 'artifact',
-      put: p => write(() => db.doc(`projects/${p.id}`).set(p)),
-      patch: (id, patch) => write(() => db.doc(`projects/${id}`).update(patch)),
-      del: id => write(() => db.doc(`projects/${id}`).delete()),
-      putFolder: f => write(() => db.doc(`folders/${f.id}`).set(f)),
-      delFolder: id => write(() => db.doc(`folders/${id}`).delete()),
+      put: (p, priv) => write(() => db.doc(`${at(priv)}projects/${p.id}`).set(p)),
+      patch: (id, patch, priv) => write(() => db.doc(`${at(priv)}projects/${id}`).update(patch)),
+      del: (id, priv) => write(() => db.doc(`${at(priv)}projects/${id}`).delete()),
+      putFolder: (f, priv) => write(() => db.doc(`${at(priv)}folders/${f.id}`).set(f)),
+      delFolder: (id, priv) => write(() => db.doc(`${at(priv)}folders/${id}`).delete()),
+      // A canvas copied between the shared database and the private part. Going private, only the pictures its
+      // screens use are copied (the page-wide ones stay where they are, others may use them too).
+      async copyCanvas(from, to) {
+        const src = parts(from), dst = parts(to); let used = null;
+        for (let i = 0; i < src.length; i++) {
+          if (src[i][1] === dst[i][1]) continue;
+          let docs = await readAll(src[i][1]);
+          if (src[i][0] === 'frames') used = JSON.stringify(docs);
+          if (src[i][0] === 'assets' && !from.startsWith('private/')) docs = docs.filter(([id]) => used && used.includes(id));
+          for (const [id, v] of docs) await write(() => db.doc(`${dst[i][1]}/${id}`).set(v));
+        }
+      },
+      async clearCanvas(from) { for (const [name, path] of parts(from)) { if (name === 'assets' && !from.startsWith('private/')) continue; for (const [id] of await readAll(path)) { try { await db.doc(`${path}/${id}`).delete(); } catch { } } } },
+      people: {
+        search: async q => { if (!user || !user.search) return []; try { return (await user.search(String(q || ''))).map(p => ({ id: p.id, name: p.name || '', avatar: p.avatarUrl || '', me: !!p.isMe })); } catch { return []; } },
+        names: async ids => { const out = {}; for (const id of ids) out[id] = { id, name: '', avatar: '' }; if (!ids.length || !user || !user.profiles) return out; try { const ps = await user.profiles(ids); for (const id of ids) { const p = ps[id] || {}; out[id] = { id, name: p.name || '', avatar: p.avatarUrl || '', me: !!p.isMe }; } } catch { } return out; },
+      },
     };
   }
+  // Who is asking, for the server: this browser's id and the name it goes by (the server prefers its sign-in header).
+  function who() { const me = env && env.me ? env.me() : {}; const id = me.id || LS.get('lg.clientId', '') || ''; return { 'x-lg-user': String(id), 'x-lg-name': encodeURIComponent(String(me.name || '').slice(0, 80)) }; }
   async function serverBackend() {
     if (window.claude || !/^https?:$/.test(location.protocol)) return null;
-    let j; try { const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 1500); const r = await fetch('/api/projects', { cache: 'no-store', signal: ctl.signal }); clearTimeout(t); if (!r.ok) return null; j = await r.json(); } catch { return null; }
+    let j; try { const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 1500); const r = await fetch('/api/projects', { cache: 'no-store', signal: ctl.signal, headers: who() }); clearTimeout(t); if (!r.ok) return null; j = await r.json(); } catch { return null; }
     if (!j || !j.lgProjects) return null;
-    S.uid = (typeof Sync !== 'undefined' && Sync.me.id) || LS.get('lg.clientId', null);
-    const apply = j => setAll({ projects: j.projects || [], folders: j.folders || [] });
+    // The server answers with what this person may see, and who it takes them to be.
+    S.uid = (env && env.me && env.me().id) || LS.get('lg.clientId', null);
+    const apply = j => { if (j.me && typeof j.me.id === 'string' && j.me.id) { S.uid = j.me.id; S.trusted = !!j.me.trusted; } setAll({ projects: j.projects || [], folders: j.folders || [] }); };
     apply(j);
     async function op(body) {
-      const r = await fetch('/api/projects', { method: 'POST', headers: { 'content-type': 'application/json', 'x-lg-admin': LS.get('lg.adminKey', '') || '' }, body: JSON.stringify(body) });
+      const r = await fetch('/api/projects', { method: 'POST', headers: { 'content-type': 'application/json', 'x-lg-admin': LS.get('lg.adminKey', '') || '', ...who() }, body: JSON.stringify(body) });
       if (!r.ok) throw new Error((await r.text()).slice(0, 200) || 'The server refused that change');
       const out = await r.json(); if (out && out.lgProjects) apply(out); return out;
     }
+    const people = async (q, ids) => { try { const r = await fetch(`/api/people?q=${encodeURIComponent(q || '')}&ids=${encodeURIComponent((ids || []).join(','))}`, { cache: 'no-store', headers: who() }); return r.ok ? ((await r.json()).people || []) : []; } catch { return []; } };
     return {
       kind: 'server',
-      refresh: (() => { let t = 0; return () => { clearTimeout(t); t = setTimeout(async () => { try { const r = await fetch('/api/projects', { cache: 'no-store' }); if (r.ok) apply(await r.json()); } catch { } }, 250); }; })(),
+      refresh: (() => { let t = 0; return () => { clearTimeout(t); t = setTimeout(async () => { try { const r = await fetch('/api/projects', { cache: 'no-store', headers: who() }); if (r.ok) apply(await r.json()); } catch { } }, 250); }; })(),
       put: p => op({ op: 'put', project: p }), patch: (id, patch) => op({ op: 'patch', id, patch }), del: id => op({ op: 'del', id }),
       putFolder: f => op({ op: 'putFolder', folder: f }), delFolder: id => op({ op: 'delFolder', id }),
+      people: {
+        search: async q => (await people(q, [])).map(p => ({ id: p.id, name: p.name || '', avatar: '', me: p.id === S.uid })),
+        names: async ids => { const out = {}; for (const id of ids) out[id] = { id, name: '', avatar: '' }; if (ids.length) for (const p of await people('', ids)) if (out[p.id]) out[p.id] = { id: p.id, name: p.name || '', avatar: '', me: p.id === S.uid }; return out; },
+      },
     };
   }
   function localBackend() {
@@ -8420,6 +8505,22 @@ const Projects = (() => {
     };
   }
 
+  // ---- who sees what ----------------------------------------------------------------------------------------------------
+  const anyFolder = id => (id && (S.folders.get(id) || S.pfolders.get(id))) || null;
+  const anyProject = id => S.projects.get(id) || S.pprojects.get(id) || null;
+  const isPriv = id => S.pprojects.has(id);
+  // A folder is seen by everyone, or by its maker and the people listed, or by its maker alone. In this browser
+  // alone (no claude.ai, no server) there is nobody else.
+  function seesFolder(f) {
+    if (!f || f.access === 'all' || S.mode === 'local') return true;
+    if (!S.uid) return false;
+    return f.by === S.uid || (f.access === 'people' && f.people.includes(S.uid));
+  }
+  const sees = p => seesFolder(anyFolder(p.folder));
+  const accessOf = p => { const f = p && anyFolder(p.folder); return f ? f.access : 'all'; };
+  const allProjects = () => [...S.projects.values(), ...S.pprojects.values()];
+  const isAdmin = () => { try { return typeof LibStore !== 'undefined' && LibStore.role().admin; } catch { return false; } };
+
   // ---- public ---------------------------------------------------------------------------------------------------------
   function init(e) { env = e; }
   function start() {
@@ -8427,38 +8528,131 @@ const Projects = (() => {
     started = (async () => { backend = (await artifactBackend()) || (await serverBackend()) || localBackend(); S.mode = backend.kind; emit(); return S.mode; })();
     return started;
   }
-  const projects = (folder) => [...S.projects.values()].filter(p => !p.archived && (folder === undefined || (p.folder || '') === folder)).sort((a, b) => (b.updated || b.created) - (a.updated || a.created));
-  const folders = () => [...S.folders.values()].sort((a, b) => a.order - b.order || a.name.localeCompare(b.name));
-  const get = id => S.projects.get(id) || null;
-  const isAdmin = () => { try { return typeof LibStore !== 'undefined' && LibStore.role().admin; } catch { return false; } };
+  const projects = (folder) => allProjects().filter(p => !p.archived && sees(p) && (folder === undefined || (p.folder || '') === folder)).sort((a, b) => (b.updated || b.created) - (a.updated || a.created));
+  const folders = () => [...S.folders.values(), ...S.pfolders.values()].filter(seesFolder).sort((a, b) => a.order - b.order || a.name.localeCompare(b.name));
+  const get = id => { const p = anyProject(id); return p && sees(p) ? p : null; };
+  // Projects in folders someone else shared with this person by name.
+  const sharedWithMe = () => projects().filter(p => { const f = anyFolder(p.folder); return f && f.access === 'people' && f.by !== S.uid; });
   function canChange(p) { return !!p && (S.owner || isAdmin() || (S.uid && p.by === S.uid) || (!S.uid && S.mode !== 'artifact')); }
+  // Who may change a folder's sharing: whoever made it, or an admin for an everyone-folder (nobody else sees the rest).
+  function canShare(f) { f = typeof f === 'string' ? anyFolder(f) : f; if (!f || S.mode === 'local') return false; return (!!S.uid && f.by === S.uid) || (f.access === 'all' && (S.owner || isAdmin())); }
   const must = () => { if (!backend) throw new Error('Projects are still loading'); if (S.canWrite === false) throw new Error('You can open projects but not change them here: ask the owner for Contributor access.'); };
+  const privateFolder = id => S.mode === 'artifact' && S.pfolders.has(id || '');
   async function create({ name, folder = '', kind = 'canvas', id } = {}) {
     must(); const me = env && env.me ? env.me() : {};
+    if (folder && !seesFolder(anyFolder(folder))) folder = '';
     const p = clean({ id: id && ID.test(id) ? id : uid(), name: String(name || 'Untitled project').trim().slice(0, 80) || 'Untitled project', folder, created: Date.now(), by: S.uid || me.id || '', byName: me.name || '', updated: Date.now(), updatedBy: S.uid || me.id || '', frames: 0, kind });
-    await backend.put(p); S.projects.set(p.id, p); emit(); return p;
+    const priv = privateFolder(folder);
+    await backend.put(p, priv); (priv ? S.pprojects : S.projects).set(p.id, p); emit(); return p;
   }
-  async function update(id, patch) { must(); const cur = get(id); if (!cur) throw new Error('No such project'); if (('name' in patch || 'folder' in patch || 'archived' in patch) && !canChange(cur)) throw new Error('Only the person who made this project (or an admin) can change it'); const next = clean({ ...cur, ...patch, id }); await backend.patch(id, { ...patch, updated: next.updated }); S.projects.set(id, next); emit(); return next; }
+  // claude.ai: a project moved into or out of an "Only me" folder moves its canvas to or from the private part.
+  // The open canvas is let go first (its last edits saved) and opened again where it now lives.
+  let moving = null;
+  async function relocate(id, next, toPriv) {
+    const fromPriv = isPriv(id); const from = baseOf(id);
+    moving = id; const wasOpen = env && env.release ? await env.release(id) : false;
+    try {
+      const to = toPriv ? `private/${S.uid}/projects/${id}/` : `projects/${id}/`;
+      await backend.put(next, toPriv); (toPriv ? S.pprojects : S.projects).set(id, next);
+      await backend.copyCanvas(from, to);
+      await backend.del(id, fromPriv); (fromPriv ? S.pprojects : S.projects).delete(id);
+      await backend.clearCanvas(from);
+      // someone else who had it open may still save a last edit to the shared place: sweep once more
+      // (not if it has moved back meanwhile: then that place is its home again)
+      if (toPriv && !fromPriv) setTimeout(() => { if (isPriv(id) && moving !== id) backend.clearCanvas(from).catch(() => { }); }, 5000);
+    } finally { moving = null; emit(); if (wasOpen && env.reopen) await env.reopen(id); }
+  }
+  async function update(id, patch) {
+    must(); const cur = get(id); if (!cur) throw new Error('No such project');
+    if (('name' in patch || 'folder' in patch || 'archived' in patch) && !canChange(cur)) throw new Error('Only the person who made this project (or an admin) can change it');
+    if ('folder' in patch && patch.folder && !seesFolder(anyFolder(patch.folder))) throw new Error('No such folder');
+    const next = clean({ ...cur, ...patch, id });
+    if ('folder' in patch && S.mode === 'artifact') {
+      const toPriv = privateFolder(patch.folder);
+      if (toPriv && cur.by !== S.uid) throw new Error('Only your own projects go in an “Only me” folder');
+      if (toPriv !== isPriv(id)) { next.updated = Date.now(); await relocate(id, next, toPriv); return next; }
+    }
+    await backend.patch(id, { ...patch, updated: next.updated }, isPriv(id)); (isPriv(id) ? S.pprojects : S.projects).set(id, next); emit(); return next;
+  }
   // Bookkeeping from the canvas (frames count, cover, last edit): quiet, at most every 20 s per project.
   const touchT = new Map();
   async function touch(id, info = {}) {
-    const cur = get(id); if (!cur || !backend) return;
+    const cur = get(id); if (!cur || !backend || moving === id) return;
     const last = touchT.get(id) || 0; if (Date.now() - last < 20000 && !info.force) return; touchT.set(id, Date.now());
     const patch = { updated: Date.now(), updatedBy: S.uid || '' }; if (info.frames != null) patch.frames = info.frames; if (info.cover) patch.cover = info.cover;
-    try { await backend.patch(id, patch); Object.assign(cur, patch); emit(); } catch { }
+    try { await backend.patch(id, patch, isPriv(id)); Object.assign(cur, patch); emit(); } catch { }
   }
-  async function remove(id) { must(); const cur = get(id); if (!cur) return; if (!canChange(cur)) throw new Error('Only the person who made this project (or an admin) can remove it'); await backend.patch(id, { archived: true, updated: Date.now() }); cur.archived = true; emit(); }
-  async function restore(id) { must(); const cur = S.projects.get(id); if (!cur) return; await backend.patch(id, { archived: false, updated: Date.now() }); cur.archived = false; emit(); }
-  async function createFolder(name) { must(); const f = cleanFolder({ id: 'f' + Math.random().toString(36).slice(2, 10), name: String(name || 'Folder').trim().slice(0, 60) || 'Folder', order: folders().length + 1, by: S.uid || '' }); await backend.putFolder(f); S.folders.set(f.id, f); emit(); return f; }
-  async function renameFolder(id, name) { must(); const f = S.folders.get(id); if (!f) return; const next = { ...f, name: String(name || f.name).trim().slice(0, 60) || f.name }; await backend.putFolder(next); S.folders.set(id, next); emit(); }
-  async function removeFolder(id) { must(); const f = S.folders.get(id); if (!f) return; if (!(S.owner || isAdmin() || f.by === S.uid || S.mode !== 'artifact')) throw new Error('Only whoever made this folder (or an admin) can remove it'); for (const p of projects(id)) await update(p.id, { folder: '' }); await backend.delFolder(id); S.folders.delete(id); emit(); }
+  async function remove(id) { must(); const cur = get(id); if (!cur) return; if (!canChange(cur)) throw new Error('Only the person who made this project (or an admin) can remove it'); await backend.patch(id, { archived: true, updated: Date.now() }, isPriv(id)); cur.archived = true; emit(); }
+  async function restore(id) { must(); const cur = anyProject(id); if (!cur || !sees(cur)) return; await backend.patch(id, { archived: false, updated: Date.now() }, isPriv(id)); cur.archived = false; emit(); }
+  async function createFolder(name, opts = {}) {
+    must();
+    const f = cleanFolder({ id: 'f' + Math.random().toString(36).slice(2, 10), name: String(name || 'Folder').trim().slice(0, 60) || 'Folder', order: folders().length + 1, by: S.uid || '', access: S.mode === 'local' ? 'all' : opts.access, people: opts.people });
+    const priv = S.mode === 'artifact' && f.access === 'me';
+    if (f.access !== 'all' && !S.uid) throw new Error('Sharing needs to know who you are: sign in to claude.ai, or open the page from the server');
+    await backend.putFolder(f, priv); (priv ? S.pfolders : S.folders).set(f.id, f); emit(); return f;
+  }
+  async function renameFolder(id, name) { must(); const f = anyFolder(id); if (!f || !seesFolder(f)) return; const next = { ...f, name: String(name || f.name).trim().slice(0, 60) || f.name }; const priv = S.pfolders.has(id); await backend.putFolder(next, priv); (priv ? S.pfolders : S.folders).set(id, next); emit(); }
+  // Change who sees a folder. Going "Only me" needs every project in it to be yours (nobody else's work disappears
+  // from under them); in claude.ai the folder and its projects then move to your private part, and back again.
+  async function setSharing(id, { access, people } = {}) {
+    must(); const f = anyFolder(id); if (!f || !seesFolder(f)) throw new Error('No such folder');
+    if (!canShare(f)) throw new Error('Only whoever made this folder can change who sees it');
+    access = ACCESS.includes(access) ? access : 'all';
+    if (access !== 'all' && !S.uid) throw new Error('Sharing needs to know who you are: sign in to claude.ai, or open the page from the server');
+    const inside = allProjects().filter(p => p.folder === id);
+    if (access === 'me') {
+      if (f.by !== S.uid) throw new Error('Only the person who made this folder can make it “Only me”');
+      const others = inside.filter(p => p.by && p.by !== S.uid);
+      if (others.length) throw new Error(`${others.length === 1 ? 'One project' : others.length + ' projects'} in this folder ${others.length === 1 ? 'was' : 'were'} made by someone else. Move ${others.length === 1 ? 'it' : 'them'} out first, or share the folder with specific people.`);
+    }
+    const next = cleanFolder({ ...f, access, people: access === 'people' ? cleanPeople(people).filter(x => x !== f.by) : [] });
+    const wasPriv = S.pfolders.has(id); const toPriv = S.mode === 'artifact' && access === 'me';
+    if (wasPriv === toPriv) { await backend.putFolder(next, wasPriv); (wasPriv ? S.pfolders : S.folders).set(id, next); emit(); return next; }
+    await backend.putFolder(next, toPriv); (toPriv ? S.pfolders : S.folders).set(id, next);
+    for (const p of inside) await relocate(p.id, { ...p }, toPriv);
+    await backend.delFolder(id, wasPriv); (wasPriv ? S.pfolders : S.folders).delete(id); emit(); return next;
+  }
+  // A folder that is not everyone's goes only once it is empty: its projects would otherwise land in Unfiled, which
+  // everyone sees.
+  async function removeFolder(id) {
+    must(); const f = anyFolder(id); if (!f || !seesFolder(f)) return;
+    if (!(S.owner || isAdmin() || f.by === S.uid || S.mode === 'local')) throw new Error('Only whoever made this folder (or an admin) can remove it');
+    const inside = allProjects().filter(p => p.folder === id);
+    if (f.access !== 'all' && inside.length) throw new Error(`This folder still holds ${inside.length} project${inside.length === 1 ? '' : 's'}${inside.some(p => p.archived) ? ' (archived ones included)' : ''}. Move or remove them first, so they do not become visible to everyone.`);
+    for (const p of inside) if (!p.archived) await update(p.id, { folder: '' });
+    const priv = S.pfolders.has(id); await backend.delFolder(id, priv); (priv ? S.pfolders : S.folders).delete(id); emit();
+  }
   function setCurrent(id) { S.current = id; LS.set('lg.project', id); emit(); }
-  const archived = () => [...S.projects.values()].filter(p => p.archived).sort((a, b) => b.updated - a.updated);
+  const archived = () => allProjects().filter(p => p.archived && sees(p)).sort((a, b) => b.updated - a.updated);
+  // Where a project's canvas lives in claude.ai's database, and the live room it uses (none for a private one).
+  function baseOf(id) { return id === '_root' ? '' : isPriv(id) ? `private/${S.uid}/projects/${id}/` : `projects/${id}/`; }
+  function roomOf(id) { return id === '_root' || isPriv(id) ? null : ('p-' + String(id).toLowerCase().replace(/[^a-z0-9_.-]/g, '-')).slice(0, 48); }
+  // A link that opens a project: the room link on a server; in claude.ai the page's address plus #project=<id>
+  // (only the address part when the owner has not set it: then the code alone, pasted into Home's “Open a link”).
+  function linkFor(id) {
+    if (S.mode === 'server') { const u = new URL(location.href); u.hash = ''; u.search = ''; u.searchParams.set('room', id); return u.toString(); }
+    if (S.mode === 'artifact') return (S.pageLink || '') + '#project=' + id;
+    return null;
+  }
+  function idFromLink(text) {
+    const t = String(text || '').trim(); const m = /[#?&](?:project|room)=([A-Za-z0-9_.:-]{1,64})/.exec(t);
+    if (m) return m[1]; return ID.test(t) ? t : null;
+  }
+  async function setPageLink(link) {
+    if (S.mode !== 'artifact' || !S.owner) throw new Error('Only the page’s owner sets its link');
+    link = String(link || '').trim().replace(/#.*$/, ''); if (link && !/^https:\/\/[^\s#]+$/.test(link)) throw new Error('That is not a page link (https://…)');
+    const db = await window.claude.use('db'); await db.doc('config/page').set({ link }); S.pageLink = link; emit();
+  }
+  const searchPeople = q => backend && backend.people ? backend.people.search(q) : Promise.resolve([]);
+  const names = ids => backend && backend.people ? backend.people.names([...new Set(ids)].filter(Boolean)) : Promise.resolve({});
   return {
-    init, start, whenReady, projects, folders, get, create, update, touch, remove, restore, archived, createFolder, renameFolder, removeFolder, setCurrent, canChange,
+    init, start, whenReady, projects, folders, get, create, update, touch, remove, restore, archived, createFolder, renameFolder, removeFolder, setSharing, setCurrent, canChange, canShare,
+    sharedWithMe, accessOf, folderAccess: id => { const f = anyFolder(id); return f ? f.access : 'all'; }, folder: id => { const f = anyFolder(id); return f && seesFolder(f) ? f : null; },
+    baseOf, roomOf, isPrivate: isPriv, linkFor, idFromLink, setPageLink, searchPeople, names,
     refresh: () => backend && backend.refresh ? backend.refresh() : null,
     on: fn => { listeners.add(fn); return () => listeners.delete(fn); },
     get mode() { return S.mode; }, get ready() { return S.ready; }, get current() { return S.current; }, get me() { return S.uid; },
+    get trusted() { return S.trusted; }, get owner() { return S.owner; }, get pageLink() { return S.pageLink; }, get moving() { return moving; },
   };
 })();
 
@@ -8600,7 +8794,7 @@ const Admin = (() => {
   const ago = t => { if (!t) return '—'; const d = Date.now() - t; const m = Math.round(d / 60000); if (m < 2) return 'just now'; if (m < 60) return m + ' min ago'; const h = Math.round(m / 60); if (h < 36) return h + ' h ago'; return Math.round(h / 24) + ' d ago'; };
   const when = t => t ? new Date(t).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
   const hours = m => m >= 90 ? (m / 60).toFixed(1) + ' h' : m + ' min';
-  const projName = id => { const p = typeof Projects !== 'undefined' && Projects.get(id); return p ? p.name : (id === '_root' ? 'Shared canvas' : id || '—'); };
+  const projName = id => { const p = typeof Projects !== 'undefined' && Projects.get(id); return p ? (Projects.accessOf(p) === 'all' ? p.name : p.name + ' (private)') : (id === '_root' ? 'Shared canvas' : id ? 'A private or removed project' : '—'); };
   const folderName = id => { const p = typeof Projects !== 'undefined' && Projects.get(id); const f = p && p.folder && Projects.folders().find(x => x.id === p.folder); return f ? f.name : ''; };
 
   // One series of bars per day: thin marks, rounded tops anchored to the baseline, a hover readout, no legend
@@ -8905,7 +9099,7 @@ const Sync = (() => {
     const send = msg => { const s = JSON.stringify(msg); if (ws && ws.readyState === 1) ws.send(s); else outbox.push(s); };
     function connect() {
       const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-      ws = new WebSocket(`${proto}//${location.host}/sync?room=${encodeURIComponent(roomId)}`);
+      ws = new WebSocket(`${proto}//${location.host}/sync?room=${encodeURIComponent(roomId)}&u=${encodeURIComponent((env.userId && env.userId()) || me.id)}`);
       ws.onopen = () => { retry = 0; status.connected = true; notify(); send({ t: 'hello', client: { id: me.id, name: me.name || '', color: me.color }, tools: env.toolList ? env.toolList() : [] }); for (const s of outbox.splice(0)) ws.send(s); };
       ws.onmessage = ev => {
         let m; try { m = JSON.parse(ev.data); } catch { return; }
@@ -8917,6 +9111,7 @@ const Sync = (() => {
         else if (m.t === 'peers') { peerMap = new Map((m.list || []).filter(p => p.id !== me.id).map(p => [p.id, { id: p.id, ...sanitizePresence(p.p) }])); setPeers([...peerMap.values()]); }
         else if (m.t === 'libs' && env.onLibs) env.onLibs();
         else if (m.t === 'projects' && env.onProjects) env.onProjects();
+        else if (m.t === 'denied') { closed = true; if (env.onDenied) env.onDenied(roomId, m.reason || ''); }
         else if (m.t === 'rpc' && env.onRpc) { Promise.resolve().then(() => env.onRpc(m.name, m.args || {})).then(result => send({ t: 'rpc-result', id: m.id, result }), err => send({ t: 'rpc-result', id: m.id, error: String(err && err.message || err) })); }
       };
       ws.onclose = () => { status.connected = false; notify(); if (closed) return; setTimeout(connect, Math.min(8000, 500 * 2 ** retry++)); };
@@ -8942,8 +9137,10 @@ const Sync = (() => {
     const [lobby, db, user, assets] = caps;
     if (!db && !lobby) return null;
     const base = opts.base ? String(opts.base).replace(/\/?$/, '/') : '';
-    let room = lobby; let named = null;
-    if (lobby && opts.room) { try { named = await lobby.join(String(opts.room).slice(0, 64)); room = named; } catch (e) { console.warn('room join', e && e.code); room = null; } }
+    // A private canvas (opts.solo) has no live room at all: the lobby is everyone's. Its pictures stay under it.
+    const assetsAt = opts.solo ? base + 'assets' : 'assets';
+    let room = opts.solo ? null : lobby; let named = null;
+    if (lobby && opts.room && !opts.solo) { try { named = await lobby.join(String(opts.room).slice(0, 64)); room = named; } catch (e) { console.warn('room join', e && e.code); room = null; } }
     const unsubs = []; const sub = (u) => { if (typeof u === 'function') unsubs.push(u); };
     const writeQueue = new Map(); let firstSnap = true; const docVersions = new Map();
     // A frame and its blocks pack into one database document (or a few, past 200 KB), keyed by frame id.
@@ -8973,7 +9170,7 @@ const Sync = (() => {
     let metaChain = Promise.resolve();
     function sendRecs(list, live) {
       if (!status.readOnly && db) {
-        const fids = new Set(); for (const r of list) { if (r._k === 'meta') metaChain = metaChain.then(() => db.doc(`${base}canvas/meta`).set({ rec: r })).catch(() => { }); else if (r._k.startsWith('a~')) db.doc(`assets/${r.id}`).set({ rec: r }).catch(() => { }); else if (r._k.startsWith('L~')) db.doc(`library/${r._k.slice(2)}`).set({ rec: r }).catch(() => { }); else fids.add(r._k.split('~')[1]); }
+        const fids = new Set(); for (const r of list) { if (r._k === 'meta') metaChain = metaChain.then(() => db.doc(`${base}canvas/meta`).set({ rec: r })).catch(() => { }); else if (r._k.startsWith('a~')) db.doc(`${assetsAt}/${r.id}`).set({ rec: r }).catch(() => { }); else if (r._k.startsWith('L~')) db.doc(`library/${r._k.slice(2)}`).set({ rec: r }).catch(() => { }); else fids.add(r._k.split('~')[1]); }
         for (const fid of fids) schedule(fid);
       }
       if (room) { for (const r of list) pendingLive.set(r._k, r); if (!liveTimer) liveTimer = setTimeout(flushLive, 120); }
@@ -9018,6 +9215,7 @@ const Sync = (() => {
         applyRemote(changed);
       }, e => console.warn('db frames', e && e.code)));
       sub(db.doc(`${base}canvas/meta`).onSnapshot(s => { const d = s.data(); if (d && d.rec) applyRemote([d.rec]); }, () => { }));
+      if (opts.solo) sub(db.collection(assetsAt).onSnapshot(s => { for (const d of s.docs) { const v = d.data(); if (v && v.rec) { if (newer(v.rec, recs.get(v.rec._k))) recs.set(v.rec._k, v.rec); ensureAsset(v.rec); } } }, () => { }));
       if (!globalSubs) {
         globalSubs = true;
         db.collection('library').onSnapshot(s => { const list = []; for (const d of s.docs) { const v = d.data(); if (v && v.rec) list.push(v.rec); } if (list.length) applyRemote(list); }, () => { });
@@ -9030,6 +9228,8 @@ const Sync = (() => {
       send: sendRecs,
       presence: p => { if (room) room.presence(p).catch(() => { }); },
       uploadAsset: assets ? async blob => { const r = await assets.upload(blob); return { id: r.id, url: r.url }; } : null,
+      // Screens waiting to be saved are saved now (before this canvas is let go).
+      flush: async () => { for (const [fid, q] of writeQueue) if (q.timer) { clearTimeout(q.timer); q.timer = 0; q.chain = q.chain.then(() => writeFrame(fid)).catch(e => console.warn('db write', e)); } await Promise.all([...writeQueue.values()].map(q => q.chain)); await metaChain; },
       close: () => { for (const u of unsubs) { try { u(); } catch { } } for (const q of writeQueue.values()) clearTimeout(q.timer); if (named && named.leave) { try { named.leave(); } catch { } } },
     };
   }
@@ -9059,28 +9259,30 @@ const Sync = (() => {
   }
   async function startArtifact(opts = {}) {
     const a = await artifactAdapter(opts); if (!a) return false;
-    attach(a, { mode: 'artifact', room: opts.room || 'artifact', label: opts.room ? 'Everyone who opens this project edits it with you' : 'Everyone with this page open edits the same canvas' });
+    attach(a, { mode: 'artifact', room: opts.room || (opts.solo ? 'private' : 'artifact'), label: opts.label || (opts.room ? 'Everyone who opens this project edits it with you' : 'Everyone with this page open edits the same canvas') });
     return true;
   }
   const canArtifact = () => !!(window.claude && typeof window.claude.use === 'function');
+  // Waits (a few seconds at most) until this canvas's pending saves are written.
+  async function flushWrites() { if (!adapter || !adapter.flush) return; await Promise.race([adapter.flush().catch(() => { }), new Promise(r => setTimeout(r, 4000))]); }
   function leave() { if (adapter) { attach(null, { mode: 'local', room: null, label: '', readOnly: false }); } }
   async function serverAvailable() {
     if (!/^https?:$/.test(location.protocol) || window.claude) return false; // file:// or inside claude.ai: no sync server there
     try { const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 1500); const r = await fetch('/api/ping', { cache: 'no-store', signal: ctl.signal }); clearTimeout(t); if (!r.ok) return false; const j = await r.json(); return !!(j && j.lg); } catch { return false; }
   }
   function roomFromUrl() { const m = /[?&#]room=([A-Za-z0-9_-]{4,64})/.exec(location.search + location.hash); return m ? m[1] : null; }
-  function joinServer(roomId) {
+  function joinServer(roomId, label) {
     if (adapter) resetState();
     status.room = roomId;
     const url = new URL(location.href); url.searchParams.set('room', roomId); history.replaceState(null, '', url);
-    attach(serverAdapter(roomId), { mode: 'server', room: roomId, label: 'Anyone with this link edits the same canvas' });
+    attach(serverAdapter(roomId), { mode: 'server', room: roomId, label: label || 'Anyone with this link edits the same canvas' });
     return roomId;
   }
   function newRoomId() { const a = 'abcdefghijkmnpqrstuvwxyz23456789'; let s = ''; const r = crypto.getRandomValues(new Uint8Array(10)); for (const x of r) s += a[x % a.length]; return s; }
   function roomLink() { if (status.mode !== 'server' || !status.room) return null; const u = new URL(location.href); u.hash = ''; u.searchParams.set('room', status.room); return u.toString(); }
   function setName(n) { me.name = String(n || '').replace(/[\u0000-\u001f<>]/g, '').slice(0, 40); LS.set('lg.name', me.name); if (adapter) adapter.presence({ name: me.name }); notify(); }
   return {
-    init, startArtifact, canArtifact, serverAvailable, roomFromUrl, joinServer, newRoomId, roomLink, setName, flush: flushInbox, resetState, leave,
+    init, startArtifact, canArtifact, serverAvailable, roomFromUrl, joinServer, newRoomId, roomLink, setName, flush: flushInbox, flushWrites, resetState, leave,
     get me() { return me; }, get status() { return status; }, get peers() { return peers; },
     onStatus: fn => { listeners.push(fn); fn(status, peers); },
     announceTools: list => { if (adapter && adapter.announceTools) adapter.announceTools(list); },
@@ -10633,6 +10835,7 @@ Layer kinds:
   Sync.init(CanvasUI, {
     getAssets: () => state.assets, dataUrlToBlob, addAssetWithId, onLibrary: () => { if (libraryOpen()) Library.render(); },
     knownAsset: id => LibStore.assetInfo(id), onLibs: () => LibStore.refresh(), onProjects: () => Projects.refresh(),
+    userId: () => Projects.me, onDenied: (room, reason) => { if (PROJ.id === room) closeProject(reason || 'That project is not shared with you.'); else toast(reason || 'That project is not shared with you.'); },
     toolList: () => (typeof AgentTools !== 'undefined' ? AgentTools.defs() : []),
     onRpc: (name, args) => (typeof AgentTools !== 'undefined' ? AgentTools.call(name, args, { via: 'mcp' }) : Promise.reject(new Error('Agent tools are not loaded'))),
   });
@@ -10644,7 +10847,9 @@ Layer kinds:
     const sig = [st.mode, st.connected, st.readOnly, st.label, me.name, ...peers.map(p => `${p.id}|${p.name}|${p.color}|${!!p.cursor}`)].join('\u0001');
     if (sig === peersSig) return; peersSig = sig;
     el.hidden = !live;
-    if (live) el.innerHTML = `<span class="cv-live ${st.connected ? 'on' : ''}" title="${escapeHtml(st.label)}${st.readOnly ? ' · view only' : ''}">${st.connected ? 'Live' : 'Connecting…'}${st.readOnly ? ' · view only' : ''}</span>`
+    // a private canvas has no live room: it is saved to this person's private part only
+    if (live && st.room === 'private') el.innerHTML = `<span class="cv-live" title="${escapeHtml(st.label)}"><svg class="home-ico" viewBox="0 0 256 256" aria-hidden="true">${Icons.SET.lock || ''}</svg>Only you${st.readOnly ? ' · view only' : ''}</span>`;
+    else if (live) el.innerHTML = `<span class="cv-live ${st.connected ? 'on' : ''}" title="${escapeHtml(st.label)}${st.readOnly ? ' · view only' : ''}">${st.connected ? 'Live' : 'Connecting…'}${st.readOnly ? ' · view only' : ''}</span>`
       + peers.slice(0, 8).map(p => `<button type="button" class="cv-av" data-peer="${escapeHtml(p.id)}" title="${escapeHtml(p.name || 'Someone')}${p.cursor ? ' · click to go to their cursor' : ''}" style="background:${Render.col(p.color, '#7C5CFF')}">${escapeHtml(initials(p.name || 'Someone'))}</button>`).join('')
       + (peers.length > 8 ? `<span class="cv-av more">+${peers.length - 8}</span>` : '')
       + (st.mode === 'server' ? `<button type="button" class="cv-av me" data-me title="You: ${escapeHtml(me.name || 'set your name')}. Click to rename." style="background:${me.color}">${escapeHtml(initials(me.name || 'You'))}</button>` : '');
@@ -10662,15 +10867,23 @@ Layer kinds:
   });
 
   // ---- Projects (Home) and usage analytics ---------------------------------------------------------------------------
-  Projects.init({ me: () => ({ id: Sync.me.id, name: Sync.me.name }) });
+  Projects.init({
+    me: () => ({ id: Sync.me.id, name: Sync.me.name }),
+    // a project changing place (into or out of someone's private part): let the open canvas go, then open it again
+    release: async id => { if (PROJ.id !== id) return false; await Sync.flushWrites(); CanvasUI.flushBackup(); Sync.leave(); return true; },
+    reopen: async id => { if (Projects.get(id)) await openProject(id, { quiet: true, keepDoc: true, force: true }); },
+  });
   Stats.init({ currentProject: () => PROJ.id });
   const ago = t => { if (!t) return 'new'; const m = Math.round((Date.now() - t) / 60000); if (m < 2) return 'just now'; if (m < 60) return m + ' min ago'; const h = Math.round(m / 60); if (h < 36) return h + ' h ago'; return Math.round(h / 24) + ' d ago'; };
   // Which project to open on load: the one in the link, else the one this person had open, else (when nothing exists
   // yet) a first one. On a shared page or server, someone who has not picked a project is not dropped into whatever
   // someone else touched last: they start on Home, and their first canvas work makes them a project of their own.
   async function startProject() {
-    const fromUrl = serverHere ? Sync.roomFromUrl() : null;
-    if (fromUrl && !Projects.get(fromUrl)) { try { await Projects.create({ id: fromUrl, name: 'Room ' + fromUrl }); } catch { } }
+    // a link to one project: ?room=<id> on a server, #project=<id> in claude.ai
+    let fromUrl = serverHere ? Sync.roomFromUrl() : null;
+    if (fromUrl && !Projects.get(fromUrl)) { try { await Projects.create({ id: fromUrl, name: 'Room ' + fromUrl }); } catch { toast('That project is not shared with you'); fromUrl = null; } }
+    const fromHash = /[#&]project=([A-Za-z0-9_.:-]{1,64})/.exec(location.hash);
+    if (!fromUrl && fromHash) { if (Projects.get(fromHash[1])) fromUrl = fromHash[1]; else toast('That project is not here, or it is not shared with you'); }
     let id = fromUrl || Projects.current; let keepDoc = false;
     if (id && !Projects.get(id)) id = null;
     if (!id) {
@@ -10688,7 +10901,7 @@ Layer kinds:
     if (PROJ.id) return true;
     try {
       const p = await Projects.create({ name: String(name || '').trim().slice(0, 60) || 'Untitled project' });
-      Stats.track('project.create', { project: p.id, detail: p.name });
+      Stats.track('project.create', { project: p.id, detail: projLabel(p) });
       await openProject(p.id, { quiet: true }); toast(`New project “${p.name}” for this work; Home lists every project.`); return true;
     } catch (e) { toast(e && e.message ? e.message : String(e)); return false; }
   }
@@ -10704,22 +10917,26 @@ Layer kinds:
   async function openProject(id, opts = {}) {
     const p = Projects.get(id); if (!p && id !== '_root') { toast('That project is not here any more'); return false; }
     if (PROJ.id === id && !opts.force) { if (!opts.quiet) setMode('canvas'); return true; }
+    // the canvas being left saves its last edits before it is let go
+    if (Sync.status.mode === 'artifact') await Sync.flushWrites();
     CanvasUI.flushBackup(); PROJ.id = id; Projects.setCurrent(id);
     const name = p ? p.name : 'Shared canvas'; const mode = Projects.mode;
+    const acc = p ? Projects.accessOf(p) : 'all';
+    const label = acc === 'me' ? 'Only you can open this project' : acc === 'people' ? 'You and the people this folder is shared with edit it together' : undefined;
     if (mode === 'artifact') {
       Sync.leave(); Sync.resetState();
       if (!opts.keepDoc) CanvasUI.replaceDoc(Canvas.create(name), { silent: true });
-      await Sync.startArtifact(id === '_root' ? {} : { base: 'projects/' + id + '/', room: ('p-' + id.toLowerCase().replace(/[^a-z0-9_.-]/g, '-')).slice(0, 48) });
+      await Sync.startArtifact(id === '_root' ? {} : { base: Projects.baseOf(id), room: Projects.roomOf(id), solo: Projects.isPrivate(id), label });
     } else if (mode === 'server') {
       if (!opts.keepDoc) CanvasUI.replaceDoc(Canvas.create(name), { silent: true });
       if (!Sync.me.name) Sync.setName('Guest ' + Sync.me.id.slice(-3).toUpperCase());
-      Sync.joinServer(id);
+      Sync.joinServer(id, label);
     } else {
       let doc = null; try { const saved = localStorage.getItem(backupKey()); doc = saved ? Canvas.deserialize(saved) : null; } catch { doc = null; }
       if (!(opts.keepDoc && !doc)) CanvasUI.replaceDoc(doc || Canvas.create(name), { silent: true });
     }
     renderProjectName(); updateCanvasBadge();
-    if (!opts.quiet) { setMode('canvas'); Stats.track('project.open', { project: id, detail: name }); }
+    if (!opts.quiet) { setMode('canvas'); Stats.track('project.open', { project: id, detail: p ? projLabel(p) : name }); }
     return true;
   }
   function renderProjectName() { const p = Projects.get(PROJ.id); $('cvProject').textContent = '⌂ ' + (p ? p.name : PROJ.id === '_root' ? 'Shared canvas' : PROJ.id ? 'Project' : 'Projects'); }
@@ -10741,47 +10958,139 @@ Layer kinds:
 
   // ---- Home ------------------------------------------------------------------------------------------------------------
   let homeFolder = LS.get('lg.homeFolder', ''); let homeQ = ''; let homeMenu = null; let homeArchived = false; let folderMenu = null;
+  const ico = name => Icons.SET[name] ? `<svg class="home-ico" viewBox="0 0 256 256" aria-hidden="true">${Icons.SET[name]}</svg>` : '';
+  const accIcon = a => a === 'me' ? ico('lock') : a === 'people' ? ico('users') : '';
+  const accWords = f => !f || f.access === 'all' ? (Projects.mode === 'artifact' ? 'Everyone with this page' : 'Everyone on this server') : f.access === 'me' ? 'Only you' : f.by === Projects.me ? `You and ${f.people.length} ${f.people.length === 1 ? 'person' : 'people'}` : 'Shared with you';
+  const sharing = () => Projects.mode !== 'local';
+  // What analytics records about a project: its name, unless its folder is not everyone's.
+  const projLabel = p => !p ? '' : Projects.accessOf(p) === 'all' ? p.name : 'Private project';
   function renderHome() {
     const v = $('homeView'); if (v.hidden) return;
-    const folders = Projects.folders(); const all = Projects.projects(); const arch = Projects.archived();
-    const base = homeArchived ? arch : homeFolder === '' ? all : homeFolder === '_none' ? all.filter(p => !p.folder) : all.filter(p => p.folder === homeFolder);
+    const folders = Projects.folders(); const all = Projects.projects(); const arch = Projects.archived(); const shared = Projects.sharedWithMe();
+    if (homeFolder && !['_none', '_shared'].includes(homeFolder) && !folders.some(f => f.id === homeFolder)) homeFolder = '';
+    const base = homeArchived ? arch : homeFolder === '' ? all : homeFolder === '_none' ? all.filter(p => !p.folder) : homeFolder === '_shared' ? shared : all.filter(p => p.folder === homeFolder);
     const list = base.filter(p => !homeQ || p.name.toLowerCase().includes(homeQ));
     const count = f => all.filter(p => p.folder === f).length; const fname = id => (folders.find(f => f.id === id) || {}).name || '';
+    const cur = folders.find(f => f.id === homeFolder) || null;
     $('homeSide').innerHTML = `<button type="button" class="home-f ${homeFolder === '' && !homeArchived ? 'on' : ''}" data-folder="">All projects <span>${all.length}</span></button>
-      ${folders.map(f => `<div class="home-frow"><button type="button" class="home-f ${homeFolder === f.id && !homeArchived ? 'on' : ''}" data-folder="${escapeHtml(f.id)}">${escapeHtml(f.name)} <span>${count(f.id)}</span></button><button type="button" class="home-fx" data-folder-menu="${escapeHtml(f.id)}" title="Rename or remove">⋯</button></div>
-        ${folderMenu === f.id ? `<div class="home-pop" style="position:static;margin:4px 0 8px"><input type="text" class="input" data-folder-name="${escapeHtml(f.id)}" value="${escapeHtml(f.name)}" maxlength="60"><button type="button" class="btn small" data-folder-rename="${escapeHtml(f.id)}">Rename</button><button type="button" class="btn small ghost" data-folder-remove="${escapeHtml(f.id)}">Remove folder (projects stay)</button></div>` : ''}`).join('')}
+      ${shared.length ? `<button type="button" class="home-f ${homeFolder === '_shared' && !homeArchived ? 'on' : ''}" data-folder="_shared"><b>${ico('users')} Shared with you</b> <span>${shared.length}</span></button>` : ''}
+      ${folders.map(f => `<div class="home-frow"><button type="button" class="home-f ${homeFolder === f.id && !homeArchived ? 'on' : ''}" data-folder="${escapeHtml(f.id)}" title="${escapeHtml(accWords(f))}"><b>${accIcon(f.access)}${escapeHtml(f.name)}</b> <span>${count(f.id)}</span></button><button type="button" class="home-fx" data-folder-menu="${escapeHtml(f.id)}" title="Rename, share or remove" aria-label="Folder menu">⋯</button></div>
+        ${folderMenu === f.id ? `<div class="home-pop" style="position:static;margin:4px 0 8px"><input type="text" class="input" data-folder-name="${escapeHtml(f.id)}" value="${escapeHtml(f.name)}" maxlength="60" aria-label="Folder name"><button type="button" class="btn small" data-folder-rename="${escapeHtml(f.id)}">Rename</button>${Projects.canShare(f) ? `<button type="button" class="btn small" data-folder-share="${escapeHtml(f.id)}">${ico('users')} Sharing…</button>` : ''}<button type="button" class="btn small ghost" data-folder-remove="${escapeHtml(f.id)}">${f.access === 'all' ? 'Remove folder (projects stay)' : 'Remove folder (once empty)'}</button></div>` : ''}`).join('')}
       <button type="button" class="home-f ${homeFolder === '_none' && !homeArchived ? 'on' : ''}" data-folder="_none">Unfiled <span>${all.filter(p => !p.folder).length}</span></button>
-      <div class="home-newf"><input type="text" class="input" id="homeFolderNew" placeholder="New folder" maxlength="60" aria-label="New folder name"><button type="button" class="btn small" id="homeAddFolder">Add</button></div>`;
-    $('homeTitle').textContent = homeArchived ? 'Archived projects' : homeFolder === '' ? 'All projects' : homeFolder === '_none' ? 'Unfiled' : fname(homeFolder);
-    $('homeGrid').innerHTML = list.map(p => `<div class="home-card${p.archived ? ' home-archived' : ''}${p.id === PROJ.id ? ' current' : ''}" data-open="${escapeHtml(p.id)}" tabindex="0" role="button" aria-label="Open ${escapeHtml(p.name)}">
+      <div class="home-newf"><input type="text" class="input" id="homeFolderNew" placeholder="New folder" maxlength="60" aria-label="New folder name"><button type="button" class="btn small" id="homeAddFolder">Add</button></div>
+      ${sharing() ? `<select class="input home-newacc" id="homeFolderAccess" aria-label="Who sees the new folder"><option value="all">Everyone sees it</option><option value="people">Specific people…</option><option value="me">Only me</option></select>` : ''}`;
+    $('homeTitle').textContent = homeArchived ? 'Archived projects' : homeFolder === '' ? 'All projects' : homeFolder === '_none' ? 'Unfiled' : homeFolder === '_shared' ? 'Shared with you' : fname(homeFolder);
+    const acc = $('homeAccess'); acc.hidden = !(cur && sharing() && !homeArchived);
+    if (!acc.hidden) acc.innerHTML = `${accIcon(cur.access)}${escapeHtml(accWords(cur))}${Projects.canShare(cur) ? ` · <button type="button" class="linkish" data-folder-share="${escapeHtml(cur.id)}">Share</button>` : ''}`;
+    $('homeGrid').innerHTML = list.map(p => { const a = Projects.accessOf(p); const link = Projects.linkFor(p.id); return `<div class="home-card${p.archived ? ' home-archived' : ''}${p.id === PROJ.id ? ' current' : ''}" data-open="${escapeHtml(p.id)}" tabindex="0" role="button" aria-label="Open ${escapeHtml(p.name)}">
         <div class="home-cover">${p.cover ? `<img src="${escapeHtml(p.cover)}" alt="">` : `<span>${escapeHtml((p.name || '?')[0].toUpperCase())}</span>`}</div>
-        <div class="home-name">${escapeHtml(p.name)}${p.id === PROJ.id ? ' <span class="cv-token">open</span>' : ''}</div>
+        <div class="home-name">${a !== 'all' ? `<span title="${a === 'me' ? 'Only you' : 'Specific people'}">${accIcon(a)}</span>` : ''}${escapeHtml(p.name)}${p.id === PROJ.id ? ' <span class="cv-token">open</span>' : ''}</div>
         <div class="home-meta">${p.frames ? p.frames + ' screen' + (p.frames === 1 ? '' : 's') + ' · ' : ''}${escapeHtml(ago(p.updated || p.created))}${p.byName ? ' · ' + escapeHtml(p.byName) : ''}${p.folder && homeFolder !== p.folder ? ' · ' + escapeHtml(fname(p.folder)) : ''}</div>
-        <button type="button" class="home-menu${homeMenu === p.id ? ' open' : ''}" data-menu="${escapeHtml(p.id)}" title="Rename, move, archive" aria-label="Project menu">⋯</button>
-        ${homeMenu === p.id ? `<div class="home-pop" data-pop><input type="text" class="input" data-rename="${escapeHtml(p.id)}" value="${escapeHtml(p.name)}" maxlength="80" aria-label="Project name"><select class="input" data-move="${escapeHtml(p.id)}" aria-label="Folder"><option value="">No folder</option>${folders.map(f => `<option value="${escapeHtml(f.id)}" ${p.folder === f.id ? 'selected' : ''}>${escapeHtml(f.name)}</option>`).join('')}</select>${Projects.canChange(p) ? (p.archived ? `<button type="button" class="btn small" data-restore="${escapeHtml(p.id)}">Restore</button>` : `<button type="button" class="btn small ghost" data-archive="${escapeHtml(p.id)}">Archive</button>`) : '<span class="hint">Made by someone else: open it, or ask them or an admin to change it.</span>'}</div>` : ''}
-      </div>`).join('') || `<p class="hint">${homeArchived ? 'Nothing archived.' : 'No projects here yet. Make one with “New project”.'}</p>`;
+        <button type="button" class="home-menu${homeMenu === p.id ? ' open' : ''}" data-menu="${escapeHtml(p.id)}" title="Rename, move, copy link, archive" aria-label="Project menu">⋯</button>
+        ${homeMenu === p.id ? `<div class="home-pop" data-pop><input type="text" class="input" data-rename="${escapeHtml(p.id)}" value="${escapeHtml(p.name)}" maxlength="80" aria-label="Project name"><select class="input" data-move="${escapeHtml(p.id)}" aria-label="Folder"><option value="">No folder (everyone)</option>${folders.map(f => `<option value="${escapeHtml(f.id)}" ${p.folder === f.id ? 'selected' : ''}>${escapeHtml(f.name)}${f.access === 'me' ? ' (only me)' : f.access === 'people' ? ' (specific people)' : ''}</option>`).join('')}</select>${link && p.id !== '_root' ? `<button type="button" class="btn small" data-link="${escapeHtml(p.id)}">Copy link</button>` : ''}${Projects.canChange(p) ? (p.archived ? `<button type="button" class="btn small" data-restore="${escapeHtml(p.id)}">Restore</button>` : `<button type="button" class="btn small ghost" data-archive="${escapeHtml(p.id)}">Archive</button>`) : '<span class="hint">Made by someone else: open it, or ask them or an admin to change it.</span>'}</div>` : ''}
+      </div>`; }).join('') || `<p class="hint">${homeArchived ? 'Nothing archived.' : homeFolder === '_shared' ? 'Nothing is shared with you by name yet.' : 'No projects here yet. Make one with “New project”.'}</p>`;
     $('homeArchived').textContent = homeArchived ? 'Back to projects' : `Show archived${arch.length ? ` (${arch.length})` : ''}`;
-    $('homeNote').textContent = Projects.mode === 'artifact' ? 'Projects are shared with everyone who opens this page.' : Projects.mode === 'server' ? 'Projects are shared with everyone on this server; each one is a live room.' : 'Projects are kept in this browser.';
-    $('homeNewFolder').innerHTML = `<option value="">No folder</option>` + folders.map(f => `<option value="${escapeHtml(f.id)}" ${homeFolder === f.id ? 'selected' : ''}>${escapeHtml(f.name)}</option>`).join('');
+    $('homeNote').textContent = Projects.mode === 'artifact' ? 'Unfiled projects and Everyone folders are seen by everyone who opens this page. A folder’s ⋯ → Sharing limits it.' : Projects.mode === 'server' ? 'Unfiled projects and Everyone folders are seen by everyone on this server; each project is a live room. A folder’s ⋯ → Sharing limits it.' : 'Projects are kept in this browser.';
+    $('homeOpenBtn').hidden = !sharing();
+    $('homeNewFolder').innerHTML = `<option value="">No folder (everyone)</option>` + folders.map(f => `<option value="${escapeHtml(f.id)}" ${homeFolder === f.id ? 'selected' : ''}>${escapeHtml(f.name)}${f.access === 'me' ? ' (only me)' : f.access === 'people' ? ' (specific people)' : ''}</option>`).join('');
   }
-  Projects.on(() => { renderHome(); if (PROJ.id) renderProjectName(); });
+  // The open project went away for this person (sharing changed, or it moved): back to Home.
+  function closeProject(msg) {
+    Sync.leave(); Sync.resetState(); PROJ.id = null; Projects.setCurrent(null);
+    CanvasUI.replaceDoc(Canvas.create('Untitled'), { silent: true }); renderProjectName(); updateCanvasBadge();
+    if (state.mode === 'canvas') setMode('home'); toast(msg);
+  }
+  Projects.on(() => {
+    renderHome(); if (PROJ.id) renderProjectName();
+    if (PROJ.id && PROJ.id !== '_root' && Projects.mode !== 'local' && Projects.ready && !Projects.moving && !Projects.get(PROJ.id)) closeProject('That project is no longer shared with you (or it was moved).');
+  });
   // The server only pushes project changes to people inside a room; on Home, ask for them.
   setInterval(() => { if (state.mode === 'home' && !document.hidden && Projects.mode === 'server' && Sync.status.mode !== 'server') Projects.refresh(); }, 4000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden && Projects.mode === 'server') Projects.refresh(); });
   const guardHome = async fn => { try { await fn(); } catch (e) { toast(e && e.message ? e.message : String(e)); } renderHome(); };
+  async function copyProjectLink(id) {
+    const link = Projects.linkFor(id); if (!link) return;
+    try { await navigator.clipboard.writeText(link); } catch { }
+    toast(Projects.mode === 'artifact' && !Projects.pageLink ? 'Link code copied. Paste it in Home → Open a link. (The page’s owner can set the page address under a folder’s Sharing, for full links.)' : 'Link copied. It opens this project for anyone it is shared with.');
+  }
+  async function openFromLink(text) {
+    const id = Projects.idFromLink(text); if (!id) { toast('That is not a project link'); return false; }
+    if (!Projects.get(id)) { toast('That project is not here, or it is not shared with you'); return false; }
+    $('homeOpenRow').hidden = true; return openProject(id);
+  }
+
+  // ---- Share a folder: everyone, specific people, or only me ----------------------------------------------------------------
+  const share = { id: null, access: 'all', people: [], hits: [], names: {}, q: '' };
+  async function openShare(id) {
+    const f = Projects.folder(id); if (!f) return;
+    Object.assign(share, { id, access: f.access, people: [...f.people], hits: [], q: '' });
+    $('shareModal').hidden = false; renderShare(); share.names = await Projects.names([...share.people, f.by]); renderShare();
+    share.hits = await Projects.searchPeople(''); renderShare();
+  }
+  function renderShare() {
+    const f = Projects.folder(share.id); if (!f) { $('shareModal').hidden = true; return; }
+    const art = Projects.mode === 'artifact'; const inside = Projects.projects(f.id).length + Projects.archived().filter(p => p.folder === f.id).length;
+    const opt = (v, title, sub) => `<label class="share-opt${share.access === v ? ' on' : ''}"><input type="radio" name="shareAcc" value="${v}" ${share.access === v ? 'checked' : ''}><span><b>${accIcon(v)}${title}</b><small>${sub}</small></span></label>`;
+    const nm = id => (share.names[id] && share.names[id].name) || (id === Projects.me ? 'You' : 'Someone');
+    const note = share.access === 'me'
+      ? (art ? 'Kept in your private part of this page: nobody else can open it, the page’s owner included. Live co-editing is off for its projects.' : Projects.trusted ? 'The server checks who you are through your sign-in.' : 'This server has no sign-in, so “you” means this browser. Ask whoever runs it to set LG_USER_HEADER for sign-in.')
+      : share.access === 'people'
+        ? (art ? 'Only you and the people you add see it in the app. Its data still sits in the page’s shared database, so it is not a lock against someone who reads that data directly: use Only me for anything sensitive.' : Projects.trusted ? 'The server only lets these people (and you) see and open it, checked through sign-in.' : 'The server only shows it to these people, but it has no sign-in, so people are told apart by browser. Ask whoever runs it to set LG_USER_HEADER.')
+        : (art ? 'Everyone who opens this page sees it and edits its projects together.' : 'Everyone on this server sees it and edits its projects together.');
+    const moving = art && inside && (share.access === 'me') !== (f.access === 'me');
+    $('shareModal').querySelector('.share-body').innerHTML = `
+      <p class="hint">Who sees <b>${escapeHtml(f.name)}</b> and the projects in it.</p>
+      <div class="share-opts">${opt('all', 'Everyone', art ? 'Everyone with this page' : 'Everyone on this server')}${opt('people', 'Specific people', 'You and the people you add')}${opt('me', 'Only me', 'Just you')}</div>
+      ${share.access === 'people' ? `<div class="share-people">
+        <div class="share-chips">${share.people.map(id => `<span class="share-chip">${escapeHtml(nm(id))}<button type="button" data-unshare="${escapeHtml(id)}" aria-label="Remove ${escapeHtml(nm(id))}">✕</button></span>`).join('') || '<span class="hint">Nobody added yet.</span>'}</div>
+        <input type="search" class="input" id="shareSearch" placeholder="${art ? 'Add people by name or email' : 'Add people by name'}" value="${escapeHtml(share.q)}" aria-label="Find people" autocomplete="off">
+        <div class="share-hits">${share.hits.filter(h => !h.me && !share.people.includes(h.id) && h.id !== f.by).map(h => `<button type="button" class="share-hit" data-addshare="${escapeHtml(h.id)}">${h.avatar ? `<img src="${escapeHtml(h.avatar)}" alt="">` : ''}<span>${escapeHtml(h.name || 'Someone')}</span></button>`).join('') || (share.q ? '<span class="hint">Nobody found.</span>' : '')}</div>
+      </div>` : ''}
+      <p class="hint share-note">${note}${moving ? ` <b>Its ${inside} project${inside === 1 ? '' : 's'} move${inside === 1 ? 's' : ''} ${share.access === 'me' ? 'into your private part' : 'back to the shared database'}.</b>` : ''}</p>
+      <div class="share-actions"><button type="button" class="btn primary" data-share-save>Save</button><button type="button" class="btn ghost" data-share-close>Cancel</button></div>
+      ${art && Projects.owner ? `<details class="share-page"><summary>Project links: this page’s address</summary><p class="hint">Copy the address from your browser (https://claude.ai/…) so “Copy link” makes links that open a project directly.</p><div class="home-newf"><input type="url" class="input" id="sharePageLink" value="${escapeHtml(Projects.pageLink)}" placeholder="https://claude.ai/…"><button type="button" class="btn small" data-share-page>Set</button></div></details>` : ''}`;
+    const s = $('shareSearch'); if (s && document.activeElement !== s && share.focus) { s.focus(); s.setSelectionRange(s.value.length, s.value.length); }
+  }
+  $('shareModal').addEventListener('click', async e => {
+    const t = e.target;
+    if (t === $('shareModal') || t.closest('[data-share-close]')) { $('shareModal').hidden = true; return; }
+    const add = t.closest('[data-addshare]'); if (add) { share.people.push(add.dataset.addshare); const h = share.hits.find(x => x.id === add.dataset.addshare); if (h) share.names[h.id] = h; share.q = ''; share.focus = true; renderShare(); share.hits = await Projects.searchPeople(''); renderShare(); return; }
+    const rm = t.closest('[data-unshare]'); if (rm) { share.people = share.people.filter(x => x !== rm.dataset.unshare); renderShare(); return; }
+    if (t.closest('[data-share-page]')) { try { await Projects.setPageLink($('sharePageLink').value); toast('Page address saved: project links now open the project'); } catch (err) { toast(err.message); } return; }
+    if (t.closest('[data-share-save]')) {
+      const btn = t.closest('[data-share-save]'); btn.disabled = true; btn.textContent = 'Saving…';
+      try { await Projects.setSharing(share.id, { access: share.access, people: share.people }); Stats.track('folder.share', { detail: share.access }); $('shareModal').hidden = true; toast(share.access === 'all' ? 'Everyone sees this folder now' : share.access === 'me' ? 'Only you see this folder now' : `Shared with ${share.people.length} ${share.people.length === 1 ? 'person' : 'people'}`); }
+      catch (err) { toast(err && err.message ? err.message : String(err)); btn.disabled = false; btn.textContent = 'Save'; }
+      renderHome(); return;
+    }
+  });
+  $('shareModal').addEventListener('change', e => { if (e.target.name === 'shareAcc') { share.access = e.target.value; share.focus = share.access === 'people'; renderShare(); } });
+  $('shareModal').addEventListener('input', async e => { if (e.target.id !== 'shareSearch') return; share.q = e.target.value; const q = share.q; const hits = await Projects.searchPeople(q); if (q !== share.q) return; share.hits = hits; share.focus = true; renderShare(); });
+  $('shareModal').addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Escape') $('shareModal').hidden = true; });
+
   $('homeView').addEventListener('click', async e => {
     const t = e.target;
+    const fs = t.closest('[data-folder-share]'); if (fs) { folderMenu = null; renderHome(); await openShare(fs.dataset.folderShare); return; }
     const f = t.closest('[data-folder]'); if (f && !t.closest('[data-pop]')) { homeFolder = f.dataset.folder; homeArchived = false; LS.set('lg.homeFolder', homeFolder); folderMenu = null; renderHome(); return; }
     const fm = t.closest('[data-folder-menu]'); if (fm) { folderMenu = folderMenu === fm.dataset.folderMenu ? null : fm.dataset.folderMenu; renderHome(); return; }
     const fr = t.closest('[data-folder-rename]'); if (fr) { const inp = $('homeSide').querySelector(`[data-folder-name="${CSS.escape(fr.dataset.folderRename)}"]`); folderMenu = null; await guardHome(() => Projects.renameFolder(fr.dataset.folderRename, inp.value)); return; }
-    const frm = t.closest('[data-folder-remove]'); if (frm) { folderMenu = null; if (homeFolder === frm.dataset.folderRemove) homeFolder = ''; await guardHome(() => Projects.removeFolder(frm.dataset.folderRemove)); return; }
-    if (t.closest('#homeAddFolder')) { const inp = $('homeFolderNew'); const name = inp.value.trim(); if (!name) { inp.focus(); return; } await guardHome(async () => { const f = await Projects.createFolder(name); homeFolder = f.id; LS.set('lg.homeFolder', homeFolder); }); return; }
-    if (t.closest('#homeNewBtn')) { $('homeNew').hidden = false; $('homeNewName').value = ''; $('homeNewName').focus(); return; }
+    const frm = t.closest('[data-folder-remove]'); if (frm) { folderMenu = null; const id = frm.dataset.folderRemove; await guardHome(async () => { await Projects.removeFolder(id); if (homeFolder === id) homeFolder = ''; }); return; }
+    if (t.closest('#homeAddFolder')) {
+      const inp = $('homeFolderNew'); const name = inp.value.trim(); if (!name) { inp.focus(); return; }
+      const access = $('homeFolderAccess') ? $('homeFolderAccess').value : 'all';
+      await guardHome(async () => { const f = await Projects.createFolder(name, { access }); homeFolder = f.id; LS.set('lg.homeFolder', homeFolder); if (access !== 'all') Stats.track('folder.share', { detail: access }); if (access === 'people') setTimeout(() => openShare(f.id), 0); });
+      return;
+    }
+    if (t.closest('#homeNewBtn')) { $('homeNew').hidden = false; $('homeOpenRow').hidden = true; $('homeNewName').value = ''; $('homeNewName').focus(); return; }
     if (t.closest('#homeCancel')) { $('homeNew').hidden = true; return; }
     if (t.closest('#homeCreate')) { await createProjectFromForm(); return; }
+    if (t.closest('#homeOpenBtn')) { $('homeOpenRow').hidden = !$('homeOpenRow').hidden; $('homeNew').hidden = true; if (!$('homeOpenRow').hidden) { $('homeOpenInput').value = ''; $('homeOpenInput').focus(); } return; }
+    if (t.closest('#homeOpenGo')) { await openFromLink($('homeOpenInput').value); return; }
+    if (t.closest('#homeOpenCancel')) { $('homeOpenRow').hidden = true; return; }
     if (t.closest('#homeArchived')) { homeArchived = !homeArchived; homeMenu = null; renderHome(); return; }
     const m = t.closest('[data-menu]'); if (m) { homeMenu = homeMenu === m.dataset.menu ? null : m.dataset.menu; renderHome(); const inp = $('homeGrid').querySelector('[data-rename]'); if (inp) { inp.focus(); inp.select(); } return; }
     if (t.closest('[data-pop]')) {
+      const ln = t.closest('[data-link]'); if (ln) { homeMenu = null; renderHome(); await copyProjectLink(ln.dataset.link); return; }
       const ar = t.closest('[data-archive]'); if (ar) { homeMenu = null; await guardHome(() => Projects.remove(ar.dataset.archive)); toast('Project archived (Show archived brings it back)'); return; }
       const rs = t.closest('[data-restore]'); if (rs) { homeMenu = null; await guardHome(() => Projects.restore(rs.dataset.restore)); return; }
       return;
@@ -10790,22 +11099,23 @@ Layer kinds:
   });
   $('homeView').addEventListener('change', async e => {
     const t = e.target;
-    if (t.dataset.move != null) { await guardHome(() => Projects.update(t.dataset.move, { folder: t.value })); return; }
+    if (t.dataset.move != null) { const id = t.dataset.move; const to = t.value; homeMenu = null; if (to && Projects.folderAccess(to) !== Projects.accessOf(Projects.get(id))) toast('Moving the project…'); await guardHome(() => Projects.update(id, { folder: to })); return; }
   });
   $('homeView').addEventListener('keydown', async e => {
     const t = e.target; e.stopPropagation();
     if (e.key === 'Enter' && t.dataset.rename != null) { const id = t.dataset.rename; homeMenu = null; await guardHome(() => Projects.update(id, { name: t.value.trim() || 'Untitled project' })); if (id === PROJ.id) renderProjectName(); return; }
     if (e.key === 'Enter' && t.id === 'homeNewName') { await createProjectFromForm(); return; }
+    if (e.key === 'Enter' && t.id === 'homeOpenInput') { await openFromLink(t.value); return; }
     if (e.key === 'Enter' && t.id === 'homeFolderNew') { $('homeAddFolder').click(); return; }
     if (e.key === 'Enter' && t.dataset.folderName != null) { $('homeSide').querySelector(`[data-folder-rename="${CSS.escape(t.dataset.folderName)}"]`).click(); return; }
-    if (e.key === 'Escape') { homeMenu = null; folderMenu = null; $('homeNew').hidden = true; renderHome(); return; }
+    if (e.key === 'Escape') { homeMenu = null; folderMenu = null; $('homeNew').hidden = true; $('homeOpenRow').hidden = true; renderHome(); return; }
     if (e.key === 'Enter' && t.classList.contains('home-card')) { await openProject(t.dataset.open); }
   });
   $('homeSearch').addEventListener('input', e => { homeQ = e.target.value.trim().toLowerCase(); renderHome(); });
   async function createProjectFromForm() {
     const name = $('homeNewName').value.trim(); if (!name) { $('homeNewName').focus(); return; }
     const folder = $('homeNewFolder').value || '';
-    await guardHome(async () => { const p = await Projects.create({ name, folder }); $('homeNew').hidden = true; Stats.track('project.create', { project: p.id, detail: name }); await openProject(p.id); toast(`${name} created. Generate layouts, import, or draw a frame to begin.`); });
+    await guardHome(async () => { const p = await Projects.create({ name, folder }); $('homeNew').hidden = true; Stats.track('project.create', { project: p.id, detail: projLabel(p) }); await openProject(p.id); toast(`${name} created. Generate layouts, import, or draw a frame to begin.`); });
   }
 
   // ---- Admin ------------------------------------------------------------------------------------------------------------

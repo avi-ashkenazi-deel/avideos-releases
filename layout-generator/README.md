@@ -57,8 +57,25 @@ Switch the top-left toggle to **Deck**. The brief becomes an outline (one intent
 **Home** (first in the mode switch) is where people start: folders on the left (Brand, Product, Sales…), projects as cards with a cover, screen count, who made it and when it last changed. **＋ New project** names it, picks a folder and opens its canvas. Click the **⌂ project name** at the top of the canvas to go back.
 
 - Each project is its own canvas and, when shared, its own live room: people in different projects never see each other's cursors or edits.
-- The card menu (⋯) renames a project, moves it to a folder, or archives it (Show archived brings it back). Whoever made a project, the page owner and library admins can rename, move or archive it; everyone can open it.
-- In the published copy, projects are shared with everyone who opens the page; the canvas the page had before projects existed becomes **Shared canvas**, unchanged. On the server they are shared with everyone on it, and a project's link (`?room=<id>`) opens it directly. Opened from disk, they live in that browser.
+- The card menu (⋯) renames a project, moves it to a folder, copies its link, or archives it (Show archived brings it back). Whoever made a project, the page owner and library admins can rename, move or archive it.
+- Unfiled projects are everyone's; the canvas the page had before projects existed becomes **Shared canvas**, unchanged. Opened from disk, projects live in that browser and sharing does not apply.
+
+### Sharing folders
+
+Each folder is shared one of three ways, chosen when it is made (the select under **New folder**) or later from its ⋯ → **Sharing…** (or **Share** next to the folder's title):
+
+| | Who sees the folder and its projects | In claude.ai | On the server |
+|---|---|---|---|
+| **Everyone** (default) | everyone with the page / on the server | shared database, live room per project | everyone |
+| **Specific people** | its maker and the people added (picked by name) | hidden from everyone else in the app; the data sits in the page's shared database, so this is **not a lock** against someone who reads the page's data directly | the server filters, refuses the room and refuses changes |
+| **Only me** | its maker alone | kept in the maker's private part of the database (`private/<id>/…`): nobody else can read it, **the page's owner included**; no live room | the server filters, refuses the room and refuses changes |
+
+- People a folder is shared with by name also find its projects under **Shared with you**.
+- Only the folder's maker changes who sees it (an admin may also limit an Everyone folder). A folder goes **Only me** only if every project in it is the maker's own; a folder that is not Everyone is removed only once empty, so its projects never fall into Unfiled by accident.
+- Moving a project into or out of an **Only me** folder (or switching a folder to or from Only me) moves its screens and pictures between the shared database and the private part; an open canvas follows it. Whoever has a project open when they lose access is taken back to Home.
+- **Copy link** (card ⋯): on the server, the room link (`?room=<id>`). In claude.ai the page cannot see its own address, so the page owner sets it once (Sharing → *Project links: this page's address*); links are then `<page address>#project=<id>`. Anyone can also paste a link (or its `#project=…` part) into Home → **Open a link**. A link opens a project only for people it is shared with.
+- Analytics record a project's name only when its folder is Everyone; others show as *Private project*.
+- On the server, people are told apart by the id their browser makes up, unless the server sits behind a sign-in proxy and `LG_USER_HEADER` names the header carrying the person's email (for example `x-forwarded-email`; `LG_NAME_HEADER` for a display name). Without it, "Only me" means "this browser"; with it, sharing follows the person on every device.
 
 ## Admin: who worked, when, on what
 
@@ -197,7 +214,8 @@ curl http://127.0.0.1:8787/api/stats     # CPU, memory, message rates, event-loo
 
 - One process, Node 18+ (22 recommended), no dependencies: `HOST=0.0.0.0 PORT=8080 LG_TOKEN=… LG_ADMIN_KEY=… node server/server.mjs`. Put `LG_DATA=/data` on a persistent volume (rooms, shared libraries, projects, analytics live there; back that folder up). Health: `GET /api/ping`; metrics: `GET /api/stats`.
 - Terminate HTTPS at the platform's proxy and pass WebSocket upgrades through on `/sync`; keep the proxy's idle timeout above 60 s (the server pings every 30 s).
-- `LG_TOKEN` guards the MCP endpoint; the app itself relies on the platform's own sign-in (Okta in front of it). `LG_ADMIN_KEY` limits who edits shared libraries and who sees analytics.
+- `LG_TOKEN` guards the MCP endpoint; the app itself relies on the platform's own sign-in (Okta in front of it). `LG_ADMIN_KEY` limits who edits shared libraries and who sees analytics. Set `LG_USER_HEADER` to the header your sign-in proxy adds (the person's email) so folder sharing knows people for sure; requests without it then count as anonymous and see only Everyone folders.
+- The MCP endpoint drives whichever room it is pointed at (`?room=`), private ones included: it is for agents you run yourself, so keep `LG_TOKEN` set beyond localhost.
 - Sizing: one process is one core. The numbers above leave room for a few hundred concurrent people spread over rooms per instance; bandwidth in one room grows with the square of its people (every edit and cursor goes to everyone), so keep rooms under about 150 people. For more, run several instances and route by room at the proxy (`?room=` in the URL, one instance per room set).
 - Memory: about 100 MB plus the open canvases (a 2,400-block canvas is about 0.6 MB).
 - Data on the volume: `rooms/` (one file per project), `libraries.json`, `projects.json`, `assets/` (pictures), `stats/` (usage, one line per summary save; a month of 50 active people is a few MB).
@@ -303,7 +321,7 @@ js/autolayout.js    auto layout engine: boxes, stacks, Fixed/Hug/Fill, wrap, abs
 js/canvas-ui.js     canvas editor: stage, selection, tools, layers tree, properties, Simple/Advanced, export
 js/library.js       Library tab: sections per library, save/insert, the Libraries window (on/off, admins)
 js/libstore.js      shared libraries: claude.ai database, server /api/libraries, or this browser
-js/projects.js      Home: projects and folders (claude.ai database, server /api/projects, or this browser)
+js/projects.js      Home: projects and folders, folder sharing, project links (claude.ai database and private part, server /api/projects, or this browser)
 js/stats.js         usage summaries per person and month; the admin report
 js/admin.js         Admin window: totals, per-day charts, people, projects, latest actions, CSV
 js/codekit.js       code components: manifest, stand-ins, props, React output
@@ -337,7 +355,8 @@ docs/learnings.md   what Presenton and a 2,415-slide corpus taught us
 - In the published copy, exports go through the viewer's save prompt and PNGs use fallback fonts (font files cannot be fetched there). Run locally for exact type.
 - Canvas share links carry layout and copy only; images are referenced by id and need the same session's assets. Use Go live (or the published copy) to share with images.
 - The published copy cannot capture web pages or reach MCP clients by itself: capture runs in your browser through the snippet, and MCP needs the local server.
-- The local server has no accounts of its own: beyond localhost, put it behind the platform's sign-in and HTTPS, and set `LG_TOKEN` (MCP) and `LG_ADMIN_KEY` (libraries, analytics).
+- The local server has no accounts of its own: beyond localhost, put it behind the platform's sign-in and HTTPS, and set `LG_TOKEN` (MCP), `LG_ADMIN_KEY` (libraries, analytics) and `LG_USER_HEADER` (folder sharing).
+- In claude.ai, **Specific people** hides a folder in the app but cannot lock its data (the page's database has no per-person rules): use **Only me** for anything sensitive. claude.ai may not pass a link's `#project=` part to the page; then the link opens Home, and **Open a link** opens the project.
 - Locally, the brief interpreter and the agent call Anthropic directly from the browser with your key. In the published copy the agent uses claude.ai and the brief interpreter stays rule-based.
 - Hex values in the Deel preset were read from the guidelines PDF. Confirm against the Figma library before production use.
 - PowerPoint import keeps one style per text block (the most-used run's), so mixed bold or colored words inside a paragraph take the paragraph's main style; charts, SmartArt and EMF/WMF pictures come in as placeholders.

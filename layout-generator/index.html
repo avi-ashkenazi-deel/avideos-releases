@@ -183,7 +183,8 @@
     <section id="homeView" class="home" hidden>
       <aside class="home-side" id="homeSide"></aside>
       <div class="home-main">
-        <div class="home-head"><h2 id="homeTitle">Projects</h2><input id="homeSearch" class="input" type="search" placeholder="Search projects" aria-label="Search projects"><button id="homeNewBtn" class="btn primary" type="button">＋ New project</button></div>
+        <div class="home-head"><h2 id="homeTitle">Projects</h2><span id="homeAccess" class="home-access" hidden></span><input id="homeSearch" class="input" type="search" placeholder="Search projects" aria-label="Search projects"><button id="homeOpenBtn" class="btn ghost" type="button" hidden>Open a link</button><button id="homeNewBtn" class="btn primary" type="button">＋ New project</button></div>
+        <div id="homeOpenRow" class="home-new" hidden><input id="homeOpenInput" class="input grow" type="text" placeholder="Paste a project link" aria-label="Project link"><button id="homeOpenGo" class="btn primary" type="button">Open</button><button id="homeOpenCancel" class="btn ghost" type="button">Cancel</button></div>
         <div id="homeNew" class="home-new" hidden><input id="homeNewName" class="input grow" type="text" placeholder="Project name, e.g. Payroll launch" maxlength="80"><select id="homeNewFolder" class="input" aria-label="Folder"></select><button id="homeCreate" class="btn primary" type="button">Create</button><button id="homeCancel" class="btn ghost" type="button">Cancel</button></div>
         <div id="homeGrid" class="home-grid"></div>
         <p class="hint home-foot"><button id="homeArchived" class="btn small ghost" type="button">Show archived</button> <span id="homeNote"></span></p>
@@ -356,6 +357,15 @@
     </div>
   </div>
 
+  <div id="shareModal" class="modal" hidden>
+    <div class="modal-inner about share-modal" role="dialog" aria-modal="true" aria-labelledby="shareTitle">
+      <div class="detail-head">
+        <h3 id="shareTitle">Share folder</h3>
+        <button class="btn ghost icon" data-share-close type="button" aria-label="Close">✕</button>
+      </div>
+      <div class="share-body"></div>
+    </div>
+  </div>
   <div id="libsModal" class="modal" hidden>
     <div class="modal-inner about libs-modal">
       <div class="detail-head">
