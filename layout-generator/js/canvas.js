@@ -186,8 +186,9 @@ const Canvas = (() => {
 
   // ---- Serialization, links, code -----------------------------------------------------------
   function serialize(doc, opts = {}) {
+    if (!opts.stripAssets) return JSON.stringify(doc);
     const d = clone(doc);
-    if (opts.stripAssets) for (const f of d.frames) for (const b of f.layout.blocks) if (b.kind === 'image') b.assetMissing = true;
+    for (const f of d.frames) for (const b of f.layout.blocks) if (b.kind === 'image') b.assetMissing = true;
     return JSON.stringify(d);
   }
   function deserialize(json) { const d = typeof json === 'string' ? JSON.parse(json) : json; if (!d || !Array.isArray(d.frames)) throw new Error('not a canvas file'); for (const f of d.frames) { for (const b of f.layout.blocks) if (!b.id) b.id = uid(); migrate(f); } return d; }

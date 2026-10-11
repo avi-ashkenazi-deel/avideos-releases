@@ -20,11 +20,14 @@ const Sync = (() => {
 
   // ---- document <-> records ----------------------------------------------------------------------------------------
   const FRAME_KEYS = ['id', 'name', 'x', 'y', 'autoLayout', 'clip', 'hidden', 'locked', 'showGrid'];
-  function toRecords(doc) {
+  // Records for the whole canvas, or (scope = {frames: Set}) for some screens only: with many people editing, every
+  // change must not cost a pass over every block. Library records come along only on a full pass or when asked.
+  function toRecords(doc, scope = null) {
     const out = new Map();
     out.set('meta', { name: doc.name || 'Untitled canvas' });
-    for (const it of doc.library || []) if (it && it.id) out.set('L~' + it.id, it);
+    if (!scope || scope.library) for (const it of doc.library || []) if (it && it.id) out.set('L~' + it.id, it);
     doc.frames.forEach((f, i) => {
+      if (scope && scope.frames && !scope.frames.has(f.id)) return;
       const { blocks, meta, ...layoutRest } = f.layout; const { original, ...metaRest } = meta || {};
       const fr = {}; for (const k of FRAME_KEYS) if (f[k] !== undefined) fr[k] = f[k];
       fr.z = i; fr.layout = { ...layoutRest, meta: metaRest }; fr.order = blocks.map(b => b.id);
@@ -64,32 +67,64 @@ const Sync = (() => {
   // Team library items, in the order they were made.
   function libraryFrom(map) { return [...map.entries()].filter(([k, r]) => k.startsWith('L~') && !r._del).map(([, r]) => strip(r)).sort((a, b) => (a.created || 0) - (b.created || 0)); }
   // After the local doc was rebuilt from records, remember its canonical JSON so we never echo it back.
-  function markSynced(doc, keys) { const cur = toRecords(doc); for (const k of keys) { if (cur.has(k)) synced.set(k, canon(cur.get(k))); else synced.delete(k); } }
+  function markSynced(doc, keys) {
+    const frames = new Set(); let library = false;
+    for (const k of keys) { if (k.startsWith('L~')) library = true; else if (k !== 'meta') frames.add(k.split('~')[1]); }
+    const cur = toRecords(doc, { frames, library });
+    for (const k of keys) { if (cur.has(k)) synced.set(k, canon(cur.get(k))); else synced.delete(k); }
+  }
 
   // ---- outgoing ------------------------------------------------------------------------------------------------------
-  function diff(doc, onlyFrames) {
-    const cur = toRecords(doc); const out = [];
+  // What changed since the last sync: all of it, or only inside some screens (scope = Set of frame ids; deletions
+  // inside those screens count, screens coming or going need the full pass).
+  function diff(doc, scope, { deletions = true } = {}) {
+    const cur = toRecords(doc, scope ? { frames: scope } : null); const out = [];
     for (const [k, r] of cur) {
-      if (onlyFrames && k !== 'meta' && !onlyFrames.has(k.split('~')[1])) continue;
       const j = canon(r); if (synced.get(k) === j) continue;
       const rec = { ...Canvas.clone(r), _k: k, _v: now(), _by: me.id }; recs.set(k, rec); synced.set(k, j); out.push(rec);
     }
-    if (!onlyFrames) for (const k of [...synced.keys()]) if (!cur.has(k) && !k.startsWith('a~')) { const rec = { _k: k, _del: 1, _v: now(), _by: me.id }; recs.set(k, rec); synced.delete(k); out.push(rec); }
+    if (deletions) for (const k of [...synced.keys()]) {
+      if (cur.has(k) || k.startsWith('a~')) continue;
+      if (scope && (k === 'meta' || k.startsWith('L~') || !scope.has(k.split('~')[1]))) continue;
+      const rec = { _k: k, _del: 1, _v: now(), _by: me.id }; recs.set(k, rec); synced.delete(k); out.push(rec);
+    }
     return out;
   }
-  function onChange(doc) {
+  let lastOrder = ''; let reconcileTimer = 0;
+  const orderOf = doc => doc.frames.map(f => f.id).join('\n');
+  // A change the editor can name the screens of goes out as a small pass; everything else, and a quiet moment after
+  // any small pass, runs the full one (so nothing is ever left behind).
+  function onChange(doc, opts = {}) {
     if (!adapter || applying) return;
-    const out = diff(doc); if (out.length) adapter.send(out, false);
+    const order = orderOf(doc); const structural = order !== lastOrder; lastOrder = order;
+    const scope = !structural && Array.isArray(opts.frames) && opts.frames.length ? new Set(opts.frames) : null;
+    const out = diff(doc, scope); if (out.length) adapter.send(out, false);
+    if (scope) { clearTimeout(reconcileTimer); reconcileTimer = setTimeout(() => { reconcileTimer = 0; if (!adapter || applying) return; const late = diff(ui.doc, null); if (late.length) adapter.send(late, false); }, 1500); }
     queueAssetShare(doc);
   }
   function onLive(frameIds) {
     if (!adapter || applying || !adapter.live) return;
-    const out = diff(ui.doc, new Set(frameIds)); if (out.length) adapter.send(out, true);
+    const out = diff(ui.doc, new Set(frameIds), { deletions: false }); if (out.length) adapter.send(out, true);
   }
 
   // ---- incoming ------------------------------------------------------------------------------------------------------
   const newer = (a, b) => !b || a._v > b._v || (a._v === b._v && String(a._by) > String(b._by));
+  // Records from many people arrive as many small messages: they are gathered for a moment and applied together, so a
+  // screen is rebuilt and drawn once per batch instead of once per message.
+  // The gathering window grows while applying takes long (many people, many screens) and shrinks back when it is
+  // quick, so the page keeps answering the person at the keyboard before it draws everyone else's changes.
+  const inbox = []; let inboxTimer = 0; let inboxFull = false; let inboxWait = 40;
   function applyRemote(list, opts = {}) {
+    for (const r of list) inbox.push(r); if (opts.full) inboxFull = true;
+    if (!inboxTimer) inboxTimer = setTimeout(flushInbox, inboxWait);
+  }
+  function flushInbox() {
+    inboxTimer = 0; const list = inbox.splice(0); const full = inboxFull; inboxFull = false;
+    if (!list.length) return;
+    const t0 = performance.now(); applyNow(list, { full }); const took = performance.now() - t0;
+    inboxWait = Math.max(40, Math.min(400, Math.round(took * 4)));
+  }
+  function applyNow(list, opts = {}) {
     const frames = new Set(); let structural = false, meta = false, lib = false; const assets = [];
     for (const rec of list) {
       if (!rec || typeof rec._k !== 'string' || typeof rec._v !== 'number') continue;
@@ -121,11 +156,12 @@ const Sync = (() => {
   }
   // Load a whole shared canvas (first join): it replaces the local one; the local one is kept as a backup.
   function loadAll(list) {
+    clearTimeout(inboxTimer); inboxTimer = 0; inbox.length = 0;
     for (const rec of list) if (rec && rec._k && newer(rec, recs.get(rec._k))) recs.set(rec._k, rec);
     for (const r of recs.values()) if (r._k.startsWith('a~') && !r._del) ensureAsset(r);
     try { localStorage.setItem('lg.canvas.backup', Canvas.serialize(ui.doc)); } catch { }
     applying = true;
-    try { const doc = docFrom(recs, ui.doc); ui.replaceDoc(doc, { silent: true }); synced.clear(); markSynced(ui.doc, [...toRecords(ui.doc).keys()]); for (const k of recs.keys()) if (k.startsWith('a~')) synced.set(k, 'asset'); } finally { applying = false; }
+    try { const doc = docFrom(recs, ui.doc); ui.replaceDoc(doc, { silent: true }); synced.clear(); markSynced(ui.doc, [...toRecords(ui.doc).keys()]); for (const k of recs.keys()) if (k.startsWith('a~')) synced.set(k, 'asset'); lastOrder = orderOf(ui.doc); } finally { applying = false; }
   }
   // Push everything (first person in an empty shared canvas).
   function pushAll() { synced.clear(); const out = diff(ui.doc); if (out.length && adapter) adapter.send(out, false); queueAssetShare(ui.doc); }
@@ -191,7 +227,9 @@ const Sync = (() => {
   let lastCursor = 0, pendingCursor;
   function cursor(p) { if (!adapter) return; pendingCursor = p; const t = performance.now(); if (t - lastCursor < 50) return; lastCursor = t; adapter.presence({ cursor: p ? { x: Math.round(p.x), y: Math.round(p.y) } : null }); }
   function selection(s) { if (adapter) adapter.presence({ sel: { frameIds: (s.frameIds || []).slice(0, 40), blockIds: (s.blockIds || []).slice(0, 40) } }); }
-  function setPeers(list) { peers = list; ui.setPeers(list); notify(); }
+  // Cursors change many times a second from everyone: the editor and the avatar strip hear about it once per frame.
+  let peersTimer = 0;
+  function setPeers(list) { peers = list; if (peersTimer) return; peersTimer = requestAnimationFrame(() => { peersTimer = 0; ui.setPeers(peers); notify(); }); }
 
   // ---- adapters ------------------------------------------------------------------------------------------------------
   // Self-hosted server: WebSocket at /sync?room=<id>, records and presence as JSON messages.
@@ -207,6 +245,7 @@ const Sync = (() => {
         if (m.t === 'snapshot') { const list = Array.isArray(m.recs) ? m.recs : []; if (firstSnapshot) { firstSnapshot = false; if (list.some(r => r._k && r._k.startsWith('f~') && !r._del)) loadAll(list); else pushAll(); } else applyRemote(list, { full: true }); }
         else if (m.t === 'recs') applyRemote(Array.isArray(m.recs) ? m.recs : []);
         else if (m.t === 'presence') { const p = peerMap.get(m.id) || { id: m.id }; Object.assign(p, sanitizePresence(m.p)); peerMap.set(m.id, p); setPeers([...peerMap.values()]); }
+        else if (m.t === 'presences' && Array.isArray(m.list)) { for (const x of m.list) { if (!x || typeof x.id !== 'string') continue; const p = peerMap.get(x.id) || { id: x.id }; Object.assign(p, sanitizePresence(x.p)); peerMap.set(x.id, p); } setPeers([...peerMap.values()]); }
         else if (m.t === 'leave') { peerMap.delete(m.id); setPeers([...peerMap.values()]); }
         else if (m.t === 'peers') { peerMap = new Map((m.list || []).filter(p => p.id !== me.id).map(p => [p.id, { id: p.id, ...sanitizePresence(p.p) }])); setPeers([...peerMap.values()]); }
         else if (m.t === 'libs' && env.onLibs) env.onLibs();
@@ -246,10 +285,12 @@ const Sync = (() => {
         docVersions.set(fid, bodies.length);
       } catch (e) { if (e && (e.code === 'invalid_argument' || e.code === 'not_granted')) { status.readOnly = true; notify(); } else throw e; }
     }
+    // The database copy of a screen is written soon after an edit; while the live room carries edits to everyone
+    // already, it waits a little longer, so a screen being edited is not shipped whole to every viewer twice a second.
     function schedule(fid) {
       const q = writeQueue.get(fid) || { timer: 0, chain: Promise.resolve() };
       clearTimeout(q.timer);
-      q.timer = setTimeout(() => { q.chain = q.chain.then(() => writeFrame(fid)).catch(e => console.warn('db write', e)); }, 450);
+      q.timer = setTimeout(() => { q.chain = q.chain.then(() => writeFrame(fid)).catch(e => console.warn('db write', e)); }, room && status.connected ? 1500 : 450);
       writeQueue.set(fid, q);
     }
     let metaChain = Promise.resolve();
@@ -284,14 +325,19 @@ const Sync = (() => {
     if (db) {
       const unpack = d => { const out = []; if (d.rec) out.push(d.rec); if (d.orig) out.push(d.orig); for (const r of Object.values(d.blocks || {})) out.push(r); return out; };
       db.collection('frames').onSnapshot(snap => {
-        const list = []; for (const d of snap.docs) { const data = d.data(); if (data) { list.push(...unpack(data)); if (!d.id.includes('.c')) docVersions.set(d.id, data.chunks || 1); } }
         if (firstSnap) {
           if (snap.metadata && snap.metadata.fromCache && !snap.size) return; // wait for the server's answer
           firstSnap = false;
+          const list = []; for (const d of snap.docs) { const data = d.data(); if (data) { list.push(...unpack(data)); if (!d.id.includes('.c')) docVersions.set(d.id, data.chunks || 1); } }
           if (list.some(r => r._k && r._k.startsWith('f~') && !r._del)) loadAll(list); else pushAll();
           return;
         }
-        const changed = []; for (const ch of snap.docChanges()) { const data = ch.doc.data(); if (data && ch.type !== 'removed') changed.push(...unpack(data)); }
+        // after the first load only the changed documents are read (reading every screen on every change is what
+        // made a busy page slow)
+        const changed = []; for (const ch of snap.docChanges()) { const data = ch.doc.data(); if (!data || ch.type === 'removed') continue; changed.push(...unpack(data)); if (!ch.doc.id.includes('.c')) docVersions.set(ch.doc.id, data.chunks || 1); }
+        // Two people writing the same screen's document at once: the later write can carry the earlier one's blocks
+        // at an older version. Where the database holds an older copy of a block this person wrote, write it again.
+        if (!status.readOnly) { const stale = new Set(); for (const r of changed) { if (!r || !r._k || !r._k.startsWith('b~')) continue; const mine = recs.get(r._k); if (mine && mine._by === me.id && newer(mine, r)) stale.add(r._k.split('~')[1]); } for (const fid of stale) schedule(fid); }
         applyRemote(changed);
       }, e => console.warn('db frames', e && e.code));
       db.doc('canvas/meta').onSnapshot(s => { const d = s.data(); if (d && d.rec) applyRemote([d.rec]); }, () => { });
@@ -319,7 +365,7 @@ const Sync = (() => {
   // ---- lifecycle -----------------------------------------------------------------------------------------------------
   function init(canvasUI, e) {
     ui = canvasUI; env = e;
-    ui.on('change', doc => onChange(doc));
+    ui.on('change', (doc, opts) => onChange(doc, opts));
     ui.on('live', ids => onLive(ids));
     ui.on('pointer', p => cursor(p));
     ui.on('select', s => selection(s));
@@ -351,7 +397,7 @@ const Sync = (() => {
   function roomLink() { if (status.mode !== 'server' || !status.room) return null; const u = new URL(location.href); u.hash = ''; u.searchParams.set('room', status.room); return u.toString(); }
   function setName(n) { me.name = String(n || '').replace(/[\u0000-\u001f<>]/g, '').slice(0, 40); LS.set('lg.name', me.name); if (adapter) adapter.presence({ name: me.name }); notify(); }
   return {
-    init, startArtifact, serverAvailable, roomFromUrl, joinServer, newRoomId, roomLink, setName,
+    init, startArtifact, serverAvailable, roomFromUrl, joinServer, newRoomId, roomLink, setName, flush: flushInbox,
     get me() { return me; }, get status() { return status; }, get peers() { return peers; },
     onStatus: fn => { listeners.push(fn); fn(status, peers); },
     announceTools: list => { if (adapter && adapter.announceTools) adapter.announceTools(list); },

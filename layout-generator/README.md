@@ -153,6 +153,42 @@ Several people can edit one canvas at the same time, with live cursors, selectio
 
 Edits merge per block and per frame (last write wins), so two people editing different blocks of the same frame never overwrite each other.
 
+### How many people at once
+
+Measured with `tools/loadtest.mjs` on one 4-core box: a 40-screen, 2,400-block canvas, everyone editing twice a second and moving a cursor 20 times a second (a heavy day, not a typical one), one Node process.
+
+| People in one room | Edit reaches everyone (p95) | Server CPU (one core) | Server out |
+|---|---|---|---|
+| 10 | 3 ms | 4 % | 0.2 MB/s |
+| 25 | 5 ms | 5 % | 1.2 MB/s |
+| 50 | 11 ms | 8 % | 4.8 MB/s |
+| 100 | 32 ms | 19 % | 18 MB/s |
+
+A real browser in that room, measured at the same time: with 25 people editing the editor's event loop lags 1 ms on average at 59 fps; with 50, 13 ms at 57 fps; with 100, 12 ms at 56 fps; a local edit costs 8–10 ms. (Before this pass: 351 ms lag at 21 fps with 25 people, 5 s with 50, and the server froze for two minutes at 100.) The published copy does the same work on the page; see the limits below.
+
+What keeps it that way: the server encodes each message once and sends cursors as one message per 50 ms tick per room (not one per cursor move per person); the editor serializes only the screens that changed, gathers incoming edits for a moment (longer when busy) and redraws each touched screen once, redraws only screens in view, writes the browser backup at most once a second, reads only the changed documents from the claude.ai database, and the people strip only rebuilds when who is here changes. Rooms under continuous editing are saved every 5 s.
+
+Run it yourself (the room is seeded with a canvas on the first run):
+
+```bash
+node tools/loadtest.mjs --url http://127.0.0.1:8787 --clients 50 --edits 2 --cursor 20 --seconds 20
+curl http://127.0.0.1:8787/api/stats     # CPU, memory, message rates, event-loop lag, saves
+```
+
+### Hosting it (Nexus or any container platform)
+
+- One process, Node 18+ (22 recommended), no dependencies: `HOST=0.0.0.0 PORT=8080 LG_TOKEN=… LG_ADMIN_KEY=… node server/server.mjs`. Put `LG_DATA=/data` on a persistent volume (rooms, shared libraries, projects, analytics live there; back that folder up). Health: `GET /api/ping`; metrics: `GET /api/stats`.
+- Terminate HTTPS at the platform's proxy and pass WebSocket upgrades through on `/sync`; keep the proxy's idle timeout above 60 s (the server pings every 30 s).
+- `LG_TOKEN` guards the MCP endpoint; the app itself relies on the platform's own sign-in (Okta in front of it). `LG_ADMIN_KEY` limits who edits shared libraries and who sees analytics.
+- Sizing: one process is one core. The numbers above leave room for a few hundred concurrent people spread over rooms per instance; bandwidth in one room grows with the square of its people (every edit and cursor goes to everyone), so keep rooms under about 150 people. For more, run several instances and route by room at the proxy (`?room=` in the URL, one instance per room set).
+- Memory: about 100 MB plus the open canvases (a 2,400-block canvas is about 0.6 MB).
+
+### Limits in the published copy (claude.ai)
+
+- The live room allows about 40 messages a second per person, shared between edits and cursors; the page sends at most 8 edit messages and 20 cursor moves a second, and gathers what arrives. Presence is complete up to 256 people.
+- The database holds documents of up to 256 KB (a screen with more than about 190 KB of blocks is split) and 5,000 documents per page in all: every screen, shared picture, library item (a full Deel UI import is 565 of them) and project counts. Keep one published page per team or product area rather than one for the whole company.
+- Measured on the same page with the runtime simulated (same canvas, everyone editing twice a second): 25 people editing at once, 16 ms average lag at 55 fps; 50 people, 33 ms at 46 fps; 100 people, 32 ms at 47 fps. The database's document count and per-person message budget, not the page, are the practical ceiling there; for big groups, host the server.
+
 ## Agent
 
 **✦ Agent** (⌘K) opens a chat that works on what you have selected: "make these three darker", "write a hiring version of this", "wireframe all of them and make two variations of the first". It reads the selection, brand kit and screenshots, then edits through the same operations the editor uses. Each request is one undo step, and the steps it took are listed under the reply.
@@ -258,6 +294,7 @@ js/figma.js         .fig and Figma clipboard reader (kiwi schema, zstd/deflate)
 js/webimport.js     web page capture snippet and import
 js/looks.js         original / wireframe / rebrand looks
 js/sync.js          multiplayer: claude.ai room + db, or the WebSocket server
+tools/loadtest.mjs  many synthetic people in a room: latency, rates, server CPU
 js/tool-defs.js     agent tool definitions (shared with the server)
 js/agent-tools.js   agent tool implementations on the canvas
 js/agent.js         agent panel (claude.ai sample or Claude API)
@@ -278,7 +315,7 @@ docs/learnings.md   what Presenton and a 2,415-slide corpus taught us
 - In the published copy, exports go through the viewer's save prompt and PNGs use fallback fonts (font files cannot be fetched there). Run locally for exact type.
 - Canvas share links carry layout and copy only; images are referenced by id and need the same session's assets. Use Go live (or the published copy) to share with images.
 - The published copy cannot capture web pages or reach MCP clients by itself: capture runs in your browser through the snippet, and MCP needs the local server.
-- The local server has no accounts. On localhost that is fine; beyond it, set `LG_TOKEN` and put it behind HTTPS.
+- The local server has no accounts of its own: beyond localhost, put it behind the platform's sign-in and HTTPS, and set `LG_TOKEN` (MCP) and `LG_ADMIN_KEY` (libraries, analytics).
 - Locally, the brief interpreter and the agent call Anthropic directly from the browser with your key. In the published copy the agent uses claude.ai and the brief interpreter stays rule-based.
 - Hex values in the Deel preset were read from the guidelines PDF. Confirm against the Figma library before production use.
 - PowerPoint import keeps one style per text block (the most-used run's), so mixed bold or colored words inside a paragraph take the paragraph's main style; charts, SmartArt and EMF/WMF pictures come in as placeholders.

@@ -32,7 +32,23 @@ const CanvasUI = (() => {
   function count() { return doc ? doc.frames.length : 0; }
   function open() { active = true; renderAll(); if (doc.frames.length && !sel.frameId) fit(); }
   function close() { endEdit(); active = false; }
-  function persist(opts = {}) { try { const s = Canvas.serialize(doc); if (s.length < 3_000_000) localStorage.setItem('lg.canvas', s); } catch { } if (!opts.silent) emit('change', doc, opts); }
+  // The browser copy is written at most once a second (and on leaving): with many people editing, every incoming
+  // change must not serialize the whole canvas. The change event names the screens that could have changed: the
+  // selected ones, the ones being dragged, and any the caller marks (dirty); structural changes are found by the
+  // sync layer itself.
+  let backupTimer = 0;
+  function backupNow() { backupTimer = 0; try { const s = Canvas.serialize(doc); if (s.length < 3_000_000) localStorage.setItem('lg.canvas', s); } catch { } }
+  function backupSoon() { if (!backupTimer) backupTimer = setTimeout(backupNow, 1000); }
+  window.addEventListener('pagehide', () => { if (backupTimer) { clearTimeout(backupTimer); backupNow(); } });
+  const dirty = new Set();
+  function touchedFrames(opts) {
+    const ids = new Set(opts.frames || []);
+    if (sel.frameId) ids.add(sel.frameId); for (const id of sel.frameIds) ids.add(id);
+    if (drag && drag.frames) for (const f of drag.frames) ids.add(f.id);
+    for (const id of dirty) ids.add(id); dirty.clear();
+    return [...ids];
+  }
+  function persist(opts = {}) { backupSoon(); if (!opts.silent) emit('change', doc, { ...opts, frames: touchedFrames(opts) }); }
   function updateUndo() { $('cvUndo').disabled = !hist.canUndo; $('cvRedo').disabled = !hist.canRedo; }
   // One undoable step for changes made from outside the editor (agent, sync, batch tools).
   function mutate(fn, opts = {}) {
@@ -43,12 +59,25 @@ const CanvasUI = (() => {
     persist(); updateUndo();
     return out;
   }
-  // Remote changes: the document object was patched in place by the sync layer.
+  // Remote changes: the document object was patched in place by the sync layer. Screens in view are redrawn now;
+  // the others are marked stale and drawn when they come into view (with many people editing, most changes land
+  // on screens this person is not looking at).
+  const stale = new Set(); let staleTimer = 0;
+  function inView(f) {
+    const r = stage().getBoundingClientRect(); const v = doc.view; const pad = 200;
+    const x0 = f.x * v.zoom + v.x, y0 = f.y * v.zoom + v.y, x1 = x0 + FW(f) * v.zoom, y1 = y0 + FH(f) * v.zoom;
+    return x1 > -pad && y1 > -pad && x0 < r.width + pad && y0 < r.height + pad;
+  }
+  function flushStale() {
+    staleTimer = 0; if (!active || !stale.size) return;
+    for (const id of [...stale]) { const f = Canvas.frameById(doc, id); if (!f) { stale.delete(id); continue; } if (inView(f)) { stale.delete(id); rerenderFrame(f); } }
+  }
   function remoteApplied(frameIds, structural) {
     validateSelection(); hover = null;
     if (editing && !Canvas.frameById(doc, editing.frameId)) endEdit(true);
     if (!active) { persist({ silent: true }); return; }
-    if (structural || !frameIds) renderFrames(); else frameIds.forEach(id => { const f = Canvas.frameById(doc, id); if (f && !(editing && editing.frameId === id)) rerenderFrame(f); });
+    if (structural || !frameIds) { stale.clear(); renderFrames(); }
+    else frameIds.forEach(id => { const f = Canvas.frameById(doc, id); if (!f || (editing && editing.frameId === id)) return; if (inView(f) || sel.frameIds.includes(id)) rerenderFrame(f); else stale.add(id); });
     renderLayers(); if (!propsFocused()) renderProps(); drawOverlay(); updateCount();
     persist({ silent: true });
   }
@@ -125,6 +154,7 @@ const CanvasUI = (() => {
   }
   function applyView() {
     const v = doc.view; $('world').style.transform = `translate(${v.x}px, ${v.y}px) scale(${v.zoom})`; $('cvZoom').textContent = Math.round(v.zoom * 100) + '%';
+    if (stale.size && !staleTimer) staleTimer = requestAnimationFrame(flushStale);
     stage().style.backgroundSize = `${24 * v.zoom}px ${24 * v.zoom}px`; stage().style.backgroundPosition = `${v.x}px ${v.y}px`;
     const fs = Math.max(11, 12 / v.zoom) + 'px', off = Math.max(16, 18 / v.zoom);
     $('world').querySelectorAll('.cv-frame-label').forEach(lb => { lb.style.fontSize = fs; const f = Canvas.frameById(doc, lb.dataset.label); if (f) lb.style.top = (f.y - off) + 'px'; });
@@ -136,6 +166,7 @@ const CanvasUI = (() => {
   function renderAll() { renderFrames(); renderLayers(); renderProps(); applyView(); updateUndo(); updateCount(); }
   function labelHTML(f) { return `<div class="cv-frame-label${sel.frameIds.includes(f.id) ? ' on' : ''}" data-label="${esc(f.id)}" style="left:${f.x}px;top:${f.y - Math.max(16, 18 / doc.view.zoom)}px;max-width:${FW(f)}px;font-size:${Math.max(11, 12 / doc.view.zoom)}px;${f.hidden ? 'display:none;' : ''}">${esc(f.name)}</div>`; }
   function renderFrames() {
+    stale.clear();
     $('world').innerHTML = doc.frames.map(f => `${labelHTML(f)}<div class="cv-frame" data-id="${esc(f.id)}" style="left:${f.x}px;top:${f.y}px;width:${FW(f)}px;height:${FH(f)}px;${f.hidden ? 'display:none;' : ''}${f.clip === false ? 'overflow:visible;' : ''}">${frameSVG(f)}</div>`).join('');
   }
   function frameSVG(f) {
@@ -1444,6 +1475,7 @@ const CanvasUI = (() => {
     regrid, exportAction, makeVariations, resizeScreens, copySelection, pasteClipboard, startEdit: (fid, bid) => { const f = Canvas.frameById(doc, fid); return startEdit(f, f && Canvas.blockById(f, bid)); },
     on: (k, fn) => { hooks[k].push(fn); return () => { hooks[k] = hooks[k].filter(x => x !== fn); }; },
     setPeers: list => { peers = Array.isArray(list) ? list : []; if (active) drawOverlay(); },
+    markDirty: ids => { for (const id of ids || []) dirty.add(id); },
     setUndoMerge: fn => { undoMerge = fn; },
     _history: () => hist,
   };

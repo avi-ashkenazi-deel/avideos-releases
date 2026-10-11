@@ -930,9 +930,12 @@
     onRpc: (name, args) => (typeof AgentTools !== 'undefined' ? AgentTools.call(name, args, { via: 'mcp' }) : Promise.reject(new Error('Agent tools are not loaded'))),
   });
   const initials = n => String(n || '?').trim().split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase() || '?';
+  let peersSig = '';
   function renderPeers(st, peers) {
     const el = $('cvPeers'); const me = Sync.me;
     const live = st.mode !== 'local';
+    const sig = [st.mode, st.connected, st.readOnly, st.label, me.name, ...peers.map(p => `${p.id}|${p.name}|${p.color}|${!!p.cursor}`)].join('\u0001');
+    if (sig === peersSig) return; peersSig = sig;
     el.hidden = !live;
     if (live) el.innerHTML = `<span class="cv-live ${st.connected ? 'on' : ''}" title="${escapeHtml(st.label)}${st.readOnly ? ' · view only' : ''}">${st.connected ? 'Live' : 'Connecting…'}${st.readOnly ? ' · view only' : ''}</span>`
       + peers.slice(0, 8).map(p => `<button type="button" class="cv-av" data-peer="${escapeHtml(p.id)}" title="${escapeHtml(p.name || 'Someone')}${p.cursor ? ' · click to go to their cursor' : ''}" style="background:${Render.col(p.color, '#7C5CFF')}">${escapeHtml(initials(p.name || 'Someone'))}</button>`).join('')
