@@ -43,22 +43,25 @@ const rooms = new Map();
 const validRoom = id => typeof id === 'string' && /^[A-Za-z0-9_-]{4,64}$/.test(id);
 async function getRoom(id) {
   let r = rooms.get(id); if (r) return r;
-  r = { id, recs: new Map(), clients: new Set(), saveTimer: null, loaded: false };
+  r = { id, recs: new Map(), clients: new Set(), saveTimer: null, saveDue: 0, loaded: false, dirtyPresence: new Set(), presenceTimer: null };
   rooms.set(id, r);
   try { const j = JSON.parse(await readFile(path.join(DATA, 'rooms', id + '.json'), 'utf8')); for (const rec of j.recs || []) if (rec && rec._k) r.recs.set(rec._k, rec); } catch { }
   r.loaded = true; return r;
 }
 function scheduleSave(r) {
   clearTimeout(r.saveTimer);
+  const now = Date.now(); if (!r.saveDue) r.saveDue = now + 5000;
   r.saveTimer = setTimeout(async () => {
+    r.saveDue = 0;
     try {
       await mkdir(path.join(DATA, 'rooms'), { recursive: true });
       const cutoff = (Date.now() - 86400e3) * 1000; // drop tombstones older than a day
       const recs = [...r.recs.values()].filter(x => !(x._del && x._v < cutoff));
-      const file = path.join(DATA, 'rooms', r.id + '.json'); const tmp = file + '.tmp';
+      const file = path.join(DATA, 'rooms', r.id + '.json'); const tmp = file + '.tmp'; const t0 = Date.now();
       await writeFile(tmp, JSON.stringify({ v: 1, id: r.id, saved: new Date().toISOString(), recs })); await rename(tmp, file);
+      stats.saves++; stats.saveMsMax = Math.max(stats.saveMsMax, Date.now() - t0);
     } catch (e) { log('save failed', r.id, e.message); }
-  }, 1500);
+  }, Math.max(50, Math.min(1500, r.saveDue - now)));
 }
 const newer = (a, b) => !b || a._v > b._v || (a._v === b._v && String(a._by) > String(b._by));
 function cleanPresence(p) {
@@ -77,20 +80,21 @@ function wsAccept(req, socket) {
   const accept = createHash('sha1').update(key + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64');
   socket.write(`HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ${accept}\r\n\r\n`);
   socket.setNoDelay(true);
-  const conn = { id: 'p' + (++connSeq).toString(36), socket, buf: Buffer.alloc(0), frags: [], alive: true, client: {}, p: {}, tools: [], lastActive: Date.now(), room: null, onMessage: null, onClose: null, closed: false };
-  socket.on('data', chunk => { conn.buf = Buffer.concat([conn.buf, chunk]); parseFrames(conn); });
+  const conn = { id: 'p' + (++connSeq).toString(36), socket, buf: Buffer.alloc(0), chunks: [], chunkLen: 0, need: 2, frags: [], alive: true, client: {}, p: {}, tools: [], lastActive: Date.now(), room: null, onMessage: null, onClose: null, closed: false };
+  // Big messages (a whole canvas) arrive in many chunks: collect them and join once there is enough for a frame.
+  socket.on('data', chunk => { conn.chunks.push(chunk); conn.chunkLen += chunk.length; if (conn.chunkLen + conn.buf.length < conn.need) return; conn.buf = Buffer.concat([conn.buf, ...conn.chunks]); conn.chunks = []; conn.chunkLen = 0; parseFrames(conn); });
   socket.on('close', () => closeConn(conn)); socket.on('error', () => closeConn(conn)); socket.on('end', () => closeConn(conn));
   return conn;
 }
 function closeConn(conn) { if (conn.closed) return; conn.closed = true; try { conn.socket.destroy(); } catch { } if (conn.onClose) conn.onClose(); }
 function parseFrames(conn) {
   for (;;) {
-    const b = conn.buf; if (b.length < 2) return;
+    const b = conn.buf; conn.need = 2; if (b.length < 2) return;
     const fin = (b[0] & 0x80) !== 0, op = b[0] & 0x0f, masked = (b[1] & 0x80) !== 0; let len = b[1] & 0x7f, off = 2;
-    if (len === 126) { if (b.length < 4) return; len = b.readUInt16BE(2); off = 4; }
-    else if (len === 127) { if (b.length < 10) return; const hi = b.readUInt32BE(2), lo = b.readUInt32BE(6); len = hi * 2 ** 32 + lo; off = 10; }
+    if (len === 126) { conn.need = 4; if (b.length < 4) return; len = b.readUInt16BE(2); off = 4; }
+    else if (len === 127) { conn.need = 10; if (b.length < 10) return; const hi = b.readUInt32BE(2), lo = b.readUInt32BE(6); len = hi * 2 ** 32 + lo; off = 10; }
     if (len > MAX_MSG) { closeConn(conn); return; }
-    const mOff = off; if (masked) off += 4; if (b.length < off + len) return;
+    const mOff = off; if (masked) off += 4; conn.need = off + len; if (b.length < off + len) return;
     let payload = b.subarray(off, off + len);
     if (masked) { const m = b.subarray(mOff, mOff + 4); payload = Buffer.from(payload); for (let i = 0; i < payload.length; i++) payload[i] ^= m[i & 3]; }
     conn.buf = b.subarray(off + len);
@@ -100,7 +104,7 @@ function parseFrames(conn) {
     if (op === 0x1 || op === 0x2 || op === 0x0) {
       conn.frags.push(payload);
       if (conn.frags.reduce((t, f) => t + f.length, 0) > MAX_MSG) { closeConn(conn); return; }
-      if (fin) { const msg = Buffer.concat(conn.frags).toString('utf8'); conn.frags = []; if (conn.onMessage) { try { conn.onMessage(msg); } catch (e) { log('message error', e.message); } } }
+      if (fin) { const msg = Buffer.concat(conn.frags).toString('utf8'); conn.frags = []; stats.msgsIn++; stats.bytesIn += msg.length; if (conn.onMessage) { try { conn.onMessage(msg); } catch (e) { log('message error', e.message); } } }
     }
   }
 }
@@ -111,11 +115,34 @@ function sendFrame(conn, op, payload) {
   else if (len < 65536) { head = Buffer.alloc(4); head[1] = 126; head.writeUInt16BE(len, 2); }
   else { head = Buffer.alloc(10); head[1] = 127; head.writeUInt32BE(Math.floor(len / 2 ** 32), 2); head.writeUInt32BE(len >>> 0, 6); }
   head[0] = 0x80 | op;
+  stats.msgsOut++; stats.bytesOut += len;
   try { conn.socket.write(Buffer.concat([head, payload])); } catch { closeConn(conn); }
 }
+// Counters and event-loop lag for /api/stats (what tools/loadtest.mjs reads).
+const stats = { msgsOut: 0, bytesOut: 0, msgsIn: 0, bytesIn: 0, dropped: 0, saves: 0, saveMsMax: 0, lag: [] };
+let lagT = Date.now(); setInterval(() => { const n = Date.now(); const l = n - lagT - 250; lagT = n; stats.lag.push(Math.max(0, l)); if (stats.lag.length > 240) stats.lag.shift(); }, 250).unref();
 const sendJSON = (conn, obj) => sendFrame(conn, 0x1, Buffer.from(JSON.stringify(obj)));
+const SLOW = 4 * 1024 * 1024, HOPELESS = 64 * 1024 * 1024;
+// One message to many people: encoded once. Presence is skipped for a reader whose socket is backed up (it is
+// replaced by the next one anyway); a reader that cannot keep up with edits at all is dropped.
+function broadcast(conns, obj, { skippable = false } = {}) {
+  const payload = Buffer.from(JSON.stringify(obj));
+  for (const c of conns) {
+    const q = c.socket.writableLength || 0;
+    if (q > HOPELESS) { stats.dropped++; closeConn(c); continue; }
+    if (skippable && q > SLOW) { stats.dropped++; continue; }
+    sendFrame(c, 0x1, payload);
+  }
+}
 setInterval(() => { for (const r of rooms.values()) for (const c of r.clients) { if (!c.alive) { closeConn(c); continue; } c.alive = false; sendFrame(c, 0x9, Buffer.alloc(0)); } }, 30000).unref();
 
+const PRESENCE_TICK = 50;
+function flushPresence(room) {
+  room.presenceTimer = null; const list = [...room.dirtyPresence].filter(c => !c.closed).map(c => ({ id: c.id, p: c.p })); room.dirtyPresence.clear();
+  if (!list.length) return;
+  if (list.length === 1) { const one = list[0]; broadcast([...room.clients].filter(c => c.id !== one.id), { t: 'presence', id: one.id, p: one.p }, { skippable: true }); return; }
+  broadcast(room.clients, { t: 'presences', list }, { skippable: true });
+}
 // ---- Room protocol ---------------------------------------------------------------------------------------------------
 const pending = new Map(); let rpcSeq = 0;
 async function joinRoom(conn, roomId) {
@@ -129,19 +156,20 @@ async function joinRoom(conn, roomId) {
       if (Array.isArray(m.tools)) conn.tools = m.tools.slice(0, 100);
       sendJSON(conn, { t: 'snapshot', recs: [...room.recs.values()] });
       sendJSON(conn, { t: 'peers', list: others().map(c => ({ id: c.id, p: c.p })) });
-      for (const c of others()) sendJSON(c, { t: 'presence', id: conn.id, p: conn.p });
+      broadcast(others(), { t: 'presence', id: conn.id, p: conn.p });
       log(`join ${room.id} ${conn.id} ${conn.client.name || ''} (${room.clients.size} here)`);
     } else if (m.t === 'recs' && Array.isArray(m.recs)) {
       const ok = [];
       for (const rec of m.recs) { if (!rec || typeof rec._k !== 'string' || typeof rec._v !== 'number' || rec._k.length > 200) continue; if (newer(rec, room.recs.get(rec._k))) { room.recs.set(rec._k, rec); ok.push(rec); } }
-      if (ok.length) { for (const c of others()) sendJSON(c, { t: 'recs', recs: ok }); scheduleSave(room); }
+      if (ok.length) { broadcast(others(), { t: 'recs', recs: ok }); scheduleSave(room); }
     } else if (m.t === 'presence') {
-      conn.p = { ...conn.p, ...cleanPresence(m.p) };
-      for (const c of others()) sendJSON(c, { t: 'presence', id: conn.id, p: conn.p });
+      // cursors arrive 20-30 times a second from everyone: the room sends them on as one message per tick
+      conn.p = { ...conn.p, ...cleanPresence(m.p) }; room.dirtyPresence.add(conn);
+      if (!room.presenceTimer) room.presenceTimer = setTimeout(() => flushPresence(room), PRESENCE_TICK);
     } else if (m.t === 'tools' && Array.isArray(m.tools)) conn.tools = m.tools.slice(0, 100);
     else if (m.t === 'rpc-result' && pending.has(m.id)) { const p = pending.get(m.id); pending.delete(m.id); clearTimeout(p.timer); m.error ? p.reject(new Error(m.error)) : p.resolve(m.result); }
   };
-  conn.onClose = () => { room.clients.delete(conn); for (const c of room.clients) sendJSON(c, { t: 'leave', id: conn.id }); log(`leave ${room.id} ${conn.id} (${room.clients.size} here)`); };
+  conn.onClose = () => { room.clients.delete(conn); room.dirtyPresence.delete(conn); broadcast(room.clients, { t: 'leave', id: conn.id }); log(`leave ${room.id} ${conn.id} (${room.clients.size} here)`); };
 }
 // ---- Shared libraries --------------------------------------------------------------------------------------------------
 const LIB_ID = /^[A-Za-z0-9_.:-]{1,64}$/;
@@ -168,7 +196,7 @@ function libOp(L, m) {
   throw new Error('unknown op');
 }
 let libPush = null;
-function broadcastLibs() { clearTimeout(libPush); libPush = setTimeout(() => { for (const r of rooms.values()) for (const c of r.clients) sendJSON(c, { t: 'libs' }); }, 400); }
+function broadcastLibs() { clearTimeout(libPush); libPush = setTimeout(() => { for (const r of rooms.values()) broadcast(r.clients, { t: 'libs' }); }, 400); }
 
 // The browser tab that carries out agent calls: the most recently active one in the room (or anywhere).
 function hostFor(roomId) {
@@ -246,6 +274,12 @@ const server = http.createServer(async (req, res) => {
   if (!hostOk(req)) return send(res, 403, 'Forbidden host');
   try {
     if (url.pathname === '/api/ping') return json(res, 200, { lg: true, version: VERSION, rooms: rooms.size });
+    if (url.pathname === '/api/stats') {
+      const cu = process.cpuUsage(), mu = process.memoryUsage(); const lag = stats.lag.slice().sort((a, b) => a - b);
+      return json(res, 200, { version: VERSION, uptimeS: Math.round(process.uptime()), rooms: rooms.size, clients: [...rooms.values()].reduce((t, r) => t + r.clients.size, 0), records: [...rooms.values()].reduce((t, r) => t + r.recs.size, 0),
+        cpuMs: Math.round((cu.user + cu.system) / 1000), rssMB: +(mu.rss / 1048576).toFixed(1), heapMB: +(mu.heapUsed / 1048576).toFixed(1), msgsOut: stats.msgsOut, bytesOut: stats.bytesOut, msgsIn: stats.msgsIn, bytesIn: stats.bytesIn, dropped: stats.dropped, saves: stats.saves, saveMsMax: stats.saveMsMax,
+        loopLagP95Ms: lag.length ? lag[Math.floor(lag.length * 0.95)] : 0, loopLagMaxMs: lag.length ? lag[lag.length - 1] : 0 });
+    }
     if (url.pathname === '/mcp') {
       if (!tokenOk(req, url)) return json(res, 401, { error: 'token required' });
       if (req.method === 'GET') return send(res, 405, '', { allow: 'POST, DELETE' });
