@@ -295,8 +295,9 @@ details.json pre { font-size: 11px; line-height: 1.45; background: var(--bg); bo
 
 /* Canvas mode */
 .badge { display: inline-block; min-width: 16px; padding: 0 5px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); font-size: 10px; line-height: 16px; margin-left: 4px; vertical-align: middle; }
-body.canvas-mode .app { grid-template-columns: 1fr; grid-template-areas: "top" "main"; }
-body.canvas-mode .sidebar, body.canvas-mode .controls, body.canvas-mode #readout, body.canvas-mode #empty { display: none; }
+body.canvas-mode .app, body.home-mode .app { grid-template-columns: 1fr; grid-template-areas: "top" "main"; }
+body.canvas-mode .sidebar, body.canvas-mode .controls, body.canvas-mode #readout, body.canvas-mode #empty,
+body.home-mode .sidebar, body.home-mode .controls, body.home-mode #readout, body.home-mode #empty, body.home-mode #prompt, body.home-mode #generateBtn { display: none; }
 body.canvas-mode .main { overflow: hidden; background-image: none; }
 .cv { display: flex; flex-direction: column; height: 100%; min-height: 0; }
 .cv-toolbar { display: flex; align-items: center; gap: 12px; padding: 8px 12px; border-bottom: 1px solid var(--line); background: var(--panel); flex-wrap: wrap; }
@@ -559,6 +560,66 @@ input[disabled] { opacity: .5; cursor: not-allowed; }
 .cv-codename { margin: 0 0 8px; font-size: 13px; }
 .cv-codename code { color: var(--accent); font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12.5px; }
 
+/* ---- Home: folders and projects ---- */
+.home { display: grid; grid-template-columns: 220px 1fr; gap: 0; min-height: calc(100vh - 120px); }
+.home-side { border-right: 1px solid var(--line-2); padding: 14px 10px; display: flex; flex-direction: column; gap: 2px; }
+.home-f { display: flex; justify-content: space-between; align-items: center; width: 100%; background: none; border: 0; color: var(--fg-2); font: inherit; font-size: 13px; padding: 7px 10px; border-radius: 8px; cursor: pointer; text-align: left; }
+.home-f:hover { color: var(--fg); background: rgba(127,127,127,.08); }
+.home-f.on { color: var(--fg); background: rgba(216,201,163,.14); font-weight: 600; }
+.home-f span { color: var(--fg-3); font-weight: 400; font-size: 12px; }
+.home-frow { display: flex; align-items: center; }
+.home-frow .home-f { flex: 1; }
+.home-fx { background: none; border: 0; color: var(--fg-3); cursor: pointer; padding: 4px 6px; border-radius: 6px; opacity: 0; }
+.home-frow:hover .home-fx, .home-fx:focus { opacity: 1; }
+.home-newf { display: flex; gap: 6px; margin-top: 10px; }
+.home-newf .input { min-width: 0; flex: 1; }
+.home-main { padding: 18px 22px; }
+.home-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+.home-head h2 { margin: 0; font-size: 20px; flex: 1; }
+.home-head .input { width: 240px; }
+.home-new { display: flex; gap: 8px; align-items: center; margin-bottom: 14px; padding: 10px; border: 1px solid var(--line-2); border-radius: 10px; background: var(--panel); }
+.home-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; }
+.home-card { position: relative; background: var(--panel); border: 1px solid var(--line-2); border-radius: 12px; padding: 10px; cursor: pointer; transition: border-color .1s; display: flex; flex-direction: column; gap: 6px; }
+.home-card:hover, .home-card:focus-within { border-color: var(--accent); }
+.home-cover { aspect-ratio: 16 / 10; border-radius: 8px; overflow: hidden; background: repeating-conic-gradient(#20202a 0% 25%, #1a1a22 0% 50%) 50% / 14px 14px; display: grid; place-items: center; color: var(--fg-3); font-size: 28px; font-weight: 700; }
+.home-cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.home-name { font-size: 13.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.home-meta { font-size: 11.5px; color: var(--fg-3); }
+.home-menu { position: absolute; top: 14px; right: 14px; background: rgba(0,0,0,.45); color: #fff; border: 0; border-radius: 6px; width: 26px; height: 22px; cursor: pointer; opacity: 0; }
+.home-card:hover .home-menu, .home-card:focus-within .home-menu, .home-menu.open { opacity: 1; }
+.home-pop { position: absolute; top: 40px; right: 10px; z-index: 5; background: var(--panel); border: 1px solid var(--line-2); border-radius: 10px; padding: 8px; display: flex; flex-direction: column; gap: 6px; min-width: 200px; box-shadow: 0 10px 30px rgba(0,0,0,.4); cursor: default; }
+.home-pop .input { width: 100%; }
+.home-pop .btn { width: 100%; justify-content: flex-start; }
+.home-foot { margin-top: 18px; }
+.home-archived .home-cover { filter: grayscale(1); opacity: .6; }
+.cv-project { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 800px) { .home { grid-template-columns: 1fr; } .home-side { border-right: 0; border-bottom: 1px solid var(--line-2); } }
+/* ---- Admin ---- */
+.modal-inner.admin-modal { width: min(1040px, 100%); }
+.admin-body.prose { max-width: none; }
+.admin-body { max-height: 78vh; overflow: auto; }
+.ad-top { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.ad-top .hint { flex: 1; }
+.ad-kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin-bottom: 14px; }
+.ad-kpi { background: var(--bg); border: 1px solid var(--line-2); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; }
+.ad-kpi b { font-size: 20px; font-weight: 700; color: var(--fg); }
+.ad-kpi span { font-size: 11.5px; color: var(--fg-3); }
+.ad-charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; margin-bottom: 12px; }
+.ad-chart { background: var(--bg); border: 1px solid var(--line-2); border-radius: 10px; padding: 10px 12px; }
+.ad-chart h4 { margin: 0 0 6px; font-size: 12.5px; color: var(--fg-2); font-weight: 600; }
+.ad-chart svg { display: block; }
+.ad-grid { stroke: var(--line-2); stroke-width: 1; }
+.ad-tick { fill: var(--fg-3); font-size: 10px; font-family: inherit; }
+.ad-chart path:hover { opacity: .8; }
+.ad-tabs { display: flex; flex-wrap: wrap; margin-bottom: 8px; }
+.ad-tabs button { padding: 6px 12px; }
+.ad-top .cv-seg { display: flex; }
+.ad-top .cv-seg button { padding: 5px 10px; }
+.ad-tablewrap { overflow: auto; }
+.ad-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.ad-table th { text-align: left; color: var(--fg-3); font-weight: 600; font-size: 11.5px; padding: 6px 8px; border-bottom: 1px solid var(--line-2); position: sticky; top: 0; background: var(--panel); }
+.ad-table td { padding: 6px 8px; border-bottom: 1px solid rgba(127,127,127,.12); vertical-align: top; }
+
 </style>
 
 <div id="app" class="app">
@@ -570,6 +631,7 @@ input[disabled] { opacity: .5; cursor: not-allowed; }
     </div>
     <form id="promptForm" class="promptbar" autocomplete="off">
       <div class="seg" id="modeSeg" role="group" aria-label="Mode">
+        <button type="button" data-mode="home">Home</button>
         <button type="button" data-mode="single" class="on">Single</button>
         <button type="button" data-mode="deck">Deck</button>
         <button type="button" data-mode="canvas">Canvas <span id="canvasBadge" class="badge" hidden></span></button>
@@ -580,6 +642,7 @@ input[disabled] { opacity: .5; cursor: not-allowed; }
     </form>
     <div class="topbar-right">
       <button id="aboutBtn" class="btn ghost" type="button">Why this works</button>
+      <button id="adminBtn" class="btn ghost" type="button" title="Who worked, when, on what" hidden>Admin</button>
       <button id="settingsBtn" class="btn ghost" type="button" title="Interpreter settings">Settings</button>
     </div>
   </header>
@@ -727,6 +790,15 @@ input[disabled] { opacity: .5; cursor: not-allowed; }
     </div>
     <div id="deckView" class="deck" hidden></div>
     <div id="gallery" class="gallery" aria-live="polite"></div>
+    <section id="homeView" class="home" hidden>
+      <aside class="home-side" id="homeSide"></aside>
+      <div class="home-main">
+        <div class="home-head"><h2 id="homeTitle">Projects</h2><input id="homeSearch" class="input" type="search" placeholder="Search projects" aria-label="Search projects"><button id="homeNewBtn" class="btn primary" type="button">＋ New project</button></div>
+        <div id="homeNew" class="home-new" hidden><input id="homeNewName" class="input grow" type="text" placeholder="Project name, e.g. Payroll launch" maxlength="80"><select id="homeNewFolder" class="input" aria-label="Folder"></select><button id="homeCreate" class="btn primary" type="button">Create</button><button id="homeCancel" class="btn ghost" type="button">Cancel</button></div>
+        <div id="homeGrid" class="home-grid"></div>
+        <p class="hint home-foot"><button id="homeArchived" class="btn small ghost" type="button">Show archived</button> <span id="homeNote"></span></p>
+      </div>
+    </section>
     <div id="canvasView" class="cv" hidden>
       <div class="cv-toolbar">
         <div class="cv-tools" id="cvTools">
@@ -755,6 +827,7 @@ input[disabled] { opacity: .5; cursor: not-allowed; }
           <span id="cvCount" class="hint"></span>
         </div>
         <div class="cv-right">
+          <button id="cvProject" class="btn small ghost cv-project" type="button" title="All projects (Home)">⌂ Project</button>
           <button id="cvUndo" class="btn small" type="button" title="Undo (⌘Z)" disabled>Undo</button>
           <button id="cvRedo" class="btn small" type="button" title="Redo (⇧⌘Z)" disabled>Redo</button>
           <button id="cvAgent" class="btn small agent-btn" type="button" data-tip="Ask Claude to change the canvas · ⌘K">✦ Agent</button>
@@ -900,6 +973,16 @@ input[disabled] { opacity: .5; cursor: not-allowed; }
         <button class="btn ghost icon" data-libs-close type="button" aria-label="Close">✕</button>
       </div>
       <div class="prose libs-body"></div>
+    </div>
+  </div>
+
+  <div id="adminModal" class="modal" hidden>
+    <div class="modal-inner about admin-modal">
+      <div class="detail-head">
+        <h3>Admin · who worked, when, on what</h3>
+        <button class="btn ghost icon" data-admin-close type="button" aria-label="Close">✕</button>
+      </div>
+      <div class="prose admin-body"></div>
     </div>
   </div>
 
@@ -5939,7 +6022,7 @@ const CanvasUI = (() => {
   let layoutHold = null; // a frame whose layout pass waits while a block in one of its stacks is dragged
   let dropHint = null;   // where a dragged block would land: {frame, container, index, before, line, free, flatten}
   const folded = new Set(); // boxes collapsed in the layers panel
-  const hooks = { change: [], live: [], select: [], pointer: [] };
+  const hooks = { change: [], live: [], select: [], pointer: [], action: [] };
   const HANDLE = 7;
   const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const emit = (k, ...a) => { for (const fn of hooks[k]) { try { fn(...a); } catch (e) { console.error(e); } } };
@@ -5948,7 +6031,7 @@ const CanvasUI = (() => {
   // ---- Setup ------------------------------------------------------------------------------------
   function init(e) {
     env = e;
-    try { const saved = localStorage.getItem('lg.canvas'); doc = saved ? Canvas.deserialize(saved) : Canvas.create(); } catch { doc = Canvas.create(); }
+    try { const saved = localStorage.getItem(e.backupKey ? e.backupKey() : 'lg.canvas'); doc = saved ? Canvas.deserialize(saved) : Canvas.create(); } catch { doc = Canvas.create(); }
     hist = Canvas.history();
     bindStage(); bindToolbar(); bindKeys(); bindLayers(); bindProps();
     Canvas.fromHash(location.hash).then(d => { if (d) { doc = d; env.toast('Canvas loaded from link'); if (active) renderAll(); } }).catch(() => { });
@@ -5961,7 +6044,7 @@ const CanvasUI = (() => {
   // selected ones, the ones being dragged, and any the caller marks (dirty); structural changes are found by the
   // sync layer itself.
   let backupTimer = 0;
-  function backupNow() { backupTimer = 0; try { const s = Canvas.serialize(doc); if (s.length < 3_000_000) localStorage.setItem('lg.canvas', s); } catch { } }
+  function backupNow() { backupTimer = 0; try { const s = Canvas.serialize(doc); if (s.length < 3_000_000) localStorage.setItem(env.backupKey ? env.backupKey() : 'lg.canvas', s); } catch { } }
   function backupSoon() { if (!backupTimer) backupTimer = setTimeout(backupNow, 1000); }
   window.addEventListener('pagehide', () => { if (backupTimer) { clearTimeout(backupTimer); backupNow(); } });
   const dirty = new Set();
@@ -6490,6 +6573,7 @@ const CanvasUI = (() => {
   }
   // A blank frame of the toolbar's format (or a drawn custom size). With center, it lands in view on a free spot.
   function createFrame({ x, y, format, center, name, bg, history = true } = {}) {
+    emit('action', 'frame.create');
     const kit = env.getKit(); const fmt = format || Grid.byId[$('cvFrameFormat').value] || Grid.byId.slide;
     const bgs = kit.colors.filter(c => c.role === 'background').map(c => c.hex).sort((a, b) => Color.luminance(b) - Color.luminance(a));
     let fx = x ?? 0, fy = y ?? 0;
@@ -6538,6 +6622,7 @@ const CanvasUI = (() => {
   // selected screen (or the one in view). In a stack it joins the flow there.
   function insertComponent(blocks, opts = {}) {
     if (!blocks || !blocks.length) return null;
+    emit('action', 'library.insert', opts.name);
     let f = null, into = null, lp = null;
     if (opts.at) { f = frameAt(opts.at); if (f) lp = { x: opts.at.x - f.x, y: opts.at.y - f.y }; }
     if (!f) { f = selFrames().length === 1 ? selFrame() : null; const bs = f ? selBlocks() : []; if (bs.length === 1 && bs[0].kind === 'box') into = bs[0]; }
@@ -7330,7 +7415,7 @@ const CanvasUI = (() => {
       if (a === 'al-add') { addAutoLayout(); return; } if (a === 'al-remove') { removeAutoLayout(); return; }
       if (a === 'code-select' && f && bs[0]) { const root = CodeKit.ownerOf(f, bs[0]); if (root) select(f.id, [root.id]); return; }
       if (a === 'frame-sel') { frameSelection(); return; } if (a === 'unwrap') { unwrapSelection(); return; }
-      if (a === 'trace' && f && bs[0] && env.traceImage) { act.disabled = true; act.textContent = 'Reading the image…'; try { await env.traceImage(f, bs[0]); } catch (err) { env.toast(err.message || String(err)); } finally { act.disabled = false; act.textContent = '✦ Rebuild as layers'; } return; }
+      if (a === 'trace' && f && bs[0] && env.traceImage) { emit('action', 'trace'); act.disabled = true; act.textContent = 'Reading the image…'; try { await env.traceImage(f, bs[0]); } catch (err) { env.toast(err.message || String(err)); } finally { act.disabled = false; act.textContent = '✦ Rebuild as layers'; } return; }
       if (a === 'edit-palette') { select(null, []); const sec = el.querySelector('[data-palette]'); if (sec) { sec.open = true; sec.scrollIntoView({ block: 'start', behavior: 'smooth' }); } return; }
       if (a === 'add-color') { const colors = env.getKit().colors.map(c => ({ ...c })); colors.push({ name: 'Color ' + (colors.length + 1), hex: '#888888', role: 'accent' }); env.updateColors(colors); renderProps(); const rows = el.querySelectorAll('.cv-pal-row'); const last = rows.length ? rows[rows.length - 1].querySelector('input[type="text"]') : null; if (last) { last.focus(); last.select(); } return; }
       if (a === 'reset-palette') { if (env.resetColors()) { followTokens(); renderProps(); env.toast('Palette reset to the preset'); } else env.toast('This kit has no preset to reset to'); return; }
@@ -7341,9 +7426,9 @@ const CanvasUI = (() => {
       if (a === 'paste') { pasteClipboard(); return; }
       if (a === 'open-settings') { e.preventDefault(); env.openSettings(); return; }
       if (a === 'agent') { env.openAgent && env.openAgent(selection()); return; }
-      if (a.startsWith('exp-')) { act.disabled = true; try { await exportAction(a.slice(4)); } catch (err) { console.error(err); env.toast('Export failed: ' + err.message); } finally { act.disabled = false; } return; }
-      if (a === 'variations') { const n = +el.querySelector('[data-var="count"]').value; const mode = el.querySelector('[data-var="mode"]').value; act.disabled = true; act.textContent = '…'; try { await makeVariations(fs, n, mode); } finally { act.disabled = false; act.textContent = 'Make'; } return; }
-      if (a.startsWith('look-')) { const look = a.slice(5); const n = mutate(() => fs.filter(x => Looks.apply(x, look, env.getKit())).length, { frames: fs.map(x => x.id) }); renderProps(); env.toast(n ? `${n > 1 ? n + ' screens' : 'Screen'}: ${look}` : `Already ${look}`); return; }
+      if (a.startsWith('exp-')) { act.disabled = true; emit('action', 'export.' + a.slice(4).replace(/\d$/, '')); try { await exportAction(a.slice(4)); } catch (err) { console.error(err); env.toast('Export failed: ' + err.message); } finally { act.disabled = false; } return; }
+      if (a === 'variations') { emit('action', 'variations'); const n = +el.querySelector('[data-var="count"]').value; const mode = el.querySelector('[data-var="mode"]').value; act.disabled = true; act.textContent = '…'; try { await makeVariations(fs, n, mode); } finally { act.disabled = false; act.textContent = 'Make'; } return; }
+      if (a.startsWith('look-')) { const look = a.slice(5); emit('action', 'look.' + look); const n = mutate(() => fs.filter(x => Looks.apply(x, look, env.getKit())).length, { frames: fs.map(x => x.id) }); renderProps(); env.toast(n ? `${n > 1 ? n + ' screens' : 'Screen'}: ${look}` : `Already ${look}`); return; }
       if (a === 'tidy-row' || a === 'tidy-grid') { mutate(() => Canvas.tidy(fs, a === 'tidy-row' ? 'row' : 'grid')); return; }
       if (a === 'align-tops') { const y = Math.min(...fs.map(x => x.y)); mutate(() => fs.forEach(x => { x.y = y; })); return; }
       if (a === 'align-lefts') { const x = Math.min(...fs.map(v => v.x)); mutate(() => fs.forEach(v => { v.x = x; })); return; }
@@ -7400,6 +7485,7 @@ const CanvasUI = (() => {
     on: (k, fn) => { hooks[k].push(fn); return () => { hooks[k] = hooks[k].filter(x => x !== fn); }; },
     setPeers: list => { peers = Array.isArray(list) ? list : []; if (active) drawOverlay(); },
     markDirty: ids => { for (const id of ids || []) dirty.add(id); },
+    flushBackup: () => { if (backupTimer) { clearTimeout(backupTimer); backupNow(); } },
     setUndoMerge: fn => { undoMerge = fn; },
     _history: () => hist,
   };
@@ -8049,6 +8135,7 @@ const Library = (() => {
     const category = /card/i.test(name) ? 'cards' : /illus|art|shape/i.test(name) ? 'illustrations' : /phone|device|browser/i.test(name) ? 'devices' : /logo/i.test(name) ? 'logos' : 'components';
     const item = fromSelection(f, blocks, name, category); item.by = env.me ? env.me() : '';
     if (bindTo) bindCode(item, bindTo);
+    if (env.track) env.track('library.save', item.name);
     if (dest === 'canvas') { env.canvas.mutate(d2 => { d2.library = [...(d2.library || []), item]; }, { history: true }); render(); env.toast(`Saved “${item.name}” to This canvas`); return; }
     env.toast('Saving to the shared library…');
     const saved = await LibStore.putItem({ ...item, lib: dest, id: undefined });
@@ -8198,6 +8285,325 @@ const Library = (() => {
   return { init, bind, bindManager, render, refresh, imagesChanged, openManager, all, sources, builtins, thumb, fromSelection, insert, specFor, codeSpecs, palette, settle, CATEGORIES };
 })();
 
+/* js/projects.js */
+/* Projects and folders: the Home screen's index. A project is one canvas (screens, blocks, its own live room);
+   folders group projects (Brand, Product, Sales…). The index lives where the shared libraries live:
+   - claude.ai: the page's database (projects/{id}, folders/{id}); the canvas itself under projects/{id}/frames
+   - server: /api/projects (server/data/projects.json); the canvas is the room with the project's id
+   - neither: this browser (lg.projects), one saved canvas per project
+   Anyone who can edit may create projects; a project is removed by whoever made it or an admin. */
+const Projects = (() => {
+  const LS = { get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch { return d; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch { return false; } } };
+  const ID = /^[A-Za-z0-9_.:-]{1,64}$/;
+  let env = null, backend = null, started = null;
+  const S = { mode: 'local', projects: new Map(), folders: new Map(), uid: null, owner: false, canEdit: null, canWrite: null, ready: false, current: LS.get('lg.project', null) };
+  const listeners = new Set(); const emit = () => { for (const fn of listeners) { try { fn(); } catch (e) { console.error(e); } } };
+  // The first answer from wherever projects live (or a timeout): opening "the last project" before the list arrives
+  // would make a new one instead.
+  function whenReady(ms = 5000) { if (S.ready) return Promise.resolve(true); return new Promise(res => { const t = setTimeout(() => { off(); res(false); }, ms); const fn = () => { if (S.ready) { clearTimeout(t); off(); res(true); } }; listeners.add(fn); const off = () => listeners.delete(fn); }); }
+  const uid = () => 'p' + Math.random().toString(36).slice(2, 10);
+  const clean = p => (p && typeof p === 'object' && ID.test(String(p.id || ''))) ? { id: String(p.id), name: String(p.name || 'Untitled').slice(0, 80), folder: ID.test(String(p.folder || '')) ? String(p.folder) : '', created: +p.created || 0, by: typeof p.by === 'string' ? p.by.slice(0, 80) : '', byName: typeof p.byName === 'string' ? p.byName.slice(0, 80) : '', updated: +p.updated || 0, updatedBy: typeof p.updatedBy === 'string' ? p.updatedBy.slice(0, 80) : '', frames: +p.frames || 0, cover: typeof p.cover === 'string' && /^data:image\/(jpeg|png|webp);base64,/.test(p.cover) && p.cover.length < 60000 ? p.cover : '', archived: !!p.archived, kind: p.kind === 'deck' ? 'deck' : 'canvas' } : null;
+  const cleanFolder = f => (f && typeof f === 'object' && ID.test(String(f.id || ''))) ? { id: String(f.id), name: String(f.name || 'Folder').slice(0, 60), order: +f.order || 0, by: typeof f.by === 'string' ? f.by.slice(0, 80) : '' } : null;
+  function setAll({ projects, folders }) {
+    if (projects) { S.projects.clear(); for (const p of projects) { const c = clean(p); if (c) S.projects.set(c.id, c); } }
+    if (folders) { S.folders.clear(); for (const f of folders) { const c = cleanFolder(f); if (c) S.folders.set(c.id, c); } }
+    S.ready = true; emit();
+  }
+
+  // ---- backends -------------------------------------------------------------------------------------------------------
+  async function artifactBackend() {
+    if (!(window.claude && typeof window.claude.use === 'function')) return null;
+    const [db, user] = await Promise.all(['db', 'user'].map(n => window.claude.use(n).catch(() => null)));
+    if (!db) return null;
+    try { S.uid = user && user.id ? await user.id() : null; } catch { S.uid = null; }
+    try { S.owner = !!(user && await user.isOwner()); } catch { S.owner = false; }
+    try { S.canEdit = user && user.canEdit ? await user.canEdit() : null; } catch { S.canEdit = null; }
+    try { S.canWrite = user && user.can ? await user.can('data.write') : null; } catch { S.canWrite = null; }
+    const why = e => (e && (e.code === 'invalid_argument' || e.code === 'not_granted')) ? new Error('This page does not let you change projects (you may be a viewer). Ask the owner for Contributor access.') : (e instanceof Error ? e : new Error((e && e.message) || String(e)));
+    const write = async fn => { try { return await fn(); } catch (e) { throw why(e); } };
+    const ready = { p: false, f: false }; const done = () => { if (ready.p && ready.f) { S.ready = true; emit(); } };
+    db.collection('projects').onSnapshot(snap => { if (!ready.p && snap.metadata && snap.metadata.fromCache && !snap.size) return; ready.p = true; const list = []; for (const d of snap.docs) { const v = d.data(); if (v) list.push({ ...v, id: d.id }); } S.projects.clear(); for (const p of list) { const c = clean(p); if (c) S.projects.set(c.id, c); } done(); emit(); }, () => { });
+    db.collection('folders').onSnapshot(snap => { if (!ready.f && snap.metadata && snap.metadata.fromCache && !snap.size) return; ready.f = true; const list = []; for (const d of snap.docs) { const v = d.data(); if (v) list.push({ ...v, id: d.id }); } S.folders.clear(); for (const f of list) { const c = cleanFolder(f); if (c) S.folders.set(c.id, c); } done(); emit(); }, () => { });
+    return {
+      kind: 'artifact',
+      put: p => write(() => db.doc(`projects/${p.id}`).set(p)),
+      patch: (id, patch) => write(() => db.doc(`projects/${id}`).update(patch)),
+      del: id => write(() => db.doc(`projects/${id}`).delete()),
+      putFolder: f => write(() => db.doc(`folders/${f.id}`).set(f)),
+      delFolder: id => write(() => db.doc(`folders/${id}`).delete()),
+    };
+  }
+  async function serverBackend() {
+    if (window.claude || !/^https?:$/.test(location.protocol)) return null;
+    let j; try { const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 1500); const r = await fetch('/api/projects', { cache: 'no-store', signal: ctl.signal }); clearTimeout(t); if (!r.ok) return null; j = await r.json(); } catch { return null; }
+    if (!j || !j.lgProjects) return null;
+    S.uid = (typeof Sync !== 'undefined' && Sync.me.id) || LS.get('lg.clientId', null);
+    const apply = j => setAll({ projects: j.projects || [], folders: j.folders || [] });
+    apply(j);
+    async function op(body) {
+      const r = await fetch('/api/projects', { method: 'POST', headers: { 'content-type': 'application/json', 'x-lg-admin': LS.get('lg.adminKey', '') || '' }, body: JSON.stringify(body) });
+      if (!r.ok) throw new Error((await r.text()).slice(0, 200) || 'The server refused that change');
+      const out = await r.json(); if (out && out.lgProjects) apply(out); return out;
+    }
+    return {
+      kind: 'server',
+      refresh: (() => { let t = 0; return () => { clearTimeout(t); t = setTimeout(async () => { try { const r = await fetch('/api/projects', { cache: 'no-store' }); if (r.ok) apply(await r.json()); } catch { } }, 250); }; })(),
+      put: p => op({ op: 'put', project: p }), patch: (id, patch) => op({ op: 'patch', id, patch }), del: id => op({ op: 'del', id }),
+      putFolder: f => op({ op: 'putFolder', folder: f }), delFolder: id => op({ op: 'delFolder', id }),
+    };
+  }
+  function localBackend() {
+    const KEY = 'lg.projects';
+    const load = () => { const j = LS.get(KEY, null) || {}; setAll({ projects: j.projects || [], folders: j.folders || [] }); };
+    const save = () => { if (!LS.set(KEY, { projects: [...S.projects.values()], folders: [...S.folders.values()] })) throw new Error('This browser\'s storage is full'); };
+    load(); window.addEventListener('storage', e => { if (e.key === KEY) load(); });
+    S.uid = LS.get('lg.clientId', null);
+    const change = fn => { fn(); save(); emit(); };
+    return {
+      kind: 'local',
+      put: p => change(() => S.projects.set(p.id, clean(p))), patch: (id, patch) => change(() => { const c = S.projects.get(id); if (c) S.projects.set(id, clean({ ...c, ...patch })); }), del: id => change(() => S.projects.delete(id)),
+      putFolder: f => change(() => S.folders.set(f.id, cleanFolder(f))), delFolder: id => change(() => S.folders.delete(id)),
+    };
+  }
+
+  // ---- public ---------------------------------------------------------------------------------------------------------
+  function init(e) { env = e; }
+  function start() {
+    if (started) return started;
+    started = (async () => { backend = (await artifactBackend()) || (await serverBackend()) || localBackend(); S.mode = backend.kind; emit(); return S.mode; })();
+    return started;
+  }
+  const projects = (folder) => [...S.projects.values()].filter(p => !p.archived && (folder === undefined || (p.folder || '') === folder)).sort((a, b) => (b.updated || b.created) - (a.updated || a.created));
+  const folders = () => [...S.folders.values()].sort((a, b) => a.order - b.order || a.name.localeCompare(b.name));
+  const get = id => S.projects.get(id) || null;
+  const isAdmin = () => { try { return typeof LibStore !== 'undefined' && LibStore.role().admin; } catch { return false; } };
+  function canChange(p) { return !!p && (S.owner || isAdmin() || (S.uid && p.by === S.uid) || (!S.uid && S.mode !== 'artifact')); }
+  const must = () => { if (!backend) throw new Error('Projects are still loading'); if (S.canWrite === false) throw new Error('You can open projects but not change them here: ask the owner for Contributor access.'); };
+  async function create({ name, folder = '', kind = 'canvas', id } = {}) {
+    must(); const me = env && env.me ? env.me() : {};
+    const p = clean({ id: id && ID.test(id) ? id : uid(), name: String(name || 'Untitled project').trim().slice(0, 80) || 'Untitled project', folder, created: Date.now(), by: S.uid || me.id || '', byName: me.name || '', updated: Date.now(), updatedBy: S.uid || me.id || '', frames: 0, kind });
+    await backend.put(p); S.projects.set(p.id, p); emit(); return p;
+  }
+  async function update(id, patch) { must(); const cur = get(id); if (!cur) throw new Error('No such project'); if (('name' in patch || 'folder' in patch || 'archived' in patch) && !canChange(cur)) throw new Error('Only the person who made this project (or an admin) can change it'); const next = clean({ ...cur, ...patch, id }); await backend.patch(id, { ...patch, updated: next.updated }); S.projects.set(id, next); emit(); return next; }
+  // Bookkeeping from the canvas (frames count, cover, last edit): quiet, at most every 20 s per project.
+  const touchT = new Map();
+  async function touch(id, info = {}) {
+    const cur = get(id); if (!cur || !backend) return;
+    const last = touchT.get(id) || 0; if (Date.now() - last < 20000 && !info.force) return; touchT.set(id, Date.now());
+    const patch = { updated: Date.now(), updatedBy: S.uid || '' }; if (info.frames != null) patch.frames = info.frames; if (info.cover) patch.cover = info.cover;
+    try { await backend.patch(id, patch); Object.assign(cur, patch); emit(); } catch { }
+  }
+  async function remove(id) { must(); const cur = get(id); if (!cur) return; if (!canChange(cur)) throw new Error('Only the person who made this project (or an admin) can remove it'); await backend.patch(id, { archived: true, updated: Date.now() }); cur.archived = true; emit(); }
+  async function restore(id) { must(); const cur = S.projects.get(id); if (!cur) return; await backend.patch(id, { archived: false, updated: Date.now() }); cur.archived = false; emit(); }
+  async function createFolder(name) { must(); const f = cleanFolder({ id: 'f' + Math.random().toString(36).slice(2, 10), name: String(name || 'Folder').trim().slice(0, 60) || 'Folder', order: folders().length + 1, by: S.uid || '' }); await backend.putFolder(f); S.folders.set(f.id, f); emit(); return f; }
+  async function renameFolder(id, name) { must(); const f = S.folders.get(id); if (!f) return; const next = { ...f, name: String(name || f.name).trim().slice(0, 60) || f.name }; await backend.putFolder(next); S.folders.set(id, next); emit(); }
+  async function removeFolder(id) { must(); const f = S.folders.get(id); if (!f) return; if (!(S.owner || isAdmin() || f.by === S.uid || S.mode !== 'artifact')) throw new Error('Only whoever made this folder (or an admin) can remove it'); for (const p of projects(id)) await update(p.id, { folder: '' }); await backend.delFolder(id); S.folders.delete(id); emit(); }
+  function setCurrent(id) { S.current = id; LS.set('lg.project', id); emit(); }
+  const archived = () => [...S.projects.values()].filter(p => p.archived).sort((a, b) => b.updated - a.updated);
+  return {
+    init, start, whenReady, projects, folders, get, create, update, touch, remove, restore, archived, createFolder, renameFolder, removeFolder, setCurrent, canChange,
+    refresh: () => backend && backend.refresh ? backend.refresh() : null,
+    on: fn => { listeners.add(fn); return () => listeners.delete(fn); },
+    get mode() { return S.mode; }, get ready() { return S.ready; }, get current() { return S.current; }, get me() { return S.uid; },
+  };
+})();
+
+/* js/stats.js */
+/* Usage analytics for the admin view: who worked, when, on which project, and what they did (projects made,
+   generations, imports, exports, agent runs, library pieces used, minutes spent editing). Each person's own page
+   counts their actions and the minutes they were active, and writes one summary per month:
+   - claude.ai: stats/{their id}/months/{YYYYMM} (their own subtree; admins read everyone's)
+   - server: POST /api/events, kept in server/data/stats/YYYYMM.jsonl; GET /api/analytics sums them up
+   - neither: this browser only
+   A summary holds counts per day and per project, plus the last 120 actions with their time. Nothing is sent
+   anywhere else, and only ids, names people already share in the room, and action names are kept. */
+const Stats = (() => {
+  const LS = { get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch { return d; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch { return false; } } };
+  const RECENT = 120, FLUSH_MS = 20000;
+  let env = null, backend = null, started = null, mode = 'local', uid = null, meName = '';
+  const day = (t = Date.now()) => { const d = new Date(t); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+  const month = (t = Date.now()) => day(t).slice(0, 7).replace('-', '');
+  const empty = m => ({ v: 1, month: m, uid, name: meName, days: {}, projects: {}, counts: {}, recent: [], first: 0, last: 0 });
+  // this person's current month summary (in memory), merged into the stored one on flush
+  let cur = null; let dirty = false; let flushTimer = 0; let lastActiveMinute = ''; let currentProject = () => null;
+  function bump(obj, k, n = 1) { obj[k] = (obj[k] || 0) + n; }
+  function track(action, info = {}) {
+    if (!cur || cur.month !== month()) cur = empty(month());
+    const t = Date.now(); const d = day(t); const pid = info.project || (currentProject() || ''); const a = String(action).slice(0, 40);
+    bump(cur.counts, a); const D = cur.days[d] = cur.days[d] || { actions: 0, minutes: 0, counts: {}, projects: {} }; D.actions++; bump(D.counts, a);
+    if (pid) { const P = cur.projects[pid] = cur.projects[pid] || { actions: 0, minutes: 0, counts: {}, first: t, last: t }; P.actions++; bump(P.counts, a); P.last = t; bump(D.projects, pid); }
+    cur.recent.push({ t, a, p: pid, ...(info.detail ? { d: String(info.detail).slice(0, 80) } : {}) }); if (cur.recent.length > RECENT) cur.recent.splice(0, cur.recent.length - RECENT);
+    cur.first = cur.first || t; cur.last = t; dirty = true; schedule();
+  }
+  // A minute counts as worked when the person touched the canvas during it.
+  function active() {
+    const t = Date.now(); const key = `${day(t)}T${new Date(t).getHours()}:${new Date(t).getMinutes()}`; if (key === lastActiveMinute) return; lastActiveMinute = key;
+    if (!cur || cur.month !== month()) cur = empty(month());
+    const d = day(t); const pid = currentProject() || '';
+    const D = cur.days[d] = cur.days[d] || { actions: 0, minutes: 0, counts: {}, projects: {} }; D.minutes++;
+    if (pid) { const P = cur.projects[pid] = cur.projects[pid] || { actions: 0, minutes: 0, counts: {}, first: t, last: t }; P.minutes++; P.last = t; }
+    cur.first = cur.first || t; cur.last = t; dirty = true; schedule();
+  }
+  function schedule() { if (!flushTimer) flushTimer = setTimeout(flush, FLUSH_MS); }
+  function merge(stored, mine) {
+    if (!stored) return mine; const out = { ...stored, name: mine.name || stored.name, last: Math.max(stored.last || 0, mine.last || 0), first: Math.min(stored.first || mine.first, mine.first || stored.first) };
+    const addCounts = (a, b) => { for (const [k, v] of Object.entries(b || {})) a[k] = (a[k] || 0) + v; return a; };
+    out.counts = addCounts({ ...(stored.counts || {}) }, mine.counts);
+    out.days = { ...(stored.days || {}) }; for (const [d, v] of Object.entries(mine.days || {})) { const s = out.days[d] || { actions: 0, minutes: 0, counts: {}, projects: {} }; out.days[d] = { actions: s.actions + v.actions, minutes: s.minutes + v.minutes, counts: addCounts({ ...s.counts }, v.counts), projects: addCounts({ ...s.projects }, v.projects) }; }
+    out.projects = { ...(stored.projects || {}) }; for (const [p, v] of Object.entries(mine.projects || {})) { const s = out.projects[p] || { actions: 0, minutes: 0, counts: {}, first: v.first, last: v.last }; out.projects[p] = { actions: s.actions + v.actions, minutes: s.minutes + v.minutes, counts: addCounts({ ...s.counts }, v.counts), first: Math.min(s.first, v.first), last: Math.max(s.last, v.last) }; }
+    out.recent = [...(stored.recent || []), ...(mine.recent || [])].slice(-RECENT);
+    return out;
+  }
+  async function flush() {
+    flushTimer = 0; if (!dirty || !cur || !backend) return; const mine = cur; dirty = false; cur = null;
+    try { await backend.write(mine); } catch (e) { console.warn('stats', e && e.message); cur = merge(mine, cur || empty(mine.month)); dirty = true; }
+  }
+
+  // ---- backends -------------------------------------------------------------------------------------------------------
+  async function artifactBackend() {
+    if (!(window.claude && typeof window.claude.use === 'function')) return null;
+    const [db, user] = await Promise.all(['db', 'user'].map(n => window.claude.use(n).catch(() => null)));
+    if (!db) return null;
+    try { uid = user && user.id ? await user.id() : null; } catch { uid = null; }
+    try { const me = user && user.me ? await user.me() : null; meName = (me && me.name) || ''; } catch { }
+    if (!uid) return { kind: 'artifact', write: async () => { }, read: async () => [] };
+    const ref = m => db.doc(`stats/${uid}/months/${m}`);
+    return {
+      kind: 'artifact',
+      write: async mine => { const snap = await ref(mine.month).get(); const stored = snap && snap.exists ? snap.data() : null; await ref(mine.month).set(merge(stored, mine)); await db.doc(`stats/${uid}`).set({ name: mine.name || '', last: mine.last || Date.now(), month: mine.month }); },
+      // admins: everyone's summaries for the given months (people whose subtree the rules open to admins)
+      read: async months => { const out = []; for (const m of months) { try { const q = await db.collection('stats').get(); for (const d of q.docs) { try { const s = await db.doc(`stats/${d.id}/months/${m}`).get(); if (s && s.exists) out.push({ ...s.data(), uid: d.id }); } catch { } } } catch { } } return out; },
+      profiles: user && user.profiles ? ids => user.profiles(ids) : null,
+    };
+  }
+  async function serverBackend() {
+    if (window.claude || !/^https?:$/.test(location.protocol)) return null;
+    try { const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 1500); const r = await fetch('/api/ping', { cache: 'no-store', signal: ctl.signal }); clearTimeout(t); const j = r.ok ? await r.json() : null; if (!(j && j.lg)) return null; } catch { return null; }
+    uid = LS.get('lg.clientId', null); meName = LS.get('lg.name', '') || '';
+    return {
+      kind: 'server',
+      write: async mine => { const r = await fetch('/api/events', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ uid, name: meName || (typeof Sync !== 'undefined' && Sync.me.name) || '', summary: mine }) }); if (!r.ok) throw new Error('events ' + r.status); },
+      read: async months => { const r = await fetch('/api/analytics?months=' + months.join(','), { headers: { 'x-lg-admin': LS.get('lg.adminKey', '') || '' } }); if (!r.ok) throw new Error(r.status === 401 ? 'This server shows analytics to people with the admin key (Libraries → Admins).' : 'analytics ' + r.status); return (await r.json()).summaries || []; },
+    };
+  }
+  function localBackend() {
+    uid = LS.get('lg.clientId', null) || 'me'; meName = LS.get('lg.name', '') || '';
+    const key = m => `lg.stats.${m}`;
+    return { kind: 'local', write: async mine => { LS.set(key(mine.month), merge(LS.get(key(mine.month), null), mine)); }, read: async months => months.map(m => LS.get(key(m), null)).filter(Boolean) };
+  }
+
+  // ---- public ---------------------------------------------------------------------------------------------------------
+  function init(e) { env = e; currentProject = e.currentProject || (() => null); }
+  function start() {
+    if (started) return started;
+    started = (async () => {
+      backend = (await artifactBackend()) || (await serverBackend()) || localBackend(); mode = backend.kind;
+      if (!meName && typeof Sync !== 'undefined') meName = Sync.me.name || '';
+      window.addEventListener('pagehide', () => { if (dirty) { clearTimeout(flushTimer); flushTimer = 0; flush(); } });
+      return mode;
+    })();
+    return started;
+  }
+  // Summaries (everyone's, for admins) for the last `days`, plus the person names the platform knows.
+  async function report(days = 30) {
+    if (!backend) await start();
+    const months = []; const now = Date.now(); for (let t = now - days * 86400e3; t <= now + 86400e3; t += 86400e3 * 28) { const m = month(t); if (!months.includes(m)) months.push(m); } if (!months.includes(month(now))) months.push(month(now));
+    if (dirty && cur) { clearTimeout(flushTimer); flushTimer = 0; await flush(); }
+    const sums = await backend.read(months);
+    const since = day(now - days * 86400e3);
+    const people = new Map(); const projects = new Map(); const dayRows = new Map(); const recent = []; const totals = {};
+    for (const s of sums) {
+      if (!s || !s.uid) continue; const P = people.get(s.uid) || { uid: s.uid, name: s.name || '', minutes: 0, actions: 0, counts: {}, projects: new Set(), first: 0, last: 0 }; people.set(s.uid, P);
+      if (s.name && !P.name) P.name = s.name;
+      for (const [d, v] of Object.entries(s.days || {})) { if (d < since) continue; P.minutes += v.minutes; P.actions += v.actions; for (const [k, n] of Object.entries(v.counts || {})) { P.counts[k] = (P.counts[k] || 0) + n; totals[k] = (totals[k] || 0) + n; } const R = dayRows.get(d) || { day: d, people: new Set(), actions: 0, minutes: 0, counts: {} }; R.people.add(s.uid); R.actions += v.actions; R.minutes += v.minutes; for (const [k, n] of Object.entries(v.counts || {})) R.counts[k] = (R.counts[k] || 0) + n; dayRows.set(d, R); for (const pid of Object.keys(v.projects || {})) P.projects.add(pid); }
+      for (const [pid, v] of Object.entries(s.projects || {})) { if (v.last && day(v.last) < since) continue; const Q = projects.get(pid) || { id: pid, minutes: 0, actions: 0, people: new Set(), last: 0, counts: {} }; Q.minutes += v.minutes; Q.actions += v.actions; Q.people.add(s.uid); Q.last = Math.max(Q.last, v.last || 0); for (const [k, n] of Object.entries(v.counts || {})) Q.counts[k] = (Q.counts[k] || 0) + n; projects.set(pid, Q); P.first = P.first ? Math.min(P.first, v.first || P.first) : (v.first || 0); P.last = Math.max(P.last, v.last || 0); }
+      for (const r of s.recent || []) if (day(r.t) >= since) recent.push({ ...r, uid: s.uid });
+    }
+    let names = {}; if (backend.profiles) { try { const ps = await backend.profiles([...people.keys()]); for (const [id, p] of Object.entries(ps || {})) if (p && p.name) names[id] = p.name; } catch { } }
+    const myName = mode === 'local' ? 'You (this browser)' : 'Someone';
+    for (const P of people.values()) { P.name = names[P.uid] || P.name || (P.uid === uid ? (mode === 'local' ? myName : 'You') : 'Someone'); P.projects = [...P.projects]; }
+    for (const Q of projects.values()) Q.people = [...Q.people];
+    recent.sort((a, b) => b.t - a.t);
+    const daysOut = [...dayRows.values()].sort((a, b) => a.day.localeCompare(b.day)).map(r => ({ ...r, people: r.people.size }));
+    return { days, since, totals, people: [...people.values()].sort((a, b) => b.last - a.last), projects: [...projects.values()].sort((a, b) => b.last - a.last), daily: daysOut, recent: recent.slice(0, 300) };
+  }
+  return { init, start, track, active, flush, report, get mode() { return mode; }, get uid() { return uid; } };
+})();
+
+/* js/admin.js */
+/* Admin view: what people did with the tool, from the month summaries each person's page keeps (see js/stats.js).
+   Who worked, when and on which project; projects made, screens made, generations, imports, exports, agent runs,
+   library pieces used, minutes spent editing. Numbers first, then a day-by-day picture, then people, projects and the
+   latest actions; everything exports as CSV. Shown to library admins (the page owner and the admin list in claude.ai,
+   the admin key on the server). */
+const Admin = (() => {
+  const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  let env = null, el = null, days = 30, rep = null, loading = false, tab = 'people';
+  const BAR = '#7B5FD6'; // validated for the dark surface (L 0.58, 3:1+)
+  const LABEL = { 'project.create': 'Projects made', 'project.open': 'Projects opened', 'frame.create': 'Screens made', generate: 'Generations', 'generate.deck': 'Deck generations', 'to-canvas': 'Layouts to canvas', 'import.figma': 'Figma imports', 'import.pptx': 'PowerPoint imports', 'import.gslides': 'Google Slides imports', 'import.web': 'Web captures', 'import.image': 'Images added', 'import.canvas': 'Canvas files opened', 'export.png': 'PNG exports', 'export.svg': 'SVG exports', 'export.pdf': 'PDF exports', 'export.pptx': 'PowerPoint exports', 'export.gslides': 'Google Slides exports', 'export.react': 'React exports', 'export.html': 'HTML exports', 'agent.run': 'Agent runs', 'agent.tool': 'Agent tool calls (MCP)', 'library.insert': 'Library pieces used', 'library.save': 'Library pieces saved', variations: 'Variation runs', trace: 'Rebuilt from images', 'look.wireframe': 'Wireframe looks', 'look.rebrand': 'Rebrand looks', 'look.original': 'Original looks' };
+  const label = a => LABEL[a] || a;
+  const sum = (counts, re) => Object.entries(counts || {}).filter(([k]) => re.test(k)).reduce((t, [, v]) => t + v, 0);
+  const ago = t => { if (!t) return '—'; const d = Date.now() - t; const m = Math.round(d / 60000); if (m < 2) return 'just now'; if (m < 60) return m + ' min ago'; const h = Math.round(m / 60); if (h < 36) return h + ' h ago'; return Math.round(h / 24) + ' d ago'; };
+  const when = t => t ? new Date(t).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+  const hours = m => m >= 90 ? (m / 60).toFixed(1) + ' h' : m + ' min';
+  const projName = id => { const p = typeof Projects !== 'undefined' && Projects.get(id); return p ? p.name : (id === '_root' ? 'Shared canvas' : id || '—'); };
+  const folderName = id => { const p = typeof Projects !== 'undefined' && Projects.get(id); const f = p && p.folder && Projects.folders().find(x => x.id === p.folder); return f ? f.name : ''; };
+
+  // One series of bars per day: thin marks, rounded tops anchored to the baseline, a hover readout, no legend
+  // (the title names the series). Days without data stay as gaps, not zeros drawn as bars.
+  function bars(title, rows, key, fmt = v => String(v)) {
+    const W = 320, H = 140, padL = 34, padB = 18, padT = 8; const n = rows.length; if (!n) return `<div class="ad-chart"><h4>${esc(title)}</h4><p class="hint">No activity in this range.</p></div>`;
+    const max = Math.max(1, ...rows.map(r => r[key])); const bw = Math.max(2, Math.min(18, (W - padL) / n - 2)); const step = (W - padL) / n;
+    const ticks = [0, Math.round(max / 2), max];
+    const y = v => padT + (H - padT - padB) * (1 - v / max);
+    const grid = ticks.map(t => `<line x1="${padL}" x2="${W}" y1="${y(t).toFixed(1)}" y2="${y(t).toFixed(1)}" class="ad-grid"/><text x="${padL - 6}" y="${(y(t) + 3).toFixed(1)}" class="ad-tick" text-anchor="end">${fmt(t)}</text>`).join('');
+    const bar = (r, i) => { const v = r[key]; const x = padL + i * step + (step - bw) / 2; const top = y(v), bottom = y(0), h = Math.max(0, bottom - top); if (!v) return ''; const rr = Math.min(4, bw / 2, h); const d = `M${x},${bottom} V${top + rr} Q${x},${top} ${x + rr},${top} H${x + bw - rr} Q${x + bw},${top} ${x + bw},${top + rr} V${bottom} Z`; return `<path d="${d}" fill="${BAR}"><title>${esc(r.day)}: ${esc(fmt(v))}</title></path>`; };
+    const labels = rows.map((r, i) => (n <= 7 || i % Math.ceil(n / 5) === 0) ? `<text x="${(padL + i * step + step / 2).toFixed(1)}" y="${H - 4}" class="ad-tick" text-anchor="middle">${esc(r.day.slice(5))}</text>` : '').join('');
+    return `<div class="ad-chart"><h4>${esc(title)}</h4><svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="${esc(title)} per day">${grid}${rows.map(bar).join('')}${labels}</svg></div>`;
+  }
+  function render() {
+    if (!el) return; const body = el.querySelector('.admin-body'); if (!body) return;
+    if (loading || !rep) { body.innerHTML = '<p class="hint">Reading the summaries…</p>'; return; }
+    const T = rep.totals; const people = rep.people; const minutes = people.reduce((t, p) => t + p.minutes, 0);
+    const kpi = [['People who worked', people.length], ['Time editing', hours(minutes)], ['Projects worked on', rep.projects.length], ['Projects made', T['project.create'] || 0], ['Screens made', T['frame.create'] || 0], ['Generations', (T.generate || 0) + (T['generate.deck'] || 0)], ['Imports', sum(T, /^import\./)], ['Exports', sum(T, /^export\./)], ['Agent runs', (T['agent.run'] || 0) + (T['agent.tool'] || 0)], ['Library pieces used', T['library.insert'] || 0]];
+    // the day rows, filled across the whole range so gaps show
+    const byDay = new Map(rep.daily.map(r => [r.day, r])); const rows = []; for (let i = rep.days - 1; i >= 0; i--) { const d = new Date(Date.now() - i * 86400e3); const k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; rows.push(byDay.get(k) || { day: k, people: 0, actions: 0, minutes: 0 }); }
+    const counts = Object.entries(T).sort((a, b) => b[1] - a[1]).slice(0, 14);
+    const tabs = [['people', `People (${people.length})`], ['projects', `Projects (${rep.projects.length})`], ['recent', `Latest actions (${rep.recent.length})`], ['actions', 'Actions by kind']];
+    let table = '';
+    if (tab === 'people') table = `<table class="ad-table"><thead><tr><th>Person</th><th>Last seen</th><th>Time</th><th>Actions</th><th>Projects</th><th>Mostly</th></tr></thead><tbody>${people.map(p => `<tr><td>${esc(p.name)}</td><td title="${esc(when(p.last))}">${ago(p.last)}</td><td>${hours(p.minutes)}</td><td>${p.actions}</td><td>${p.projects.slice(0, 4).map(projName).map(esc).join(', ')}${p.projects.length > 4 ? ` +${p.projects.length - 4}` : ''}</td><td>${Object.entries(p.counts).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k, v]) => `${esc(label(k))} ${v}`).join(' · ')}</td></tr>`).join('') || '<tr><td colspan="6" class="hint">Nobody yet.</td></tr>'}</tbody></table>`;
+    else if (tab === 'projects') table = `<table class="ad-table"><thead><tr><th>Project</th><th>Folder</th><th>Last edit</th><th>Time</th><th>Actions</th><th>People</th></tr></thead><tbody>${rep.projects.map(q => `<tr><td>${esc(projName(q.id))}</td><td>${esc(folderName(q.id))}</td><td title="${esc(when(q.last))}">${ago(q.last)}</td><td>${hours(q.minutes)}</td><td>${q.actions}</td><td>${q.people.map(id => (people.find(p => p.uid === id) || {}).name || 'Someone').map(esc).join(', ')}</td></tr>`).join('') || '<tr><td colspan="6" class="hint">No project work yet.</td></tr>'}</tbody></table>`;
+    else if (tab === 'recent') table = `<table class="ad-table"><thead><tr><th>When</th><th>Who</th><th>What</th><th>Project</th><th></th></tr></thead><tbody>${rep.recent.slice(0, 200).map(r => `<tr><td>${esc(when(r.t))}</td><td>${esc((people.find(p => p.uid === r.uid) || {}).name || 'Someone')}</td><td>${esc(label(r.a))}</td><td>${esc(projName(r.p))}</td><td class="hint">${esc(r.d || '')}</td></tr>`).join('') || '<tr><td colspan="5" class="hint">Nothing yet.</td></tr>'}</tbody></table>`;
+    else table = `<table class="ad-table"><thead><tr><th>Action</th><th>Count</th></tr></thead><tbody>${counts.map(([k, v]) => `<tr><td>${esc(label(k))}</td><td>${v}</td></tr>`).join('') || '<tr><td colspan="2" class="hint">Nothing yet.</td></tr>'}</tbody></table>`;
+    body.innerHTML = `<div class="ad-top"><div class="cv-seg">${[7, 30, 90].map(d => `<button type="button" class="${days === d ? 'on' : ''}" data-days="${d}">${d} days</button>`).join('')}</div><span class="hint">${esc(Stats.mode === 'artifact' ? 'Everyone who used this page' : Stats.mode === 'server' ? 'Everyone on this server' : 'This browser only')} · since ${esc(rep.since)}</span><button type="button" class="btn small ghost" data-ad-csv>Export CSV</button></div>
+      <div class="ad-kpis">${kpi.map(([k, v]) => `<div class="ad-kpi"><b>${esc(String(v))}</b><span>${esc(k)}</span></div>`).join('')}</div>
+      <div class="ad-charts">${bars('People active per day', rows, 'people')}${bars('Actions per day', rows, 'actions')}${bars('Editing minutes per day', rows, 'minutes', v => hours(v))}</div>
+      <div class="cv-seg ad-tabs">${tabs.map(([k, l]) => `<button type="button" class="${tab === k ? 'on' : ''}" data-tab="${k}">${esc(l)}</button>`).join('')}</div>
+      <div class="ad-tablewrap">${table}</div>`;
+  }
+  async function load() { loading = true; render(); try { rep = await Stats.report(days); } catch (e) { rep = null; loading = false; if (el) el.querySelector('.admin-body').innerHTML = `<p class="hint">${esc(e.message || String(e))}</p>`; return; } loading = false; render(); }
+  function open() { if (!el) return; el.hidden = false; load(); }
+  function csv() {
+    if (!rep) return; const q = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    const lines = ['section,name,last,minutes,actions,projects_or_people,detail'];
+    for (const p of rep.people) lines.push(['person', p.name, when(p.last), p.minutes, p.actions, p.projects.map(projName).join('; '), Object.entries(p.counts).map(([k, v]) => `${label(k)}=${v}`).join('; ')].map(q).join(','));
+    for (const r of rep.projects) lines.push(['project', projName(r.id), when(r.last), r.minutes, r.actions, r.people.map(id => (rep.people.find(p => p.uid === id) || {}).name || 'Someone').join('; '), Object.entries(r.counts).map(([k, v]) => `${label(k)}=${v}`).join('; ')].map(q).join(','));
+    for (const r of rep.recent) lines.push(['action', (rep.people.find(p => p.uid === r.uid) || {}).name || 'Someone', when(r.t), '', label(r.a), projName(r.p), r.d || ''].map(q).join(','));
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv' }); env.download(blob, `layout-engine-usage-${rep.since}.csv`);
+  }
+  function bind(root, e) {
+    el = root; env = e;
+    root.addEventListener('click', ev => {
+      if (ev.target === root || ev.target.closest('[data-admin-close]')) { root.hidden = true; return; }
+      const d = ev.target.closest('[data-days]'); if (d) { days = +d.dataset.days; load(); return; }
+      const t = ev.target.closest('[data-tab]'); if (t) { tab = t.dataset.tab; render(); return; }
+      if (ev.target.closest('[data-ad-csv]')) csv();
+    });
+    root.addEventListener('keydown', ev => { ev.stopPropagation(); if (ev.key === 'Escape') root.hidden = true; });
+  }
+  return { bind, open, render };
+})();
+
 /* js/sync.js */
 /* Multiplayer. The canvas document is split into records — the canvas name, one per frame, one per block, one per
    stored original (Looks) and one per shared image — each stamped with a version and its writer. Changes travel as
@@ -8212,6 +8618,12 @@ const Sync = (() => {
   const me = { id: LS.get('lg.clientId', null) || ('c' + Math.random().toString(36).slice(2, 10)), name: LS.get('lg.name', ''), color: null };
   LS.set('lg.clientId', me.id); me.color = COLORS[hashStr(me.id) % COLORS.length];
   let ui = null, env = null, adapter = null, applying = false, clock = 0;
+  // Switching to another project's canvas: everything but the shared pictures starts over.
+  function resetState() {
+    for (const k of [...recs.keys()]) if (!k.startsWith('a~')) recs.delete(k);
+    synced.clear(); for (const k of recs.keys()) synced.set(k, 'asset');
+    inbox.length = 0; clearTimeout(inboxTimer); inboxTimer = 0; inboxFull = false; lastOrder = ''; clearTimeout(reconcileTimer); reconcileTimer = 0;
+  }
   const recs = new Map();    // key -> latest record known here (with _k, _v, _by, maybe _del)
   const synced = new Map();  // key -> canonical JSON of the shared value (what the local doc matched last time)
   let peers = []; const listeners = [];
@@ -8450,6 +8862,7 @@ const Sync = (() => {
         else if (m.t === 'leave') { peerMap.delete(m.id); setPeers([...peerMap.values()]); }
         else if (m.t === 'peers') { peerMap = new Map((m.list || []).filter(p => p.id !== me.id).map(p => [p.id, { id: p.id, ...sanitizePresence(p.p) }])); setPeers([...peerMap.values()]); }
         else if (m.t === 'libs' && env.onLibs) env.onLibs();
+        else if (m.t === 'projects' && env.onProjects) env.onProjects();
         else if (m.t === 'rpc' && env.onRpc) { Promise.resolve().then(() => env.onRpc(m.name, m.args || {})).then(result => send({ t: 'rpc-result', id: m.id, result }), err => send({ t: 'rpc-result', id: m.id, error: String(err && err.message || err) })); }
       };
       ws.onclose = () => { status.connected = false; notify(); if (closed) return; setTimeout(connect, Math.min(8000, 500 * 2 ** retry++)); };
@@ -8465,10 +8878,19 @@ const Sync = (() => {
     };
   }
   // claude.ai artifact: room (presence, live edits) + db (persistence) + assets (images) + user (names).
-  async function artifactAdapter() {
+  // opts.base: where this canvas lives in the database ('' for the page's original canvas, 'projects/<id>/' for a
+  // project); opts.room: a named room for it (everyone in the lobby otherwise). Library and picture subscriptions
+  // are shared by every canvas and made once.
+  let caps = null; let globalSubs = false;
+  async function artifactAdapter(opts = {}) {
     if (!(window.claude && typeof window.claude.use === 'function')) return null;
-    const [room, db, user, assets] = await Promise.all(['room', 'db', 'user', 'assets'].map(n => window.claude.use(n).catch(() => null)));
-    if (!db && !room) return null;
+    if (!caps) caps = await Promise.all(['room', 'db', 'user', 'assets'].map(n => window.claude.use(n).catch(() => null)));
+    const [lobby, db, user, assets] = caps;
+    if (!db && !lobby) return null;
+    const base = opts.base ? String(opts.base).replace(/\/?$/, '/') : '';
+    let room = lobby; let named = null;
+    if (lobby && opts.room) { try { named = await lobby.join(String(opts.room).slice(0, 64)); room = named; } catch (e) { console.warn('room join', e && e.code); room = null; } }
+    const unsubs = []; const sub = (u) => { if (typeof u === 'function') unsubs.push(u); };
     const writeQueue = new Map(); let firstSnap = true; const docVersions = new Map();
     // A frame and its blocks pack into one database document (or a few, past 200 KB), keyed by frame id.
     function framePacks(fid) {
@@ -8481,8 +8903,8 @@ const Sync = (() => {
       const chunks = framePacks(fid); const o = recs.get('o~' + fid);
       const bodies = chunks.map((blocks, i) => i === 0 ? { rec: fr, orig: o || null, blocks, chunks: chunks.length } : { of: fid, i, blocks });
       try {
-        for (let i = 0; i < bodies.length; i++) await db.doc(`frames/${i ? fid + '.c' + i : fid}`).set(bodies[i]);
-        const had = docVersions.get(fid) || 1; for (let i = bodies.length; i < had; i++) await db.doc(`frames/${fid}.c${i}`).delete();
+        for (let i = 0; i < bodies.length; i++) await db.doc(`${base}frames/${i ? fid + '.c' + i : fid}`).set(bodies[i]);
+        const had = docVersions.get(fid) || 1; for (let i = bodies.length; i < had; i++) await db.doc(`${base}frames/${fid}.c${i}`).delete();
         docVersions.set(fid, bodies.length);
       } catch (e) { if (e && (e.code === 'invalid_argument' || e.code === 'not_granted')) { status.readOnly = true; notify(); } else throw e; }
     }
@@ -8497,7 +8919,7 @@ const Sync = (() => {
     let metaChain = Promise.resolve();
     function sendRecs(list, live) {
       if (!status.readOnly && db) {
-        const fids = new Set(); for (const r of list) { if (r._k === 'meta') metaChain = metaChain.then(() => db.doc('canvas/meta').set({ rec: r })).catch(() => { }); else if (r._k.startsWith('a~')) db.doc(`assets/${r.id}`).set({ rec: r }).catch(() => { }); else if (r._k.startsWith('L~')) db.doc(`library/${r._k.slice(2)}`).set({ rec: r }).catch(() => { }); else fids.add(r._k.split('~')[1]); }
+        const fids = new Set(); for (const r of list) { if (r._k === 'meta') metaChain = metaChain.then(() => db.doc(`${base}canvas/meta`).set({ rec: r })).catch(() => { }); else if (r._k.startsWith('a~')) db.doc(`assets/${r.id}`).set({ rec: r }).catch(() => { }); else if (r._k.startsWith('L~')) db.doc(`library/${r._k.slice(2)}`).set({ rec: r }).catch(() => { }); else fids.add(r._k.split('~')[1]); }
         for (const fid of fids) schedule(fid);
       }
       if (room) { for (const r of list) pendingLive.set(r._k, r); if (!liveTimer) liveTimer = setTimeout(flushLive, 120); }
@@ -8512,20 +8934,20 @@ const Sync = (() => {
       flush();
     }
     if (room) {
-      room.on('live', msg => { if (msg.sameTab || !msg.data || !Array.isArray(msg.data.recs)) return; applyRemote(msg.data.recs); });
+      sub(room.on('live', msg => { if (msg.sameTab || !msg.data || !Array.isArray(msg.data.recs)) return; applyRemote(msg.data.recs); }));
       const names = new Map();
-      room.onPeers(async ch => {
+      sub(room.onPeers(async ch => {
         const list = ch.peers.filter(p => !p.isMe || !p.sameTab).filter(p => !(p.isMe && p.sameTab)).map(p => ({ id: p.peer, by: p.by, isMe: p.isMe, kind: p.kind, ...sanitizePresence(p.presence) }));
         const ids = list.map(p => p.by).filter(b => b && !names.has(b));
         if (ids.length && user && user.profiles) { try { const ps = await user.profiles(ids); for (const id of ids) names.set(id, (ps[id] && ps[id].name) || ''); } catch { } }
         for (const p of list) { const n = p.by && names.get(p.by); if (n) p.name = p.isMe ? n + ' (you, other tab)' : n; if (!p.name) p.name = p.kind === 'agent' ? 'Claude' : 'Someone'; if (!p.color) p.color = COLORS[hashStr(p.id) % COLORS.length]; }
         setPeers(list);
-      });
-      room.onConnection(c => { status.connected = c; notify(); });
+      }));
+      if (room.onConnection) sub(room.onConnection(c => { status.connected = c; notify(); })); else { status.connected = true; notify(); }
     }
     if (db) {
       const unpack = d => { const out = []; if (d.rec) out.push(d.rec); if (d.orig) out.push(d.orig); for (const r of Object.values(d.blocks || {})) out.push(r); return out; };
-      db.collection('frames').onSnapshot(snap => {
+      sub(db.collection(`${base}frames`).onSnapshot(snap => {
         if (firstSnap) {
           if (snap.metadata && snap.metadata.fromCache && !snap.size) return; // wait for the server's answer
           firstSnap = false;
@@ -8540,18 +8962,21 @@ const Sync = (() => {
         // at an older version. Where the database holds an older copy of a block this person wrote, write it again.
         if (!status.readOnly) { const stale = new Set(); for (const r of changed) { if (!r || !r._k || !r._k.startsWith('b~')) continue; const mine = recs.get(r._k); if (mine && mine._by === me.id && newer(mine, r)) stale.add(r._k.split('~')[1]); } for (const fid of stale) schedule(fid); }
         applyRemote(changed);
-      }, e => console.warn('db frames', e && e.code));
-      db.doc('canvas/meta').onSnapshot(s => { const d = s.data(); if (d && d.rec) applyRemote([d.rec]); }, () => { });
-      db.collection('library').onSnapshot(s => { const list = []; for (const d of s.docs) { const v = d.data(); if (v && v.rec) list.push(v.rec); } if (list.length) applyRemote(list); }, () => { });
-      db.collection('assets').onSnapshot(s => { for (const d of s.docs) { const v = d.data(); if (v && v.rec) { if (newer(v.rec, recs.get(v.rec._k))) recs.set(v.rec._k, v.rec); ensureAsset(v.rec); } } }, () => { });
-      if (user && user.can) user.can('data.write').then(v => { if (v === false) { status.readOnly = true; notify(); } }).catch(() => { });
+      }, e => console.warn('db frames', e && e.code)));
+      sub(db.doc(`${base}canvas/meta`).onSnapshot(s => { const d = s.data(); if (d && d.rec) applyRemote([d.rec]); }, () => { }));
+      if (!globalSubs) {
+        globalSubs = true;
+        db.collection('library').onSnapshot(s => { const list = []; for (const d of s.docs) { const v = d.data(); if (v && v.rec) list.push(v.rec); } if (list.length) applyRemote(list); }, () => { });
+        db.collection('assets').onSnapshot(s => { for (const d of s.docs) { const v = d.data(); if (v && v.rec) { if (newer(v.rec, recs.get(v.rec._k))) recs.set(v.rec._k, v.rec); ensureAsset(v.rec); } } }, () => { });
+        if (user && user.can) user.can('data.write').then(v => { if (v === false) { status.readOnly = true; notify(); } }).catch(() => { });
+      }
     }
     return {
       kind: 'artifact', live: !!room,
       send: sendRecs,
       presence: p => { if (room) room.presence(p).catch(() => { }); },
       uploadAsset: assets ? async blob => { const r = await assets.upload(blob); return { id: r.id, url: r.url }; } : null,
-      close: () => { },
+      close: () => { for (const u of unsubs) { try { u(); } catch { } } for (const q of writeQueue.values()) clearTimeout(q.timer); if (named && named.leave) { try { named.leave(); } catch { } } },
     };
   }
   function sanitizePresence(p) {
@@ -8578,17 +9003,20 @@ const Sync = (() => {
     if (a) a.presence({ name: me.name || '', color: me.color, cursor: null, sel: { frameIds: [], blockIds: [] } });
     notify();
   }
-  async function startArtifact() {
-    const a = await artifactAdapter(); if (!a) return false;
-    attach(a, { mode: 'artifact', room: 'artifact', label: 'Everyone with this page open edits the same canvas' });
+  async function startArtifact(opts = {}) {
+    const a = await artifactAdapter(opts); if (!a) return false;
+    attach(a, { mode: 'artifact', room: opts.room || 'artifact', label: opts.room ? 'Everyone who opens this project edits it with you' : 'Everyone with this page open edits the same canvas' });
     return true;
   }
+  const canArtifact = () => !!(window.claude && typeof window.claude.use === 'function');
+  function leave() { if (adapter) { attach(null, { mode: 'local', room: null, label: '', readOnly: false }); } }
   async function serverAvailable() {
     if (!/^https?:$/.test(location.protocol) || window.claude) return false; // file:// or inside claude.ai: no sync server there
     try { const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 1500); const r = await fetch('/api/ping', { cache: 'no-store', signal: ctl.signal }); clearTimeout(t); if (!r.ok) return false; const j = await r.json(); return !!(j && j.lg); } catch { return false; }
   }
   function roomFromUrl() { const m = /[?&#]room=([A-Za-z0-9_-]{4,64})/.exec(location.search + location.hash); return m ? m[1] : null; }
   function joinServer(roomId) {
+    if (adapter) resetState();
     status.room = roomId;
     const url = new URL(location.href); url.searchParams.set('room', roomId); history.replaceState(null, '', url);
     attach(serverAdapter(roomId), { mode: 'server', room: roomId, label: 'Anyone with this link edits the same canvas' });
@@ -8598,7 +9026,7 @@ const Sync = (() => {
   function roomLink() { if (status.mode !== 'server' || !status.room) return null; const u = new URL(location.href); u.hash = ''; u.searchParams.set('room', status.room); return u.toString(); }
   function setName(n) { me.name = String(n || '').replace(/[\u0000-\u001f<>]/g, '').slice(0, 40); LS.set('lg.name', me.name); if (adapter) adapter.presence({ name: me.name }); notify(); }
   return {
-    init, startArtifact, serverAvailable, roomFromUrl, joinServer, newRoomId, roomLink, setName, flush: flushInbox,
+    init, startArtifact, canArtifact, serverAvailable, roomFromUrl, joinServer, newRoomId, roomLink, setName, flush: flushInbox, resetState, leave,
     get me() { return me; }, get status() { return status; }, get peers() { return peers; },
     onStatus: fn => { listeners.push(fn); fn(status, peers); },
     announceTools: list => { if (adapter && adapter.announceTools) adapter.announceTools(list); },
@@ -9000,6 +9428,7 @@ Change the canvas with the tools; the person sees each change live and can undo 
   // ---- runs -----------------------------------------------------------------------------------------------------------
   async function send(text) {
     if (busy) return; const m = mode();
+    if (env && env.onRun) { try { env.onRun(text); } catch { } }
     if ($('agentPanel').hidden) show();
     bubble('user', text); const box = bubble('assistant');
     if (!m) { setText(box, 'Add an Anthropic API key in Settings to use the agent here, or open the published page on claude.ai where it runs on your account.'); return; }
@@ -9302,7 +9731,7 @@ Layer kinds:
     const d = applyBriefCopy(text, Prompt.parse(text, state.kit));
     if (!d) { toast('The brief names no subject to write about'); return; }
     readKit();
-    if (state.mode !== 'canvas') generate(text);
+    if (state.mode !== 'canvas' && state.mode !== 'home') generate(text);
   }
   for (const id of COPY_FIELDS) $(id).addEventListener('input', () => {
     if (!$('copyFromBrief').checked) return;
@@ -9429,6 +9858,7 @@ Layer kinds:
   async function generate(text, opts = {}) {
     if (state.busy) return;
     if (state.mode === 'deck' && !opts.intent) return generateDeck(text);
+    if (!opts.auto) Stats.track('generate', { detail: String(text).slice(0, 60) });
     state.busy = true; $('generateBtn').disabled = true; $('generateBtn').textContent = 'Reading brief…';
     try {
       let intent = opts.intent;
@@ -9708,10 +10138,11 @@ Layer kinds:
   function setMode(mode) {
     state.mode = mode;
     document.querySelectorAll('#modeSeg button').forEach(b => b.classList.toggle('on', b.dataset.mode === mode));
-    const canvas = mode === 'canvas';
-    document.body.classList.toggle('canvas-mode', canvas);
-    $('canvasView').hidden = !canvas;
-    $('promptForm').querySelector('#prompt').disabled = canvas; $('generateBtn').disabled = canvas;
+    const canvas = mode === 'canvas'; const home = mode === 'home';
+    document.body.classList.toggle('canvas-mode', canvas); document.body.classList.toggle('home-mode', home);
+    $('canvasView').hidden = !canvas; $('homeView').hidden = !home;
+    $('promptForm').querySelector('#prompt').disabled = canvas || home; $('generateBtn').disabled = canvas || home;
+    if (home) { CanvasUI.close(); for (const id of ['outlinePanel', 'deckBar', 'deckView', 'gallery', 'empty']) $(id).hidden = true; LS.set('lg.mode', 'home'); renderHome(); return; }
     if (canvas) { CanvasUI.open(); $('outlinePanel').hidden = true; $('deckBar').hidden = true; $('deckView').hidden = true; $('gallery').hidden = true; $('empty').hidden = true; LS.set('lg.mode', mode); return; }
     CanvasUI.close();
     const deck = mode === 'deck';
@@ -9796,6 +10227,7 @@ Layer kinds:
   }
 
   async function generateDeck(text) {
+    Stats.track('generate.deck', { detail: String(text).slice(0, 60) });
     state.busy = true; $('generateBtn').disabled = true; $('generateBtn').textContent = 'Reading brief…';
     try {
       const promptChanged = text !== state.lastPrompt;
@@ -9918,6 +10350,7 @@ Layer kinds:
   }
   $('importLayout').addEventListener('click', e => { const b = e.target.closest('[data-il]'); if (!b) return; LS.set('lg.importLayout', b.dataset.il); renderImportLayout(); });
   async function importFigmaData(data, how) {
+    Stats.track('import.figma');
     const res = await FigmaImport.convert(data, { addImage: (url, name) => addImage(url, name) }, { layout: importLayout() });
     const items = FigmaImport.toLayouts(res.frames, state.kit);
     if (!items.length) { toast('Nothing visible to import'); return; }
@@ -9935,6 +10368,7 @@ Layer kinds:
   }
   // ---- Slides in and out: .pptx files, Google Slides links, Save to Google Slides --------------------------------------
   async function importPptxBytes(bytes, label) {
+    Stats.track('import.pptx', { detail: label });
     toast(`Reading ${label}…`); $('slidesStatus').textContent = 'Reading…';
     try {
       const res = await PptxImport.read(bytes, { addImage: (url, name) => addImage(url, name), layout: importLayout(), onProgress: (i, n) => { $('slidesStatus').textContent = `Slide ${i} of ${n}`; } });
@@ -9948,6 +10382,7 @@ Layer kinds:
     finally { $('slidesStatus').textContent = ''; }
   }
   async function importSlidesLink(url) {
+    Stats.track('import.gslides');
     try { $('slidesStatus').textContent = 'Fetching the deck…'; const bytes = await GSlides.fetchDeck(url); await importPptxBytes(bytes, 'Google Slides'); }
     catch (err) { toast(err.message); $('slidesStatus').textContent = ''; }
   }
@@ -9960,6 +10395,7 @@ Layer kinds:
   }
   // Selected screens -> Google Slides (one deck per slide size), through the Drive connector; else a .pptx to import.
   async function saveToGoogleSlides(frames) {
+    Stats.track('export.gslides');
     const groups = new Map(); for (const f of frames) { const k = `${f.layout.format.w}x${f.layout.format.h}`; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(f); }
     const links = [];
     for (const [k, list] of groups) {
@@ -9983,7 +10419,7 @@ Layer kinds:
     }
     if (/\.json$/i.test(file.name) || file.type === 'application/json') {
       const text = await file.text(); let j; try { j = JSON.parse(text); } catch { return false; }
-      if (j && j.lgCapture && typeof WebImport !== 'undefined') { await WebImport.importCapture(j.lgCapture); return true; }
+      if (j && j.lgCapture && typeof WebImport !== 'undefined') { Stats.track('import.web'); await WebImport.importCapture(j.lgCapture); return true; }
       if (j && Array.isArray(j.frames)) { CanvasUI.replaceDoc(Canvas.deserialize(j), { keepView: false }); CanvasUI.fit(); toast('Canvas loaded'); updateCanvasBadge(); return true; }
     }
     return false;
@@ -10016,6 +10452,7 @@ Layer kinds:
 
   function sendToCanvas(layouts) {
     if (!layouts.length) return;
+    Stats.track('to-canvas', { detail: layouts.length + ' layouts' });
     CanvasUI.addLayouts(layouts);
     setMode('canvas'); updateCanvasBadge();
     toast(`${layouts.length} layout${layouts.length > 1 ? 's' : ''} on the canvas`);
@@ -10043,8 +10480,11 @@ Layer kinds:
     Library.imagesChanged();
     const fids = CanvasUI.doc.frames.filter(f => f.layout.blocks.some(b => b.asset === id)).map(f => f.id); if (fids.length) CanvasUI.rerender(fids);
   }
+  // The open project: its canvas is backed up in this browser under its own key.
+  const PROJ = { id: null };
+  function backupKey() { return PROJ.id ? `lg.canvas.${PROJ.id}` : 'lg.canvas'; }
   CanvasUI.init({
-    getKit: () => state.kit, getAssets: () => state.assets, toast,
+    getKit: () => state.kit, getAssets: () => state.assets, toast, backupKey,
     addImage: async file => addImage(await readAsDataURL(file), file.name),
     importFile: file => importFile(file),
     onPaste: e => onCanvasPaste(e),
@@ -10069,7 +10509,7 @@ Layer kinds:
   });
   // ---- Library: approved components, logos, cards, devices, illustrations ------------------------------------------
   Library.init({ getKit: () => state.kit, getAssets: () => state.assets, toast, canvas: CanvasUI, download: (blob, name) => Render.download(blob, name),
-    addImage: async file => addImage(await readAsDataURL(file), file.name), addImageData: (dataUrl, name) => addImage(dataUrl, name), me: () => (typeof Sync !== 'undefined' && Sync.me.name) || '' });
+    addImage: async file => addImage(await readAsDataURL(file), file.name), addImageData: (dataUrl, name) => addImage(dataUrl, name), me: () => (typeof Sync !== 'undefined' && Sync.me.name) || '', track: (a, d) => Stats.track(a, { detail: d }) });
   Library.bind($('cvLibrary')); Library.bindManager($('libsModal'));
   LibStore.init({ getAssets: () => state.assets, dataUrlToBlob, ensureImage });
   LibStore.start();
@@ -10089,14 +10529,14 @@ Layer kinds:
     getKit: () => state.kit, getAssets: () => state.assets, addImageData: (url, name) => addImage(url, name),
     exportPNG: (layout, scale) => Render.exportPNG(layout, { kit: state.kit, assets: state.assets }, scale || 1),
     variations: opts => makeVariations(opts),
-    onExternal: name => toast(`Outside agent: ${name.replace(/_/g, ' ')}`),
+    onExternal: name => { toast(`Outside agent: ${name.replace(/_/g, ' ')}`); Stats.track('agent.tool', { detail: name }); },
   });
-  Agent.init({ getKit: () => state.kit, toast, openSettings: () => { $('settings').hidden = false; } });
+  Agent.init({ getKit: () => state.kit, toast, openSettings: () => { $('settings').hidden = false; }, onRun: text => Stats.track('agent.run', { detail: String(text).slice(0, 60) }) });
 
   // ---- Multiplayer ------------------------------------------------------------------------------------------------
   Sync.init(CanvasUI, {
     getAssets: () => state.assets, dataUrlToBlob, addAssetWithId, onLibrary: () => { if (libraryOpen()) Library.render(); },
-    knownAsset: id => LibStore.assetInfo(id), onLibs: () => LibStore.refresh(),
+    knownAsset: id => LibStore.assetInfo(id), onLibs: () => LibStore.refresh(), onProjects: () => Projects.refresh(),
     toolList: () => (typeof AgentTools !== 'undefined' ? AgentTools.defs() : []),
     onRpc: (name, args) => (typeof AgentTools !== 'undefined' ? AgentTools.call(name, args, { via: 'mcp' }) : Promise.reject(new Error('Agent tools are not loaded'))),
   });
@@ -10122,16 +10562,147 @@ Layer kinds:
   });
   $('cvLive').addEventListener('click', async () => {
     if (Sync.status.mode === 'server') { const link = Sync.roomLink(); try { await navigator.clipboard.writeText(link); } catch { } toast('Room link copied'); return; }
-    if (!Sync.me.name) { const n = prompt('Your name, as others in this room see it', ''); if (n) Sync.setName(n); }
-    const id = Sync.joinServer(Sync.newRoomId());
-    try { await navigator.clipboard.writeText(Sync.roomLink()); } catch { }
-    toast(`Live room ${id} started; link copied. Anyone with it edits this canvas with you.`);
+    toast('On this server every project is a live room already: open one from Home and share its link.');
   });
+
+  // ---- Projects (Home) and usage analytics ---------------------------------------------------------------------------
+  Projects.init({ me: () => ({ id: Sync.me.id, name: Sync.me.name }) });
+  Stats.init({ currentProject: () => PROJ.id });
+  const ago = t => { if (!t) return 'new'; const m = Math.round((Date.now() - t) / 60000); if (m < 2) return 'just now'; if (m < 60) return m + ' min ago'; const h = Math.round(m / 60); if (h < 36) return h + ' h ago'; return Math.round(h / 24) + ' d ago'; };
+  async function startProject() {
+    const fromUrl = serverHere ? Sync.roomFromUrl() : null;
+    if (fromUrl && !Projects.get(fromUrl)) { try { await Projects.create({ id: fromUrl, name: 'Room ' + fromUrl }); } catch { } }
+    let id = fromUrl || Projects.current; let keepDoc = false;
+    if (!id || !Projects.get(id)) id = (Projects.projects()[0] || {}).id || null;
+    if (!id) { id = await firstProject(); keepDoc = true; }
+    await openProject(id, { quiet: true, keepDoc });
+    if (fromUrl && state.mode !== 'canvas') setMode('canvas');
+  }
+  // Nothing yet: what this browser already holds becomes the first project (in claude.ai, the page's own canvas).
+  async function firstProject() {
+    const mode = Projects.mode;
+    if (mode === 'artifact') { try { await Projects.create({ id: '_root', name: 'Shared canvas' }); } catch { } return '_root'; }
+    if (mode === 'server') { try { const p = await Projects.create({ name: 'My first project' }); return p.id; } catch { return 'local'; } }
+    try { await Projects.create({ id: 'local', name: 'My first project' }); } catch { }
+    try { if (!localStorage.getItem('lg.canvas.local')) { const old = localStorage.getItem('lg.canvas'); if (old) localStorage.setItem('lg.canvas.local', old); } } catch { }
+    return 'local';
+  }
+  async function openProject(id, opts = {}) {
+    const p = Projects.get(id); if (!p && id !== '_root') { toast('That project is not here any more'); return false; }
+    if (PROJ.id === id && !opts.force) { if (!opts.quiet) setMode('canvas'); return true; }
+    CanvasUI.flushBackup(); PROJ.id = id; Projects.setCurrent(id);
+    const name = p ? p.name : 'Shared canvas'; const mode = Projects.mode;
+    if (mode === 'artifact') {
+      Sync.leave(); Sync.resetState();
+      if (!opts.keepDoc) CanvasUI.replaceDoc(Canvas.create(name), { silent: true });
+      await Sync.startArtifact(id === '_root' ? {} : { base: 'projects/' + id + '/', room: ('p-' + id.toLowerCase().replace(/[^a-z0-9_.-]/g, '-')).slice(0, 48) });
+    } else if (mode === 'server') {
+      if (!opts.keepDoc) CanvasUI.replaceDoc(Canvas.create(name), { silent: true });
+      if (!Sync.me.name) Sync.setName('Guest ' + Sync.me.id.slice(-3).toUpperCase());
+      Sync.joinServer(id);
+    } else {
+      let doc = null; try { const saved = localStorage.getItem(backupKey()); doc = saved ? Canvas.deserialize(saved) : null; } catch { doc = null; }
+      if (!(opts.keepDoc && !doc)) CanvasUI.replaceDoc(doc || Canvas.create(name), { silent: true });
+    }
+    renderProjectName(); updateCanvasBadge();
+    if (!opts.quiet) { setMode('canvas'); Stats.track('project.open', { project: id, detail: name }); }
+    return true;
+  }
+  function renderProjectName() { const p = Projects.get(PROJ.id); $('cvProject').textContent = '⌂ ' + (p ? p.name : PROJ.id === '_root' ? 'Shared canvas' : 'Project'); }
+  $('cvProject').addEventListener('click', () => setMode('home'));
+  // Project bookkeeping from the canvas: screen count and a small cover, at most every 20 s.
+  let touchTimer = 0;
+  async function thumbnail(f) {
+    try {
+      const svg = Render.toSVG(f.layout, { kit: state.kit, assets: state.assets, forExport: true });
+      const img = new Image(); await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg); });
+      const W = 320, H = Math.max(40, Math.round(320 * f.layout.format.h / f.layout.format.w)); const c = document.createElement('canvas'); c.width = W; c.height = Math.min(H, 400);
+      c.getContext('2d').drawImage(img, 0, 0, W, H); return c.toDataURL('image/jpeg', 0.6);
+    } catch { return ''; }
+  }
+  CanvasUI.on('change', () => { if (!PROJ.id) return; clearTimeout(touchTimer); touchTimer = setTimeout(async () => { const d = CanvasUI.doc; const f = d.frames.find(x => !x.hidden) || d.frames[0]; Projects.touch(PROJ.id, { frames: d.frames.length, cover: f ? await thumbnail(f) : '' }); }, 4000); });
+  CanvasUI.on('action', (a, d) => Stats.track(a, { detail: d }));
+  $('stage').addEventListener('pointerdown', () => Stats.active()); $('stage').addEventListener('wheel', () => Stats.active(), { passive: true });
+  document.addEventListener('keydown', () => { if (state.mode === 'canvas') Stats.active(); });
+
+  // ---- Home ------------------------------------------------------------------------------------------------------------
+  let homeFolder = LS.get('lg.homeFolder', ''); let homeQ = ''; let homeMenu = null; let homeArchived = false; let folderMenu = null;
+  function renderHome() {
+    const v = $('homeView'); if (v.hidden) return;
+    const folders = Projects.folders(); const all = Projects.projects(); const arch = Projects.archived();
+    const base = homeArchived ? arch : homeFolder === '' ? all : homeFolder === '_none' ? all.filter(p => !p.folder) : all.filter(p => p.folder === homeFolder);
+    const list = base.filter(p => !homeQ || p.name.toLowerCase().includes(homeQ));
+    const count = f => all.filter(p => p.folder === f).length; const fname = id => (folders.find(f => f.id === id) || {}).name || '';
+    $('homeSide').innerHTML = `<button type="button" class="home-f ${homeFolder === '' && !homeArchived ? 'on' : ''}" data-folder="">All projects <span>${all.length}</span></button>
+      ${folders.map(f => `<div class="home-frow"><button type="button" class="home-f ${homeFolder === f.id && !homeArchived ? 'on' : ''}" data-folder="${escapeHtml(f.id)}">${escapeHtml(f.name)} <span>${count(f.id)}</span></button><button type="button" class="home-fx" data-folder-menu="${escapeHtml(f.id)}" title="Rename or remove">⋯</button></div>
+        ${folderMenu === f.id ? `<div class="home-pop" style="position:static;margin:4px 0 8px"><input type="text" class="input" data-folder-name="${escapeHtml(f.id)}" value="${escapeHtml(f.name)}" maxlength="60"><button type="button" class="btn small" data-folder-rename="${escapeHtml(f.id)}">Rename</button><button type="button" class="btn small ghost" data-folder-remove="${escapeHtml(f.id)}">Remove folder (projects stay)</button></div>` : ''}`).join('')}
+      <button type="button" class="home-f ${homeFolder === '_none' && !homeArchived ? 'on' : ''}" data-folder="_none">Unfiled <span>${all.filter(p => !p.folder).length}</span></button>
+      <div class="home-newf"><input type="text" class="input" id="homeFolderNew" placeholder="New folder" maxlength="60" aria-label="New folder name"><button type="button" class="btn small" id="homeAddFolder">Add</button></div>`;
+    $('homeTitle').textContent = homeArchived ? 'Archived projects' : homeFolder === '' ? 'All projects' : homeFolder === '_none' ? 'Unfiled' : fname(homeFolder);
+    $('homeGrid').innerHTML = list.map(p => `<div class="home-card${p.archived ? ' home-archived' : ''}${p.id === PROJ.id ? ' current' : ''}" data-open="${escapeHtml(p.id)}" tabindex="0" role="button" aria-label="Open ${escapeHtml(p.name)}">
+        <div class="home-cover">${p.cover ? `<img src="${escapeHtml(p.cover)}" alt="">` : `<span>${escapeHtml((p.name || '?')[0].toUpperCase())}</span>`}</div>
+        <div class="home-name">${escapeHtml(p.name)}${p.id === PROJ.id ? ' <span class="cv-token">open</span>' : ''}</div>
+        <div class="home-meta">${p.frames ? p.frames + ' screen' + (p.frames === 1 ? '' : 's') + ' · ' : ''}${escapeHtml(ago(p.updated || p.created))}${p.byName ? ' · ' + escapeHtml(p.byName) : ''}${p.folder && homeFolder !== p.folder ? ' · ' + escapeHtml(fname(p.folder)) : ''}</div>
+        <button type="button" class="home-menu${homeMenu === p.id ? ' open' : ''}" data-menu="${escapeHtml(p.id)}" title="Rename, move, archive" aria-label="Project menu">⋯</button>
+        ${homeMenu === p.id ? `<div class="home-pop" data-pop><input type="text" class="input" data-rename="${escapeHtml(p.id)}" value="${escapeHtml(p.name)}" maxlength="80" aria-label="Project name"><select class="input" data-move="${escapeHtml(p.id)}" aria-label="Folder"><option value="">No folder</option>${folders.map(f => `<option value="${escapeHtml(f.id)}" ${p.folder === f.id ? 'selected' : ''}>${escapeHtml(f.name)}</option>`).join('')}</select>${Projects.canChange(p) ? (p.archived ? `<button type="button" class="btn small" data-restore="${escapeHtml(p.id)}">Restore</button>` : `<button type="button" class="btn small ghost" data-archive="${escapeHtml(p.id)}">Archive</button>`) : '<span class="hint">Made by someone else: open it, or ask them or an admin to change it.</span>'}</div>` : ''}
+      </div>`).join('') || `<p class="hint">${homeArchived ? 'Nothing archived.' : 'No projects here yet. Make one with “New project”.'}</p>`;
+    $('homeArchived').textContent = homeArchived ? 'Back to projects' : `Show archived${arch.length ? ` (${arch.length})` : ''}`;
+    $('homeNote').textContent = Projects.mode === 'artifact' ? 'Projects are shared with everyone who opens this page.' : Projects.mode === 'server' ? 'Projects are shared with everyone on this server; each one is a live room.' : 'Projects are kept in this browser.';
+    $('homeNewFolder').innerHTML = `<option value="">No folder</option>` + folders.map(f => `<option value="${escapeHtml(f.id)}" ${homeFolder === f.id ? 'selected' : ''}>${escapeHtml(f.name)}</option>`).join('');
+  }
+  Projects.on(() => { renderHome(); if (PROJ.id) renderProjectName(); });
+  const guardHome = async fn => { try { await fn(); } catch (e) { toast(e && e.message ? e.message : String(e)); } renderHome(); };
+  $('homeView').addEventListener('click', async e => {
+    const t = e.target;
+    const f = t.closest('[data-folder]'); if (f && !t.closest('[data-pop]')) { homeFolder = f.dataset.folder; homeArchived = false; LS.set('lg.homeFolder', homeFolder); folderMenu = null; renderHome(); return; }
+    const fm = t.closest('[data-folder-menu]'); if (fm) { folderMenu = folderMenu === fm.dataset.folderMenu ? null : fm.dataset.folderMenu; renderHome(); return; }
+    const fr = t.closest('[data-folder-rename]'); if (fr) { const inp = $('homeSide').querySelector(`[data-folder-name="${CSS.escape(fr.dataset.folderRename)}"]`); folderMenu = null; await guardHome(() => Projects.renameFolder(fr.dataset.folderRename, inp.value)); return; }
+    const frm = t.closest('[data-folder-remove]'); if (frm) { folderMenu = null; if (homeFolder === frm.dataset.folderRemove) homeFolder = ''; await guardHome(() => Projects.removeFolder(frm.dataset.folderRemove)); return; }
+    if (t.closest('#homeAddFolder')) { const inp = $('homeFolderNew'); const name = inp.value.trim(); if (!name) { inp.focus(); return; } await guardHome(async () => { const f = await Projects.createFolder(name); homeFolder = f.id; LS.set('lg.homeFolder', homeFolder); }); return; }
+    if (t.closest('#homeNewBtn')) { $('homeNew').hidden = false; $('homeNewName').value = ''; $('homeNewName').focus(); return; }
+    if (t.closest('#homeCancel')) { $('homeNew').hidden = true; return; }
+    if (t.closest('#homeCreate')) { await createProjectFromForm(); return; }
+    if (t.closest('#homeArchived')) { homeArchived = !homeArchived; homeMenu = null; renderHome(); return; }
+    const m = t.closest('[data-menu]'); if (m) { homeMenu = homeMenu === m.dataset.menu ? null : m.dataset.menu; renderHome(); const inp = $('homeGrid').querySelector('[data-rename]'); if (inp) { inp.focus(); inp.select(); } return; }
+    if (t.closest('[data-pop]')) {
+      const ar = t.closest('[data-archive]'); if (ar) { homeMenu = null; await guardHome(() => Projects.remove(ar.dataset.archive)); toast('Project archived (Show archived brings it back)'); return; }
+      const rs = t.closest('[data-restore]'); if (rs) { homeMenu = null; await guardHome(() => Projects.restore(rs.dataset.restore)); return; }
+      return;
+    }
+    const card = t.closest('[data-open]'); if (card) { homeMenu = null; await openProject(card.dataset.open); }
+  });
+  $('homeView').addEventListener('change', async e => {
+    const t = e.target;
+    if (t.dataset.move != null) { await guardHome(() => Projects.update(t.dataset.move, { folder: t.value })); return; }
+  });
+  $('homeView').addEventListener('keydown', async e => {
+    const t = e.target; e.stopPropagation();
+    if (e.key === 'Enter' && t.dataset.rename != null) { const id = t.dataset.rename; homeMenu = null; await guardHome(() => Projects.update(id, { name: t.value.trim() || 'Untitled project' })); if (id === PROJ.id) renderProjectName(); return; }
+    if (e.key === 'Enter' && t.id === 'homeNewName') { await createProjectFromForm(); return; }
+    if (e.key === 'Enter' && t.id === 'homeFolderNew') { $('homeAddFolder').click(); return; }
+    if (e.key === 'Enter' && t.dataset.folderName != null) { $('homeSide').querySelector(`[data-folder-rename="${CSS.escape(t.dataset.folderName)}"]`).click(); return; }
+    if (e.key === 'Escape') { homeMenu = null; folderMenu = null; $('homeNew').hidden = true; renderHome(); return; }
+    if (e.key === 'Enter' && t.classList.contains('home-card')) { await openProject(t.dataset.open); }
+  });
+  $('homeSearch').addEventListener('input', e => { homeQ = e.target.value.trim().toLowerCase(); renderHome(); });
+  async function createProjectFromForm() {
+    const name = $('homeNewName').value.trim(); if (!name) { $('homeNewName').focus(); return; }
+    const folder = $('homeNewFolder').value || '';
+    await guardHome(async () => { const p = await Projects.create({ name, folder }); $('homeNew').hidden = true; Stats.track('project.create', { project: p.id, detail: name }); await openProject(p.id); toast(`${name} created. Generate layouts, import, or draw a frame to begin.`); });
+  }
+
+  // ---- Admin ------------------------------------------------------------------------------------------------------------
+  Admin.bind($('adminModal'), { download: (blob, name) => Render.download(blob, name) });
+  $('adminBtn').addEventListener('click', () => Admin.open());
+  function updateAdminButton() { $('adminBtn').hidden = !LibStore.role().admin; }
+  LibStore.on(updateAdminButton);
+
   (async () => {
-    if (await Sync.startArtifact()) return;
-    serverHere = await Sync.serverAvailable();
-    if (serverHere) { const room = Sync.roomFromUrl(); if (room) { if (!Sync.me.name) Sync.setName('Guest ' + Sync.me.id.slice(-3).toUpperCase()); Sync.joinServer(room); if (state.mode !== 'canvas') setMode('canvas'); } }
-    renderPeers(Sync.status, Sync.peers);
+    if (!Sync.canArtifact()) serverHere = await Sync.serverAvailable();
+    await Promise.all([Projects.start(), Stats.start()]);
+    await Projects.whenReady(5000);
+    await startProject();
+    renderPeers(Sync.status, Sync.peers); renderHome(); updateAdminButton();
   })();
 
   $('cvFrameFormat').innerHTML = Grid.FORMATS.map(f => `<option value="${f.id}" ${f.id === 'slide' ? 'selected' : ''}>${f.name}</option>`).join('');
@@ -10160,8 +10731,8 @@ Layer kinds:
     if (!$('prompt').value) $('prompt').value = savedMode === 'deck' ? '8-slide launch deck for Deel Global Payroll' : 'Launch posts for Deel Global Payroll, bold, image-led, square and story';
     if (savedMode === 'deck') setMode('deck');
     updateCanvasBadge();
-    if (savedMode === 'canvas') { await ensureDemoImages(false); await loadFonts(state.kit); setMode('canvas'); return; }
-    await generate($('prompt').value);
+    if (savedMode === 'canvas' || savedMode === 'home') { await ensureDemoImages(false); await loadFonts(state.kit); setMode(savedMode); return; }
+    await generate($('prompt').value, { auto: true });
   }
   init();
 })();

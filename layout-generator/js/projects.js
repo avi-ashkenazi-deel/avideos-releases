@@ -10,6 +10,9 @@ const Projects = (() => {
   let env = null, backend = null, started = null;
   const S = { mode: 'local', projects: new Map(), folders: new Map(), uid: null, owner: false, canEdit: null, canWrite: null, ready: false, current: LS.get('lg.project', null) };
   const listeners = new Set(); const emit = () => { for (const fn of listeners) { try { fn(); } catch (e) { console.error(e); } } };
+  // The first answer from wherever projects live (or a timeout): opening "the last project" before the list arrives
+  // would make a new one instead.
+  function whenReady(ms = 5000) { if (S.ready) return Promise.resolve(true); return new Promise(res => { const t = setTimeout(() => { off(); res(false); }, ms); const fn = () => { if (S.ready) { clearTimeout(t); off(); res(true); } }; listeners.add(fn); const off = () => listeners.delete(fn); }); }
   const uid = () => 'p' + Math.random().toString(36).slice(2, 10);
   const clean = p => (p && typeof p === 'object' && ID.test(String(p.id || ''))) ? { id: String(p.id), name: String(p.name || 'Untitled').slice(0, 80), folder: ID.test(String(p.folder || '')) ? String(p.folder) : '', created: +p.created || 0, by: typeof p.by === 'string' ? p.by.slice(0, 80) : '', byName: typeof p.byName === 'string' ? p.byName.slice(0, 80) : '', updated: +p.updated || 0, updatedBy: typeof p.updatedBy === 'string' ? p.updatedBy.slice(0, 80) : '', frames: +p.frames || 0, cover: typeof p.cover === 'string' && /^data:image\/(jpeg|png|webp);base64,/.test(p.cover) && p.cover.length < 60000 ? p.cover : '', archived: !!p.archived, kind: p.kind === 'deck' ? 'deck' : 'canvas' } : null;
   const cleanFolder = f => (f && typeof f === 'object' && ID.test(String(f.id || ''))) ? { id: String(f.id), name: String(f.name || 'Folder').slice(0, 60), order: +f.order || 0, by: typeof f.by === 'string' ? f.by.slice(0, 80) : '' } : null;
@@ -88,9 +91,9 @@ const Projects = (() => {
   const isAdmin = () => { try { return typeof LibStore !== 'undefined' && LibStore.role().admin; } catch { return false; } };
   function canChange(p) { return !!p && (S.owner || isAdmin() || (S.uid && p.by === S.uid) || (!S.uid && S.mode !== 'artifact')); }
   const must = () => { if (!backend) throw new Error('Projects are still loading'); if (S.canWrite === false) throw new Error('You can open projects but not change them here: ask the owner for Contributor access.'); };
-  async function create({ name, folder = '', kind = 'canvas' } = {}) {
+  async function create({ name, folder = '', kind = 'canvas', id } = {}) {
     must(); const me = env && env.me ? env.me() : {};
-    const p = clean({ id: uid(), name: String(name || 'Untitled project').trim().slice(0, 80) || 'Untitled project', folder, created: Date.now(), by: S.uid || me.id || '', byName: me.name || '', updated: Date.now(), updatedBy: S.uid || me.id || '', frames: 0, kind });
+    const p = clean({ id: id && ID.test(id) ? id : uid(), name: String(name || 'Untitled project').trim().slice(0, 80) || 'Untitled project', folder, created: Date.now(), by: S.uid || me.id || '', byName: me.name || '', updated: Date.now(), updatedBy: S.uid || me.id || '', frames: 0, kind });
     await backend.put(p); S.projects.set(p.id, p); emit(); return p;
   }
   async function update(id, patch) { must(); const cur = get(id); if (!cur) throw new Error('No such project'); if (('name' in patch || 'folder' in patch || 'archived' in patch) && !canChange(cur)) throw new Error('Only the person who made this project (or an admin) can change it'); const next = clean({ ...cur, ...patch, id }); await backend.patch(id, { ...patch, updated: next.updated }); S.projects.set(id, next); emit(); return next; }
@@ -110,7 +113,7 @@ const Projects = (() => {
   function setCurrent(id) { S.current = id; LS.set('lg.project', id); emit(); }
   const archived = () => [...S.projects.values()].filter(p => p.archived).sort((a, b) => b.updated - a.updated);
   return {
-    init, start, projects, folders, get, create, update, touch, remove, restore, archived, createFolder, renameFolder, removeFolder, setCurrent, canChange,
+    init, start, whenReady, projects, folders, get, create, update, touch, remove, restore, archived, createFolder, renameFolder, removeFolder, setCurrent, canChange,
     refresh: () => backend && backend.refresh ? backend.refresh() : null,
     on: fn => { listeners.add(fn); return () => listeners.delete(fn); },
     get mode() { return S.mode; }, get ready() { return S.ready; }, get current() { return S.current; }, get me() { return S.uid; },

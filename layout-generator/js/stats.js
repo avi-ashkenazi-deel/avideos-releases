@@ -59,7 +59,7 @@ const Stats = (() => {
     const ref = m => db.doc(`stats/${uid}/months/${m}`);
     return {
       kind: 'artifact',
-      write: async mine => { const snap = await ref(mine.month).get(); const stored = snap && snap.exists ? snap.data() : null; await ref(mine.month).set(merge(stored, mine)); },
+      write: async mine => { const snap = await ref(mine.month).get(); const stored = snap && snap.exists ? snap.data() : null; await ref(mine.month).set(merge(stored, mine)); await db.doc(`stats/${uid}`).set({ name: mine.name || '', last: mine.last || Date.now(), month: mine.month }); },
       // admins: everyone's summaries for the given months (people whose subtree the rules open to admins)
       read: async months => { const out = []; for (const m of months) { try { const q = await db.collection('stats').get(); for (const d of q.docs) { try { const s = await db.doc(`stats/${d.id}/months/${m}`).get(); if (s && s.exists) out.push({ ...s.data(), uid: d.id }); } catch { } } } catch { } } return out; },
       profiles: user && user.profiles ? ids => user.profiles(ids) : null,
@@ -109,7 +109,8 @@ const Stats = (() => {
       for (const r of s.recent || []) if (day(r.t) >= since) recent.push({ ...r, uid: s.uid });
     }
     let names = {}; if (backend.profiles) { try { const ps = await backend.profiles([...people.keys()]); for (const [id, p] of Object.entries(ps || {})) if (p && p.name) names[id] = p.name; } catch { } }
-    for (const P of people.values()) { P.name = names[P.uid] || P.name || 'Someone'; P.projects = [...P.projects]; }
+    const myName = mode === 'local' ? 'You (this browser)' : 'Someone';
+    for (const P of people.values()) { P.name = names[P.uid] || P.name || (P.uid === uid ? (mode === 'local' ? myName : 'You') : 'Someone'); P.projects = [...P.projects]; }
     for (const Q of projects.values()) Q.people = [...Q.people];
     recent.sort((a, b) => b.t - a.t);
     const daysOut = [...dayRows.values()].sort((a, b) => a.day.localeCompare(b.day)).map(r => ({ ...r, people: r.people.size }));

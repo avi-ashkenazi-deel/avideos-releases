@@ -131,7 +131,7 @@
     const d = applyBriefCopy(text, Prompt.parse(text, state.kit));
     if (!d) { toast('The brief names no subject to write about'); return; }
     readKit();
-    if (state.mode !== 'canvas') generate(text);
+    if (state.mode !== 'canvas' && state.mode !== 'home') generate(text);
   }
   for (const id of COPY_FIELDS) $(id).addEventListener('input', () => {
     if (!$('copyFromBrief').checked) return;
@@ -258,6 +258,7 @@
   async function generate(text, opts = {}) {
     if (state.busy) return;
     if (state.mode === 'deck' && !opts.intent) return generateDeck(text);
+    if (!opts.auto) Stats.track('generate', { detail: String(text).slice(0, 60) });
     state.busy = true; $('generateBtn').disabled = true; $('generateBtn').textContent = 'Reading brief…';
     try {
       let intent = opts.intent;
@@ -537,10 +538,11 @@
   function setMode(mode) {
     state.mode = mode;
     document.querySelectorAll('#modeSeg button').forEach(b => b.classList.toggle('on', b.dataset.mode === mode));
-    const canvas = mode === 'canvas';
-    document.body.classList.toggle('canvas-mode', canvas);
-    $('canvasView').hidden = !canvas;
-    $('promptForm').querySelector('#prompt').disabled = canvas; $('generateBtn').disabled = canvas;
+    const canvas = mode === 'canvas'; const home = mode === 'home';
+    document.body.classList.toggle('canvas-mode', canvas); document.body.classList.toggle('home-mode', home);
+    $('canvasView').hidden = !canvas; $('homeView').hidden = !home;
+    $('promptForm').querySelector('#prompt').disabled = canvas || home; $('generateBtn').disabled = canvas || home;
+    if (home) { CanvasUI.close(); for (const id of ['outlinePanel', 'deckBar', 'deckView', 'gallery', 'empty']) $(id).hidden = true; LS.set('lg.mode', 'home'); renderHome(); return; }
     if (canvas) { CanvasUI.open(); $('outlinePanel').hidden = true; $('deckBar').hidden = true; $('deckView').hidden = true; $('gallery').hidden = true; $('empty').hidden = true; LS.set('lg.mode', mode); return; }
     CanvasUI.close();
     const deck = mode === 'deck';
@@ -625,6 +627,7 @@
   }
 
   async function generateDeck(text) {
+    Stats.track('generate.deck', { detail: String(text).slice(0, 60) });
     state.busy = true; $('generateBtn').disabled = true; $('generateBtn').textContent = 'Reading brief…';
     try {
       const promptChanged = text !== state.lastPrompt;
@@ -747,6 +750,7 @@
   }
   $('importLayout').addEventListener('click', e => { const b = e.target.closest('[data-il]'); if (!b) return; LS.set('lg.importLayout', b.dataset.il); renderImportLayout(); });
   async function importFigmaData(data, how) {
+    Stats.track('import.figma');
     const res = await FigmaImport.convert(data, { addImage: (url, name) => addImage(url, name) }, { layout: importLayout() });
     const items = FigmaImport.toLayouts(res.frames, state.kit);
     if (!items.length) { toast('Nothing visible to import'); return; }
@@ -764,6 +768,7 @@
   }
   // ---- Slides in and out: .pptx files, Google Slides links, Save to Google Slides --------------------------------------
   async function importPptxBytes(bytes, label) {
+    Stats.track('import.pptx', { detail: label });
     toast(`Reading ${label}…`); $('slidesStatus').textContent = 'Reading…';
     try {
       const res = await PptxImport.read(bytes, { addImage: (url, name) => addImage(url, name), layout: importLayout(), onProgress: (i, n) => { $('slidesStatus').textContent = `Slide ${i} of ${n}`; } });
@@ -777,6 +782,7 @@
     finally { $('slidesStatus').textContent = ''; }
   }
   async function importSlidesLink(url) {
+    Stats.track('import.gslides');
     try { $('slidesStatus').textContent = 'Fetching the deck…'; const bytes = await GSlides.fetchDeck(url); await importPptxBytes(bytes, 'Google Slides'); }
     catch (err) { toast(err.message); $('slidesStatus').textContent = ''; }
   }
@@ -789,6 +795,7 @@
   }
   // Selected screens -> Google Slides (one deck per slide size), through the Drive connector; else a .pptx to import.
   async function saveToGoogleSlides(frames) {
+    Stats.track('export.gslides');
     const groups = new Map(); for (const f of frames) { const k = `${f.layout.format.w}x${f.layout.format.h}`; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(f); }
     const links = [];
     for (const [k, list] of groups) {
@@ -812,7 +819,7 @@
     }
     if (/\.json$/i.test(file.name) || file.type === 'application/json') {
       const text = await file.text(); let j; try { j = JSON.parse(text); } catch { return false; }
-      if (j && j.lgCapture && typeof WebImport !== 'undefined') { await WebImport.importCapture(j.lgCapture); return true; }
+      if (j && j.lgCapture && typeof WebImport !== 'undefined') { Stats.track('import.web'); await WebImport.importCapture(j.lgCapture); return true; }
       if (j && Array.isArray(j.frames)) { CanvasUI.replaceDoc(Canvas.deserialize(j), { keepView: false }); CanvasUI.fit(); toast('Canvas loaded'); updateCanvasBadge(); return true; }
     }
     return false;
@@ -845,6 +852,7 @@
 
   function sendToCanvas(layouts) {
     if (!layouts.length) return;
+    Stats.track('to-canvas', { detail: layouts.length + ' layouts' });
     CanvasUI.addLayouts(layouts);
     setMode('canvas'); updateCanvasBadge();
     toast(`${layouts.length} layout${layouts.length > 1 ? 's' : ''} on the canvas`);
@@ -872,8 +880,11 @@
     Library.imagesChanged();
     const fids = CanvasUI.doc.frames.filter(f => f.layout.blocks.some(b => b.asset === id)).map(f => f.id); if (fids.length) CanvasUI.rerender(fids);
   }
+  // The open project: its canvas is backed up in this browser under its own key.
+  const PROJ = { id: null };
+  function backupKey() { return PROJ.id ? `lg.canvas.${PROJ.id}` : 'lg.canvas'; }
   CanvasUI.init({
-    getKit: () => state.kit, getAssets: () => state.assets, toast,
+    getKit: () => state.kit, getAssets: () => state.assets, toast, backupKey,
     addImage: async file => addImage(await readAsDataURL(file), file.name),
     importFile: file => importFile(file),
     onPaste: e => onCanvasPaste(e),
@@ -898,7 +909,7 @@
   });
   // ---- Library: approved components, logos, cards, devices, illustrations ------------------------------------------
   Library.init({ getKit: () => state.kit, getAssets: () => state.assets, toast, canvas: CanvasUI, download: (blob, name) => Render.download(blob, name),
-    addImage: async file => addImage(await readAsDataURL(file), file.name), addImageData: (dataUrl, name) => addImage(dataUrl, name), me: () => (typeof Sync !== 'undefined' && Sync.me.name) || '' });
+    addImage: async file => addImage(await readAsDataURL(file), file.name), addImageData: (dataUrl, name) => addImage(dataUrl, name), me: () => (typeof Sync !== 'undefined' && Sync.me.name) || '', track: (a, d) => Stats.track(a, { detail: d }) });
   Library.bind($('cvLibrary')); Library.bindManager($('libsModal'));
   LibStore.init({ getAssets: () => state.assets, dataUrlToBlob, ensureImage });
   LibStore.start();
@@ -918,14 +929,14 @@
     getKit: () => state.kit, getAssets: () => state.assets, addImageData: (url, name) => addImage(url, name),
     exportPNG: (layout, scale) => Render.exportPNG(layout, { kit: state.kit, assets: state.assets }, scale || 1),
     variations: opts => makeVariations(opts),
-    onExternal: name => toast(`Outside agent: ${name.replace(/_/g, ' ')}`),
+    onExternal: name => { toast(`Outside agent: ${name.replace(/_/g, ' ')}`); Stats.track('agent.tool', { detail: name }); },
   });
-  Agent.init({ getKit: () => state.kit, toast, openSettings: () => { $('settings').hidden = false; } });
+  Agent.init({ getKit: () => state.kit, toast, openSettings: () => { $('settings').hidden = false; }, onRun: text => Stats.track('agent.run', { detail: String(text).slice(0, 60) }) });
 
   // ---- Multiplayer ------------------------------------------------------------------------------------------------
   Sync.init(CanvasUI, {
     getAssets: () => state.assets, dataUrlToBlob, addAssetWithId, onLibrary: () => { if (libraryOpen()) Library.render(); },
-    knownAsset: id => LibStore.assetInfo(id), onLibs: () => LibStore.refresh(),
+    knownAsset: id => LibStore.assetInfo(id), onLibs: () => LibStore.refresh(), onProjects: () => Projects.refresh(),
     toolList: () => (typeof AgentTools !== 'undefined' ? AgentTools.defs() : []),
     onRpc: (name, args) => (typeof AgentTools !== 'undefined' ? AgentTools.call(name, args, { via: 'mcp' }) : Promise.reject(new Error('Agent tools are not loaded'))),
   });
@@ -951,16 +962,147 @@
   });
   $('cvLive').addEventListener('click', async () => {
     if (Sync.status.mode === 'server') { const link = Sync.roomLink(); try { await navigator.clipboard.writeText(link); } catch { } toast('Room link copied'); return; }
-    if (!Sync.me.name) { const n = prompt('Your name, as others in this room see it', ''); if (n) Sync.setName(n); }
-    const id = Sync.joinServer(Sync.newRoomId());
-    try { await navigator.clipboard.writeText(Sync.roomLink()); } catch { }
-    toast(`Live room ${id} started; link copied. Anyone with it edits this canvas with you.`);
+    toast('On this server every project is a live room already: open one from Home and share its link.');
   });
+
+  // ---- Projects (Home) and usage analytics ---------------------------------------------------------------------------
+  Projects.init({ me: () => ({ id: Sync.me.id, name: Sync.me.name }) });
+  Stats.init({ currentProject: () => PROJ.id });
+  const ago = t => { if (!t) return 'new'; const m = Math.round((Date.now() - t) / 60000); if (m < 2) return 'just now'; if (m < 60) return m + ' min ago'; const h = Math.round(m / 60); if (h < 36) return h + ' h ago'; return Math.round(h / 24) + ' d ago'; };
+  async function startProject() {
+    const fromUrl = serverHere ? Sync.roomFromUrl() : null;
+    if (fromUrl && !Projects.get(fromUrl)) { try { await Projects.create({ id: fromUrl, name: 'Room ' + fromUrl }); } catch { } }
+    let id = fromUrl || Projects.current; let keepDoc = false;
+    if (!id || !Projects.get(id)) id = (Projects.projects()[0] || {}).id || null;
+    if (!id) { id = await firstProject(); keepDoc = true; }
+    await openProject(id, { quiet: true, keepDoc });
+    if (fromUrl && state.mode !== 'canvas') setMode('canvas');
+  }
+  // Nothing yet: what this browser already holds becomes the first project (in claude.ai, the page's own canvas).
+  async function firstProject() {
+    const mode = Projects.mode;
+    if (mode === 'artifact') { try { await Projects.create({ id: '_root', name: 'Shared canvas' }); } catch { } return '_root'; }
+    if (mode === 'server') { try { const p = await Projects.create({ name: 'My first project' }); return p.id; } catch { return 'local'; } }
+    try { await Projects.create({ id: 'local', name: 'My first project' }); } catch { }
+    try { if (!localStorage.getItem('lg.canvas.local')) { const old = localStorage.getItem('lg.canvas'); if (old) localStorage.setItem('lg.canvas.local', old); } } catch { }
+    return 'local';
+  }
+  async function openProject(id, opts = {}) {
+    const p = Projects.get(id); if (!p && id !== '_root') { toast('That project is not here any more'); return false; }
+    if (PROJ.id === id && !opts.force) { if (!opts.quiet) setMode('canvas'); return true; }
+    CanvasUI.flushBackup(); PROJ.id = id; Projects.setCurrent(id);
+    const name = p ? p.name : 'Shared canvas'; const mode = Projects.mode;
+    if (mode === 'artifact') {
+      Sync.leave(); Sync.resetState();
+      if (!opts.keepDoc) CanvasUI.replaceDoc(Canvas.create(name), { silent: true });
+      await Sync.startArtifact(id === '_root' ? {} : { base: 'projects/' + id + '/', room: ('p-' + id.toLowerCase().replace(/[^a-z0-9_.-]/g, '-')).slice(0, 48) });
+    } else if (mode === 'server') {
+      if (!opts.keepDoc) CanvasUI.replaceDoc(Canvas.create(name), { silent: true });
+      if (!Sync.me.name) Sync.setName('Guest ' + Sync.me.id.slice(-3).toUpperCase());
+      Sync.joinServer(id);
+    } else {
+      let doc = null; try { const saved = localStorage.getItem(backupKey()); doc = saved ? Canvas.deserialize(saved) : null; } catch { doc = null; }
+      if (!(opts.keepDoc && !doc)) CanvasUI.replaceDoc(doc || Canvas.create(name), { silent: true });
+    }
+    renderProjectName(); updateCanvasBadge();
+    if (!opts.quiet) { setMode('canvas'); Stats.track('project.open', { project: id, detail: name }); }
+    return true;
+  }
+  function renderProjectName() { const p = Projects.get(PROJ.id); $('cvProject').textContent = '⌂ ' + (p ? p.name : PROJ.id === '_root' ? 'Shared canvas' : 'Project'); }
+  $('cvProject').addEventListener('click', () => setMode('home'));
+  // Project bookkeeping from the canvas: screen count and a small cover, at most every 20 s.
+  let touchTimer = 0;
+  async function thumbnail(f) {
+    try {
+      const svg = Render.toSVG(f.layout, { kit: state.kit, assets: state.assets, forExport: true });
+      const img = new Image(); await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg); });
+      const W = 320, H = Math.max(40, Math.round(320 * f.layout.format.h / f.layout.format.w)); const c = document.createElement('canvas'); c.width = W; c.height = Math.min(H, 400);
+      c.getContext('2d').drawImage(img, 0, 0, W, H); return c.toDataURL('image/jpeg', 0.6);
+    } catch { return ''; }
+  }
+  CanvasUI.on('change', () => { if (!PROJ.id) return; clearTimeout(touchTimer); touchTimer = setTimeout(async () => { const d = CanvasUI.doc; const f = d.frames.find(x => !x.hidden) || d.frames[0]; Projects.touch(PROJ.id, { frames: d.frames.length, cover: f ? await thumbnail(f) : '' }); }, 4000); });
+  CanvasUI.on('action', (a, d) => Stats.track(a, { detail: d }));
+  $('stage').addEventListener('pointerdown', () => Stats.active()); $('stage').addEventListener('wheel', () => Stats.active(), { passive: true });
+  document.addEventListener('keydown', () => { if (state.mode === 'canvas') Stats.active(); });
+
+  // ---- Home ------------------------------------------------------------------------------------------------------------
+  let homeFolder = LS.get('lg.homeFolder', ''); let homeQ = ''; let homeMenu = null; let homeArchived = false; let folderMenu = null;
+  function renderHome() {
+    const v = $('homeView'); if (v.hidden) return;
+    const folders = Projects.folders(); const all = Projects.projects(); const arch = Projects.archived();
+    const base = homeArchived ? arch : homeFolder === '' ? all : homeFolder === '_none' ? all.filter(p => !p.folder) : all.filter(p => p.folder === homeFolder);
+    const list = base.filter(p => !homeQ || p.name.toLowerCase().includes(homeQ));
+    const count = f => all.filter(p => p.folder === f).length; const fname = id => (folders.find(f => f.id === id) || {}).name || '';
+    $('homeSide').innerHTML = `<button type="button" class="home-f ${homeFolder === '' && !homeArchived ? 'on' : ''}" data-folder="">All projects <span>${all.length}</span></button>
+      ${folders.map(f => `<div class="home-frow"><button type="button" class="home-f ${homeFolder === f.id && !homeArchived ? 'on' : ''}" data-folder="${escapeHtml(f.id)}">${escapeHtml(f.name)} <span>${count(f.id)}</span></button><button type="button" class="home-fx" data-folder-menu="${escapeHtml(f.id)}" title="Rename or remove">⋯</button></div>
+        ${folderMenu === f.id ? `<div class="home-pop" style="position:static;margin:4px 0 8px"><input type="text" class="input" data-folder-name="${escapeHtml(f.id)}" value="${escapeHtml(f.name)}" maxlength="60"><button type="button" class="btn small" data-folder-rename="${escapeHtml(f.id)}">Rename</button><button type="button" class="btn small ghost" data-folder-remove="${escapeHtml(f.id)}">Remove folder (projects stay)</button></div>` : ''}`).join('')}
+      <button type="button" class="home-f ${homeFolder === '_none' && !homeArchived ? 'on' : ''}" data-folder="_none">Unfiled <span>${all.filter(p => !p.folder).length}</span></button>
+      <div class="home-newf"><input type="text" class="input" id="homeFolderNew" placeholder="New folder" maxlength="60" aria-label="New folder name"><button type="button" class="btn small" id="homeAddFolder">Add</button></div>`;
+    $('homeTitle').textContent = homeArchived ? 'Archived projects' : homeFolder === '' ? 'All projects' : homeFolder === '_none' ? 'Unfiled' : fname(homeFolder);
+    $('homeGrid').innerHTML = list.map(p => `<div class="home-card${p.archived ? ' home-archived' : ''}${p.id === PROJ.id ? ' current' : ''}" data-open="${escapeHtml(p.id)}" tabindex="0" role="button" aria-label="Open ${escapeHtml(p.name)}">
+        <div class="home-cover">${p.cover ? `<img src="${escapeHtml(p.cover)}" alt="">` : `<span>${escapeHtml((p.name || '?')[0].toUpperCase())}</span>`}</div>
+        <div class="home-name">${escapeHtml(p.name)}${p.id === PROJ.id ? ' <span class="cv-token">open</span>' : ''}</div>
+        <div class="home-meta">${p.frames ? p.frames + ' screen' + (p.frames === 1 ? '' : 's') + ' · ' : ''}${escapeHtml(ago(p.updated || p.created))}${p.byName ? ' · ' + escapeHtml(p.byName) : ''}${p.folder && homeFolder !== p.folder ? ' · ' + escapeHtml(fname(p.folder)) : ''}</div>
+        <button type="button" class="home-menu${homeMenu === p.id ? ' open' : ''}" data-menu="${escapeHtml(p.id)}" title="Rename, move, archive" aria-label="Project menu">⋯</button>
+        ${homeMenu === p.id ? `<div class="home-pop" data-pop><input type="text" class="input" data-rename="${escapeHtml(p.id)}" value="${escapeHtml(p.name)}" maxlength="80" aria-label="Project name"><select class="input" data-move="${escapeHtml(p.id)}" aria-label="Folder"><option value="">No folder</option>${folders.map(f => `<option value="${escapeHtml(f.id)}" ${p.folder === f.id ? 'selected' : ''}>${escapeHtml(f.name)}</option>`).join('')}</select>${Projects.canChange(p) ? (p.archived ? `<button type="button" class="btn small" data-restore="${escapeHtml(p.id)}">Restore</button>` : `<button type="button" class="btn small ghost" data-archive="${escapeHtml(p.id)}">Archive</button>`) : '<span class="hint">Made by someone else: open it, or ask them or an admin to change it.</span>'}</div>` : ''}
+      </div>`).join('') || `<p class="hint">${homeArchived ? 'Nothing archived.' : 'No projects here yet. Make one with “New project”.'}</p>`;
+    $('homeArchived').textContent = homeArchived ? 'Back to projects' : `Show archived${arch.length ? ` (${arch.length})` : ''}`;
+    $('homeNote').textContent = Projects.mode === 'artifact' ? 'Projects are shared with everyone who opens this page.' : Projects.mode === 'server' ? 'Projects are shared with everyone on this server; each one is a live room.' : 'Projects are kept in this browser.';
+    $('homeNewFolder').innerHTML = `<option value="">No folder</option>` + folders.map(f => `<option value="${escapeHtml(f.id)}" ${homeFolder === f.id ? 'selected' : ''}>${escapeHtml(f.name)}</option>`).join('');
+  }
+  Projects.on(() => { renderHome(); if (PROJ.id) renderProjectName(); });
+  const guardHome = async fn => { try { await fn(); } catch (e) { toast(e && e.message ? e.message : String(e)); } renderHome(); };
+  $('homeView').addEventListener('click', async e => {
+    const t = e.target;
+    const f = t.closest('[data-folder]'); if (f && !t.closest('[data-pop]')) { homeFolder = f.dataset.folder; homeArchived = false; LS.set('lg.homeFolder', homeFolder); folderMenu = null; renderHome(); return; }
+    const fm = t.closest('[data-folder-menu]'); if (fm) { folderMenu = folderMenu === fm.dataset.folderMenu ? null : fm.dataset.folderMenu; renderHome(); return; }
+    const fr = t.closest('[data-folder-rename]'); if (fr) { const inp = $('homeSide').querySelector(`[data-folder-name="${CSS.escape(fr.dataset.folderRename)}"]`); folderMenu = null; await guardHome(() => Projects.renameFolder(fr.dataset.folderRename, inp.value)); return; }
+    const frm = t.closest('[data-folder-remove]'); if (frm) { folderMenu = null; if (homeFolder === frm.dataset.folderRemove) homeFolder = ''; await guardHome(() => Projects.removeFolder(frm.dataset.folderRemove)); return; }
+    if (t.closest('#homeAddFolder')) { const inp = $('homeFolderNew'); const name = inp.value.trim(); if (!name) { inp.focus(); return; } await guardHome(async () => { const f = await Projects.createFolder(name); homeFolder = f.id; LS.set('lg.homeFolder', homeFolder); }); return; }
+    if (t.closest('#homeNewBtn')) { $('homeNew').hidden = false; $('homeNewName').value = ''; $('homeNewName').focus(); return; }
+    if (t.closest('#homeCancel')) { $('homeNew').hidden = true; return; }
+    if (t.closest('#homeCreate')) { await createProjectFromForm(); return; }
+    if (t.closest('#homeArchived')) { homeArchived = !homeArchived; homeMenu = null; renderHome(); return; }
+    const m = t.closest('[data-menu]'); if (m) { homeMenu = homeMenu === m.dataset.menu ? null : m.dataset.menu; renderHome(); const inp = $('homeGrid').querySelector('[data-rename]'); if (inp) { inp.focus(); inp.select(); } return; }
+    if (t.closest('[data-pop]')) {
+      const ar = t.closest('[data-archive]'); if (ar) { homeMenu = null; await guardHome(() => Projects.remove(ar.dataset.archive)); toast('Project archived (Show archived brings it back)'); return; }
+      const rs = t.closest('[data-restore]'); if (rs) { homeMenu = null; await guardHome(() => Projects.restore(rs.dataset.restore)); return; }
+      return;
+    }
+    const card = t.closest('[data-open]'); if (card) { homeMenu = null; await openProject(card.dataset.open); }
+  });
+  $('homeView').addEventListener('change', async e => {
+    const t = e.target;
+    if (t.dataset.move != null) { await guardHome(() => Projects.update(t.dataset.move, { folder: t.value })); return; }
+  });
+  $('homeView').addEventListener('keydown', async e => {
+    const t = e.target; e.stopPropagation();
+    if (e.key === 'Enter' && t.dataset.rename != null) { const id = t.dataset.rename; homeMenu = null; await guardHome(() => Projects.update(id, { name: t.value.trim() || 'Untitled project' })); if (id === PROJ.id) renderProjectName(); return; }
+    if (e.key === 'Enter' && t.id === 'homeNewName') { await createProjectFromForm(); return; }
+    if (e.key === 'Enter' && t.id === 'homeFolderNew') { $('homeAddFolder').click(); return; }
+    if (e.key === 'Enter' && t.dataset.folderName != null) { $('homeSide').querySelector(`[data-folder-rename="${CSS.escape(t.dataset.folderName)}"]`).click(); return; }
+    if (e.key === 'Escape') { homeMenu = null; folderMenu = null; $('homeNew').hidden = true; renderHome(); return; }
+    if (e.key === 'Enter' && t.classList.contains('home-card')) { await openProject(t.dataset.open); }
+  });
+  $('homeSearch').addEventListener('input', e => { homeQ = e.target.value.trim().toLowerCase(); renderHome(); });
+  async function createProjectFromForm() {
+    const name = $('homeNewName').value.trim(); if (!name) { $('homeNewName').focus(); return; }
+    const folder = $('homeNewFolder').value || '';
+    await guardHome(async () => { const p = await Projects.create({ name, folder }); $('homeNew').hidden = true; Stats.track('project.create', { project: p.id, detail: name }); await openProject(p.id); toast(`${name} created. Generate layouts, import, or draw a frame to begin.`); });
+  }
+
+  // ---- Admin ------------------------------------------------------------------------------------------------------------
+  Admin.bind($('adminModal'), { download: (blob, name) => Render.download(blob, name) });
+  $('adminBtn').addEventListener('click', () => Admin.open());
+  function updateAdminButton() { $('adminBtn').hidden = !LibStore.role().admin; }
+  LibStore.on(updateAdminButton);
+
   (async () => {
-    if (await Sync.startArtifact()) return;
-    serverHere = await Sync.serverAvailable();
-    if (serverHere) { const room = Sync.roomFromUrl(); if (room) { if (!Sync.me.name) Sync.setName('Guest ' + Sync.me.id.slice(-3).toUpperCase()); Sync.joinServer(room); if (state.mode !== 'canvas') setMode('canvas'); } }
-    renderPeers(Sync.status, Sync.peers);
+    if (!Sync.canArtifact()) serverHere = await Sync.serverAvailable();
+    await Promise.all([Projects.start(), Stats.start()]);
+    await Projects.whenReady(5000);
+    await startProject();
+    renderPeers(Sync.status, Sync.peers); renderHome(); updateAdminButton();
   })();
 
   $('cvFrameFormat').innerHTML = Grid.FORMATS.map(f => `<option value="${f.id}" ${f.id === 'slide' ? 'selected' : ''}>${f.name}</option>`).join('');
@@ -989,8 +1131,8 @@
     if (!$('prompt').value) $('prompt').value = savedMode === 'deck' ? '8-slide launch deck for Deel Global Payroll' : 'Launch posts for Deel Global Payroll, bold, image-led, square and story';
     if (savedMode === 'deck') setMode('deck');
     updateCanvasBadge();
-    if (savedMode === 'canvas') { await ensureDemoImages(false); await loadFonts(state.kit); setMode('canvas'); return; }
-    await generate($('prompt').value);
+    if (savedMode === 'canvas' || savedMode === 'home') { await ensureDemoImages(false); await loadFonts(state.kit); setMode(savedMode); return; }
+    await generate($('prompt').value, { auto: true });
   }
   init();
 })();

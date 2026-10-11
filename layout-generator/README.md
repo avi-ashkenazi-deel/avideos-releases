@@ -52,6 +52,24 @@ Switch the top-left toggle to **Deck**. The brief becomes an outline (one intent
 - **Consistency.** One background, text, and accent color for the whole deck; one type step; the logo stays in the same corner after the cover.
 - **Shuffle** regenerates one slide's variations; **Reshuffle deck** starts over with a new palette.
 
+## Home: projects and folders
+
+**Home** (first in the mode switch) is where people start: folders on the left (Brand, Product, Sales…), projects as cards with a cover, screen count, who made it and when it last changed. **＋ New project** names it, picks a folder and opens its canvas. Click the **⌂ project name** at the top of the canvas to go back.
+
+- Each project is its own canvas and, when shared, its own live room: people in different projects never see each other's cursors or edits.
+- The card menu (⋯) renames a project, moves it to a folder, or archives it (Show archived brings it back). Whoever made a project, the page owner and library admins can rename, move or archive it; everyone can open it.
+- In the published copy, projects are shared with everyone who opens the page; the canvas the page had before projects existed becomes **Shared canvas**, unchanged. On the server they are shared with everyone on it, and a project's link (`?room=<id>`) opens it directly. Opened from disk, they live in that browser.
+
+## Admin: who worked, when, on what
+
+**Admin** (top right, for library admins: the page owner and the admin list in claude.ai, people with `LG_ADMIN_KEY` on the server) shows the last 7, 30 or 90 days:
+
+- Totals: people who worked, time spent editing, projects worked on, projects made, screens made, generations, imports, exports, agent runs, library pieces used.
+- Per day: people active, actions, editing minutes.
+- **People:** each person, when they were last here, time, actions, which projects, what they mostly did. **Projects:** time, actions and who worked on each. **Latest actions:** who did what, when, in which project. **Export CSV** for all of it.
+
+How it is counted: each person's page keeps a month summary (counts per day and per project, minutes in which they touched the canvas, the last 120 actions) and saves it every 20 seconds while they work. In claude.ai it sits in their own part of the page's database, which only they and the page's Editors can read; on the server it is appended to `server/data/stats/<month>.jsonl`. Only action names, project ids and people's ids and names are kept, not content. The automatic demo generation when the page first opens is not counted.
+
 ## Canvas
 
 Pick layouts in Single mode (tick cards, or favorite them) or pick slides in Deck mode, then **Send to canvas**. The canvas is an infinite stage where every frame is one layout spec and editing the frame is editing that JSON.
@@ -182,11 +200,12 @@ curl http://127.0.0.1:8787/api/stats     # CPU, memory, message rates, event-loo
 - `LG_TOKEN` guards the MCP endpoint; the app itself relies on the platform's own sign-in (Okta in front of it). `LG_ADMIN_KEY` limits who edits shared libraries and who sees analytics.
 - Sizing: one process is one core. The numbers above leave room for a few hundred concurrent people spread over rooms per instance; bandwidth in one room grows with the square of its people (every edit and cursor goes to everyone), so keep rooms under about 150 people. For more, run several instances and route by room at the proxy (`?room=` in the URL, one instance per room set).
 - Memory: about 100 MB plus the open canvases (a 2,400-block canvas is about 0.6 MB).
+- Data on the volume: `rooms/` (one file per project), `libraries.json`, `projects.json`, `assets/` (pictures), `stats/` (usage, one line per summary save; a month of 50 active people is a few MB).
 
 ### Limits in the published copy (claude.ai)
 
 - The live room allows about 40 messages a second per person, shared between edits and cursors; the page sends at most 8 edit messages and 20 cursor moves a second, and gathers what arrives. Presence is complete up to 256 people.
-- The database holds documents of up to 256 KB (a screen with more than about 190 KB of blocks is split) and 5,000 documents per page in all: every screen, shared picture, library item (a full Deel UI import is 565 of them) and project counts. Keep one published page per team or product area rather than one for the whole company.
+- The database holds documents of up to 256 KB (a screen with more than about 190 KB of blocks is split) and 5,000 documents per page in all: every screen of every project, shared picture, library item (a full Deel UI import is 565 of them), project and each person's monthly usage summary counts. Keep one published page per team or product area rather than one for the whole company.
 - Measured on the same page with the runtime simulated (same canvas, everyone editing twice a second): 25 people editing at once, 16 ms average lag at 55 fps; 50 people, 33 ms at 46 fps; 100 people, 32 ms at 47 fps. The database's document count and per-person message budget, not the page, are the practical ceiling there; for big groups, host the server.
 
 ## Agent
@@ -284,6 +303,9 @@ js/autolayout.js    auto layout engine: boxes, stacks, Fixed/Hug/Fill, wrap, abs
 js/canvas-ui.js     canvas editor: stage, selection, tools, layers tree, properties, Simple/Advanced, export
 js/library.js       Library tab: sections per library, save/insert, the Libraries window (on/off, admins)
 js/libstore.js      shared libraries: claude.ai database, server /api/libraries, or this browser
+js/projects.js      Home: projects and folders (claude.ai database, server /api/projects, or this browser)
+js/stats.js         usage summaries per person and month; the admin report
+js/admin.js         Admin window: totals, per-day charts, people, projects, latest actions, CSV
 js/codekit.js       code components: manifest, stand-ins, props, React output
 js/trace.js         Rebuild as layers: an image read by Claude into editable layers and crops
 js/pptx-import.js   PowerPoint reader: slides, layouts, masters, theme, text, shapes, pictures, tables

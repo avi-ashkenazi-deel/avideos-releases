@@ -15,7 +15,7 @@ const CanvasUI = (() => {
   let layoutHold = null; // a frame whose layout pass waits while a block in one of its stacks is dragged
   let dropHint = null;   // where a dragged block would land: {frame, container, index, before, line, free, flatten}
   const folded = new Set(); // boxes collapsed in the layers panel
-  const hooks = { change: [], live: [], select: [], pointer: [] };
+  const hooks = { change: [], live: [], select: [], pointer: [], action: [] };
   const HANDLE = 7;
   const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const emit = (k, ...a) => { for (const fn of hooks[k]) { try { fn(...a); } catch (e) { console.error(e); } } };
@@ -24,7 +24,7 @@ const CanvasUI = (() => {
   // ---- Setup ------------------------------------------------------------------------------------
   function init(e) {
     env = e;
-    try { const saved = localStorage.getItem('lg.canvas'); doc = saved ? Canvas.deserialize(saved) : Canvas.create(); } catch { doc = Canvas.create(); }
+    try { const saved = localStorage.getItem(e.backupKey ? e.backupKey() : 'lg.canvas'); doc = saved ? Canvas.deserialize(saved) : Canvas.create(); } catch { doc = Canvas.create(); }
     hist = Canvas.history();
     bindStage(); bindToolbar(); bindKeys(); bindLayers(); bindProps();
     Canvas.fromHash(location.hash).then(d => { if (d) { doc = d; env.toast('Canvas loaded from link'); if (active) renderAll(); } }).catch(() => { });
@@ -37,7 +37,7 @@ const CanvasUI = (() => {
   // selected ones, the ones being dragged, and any the caller marks (dirty); structural changes are found by the
   // sync layer itself.
   let backupTimer = 0;
-  function backupNow() { backupTimer = 0; try { const s = Canvas.serialize(doc); if (s.length < 3_000_000) localStorage.setItem('lg.canvas', s); } catch { } }
+  function backupNow() { backupTimer = 0; try { const s = Canvas.serialize(doc); if (s.length < 3_000_000) localStorage.setItem(env.backupKey ? env.backupKey() : 'lg.canvas', s); } catch { } }
   function backupSoon() { if (!backupTimer) backupTimer = setTimeout(backupNow, 1000); }
   window.addEventListener('pagehide', () => { if (backupTimer) { clearTimeout(backupTimer); backupNow(); } });
   const dirty = new Set();
@@ -566,6 +566,7 @@ const CanvasUI = (() => {
   }
   // A blank frame of the toolbar's format (or a drawn custom size). With center, it lands in view on a free spot.
   function createFrame({ x, y, format, center, name, bg, history = true } = {}) {
+    emit('action', 'frame.create');
     const kit = env.getKit(); const fmt = format || Grid.byId[$('cvFrameFormat').value] || Grid.byId.slide;
     const bgs = kit.colors.filter(c => c.role === 'background').map(c => c.hex).sort((a, b) => Color.luminance(b) - Color.luminance(a));
     let fx = x ?? 0, fy = y ?? 0;
@@ -614,6 +615,7 @@ const CanvasUI = (() => {
   // selected screen (or the one in view). In a stack it joins the flow there.
   function insertComponent(blocks, opts = {}) {
     if (!blocks || !blocks.length) return null;
+    emit('action', 'library.insert', opts.name);
     let f = null, into = null, lp = null;
     if (opts.at) { f = frameAt(opts.at); if (f) lp = { x: opts.at.x - f.x, y: opts.at.y - f.y }; }
     if (!f) { f = selFrames().length === 1 ? selFrame() : null; const bs = f ? selBlocks() : []; if (bs.length === 1 && bs[0].kind === 'box') into = bs[0]; }
@@ -1406,7 +1408,7 @@ const CanvasUI = (() => {
       if (a === 'al-add') { addAutoLayout(); return; } if (a === 'al-remove') { removeAutoLayout(); return; }
       if (a === 'code-select' && f && bs[0]) { const root = CodeKit.ownerOf(f, bs[0]); if (root) select(f.id, [root.id]); return; }
       if (a === 'frame-sel') { frameSelection(); return; } if (a === 'unwrap') { unwrapSelection(); return; }
-      if (a === 'trace' && f && bs[0] && env.traceImage) { act.disabled = true; act.textContent = 'Reading the image…'; try { await env.traceImage(f, bs[0]); } catch (err) { env.toast(err.message || String(err)); } finally { act.disabled = false; act.textContent = '✦ Rebuild as layers'; } return; }
+      if (a === 'trace' && f && bs[0] && env.traceImage) { emit('action', 'trace'); act.disabled = true; act.textContent = 'Reading the image…'; try { await env.traceImage(f, bs[0]); } catch (err) { env.toast(err.message || String(err)); } finally { act.disabled = false; act.textContent = '✦ Rebuild as layers'; } return; }
       if (a === 'edit-palette') { select(null, []); const sec = el.querySelector('[data-palette]'); if (sec) { sec.open = true; sec.scrollIntoView({ block: 'start', behavior: 'smooth' }); } return; }
       if (a === 'add-color') { const colors = env.getKit().colors.map(c => ({ ...c })); colors.push({ name: 'Color ' + (colors.length + 1), hex: '#888888', role: 'accent' }); env.updateColors(colors); renderProps(); const rows = el.querySelectorAll('.cv-pal-row'); const last = rows.length ? rows[rows.length - 1].querySelector('input[type="text"]') : null; if (last) { last.focus(); last.select(); } return; }
       if (a === 'reset-palette') { if (env.resetColors()) { followTokens(); renderProps(); env.toast('Palette reset to the preset'); } else env.toast('This kit has no preset to reset to'); return; }
@@ -1417,9 +1419,9 @@ const CanvasUI = (() => {
       if (a === 'paste') { pasteClipboard(); return; }
       if (a === 'open-settings') { e.preventDefault(); env.openSettings(); return; }
       if (a === 'agent') { env.openAgent && env.openAgent(selection()); return; }
-      if (a.startsWith('exp-')) { act.disabled = true; try { await exportAction(a.slice(4)); } catch (err) { console.error(err); env.toast('Export failed: ' + err.message); } finally { act.disabled = false; } return; }
-      if (a === 'variations') { const n = +el.querySelector('[data-var="count"]').value; const mode = el.querySelector('[data-var="mode"]').value; act.disabled = true; act.textContent = '…'; try { await makeVariations(fs, n, mode); } finally { act.disabled = false; act.textContent = 'Make'; } return; }
-      if (a.startsWith('look-')) { const look = a.slice(5); const n = mutate(() => fs.filter(x => Looks.apply(x, look, env.getKit())).length, { frames: fs.map(x => x.id) }); renderProps(); env.toast(n ? `${n > 1 ? n + ' screens' : 'Screen'}: ${look}` : `Already ${look}`); return; }
+      if (a.startsWith('exp-')) { act.disabled = true; emit('action', 'export.' + a.slice(4).replace(/\d$/, '')); try { await exportAction(a.slice(4)); } catch (err) { console.error(err); env.toast('Export failed: ' + err.message); } finally { act.disabled = false; } return; }
+      if (a === 'variations') { emit('action', 'variations'); const n = +el.querySelector('[data-var="count"]').value; const mode = el.querySelector('[data-var="mode"]').value; act.disabled = true; act.textContent = '…'; try { await makeVariations(fs, n, mode); } finally { act.disabled = false; act.textContent = 'Make'; } return; }
+      if (a.startsWith('look-')) { const look = a.slice(5); emit('action', 'look.' + look); const n = mutate(() => fs.filter(x => Looks.apply(x, look, env.getKit())).length, { frames: fs.map(x => x.id) }); renderProps(); env.toast(n ? `${n > 1 ? n + ' screens' : 'Screen'}: ${look}` : `Already ${look}`); return; }
       if (a === 'tidy-row' || a === 'tidy-grid') { mutate(() => Canvas.tidy(fs, a === 'tidy-row' ? 'row' : 'grid')); return; }
       if (a === 'align-tops') { const y = Math.min(...fs.map(x => x.y)); mutate(() => fs.forEach(x => { x.y = y; })); return; }
       if (a === 'align-lefts') { const x = Math.min(...fs.map(v => v.x)); mutate(() => fs.forEach(v => { v.x = x; })); return; }
@@ -1476,6 +1478,7 @@ const CanvasUI = (() => {
     on: (k, fn) => { hooks[k].push(fn); return () => { hooks[k] = hooks[k].filter(x => x !== fn); }; },
     setPeers: list => { peers = Array.isArray(list) ? list : []; if (active) drawOverlay(); },
     markDirty: ids => { for (const id of ids || []) dirty.add(id); },
+    flushBackup: () => { if (backupTimer) { clearTimeout(backupTimer); backupNow(); } },
     setUndoMerge: fn => { undoMerge = fn; },
     _history: () => hist,
   };

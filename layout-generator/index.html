@@ -21,6 +21,7 @@
     </div>
     <form id="promptForm" class="promptbar" autocomplete="off">
       <div class="seg" id="modeSeg" role="group" aria-label="Mode">
+        <button type="button" data-mode="home">Home</button>
         <button type="button" data-mode="single" class="on">Single</button>
         <button type="button" data-mode="deck">Deck</button>
         <button type="button" data-mode="canvas">Canvas <span id="canvasBadge" class="badge" hidden></span></button>
@@ -31,6 +32,7 @@
     </form>
     <div class="topbar-right">
       <button id="aboutBtn" class="btn ghost" type="button">Why this works</button>
+      <button id="adminBtn" class="btn ghost" type="button" title="Who worked, when, on what" hidden>Admin</button>
       <button id="settingsBtn" class="btn ghost" type="button" title="Interpreter settings">Settings</button>
     </div>
   </header>
@@ -178,6 +180,15 @@
     </div>
     <div id="deckView" class="deck" hidden></div>
     <div id="gallery" class="gallery" aria-live="polite"></div>
+    <section id="homeView" class="home" hidden>
+      <aside class="home-side" id="homeSide"></aside>
+      <div class="home-main">
+        <div class="home-head"><h2 id="homeTitle">Projects</h2><input id="homeSearch" class="input" type="search" placeholder="Search projects" aria-label="Search projects"><button id="homeNewBtn" class="btn primary" type="button">＋ New project</button></div>
+        <div id="homeNew" class="home-new" hidden><input id="homeNewName" class="input grow" type="text" placeholder="Project name, e.g. Payroll launch" maxlength="80"><select id="homeNewFolder" class="input" aria-label="Folder"></select><button id="homeCreate" class="btn primary" type="button">Create</button><button id="homeCancel" class="btn ghost" type="button">Cancel</button></div>
+        <div id="homeGrid" class="home-grid"></div>
+        <p class="hint home-foot"><button id="homeArchived" class="btn small ghost" type="button">Show archived</button> <span id="homeNote"></span></p>
+      </div>
+    </section>
     <div id="canvasView" class="cv" hidden>
       <div class="cv-toolbar">
         <div class="cv-tools" id="cvTools">
@@ -206,6 +217,7 @@
           <span id="cvCount" class="hint"></span>
         </div>
         <div class="cv-right">
+          <button id="cvProject" class="btn small ghost cv-project" type="button" title="All projects (Home)">⌂ Project</button>
           <button id="cvUndo" class="btn small" type="button" title="Undo (⌘Z)" disabled>Undo</button>
           <button id="cvRedo" class="btn small" type="button" title="Redo (⇧⌘Z)" disabled>Redo</button>
           <button id="cvAgent" class="btn small agent-btn" type="button" data-tip="Ask Claude to change the canvas · ⌘K">✦ Agent</button>
@@ -354,6 +366,16 @@
     </div>
   </div>
 
+  <div id="adminModal" class="modal" hidden>
+    <div class="modal-inner about admin-modal">
+      <div class="detail-head">
+        <h3>Admin · who worked, when, on what</h3>
+        <button class="btn ghost icon" data-admin-close type="button" aria-label="Close">✕</button>
+      </div>
+      <div class="prose admin-body"></div>
+    </div>
+  </div>
+
   <div id="about" class="modal" hidden>
     <div class="modal-inner about">
       <div class="detail-head">
@@ -416,6 +438,9 @@
 <script src="js/libstore.js"></script>
 <script src="js/codekit.js"></script>
 <script src="js/library.js"></script>
+<script src="js/projects.js"></script>
+<script src="js/stats.js"></script>
+<script src="js/admin.js"></script>
 <script src="js/sync.js"></script>
 <script src="js/tool-defs.js"></script>
 <script src="js/agent-tools.js"></script>

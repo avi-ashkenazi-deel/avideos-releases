@@ -241,6 +241,7 @@ const Library = (() => {
     const category = /card/i.test(name) ? 'cards' : /illus|art|shape/i.test(name) ? 'illustrations' : /phone|device|browser/i.test(name) ? 'devices' : /logo/i.test(name) ? 'logos' : 'components';
     const item = fromSelection(f, blocks, name, category); item.by = env.me ? env.me() : '';
     if (bindTo) bindCode(item, bindTo);
+    if (env.track) env.track('library.save', item.name);
     if (dest === 'canvas') { env.canvas.mutate(d2 => { d2.library = [...(d2.library || []), item]; }, { history: true }); render(); env.toast(`Saved “${item.name}” to This canvas`); return; }
     env.toast('Saving to the shared library…');
     const saved = await LibStore.putItem({ ...item, lib: dest, id: undefined });

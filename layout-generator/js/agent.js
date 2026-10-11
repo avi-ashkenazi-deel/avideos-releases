@@ -109,6 +109,7 @@ Change the canvas with the tools; the person sees each change live and can undo 
   // ---- runs -----------------------------------------------------------------------------------------------------------
   async function send(text) {
     if (busy) return; const m = mode();
+    if (env && env.onRun) { try { env.onRun(text); } catch { } }
     if ($('agentPanel').hidden) show();
     bubble('user', text); const box = bubble('assistant');
     if (!m) { setText(box, 'Add an Anthropic API key in Settings to use the agent here, or open the published page on claude.ai where it runs on your account.'); return; }
