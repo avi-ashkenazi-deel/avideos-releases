@@ -701,7 +701,7 @@
     if (mode === 'palette' || !isEngineLayout(L)) {
       const cur = Color.normalize(L.palette.bg);
       const pairs = RNG.make(seed).shuffle(Brand.pairs(kit).filter(p => p.bg !== cur));
-      for (const p of pairs.slice(0, count)) { const tmp = { layout: Canvas.clone(L) }; Canvas.recolor(tmp, { bg: p.bg, fg: p.fgs[0], accent: p.accents[0], bgName: p.bgName }); tmp.layout.palette.bgToken = p.bgName; tmp.layout.id = (L.id || 'v') + '-' + p.bgName.replace(/\W+/g, ''); out.push(tmp.layout); }
+      for (const p of pairs.slice(0, count)) { const tmp = { layout: Canvas.clone(L) }; Canvas.recolor(tmp, { bg: p.bg, fg: p.fgs[0], accent: p.accents[0], bgName: p.bgName, colors: state.kit.colors.map(c => c.hex) }); tmp.layout.palette.bgToken = p.bgName; tmp.layout.id = (L.id || 'v') + '-' + p.bgName.replace(/\W+/g, ''); out.push(tmp.layout); }
       return out;
     }
     const intent = { ...state.intent, content: Canvas.extractContent(L), slideIntent: L.slideIntent || undefined, formats: [L.format.id] };

@@ -371,11 +371,16 @@ const Canvas = (() => {
   // ---- Batch edits for one or many frames -------------------------------------------------------------------------
   const norm = v => { try { return Color.normalize(v); } catch { return null; } };
   // Swap a frame's palette: every fill that matched the old bg, fg or accent takes the new one.
+  // Swap a frame's palette: every fill that matched the old bg, fg or accent takes the new one. "none" (no fill) is not
+  // a color and stays. With to.colors (the brand's colors), text that ends up unreadable on whatever sits behind it (its
+  // card, its box, the screen) then takes the most readable of those colors; imported files carry colors the palette
+  // does not name, so the swap alone cannot know them.
+  const isColor = v => typeof v === 'string' && /^(#[0-9a-fA-F]{3,8}|rgba?\()/.test(v.trim());
   function recolor(frame, to) {
     const L = frame.layout; const from = { ...L.palette };
     const map = new Map();
     for (const k of ['bg', 'fg', 'accent']) { const a = norm(from[k]), b = norm(to[k]); if (a && b && !map.has(a)) map.set(a, b); }
-    const sw = v => { const k = norm(v); return k && map.has(k) ? map.get(k) : v; };
+    const sw = v => { if (!isColor(v)) return v; const k = norm(v); return k && map.has(k) ? map.get(k) : v; };
     for (const b of L.blocks) {
       if (b.fill) b.fill = sw(b.fill); if (b.color) b.color = sw(b.color);
       if (b.gradient && b.gradient.stops) b.gradient.stops.forEach(st => { st.c = sw(st.c); });
@@ -384,6 +389,42 @@ const Canvas = (() => {
     }
     L.palette = { ...L.palette, bg: norm(to.bg) || L.palette.bg, fg: norm(to.fg) || L.palette.fg, accent: norm(to.accent) || L.palette.accent, bgName: to.bgName || L.palette.bgName };
     delete L.palette.bgToken;
+    if (Array.isArray(to.colors) && to.colors.length) return fixContrast(frame, to.colors.map(norm).filter(Boolean));
+    return 0;
+  }
+  // What a block is read against: its nearest filled box, else the last filled shape painted under its centre, else
+  // the screen. null when a picture is under it (nothing to judge by).
+  function backdropOf(frame, b, order) {
+    const L = frame.layout; const byId = new Map(L.blocks.map(x => [x.id, x]));
+    const solid = s => s && !s.hidden && (s.opacity ?? 1) > 0.5 && (s.alpha ?? 1) > 0.5 && ((s.gradient && s.gradient.stops && s.gradient.stops.length) || isColor(s.fill));
+    const colorOf = s => s.gradient && s.gradient.stops && s.gradient.stops.length ? s.gradient.stops[Math.floor(s.gradient.stops.length / 2)].c : s.fill;
+    const seen = new Set(); let cur = b.parent ? byId.get(b.parent) : null;
+    while (cur && !seen.has(cur.id)) { seen.add(cur.id); if (cur.kind === 'box' && solid(cur)) return norm(colorOf(cur)); cur = cur.parent ? byId.get(cur.parent) : null; }
+    const cx = b.x + b.w / 2, cy = b.y + b.h / 2; const at = order.indexOf(b);
+    for (let i = at - 1; i >= 0; i--) {
+      const s = order[i]; if (s.hidden || s.kind === 'text' || s.kind === 'list' || s.kind === 'icon' || s.kind === 'vector' || s.kind === 'line' || s.kind === 'rule') continue;
+      if (!(cx >= s.x && cx <= s.x + s.w && cy >= s.y && cy <= s.y + s.h)) continue;
+      if (s.kind === 'image') return s.asset ? null : norm(s.placeholder || '#D6D3E4');
+      if (solid(s)) return norm(colorOf(s));
+    }
+    const P = L.palette; return norm(P.bgGradient && P.bgGradient.stops ? P.bgGradient.stops[0].c : P.bg);
+  }
+  function fixContrast(frame, colors) {
+    const order = typeof Auto !== 'undefined' ? Auto.paintOrder(frame) : frame.layout.blocks; let n = 0;
+    const big = b => b.font && (b.font.size >= 24 || (b.font.size >= 19 && b.font.weight >= 600));
+    for (const b of order) {
+      if (b.hidden) continue;
+      if (b.kind === 'text' || b.kind === 'list') {
+        if (!isColor(b.fill) || b.gradient) continue; const bg = backdropOf(frame, b, order); if (!bg) continue;
+        const need = big(b) ? 3 : 4.5; if (Color.contrast(bg, norm(b.fill)) >= need) continue;
+        b.fill = Color.bestForeground(bg, colors, need)[0]; delete b.fillToken; n++;
+      } else if (b.kind === 'button' && isColor(b.fill) && isColor(b.color)) {
+        if (Color.contrast(norm(b.fill), norm(b.color)) >= 4.5) continue; b.color = Color.bestForeground(norm(b.fill), colors, 4.5)[0]; delete b.colorToken; n++;
+      } else if ((b.kind === 'line' || b.kind === 'rule') && isColor(b.fill)) {
+        const bg = backdropOf(frame, b, order); if (!bg || Color.contrast(bg, norm(b.fill)) >= 1.5) continue; b.fill = Color.bestForeground(bg, colors, 3)[0]; n++;
+      }
+    }
+    return n;
   }
   // The copy a layout carries, rebuilt from its blocks' content paths (what Engine.hydrate takes back).
   function extractContent(layout) {
@@ -455,11 +496,13 @@ const Canvas = (() => {
     }
     return n;
   }
-  const DISPLAY_ROLES = /^(headline|stat|eyebrow|quote|title|text)$/;
+  const DISPLAY_ROLES = /^(headline|stat|eyebrow|quote|title)$/;
   function setFonts(frames, { display, body, kit }) {
     for (const f of frames) for (const b of f.layout.blocks) {
       if (!b.font || !(b.kind === 'text' || b.kind === 'list' || b.kind === 'button' || b.kind === 'badge')) continue;
-      const isDisplay = b.kind === 'text' && DISPLAY_ROLES.test(b.role || 'text') && b.role !== 'body';
+      // headlines, numbers, eyebrows and quotes take the display font; plain text only when it is set large
+      const role = b.role || 'text';
+      const isDisplay = b.kind === 'text' && role !== 'body' && (DISPLAY_ROLES.test(role) || (role === 'text' && b.font.size >= 40));
       const name = isDisplay ? display : body; if (!name) continue;
       b.font.family = Brand.fontCss(name);
       const ws = Brand.fontWeights(name); if (!ws.includes(b.font.weight)) b.font.weight = ws.reduce((p, c) => Math.abs(c - b.font.weight) < Math.abs(p - b.font.weight) ? c : p, ws[0]);

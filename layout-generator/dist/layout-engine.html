@@ -5494,11 +5494,16 @@ const Canvas = (() => {
   // ---- Batch edits for one or many frames -------------------------------------------------------------------------
   const norm = v => { try { return Color.normalize(v); } catch { return null; } };
   // Swap a frame's palette: every fill that matched the old bg, fg or accent takes the new one.
+  // Swap a frame's palette: every fill that matched the old bg, fg or accent takes the new one. "none" (no fill) is not
+  // a color and stays. With to.colors (the brand's colors), text that ends up unreadable on whatever sits behind it (its
+  // card, its box, the screen) then takes the most readable of those colors; imported files carry colors the palette
+  // does not name, so the swap alone cannot know them.
+  const isColor = v => typeof v === 'string' && /^(#[0-9a-fA-F]{3,8}|rgba?\()/.test(v.trim());
   function recolor(frame, to) {
     const L = frame.layout; const from = { ...L.palette };
     const map = new Map();
     for (const k of ['bg', 'fg', 'accent']) { const a = norm(from[k]), b = norm(to[k]); if (a && b && !map.has(a)) map.set(a, b); }
-    const sw = v => { const k = norm(v); return k && map.has(k) ? map.get(k) : v; };
+    const sw = v => { if (!isColor(v)) return v; const k = norm(v); return k && map.has(k) ? map.get(k) : v; };
     for (const b of L.blocks) {
       if (b.fill) b.fill = sw(b.fill); if (b.color) b.color = sw(b.color);
       if (b.gradient && b.gradient.stops) b.gradient.stops.forEach(st => { st.c = sw(st.c); });
@@ -5507,6 +5512,42 @@ const Canvas = (() => {
     }
     L.palette = { ...L.palette, bg: norm(to.bg) || L.palette.bg, fg: norm(to.fg) || L.palette.fg, accent: norm(to.accent) || L.palette.accent, bgName: to.bgName || L.palette.bgName };
     delete L.palette.bgToken;
+    if (Array.isArray(to.colors) && to.colors.length) return fixContrast(frame, to.colors.map(norm).filter(Boolean));
+    return 0;
+  }
+  // What a block is read against: its nearest filled box, else the last filled shape painted under its centre, else
+  // the screen. null when a picture is under it (nothing to judge by).
+  function backdropOf(frame, b, order) {
+    const L = frame.layout; const byId = new Map(L.blocks.map(x => [x.id, x]));
+    const solid = s => s && !s.hidden && (s.opacity ?? 1) > 0.5 && (s.alpha ?? 1) > 0.5 && ((s.gradient && s.gradient.stops && s.gradient.stops.length) || isColor(s.fill));
+    const colorOf = s => s.gradient && s.gradient.stops && s.gradient.stops.length ? s.gradient.stops[Math.floor(s.gradient.stops.length / 2)].c : s.fill;
+    const seen = new Set(); let cur = b.parent ? byId.get(b.parent) : null;
+    while (cur && !seen.has(cur.id)) { seen.add(cur.id); if (cur.kind === 'box' && solid(cur)) return norm(colorOf(cur)); cur = cur.parent ? byId.get(cur.parent) : null; }
+    const cx = b.x + b.w / 2, cy = b.y + b.h / 2; const at = order.indexOf(b);
+    for (let i = at - 1; i >= 0; i--) {
+      const s = order[i]; if (s.hidden || s.kind === 'text' || s.kind === 'list' || s.kind === 'icon' || s.kind === 'vector' || s.kind === 'line' || s.kind === 'rule') continue;
+      if (!(cx >= s.x && cx <= s.x + s.w && cy >= s.y && cy <= s.y + s.h)) continue;
+      if (s.kind === 'image') return s.asset ? null : norm(s.placeholder || '#D6D3E4');
+      if (solid(s)) return norm(colorOf(s));
+    }
+    const P = L.palette; return norm(P.bgGradient && P.bgGradient.stops ? P.bgGradient.stops[0].c : P.bg);
+  }
+  function fixContrast(frame, colors) {
+    const order = typeof Auto !== 'undefined' ? Auto.paintOrder(frame) : frame.layout.blocks; let n = 0;
+    const big = b => b.font && (b.font.size >= 24 || (b.font.size >= 19 && b.font.weight >= 600));
+    for (const b of order) {
+      if (b.hidden) continue;
+      if (b.kind === 'text' || b.kind === 'list') {
+        if (!isColor(b.fill) || b.gradient) continue; const bg = backdropOf(frame, b, order); if (!bg) continue;
+        const need = big(b) ? 3 : 4.5; if (Color.contrast(bg, norm(b.fill)) >= need) continue;
+        b.fill = Color.bestForeground(bg, colors, need)[0]; delete b.fillToken; n++;
+      } else if (b.kind === 'button' && isColor(b.fill) && isColor(b.color)) {
+        if (Color.contrast(norm(b.fill), norm(b.color)) >= 4.5) continue; b.color = Color.bestForeground(norm(b.fill), colors, 4.5)[0]; delete b.colorToken; n++;
+      } else if ((b.kind === 'line' || b.kind === 'rule') && isColor(b.fill)) {
+        const bg = backdropOf(frame, b, order); if (!bg || Color.contrast(bg, norm(b.fill)) >= 1.5) continue; b.fill = Color.bestForeground(bg, colors, 3)[0]; n++;
+      }
+    }
+    return n;
   }
   // The copy a layout carries, rebuilt from its blocks' content paths (what Engine.hydrate takes back).
   function extractContent(layout) {
@@ -5578,11 +5619,13 @@ const Canvas = (() => {
     }
     return n;
   }
-  const DISPLAY_ROLES = /^(headline|stat|eyebrow|quote|title|text)$/;
+  const DISPLAY_ROLES = /^(headline|stat|eyebrow|quote|title)$/;
   function setFonts(frames, { display, body, kit }) {
     for (const f of frames) for (const b of f.layout.blocks) {
       if (!b.font || !(b.kind === 'text' || b.kind === 'list' || b.kind === 'button' || b.kind === 'badge')) continue;
-      const isDisplay = b.kind === 'text' && DISPLAY_ROLES.test(b.role || 'text') && b.role !== 'body';
+      // headlines, numbers, eyebrows and quotes take the display font; plain text only when it is set large
+      const role = b.role || 'text';
+      const isDisplay = b.kind === 'text' && role !== 'body' && (DISPLAY_ROLES.test(role) || (role === 'text' && b.font.size >= 40));
       const name = isDisplay ? display : body; if (!name) continue;
       b.font.family = Brand.fontCss(name);
       const ws = Brand.fontWeights(name); if (!ws.includes(b.font.weight)) b.font.weight = ws.reduce((p, c) => Math.abs(c - b.font.weight) < Math.abs(p - b.font.weight) ? c : p, ws[0]);
@@ -7320,7 +7363,7 @@ const CanvasUI = (() => {
     const kit = env.getKit(); const cols = kit.colors.map(c => toHex(c.hex));
     const fg = Color.bestForeground(hex, cols, 4.5)[0];
     const acc = (kit.colors.find(c => (c.role === 'accent' || c.role === 'core') && toHex(c.hex) !== hex && Color.contrast(hex, c.hex) >= 3) || { hex: fg }).hex;
-    Canvas.recolor(f, { bg: hex, fg, accent: toHex(acc), bgName: name || f.layout.palette.bgName });
+    Canvas.recolor(f, { bg: hex, fg, accent: toHex(acc), bgName: name || f.layout.palette.bgName, colors: cols });
     if (name) f.layout.palette.bgToken = name;
   }
   function applySwatch(k, hex, name) {
@@ -7406,7 +7449,7 @@ const CanvasUI = (() => {
     el.addEventListener('click', async e => {
       const f = selFrame(); const bs = selBlocks(); const fs = selFrames();
       const sw = e.target.closest('[data-sw]'); if (sw) { applySwatch(sw.dataset.for, sw.dataset.sw, sw.dataset.swName); return; }
-      const pr = e.target.closest('[data-pair]'); if (pr) { const p = Brand.pairs(env.getKit())[+pr.dataset.pair]; if (p && fs.length) { mutate(() => fs.forEach(fr => { Canvas.recolor(fr, { bg: p.bg, fg: p.fgs[0], accent: p.accents[0], bgName: p.bgName }); fr.layout.palette.bgToken = p.bgName; }), { frames: fs.map(x => x.id) }); env.toast(`${fs.length > 1 ? fs.length + ' screens' : 'Screen'} on ${p.bgName}`); } return; }
+      const pr = e.target.closest('[data-pair]'); if (pr) { const p = Brand.pairs(env.getKit())[+pr.dataset.pair]; if (p && fs.length) { mutate(() => fs.forEach(fr => { Canvas.recolor(fr, { bg: p.bg, fg: p.fgs[0], accent: p.accents[0], bgName: p.bgName, colors: env.getKit().colors.map(c => c.hex) }); fr.layout.palette.bgToken = p.bgName; }), { frames: fs.map(x => x.id) }); env.toast(`${fs.length > 1 ? fs.length + ' screens' : 'Screen'} on ${p.bgName}`); } return; }
       const palRm = e.target.closest('[data-pal="rm"]'); if (palRm) { const colors = env.getKit().colors.filter((_, i) => i !== +palRm.dataset.i); env.updateColors(colors); followTokens(); renderProps(); return; }
       const al = e.target.closest('[data-align]'); if (al && f) { hist.push(doc); Canvas.align(f, bs.length ? bs : [], al.dataset.align); rerenderFrame(f); drawOverlay(); liveProps(); persist(); updateUndo(); return; }
       const add = e.target.closest('[data-add]'); if (add && f) { hist.push(doc); const b = add.dataset.add === 'stack' ? { id: Canvas.uid(), kind: 'box', x: f.layout.grid.mx, y: f.layout.grid.my, w: 480, h: 240, fill: 'none', radius: 0, clip: false, decorative: true, hidden: false, locked: false, sizeW: 'fixed', sizeH: 'hug', auto: { v: 2, mode: 'vertical', wrap: false, gap: 16, gapAuto: false, counterGap: 16, counterGapAuto: false, pad: { t: 24, r: 24, b: 24, l: 24 }, main: 'start', cross: 'start' } } : Canvas.newBlock(add.dataset.add, f, env.getKit(), null); if (b) { f.layout.blocks.push(b); const sb = selBlocks(); const host = sb.length === 1 && sb[0].kind === 'box' ? sb[0] : null; if (host) { b.parent = host.id; if (Auto.on(Auto.settingsOf(f, host))) { Auto.moveInList(f, b, host.id, null); if ((b.kind === 'text' || b.kind === 'list') && Auto.settingsOf(f, host).mode === 'vertical') b.sizeW = 'fill'; } } else if (Auto.on(Auto.settingsOf(f, null))) Auto.moveInList(f, b, '', null); select(f.id, [b.id]); rerenderFrame(f); persist(); updateUndo(); if (b.kind === 'image') { const inp = $('cvProps').querySelector('[data-file="image"]'); if (inp) inp.click(); } } return; }
@@ -9049,24 +9092,24 @@ const TOOL_DEFS = [
   { name: 'get_screenshot', description: 'A PNG of one screen, to check how it looks after changes.', inputSchema: { type: 'object', properties: { frame_id: { type: 'string' }, scale: { type: 'number', description: '0.25 to 1, default 0.5' } }, required: ['frame_id'] } },
   { name: 'get_code', description: 'One screen as code: React with Tailwind classes, or plain HTML/CSS.', inputSchema: { type: 'object', properties: { frame_id: { type: 'string' }, format: { type: 'string', enum: ['react', 'html'] } }, required: ['frame_id'] } },
   { name: 'select', description: 'Select screens, or blocks inside one screen, so the person sees what you mean.', inputSchema: { type: 'object', properties: { frame_ids: { type: 'array', items: { type: 'string' } }, block_ids: { type: 'array', items: { type: 'string' }, description: 'Only with exactly one frame id' } } } },
-  { name: 'update_blocks', core: true, description: 'Change blocks. Each update names frame_id, block_id and the props to set: text, items, x, y, w, h, fill (hex or brand color name), color (button label), font_size, font_weight, font_family, line_height, letter_spacing, align, case, opacity, radius, rotation, hidden, label, shadow, stroke, gradient, z, size_w / size_h (fixed, hug, fill: sizing inside a stack), absolute (true: ignore the stack), variant and product (logo: wordmark, symbol, appicon, lockup). Returns overflow ids when text no longer fits its box.',
+  { name: 'update_blocks', core: true, description: 'Change blocks. Each update names frame_id, block_id and the props to set: text, items, x, y, w, h, fill (hex or brand color name; \"none\" for no fill on boxes and rectangles), color (button label), font_size, font_weight, font_family, line_height (multiple of the size, e.g. 1.2), letter_spacing (in em, e.g. 0.02; 0.1 is already wide), align, case, opacity, radius, rotation, hidden, label, shadow, stroke, gradient, z, size_w / size_h (fixed, hug, fill: sizing inside a stack), absolute (true: ignore the stack), variant and product (logo: wordmark, symbol, appicon, lockup). Returns overflow ids when text no longer fits its box.',
     inputSchema: { type: 'object', properties: { updates: { type: 'array', items: { type: 'object', properties: { frame_id: { type: 'string' }, block_id: { type: 'string' }, props: { type: 'object', description: 'e.g. {"text":"New headline","font_size":72} or {"fill":"Acai"} or {"shadow":{"y":8,"blur":24,"alpha":0.2}} or {"gradient":{"type":"linear","angle":180,"stops":["#5938B8","#191A25"]}} or {"z":"front"}' } }, required: ['frame_id', 'block_id', 'props'] } } }, required: ['updates'] } },
   { name: 'add_blocks', core: true, description: 'Add blocks to a screen. kind is text, body, button, rect, ellipse, image, icon or logo; then any props update_blocks takes. Returns the new block ids.',
     inputSchema: { type: 'object', properties: { frame_id: { type: 'string' }, blocks: { type: 'array', items: { type: 'object', properties: { kind: { type: 'string', enum: ['text', 'body', 'button', 'rect', 'ellipse', 'image', 'icon', 'logo'] }, props: { type: 'object' } }, required: ['kind'] } } }, required: ['frame_id', 'blocks'] } },
   { name: 'delete_blocks', core: true, description: 'Remove blocks from a screen.', inputSchema: { type: 'object', properties: { frame_id: { type: 'string' }, block_ids: { type: 'array', items: { type: 'string' } } }, required: ['frame_id', 'block_ids'] } },
   { name: 'create_frame', description: 'Add a blank screen. format is one of square, story, linkedin, x, slide, portrait, poster, banner; or give width and height. Returns its id.', inputSchema: { type: 'object', properties: { format: { type: 'string' }, width: { type: 'number' }, height: { type: 'number' }, name: { type: 'string' }, background: { type: 'string', description: 'hex or brand color name' } } } },
   { name: 'update_frames', core: true, description: 'Rename, move or recolor the background of screens. Each update: frame_id plus name, x, y, background (hex or brand color name).', inputSchema: { type: 'object', properties: { updates: { type: 'array', items: { type: 'object', properties: { frame_id: { type: 'string' }, name: { type: 'string' }, x: { type: 'number' }, y: { type: 'number' }, background: { type: 'string' } }, required: ['frame_id'] } } }, required: ['updates'] } },
-  { name: 'duplicate_frames', core: true, description: 'Copy screens next to the originals. Returns the new frame ids, in order.', inputSchema: { type: 'object', properties: { frame_ids: { type: 'array', items: { type: 'string' } }, copies: { type: 'number', description: '1 to 6 copies of each, default 1' } }, required: ['frame_ids'] } },
+  { name: 'duplicate_frames', core: true, description: 'Copy screens, keeping their arrangement. They land at x, y (top left of the copied group) when given, else in free space below everything on the canvas. name_prefix names the copies (e.g. "A · " gives "A · <original name>"). Returns frame_ids and, per copy, its original (from), position and a map from the original block ids to the copy\'s block ids.', inputSchema: { type: 'object', properties: { frame_ids: { type: 'array', items: { type: 'string' } }, copies: { type: 'number', description: '1 to 6 copies of the group, default 1' }, x: { type: 'number' }, y: { type: 'number' }, name_prefix: { type: 'string' } }, required: ['frame_ids'] } },
   { name: 'delete_frames', description: 'Remove screens. Only when the person asked for it.', inputSchema: { type: 'object', properties: { frame_ids: { type: 'array', items: { type: 'string' } } }, required: ['frame_ids'] } },
-  { name: 'recolor_frames', core: true, description: 'Move screens onto a brand background: every fill that used the old background, text or accent color takes the new one. background is a brand color name or hex; text and accent are picked for contrast unless given.', inputSchema: { type: 'object', properties: { frame_ids: { type: 'array', items: { type: 'string' } }, background: { type: 'string' }, text: { type: 'string' }, accent: { type: 'string' } }, required: ['frame_ids', 'background'] } },
+  { name: 'recolor_frames', core: true, description: 'Move screens onto a brand background: every fill that used the old background, text or accent color takes the new one (no-fill boxes stay without fill); then any text left unreadable on what sits behind it (its card, box or the screen) takes the most readable brand color, and contrast_fixes counts those. background is a brand color name or hex; text and accent are picked for contrast unless given.', inputSchema: { type: 'object', properties: { frame_ids: { type: 'array', items: { type: 'string' } }, background: { type: 'string' }, text: { type: 'string' }, accent: { type: 'string' } }, required: ['frame_ids', 'background'] } },
   { name: 'make_variations', core: true, description: 'New takes on a screen, placed below it with the same copy. mode: similar (same layout idea), explore (other layouts) or palette (color swaps). Returns the new frame ids.', inputSchema: { type: 'object', properties: { frame_id: { type: 'string' }, count: { type: 'number', description: '1 to 6, default 3' }, mode: { type: 'string', enum: ['similar', 'explore', 'palette'] } }, required: ['frame_id'] } },
   { name: 'apply_look', core: true, description: 'Switch screens between original, wireframe (grey boxes, one typeface) and rebrand (colors and type moved onto the brand kit). Lossless: original always comes back.', inputSchema: { type: 'object', properties: { frame_ids: { type: 'array', items: { type: 'string' } }, look: { type: 'string', enum: ['original', 'wireframe', 'rebrand'] } }, required: ['frame_ids', 'look'] } },
   { name: 'replace_text', core: true, description: 'Find and replace words across screens (text, buttons, lists). Case-insensitive. Returns how many replacements were made.', inputSchema: { type: 'object', properties: { frame_ids: { type: 'array', items: { type: 'string' } }, find: { type: 'string' }, replace: { type: 'string' } }, required: ['frame_ids', 'find', 'replace'] } },
-  { name: 'set_fonts', description: 'Set the display font (headlines, numbers, eyebrows) and body font on screens. Names from get_brand.', inputSchema: { type: 'object', properties: { frame_ids: { type: 'array', items: { type: 'string' } }, display: { type: 'string' }, body: { type: 'string' } }, required: ['frame_ids'] } },
+  { name: 'set_fonts', description: 'Set the display font and body font on screens. Headlines, numbers, eyebrows, quotes and any text 40px or larger take the display font; everything else the body font. Names from get_brand.', inputSchema: { type: 'object', properties: { frame_ids: { type: 'array', items: { type: 'string' } }, display: { type: 'string' }, body: { type: 'string' } }, required: ['frame_ids'] } },
   { name: 'resize_frames', description: 'Resize screens to another format (square, story, linkedin, x, slide, portrait, poster, banner). Generated layouts are laid out again; other screens scale.', inputSchema: { type: 'object', properties: { frame_ids: { type: 'array', items: { type: 'string' } }, format: { type: 'string' } }, required: ['frame_ids', 'format'] } },
   { name: 'generate_image', description: 'Generate a picture into an image block with the image model set in Settings (Gemini or OpenAI). Only works where outbound requests are allowed.', inputSchema: { type: 'object', properties: { frame_id: { type: 'string' }, block_id: { type: 'string' }, prompt: { type: 'string' } }, required: ['frame_id', 'block_id', 'prompt'] } },
-  { name: 'set_auto_layout', description: 'Auto layout (Figma-style stacks) for a box, or for the screen itself when box_id is omitted. mode vertical, horizontal or wrap turns it on (direction, gap and padding are read from how the children sit unless given); none turns it off and leaves everything where it is. Children then size Fixed, Hug or Fill (size_w / size_h in update_blocks).',
-    inputSchema: { type: 'object', properties: { frame_id: { type: 'string' }, box_id: { type: 'string' }, mode: { type: 'string', enum: ['vertical', 'horizontal', 'wrap', 'none'] }, gap: { type: 'number' }, gap_auto: { type: 'boolean', description: 'space between' }, padding: { description: 'number, or {top,right,bottom,left}' }, align_main: { type: 'string', enum: ['start', 'center', 'end'] }, align_cross: { type: 'string', enum: ['start', 'center', 'end', 'baseline'] }, clip: { type: 'boolean' } }, required: ['frame_id'] } },
+  { name: 'set_auto_layout', description: 'Auto layout (Figma-style stacks) for a box, several boxes at once (box_ids), or the screen itself when neither is given. mode vertical, horizontal or wrap turns it on (direction, gap and padding are read from how the children sit unless given); none turns it off and leaves everything where it is. Children then size Fixed, Hug or Fill (size_w / size_h in update_blocks).',
+    inputSchema: { type: 'object', properties: { frame_id: { type: 'string' }, box_id: { type: 'string' }, box_ids: { type: 'array', items: { type: 'string' }, description: 'the same settings on each of these boxes' }, mode: { type: 'string', enum: ['vertical', 'horizontal', 'wrap', 'none'] }, gap: { type: 'number' }, gap_auto: { type: 'boolean', description: 'space between' }, padding: { description: 'number, or {top,right,bottom,left}' }, align_main: { type: 'string', enum: ['start', 'center', 'end'] }, align_cross: { type: 'string', enum: ['start', 'center', 'end', 'baseline'] }, clip: { type: 'boolean' } }, required: ['frame_id'] } },
   { name: 'wrap_in_stack', description: 'Put blocks (siblings) into a new box. With stack true (default) it is an auto layout stack whose direction and gap are read from the blocks; false makes a plain box. Returns the box id.',
     inputSchema: { type: 'object', properties: { frame_id: { type: 'string' }, block_ids: { type: 'array', items: { type: 'string' } }, stack: { type: 'boolean' }, label: { type: 'string' } }, required: ['frame_id', 'block_ids'] } },
   { name: 'move_into', description: 'Move blocks into a box (box_id) or to the top level of the screen (box_id empty). In a stack they join the flow, before the block named in before_id or at the end.',
@@ -9110,7 +9153,8 @@ const AgentTools = (() => {
     if (b.kind === 'list') o.items = (b.items || []).map(i => String(i).slice(0, 120)).slice(0, 12);
     if (b.fill) o.fill = b.fillToken ? `${b.fill} (${b.fillToken})` : b.fill;
     if (b.color) o.color = b.color;
-    if (b.font) o.font = { family: String(b.font.family).split(',')[0].replace(/["']/g, ''), size: b.font.size, weight: b.font.weight };
+    if (b.font) { o.font = { family: String(b.font.family).split(',')[0].replace(/["']/g, ''), size: b.font.size, weight: b.font.weight, line_height: b.font.lineHeight || 1.2 }; if (b.font.letterSpacing) o.font.letter_spacing = b.font.letterSpacing; if (b.font.transform && b.font.transform !== 'none') o.font.case = b.font.transform; }
+    if (b.radius) o.radius = b.radius; if (b.kind === 'field' && b.alpha === 0) o.fill = 'none';
     if (b.align && b.align !== 'left') o.align = b.align;
     if (b.kind === 'image') o.image = b.asset ? 'set' : 'empty';
     if (b.kind === 'icon') o.icon = b.name;
@@ -9118,7 +9162,7 @@ const AgentTools = (() => {
     if (b.overflow) o.overflow = true; if (b.hidden) o.hidden = true; if (b.locked) o.locked = true;
     if (b.opacity != null && b.opacity < 1) o.opacity = b.opacity;
     if (b.parent) o.parent = b.parent;
-    if (b.kind === 'box') { const s = Auto.norm(b.auto); if (Auto.on(s)) o.stack = { mode: s.wrap ? 'wrap' : s.mode, gap: s.gapAuto ? 'auto' : s.gap, padding: s.pad, align_main: s.main, align_cross: s.cross }; if (b.clip) o.clip = true; }
+    if (b.kind === 'box') { const s = Auto.norm(b.auto); if (Auto.on(s)) o.stack = { mode: s.wrap ? 'wrap' : s.mode, gap: s.gapAuto ? 'auto' : s.gap, padding: { top: s.pad.t, right: s.pad.r, bottom: s.pad.b, left: s.pad.l }, align_main: s.main, align_cross: s.cross }; if (b.clip) o.clip = true; }
     if (b.sizeW && b.sizeW !== 'fixed') o.size_w = b.sizeW; if (b.sizeH && b.sizeH !== 'fixed' && b.kind !== 'text') o.size_h = b.sizeH; if (b.absolute) o.absolute = true;
     if (b.kind === 'logo') { o.variant = b.variant || 'wordmark'; if (b.product) o.product = b.product; }
     return o;
@@ -9138,7 +9182,14 @@ const AgentTools = (() => {
     if ('items' in p && b.kind === 'list') { b.items = arr(p.items).map(String).slice(0, 20); refit = true; }
     for (const k of ['x', 'y']) if (k in p) b[k] = Math.round(num(k));
     for (const k of ['w', 'h']) if (k in p) { b[k] = Math.round(num(k, 4, 20000)); refit = true; }
-    if ('fill' in p) { const c = color(p.fill); b.fill = c.hex; if (c.name) b.fillToken = c.name; else delete b.fillToken; delete b.gradient; }
+    if ('fill' in p) {
+      // no fill: "none", "transparent", null or a fully transparent hex
+      if (p.fill == null || p.fill === '' || /^(none|transparent)$/i.test(String(p.fill).trim()) || /^#[0-9a-f]{6}00$/i.test(String(p.fill).trim())) {
+        if (b.kind === 'box') { b.fill = 'none'; delete b.fillToken; delete b.gradient; }
+        else if (b.kind === 'field') { b.alpha = 0; delete b.gradient; }
+        else throw new Error(`a ${b.kind} cannot have no fill; hide it (hidden: true) or set opacity instead`);
+      } else { const c = color(p.fill); b.fill = c.hex; if (c.name) b.fillToken = c.name; else delete b.fillToken; delete b.gradient; if (b.kind === 'field' && b.alpha === 0) b.alpha = 1; }
+    }
     if ('color' in p) { const c = color(p.color); b.color = c.hex; if (c.name) b.colorToken = c.name; else delete b.colorToken; }
     if (b.font) {
       if ('font_size' in p) { b.font.size = Math.round(num('font_size', 6, 800)); refit = true; }
@@ -9171,7 +9222,11 @@ const AgentTools = (() => {
 
   const padOf = p => { if (p == null) return null; if (typeof p === 'number') return { t: p, r: p, b: p, l: p }; if (typeof p === 'object') return { t: Number(p.top ?? p.t) || 0, r: Number(p.right ?? p.r) || 0, b: Number(p.bottom ?? p.b) || 0, l: Number(p.left ?? p.l) || 0 }; throw new Error('padding is a number or {top,right,bottom,left}'); };
   const IMPL = {
-    set_auto_layout({ frame_id, box_id, mode, gap, gap_auto, padding, align_main, align_cross, clip }) {
+    set_auto_layout(args) {
+      if (Array.isArray(args.box_ids) && args.box_ids.length) { let last = null; for (const id of args.box_ids.slice(0, 60)) last = IMPL.set_auto_layout({ ...args, box_ids: undefined, box_id: id }); return { ...last, boxes: args.box_ids.length }; }
+      return IMPL._setAutoLayoutOne(args);
+    },
+    _setAutoLayoutOne({ frame_id, box_id, mode, gap, gap_auto, padding, align_main, align_cross, clip }) {
       const f = F(frame_id); const box = box_id ? Bk(f, box_id) : null; if (box && box.kind !== 'box') throw new Error(`${box_id} is not a box; use wrap_in_stack first`);
       write(() => {
         Auto.layout(f);
@@ -9185,7 +9240,7 @@ const AgentTools = (() => {
         if (box) { box.auto = s; if (clip != null) box.clip = !!clip; } else f.autoLayout = s;
       }, [f.id]);
       const s = Auto.settingsOf(f, box); note(`${mode === 'none' ? 'Auto layout off' : 'Auto layout ' + (s.wrap ? 'wrap' : s.mode)} on ${box ? (box.label || 'a box') : f.name}`);
-      return { frame_id: f.id, box_id: box ? box.id : null, stack: Auto.on(s) ? { mode: s.wrap ? 'wrap' : s.mode, gap: s.gapAuto ? 'auto' : s.gap, padding: s.pad, align_main: s.main, align_cross: s.cross } : 'off' };
+      return { frame_id: f.id, box_id: box ? box.id : null, stack: Auto.on(s) ? { mode: s.wrap ? 'wrap' : s.mode, gap: s.gapAuto ? 'auto' : s.gap, padding: { top: s.pad.t, right: s.pad.r, bottom: s.pad.b, left: s.pad.l }, align_main: s.main, align_cross: s.cross } : 'off' };
     },
     wrap_in_stack({ frame_id, block_ids, stack, label }) {
       const f = F(frame_id); const bs = arr(block_ids).map(id => Bk(f, id)); if (!bs.length) throw new Error('block_ids is empty');
@@ -9264,18 +9319,35 @@ const AgentTools = (() => {
       write(() => { for (const u of list) { const f = F(u.frame_id); if (u.name) f.name = String(u.name).slice(0, 80); if (Number.isFinite(Number(u.x)) && u.x != null) f.x = Math.round(Number(u.x)); if (Number.isFinite(Number(u.y)) && u.y != null) f.y = Math.round(Number(u.y)); if (u.background) { const c = color(u.background); f.layout.palette.bg = c.hex; if (c.name) { f.layout.palette.bgToken = c.name; f.layout.palette.bgName = c.name; } delete f.layout.palette.bgGradient; } ids.push(f.id); } }, null);
       note(`Updated ${ids.length} screen${ids.length === 1 ? '' : 's'}`); return { updated: ids.length };
     },
-    duplicate_frames({ frame_ids, copies }) {
-      const frames = framesArg(frame_ids); const n = Math.max(1, Math.min(6, Number(copies) || 1)); const out = [];
-      write(() => { for (const f of frames) { let x = f.x + f.layout.format.w + 160; for (let i = 0; i < n; i++) { const c = Canvas.pasteFrames(doc(), [f], { x, y: f.y })[0]; out.push(c.id); x += f.layout.format.w + 160; } } }, null);
-      note(`Duplicated ${frames.length} screen${frames.length === 1 ? '' : 's'}`); return { frame_ids: out };
+    // Copies keep the screens' arrangement and land where asked (x, y: top left of the copied group), else in free space
+    // below everything on the canvas. The result maps each copy to its original and the original block ids to the
+    // copy's.
+    duplicate_frames({ frame_ids, copies, x, y, name_prefix }) {
+      const frames = framesArg(frame_ids); const n = Math.max(1, Math.min(6, Number(copies) || 1)); const out = []; const detail = [];
+      write(() => {
+        const D = doc(); const gx = Math.min(...frames.map(f => f.x)), gy = Math.min(...frames.map(f => f.y));
+        const gw = Math.max(...frames.map(f => f.x + f.layout.format.w)) - gx, gh = Math.max(...frames.map(f => f.y + f.layout.format.h)) - gy;
+        const bottom = Math.max(...D.frames.map(f => f.y + f.layout.format.h));
+        for (let i = 0; i < n; i++) {
+          const at = x != null && y != null ? { x: Number(x) + i * (gw + 160), y: Number(y) } : { x: gx, y: bottom + 240 + i * (gh + 240) };
+          const made = Canvas.pasteFrames(D, frames, at);
+          made.forEach((c, k) => {
+            const src = frames[k]; if (name_prefix) c.name = String(name_prefix) + src.name; else c.name = src.name + ' copy';
+            const blocks = {}; src.layout.blocks.forEach((b, j) => { if (c.layout.blocks[j]) blocks[b.id] = c.layout.blocks[j].id; });
+            out.push(c.id); detail.push({ id: c.id, from: src.id, name: c.name, x: c.x, y: c.y, blocks });
+          });
+        }
+      }, null);
+      note(`Duplicated ${frames.length} screen${frames.length === 1 ? '' : 's'}`); return { frame_ids: out, copies: detail };
     },
     delete_frames({ frame_ids }) { const ids = new Set(framesArg(frame_ids).map(f => f.id)); write(d => { d.frames = d.frames.filter(f => !ids.has(f.id)); }, null); note(`Deleted ${ids.size} screen${ids.size === 1 ? '' : 's'}`); return { deleted: ids.size }; },
     recolor_frames({ frame_ids, background, text, accent }) {
       const frames = framesArg(frame_ids); const bg = color(background); const cols = kit().colors.map(c => Color.normalize(c.hex));
       const fg = text ? color(text).hex : Color.bestForeground(bg.hex, cols, 4.5)[0];
       const acc = accent ? color(accent).hex : Color.normalize((kit().colors.find(c => (c.role === 'accent' || c.role === 'core') && Color.normalize(c.hex) !== bg.hex && Color.contrast(bg.hex, c.hex) >= 3) || { hex: fg }).hex);
-      write(() => frames.forEach(f => { Canvas.recolor(f, { bg: bg.hex, fg, accent: acc, bgName: bg.name || undefined }); if (bg.name) f.layout.palette.bgToken = bg.name; }), frames.map(f => f.id));
-      note(`Recolored ${frames.length} screen${frames.length === 1 ? '' : 's'} on ${bg.name || bg.hex}`); return { recolored: frames.length, background: bg.hex, text: fg, accent: acc };
+      let fixed = 0;
+      write(() => frames.forEach(f => { fixed += Canvas.recolor(f, { bg: bg.hex, fg, accent: acc, bgName: bg.name || undefined, colors: kit().colors.map(c => c.hex) }) || 0; if (bg.name) f.layout.palette.bgToken = bg.name; }), frames.map(f => f.id));
+      note(`Recolored ${frames.length} screen${frames.length === 1 ? '' : 's'} on ${bg.name || bg.hex}`); return { recolored: frames.length, background: bg.hex, text: fg, accent: acc, contrast_fixes: fixed };
     },
     async make_variations({ frame_id, count, mode }) {
       const f = F(frame_id); const n = Math.max(1, Math.min(6, Number(count) || 3)); const m = ['similar', 'explore', 'palette'].includes(mode) ? mode : 'explore';
@@ -10304,7 +10376,7 @@ Layer kinds:
     if (mode === 'palette' || !isEngineLayout(L)) {
       const cur = Color.normalize(L.palette.bg);
       const pairs = RNG.make(seed).shuffle(Brand.pairs(kit).filter(p => p.bg !== cur));
-      for (const p of pairs.slice(0, count)) { const tmp = { layout: Canvas.clone(L) }; Canvas.recolor(tmp, { bg: p.bg, fg: p.fgs[0], accent: p.accents[0], bgName: p.bgName }); tmp.layout.palette.bgToken = p.bgName; tmp.layout.id = (L.id || 'v') + '-' + p.bgName.replace(/\W+/g, ''); out.push(tmp.layout); }
+      for (const p of pairs.slice(0, count)) { const tmp = { layout: Canvas.clone(L) }; Canvas.recolor(tmp, { bg: p.bg, fg: p.fgs[0], accent: p.accents[0], bgName: p.bgName, colors: state.kit.colors.map(c => c.hex) }); tmp.layout.palette.bgToken = p.bgName; tmp.layout.id = (L.id || 'v') + '-' + p.bgName.replace(/\W+/g, ''); out.push(tmp.layout); }
       return out;
     }
     const intent = { ...state.intent, content: Canvas.extractContent(L), slideIntent: L.slideIntent || undefined, formats: [L.format.id] };

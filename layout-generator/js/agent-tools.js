@@ -30,7 +30,8 @@ const AgentTools = (() => {
     if (b.kind === 'list') o.items = (b.items || []).map(i => String(i).slice(0, 120)).slice(0, 12);
     if (b.fill) o.fill = b.fillToken ? `${b.fill} (${b.fillToken})` : b.fill;
     if (b.color) o.color = b.color;
-    if (b.font) o.font = { family: String(b.font.family).split(',')[0].replace(/["']/g, ''), size: b.font.size, weight: b.font.weight };
+    if (b.font) { o.font = { family: String(b.font.family).split(',')[0].replace(/["']/g, ''), size: b.font.size, weight: b.font.weight, line_height: b.font.lineHeight || 1.2 }; if (b.font.letterSpacing) o.font.letter_spacing = b.font.letterSpacing; if (b.font.transform && b.font.transform !== 'none') o.font.case = b.font.transform; }
+    if (b.radius) o.radius = b.radius; if (b.kind === 'field' && b.alpha === 0) o.fill = 'none';
     if (b.align && b.align !== 'left') o.align = b.align;
     if (b.kind === 'image') o.image = b.asset ? 'set' : 'empty';
     if (b.kind === 'icon') o.icon = b.name;
@@ -38,7 +39,7 @@ const AgentTools = (() => {
     if (b.overflow) o.overflow = true; if (b.hidden) o.hidden = true; if (b.locked) o.locked = true;
     if (b.opacity != null && b.opacity < 1) o.opacity = b.opacity;
     if (b.parent) o.parent = b.parent;
-    if (b.kind === 'box') { const s = Auto.norm(b.auto); if (Auto.on(s)) o.stack = { mode: s.wrap ? 'wrap' : s.mode, gap: s.gapAuto ? 'auto' : s.gap, padding: s.pad, align_main: s.main, align_cross: s.cross }; if (b.clip) o.clip = true; }
+    if (b.kind === 'box') { const s = Auto.norm(b.auto); if (Auto.on(s)) o.stack = { mode: s.wrap ? 'wrap' : s.mode, gap: s.gapAuto ? 'auto' : s.gap, padding: { top: s.pad.t, right: s.pad.r, bottom: s.pad.b, left: s.pad.l }, align_main: s.main, align_cross: s.cross }; if (b.clip) o.clip = true; }
     if (b.sizeW && b.sizeW !== 'fixed') o.size_w = b.sizeW; if (b.sizeH && b.sizeH !== 'fixed' && b.kind !== 'text') o.size_h = b.sizeH; if (b.absolute) o.absolute = true;
     if (b.kind === 'logo') { o.variant = b.variant || 'wordmark'; if (b.product) o.product = b.product; }
     return o;
@@ -58,7 +59,14 @@ const AgentTools = (() => {
     if ('items' in p && b.kind === 'list') { b.items = arr(p.items).map(String).slice(0, 20); refit = true; }
     for (const k of ['x', 'y']) if (k in p) b[k] = Math.round(num(k));
     for (const k of ['w', 'h']) if (k in p) { b[k] = Math.round(num(k, 4, 20000)); refit = true; }
-    if ('fill' in p) { const c = color(p.fill); b.fill = c.hex; if (c.name) b.fillToken = c.name; else delete b.fillToken; delete b.gradient; }
+    if ('fill' in p) {
+      // no fill: "none", "transparent", null or a fully transparent hex
+      if (p.fill == null || p.fill === '' || /^(none|transparent)$/i.test(String(p.fill).trim()) || /^#[0-9a-f]{6}00$/i.test(String(p.fill).trim())) {
+        if (b.kind === 'box') { b.fill = 'none'; delete b.fillToken; delete b.gradient; }
+        else if (b.kind === 'field') { b.alpha = 0; delete b.gradient; }
+        else throw new Error(`a ${b.kind} cannot have no fill; hide it (hidden: true) or set opacity instead`);
+      } else { const c = color(p.fill); b.fill = c.hex; if (c.name) b.fillToken = c.name; else delete b.fillToken; delete b.gradient; if (b.kind === 'field' && b.alpha === 0) b.alpha = 1; }
+    }
     if ('color' in p) { const c = color(p.color); b.color = c.hex; if (c.name) b.colorToken = c.name; else delete b.colorToken; }
     if (b.font) {
       if ('font_size' in p) { b.font.size = Math.round(num('font_size', 6, 800)); refit = true; }
@@ -91,7 +99,11 @@ const AgentTools = (() => {
 
   const padOf = p => { if (p == null) return null; if (typeof p === 'number') return { t: p, r: p, b: p, l: p }; if (typeof p === 'object') return { t: Number(p.top ?? p.t) || 0, r: Number(p.right ?? p.r) || 0, b: Number(p.bottom ?? p.b) || 0, l: Number(p.left ?? p.l) || 0 }; throw new Error('padding is a number or {top,right,bottom,left}'); };
   const IMPL = {
-    set_auto_layout({ frame_id, box_id, mode, gap, gap_auto, padding, align_main, align_cross, clip }) {
+    set_auto_layout(args) {
+      if (Array.isArray(args.box_ids) && args.box_ids.length) { let last = null; for (const id of args.box_ids.slice(0, 60)) last = IMPL.set_auto_layout({ ...args, box_ids: undefined, box_id: id }); return { ...last, boxes: args.box_ids.length }; }
+      return IMPL._setAutoLayoutOne(args);
+    },
+    _setAutoLayoutOne({ frame_id, box_id, mode, gap, gap_auto, padding, align_main, align_cross, clip }) {
       const f = F(frame_id); const box = box_id ? Bk(f, box_id) : null; if (box && box.kind !== 'box') throw new Error(`${box_id} is not a box; use wrap_in_stack first`);
       write(() => {
         Auto.layout(f);
@@ -105,7 +117,7 @@ const AgentTools = (() => {
         if (box) { box.auto = s; if (clip != null) box.clip = !!clip; } else f.autoLayout = s;
       }, [f.id]);
       const s = Auto.settingsOf(f, box); note(`${mode === 'none' ? 'Auto layout off' : 'Auto layout ' + (s.wrap ? 'wrap' : s.mode)} on ${box ? (box.label || 'a box') : f.name}`);
-      return { frame_id: f.id, box_id: box ? box.id : null, stack: Auto.on(s) ? { mode: s.wrap ? 'wrap' : s.mode, gap: s.gapAuto ? 'auto' : s.gap, padding: s.pad, align_main: s.main, align_cross: s.cross } : 'off' };
+      return { frame_id: f.id, box_id: box ? box.id : null, stack: Auto.on(s) ? { mode: s.wrap ? 'wrap' : s.mode, gap: s.gapAuto ? 'auto' : s.gap, padding: { top: s.pad.t, right: s.pad.r, bottom: s.pad.b, left: s.pad.l }, align_main: s.main, align_cross: s.cross } : 'off' };
     },
     wrap_in_stack({ frame_id, block_ids, stack, label }) {
       const f = F(frame_id); const bs = arr(block_ids).map(id => Bk(f, id)); if (!bs.length) throw new Error('block_ids is empty');
@@ -184,18 +196,35 @@ const AgentTools = (() => {
       write(() => { for (const u of list) { const f = F(u.frame_id); if (u.name) f.name = String(u.name).slice(0, 80); if (Number.isFinite(Number(u.x)) && u.x != null) f.x = Math.round(Number(u.x)); if (Number.isFinite(Number(u.y)) && u.y != null) f.y = Math.round(Number(u.y)); if (u.background) { const c = color(u.background); f.layout.palette.bg = c.hex; if (c.name) { f.layout.palette.bgToken = c.name; f.layout.palette.bgName = c.name; } delete f.layout.palette.bgGradient; } ids.push(f.id); } }, null);
       note(`Updated ${ids.length} screen${ids.length === 1 ? '' : 's'}`); return { updated: ids.length };
     },
-    duplicate_frames({ frame_ids, copies }) {
-      const frames = framesArg(frame_ids); const n = Math.max(1, Math.min(6, Number(copies) || 1)); const out = [];
-      write(() => { for (const f of frames) { let x = f.x + f.layout.format.w + 160; for (let i = 0; i < n; i++) { const c = Canvas.pasteFrames(doc(), [f], { x, y: f.y })[0]; out.push(c.id); x += f.layout.format.w + 160; } } }, null);
-      note(`Duplicated ${frames.length} screen${frames.length === 1 ? '' : 's'}`); return { frame_ids: out };
+    // Copies keep the screens' arrangement and land where asked (x, y: top left of the copied group), else in free space
+    // below everything on the canvas. The result maps each copy to its original and the original block ids to the
+    // copy's.
+    duplicate_frames({ frame_ids, copies, x, y, name_prefix }) {
+      const frames = framesArg(frame_ids); const n = Math.max(1, Math.min(6, Number(copies) || 1)); const out = []; const detail = [];
+      write(() => {
+        const D = doc(); const gx = Math.min(...frames.map(f => f.x)), gy = Math.min(...frames.map(f => f.y));
+        const gw = Math.max(...frames.map(f => f.x + f.layout.format.w)) - gx, gh = Math.max(...frames.map(f => f.y + f.layout.format.h)) - gy;
+        const bottom = Math.max(...D.frames.map(f => f.y + f.layout.format.h));
+        for (let i = 0; i < n; i++) {
+          const at = x != null && y != null ? { x: Number(x) + i * (gw + 160), y: Number(y) } : { x: gx, y: bottom + 240 + i * (gh + 240) };
+          const made = Canvas.pasteFrames(D, frames, at);
+          made.forEach((c, k) => {
+            const src = frames[k]; if (name_prefix) c.name = String(name_prefix) + src.name; else c.name = src.name + ' copy';
+            const blocks = {}; src.layout.blocks.forEach((b, j) => { if (c.layout.blocks[j]) blocks[b.id] = c.layout.blocks[j].id; });
+            out.push(c.id); detail.push({ id: c.id, from: src.id, name: c.name, x: c.x, y: c.y, blocks });
+          });
+        }
+      }, null);
+      note(`Duplicated ${frames.length} screen${frames.length === 1 ? '' : 's'}`); return { frame_ids: out, copies: detail };
     },
     delete_frames({ frame_ids }) { const ids = new Set(framesArg(frame_ids).map(f => f.id)); write(d => { d.frames = d.frames.filter(f => !ids.has(f.id)); }, null); note(`Deleted ${ids.size} screen${ids.size === 1 ? '' : 's'}`); return { deleted: ids.size }; },
     recolor_frames({ frame_ids, background, text, accent }) {
       const frames = framesArg(frame_ids); const bg = color(background); const cols = kit().colors.map(c => Color.normalize(c.hex));
       const fg = text ? color(text).hex : Color.bestForeground(bg.hex, cols, 4.5)[0];
       const acc = accent ? color(accent).hex : Color.normalize((kit().colors.find(c => (c.role === 'accent' || c.role === 'core') && Color.normalize(c.hex) !== bg.hex && Color.contrast(bg.hex, c.hex) >= 3) || { hex: fg }).hex);
-      write(() => frames.forEach(f => { Canvas.recolor(f, { bg: bg.hex, fg, accent: acc, bgName: bg.name || undefined }); if (bg.name) f.layout.palette.bgToken = bg.name; }), frames.map(f => f.id));
-      note(`Recolored ${frames.length} screen${frames.length === 1 ? '' : 's'} on ${bg.name || bg.hex}`); return { recolored: frames.length, background: bg.hex, text: fg, accent: acc };
+      let fixed = 0;
+      write(() => frames.forEach(f => { fixed += Canvas.recolor(f, { bg: bg.hex, fg, accent: acc, bgName: bg.name || undefined, colors: kit().colors.map(c => c.hex) }) || 0; if (bg.name) f.layout.palette.bgToken = bg.name; }), frames.map(f => f.id));
+      note(`Recolored ${frames.length} screen${frames.length === 1 ? '' : 's'} on ${bg.name || bg.hex}`); return { recolored: frames.length, background: bg.hex, text: fg, accent: acc, contrast_fixes: fixed };
     },
     async make_variations({ frame_id, count, mode }) {
       const f = F(frame_id); const n = Math.max(1, Math.min(6, Number(count) || 3)); const m = ['similar', 'explore', 'palette'].includes(mode) ? mode : 'explore';
