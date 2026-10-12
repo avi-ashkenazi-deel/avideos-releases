@@ -5156,7 +5156,7 @@ Intents and the fields each uses:
 - cover: eyebrow (≤ 24 chars), headline (≤ 70), subhead (≤ 140)
 - agenda: headline, items (3 to 8, title ≤ 50, text "")
 - statement: headline (≤ 90) and subhead (≤ 140). Section dividers and single big ideas.
-- stat: stat (the number as written, e.g. "$1BN", "1.5-2x", "+237%"), headline as its caption (≤ 70), subhead (≤ 140)
+- stat: stat (the number as written, e.g. "$2M", "1.5-2x", "+40%"), headline as its caption (≤ 70), subhead (≤ 140)
 - comparison: headline, exactly 2 columns, each a title (≤ 30) and 2 to 4 bullets (≤ 70)
 - process: headline, 3 to 6 steps (title ≤ 32, text ≤ 90). A short sequence of how-to steps.
 - cards: headline, 2 to 6 items (title ≤ 32, text ≤ 110). Parallel points, pillars, options, several numbers (the number as the title).
@@ -5170,7 +5170,7 @@ ${first ? 'The first source slide is the cover: its headline is the presentation
 Vary the intents where the content allows (a key number as a stat slide, a sequence as a process, two sides as a comparison, a section title as a statement): cards should not be most of the deck.
 ${typeof Brand !== 'undefined' && Brand.voiceText(kit) ? Brand.voiceText(kit) + '\n' : ''}Rules: keep the presentation's own facts, numbers, names and terms; ${keep ? 'on slides that are not kept whole, ' : ''}condense long text to what a slide can hold (it is read in seconds) and put the detail you cut, in full sentences, in "notes" for the speaker; never invent facts or numbers; fix obvious typos; sentence case headlines; no emojis, no exclamation marks. Unused fields are "" or [].
 
-Reply with only JSON: {"slides":[{"source":2,"intent":"stat","eyebrow":"","headline":"…","subhead":"","body":"","items":[],"steps":[],"columns":[],"sections":[],"diagram":null,"quote":"","attribution":"","stat":"$1BN","cta":"","notes":"…"}]}
+Reply with only JSON: {"slides":[{"source":2,"intent":"stat","eyebrow":"","headline":"…","subhead":"","body":"","items":[],"steps":[],"columns":[],"sections":[],"diagram":null,"quote":"","attribution":"","stat":"$2M","cta":"","notes":"…"}]}
 Fields: ${FIELDS}.
 
 Source slides:
