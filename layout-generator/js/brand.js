@@ -43,10 +43,30 @@ const Brand = (() => {
         { id: 'lockup', name: 'Product lockup', kind: 'lockup', text: 'deel.', product: 'Payroll' },
       ],
       fonts: { display: 'Bricolage Grotesque', body: 'Inter', displayWeight: 600, bodyWeight: 400, headlineCase: 'sentence', tracking: -0.025 },
+      // How Deel writes (from the brand playbook, in our words): Claude reads these whenever it writes or condenses copy.
+      voice: {
+        summary: 'A savvy mentor: bold, not boastful; clear, not corporate; clever, not cute; action-first; globally fluent.',
+        rules: [
+          'Sentence case for headlines, slide titles, subheads and buttons; never all caps except short labels.',
+          'Headlines carry no end punctuation (a question mark is fine) and no exclamation points.',
+          'Slide headlines state an outcome in 7 to 11 words; supporting copy is two sentences, three at most.',
+          'Active voice, contractions, plain words; lead with outcomes and benefits, not feature lists.',
+          'Bullets are one phrase or sentence each, ideally starting with a verb, with consistent end punctuation.',
+          'Always the Oxford comma; em dashes sparingly and without spaces; en dashes for ranges (5–10 days); avoid semicolons and ampersands.',
+          'Numerals in headlines and slides; abbreviate large numbers (15k, $2B); the % symbol; currency symbol first; no cents unless non-zero.',
+          'Dates as December 4, 2026 (Dec. 4 when tight); never ordinals or slash dates.',
+          'Lead with Deel; solutions are "Deel + name" (Deel Payroll, Deel HR, Deel Mobility, Deel Benefits, Deel IT, Deel Services); modules and features stay descriptive and lowercase.',
+          'Say Deel Payroll, not Global Payroll or US Payroll; spell out employer of record (EOR) on first use for broad audiences; "an HRIS".',
+          'Avoid: cheap (say affordable), seamless, world-class, best-in-class, revolutionary, one-stop shop, users for customers, regional idioms and slang.',
+          'Never exaggerate or overpromise; keep claims specific and provable; no puns on the brand name; gender-neutral pronouns; American spelling.',
+          'No emojis in decks or formal documents.',
+          'Quotes are attributed as Full Name, Role, Company; decks close with a simple thank-you or contact slide.',
+        ],
+      },
       grid: { unit: 8, marginRatio: 0.06, gutterUnits: 3, radius: 1 },
       shapes: ['circle', 'pill', 'quarter'],
       content: {
-        eyebrow: 'Deel Global Payroll',
+        eyebrow: 'Deel Payroll',
         headline: 'Run payroll in 150+ countries from one platform',
         subhead: 'Owned infrastructure, 2,000+ local experts, and AI that takes action inside your workflows.',
         body: 'Consolidate vendors, close payroll faster, and keep every entity compliant without adding headcount.',
@@ -55,10 +75,10 @@ const Brand = (() => {
         footer: 'deel.com',
       },
       deck: {
-        title: 'Deel Global Payroll',
+        title: 'Deel Payroll',
         slides: [
-          { intent: 'cover', eyebrow: 'Deel Global Payroll', headline: 'Global payroll, run from one platform', subhead: 'Payroll, HR, and compliance for teams in 150+ countries.' },
-          { intent: 'agenda', headline: 'What we will cover', items: ['Why now', 'What Deel Global Payroll does', 'How it works', 'Proof', 'Before and after', 'Next steps'] },
+          { intent: 'cover', eyebrow: 'Deel Payroll', headline: 'Global payroll, run from one platform', subhead: 'Payroll, HR, and compliance for teams in 150+ countries.' },
+          { intent: 'agenda', headline: 'What we will cover', items: ['Why now', 'What Deel Payroll does', 'How it works', 'Proof', 'Before and after', 'Next steps'] },
           { intent: 'statement', eyebrow: 'Why now', headline: 'Most companies run five payroll vendors. One system can\'t cover them all.', subhead: 'Every new country adds a provider, a process, and a place for errors to hide.' },
           { intent: 'cards', eyebrow: 'What you get', headline: 'One platform, four things done for you', items: [
             { title: 'Owned infrastructure', text: 'No third-party processors. Faster fixes and total accountability.', icon: 'bank' },
@@ -70,12 +90,12 @@ const Brand = (() => {
             { title: 'Connect your HRIS', text: 'Sync people, contracts, and pay data.' },
             { title: 'Map entities and pay groups', text: 'Local rules applied automatically.' },
             { title: 'Run and approve', text: 'One calendar, one approval flow.' },
-            { title: 'Pay and report', text: 'Payslips, filings, and reporting in 200+ currencies.' },
+            { title: 'Pay and report', text: 'Payslips, filings, and reporting in local currencies.' },
           ] },
-          { intent: 'stat', stat: '150+', headline: 'Countries where Deel runs payroll on its own rails', subhead: 'With 200+ currencies and in-house entities.' },
+          { intent: 'stat', stat: '150+', headline: 'Countries where Deel runs payroll on its own rails', subhead: 'With in-house entities and local experts.' },
           { intent: 'comparison', headline: 'Before and after', columns: [
             { title: 'Vendor patchwork', bullets: ['Five providers on average', 'Manual reconciliation every cycle', 'Compliance gaps surface late'] },
-            { title: 'Deel Global Payroll', bullets: ['One platform, one payroll engine', 'Automated reconciliation', 'Real-time compliance checks'] },
+            { title: 'Deel Payroll', bullets: ['One platform, one payroll engine', 'Automated reconciliation', 'Real-time compliance checks'] },
           ] },
           { intent: 'quote', quote: 'Deel enables us to hire and support exceptional talent anywhere.', attribution: 'Mati Staniszewski, CEO, ElevenLabs' },
           { intent: 'closing', headline: 'Let\'s run your next payroll together', subhead: 'Book a 30-minute walkthrough with a payroll specialist.', cta: 'Book a demo', footer: 'deel.com' },
@@ -268,5 +288,7 @@ const Brand = (() => {
     return JSON.stringify(k, null, 2);
   }
 
-  return { FONTS, customFonts, fontCss, fontWeights, allFontNames, PRESETS, fromPreset, pairs, parseSvg, logoInner, logoColorFor, logosOf, logoVariant, logoAspectOf, makeDemoImage, serialize, clone };
+  // The kit's writing rules as prompt text ('' when the kit has none).
+  function voiceText(kit) { const v = kit && kit.voice; if (!v || !Array.isArray(v.rules) || !v.rules.length) return ''; return `${kit.name} writing rules${v.summary ? ` (${v.summary})` : ''}:\n- ` + v.rules.join('\n- '); }
+  return { voiceText, FONTS, customFonts, fontCss, fontWeights, allFontNames, PRESETS, fromPreset, pairs, parseSvg, logoInner, logoColorFor, logosOf, logoVariant, logoAspectOf, makeDemoImage, serialize, clone };
 })();

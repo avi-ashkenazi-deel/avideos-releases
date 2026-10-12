@@ -48,13 +48,18 @@ Rooms and shared libraries are saved to `server/data/` (git-ignored) and survive
 Switch the top-left toggle to **Deck**. The brief becomes an outline (one intent per slide), the engine generates variations for every slide under one palette and type level, you pick one per slide, and the picks export as one editable PowerPoint deck or a set of PNGs.
 
 - **Outline.** Written by the rule parser from the brief (an explicit list such as "cover, why now, what you get, how it works, proof, before and after, quote, next steps" wins; otherwise the kit's sample deck, trimmed to the requested count), or by Claude when a key is set. Every row is editable in the sidebar: intent, headline, and details (one item per line).
-- **Intents.** cover, agenda, statement, big number, comparison, process, cards, quote, body copy, closing. Each maps to the families that can express it.
+- **Intents.** cover, agenda, statement, big number, comparison, process, cards, quote, body copy, text-heavy, diagram, closing. Each maps to the families that can express it.
+- **Text-heavy slides.** When a slide has to carry a lot (an executive summary, a page of sections), the **Text-heavy** intent keeps every point: a headline and lede over two to six sections (title, paragraph, bullets) set as columns or a grid, in plain, ruled or card styles. All sections step their type down together until everything fits, never below a size that still reads on a screen. In the outline, sections are separated by `---`, the first line of each is its title and `- ` lines are bullets.
+- **Diagrams.** The **Diagram** intent draws flow, cycle, tree (org chart), timeline, mind map, pyramid, staircase and 2 × 2 matrix diagrams in the brand: rounded nodes holding their words, connectors with arrowheads, the highlight in the accent color. In the outline a diagram is a `type: …` line, then one node per line (`Label — note`), indented under its parent for trees and mind maps.
+- **Edit one slide.** Double-click a slide (or a card in Single mode) to edit its words with the slide redrawing as you type: text size (A−/A+), Rearrange, the diagram type, Save (back into the deck and its outline row) or Open on canvas for everything else.
 - **Consistency.** One background, text, and accent color for the whole deck; one type step; the logo stays in the same corner after the cover.
 - **Shuffle** regenerates one slide's variations; **Reshuffle deck** starts over with a new palette.
 
 ### From an existing presentation
 
 Paste a **Google Slides link** as the brief (in Deck mode, or in Single mode, which switches to Deck), or use **Use a deck (.pptx)…** in the outline panel (or drop a .pptx anywhere in Deck mode), then Generate. Every slide is read and rebuilt in the brand:
+
+Text-heavy slides are kept whole by default (**Keep text-heavy slides whole** in the outline panel); switch it off to have them condensed, with what is cut kept as speaker notes. Slides that are structures come back as diagrams, with or without Claude: numbered milestones, phases or dated steps become a timeline, a chain joined by arrows a flow, and in a .pptx the drawn shapes themselves are read (a ring of shapes is a cycle, one shape above rows of others a tree, a rising diagonal a staircase, a 2 × 2 a matrix, a run of chevrons a timeline or flow). Text-heavy slides set every section at one size, each row as tall as its fullest section.
 
 1. **Read.** In claude.ai a link is read as text through your Google Drive connector (fast even for a 30 MB deck; pictures stay behind and the brand's are used). On the server, and for .pptx files, the deck itself is read, and each slide keeps its own pictures (logos and backgrounds that repeat on many slides, and small icons, are left out). Slides after one that says "ignore anything from this point" are left out, and so are empty ones.
 2. **Sort.** Claude (your claude.ai account; locally, the API key with *Use Claude* on) reads a few slides per request and gives each one an intent (cover, statement, big number, cards, process, comparison, quote, body, closing), keeps the deck's facts and numbers, condenses long text to what a slide holds, and puts what it cut in **Speaker notes** under the outline row. Without Claude, rules sort the slides and keep the deck's words as written (trimmed).
@@ -96,6 +101,10 @@ Each folder is shared one of three ways, chosen when it is made (the select unde
 How it is counted: each person's page keeps a month summary (counts per day and per project, minutes in which they touched the canvas, the last 120 actions) and saves it every 20 seconds while they work. In claude.ai it sits in their own part of the page's database, which only they and the page's Editors can read; on the server it is appended to `server/data/stats/<month>.jsonl`. Only action names, project ids and people's ids and names are kept, not content. The automatic demo generation when the page first opens is not counted.
 
 ## Canvas
+
+**Diagrams on the canvas.** **◇ Diagram** adds a diagram to the selected screen. Select it and the panel shows its type and its nodes as text (one per line, `Label — note`, indented for children): change either and it redraws in place, keeping words you typed on the slide itself. Every piece is an ordinary block, so it can still be moved, recolored or edited by hand; **Detach** keeps the pieces and stops the redraws.
+
+**Look.** The interface follows the system's light or dark mode; the sun/moon button in the top bar (or Settings → Theme) picks one. The **Size** slider in Single and Deck mode makes the previews bigger or smaller. The ✕ in the brief clears it.
 
 Pick layouts in Single mode (tick cards, or favorite them) or pick slides in Deck mode, then **Send to canvas**. The canvas is an infinite stage where every frame is one layout spec and editing the frame is editing that JSON.
 
@@ -292,9 +301,12 @@ Any design system that can be described like this can run through the engine. Do
   "fonts": { "display": "Bricolage Grotesque", "body": "Inter", "displayWeight": 600, "headlineCase": "sentence", "tracking": -0.025 },
   "grid": { "unit": 8, "marginRatio": 0.06, "gutterUnits": 3, "radius": 1 },
   "shapes": ["circle", "pill", "quarter"],
-  "content": { "headline": "Run payroll in 150+ countries from one platform", "cta": "Book a demo" }
+  "content": { "headline": "Run payroll in 150+ countries from one platform", "cta": "Book a demo" },
+  "voice": { "summary": "A savvy mentor: bold, not boastful; clear, not corporate", "rules": ["Sentence case for headlines…", "Always the Oxford comma…"] }
 }
 ```
+
+`voice` is optional: when present, every request where Claude writes or condenses copy (reading a deck, the outline, copy refits, the canvas agent) carries these rules. The Deel preset's rules are a summary of the brand playbook (voice, capitalization, punctuation, numbers and dates, product naming, words to avoid, slide copy). Without Claude, decks read by rules get sentence-case headlines and lose end punctuation.
 
 Color roles: `core` (can be a ground or a big field), `accent` (pops, CTAs), `background` (calm grounds), `neutral` (text only). Readable pairs are derived automatically from WCAG contrast, so adding a color never produces an unreadable layout.
 
@@ -329,6 +341,7 @@ js/autolayout.js    auto layout engine: boxes, stacks, Fixed/Hug/Fill, wrap, abs
 js/canvas-ui.js     canvas editor: stage, selection, tools, layers tree, properties, Simple/Advanced, export
 js/library.js       Library tab: sections per library, save/insert, the Libraries window (on/off, admins)
 js/libstore.js      shared libraries: claude.ai database, server /api/libraries, or this browser
+js/diagram.js       Diagrams: flow, cycle, tree, timeline, mind map, pyramid, staircase, matrix; spec ⇄ text, layout into blocks
 js/deck-digest.js   A finished deck (Slides text or .pptx) into a Deck-mode outline: Claude in batches, rules otherwise
 js/projects.js      Home: projects and folders, folder sharing, project links (claude.ai database and private part, server /api/projects, or this browser)
 js/stats.js         usage summaries per person and month; the admin report

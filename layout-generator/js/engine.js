@@ -4,14 +4,15 @@
    Anything that breaks a rule (overflowing text, text off the safe area, unreadable contrast) is rejected. */
 const Engine = (() => {
   const H_LEVELS = [0.055, 0.07, 0.09, 0.115, 0.145, 0.18];
-  const ARCHETYPES = ['type-led', 'split', 'full-bleed', 'poster', 'mosaic', 'color-block', 'editorial', 'stat', 'agenda', 'comparison', 'process', 'cards', 'quote'];
+  const ARCHETYPES = ['type-led', 'split', 'full-bleed', 'poster', 'mosaic', 'color-block', 'editorial', 'stat', 'agenda', 'comparison', 'process', 'cards', 'quote', 'sections', 'diagram'];
   const ARCH_LABEL = {
     'type-led': 'Type-led', 'split': 'Split', 'full-bleed': 'Full-bleed image', 'poster': 'Framed image',
     'mosaic': 'Mosaic', 'color-block': 'Color blocks', 'editorial': 'Editorial', 'stat': 'Statement stat',
     'agenda': 'Agenda', 'comparison': 'Comparison', 'process': 'Process', 'cards': 'Cards', 'quote': 'Quote',
+    'sections': 'Sections', 'diagram': 'Diagram',
   };
   // Slide intents (deck mode) and the families that can express them.
-  const SLIDE_INTENTS = ['cover', 'agenda', 'statement', 'stat', 'comparison', 'process', 'cards', 'quote', 'body', 'closing'];
+  const SLIDE_INTENTS = ['cover', 'agenda', 'statement', 'stat', 'comparison', 'process', 'cards', 'quote', 'body', 'sections', 'diagram', 'closing'];
   const INTENT_WEIGHTS = {
     cover: { 'type-led': 3, 'full-bleed': 3, split: 2, 'color-block': 1.5, poster: 1 },
     agenda: { agenda: 1 },
@@ -21,7 +22,9 @@ const Engine = (() => {
     process: { process: 1 },
     cards: { cards: 1 },
     quote: { quote: 1 },
-    body: { editorial: 2, split: 1.5, poster: 1, 'type-led': 1 },
+    body: { editorial: 2, split: 1.5, poster: 1, 'type-led': 1, sections: 1.5 },
+    sections: { sections: 1 },
+    diagram: { diagram: 1 },
     closing: { 'type-led': 2, 'color-block': 1.5, 'full-bleed': 1 },
   };
   const normItems = arr => (arr || []).map((it, i) => typeof it === 'string' ? { title: it, text: '' } : { title: it.title || it.name || '', text: it.text || it.body || it.description || '', icon: it.icon, bullets: it.bullets }).filter(it => it.title || it.text);
@@ -122,7 +125,7 @@ const Engine = (() => {
   }
   // Fit a bulleted or numbered list: every item wraps at the indent, size steps down until all lines fit.
   function fitList(it, region, g) {
-    const lh = it.font.lineHeight || 1.3; let size = it.font.size; const minSize = Math.max(10, size * 0.6); const step = Math.max(2, g.unit / 4);
+    const lh = it.font.lineHeight || 1.3; let size = it.font.size; const minSize = it.minSize || Math.max(10, size * 0.6); const step = Math.max(2, g.unit / 4);
     const n = it.items.length;
     while (size >= minSize) {
       const f = { ...it.font, size }; const indent = snap(size * (it.marker === 'number' ? 2.1 : 1.3), 2); const itemGap = Math.round(size * (it.itemGap ?? 0.4));
@@ -792,6 +795,77 @@ const Engine = (() => {
     return { blocks, meta: { cards: n, mode, highlight: highlight >= 0 } };
   };
 
+  // A text-heavy slide kept as written: a headline (and lede) over two to six sections, each a title with a paragraph
+  // and/or bullets, set as columns or a grid. Every section's type steps down together until all of it fits, never
+  // below a size that still reads on a screen. A long body with no sections becomes its paragraphs.
+  A['sections'] = ctx => {
+    const { g, rng, pal, ts, content } = ctx;
+    let secs = (Array.isArray(content.sections) ? content.sections : []).map(x => ({ title: String((x && x.title) || ''), text: String((x && x.text) || ''), bullets: Array.isArray(x && x.bullets) ? x.bullets.map(String).filter(Boolean) : [] })).filter(x => x.title || x.text || x.bullets.length);
+    if (!secs.length) {
+      const body = String(content.body || ''); if (body.length < 240) return null;
+      const paras = body.split(/\n+/).map(t => t.trim()).filter(Boolean);
+      secs = paras.length >= 2 ? paras.slice(0, 6).map(t => ({ title: '', text: t, bullets: [] })) : (() => { const sent = body.match(/[^.!?]+[.!?]+(\s|$)|[^.!?]+$/g) || [body]; const h = Math.ceil(sent.length / 2); return [{ title: '', text: sent.slice(0, h).join('').trim(), bullets: [] }, { title: '', text: sent.slice(h).join('').trim(), bullets: [] }].filter(x => x.text); })();
+    }
+    secs = secs.slice(0, 6); if (!content.headline) return null;
+    const C = g.cols, R = ctx.R, wide = g.w >= g.h * 1.2, tall = g.h > g.w * 1.3, n = secs.length;
+    const style = rng.weighted([{ v: 'plain', w: 3 }, { v: 'cards', w: 2 }, { v: 'ruled', w: 2 }]);
+    const highlight = style === 'cards' && n > 1 && rng.chance(0.3) ? 0 : -1;
+    const blocks = []; const avoid = [];
+    const headItems = [];
+    if (content.eyebrow) headItems.push({ kind: 'text', role: 'eyebrow', path: 'eyebrow', text: content.eyebrow, font: ts.eyebrow, fill: pal.accentText, maxLines: 1, gap: snap(ts.body.size * 0.6, g.unit) });
+    headItems.push({ kind: 'text', role: 'headline', path: 'headline', text: content.headline, font: { ...ts.headline, size: snapFont(ts.headline.size * 0.7, g.unit) }, fill: pal.fg, maxLines: 2, gap: snap(ts.body.size * 0.8, g.unit) });
+    if (content.subhead) headItems.push({ kind: 'text', role: 'subhead', path: 'subhead', text: content.subhead, font: { ...ts.subhead, size: snapFont(ts.subhead.size * 0.85, g.unit) }, fill: pal.fg2, maxLines: 3 });
+    const headRows = content.subhead || content.eyebrow ? 3 : 2;
+    const hr = headlineRegion(ctx, headRows, Math.round(C * (wide ? 0.8 : 1)));
+    const hs = buildStack(headItems, hr, 'left', 'top', g); if (!hs) return null;
+    blocks.push(...hs.blocks); avoid.push(inkRect(hs, hr, 'left'));
+    // where the sections go: columns, a grid of 2 or 3 across, or rows on a tall format
+    // below the headline's ink, to the bottom of the usable area (grid rows are too coarse on a 16:9 slide)
+    const area = Grid.rect(g, 0, ctx.r0, C, R); const top = snap(hs.y1 + Math.max(g.unit * 3, ts.body.size * 1.4), g.unit); const bottom = area.y + area.h;
+    if (bottom - top < g.unit * 10) return null;
+    const across = tall ? 1 : wide ? (n <= 4 ? n : 3) : Math.min(2, n); const down = Math.ceil(n / across);
+    const per = Math.floor(C / across); const cols = [...Array(across)].map((_, k) => Grid.rect(g, k * per, ctx.r0, per, R));
+    const minBody = Math.max(12, Math.min(g.w, g.h) * 0.015); const pad = snap(g.unit * 2.5, g.unit / 2);
+    const colGap = i => (across > 1 && (i % across) < across - 1 && style !== 'cards' ? snap(g.gutter * 0.5, 1) : 0);
+    for (const sc of [1, 0.9, 0.8, 0.72, 0.65, 0.58, 0.52, 0.47]) {
+      const bodyF = { ...ts.body, size: Math.max(minBody, Math.round(ts.body.size * sc)), lineHeight: 1.38 };
+      if (sc < 1 && bodyF.size === minBody && ts.body.size * sc < minBody - 2) break;
+      const titleF = { ...ts.subhead, size: Math.round(Math.max(bodyF.size * 1.15, ts.subhead.size * sc)), weight: nearestWeight(ctx.kit.fonts.body, 600), lineHeight: 1.2 };
+      // every section at one size: the title, its paragraph and its bullets never shrink on their own
+      const itemsFor = i => {
+        const s = secs[i]; const cp = style === 'cards' ? cardPal(ctx, i === highlight) : { fg: pal.fg, fg2: pal.fg2, accentText: pal.accentText };
+        const its = [];
+        if (style === 'ruled') its.push({ kind: 'rule', role: 'rule', fill: pal.accentText, w: snap(g.unit * 4, g.unit), h: Math.max(2, g.unit / 4), gap: snap(bodyF.size * 0.7, g.unit / 2), decorative: true });
+        if (s.title) its.push({ kind: 'text', role: 'title', path: `sections.${i}.title`, text: s.title, font: titleF, fill: style === 'cards' ? cp.fg : cp.accentText, maxLines: 3, minSize: titleF.size, gap: snap(bodyF.size * 0.5, g.unit / 2) });
+        if (s.text) its.push({ kind: 'text', role: 'text', path: `sections.${i}.text`, text: s.text, font: bodyF, fill: cp.fg2, maxLines: 40, minSize: bodyF.size, gap: snap(bodyF.size * 0.6, g.unit / 2) });
+        if (s.bullets.length) its.push({ kind: 'list', role: 'bullets', path: `sections.${i}.bullets`, items: s.bullets.slice(0, 10), marker: 'bullet', font: bodyF, minSize: bodyF.size, fill: cp.fg2, markerFill: style === 'cards' ? cp.accentText : pal.accentText, maxLinesPerItem: 12, itemGap: 0.35 });
+        if (its.length && its[its.length - 1].gap) its[its.length - 1] = { ...its[its.length - 1], gap: 0 };
+        return { its, cp };
+      };
+      const built = secs.map((_, i) => itemsFor(i));
+      // how tall each section is when set at this size; a row is as tall as its tallest section
+      const inset = style === 'cards' ? pad * 2 : 0;
+      const need = built.map((b, i) => { const w = cols[i % across].w - colGap(i) - inset; const st = buildStack(b.its, { x: 0, y: 0, w, h: 1e5 }, 'left', 'top', g); return st ? st.y1 + inset : Infinity; });
+      const rowNeed = [...Array(down)].map((_, k) => Math.max(...need.slice(k * across, k * across + across)));
+      const room = bottom - top - (down - 1) * g.gutter; const sum = rowNeed.reduce((a, b) => a + b, 0);
+      if (!(sum <= room)) continue;
+      // the room left over is shared out: one row takes all of it, several rows get an equal share each
+      const rowH = rowNeed.map(h => down === 1 ? room : Math.floor(h + (room - sum) / down));
+      const rowY = rowH.map((_, k) => top + rowH.slice(0, k).reduce((a, b) => a + b, 0) + k * g.gutter);
+      const rects = secs.map((_, i) => ({ x: cols[i % across].x, w: cols[i % across].w, y: rowY[Math.floor(i / across)], h: rowH[Math.floor(i / across)] }));
+      const out = []; let ok = true;
+      for (let i = 0; i < n && ok; i++) {
+        const { its, cp } = built[i]; const r = rects[i];
+        if (style === 'cards') { const b = card(ctx, r, its, { fill: cp.fill, pad }); if (!b) { ok = false; break; } out.push(...b); }
+        else { const st = buildStack(its, { ...r, w: r.w - colGap(i) }, 'left', 'top', g); if (!st) { ok = false; break; } out.push(...st.blocks); }
+      }
+      if (ok) { blocks.push(...out); for (const r of rects) avoid.push(r); const logo = placeLogo(ctx, avoid, ['TR', 'BR']); if (logo) blocks.push(logo); return { blocks, meta: { sections: n, across, style, scale: sc, body: bodyF.size } }; }
+    }
+    return null;
+  };
+
+  A['diagram'] = ctx => (typeof Diagram !== 'undefined' ? Diagram.archetype(ctx, { buildStack, headlineRegion, inkRect, placeLogo, snap, snapFont, nearestWeight, cardPal }) : null);
+
   A['quote'] = ctx => {
     const { g, rng, pal, ts, content } = ctx;
     if (!content.quote) return null;
@@ -872,8 +946,9 @@ const Engine = (() => {
         : { 'type-led': 2, split: 2, poster: 1.5, 'full-bleed': 1.5, 'color-block': 2, editorial: 1.5, mosaic: n >= 2 ? 1 : 0.2, stat: 1 };
     if (intent.slideIntent && INTENT_WEIGHTS[intent.slideIntent]) {
       const iw = INTENT_WEIGHTS[intent.slideIntent]; for (const k of Object.keys(w)) w[k] = 0; for (const k of Object.keys(iw)) w[k] = iw[k];
-      for (const k of ['agenda', 'comparison', 'process', 'cards', 'quote']) if (!(k in w)) w[k] = 0;
-    } else { for (const k of ['agenda', 'comparison', 'process', 'cards', 'quote']) w[k] = (intent.archetypes && intent.archetypes.includes(k)) ? 1 : 0; }
+      for (const k of ['agenda', 'comparison', 'process', 'cards', 'quote', 'sections', 'diagram']) if (!(k in w)) w[k] = 0;
+    } else { for (const k of ['agenda', 'comparison', 'process', 'cards', 'quote', 'sections', 'diagram']) w[k] = (intent.archetypes && intent.archetypes.includes(k)) ? 1 : 0; }
+    if (!content.diagram) w.diagram = 0;
     if (!n) { w['full-bleed'] = 0; w.mosaic = 0; w.poster *= 0.6; w.split *= 0.7; }
     if (!content.stat) w.stat = 0;
     if (!content.quote) w.quote = 0;
@@ -986,5 +1061,5 @@ const Engine = (() => {
     const pal = choosePalette({ rng: RNG.make(seed), kit, intent });
     return pal ? { bg: pal.bg, fg: pal.fg, accent: pal.accent, bgName: pal.bgName } : null;
   }
-  return { generate, generateMany, ARCHETYPES, ARCH_LABEL, SLIDE_INTENTS, INTENT_WEIGHTS, H_LEVELS, typeSet, logoAspect, contentSchema, hydrate, palettePick, normItems };
+  return { generate, generateMany, ARCHETYPES, ARCH_LABEL, SLIDE_INTENTS, INTENT_WEIGHTS, H_LEVELS, typeSet, logoAspect, contentSchema, hydrate, palettePick, normItems, buildStack };
 })();

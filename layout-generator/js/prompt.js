@@ -119,7 +119,7 @@ content: only fields the brief explicitly supplies (quoted copy, a CTA, a stat),
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
-      body: JSON.stringify({ model: 'claude-opus-5-5', max_tokens: 2048, system, messages: [{ role: 'user', content: `Brief:\n${brief}\n\nSlide intent: ${slideIntent || 'single piece'}\n\nCurrent copy (reference):\n${JSON.stringify(current, null, 1)}` }], output_config: { effort: 'low', format: { type: 'json_schema', schema } } }),
+      body: JSON.stringify({ model: 'claude-opus-5-5', max_tokens: 2048, system, messages: [{ role: 'user', content: `Brief:\n${brief}\n\nSlide intent: ${slideIntent || 'single piece'}\n\n${Brand.voiceText(kit) ? Brand.voiceText(kit) + '\n\n' : ''}Current copy (reference):\n${JSON.stringify(current, null, 1)}` }], output_config: { effort: 'low', format: { type: 'json_schema', schema } } }),
     });
     if (!res.ok) throw new Error(`Claude request failed (${res.status}): ${(await res.text()).slice(0, 300)}`);
     const data = await res.json();

@@ -246,7 +246,7 @@ const PptxImport = (() => {
     let blk;
     if (b.h < 1 || b.w < 1) blk = { id: uid(), kind: 'line', x: b.x, y: b.y, w: Math.max(1, b.w), h: 0, fill: color, width: r2(w), decorative: true, label: nameOf(el) || 'line' };
     else { const [x1, y1, x2, y2] = [b.flipH ? b.w : 0, b.flipV ? b.h : 0, b.flipH ? 0 : b.w, b.flipV ? 0 : b.h]; blk = { id: uid(), kind: 'vector', x: b.x, y: b.y, w: b.w, h: b.h, viewBox: [0, 0, b.w, b.h], svg: `<path d="M${r2(x1)} ${r2(y1)}L${r2(x2)} ${r2(y2)}" fill="none" stroke="${color}" stroke-width="${r2(w)}"/>`, fill: color, decorative: true, label: nameOf(el) || 'line' }; }
-    if (parentId) blk.parent = parentId; ctx.blocks.push(blk);
+    blk.connector = true; if (parentId) blk.parent = parentId; ctx.blocks.push(blk);
   }
   // Preset geometry -> the closest block. Unknown presets become rectangles of the same box.
   async function shape(el, ctx, xf, parentId) {
@@ -277,6 +277,7 @@ const PptxImport = (() => {
     else if (vk === 'ellipse') { if (fill || line) visual = paint({ id: uid(), kind: 'shape', shape: Math.abs(b.w - b.h) < 1 ? 'circle' : 'ellipse', x: b.x, y: b.y, w: b.w, h: b.h, fill: 'none', decorative: true, label: label || 'ellipse' }); }
     else if (vk === 'cust') { const d = custPath(at(spPr, 'custGeom'), b); if (d && (fill || line)) visual = { id: uid(), kind: 'vector', x: b.x, y: b.y, w: Math.max(1, b.w), h: Math.max(1, b.h), viewBox: [0, 0, Math.max(1, b.w), Math.max(1, b.h)], svg: `<path d="${d}" fill="${fill && fill.color ? fill.color.hex : 'none'}"${fill && fill.color && fill.color.a < 1 ? ` fill-opacity="${r2(fill.color.a)}"` : ''}${line ? ` stroke="${line.color}" stroke-width="${r2(line.width * ctx.S)}"` : ''}/>`, fill: fill && fill.color ? fill.color.hex : '#000000', decorative: true, label: label || 'shape' }; }
     else if (vk === 'other' && (fill || line) && !hasText) visual = paint({ id: uid(), kind: 'field', x: b.x, y: b.y, w: b.w, h: b.h, fill: '#FFFFFF', radius, decorative: true, label: label || prst });
+    if (visual && prst !== 'rect') visual.geom = prst;
     if (!hasText) { if (visual) { if (parentId) visual.parent = parentId; ctx.blocks.push(visual); } else if (vk === 'rect' && (fill || line)) { const f = paint({ id: uid(), kind: 'field', x: b.x, y: b.y, w: b.w, h: b.h, fill: '#FFFFFF', radius, decorative: true, label: label || 'rectangle' }); if (!fill) f.alpha = 0; if (parentId) f.parent = parentId; ctx.blocks.push(f); } return; }
     // A text box: a stack with the shape's fill (rectangles) holding one text block per run of same-styled paragraphs.
     const rectLike = vk === 'rect' || vk === 'other';
@@ -291,6 +292,7 @@ const PptxImport = (() => {
       auto: { v: 2, mode: 'vertical', wrap: false, gap: 0, gapAuto: false, counterGap: 0, counterGapAuto: false, pad: { t: r2(ins('tIns')), r: r2(ins('rIns')), b: r2(ins('bIns')), l: r2(ins('lIns')) }, main: anchor === 'ctr' ? 'center' : anchor === 'b' ? 'end' : 'start', cross: 'start' }, sizeW: 'fixed', sizeH: autofit === 'grow' ? 'hug' : 'fixed' });
     if (!rectLike || !visual) { if (!fill || !rectLike) { box.fill = 'none'; delete box.gradient; delete box.fillAlpha; } if (!rectLike) delete box.stroke; }
     if (b.rot) box.rotation = r2(b.rot);
+    if (prst !== 'rect') box.geom = prst; // the deck reader tells drawn diagrams (chevrons, arrows, circles) from text boxes
     if (parentId) box.parent = parentId;
     ctx.blocks.push(box);
     const kind = info ? (info.type === 'title' || info.type === 'ctrTitle' ? 'title' : /^(body|subTitle|obj)$/.test(info.type) ? 'body' : 'other') : 'other';

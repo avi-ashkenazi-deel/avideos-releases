@@ -912,6 +912,7 @@ const CanvasUI = (() => {
     $('cvNewFrame').addEventListener('click', () => createFrame({ center: true }));
     $('cvZoomIn').addEventListener('click', () => zoomBy(1.25)); $('cvZoomOut').addEventListener('click', () => zoomBy(1 / 1.25)); $('cvFit').addEventListener('click', fit);
     $('cvZoom').addEventListener('click', () => zoomTo(1));
+    $('cvAddDiagram').addEventListener('click', addDiagram);
     { const mod = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent) ? '⌘' : 'Ctrl '; $('cvZoomIn').title = `Zoom in (${mod}+ or +)`; $('cvZoomOut').title = `Zoom out (${mod}− or −)`; $('cvFit').title = 'Fit everything (Shift 1, or 0) · Shift 2 fits the selection'; $('cvZoom').title = `Back to 100% (${mod}0 or Shift 0)`; }
     $('cvUndo').addEventListener('click', undo); $('cvRedo').addEventListener('click', redo);
     $('cvSnap').addEventListener('change', e => { doc.grid.snap = e.target.checked; persist(); });
@@ -1061,8 +1062,55 @@ const CanvasUI = (() => {
     if (!frames.length) { el.innerHTML = canvasProps(); return; }
     if (frames.length > 1) { el.innerHTML = screensProps(frames); return; }
     if (!bs.length) { el.innerHTML = frameProps(f); return; }
-    if (bs.length > 1) { el.innerHTML = blocksProps(f, bs); return; }
-    el.innerHTML = blockProps(f, bs[0]);
+    const dg = diagramOf(f, bs); const dgHtml = dg ? diagramSection(f, dg) : '';
+    if (bs.length > 1) { el.innerHTML = dgHtml + blocksProps(f, bs); return; }
+    el.innerHTML = dgHtml + blockProps(f, bs[0]);
+  }
+  // ---- Diagrams: a group whose frame block keeps the spec. Redrawn from the spec, with words typed on the canvas read
+  // back first, so nothing typed by hand is lost. --------------------------------------------------------------------------
+  function diagramOf(f, bs) {
+    if (!f || !bs.length || typeof Diagram === 'undefined') return null; const gid = bs[0].group;
+    if (gid && bs.every(b => b.group === gid)) return f.layout.blocks.find(b => b.group === gid && b.role === 'diagram' && b.diagram) || null;
+    return bs.length === 1 && bs[0].role === 'diagram' && bs[0].diagram ? bs[0] : null;
+  }
+  function diagramSpec(f, fr) {
+    const spec = JSON.parse(JSON.stringify(fr.diagram));
+    for (const b of f.layout.blocks) { if (b.group !== fr.group || !b.path) continue; const m = /^diagram\.nodes\.(\d+)\.(label|text)$/.exec(b.path); if (m && spec.nodes[+m[1]]) spec.nodes[+m[1]][m[2]] = Canvas.sourceText(b).replace(/\s+/g, ' ').trim(); }
+    return spec;
+  }
+  function diagramSection(f, fr) {
+    const spec = diagramSpec(f, fr); const lines = Diagram.toText(spec).split('\n').slice(1).join('\n');
+    return `<div class="cv-section" data-dgsec><h3>Diagram <span class="cv-token">${esc(Diagram.LABEL[spec.type])}</span></h3>
+      <label class="cv-f"><span>Type</span><select data-dg="type">${Diagram.TYPES.map(t => `<option value="${t}" ${t === spec.type ? 'selected' : ''}>${esc(Diagram.LABEL[t])}</option>`).join('')}</select></label>
+      <textarea class="cv-dg-text" data-dg="text" data-orig="${esc(lines)}" rows="${Math.min(12, spec.nodes.length + 2)}" aria-label="Diagram nodes" spellcheck="false">${esc(lines)}</textarea>
+      <p class="hint">One node per line, <code>Label — note</code>. Indent a line under another to make it a child (trees, mind maps). It redraws as you type.</p>
+      <div class="cv-row"><button type="button" class="btn small" data-dg-act="redraw">Redraw</button><button type="button" class="btn small ghost" data-dg-act="explode" title="Keep the pieces, forget the diagram (no more redraws)">Detach</button></div></div>`;
+  }
+  function diagramStyleFor(f) {
+    const kit = env.getKit(); const P = f.layout.palette; const g = Grid.compute(Grid.byId[f.layout.format.id] || f.layout.format, kit.grid); const ts = Engine.typeSet(kit, g, 3);
+    const bg = Color.normalize(P.bg || '#FFFFFF'), fg = Color.normalize(P.fg || '#111111'), acc = Color.normalize(P.accent || fg);
+    const accText = Color.bestForeground(acc, kit.colors.map(c => Color.normalize(c.hex)).concat(['#FFFFFF', '#000000']), 4.5)[0];
+    return Diagram.styleFrom({ fg, bg, accentText: acc, accent: acc, card: Color.mix(fg, bg, 0.9), accentCard: acc, accentCardText: accText }, ts, kit, g, Math.round(g.unit * 2));
+  }
+  function drawDiagram(f, rect, spec, st, replaceGroup) {
+    const out = Diagram.blocks(spec, rect, st, { buildStack: Engine.buildStack }, { unit: f.layout.grid.unit, gutter: f.layout.grid.gutter });
+    if (!out) { env.toast('That does not fit here: fewer words, another type, or a bigger diagram'); return null; }
+    const fresh = out.map(b => ({ ...b, id: Canvas.uid() }));
+    mutate(() => {
+      const at = replaceGroup ? f.layout.blocks.findIndex(b => b.group === replaceGroup) : -1;
+      const keep = replaceGroup ? f.layout.blocks.filter(b => b.group !== replaceGroup) : f.layout.blocks;
+      f.layout.blocks = at >= 0 ? [...keep.slice(0, at), ...fresh, ...keep.slice(at)] : [...keep, ...fresh];
+    }, { frames: [f.id] });
+    select(f.id, fresh.map(b => b.id));
+    return fresh;
+  }
+  function redrawDiagram(f, fr, spec) { return drawDiagram(f, { x: fr.x, y: fr.y, w: fr.w, h: fr.h }, spec, fr.diagramStyle || diagramStyleFor(f), fr.group); }
+  // A new diagram in the selected screen (or the first one), centered, ready to edit in the panel.
+  function addDiagram() {
+    const f = selFrame() || doc.frames.find(x => !x.hidden); if (!f) { env.toast('Add a screen first'); return; }
+    const W = f.layout.format.w, H = f.layout.format.h; const rect = { x: Math.round(W * 0.1), y: Math.round(H * 0.3), w: Math.round(W * 0.8), h: Math.round(H * 0.45) };
+    const spec = { type: 'flow', nodes: [{ label: 'First step', text: '' }, { label: 'Second step', text: '' }, { label: 'Third step', text: '' }] };
+    if (drawDiagram(f, rect, spec, diagramStyleFor(f), null)) emit('action', 'diagram.add', 'flow');
   }
   function canvasProps() {
     return `<div class="cv-section"><h3>Canvas</h3><label class="cv-f"><span>Name</span><input type="text" data-doc="name" value="${esc(doc.name)}"></label>
@@ -1364,10 +1412,20 @@ const CanvasUI = (() => {
   }
   function bindProps() {
     const el = $('cvProps');
+    // diagram section: type and nodes redraw the diagram (the nodes as you pause typing)
+    let dgT = 0;
+    const dgApply = () => { const f = selFrame(); const fr = diagramOf(f, selBlocks()); if (!fr) return; const sec = el.querySelector('[data-dgsec]'); if (!sec) return; const ta0 = sec.querySelector('[data-dg="text"]'); const type = sec.querySelector('[data-dg="type"]').value; const spec = ta0.value === ta0.dataset.orig ? { ...diagramSpec(f, fr), type } : Diagram.fromText(ta0.value, type); if (!spec.nodes.length) return; spec.type = type; const keepFocus = document.activeElement && document.activeElement.dataset.dg === 'text'; const caret = keepFocus ? document.activeElement.selectionStart : 0; if (redrawDiagram(f, fr, spec) && keepFocus) { const ta = el.querySelector('[data-dg="text"]'); if (ta) { ta.focus(); ta.setSelectionRange(caret, caret); } } };
+    el.addEventListener('input', e => { if (e.target.dataset.dg === 'text') { clearTimeout(dgT); dgT = setTimeout(dgApply, 500); } });
+    el.addEventListener('change', e => { if (e.target.dataset.dg === 'type') dgApply(); });
+    el.addEventListener('click', e => {
+      const a = e.target.closest('[data-dg-act]'); if (!a) return;
+      if (a.dataset.dgAct === 'redraw') { clearTimeout(dgT); dgApply(); return; }
+      if (a.dataset.dgAct === 'explode') { const f = selFrame(); const fr = diagramOf(f, selBlocks()); if (!fr) return; mutate(() => { f.layout.blocks = f.layout.blocks.filter(b => b !== fr); }, { frames: [f.id] }); env.toast('Detached: the pieces stay, the diagram no longer redraws'); }
+    });
     const apply = (e, live) => {
       const t = e.target; const fs = selFrames(); const f = selFrame();
       if (t.dataset.doc === 'name') { doc.name = t.value; persist(); return; }
-      if (!f || t.dataset.var || t.dataset.fr || (t.dataset.p && t.dataset.p.startsWith('batch-'))) return;
+      if (!f || t.dataset.var || t.dataset.fr || t.dataset.dg || (t.dataset.p && t.dataset.p.startsWith('batch-'))) return;
       const bs = selBlocks();
       const val = t.type === 'checkbox' ? t.checked : t.value;
       if (t.dataset.f) {

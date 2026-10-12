@@ -385,7 +385,9 @@
   function openSlideEditor(id) {
     const l = findLayout(id); if (!l) return;
     $('detail').hidden = true;
-    Object.assign(se, { l, content: JSON.parse(JSON.stringify(Canvas.extractContent(l))), level: l.type.level, seed: l.seed, next: l });
+    Object.assign(se, { l, content: JSON.parse(JSON.stringify(Canvas.extractContent(l))), level: l.type.level, seed: l.seed, next: l, merged: null, diagramType: null });
+    const dg = l.blocks.find(b => b.role === 'diagram' && b.diagram);
+    $('seDiagram').hidden = !dg; if (dg) $('seDiagramType').innerHTML = Diagram.TYPES.map(t => `<option value="${t}" ${t === dg.diagram.type ? 'selected' : ''}>${Diagram.LABEL[t]}</option>`).join('');
     const o = l.deckIndex != null && state.outline && state.outline.slides[l.deckIndex];
     $('seTitle').textContent = o ? `Slide ${l.deckIndex + 1} · ${Deck.INTENT_LABEL[o.intent] || o.intent}` : `${l.archetypeLabel} · ${l.format.name}`;
     renderSlideFields(); drawSlideEdit(l); $('seNote').textContent = ''; $('slideEdit').hidden = false;
@@ -405,9 +407,15 @@
   }
   function drawSlideEdit(l) { $('sePreview').innerHTML = Render.toSVG(l, { kit: state.kit, assets: state.assets, width: 1000 }); }
   // Redraw from the edited words: same layout and palette, the chosen type size and arrangement.
+  // Edited words over the slide's full content: a diagram keeps its type and links, a list its hidden items.
+  const deepMerge = (a, b) => { if (Array.isArray(a) && Array.isArray(b)) { const out = a.slice(); for (let i = 0; i < b.length; i++) if (b[i] !== undefined) out[i] = deepMerge(a[i], b[i]); return out; } if (a && b && typeof a === 'object' && typeof b === 'object' && !Array.isArray(b)) { const out = { ...a }; for (const [k, v] of Object.entries(b)) out[k] = deepMerge(a[k], v); return out; } return b === undefined ? a : b; };
   function slideEditRedraw() {
     const base = { ...se.l, seed: se.seed, type: { ...se.l.type, level: se.level } };
-    let next = null; try { next = Engine.hydrate(base, se.content, seEnv(se.l)); } catch (e) { console.warn(e); }
+    const orig = (se.l.genIntent && se.l.genIntent.content) || {};
+    const content = {}; for (const [k, v] of Object.entries(se.content)) content[k] = orig[k] && typeof orig[k] === 'object' ? deepMerge(orig[k], v) : v;
+    if (se.diagramType && content.diagram) content.diagram = { ...content.diagram, type: se.diagramType };
+    se.merged = content;
+    let next = null; try { next = Engine.hydrate(base, content, seEnv(se.l)); } catch (e) { console.warn(e); }
     if (!next) { $('seNote').textContent = 'That does not fit this layout: shorten it, make the text smaller, or rearrange.'; return false; }
     se.next = next; drawSlideEdit(next); $('seNote').textContent = ''; return true;
   }
@@ -431,7 +439,7 @@
         if (l.deckIndex != null && state.deck) {
           const row = state.deck.slides[l.deckIndex]; const j = row.variations.indexOf(l); if (j >= 0) { row.variations[j] = next; row.pick = j; }
           const o = state.outline && state.outline.slides[l.deckIndex];
-          if (o) { for (const k of ['eyebrow', 'headline', 'subhead', 'body', 'stat', 'quote', 'attribution', 'cta', 'items', 'steps', 'columns', 'bullets', 'sections']) if (k in se.content) o[k] = JSON.parse(JSON.stringify(se.content[k])); state.outlineEdited = true; renderOutline(); }
+          if (o) { const src = se.merged || se.content; for (const k of ['eyebrow', 'headline', 'subhead', 'body', 'stat', 'quote', 'attribution', 'cta', 'items', 'steps', 'columns', 'bullets', 'sections', 'diagram']) if (k in src) o[k] = JSON.parse(JSON.stringify(src[k])); state.outlineEdited = true; renderOutline(); }
           renderDeck();
         } else { const j = state.layouts.indexOf(l); if (j >= 0) state.layouts[j] = next; renderGallery(); }
         Stats.track('slide.edit');
@@ -442,6 +450,7 @@
   });
   let seCount = 0;
   $('detailEdit').addEventListener('click', () => { if (state.detail) openSlideEditor(state.detail.id); });
+  $('seDiagramType').addEventListener('change', e => { const prev = se.diagramType; se.diagramType = e.target.value; if (!slideEditRedraw()) { se.diagramType = prev; $('seNote').textContent = 'That kind of diagram does not fit these words here: try another, or fewer words.'; } });
   function openDetail(id) {
     const l = findLayout(id); if (!l) return;
     state.detail = l; state.family = null;
@@ -638,14 +647,14 @@
     $('outlinePanel').hidden = !deck; $('deckBar').hidden = !deck; $('deckView').hidden = !deck;
     $('gallery').hidden = deck; $('empty').hidden = deck || state.layouts.length > 0;
     for (const id of ['count', 'sort', 'filterArch', 'favOnly', 'compareBtn', 'exportFavBtn', 'exportFavPptxBtn', 'toCanvasBtn']) $(id).closest('label, button').hidden = deck;
-    $('prompt').placeholder = deck ? 'Describe the deck, e.g. "8-slide launch deck for Deel Global Payroll: cover, why now, what you get, how it works, proof, before and after, customer quote, next steps"' : 'Describe what you need, e.g. "36 bold image-led square posts for Deel Payroll, dark, with a CTA"';
+    $('prompt').placeholder = deck ? 'Describe the deck, e.g. "8-slide launch deck for Deel Payroll: cover, why now, what you get, how it works, proof, before and after, customer quote, next steps"' : 'Describe what you need, e.g. "36 bold image-led square posts for Deel Payroll, dark, with a CTA"';
     if (deck) { state.formats = [state.deckFormat]; renderChips(); if (!state.outline) { state.outline = Deck.outlineFromBrief($('prompt').value, state.kit); renderOutline(); } }
     LS.set('lg.mode', mode);
   }
   $('modeSeg').addEventListener('click', e => { const b = e.target.closest('[data-mode]'); if (b) setMode(b.dataset.mode); });
 
   // Outline editor --------------------------------------------------------------------------------------
-  const DETAIL_HINT = { cards: 'Title — text, one per line', process: 'Step title — text, one per line', agenda: 'One entry per line', comparison: 'Left title\nbullet\nbullet\n---\nRight title\nbullet\nbullet', quote: 'Quote\nAttribution', stat: 'Stat (e.g. 150+)\nSubhead', cover: 'Subhead', statement: 'Subhead', body: 'Body copy', closing: 'Subhead\nCTA label' };
+  const DETAIL_HINT = { cards: 'Title — text, one per line', process: 'Step title — text, one per line', agenda: 'One entry per line', comparison: 'Left title\nbullet\nbullet\n---\nRight title\nbullet\nbullet', quote: 'Quote\nAttribution', stat: 'Stat (e.g. 150+)\nSubhead', cover: 'Subhead', statement: 'Subhead', body: 'Body copy', closing: 'Subhead\nCTA label' , sections: 'Section title\nIts paragraph\n- or bullets\n---\nNext section title\n…', diagram: 'type: flow (or cycle, tree, timeline, mindmap, pyramid, staircase, matrix)\nStep one — note\nStep two\n  child (indent under a parent for tree and mindmap)'};
   function detailsText(sl) {
     const i = sl.intent;
     if (i === 'cards' || i === 'process') return Engine.normItems(i === 'cards' ? sl.items : (sl.steps && sl.steps.length ? sl.steps : sl.items)).map(x => x.text ? `${x.title} — ${x.text}` : x.title).join('\n');
@@ -655,6 +664,9 @@
     if (i === 'stat') return [sl.stat || '', sl.subhead || ''].join('\n');
     if (i === 'closing') return [sl.subhead || '', sl.cta || ''].join('\n');
     if (i === 'body') return sl.body || '';
+    if (i === 'sections' && !(sl.sections && sl.sections.length)) return sl.body || '';
+    if (i === 'sections') return (sl.sections || []).map(x => [x.title || '', ...(x.text ? [x.text] : []), ...(x.bullets || []).map(b => '- ' + b)].join('\n')).join('\n---\n');
+    if (i === 'diagram') return typeof Diagram !== 'undefined' && sl.diagram ? Diagram.toText(sl.diagram) : '';
     return sl.subhead || '';
   }
   function parseDetails(sl, text) {
@@ -666,6 +678,8 @@
     else if (i === 'agenda') sl.items = lines.map(l => ({ title: l, text: '' }));
     else if (i === 'comparison') { sl.columns = text.split(/\n-{3,}\n?/).map(block => { const ls = block.split('\n').map(x => x.trim()).filter(Boolean); return { title: ls[0] || '', bullets: ls.slice(1) }; }).filter(c => c.title); }
     else if (i === 'quote') { sl.quote = lines[0] || ''; sl.attribution = lines[1] || ''; }
+    else if (i === 'sections') { sl.sections = text.split(/\n-{3,}\n?/).map(block => { const ls = block.split('\n').map(x => x.trim()).filter(Boolean); const bul = ls.filter(l => /^[-•*]\s+/.test(l)).map(l => l.replace(/^[-•*]\s+/, '')); const rest = ls.filter(l => !/^[-•*]\s+/.test(l)); const title = rest.length > 1 || (rest[0] && rest[0].length <= 60 && bul.length) ? rest.shift() : ''; return { title, text: rest.join(' '), bullets: bul }; }).filter(x => x.title || x.text || x.bullets.length); }
+    else if (i === 'diagram') { if (typeof Diagram !== 'undefined') sl.diagram = Diagram.fromText(text, sl.diagram && sl.diagram.type); }
     else if (i === 'stat') { sl.stat = lines[0] || ''; sl.subhead = lines.slice(1).join(' '); }
     else if (i === 'closing') { sl.subhead = lines[0] || ''; sl.cta = lines[1] || sl.cta || state.kit.content.cta; }
     else if (i === 'body') sl.body = lines.join(' ');
@@ -757,10 +771,10 @@
     return deck;
   }
   async function outlineFromDeck(deck) {
-    const asker = await deckAsker();
-    if (!asker) return DeckDigest.rules(deck);
+    const asker = await deckAsker(); const opts = { keepText: $('keepText').checked };
+    if (!asker) return DeckDigest.rules(deck, opts);
     $('generateBtn').textContent = 'Claude is reading the deck…';
-    const o = await DeckDigest.withClaude(deck, state.kit, asker.ask, (d, n) => { $('generateBtn').textContent = `Claude is reading the deck… ${d}/${n}`; });
+    const o = await DeckDigest.withClaude(deck, state.kit, asker.ask, (d, n) => { $('generateBtn').textContent = `Claude is reading the deck… ${d}/${n}`; }, opts);
     if (o.by === 'rules') toast('Claude did not answer, so rules sorted the slides. Generate again to retry, or edit the outline.');
     else if (o.failed) toast(`Claude sorted most slides; ${o.failed} part${o.failed > 1 ? 's were' : ' was'} sorted by rules.`);
     return o;
@@ -829,6 +843,9 @@
     row.querySelectorAll('.deck-card').forEach(c => c.classList.toggle('pick', c === card));
   });
   $('deckView').addEventListener('dblclick', e => { const card = e.target.closest('.deck-card'); if (card) openSlideEditor(card.dataset.id); });
+  // Keep long slides whole, or condense them: remembered, and a deck in play is sorted again
+  $('keepText').checked = LS.get('lg.keepText', true) !== false;
+  $('keepText').addEventListener('change', () => { LS.set('lg.keepText', $('keepText').checked); if (state.deckSource && state.outline && state.outline.source === 'deck' && !state.busy) { state.outlineEdited = false; generateDeck($('prompt').value, { rebuild: true }); } });
   // A .pptx chosen in the outline panel or dropped anywhere in Deck mode
   $('outlineFromDeck').addEventListener('click', () => $('deckFile').click());
   $('deckFile').addEventListener('change', e => { const f = e.target.files[0]; e.target.value = ''; if (f && !state.busy) generateDeck(($('prompt').value || '').replace(slidesLinkIn($('prompt').value) || '', '').trim(), { file: f }); });
@@ -1417,7 +1434,7 @@
     await ensureDemoImages(false);
     // First frame: a working state, not an empty shell.
     const savedMode = LS.get('lg.mode', 'single');
-    if (!$('prompt').value) $('prompt').value = savedMode === 'deck' ? '8-slide launch deck for Deel Global Payroll' : 'Launch posts for Deel Global Payroll, bold, image-led, square and story';
+    if (!$('prompt').value) $('prompt').value = savedMode === 'deck' ? '8-slide launch deck for Deel Payroll' : 'Launch posts for Deel Payroll, bold, image-led, square and story';
     $('promptClear').hidden = !$('prompt').value;
     if (savedMode === 'deck') setMode('deck');
     updateCanvasBadge();

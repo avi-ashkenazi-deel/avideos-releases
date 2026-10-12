@@ -710,6 +710,8 @@ input[disabled] { opacity: .5; cursor: not-allowed; }
 .slide-edit .detail-actions { display: flex; gap: 8px; align-items: center; }
 .slide-edit .grow { flex: 1; }
 
+.cv-dg-text { width: 100%; min-height: 90px; resize: vertical; font: 12.5px/1.45 var(--font-mono); background: var(--panel-2); color: var(--fg); border: 1px solid var(--line-2); border-radius: var(--r); padding: 6px 8px; margin: 4px 0; white-space: pre; }
+
 </style>
 </head>
 <body>
@@ -796,6 +798,7 @@ input[disabled] { opacity: .5; cursor: not-allowed; }
       <div class="panel-head"><h2>Deck outline</h2><span class="hint" id="outlineSource"></span></div>
       <p class="hint">One row per slide. Edit anything, then Generate again. Details take one item per line: <code>Title — text</code> for cards and steps, two blocks split by <code>---</code> for a comparison, quote then attribution for a quote.</p>
       <p class="hint"><b>From a deck:</b> paste a Google Slides link as the brief, or use a .pptx (or drop it here): every slide is read and rebuilt in the brand.</p>
+      <label class="check" title="Off: long slides are condensed (the cut detail goes to speaker notes)"><input id="keepText" type="checkbox" checked> Keep text-heavy slides whole</label>
       <div id="outlineList" class="outline"></div>
       <div class="row">
         <button id="outlineAdd" class="btn small" type="button">Add slide</button>
@@ -914,6 +917,7 @@ input[disabled] { opacity: .5; cursor: not-allowed; }
         </div>
         <div class="cv-newframe">
           <button id="cvNewFrame" class="btn small" type="button" data-tip="Add a blank frame in view · ⇧N">＋ Frame</button>
+          <button id="cvAddDiagram" class="btn small" type="button" data-tip="Add a diagram to the selected screen: flow, cycle, tree, timeline, mind map…">◇ Diagram</button>
           <select id="cvFrameFormat" class="select" aria-label="Frame format"></select>
         </div>
         <div class="cv-center">
@@ -1038,6 +1042,7 @@ input[disabled] { opacity: .5; cursor: not-allowed; }
           <button class="btn small" data-se-size="-1" type="button" title="Smaller type">A−</button>
           <button class="btn small" data-se-size="1" type="button" title="Larger type">A+</button>
           <button class="btn small" data-se-shuffle type="button" title="The same kind of layout, arranged differently">Rearrange</button>
+          <label class="inline" id="seDiagram" hidden>Diagram <select id="seDiagramType" class="select"></select></label>
         </div>
         <div class="se-fields" id="seFields"></div>
         <p class="hint" id="seNote" aria-live="polite"></p>
@@ -1347,10 +1352,30 @@ const Brand = (() => {
         { id: 'lockup', name: 'Product lockup', kind: 'lockup', text: 'deel.', product: 'Payroll' },
       ],
       fonts: { display: 'Bricolage Grotesque', body: 'Inter', displayWeight: 600, bodyWeight: 400, headlineCase: 'sentence', tracking: -0.025 },
+      // How Deel writes (from the brand playbook, in our words): Claude reads these whenever it writes or condenses copy.
+      voice: {
+        summary: 'A savvy mentor: bold, not boastful; clear, not corporate; clever, not cute; action-first; globally fluent.',
+        rules: [
+          'Sentence case for headlines, slide titles, subheads and buttons; never all caps except short labels.',
+          'Headlines carry no end punctuation (a question mark is fine) and no exclamation points.',
+          'Slide headlines state an outcome in 7 to 11 words; supporting copy is two sentences, three at most.',
+          'Active voice, contractions, plain words; lead with outcomes and benefits, not feature lists.',
+          'Bullets are one phrase or sentence each, ideally starting with a verb, with consistent end punctuation.',
+          'Always the Oxford comma; em dashes sparingly and without spaces; en dashes for ranges (5–10 days); avoid semicolons and ampersands.',
+          'Numerals in headlines and slides; abbreviate large numbers (15k, $2B); the % symbol; currency symbol first; no cents unless non-zero.',
+          'Dates as December 4, 2026 (Dec. 4 when tight); never ordinals or slash dates.',
+          'Lead with Deel; solutions are "Deel + name" (Deel Payroll, Deel HR, Deel Mobility, Deel Benefits, Deel IT, Deel Services); modules and features stay descriptive and lowercase.',
+          'Say Deel Payroll, not Global Payroll or US Payroll; spell out employer of record (EOR) on first use for broad audiences; "an HRIS".',
+          'Avoid: cheap (say affordable), seamless, world-class, best-in-class, revolutionary, one-stop shop, users for customers, regional idioms and slang.',
+          'Never exaggerate or overpromise; keep claims specific and provable; no puns on the brand name; gender-neutral pronouns; American spelling.',
+          'No emojis in decks or formal documents.',
+          'Quotes are attributed as Full Name, Role, Company; decks close with a simple thank-you or contact slide.',
+        ],
+      },
       grid: { unit: 8, marginRatio: 0.06, gutterUnits: 3, radius: 1 },
       shapes: ['circle', 'pill', 'quarter'],
       content: {
-        eyebrow: 'Deel Global Payroll',
+        eyebrow: 'Deel Payroll',
         headline: 'Run payroll in 150+ countries from one platform',
         subhead: 'Owned infrastructure, 2,000+ local experts, and AI that takes action inside your workflows.',
         body: 'Consolidate vendors, close payroll faster, and keep every entity compliant without adding headcount.',
@@ -1359,10 +1384,10 @@ const Brand = (() => {
         footer: 'deel.com',
       },
       deck: {
-        title: 'Deel Global Payroll',
+        title: 'Deel Payroll',
         slides: [
-          { intent: 'cover', eyebrow: 'Deel Global Payroll', headline: 'Global payroll, run from one platform', subhead: 'Payroll, HR, and compliance for teams in 150+ countries.' },
-          { intent: 'agenda', headline: 'What we will cover', items: ['Why now', 'What Deel Global Payroll does', 'How it works', 'Proof', 'Before and after', 'Next steps'] },
+          { intent: 'cover', eyebrow: 'Deel Payroll', headline: 'Global payroll, run from one platform', subhead: 'Payroll, HR, and compliance for teams in 150+ countries.' },
+          { intent: 'agenda', headline: 'What we will cover', items: ['Why now', 'What Deel Payroll does', 'How it works', 'Proof', 'Before and after', 'Next steps'] },
           { intent: 'statement', eyebrow: 'Why now', headline: 'Most companies run five payroll vendors. One system can\'t cover them all.', subhead: 'Every new country adds a provider, a process, and a place for errors to hide.' },
           { intent: 'cards', eyebrow: 'What you get', headline: 'One platform, four things done for you', items: [
             { title: 'Owned infrastructure', text: 'No third-party processors. Faster fixes and total accountability.', icon: 'bank' },
@@ -1374,12 +1399,12 @@ const Brand = (() => {
             { title: 'Connect your HRIS', text: 'Sync people, contracts, and pay data.' },
             { title: 'Map entities and pay groups', text: 'Local rules applied automatically.' },
             { title: 'Run and approve', text: 'One calendar, one approval flow.' },
-            { title: 'Pay and report', text: 'Payslips, filings, and reporting in 200+ currencies.' },
+            { title: 'Pay and report', text: 'Payslips, filings, and reporting in local currencies.' },
           ] },
-          { intent: 'stat', stat: '150+', headline: 'Countries where Deel runs payroll on its own rails', subhead: 'With 200+ currencies and in-house entities.' },
+          { intent: 'stat', stat: '150+', headline: 'Countries where Deel runs payroll on its own rails', subhead: 'With in-house entities and local experts.' },
           { intent: 'comparison', headline: 'Before and after', columns: [
             { title: 'Vendor patchwork', bullets: ['Five providers on average', 'Manual reconciliation every cycle', 'Compliance gaps surface late'] },
-            { title: 'Deel Global Payroll', bullets: ['One platform, one payroll engine', 'Automated reconciliation', 'Real-time compliance checks'] },
+            { title: 'Deel Payroll', bullets: ['One platform, one payroll engine', 'Automated reconciliation', 'Real-time compliance checks'] },
           ] },
           { intent: 'quote', quote: 'Deel enables us to hire and support exceptional talent anywhere.', attribution: 'Mati Staniszewski, CEO, ElevenLabs' },
           { intent: 'closing', headline: 'Let\'s run your next payroll together', subhead: 'Book a 30-minute walkthrough with a payroll specialist.', cta: 'Book a demo', footer: 'deel.com' },
@@ -1572,7 +1597,9 @@ const Brand = (() => {
     return JSON.stringify(k, null, 2);
   }
 
-  return { FONTS, customFonts, fontCss, fontWeights, allFontNames, PRESETS, fromPreset, pairs, parseSvg, logoInner, logoColorFor, logosOf, logoVariant, logoAspectOf, makeDemoImage, serialize, clone };
+  // The kit's writing rules as prompt text ('' when the kit has none).
+  function voiceText(kit) { const v = kit && kit.voice; if (!v || !Array.isArray(v.rules) || !v.rules.length) return ''; return `${kit.name} writing rules${v.summary ? ` (${v.summary})` : ''}:\n- ` + v.rules.join('\n- '); }
+  return { voiceText, FONTS, customFonts, fontCss, fontWeights, allFontNames, PRESETS, fromPreset, pairs, parseSvg, logoInner, logoColorFor, logosOf, logoVariant, logoAspectOf, makeDemoImage, serialize, clone };
 })();
 
 /* js/grid.js */
@@ -1716,14 +1743,15 @@ const Text = (() => {
    Anything that breaks a rule (overflowing text, text off the safe area, unreadable contrast) is rejected. */
 const Engine = (() => {
   const H_LEVELS = [0.055, 0.07, 0.09, 0.115, 0.145, 0.18];
-  const ARCHETYPES = ['type-led', 'split', 'full-bleed', 'poster', 'mosaic', 'color-block', 'editorial', 'stat', 'agenda', 'comparison', 'process', 'cards', 'quote'];
+  const ARCHETYPES = ['type-led', 'split', 'full-bleed', 'poster', 'mosaic', 'color-block', 'editorial', 'stat', 'agenda', 'comparison', 'process', 'cards', 'quote', 'sections', 'diagram'];
   const ARCH_LABEL = {
     'type-led': 'Type-led', 'split': 'Split', 'full-bleed': 'Full-bleed image', 'poster': 'Framed image',
     'mosaic': 'Mosaic', 'color-block': 'Color blocks', 'editorial': 'Editorial', 'stat': 'Statement stat',
     'agenda': 'Agenda', 'comparison': 'Comparison', 'process': 'Process', 'cards': 'Cards', 'quote': 'Quote',
+    'sections': 'Sections', 'diagram': 'Diagram',
   };
   // Slide intents (deck mode) and the families that can express them.
-  const SLIDE_INTENTS = ['cover', 'agenda', 'statement', 'stat', 'comparison', 'process', 'cards', 'quote', 'body', 'closing'];
+  const SLIDE_INTENTS = ['cover', 'agenda', 'statement', 'stat', 'comparison', 'process', 'cards', 'quote', 'body', 'sections', 'diagram', 'closing'];
   const INTENT_WEIGHTS = {
     cover: { 'type-led': 3, 'full-bleed': 3, split: 2, 'color-block': 1.5, poster: 1 },
     agenda: { agenda: 1 },
@@ -1733,7 +1761,9 @@ const Engine = (() => {
     process: { process: 1 },
     cards: { cards: 1 },
     quote: { quote: 1 },
-    body: { editorial: 2, split: 1.5, poster: 1, 'type-led': 1 },
+    body: { editorial: 2, split: 1.5, poster: 1, 'type-led': 1, sections: 1.5 },
+    sections: { sections: 1 },
+    diagram: { diagram: 1 },
     closing: { 'type-led': 2, 'color-block': 1.5, 'full-bleed': 1 },
   };
   const normItems = arr => (arr || []).map((it, i) => typeof it === 'string' ? { title: it, text: '' } : { title: it.title || it.name || '', text: it.text || it.body || it.description || '', icon: it.icon, bullets: it.bullets }).filter(it => it.title || it.text);
@@ -1834,7 +1864,7 @@ const Engine = (() => {
   }
   // Fit a bulleted or numbered list: every item wraps at the indent, size steps down until all lines fit.
   function fitList(it, region, g) {
-    const lh = it.font.lineHeight || 1.3; let size = it.font.size; const minSize = Math.max(10, size * 0.6); const step = Math.max(2, g.unit / 4);
+    const lh = it.font.lineHeight || 1.3; let size = it.font.size; const minSize = it.minSize || Math.max(10, size * 0.6); const step = Math.max(2, g.unit / 4);
     const n = it.items.length;
     while (size >= minSize) {
       const f = { ...it.font, size }; const indent = snap(size * (it.marker === 'number' ? 2.1 : 1.3), 2); const itemGap = Math.round(size * (it.itemGap ?? 0.4));
@@ -2504,6 +2534,77 @@ const Engine = (() => {
     return { blocks, meta: { cards: n, mode, highlight: highlight >= 0 } };
   };
 
+  // A text-heavy slide kept as written: a headline (and lede) over two to six sections, each a title with a paragraph
+  // and/or bullets, set as columns or a grid. Every section's type steps down together until all of it fits, never
+  // below a size that still reads on a screen. A long body with no sections becomes its paragraphs.
+  A['sections'] = ctx => {
+    const { g, rng, pal, ts, content } = ctx;
+    let secs = (Array.isArray(content.sections) ? content.sections : []).map(x => ({ title: String((x && x.title) || ''), text: String((x && x.text) || ''), bullets: Array.isArray(x && x.bullets) ? x.bullets.map(String).filter(Boolean) : [] })).filter(x => x.title || x.text || x.bullets.length);
+    if (!secs.length) {
+      const body = String(content.body || ''); if (body.length < 240) return null;
+      const paras = body.split(/\n+/).map(t => t.trim()).filter(Boolean);
+      secs = paras.length >= 2 ? paras.slice(0, 6).map(t => ({ title: '', text: t, bullets: [] })) : (() => { const sent = body.match(/[^.!?]+[.!?]+(\s|$)|[^.!?]+$/g) || [body]; const h = Math.ceil(sent.length / 2); return [{ title: '', text: sent.slice(0, h).join('').trim(), bullets: [] }, { title: '', text: sent.slice(h).join('').trim(), bullets: [] }].filter(x => x.text); })();
+    }
+    secs = secs.slice(0, 6); if (!content.headline) return null;
+    const C = g.cols, R = ctx.R, wide = g.w >= g.h * 1.2, tall = g.h > g.w * 1.3, n = secs.length;
+    const style = rng.weighted([{ v: 'plain', w: 3 }, { v: 'cards', w: 2 }, { v: 'ruled', w: 2 }]);
+    const highlight = style === 'cards' && n > 1 && rng.chance(0.3) ? 0 : -1;
+    const blocks = []; const avoid = [];
+    const headItems = [];
+    if (content.eyebrow) headItems.push({ kind: 'text', role: 'eyebrow', path: 'eyebrow', text: content.eyebrow, font: ts.eyebrow, fill: pal.accentText, maxLines: 1, gap: snap(ts.body.size * 0.6, g.unit) });
+    headItems.push({ kind: 'text', role: 'headline', path: 'headline', text: content.headline, font: { ...ts.headline, size: snapFont(ts.headline.size * 0.7, g.unit) }, fill: pal.fg, maxLines: 2, gap: snap(ts.body.size * 0.8, g.unit) });
+    if (content.subhead) headItems.push({ kind: 'text', role: 'subhead', path: 'subhead', text: content.subhead, font: { ...ts.subhead, size: snapFont(ts.subhead.size * 0.85, g.unit) }, fill: pal.fg2, maxLines: 3 });
+    const headRows = content.subhead || content.eyebrow ? 3 : 2;
+    const hr = headlineRegion(ctx, headRows, Math.round(C * (wide ? 0.8 : 1)));
+    const hs = buildStack(headItems, hr, 'left', 'top', g); if (!hs) return null;
+    blocks.push(...hs.blocks); avoid.push(inkRect(hs, hr, 'left'));
+    // where the sections go: columns, a grid of 2 or 3 across, or rows on a tall format
+    // below the headline's ink, to the bottom of the usable area (grid rows are too coarse on a 16:9 slide)
+    const area = Grid.rect(g, 0, ctx.r0, C, R); const top = snap(hs.y1 + Math.max(g.unit * 3, ts.body.size * 1.4), g.unit); const bottom = area.y + area.h;
+    if (bottom - top < g.unit * 10) return null;
+    const across = tall ? 1 : wide ? (n <= 4 ? n : 3) : Math.min(2, n); const down = Math.ceil(n / across);
+    const per = Math.floor(C / across); const cols = [...Array(across)].map((_, k) => Grid.rect(g, k * per, ctx.r0, per, R));
+    const minBody = Math.max(12, Math.min(g.w, g.h) * 0.015); const pad = snap(g.unit * 2.5, g.unit / 2);
+    const colGap = i => (across > 1 && (i % across) < across - 1 && style !== 'cards' ? snap(g.gutter * 0.5, 1) : 0);
+    for (const sc of [1, 0.9, 0.8, 0.72, 0.65, 0.58, 0.52, 0.47]) {
+      const bodyF = { ...ts.body, size: Math.max(minBody, Math.round(ts.body.size * sc)), lineHeight: 1.38 };
+      if (sc < 1 && bodyF.size === minBody && ts.body.size * sc < minBody - 2) break;
+      const titleF = { ...ts.subhead, size: Math.round(Math.max(bodyF.size * 1.15, ts.subhead.size * sc)), weight: nearestWeight(ctx.kit.fonts.body, 600), lineHeight: 1.2 };
+      // every section at one size: the title, its paragraph and its bullets never shrink on their own
+      const itemsFor = i => {
+        const s = secs[i]; const cp = style === 'cards' ? cardPal(ctx, i === highlight) : { fg: pal.fg, fg2: pal.fg2, accentText: pal.accentText };
+        const its = [];
+        if (style === 'ruled') its.push({ kind: 'rule', role: 'rule', fill: pal.accentText, w: snap(g.unit * 4, g.unit), h: Math.max(2, g.unit / 4), gap: snap(bodyF.size * 0.7, g.unit / 2), decorative: true });
+        if (s.title) its.push({ kind: 'text', role: 'title', path: `sections.${i}.title`, text: s.title, font: titleF, fill: style === 'cards' ? cp.fg : cp.accentText, maxLines: 3, minSize: titleF.size, gap: snap(bodyF.size * 0.5, g.unit / 2) });
+        if (s.text) its.push({ kind: 'text', role: 'text', path: `sections.${i}.text`, text: s.text, font: bodyF, fill: cp.fg2, maxLines: 40, minSize: bodyF.size, gap: snap(bodyF.size * 0.6, g.unit / 2) });
+        if (s.bullets.length) its.push({ kind: 'list', role: 'bullets', path: `sections.${i}.bullets`, items: s.bullets.slice(0, 10), marker: 'bullet', font: bodyF, minSize: bodyF.size, fill: cp.fg2, markerFill: style === 'cards' ? cp.accentText : pal.accentText, maxLinesPerItem: 12, itemGap: 0.35 });
+        if (its.length && its[its.length - 1].gap) its[its.length - 1] = { ...its[its.length - 1], gap: 0 };
+        return { its, cp };
+      };
+      const built = secs.map((_, i) => itemsFor(i));
+      // how tall each section is when set at this size; a row is as tall as its tallest section
+      const inset = style === 'cards' ? pad * 2 : 0;
+      const need = built.map((b, i) => { const w = cols[i % across].w - colGap(i) - inset; const st = buildStack(b.its, { x: 0, y: 0, w, h: 1e5 }, 'left', 'top', g); return st ? st.y1 + inset : Infinity; });
+      const rowNeed = [...Array(down)].map((_, k) => Math.max(...need.slice(k * across, k * across + across)));
+      const room = bottom - top - (down - 1) * g.gutter; const sum = rowNeed.reduce((a, b) => a + b, 0);
+      if (!(sum <= room)) continue;
+      // the room left over is shared out: one row takes all of it, several rows get an equal share each
+      const rowH = rowNeed.map(h => down === 1 ? room : Math.floor(h + (room - sum) / down));
+      const rowY = rowH.map((_, k) => top + rowH.slice(0, k).reduce((a, b) => a + b, 0) + k * g.gutter);
+      const rects = secs.map((_, i) => ({ x: cols[i % across].x, w: cols[i % across].w, y: rowY[Math.floor(i / across)], h: rowH[Math.floor(i / across)] }));
+      const out = []; let ok = true;
+      for (let i = 0; i < n && ok; i++) {
+        const { its, cp } = built[i]; const r = rects[i];
+        if (style === 'cards') { const b = card(ctx, r, its, { fill: cp.fill, pad }); if (!b) { ok = false; break; } out.push(...b); }
+        else { const st = buildStack(its, { ...r, w: r.w - colGap(i) }, 'left', 'top', g); if (!st) { ok = false; break; } out.push(...st.blocks); }
+      }
+      if (ok) { blocks.push(...out); for (const r of rects) avoid.push(r); const logo = placeLogo(ctx, avoid, ['TR', 'BR']); if (logo) blocks.push(logo); return { blocks, meta: { sections: n, across, style, scale: sc, body: bodyF.size } }; }
+    }
+    return null;
+  };
+
+  A['diagram'] = ctx => (typeof Diagram !== 'undefined' ? Diagram.archetype(ctx, { buildStack, headlineRegion, inkRect, placeLogo, snap, snapFont, nearestWeight, cardPal }) : null);
+
   A['quote'] = ctx => {
     const { g, rng, pal, ts, content } = ctx;
     if (!content.quote) return null;
@@ -2584,8 +2685,9 @@ const Engine = (() => {
         : { 'type-led': 2, split: 2, poster: 1.5, 'full-bleed': 1.5, 'color-block': 2, editorial: 1.5, mosaic: n >= 2 ? 1 : 0.2, stat: 1 };
     if (intent.slideIntent && INTENT_WEIGHTS[intent.slideIntent]) {
       const iw = INTENT_WEIGHTS[intent.slideIntent]; for (const k of Object.keys(w)) w[k] = 0; for (const k of Object.keys(iw)) w[k] = iw[k];
-      for (const k of ['agenda', 'comparison', 'process', 'cards', 'quote']) if (!(k in w)) w[k] = 0;
-    } else { for (const k of ['agenda', 'comparison', 'process', 'cards', 'quote']) w[k] = (intent.archetypes && intent.archetypes.includes(k)) ? 1 : 0; }
+      for (const k of ['agenda', 'comparison', 'process', 'cards', 'quote', 'sections', 'diagram']) if (!(k in w)) w[k] = 0;
+    } else { for (const k of ['agenda', 'comparison', 'process', 'cards', 'quote', 'sections', 'diagram']) w[k] = (intent.archetypes && intent.archetypes.includes(k)) ? 1 : 0; }
+    if (!content.diagram) w.diagram = 0;
     if (!n) { w['full-bleed'] = 0; w.mosaic = 0; w.poster *= 0.6; w.split *= 0.7; }
     if (!content.stat) w.stat = 0;
     if (!content.quote) w.quote = 0;
@@ -2698,7 +2800,7 @@ const Engine = (() => {
     const pal = choosePalette({ rng: RNG.make(seed), kit, intent });
     return pal ? { bg: pal.bg, fg: pal.fg, accent: pal.accent, bgName: pal.bgName } : null;
   }
-  return { generate, generateMany, ARCHETYPES, ARCH_LABEL, SLIDE_INTENTS, INTENT_WEIGHTS, H_LEVELS, typeSet, logoAspect, contentSchema, hydrate, palettePick, normItems };
+  return { generate, generateMany, ARCHETYPES, ARCH_LABEL, SLIDE_INTENTS, INTENT_WEIGHTS, H_LEVELS, typeSet, logoAspect, contentSchema, hydrate, palettePick, normItems, buildStack };
 })();
 
 /* js/icons.js */
@@ -3393,7 +3495,7 @@ content: only fields the brief explicitly supplies (quoted copy, a CTA, a stat),
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
-      body: JSON.stringify({ model: 'claude-opus-5-5', max_tokens: 2048, system, messages: [{ role: 'user', content: `Brief:\n${brief}\n\nSlide intent: ${slideIntent || 'single piece'}\n\nCurrent copy (reference):\n${JSON.stringify(current, null, 1)}` }], output_config: { effort: 'low', format: { type: 'json_schema', schema } } }),
+      body: JSON.stringify({ model: 'claude-opus-5-5', max_tokens: 2048, system, messages: [{ role: 'user', content: `Brief:\n${brief}\n\nSlide intent: ${slideIntent || 'single piece'}\n\n${Brand.voiceText(kit) ? Brand.voiceText(kit) + '\n\n' : ''}Current copy (reference):\n${JSON.stringify(current, null, 1)}` }], output_config: { effort: 'low', format: { type: 'json_schema', schema } } }),
     });
     if (!res.ok) throw new Error(`Claude request failed (${res.status}): ${(await res.text()).slice(0, 300)}`);
     const data = await res.json();
@@ -3620,7 +3722,7 @@ const Copy = (() => {
 /* Deck mode: a brief becomes an outline (one intent per slide), the engine generates variations per slide
    under one palette and type level, you pick one per slide, and the picks export as one editable deck. */
 const Deck = (() => {
-  const INTENT_LABEL = { cover: 'Cover', agenda: 'Agenda', statement: 'Statement', stat: 'Big number', comparison: 'Comparison', process: 'Process', cards: 'Cards', quote: 'Quote', body: 'Body copy', closing: 'Closing' };
+  const INTENT_LABEL = { cover: 'Cover', agenda: 'Agenda', statement: 'Statement', stat: 'Big number', comparison: 'Comparison', process: 'Process', cards: 'Cards', quote: 'Quote', body: 'Body copy', sections: 'Text-heavy', diagram: 'Diagram', closing: 'Closing' };
   const INTENT_KEYS = [
     [/\b(cover|title|intro|opening|welcome)\b/i, 'cover'], [/\b(agenda|contents|overview|what we.ll cover|toc)\b/i, 'agenda'],
     [/\b(problem|why now|challenge|context|statement|thesis|belief|pain)\b/i, 'statement'], [/\b(stat|number|metric|kpi|proof|results?|numbers)\b/i, 'stat'],
@@ -3720,7 +3822,7 @@ const Deck = (() => {
     const system = `You write presentation outlines for a layout engine. Return JSON that follows the schema exactly.
 Intents and what each needs: cover (eyebrow, headline, subhead) · agenda (headline, items: titles of the other slides) · statement (headline ≤ 90 chars, subhead) · stat (stat like "150+" or "3 min", headline as its caption, subhead) · comparison (headline, exactly 2 columns with a title and 3 bullets each) · process (headline, 3 to 5 steps with title ≤ 32 chars and text ≤ 90 chars) · cards (headline, 3 to 4 items with title ≤ 32 chars and text ≤ 110 chars) · quote (quote ≤ 160 chars, attribution) · body (headline, body ≤ 300 chars) · closing (headline, subhead, cta).
 Rules: first slide is a cover, last is a closing. 6 to 10 slides unless the brief says otherwise. Sentence case headlines, no exclamation marks, no emojis, active voice, concrete facts only from the brief and brand facts; never invent numbers. Fields a slide does not use must be empty strings or empty arrays. Write in the brand's voice.`;
-    const brand = { name: kit.name, tagline: kit.content.subhead, products: kit.content.body, cta: kit.content.cta, sampleDeck: kit.deck ? kit.deck.slides.slice(0, 3) : null };
+    const brand = { name: kit.name, tagline: kit.content.subhead, products: kit.content.body, cta: kit.content.cta, sampleDeck: kit.deck ? kit.deck.slides.slice(0, 3) : null, writing: kit.voice || null };
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
@@ -4544,7 +4646,7 @@ const PptxImport = (() => {
     let blk;
     if (b.h < 1 || b.w < 1) blk = { id: uid(), kind: 'line', x: b.x, y: b.y, w: Math.max(1, b.w), h: 0, fill: color, width: r2(w), decorative: true, label: nameOf(el) || 'line' };
     else { const [x1, y1, x2, y2] = [b.flipH ? b.w : 0, b.flipV ? b.h : 0, b.flipH ? 0 : b.w, b.flipV ? 0 : b.h]; blk = { id: uid(), kind: 'vector', x: b.x, y: b.y, w: b.w, h: b.h, viewBox: [0, 0, b.w, b.h], svg: `<path d="M${r2(x1)} ${r2(y1)}L${r2(x2)} ${r2(y2)}" fill="none" stroke="${color}" stroke-width="${r2(w)}"/>`, fill: color, decorative: true, label: nameOf(el) || 'line' }; }
-    if (parentId) blk.parent = parentId; ctx.blocks.push(blk);
+    blk.connector = true; if (parentId) blk.parent = parentId; ctx.blocks.push(blk);
   }
   // Preset geometry -> the closest block. Unknown presets become rectangles of the same box.
   async function shape(el, ctx, xf, parentId) {
@@ -4575,6 +4677,7 @@ const PptxImport = (() => {
     else if (vk === 'ellipse') { if (fill || line) visual = paint({ id: uid(), kind: 'shape', shape: Math.abs(b.w - b.h) < 1 ? 'circle' : 'ellipse', x: b.x, y: b.y, w: b.w, h: b.h, fill: 'none', decorative: true, label: label || 'ellipse' }); }
     else if (vk === 'cust') { const d = custPath(at(spPr, 'custGeom'), b); if (d && (fill || line)) visual = { id: uid(), kind: 'vector', x: b.x, y: b.y, w: Math.max(1, b.w), h: Math.max(1, b.h), viewBox: [0, 0, Math.max(1, b.w), Math.max(1, b.h)], svg: `<path d="${d}" fill="${fill && fill.color ? fill.color.hex : 'none'}"${fill && fill.color && fill.color.a < 1 ? ` fill-opacity="${r2(fill.color.a)}"` : ''}${line ? ` stroke="${line.color}" stroke-width="${r2(line.width * ctx.S)}"` : ''}/>`, fill: fill && fill.color ? fill.color.hex : '#000000', decorative: true, label: label || 'shape' }; }
     else if (vk === 'other' && (fill || line) && !hasText) visual = paint({ id: uid(), kind: 'field', x: b.x, y: b.y, w: b.w, h: b.h, fill: '#FFFFFF', radius, decorative: true, label: label || prst });
+    if (visual && prst !== 'rect') visual.geom = prst;
     if (!hasText) { if (visual) { if (parentId) visual.parent = parentId; ctx.blocks.push(visual); } else if (vk === 'rect' && (fill || line)) { const f = paint({ id: uid(), kind: 'field', x: b.x, y: b.y, w: b.w, h: b.h, fill: '#FFFFFF', radius, decorative: true, label: label || 'rectangle' }); if (!fill) f.alpha = 0; if (parentId) f.parent = parentId; ctx.blocks.push(f); } return; }
     // A text box: a stack with the shape's fill (rectangles) holding one text block per run of same-styled paragraphs.
     const rectLike = vk === 'rect' || vk === 'other';
@@ -4589,6 +4692,7 @@ const PptxImport = (() => {
       auto: { v: 2, mode: 'vertical', wrap: false, gap: 0, gapAuto: false, counterGap: 0, counterGapAuto: false, pad: { t: r2(ins('tIns')), r: r2(ins('rIns')), b: r2(ins('bIns')), l: r2(ins('lIns')) }, main: anchor === 'ctr' ? 'center' : anchor === 'b' ? 'end' : 'start', cross: 'start' }, sizeW: 'fixed', sizeH: autofit === 'grow' ? 'hug' : 'fixed' });
     if (!rectLike || !visual) { if (!fill || !rectLike) { box.fill = 'none'; delete box.gradient; delete box.fillAlpha; } if (!rectLike) delete box.stroke; }
     if (b.rot) box.rotation = r2(b.rot);
+    if (prst !== 'rect') box.geom = prst; // the deck reader tells drawn diagrams (chevrons, arrows, circles) from text boxes
     if (parentId) box.parent = parentId;
     ctx.blocks.push(box);
     const kind = info ? (info.type === 'title' || info.type === 'ctrTitle' ? 'title' : /^(body|subTitle|obj)$/.test(info.type) ? 'body' : 'other') : 'other';
@@ -4855,12 +4959,22 @@ const DeckDigest = (() => {
         }
       }
       const pics = B.filter(b => b.kind === 'image' && b.asset && !b.decorative && b.w * b.h >= area * 0.035 && (uses.get(b.asset) || 0) < Math.max(3, n * 0.4)).sort((a, b) => b.w * b.h - a.w * a.h);
-      return { n: i + 1, title: head ? textOf(head).join(' ') : '', lines, images: [...new Set(pics.map(b => b.asset))].slice(0, 2) };
+      return { n: i + 1, title: head ? textOf(head).join(' ') : '', lines, images: [...new Set(pics.map(b => b.asset))].slice(0, 2), drawn: drawnOf(B, head, textOf) };
     });
     // words that repeat on many slides are a footer ("Confidential", the company name), not content
     const seen = new Map(); for (const s of slides) for (const t of new Set(s.lines.map(l => l.text))) seen.set(t, (seen.get(t) || 0) + 1);
     const limit = Math.max(3, n * 0.4); for (const s of slides) s.lines = s.lines.filter(l => (seen.get(l.text) || 0) < limit);
     return { title: sp(name).replace(/\.pptx$/i, '') || (slides[0] && slides[0].title) || 'Deck', slides, pictures: true };
+  }
+  // Shapes joined by connectors or arrows, or a run of chevrons, are a drawn diagram: what each shape says and where it sits.
+  function drawnOf(B, head, textOf) {
+    const links = B.filter(b => b.connector || /arrow|chevron|homePlate|connector|^line$/i.test(b.geom || '')).length;
+    const nodes = B.filter(b => b.kind === 'box' && (b.geom || (b.fill && b.fill !== 'none') || b.stroke) && !(head && head.parent === b.id))
+      .map(b => ({ parts: B.filter(x => x.parent === b.id && (x.kind === 'text' || x.kind === 'list')).flatMap(textOf), x: b.x + b.w / 2, y: b.y + b.h / 2, geom: b.geom || '' }))
+      .filter(x => x.parts.length && x.parts.join(' ').length <= 200);
+    const chevrons = nodes.filter(x => /chevron|homePlate|arrow/i.test(x.geom)).length;
+    if (nodes.length < 3 || nodes.length > 12 || (links < 2 && chevrons < 3)) return null;
+    return { links, chevrons, nodes };
   }
   // The deck as it should be rebuilt: nothing after a slide that says to ignore the rest, no empty slides.
   function prune(deck) {
@@ -4873,7 +4987,51 @@ const DeckDigest = (() => {
 
   // ---- Rules: each slide sorted by what is on it ---------------------------------------------------------------------------
   const pairOf = t => { const m = /^(.{2,48}?)\s*(?::|\s[–—-])\s+(.{3,})$/.exec(t); return m ? { title: sp(m[1]), text: sp(m[2]) } : null; };
-  function slideByRules(s, i, n, deck) {
+  // A slide that is a structure is drawn as one. Shapes from a .pptx: a ring is a cycle, one shape over rows of more is a
+  // tree, a rising diagonal a staircase, a 2 by 2 a matrix (a cycle when arrows join it), anything else a flow in reading order.
+  function diagramFromDrawn(d) {
+    const N = d.nodes; const xs = N.map(x => x.x), ys = N.map(x => x.y);
+    const sx = Math.max(...xs) - Math.min(...xs) || 1, sy = Math.max(...ys) - Math.min(...ys) || 1;
+    const rows = []; const tol = Math.max(24, sy * 0.12);
+    for (const x of [...N].sort((a, b) => a.y - b.y)) { const r = rows.find(r => Math.abs(r.y - x.y) <= tol); if (r) r.list.push(x); else rows.push({ y: x.y, list: [x] }); }
+    rows.forEach(r => r.list.sort((a, b) => a.x - b.x));
+    const node = x => { const p = x.parts.length === 1 ? pairOf(x.parts[0]) : null; return p ? { label: p.title, text: p.text, parent: -1 } : { label: x.parts[0], text: x.parts.slice(1).join(' '), parent: -1 }; };
+    const cx = xs.reduce((a, b) => a + b, 0) / N.length, cy = ys.reduce((a, b) => a + b, 0) / N.length;
+    const ds = N.map(x => Math.hypot((x.x - cx) / sx, (x.y - cy) / sy)); const dmin = Math.min(...ds), dmax = Math.max(...ds);
+    const angle = x => (Math.atan2((x.y - cy) / sy, (x.x - cx) / sx) + Math.PI / 2 + Math.PI * 4) % (Math.PI * 2);
+    let type = 'flow', order = rows.flatMap(r => r.list), parents = null;
+    if (N.length === 4 && rows.length === 2 && rows.every(r => r.list.length === 2)) { if (d.links >= 3) { type = 'cycle'; order = [rows[0].list[0], rows[0].list[1], rows[1].list[1], rows[1].list[0]]; } else type = 'matrix'; }
+    else if (N.length >= 4 && rows.length >= 3 && dmin > 0.25 && dmax - dmin < 0.3 * dmax) { type = 'cycle'; order = [...N].sort((a, b) => angle(a) - angle(b)); }
+    else if (rows.length >= 2 && rows[0].list.length === 1 && rows.some(r => r.list.length >= 2)) {
+      type = 'tree'; parents = new Map();
+      for (let k = 1; k < rows.length; k++) for (const x of rows[k].list) parents.set(x, rows[k - 1].list.reduce((b, p) => Math.abs(p.x - x.x) < Math.abs(b.x - x.x) ? p : b));
+    }
+    else if (rows.length === N.length && N.length >= 3 && [...N].sort((a, b) => a.x - b.x).every((x, k, a) => k === 0 || (x.y < a[k - 1].y && x.x - a[k - 1].x > sx * 0.1))) { type = 'staircase'; order = [...N].sort((a, b) => a.x - b.x); }
+    const nodes = order.map(node);
+    if (parents) order.forEach((x, k) => { const p = parents.get(x); if (p) nodes[k].parent = order.indexOf(p); });
+    if (type === 'flow' && nodes.filter(x => MARK.test(x.label)).length >= Math.max(2, nodes.length - 1)) type = 'timeline';
+    return { type, nodes, used: new Set(N.flatMap(x => x.parts)) };
+  }
+  // In words: numbered milestones, phases or stages (or years and quarters) in order are a timeline, each with the text
+  // under it; a line that chains three or more steps with arrows is a flow.
+  const MARK = /^((milestone|phase|stage|step|wave|horizon|release|sprint|year|month|week|day)\s*\d+\b|q[1-4]\s*(fy)?\s*'?\d{2,4}\b|h[12]\s*(fy)?\s*'?\d{2,4}\b|(fy\s?)?(19|20)\d{2}\b)/i;
+  function diagramFromLines(lines) {
+    const marks = []; const lead = [], tail = []; let cur = null;
+    for (const l of lines) {
+      const m = MARK.exec(l);
+      if (m) { const p = pairOf(l); cur = l.length <= 60 && !p ? { label: l, text: '' } : p ? { label: p.title, text: p.text } : { label: m[0], text: sp(l.slice(m[0].length).replace(/^[\s:–—-]+/, '')) }; cur.lines = [l]; marks.push(cur); }
+      else if (cur && (!cur.text || l.length <= 150) && !tail.length) { cur.text = sp(cur.text + ' ' + l); cur.lines.push(l); }
+      else if (cur) tail.push(l); else lead.push(l);
+    }
+    if (marks.length >= 3 && marks.length <= 8 && marks.filter(x => x.text).length >= marks.length - 1)
+      return { type: 'timeline', nodes: marks.map(x => ({ label: x.label, text: x.text, parent: -1 })), used: new Set(marks.flatMap(x => x.lines)), lead, tail };
+    for (const l of lines) {
+      const parts = l.split(/\s*(?:→|->|=>|⟶|➜|➔)\s*/).map(sp).filter(Boolean);
+      if (parts.length >= 3 && parts.length <= 6 && parts.every(x => x.length <= 48)) return { type: 'flow', nodes: parts.map(x => ({ label: x, text: '', parent: -1 })), used: new Set([l]), lead: lines.filter(x => x !== l), tail: [] };
+    }
+    return null;
+  }
+  function slideByRules(s, i, n, deck, opts = {}) {
     const lines = s.lines.map(l => l.text); const all = lines.join(' ');
     let title = s.title; if (!title && lines.length && lines[0].length <= 90) title = lines.shift();
     const headline = cut(title || deck.title, 110);
@@ -4886,11 +5044,26 @@ const DeckDigest = (() => {
     if (/^(agenda|contents|table of contents|overview|today|what we('|’)ll cover|outline|topics)\b/.test(t) && lines.length >= 2) return { ...base, intent: 'agenda', items: lines.slice(0, 8).map(l => ({ title: cut(l, 60), text: '' })) };
     const q = lines.findIndex(l => /^[“"‘]/.test(l) && l.length >= 30);
     if (q >= 0) return { ...base, intent: 'quote', quote: cut(lines[q].replace(/^[“"‘]+|[”"’]+$/g, ''), 220), attribution: cut((lines[q + 1] || '').replace(/^[—–~-]\s*/, ''), 60) };
+    const dg = (s.drawn && diagramFromDrawn(s.drawn)) || diagramFromLines(lines);
+    if (dg) {
+      // what the diagram does not hold leads it (a short line) or goes to the speaker notes, never lost
+      const rest = dg.lead ? dg.lead : lines.filter(l => !dg.used.has(l)); const lead = rest.join(' '); const tail = (dg.tail || []).join(' ');
+      const long = dg.nodes.some(x => x.label.length > 32 || x.text.length > 160);
+      return { ...base, intent: 'diagram', diagram: { type: dg.type, nodes: dg.nodes.slice(0, 8).map(x => ({ ...x, label: cut(x.label, 32), text: cut(x.text, 160) })) }, subhead: lead.length <= 200 ? lead : '', notes: [lead.length > 200 ? lead : '', tail, long || dg.nodes.length > 8 ? dg.nodes.map(x => x.label + (x.text ? ': ' + x.text : '')).join('\n') : ''].filter(Boolean).join('\n\n') };
+    }
     const rows = s.lines.filter(l => l.table).map(l => l.text.split(' | ').map(sp));
     if (rows.length >= 2) {
       const w = rows[0].length;
       if (w === 2 || w === 3) { const off = w - 2; return { ...base, intent: 'comparison', columns: [1, 2].map(c => ({ title: cut(rows[0][c - 1 + off] || '', 40), bullets: rows.slice(1, 5).map(r => cut(off ? `${r[0]}: ${r[c]}` : r[c - 1], 80)).filter(Boolean) })) }; }
       return { ...base, intent: 'cards', items: rows.slice(1, 7).map(r => ({ title: cut(r[0], 32), text: cut(r.slice(1).join(' · '), 110) })) };
+    }
+    // a long slide with headed parts (short heading lines followed by text) stays whole as sections
+    if (opts.keepText !== false && words(all) > 90) {
+      const secs = []; let cur = null;
+      for (const l of lines) { if (l.length <= 48 && !/[.!?]$/.test(l) && !/^\d/.test(l)) { cur = { title: l, text: '', bullets: [] }; secs.push(cur); } else { if (!cur) { cur = { title: '', text: '', bullets: [] }; secs.push(cur); } if (l.length > 140 && !cur.bullets.length && !cur.text) cur.text = l; else cur.bullets.push(l); } }
+      const good = secs.filter(x => x.text || x.bullets.length);
+      if (good.length >= 2 && good.length <= 6) return { ...base, intent: 'sections', sections: good.map(x => ({ title: cut(x.title, 40), text: cut(x.text, 420), bullets: x.bullets.slice(0, 6).map(b => cut(b, 200)) })) };
+      if (good.length === 1 || words(all) > 140) return { ...base, intent: 'sections', body: cut(all, 1400) };
     }
     const nums = lines.map(l => NUM.test(l) ? { stat: l, text: '' } : (() => { const m = NUM_LEAD.exec(l); return m ? { stat: m[1], text: m[2] } : null; })()).filter(Boolean);
     if (nums.length === 1 && lines.length <= 4) { const other = lines.filter(l => !l.startsWith(nums[0].stat)); return { ...base, intent: 'stat', stat: cut(nums[0].stat, 14), headline: cut(nums[0].text || title || other[0] || '', 90), subhead: cut(other.join(' '), 140) }; }
@@ -4904,9 +5077,36 @@ const DeckDigest = (() => {
     if (words(all) <= 30) return { ...base, intent: 'statement', headline: cut(title || lines.shift() || deck.title, 110), subhead: cut(lines.join(' '), 140) };
     return { ...base, intent: 'body', body: cut(all, 360) };
   }
-  function rules(deck0) {
-    const deck = prune(deck0); const n = deck.slides.length;
-    const slides = deck.slides.map((s, i) => slideByRules(s, i, n, deck)).map(finish);
+  // Headlines the way the brand writes them (the rules path; Claude follows the writing rules itself): Title Case
+  // becomes sentence case, end punctuation and trailing dots go. Words the deck capitalizes mid-sentence elsewhere
+  // (names, places, products), acronyms and anything with digits keep their capitals.
+  function properNouns(deck) {
+    const keep = new Set(['deel', 'i']); const lower = new Set(), mid = new Set(); const core = w => w.replace(/^[^A-Za-z]+|[^A-Za-z']+$/g, '');
+    for (const sl of deck.slides) for (const l of sl.lines) {
+      const ws = l.text.split(/\s+/); for (const w of ws) if (/^[a-z]/.test(core(w))) lower.add(core(w).toLowerCase());
+      // a line in Title Case says nothing about which words are names
+      if (ws.filter(w => /^[A-Z][a-z]/.test(core(w))).length > ws.length * 0.5) continue;
+      for (let i = 1; i < ws.length; i++) { const w = core(ws[i]); if (w && /^[A-Z][a-z]/.test(w) && !/[.!?:]$/.test(ws[i - 1])) mid.add(w.toLowerCase()); }
+    }
+    for (const w of mid) if (!lower.has(w)) keep.add(w);
+    return keep;
+  }
+  function polish(t, keep) {
+    let s = sp(t).replace(/\s*(\.{2,}|…)+$/, '').replace(/[.!]+$/, '').trim(); if (!s) return s;
+    const ws = s.split(' '); const caps = ws.filter(w => /^[A-Z][a-z]/.test(w.replace(/^[^A-Za-z]+/, ''))).length;
+    if (ws.length < 3 || caps < Math.max(2, ws.length * 0.6)) return s;
+    return ws.map((w, i) => { const core = w.replace(/^[^A-Za-z]+|[^A-Za-z']+$/g, ''); if (i === 0 || !core || /[A-Z].*[A-Z]/.test(core) || /\d/.test(w) || keep.has(core.toLowerCase()) || /^Deel$/i.test((ws[i - 1] || '').replace(/[^A-Za-z]/g, ''))) return w; return /^[A-Z][a-z]/.test(core) ? w.replace(core, core.toLowerCase()) : w; }).join(' ');
+  }
+  function polishSlide(sl, keep) {
+    sl.headline = polish(sl.headline, keep);
+    for (const k of ['items', 'steps']) if (sl[k]) sl[k] = sl[k].map(x => ({ ...x, title: polish(x.title, keep) }));
+    if (sl.sections) sl.sections = sl.sections.map(x => ({ ...x, title: polish(x.title, keep) }));
+    if (sl.columns) sl.columns = sl.columns.map(c => ({ ...c, title: polish(c.title, keep) }));
+    return sl;
+  }
+  function rules(deck0, opts = {}) {
+    const deck = prune(deck0); const n = deck.slides.length; const keep = properNouns(deck);
+    const slides = deck.slides.map((s, i) => slideByRules(s, i, n, deck, opts)).map(finish).map(sl => polishSlide(sl, keep));
     return { title: deck.title, slides, source: 'deck', by: 'rules', from: { title: deck.title, slides: deck0.slides.length, used: n, ignored: deck.ignored, pictures: deck.pictures } };
   }
   // Every outline slide carries every field the engine reads, so nothing falls back to the brand's sample copy.
@@ -4916,12 +5116,16 @@ const DeckDigest = (() => {
     if (o.items && o.items.length) s.items = pairs(o.items).slice(0, 8);
     if (o.steps && o.steps.length) s.steps = pairs(o.steps).slice(0, 6);
     if (o.bullets && o.bullets.length) s.bullets = o.bullets.map(sp).filter(Boolean).slice(0, 8);
+    if (Array.isArray(o.sections) && o.sections.length) s.sections = o.sections.slice(0, 6).map(x => ({ title: sp(x && x.title), text: sp(x && x.text), bullets: (x && Array.isArray(x.bullets) ? x.bullets : []).map(sp).filter(Boolean).slice(0, 10) })).filter(x => x.title || x.text || x.bullets.length);
+    if (o.diagram && typeof Diagram !== 'undefined') { const d = Diagram.norm(o.diagram); if (d) s.diagram = d; }
     if (o.columns && o.columns.length) s.columns = o.columns.slice(0, 2).map(c => ({ title: sp(c && c.title), bullets: (c && Array.isArray(c.bullets) ? c.bullets : []).map(sp).filter(Boolean).slice(0, 5) }));
     if (s.intent === 'quote' && !s.quote) { s.intent = 'statement'; }
     if (s.intent === 'stat' && !s.stat) s.intent = 'statement';
     if ((s.intent === 'cards' || s.intent === 'agenda') && !(s.items && s.items.length)) s.intent = s.body ? 'body' : 'statement';
     if (s.intent === 'process' && !(s.steps && s.steps.length)) s.intent = s.body ? 'body' : 'statement';
     if (s.intent === 'comparison' && !(s.columns && s.columns.length === 2)) s.intent = s.body ? 'body' : 'statement';
+    if (s.intent === 'sections' && !(s.sections && s.sections.length) && String(o.body || '').length < 240) s.intent = s.body ? 'body' : 'statement';
+    if (s.intent === 'diagram' && !s.diagram) s.intent = s.items && s.items.length ? 'cards' : s.body ? 'body' : 'statement';
     if (o.notes) s.notes = String(o.notes).slice(0, 2000);
     return s;
   }
@@ -4933,16 +5137,20 @@ const DeckDigest = (() => {
     if (s.steps) s.steps = s.steps.slice(0, 4).map(x => ({ title: cut(x.title, 26), text: cut(x.text, 70) }));
     if (s.columns) s.columns = s.columns.map(c => ({ title: cut(c.title, 28), bullets: c.bullets.slice(0, 3).map(b => cut(b, 56)) }));
     if (s.bullets) s.bullets = s.bullets.slice(0, 4).map(b => cut(b, 60));
+    if (s.sections) s.sections = s.sections.slice(0, 4).map(x => ({ title: cut(x.title, 32), text: cut(x.text, 220), bullets: (x.bullets || []).slice(0, 4).map(b => cut(b, 110)) }));
+    if (s.diagram) s.diagram = { ...s.diagram, nodes: s.diagram.nodes.slice(0, 8).map(x => ({ ...x, label: cut(x.label, 28), text: cut(x.text, 50) })) };
     return s;
   }
 
   // ---- Claude: a few slides per request ----------------------------------------------------------------------------------------
-  const FIELDS = 'intent, eyebrow, headline, subhead, body, items [{title, text}], steps [{title, text}], columns [{title, bullets}], quote, attribution, stat, cta, notes';
-  function promptFor(batch, deck, kit, first, last) {
-    const src = batch.map(s => `### Slide ${s.n}${s.title ? `: ${s.title}` : ''}${s.images.length ? ` (has ${s.images.length} picture${s.images.length > 1 ? 's' : ''})` : ''}\n` + s.lines.map(l => (l.table ? '| ' : l.list ? '- ' : l.head ? '## ' : '') + l.text).join('\n').slice(0, 6000)).join('\n\n');
+  const FIELDS = 'intent, eyebrow, headline, subhead, body, items [{title, text}], steps [{title, text}], columns [{title, bullets}], sections [{title, text, bullets}], diagram {type, nodes [{label, text, parent}]}, quote, attribution, stat, cta, notes';
+  function promptFor(batch, deck, kit, first, last, opts = {}) {
+    const keep = opts.keepText !== false;
+    const drawnNote = s => { if (!s.drawn) return ''; const d = diagramFromDrawn(s.drawn); return `(drawn on the slide as a diagram: ${s.drawn.nodes.length} shapes${s.drawn.links ? ` joined by ${s.drawn.links} connectors or arrows` : ''}, laid out like a ${d.type})\n`; };
+    const src = batch.map(s => `### Slide ${s.n}${s.title ? `: ${s.title}` : ''}${s.images.length ? ` (has ${s.images.length} picture${s.images.length > 1 ? 's' : ''})` : ''}\n` + drawnNote(s) + s.lines.map(l => (l.table ? '| ' : l.list ? '- ' : l.head ? '## ' : '') + l.text).join('\n').slice(0, 6000)).join('\n\n');
     return `You turn slides from an existing presentation into an outline for a brand layout engine that redraws every slide in the ${kit.name} brand. The presentation is "${deck.title}".
 
-Return one outline slide for each source slide below, in the same order, each with "source" set to its slide number. A very dense source slide may become two outline slides with the same "source"; a slide that only repeats the previous one may be left out.
+Return one outline slide for each source slide below, in the same order, each with "source" set to its slide number. ${keep ? 'Keep dense slides whole: a text-heavy slide (an executive summary, a page of sections) becomes one "sections" slide that keeps all its points, lightly edited for clarity, rather than being cut or split.' : 'A very dense source slide may become two outline slides with the same "source".'} A slide that only repeats the previous one may be left out.
 
 Intents and the fields each uses:
 - cover: eyebrow (≤ 24 chars), headline (≤ 70), subhead (≤ 140)
@@ -4950,17 +5158,19 @@ Intents and the fields each uses:
 - statement: headline (≤ 90) and subhead (≤ 140). Section dividers and single big ideas.
 - stat: stat (the number as written, e.g. "$1BN", "1.5-2x", "+237%"), headline as its caption (≤ 70), subhead (≤ 140)
 - comparison: headline, exactly 2 columns, each a title (≤ 30) and 2 to 4 bullets (≤ 70)
-- process: headline, 3 to 6 steps (title ≤ 32, text ≤ 90). Sequences, milestones, phases, timelines.
+- process: headline, 3 to 6 steps (title ≤ 32, text ≤ 90). A short sequence of how-to steps.
 - cards: headline, 2 to 6 items (title ≤ 32, text ≤ 110). Parallel points, pillars, options, several numbers (the number as the title).
 - quote: quote (≤ 200), attribution
+- sections: headline, optional subhead (a one-line lede), 2 to 6 sections, each a title (≤ 40) with text (a short paragraph) and/or bullets. For text-heavy slides${keep ? ' the presenter wants kept whole: keep every point' : ''}.
+- diagram: headline, optional subhead, diagram {type, nodes}. Use it whenever the slide is a structure, drawn or written: a slide marked "drawn on the slide as a diagram", numbered milestones, phases or dated steps (timeline, even when each has a sentence), a team or org structure (tree), a loop (cycle), tiers or price bands (staircase or pyramid), a 2 by 2 (matrix), a chain joined by arrows (flow). Prefer it to process, cards and sections for these. Types: flow (a sequence or cause → effect, 2 to 6 nodes), cycle (a loop, 3 to 8), tree (an org chart or hierarchy: nodes with "parent" set to the index of their parent node, root first), timeline (dated or numbered milestones, 2 to 8), mindmap (one central idea, node 0, with branches whose parent is 0), pyramid (layers, top first), staircase (rising tiers, e.g. price bands, lowest first), matrix (four quadrants). Node label ≤ 32, text ≤ 70 (≤ 160 on slides kept whole).
 - body: headline, body (≤ 360). Only when nothing above fits.
 - closing: headline, subhead, cta (≤ 30)
 ${first ? 'The first source slide is the cover: its headline is the presentation\'s own title as that slide shows it, and its subtitle the subhead.' : ''}${last ? ' If the last source slide ends the talk (thanks, questions, next steps) it is the closing.' : ''}
 
 Vary the intents where the content allows (a key number as a stat slide, a sequence as a process, two sides as a comparison, a section title as a statement): cards should not be most of the deck.
-Rules: keep the presentation's own facts, numbers, names and terms; condense long text to what a slide can hold (it is read in seconds) and put the detail you cut, in full sentences, in "notes" for the speaker; never invent facts or numbers; fix obvious typos; sentence case headlines; no emojis, no exclamation marks. Unused fields are "" or [].
+${typeof Brand !== 'undefined' && Brand.voiceText(kit) ? Brand.voiceText(kit) + '\n' : ''}Rules: keep the presentation's own facts, numbers, names and terms; ${keep ? 'on slides that are not kept whole, ' : ''}condense long text to what a slide can hold (it is read in seconds) and put the detail you cut, in full sentences, in "notes" for the speaker; never invent facts or numbers; fix obvious typos; sentence case headlines; no emojis, no exclamation marks. Unused fields are "" or [].
 
-Reply with only JSON: {"slides":[{"source":2,"intent":"stat","eyebrow":"","headline":"…","subhead":"","body":"","items":[],"steps":[],"columns":[],"quote":"","attribution":"","stat":"$1BN","cta":"","notes":"…"}]}
+Reply with only JSON: {"slides":[{"source":2,"intent":"stat","eyebrow":"","headline":"…","subhead":"","body":"","items":[],"steps":[],"columns":[],"sections":[],"diagram":null,"quote":"","attribution":"","stat":"$1BN","cta":"","notes":"…"}]}
 Fields: ${FIELDS}.
 
 Source slides:
@@ -4969,7 +5179,7 @@ ${src}`;
   }
   function batches(slides) { const out = []; let cur = [], size = 0; for (const s of slides) { const n = s.lines.reduce((t, l) => t + l.text.length, s.title.length); if (cur.length && (cur.length >= 6 || size + n > 9000)) { out.push(cur); cur = []; size = 0; } cur.push(s); size += n; } if (cur.length) out.push(cur); return out; }
   // ask(prompt) -> parsed JSON. Batches go two at a time; one that fails falls back to rules for its slides.
-  async function withClaude(deck0, kit, ask, onProgress) {
+  async function withClaude(deck0, kit, ask, onProgress, opts = {}) {
     const deck = prune(deck0); const n = deck.slides.length; const groups = batches(deck.slides);
     const results = new Array(groups.length); let done = 0, failed = 0, next = 0, stop = null;
     const runOne = async () => { if (next < groups.length) await step(); };
@@ -4980,25 +5190,288 @@ ${src}`;
         // once Claude is declined or out of turns, the rest goes by rules at once
         try {
           if (stop) throw stop;
-          const res = await ask(promptFor(g, deck, kit, gi === 0, gi === groups.length - 1));
+          const res = await ask(promptFor(g, deck, kit, gi === 0, gi === groups.length - 1, opts));
           const list = (res && Array.isArray(res.slides) ? res.slides : Array.isArray(res) ? res : []).filter(x => x && typeof x === 'object');
           const own = new Set(g.map(s => s.n));
           const ok = list.filter(x => own.has(+x.source)).map(x => ({ ...x, source: +x.source, images: (g.find(s => s.n === +x.source) || {}).images || [] }));
           if (!ok.length) throw new Error('no slides came back');
           results[gi] = ok;
-        } catch (e) { failed++; if (e && ['not_granted', 'rate_limited', 'unavailable', 'capability_disabled'].includes(e.code)) stop = e; if (e !== stop) console.warn('deck digest batch', e); results[gi] = g.map(s => slideByRules(s, s.k, n, deck)); }
+        } catch (e) { failed++; if (e && ['not_granted', 'rate_limited', 'unavailable', 'capability_disabled'].includes(e.code)) stop = e; if (e !== stop) console.warn('deck digest batch', e); results[gi] = g.map(s => slideByRules(s, s.k, n, deck, opts)); }
         done++; if (onProgress) onProgress(done, groups.length, g);
       }
     };
     // the first request goes alone (in claude.ai it is the one that asks the viewer's permission), then two at a time
     await runOne(); await Promise.all([run(), run()]);
-    const slides = results.flat().map(finish);
+    const keep = properNouns(deck); const slides = results.flat().map(finish).map(sl => polishSlide(sl, keep));
     if (slides.length && slides[0].intent !== 'cover') slides[0].intent = 'cover';
     return { title: deck.title, slides, source: 'deck', by: failed === groups.length ? 'rules' : 'claude', failed, from: { title: deck.title, slides: deck0.slides.length, used: n, ignored: deck.ignored, pictures: deck.pictures } };
   }
   // Tolerant JSON out of a reply: the whole text, else from the first { to the last }.
   function parseJSON(text) { try { return JSON.parse(text); } catch { } const a = text.indexOf('{'), b = text.lastIndexOf('}'); if (a >= 0 && b > a) return JSON.parse(text.slice(a, b + 1)); throw new Error('Claude did not reply with JSON'); }
   return { fromText, fromPptx, prune, rules, withClaude, shorten, parseJSON, _promptFor: promptFor };
+})();
+
+/* js/diagram.js */
+/* Diagrams: flow, cycle, tree (org chart), timeline, mind map, pyramid, staircase and a 2 × 2 matrix. A diagram is a
+   small spec ({type, nodes: [{label, text, parent}]}) laid out into ordinary blocks: rounded boxes holding their words,
+   connectors drawn as paths with arrowheads. All of them share one group whose frame block (role "diagram") keeps the
+   spec and the colors it was drawn with, so the canvas can redraw the diagram when its words or type change, while
+   every piece can still be moved, recolored or edited by hand. As text, a diagram is one node per line, indented under
+   its parent ("Label — note"), after a "type: …" line. */
+const Diagram = (() => {
+  const TYPES = ['flow', 'cycle', 'tree', 'timeline', 'mindmap', 'pyramid', 'staircase', 'matrix'];
+  const LABEL = { flow: 'Flow', cycle: 'Cycle', tree: 'Tree / org chart', timeline: 'Timeline', mindmap: 'Mind map', pyramid: 'Pyramid', staircase: 'Staircase', matrix: '2 × 2 matrix' };
+  const sp = s => String(s == null ? '' : s).replace(/\s+/g, ' ').trim();
+  const r1 = v => Math.round(v * 10) / 10;
+
+  // ---- The spec ---------------------------------------------------------------------------------------------------------
+  function norm(d) {
+    if (!d || typeof d !== 'object') return null;
+    const type = TYPES.includes(d.type) ? d.type : 'flow';
+    const raw = Array.isArray(d.nodes) ? d.nodes : [];
+    const nodes = raw.slice(0, 24).map(x => typeof x === 'string' ? { label: sp(x), text: '', parent: -1 } : { label: sp(x && (x.label || x.title)), text: sp(x && x.text), parent: Number.isInteger(x && x.parent) ? x.parent : -1 }).filter(x => x.label || x.text);
+    for (const [i, x] of nodes.entries()) if (x.parent >= i || x.parent < -1) x.parent = -1;
+    return nodes.length ? { type, nodes } : null;
+  }
+  function toText(d) {
+    d = norm(d); if (!d) return 'type: flow\n';
+    const depth = i => { let k = 0, p = d.nodes[i].parent; while (p >= 0 && k < 6) { k++; p = d.nodes[p].parent; } return k; };
+    return `type: ${d.type}\n` + d.nodes.map((x, i) => '  '.repeat(depth(i)) + x.label + (x.text ? ' — ' + x.text : '')).join('\n');
+  }
+  function fromText(text, fallbackType) {
+    let type = TYPES.includes(fallbackType) ? fallbackType : 'flow'; const nodes = []; const stack = [];
+    for (const raw of String(text || '').split('\n')) {
+      if (!raw.trim()) continue;
+      const t = /^\s*type\s*:\s*([a-z ×x2-]+)\s*$/i.exec(raw); if (t) { const k = t[1].toLowerCase().replace(/[^a-z]/g, ''); const hit = TYPES.find(x => k.startsWith(x.slice(0, 4))) || (k.includes('org') ? 'tree' : k.includes('mind') ? 'mindmap' : null); if (hit) type = hit; continue; }
+      const ind = (/^(\s*)/.exec(raw.replace(/\t/g, '  '))[1].length / 2) | 0;
+      const line = raw.trim().replace(/^[-*•]\s+/, '');
+      const m = /^(.{1,60}?)\s+[—–-]\s+(.+)$/.exec(line) || /^(.{1,40}?):\s+(.+)$/.exec(line);
+      while (stack.length && stack[stack.length - 1].ind >= ind) stack.pop();
+      const parent = stack.length ? stack[stack.length - 1].i : -1;
+      nodes.push({ label: sp(m ? m[1] : line), text: sp(m ? m[2] : ''), parent }); stack.push({ ind, i: nodes.length - 1 });
+    }
+    return { type, nodes };
+  }
+
+  // ---- Drawing helpers -----------------------------------------------------------------------------------------------------
+  // style: {fg, fg2, line, accent, accentText, card, cardText, cardText2, hi, hiText, font, bodySize, radius, unit, stroke}
+  function textStack(H, g, lines, rect, align, valign) { return H.buildStack(lines, rect, align, valign, g); }
+  function nodeBox(H, g, st, rect, node, i, opts = {}) {
+    const hi = !!opts.hi; const fill = opts.fill || (hi ? st.hi : st.card); const fg = opts.fg || (hi ? st.hiText : st.cardText); const fg2 = opts.fg2 || (hi ? st.hiText : st.cardText2);
+    const pad = opts.pad ?? Math.max(6, Math.min(rect.w, rect.h) * 0.1); const size = opts.size || Math.round(st.bodySize * 1.2);
+    const items = [{ kind: 'text', role: 'node', path: `diagram.nodes.${i}.label`, text: node.label || ' ', font: { ...st.font, size, weight: st.boldWeight, lineHeight: 1.18 }, fill: fg, maxLines: 4, minSize: Math.max(10, size * 0.55), gap: node.text ? Math.round(size * 0.35) : 0 }];
+    if (node.text && !opts.noText) items.push({ kind: 'text', role: 'note', path: `diagram.nodes.${i}.text`, text: node.text, font: { ...st.font, size: Math.round(size * 0.78), weight: st.weight, lineHeight: 1.3 }, fill: fg2, maxLines: opts.noteLines || 6, minSize: Math.max(9, size * 0.45) });
+    const inner = { x: rect.x + pad, y: rect.y + pad, w: rect.w - 2 * pad, h: rect.h - 2 * pad };
+    let s = textStack(H, g, items, inner, opts.align || 'center', opts.valign || 'center');
+    if (!s && items.length > 1) s = textStack(H, g, items.slice(0, 1), inner, opts.align || 'center', opts.valign || 'center'); // the note gives way first
+    if (!s) return null;
+    const shape = opts.shape === 'circle' ? { kind: 'shape', shape: 'circle', x: rect.x, y: rect.y, w: rect.w, h: rect.h, fill } : { kind: 'field', x: rect.x, y: rect.y, w: rect.w, h: rect.h, fill, radius: opts.radius ?? st.radius, stroke: opts.stroke };
+    return [{ ...shape, role: 'diagram-node', decorative: true, label: node.label.slice(0, 40) || 'node' }, ...s.blocks];
+  }
+  // A connector from (x1,y1) to (x2,y2): straight, elbow (vertical first) or curved; with an arrowhead at the end.
+  function connector(st, x1, y1, x2, y2, kind = 'straight', arrow = true) {
+    const minX = Math.min(x1, x2), minY = Math.min(y1, y2); const w = Math.max(1, Math.abs(x2 - x1)), h = Math.max(1, Math.abs(y2 - y1));
+    const a = [x1 - minX, y1 - minY], b = [x2 - minX, y2 - minY];
+    let d, end; // end: direction of the last segment, for the arrowhead
+    if (kind === 'elbow') { const my = r1((a[1] + b[1]) / 2); d = `M ${r1(a[0])} ${r1(a[1])} L ${r1(a[0])} ${my} L ${r1(b[0])} ${my} L ${r1(b[0])} ${r1(b[1])}`; end = [0, Math.sign(b[1] - my) || 1]; }
+    else if (kind === 'curve') { const mx = r1((a[0] + b[0]) / 2); d = `M ${r1(a[0])} ${r1(a[1])} C ${mx} ${r1(a[1])} ${mx} ${r1(b[1])} ${r1(b[0])} ${r1(b[1])}`; end = [Math.sign(b[0] - mx) || 1, 0]; }
+    else { d = `M ${r1(a[0])} ${r1(a[1])} L ${r1(b[0])} ${r1(b[1])}`; const L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1; end = [(b[0] - a[0]) / L, (b[1] - a[1]) / L]; }
+    const out = [{ kind: 'vector', role: 'diagram-link', x: r1(minX), y: r1(minY), w: r1(w), h: r1(h), viewBox: [0, 0, r1(w), r1(h)], d, fill: 'none', stroke: { color: st.line, width: st.stroke }, decorative: true, label: 'connector' }];
+    if (arrow) out.push(arrowHead(st, x2, y2, end));
+    return out;
+  }
+  // An arc of the ellipse (cx, cy, R, Ry) from angle t1 to t2 (clockwise on screen), arrowhead at t2.
+  function arc(st, cx, cy, R, Ry, t1, t2) {
+    if (t2 <= t1) return [];
+    const P = t => [cx + R * Math.cos(t), cy + Ry * Math.sin(t)]; const pts = []; for (let k = 0; k <= 16; k++) pts.push(P(t1 + (t2 - t1) * k / 16));
+    const mx = Math.min(...pts.map(p => p[0])), my = Math.min(...pts.map(p => p[1])); const w = Math.max(1, Math.max(...pts.map(p => p[0])) - mx), h = Math.max(1, Math.max(...pts.map(p => p[1])) - my);
+    const [x1, y1] = P(t1), [x2, y2] = P(t2); const large = t2 - t1 > Math.PI ? 1 : 0;
+    const d = `M ${r1(x1 - mx)} ${r1(y1 - my)} A ${r1(R)} ${r1(Ry)} 0 ${large} 1 ${r1(x2 - mx)} ${r1(y2 - my)}`;
+    const tx = -R * Math.sin(t2), ty = Ry * Math.cos(t2); const tl = Math.hypot(tx, ty) || 1;
+    return [{ kind: 'vector', role: 'diagram-link', x: r1(mx), y: r1(my), w: r1(w), h: r1(h), viewBox: [0, 0, r1(w), r1(h)], d, fill: 'none', stroke: { color: st.line, width: st.stroke }, decorative: true, label: 'connector' }, arrowHead(st, x2, y2, [tx / tl, ty / tl])];
+  }
+  function arrowHead(st, x, y, dir) {
+    const s = st.stroke * 4.2; const [dx, dy] = dir; const px = -dy, py = dx;
+    const p1 = [x, y], p2 = [x - dx * s + px * s * 0.55, y - dy * s + py * s * 0.55], p3 = [x - dx * s - px * s * 0.55, y - dy * s - py * s * 0.55];
+    const xs = [p1[0], p2[0], p3[0]], ys = [p1[1], p2[1], p3[1]]; const mx = Math.min(...xs), my = Math.min(...ys); const w = Math.max(1, Math.max(...xs) - mx), h = Math.max(1, Math.max(...ys) - my);
+    const d = `M ${r1(p1[0] - mx)} ${r1(p1[1] - my)} L ${r1(p2[0] - mx)} ${r1(p2[1] - my)} L ${r1(p3[0] - mx)} ${r1(p3[1] - my)} Z`;
+    return { kind: 'vector', role: 'diagram-arrow', x: r1(mx), y: r1(my), w: r1(w), h: r1(h), viewBox: [0, 0, r1(w), r1(h)], d, fill: st.line, decorative: true, label: 'arrowhead' };
+  }
+  const roots = d => d.nodes.map((x, i) => [x, i]).filter(([x]) => x.parent < 0);
+  const kids = (d, i) => d.nodes.map((x, j) => [x, j]).filter(([x]) => x.parent === i);
+  // Children folded into their parent's note (for types that draw one level).
+  const folded = (d, i) => { const n = d.nodes[i]; const k = kids(d, i).map(([x]) => x.label); return { ...n, text: [n.text, k.join(' · ')].filter(Boolean).join(n.text && k.length ? ' — ' : '') }; };
+
+  // ---- Layouts ---------------------------------------------------------------------------------------------------------------
+  const L = {};
+  L.flow = (d, r, st, H, g) => {
+    const top = roots(d).slice(0, 8); const n = top.length; if (n < 2) return null;
+    const rows = n > 5 && r.w < r.h * 2.2 ? 2 : 1; const per = Math.ceil(n / rows); const gap = Math.max(st.unit * 4, r.w * 0.035);
+    const w = (r.w - gap * (per - 1)) / per; const h = Math.min(rows === 1 ? r.h * 0.8 : (r.h - gap) / 2, w * 0.66);
+    const out = []; const boxes = [];
+    for (let k = 0; k < n; k++) {
+      const row = Math.floor(k / per), col = row % 2 ? per - 1 - (k % per) : k % per; // snake back on the second row
+      const x = r.x + col * (w + gap), y = rows === 1 ? r.y + (r.h - h) / 2 : r.y + row * (h + gap) + (r.h - (h * 2 + gap)) / 2;
+      const b = nodeBox(H, g, st, { x, y, w, h }, folded(d, top[k][1]), top[k][1], { hi: k === n - 1 && st.highlightLast }); if (!b) return null;
+      out.push(...b); boxes.push({ x, y, w, h, row });
+    }
+    for (let k = 0; k < n - 1; k++) {
+      const a = boxes[k], b = boxes[k + 1];
+      if (a.row === b.row) { const ltr = b.x > a.x; out.push(...connector(st, ltr ? a.x + a.w + gap * 0.18 : a.x - gap * 0.18, a.y + a.h / 2, ltr ? b.x - gap * 0.18 : b.x + b.w + gap * 0.18, b.y + b.h / 2)); }
+      else out.push(...connector(st, a.x + a.w / 2, a.y + a.h + gap * 0.15, b.x + b.w / 2, b.y - gap * 0.15));
+    }
+    return out;
+  };
+  L.cycle = (d, r, st, H, g) => {
+    const top = roots(d).slice(0, 8); const n = top.length; if (n < 3) return null;
+    const cx = r.x + r.w / 2, cy = r.y + r.h / 2;
+    const nh = Math.min(r.h * 0.22, r.w * 0.12), nw = Math.min(nh * 2.6, r.w / (n * 0.75));
+    const Ry = (r.h - nh) / 2, Rx = Math.min((r.w - nw) / 2, Ry * 2.1);
+    const ang = k => -Math.PI / 2 + k * 2 * Math.PI / n; const pts = top.map((_, k) => [cx + Rx * Math.cos(ang(k)), cy + Ry * Math.sin(ang(k))]);
+    const out = [];
+    for (let k = 0; k < n; k++) { const b = nodeBox(H, g, st, { x: pts[k][0] - nw / 2, y: pts[k][1] - nh / 2, w: nw, h: nh }, folded(d, top[k][1]), top[k][1], { radius: nh / 2, hi: k === 0 }); if (!b) return null; out.push(...b); }
+    // arcs along the ring from one step to the next, starting and ending clear of the boxes
+    const clear = t => { const c = Math.abs(Math.cos(t)), s2 = Math.abs(Math.sin(t)); return Math.min(Math.PI / n * 0.75, (nw * 0.62 * s2 + nh * 0.9 * c) / Math.max(Rx, Ry) + 0.05); };
+    for (let k = 0; k < n; k++) { const a = ang(k), b = ang(k + 1); out.push(...arc(st, cx, cy, Rx, Ry, a + clear(a), b - clear(b))); }
+    return out;
+  };
+  L.tree = (d, r, st, H, g) => {
+    // depth and leaves; up to three levels drawn as boxes, deeper ones fold into their parent's note
+    const depthOf = i => { let k = 0, p = d.nodes[i].parent; while (p >= 0) { k++; p = d.nodes[p].parent; } return k; };
+    const show = d.nodes.map((_, i) => depthOf(i) <= 2); const top = roots(d); if (!top.length) return null;
+    const vis = i => kids(d, i).filter(([, j]) => show[j]);
+    const leaves = i => { const k = vis(i); return k.length ? k.reduce((t, [, j]) => t + leaves(j), 0) : 1; };
+    const total = top.reduce((t, [, i]) => t + leaves(i), 0); const levels = Math.max(...d.nodes.map((_, i) => show[i] ? depthOf(i) : 0)) + 1;
+    const slot = r.w / total; const vgap = Math.max(st.unit * 4, r.h * 0.08); const nh = Math.min((r.h - vgap * (levels - 1)) / levels, slot * 0.9); const nw = Math.min(slot * 0.9, nh * 3.2);
+    const out = []; const pos = new Map(); let cursor = 0;
+    const place = (i, depth) => { const k = vis(i); let x0 = cursor; if (k.length) { for (const [, j] of k) place(j, depth + 1); } else cursor += 1; const span = k.length ? [pos.get(k[0][1]).slot0, pos.get(k[k.length - 1][1]).slot1] : [x0, x0 + 1]; const cxs = r.x + (span[0] + span[1]) / 2 * slot; pos.set(i, { slot0: span[0], slot1: span[1], cx: cxs, y: r.y + depth * (nh + vgap) + (r.h - (levels * nh + (levels - 1) * vgap)) / 2, depth }); };
+    for (const [, i] of top) place(i, 0);
+    for (const [i, p] of pos) { const node = d.nodes[i]; const deep = kids(d, i).filter(([, j]) => !show[j]).map(([x]) => x.label); const b = nodeBox(H, g, st, { x: p.cx - nw / 2, y: p.y, w: nw, h: nh }, deep.length ? { ...node, text: [node.text, deep.join(' · ')].filter(Boolean).join(' — ') } : node, i, { hi: p.depth === 0 }); if (!b) return null; out.push(...b); }
+    for (const [i, p] of pos) for (const [, j] of vis(i)) { const c = pos.get(j); out.push(...connector(st, p.cx, p.y + nh, c.cx, c.y, 'elbow', false)); }
+    return out;
+  };
+  L.timeline = (d, r, st, H, g) => {
+    const top = roots(d).slice(0, 8); const n = top.length; if (n < 2) return null;
+    if (top.some(([, i]) => (folded(d, i).text || '').length > 60)) {
+      // long notes: the track runs along the top and each milestone is a column of text under its dot
+      const slot = r.w / n; const dot = Math.max(st.unit * 1.5, Math.min(slot * 0.07, r.h * 0.05)); const y = r.y + dot;
+      const out = [...connector(st, r.x, y, r.x + r.w, y, 'straight', true)]; const gap = Math.max(st.unit * 2, slot * 0.08);
+      for (let k = 0; k < n; k++) {
+        const x0 = r.x + slot * k;
+        out.push({ kind: 'shape', shape: 'circle', role: 'diagram-node', x: x0, y: y - dot / 2, w: dot, h: dot, fill: k === 0 ? st.accent : st.line, decorative: true, label: 'milestone' });
+        const col = { x: x0, y: y + dot * 1.8, w: slot - gap, h: r.y + r.h - (y + dot * 1.8) };
+        const b = nodeBox(H, g, st, col, folded(d, top[k][1]), top[k][1], { fill: 'none', fg: st.fg, fg2: st.fg2, radius: 0, pad: 0, align: 'left', valign: 'top', noteLines: 14 });
+        if (!b) return null; b[0].fill = 'none'; out.push(...b.slice(1));
+      }
+      return out;
+    }
+    const y = r.y + r.h / 2; const slot = r.w / n; const dot = Math.max(st.unit * 1.5, Math.min(slot * 0.12, r.h * 0.06));
+    const out = [...connector(st, r.x, y, r.x + r.w, y, 'straight', true)];
+    const bh = (r.h / 2) - dot * 2.2; const bw = slot * 0.92;
+    for (let k = 0; k < n; k++) {
+      const cx = r.x + slot * (k + 0.5); const up = k % 2 === 0;
+      out.push({ kind: 'shape', shape: 'circle', role: 'diagram-node', x: cx - dot / 2, y: y - dot / 2, w: dot, h: dot, fill: k === 0 ? st.accent : st.line, decorative: true, label: 'milestone' });
+      const rect = { x: cx - bw / 2, y: up ? y - dot * 1.6 - bh : y + dot * 1.6, w: bw, h: bh };
+      const b = nodeBox(H, g, st, rect, folded(d, top[k][1]), top[k][1], { fill: 'none', fg: st.fg, fg2: st.fg2, radius: 0 });
+      if (!b) return null; b[0].fill = 'none'; out.push(...b.slice(1));
+      const s = b.slice(1); if (s.length) { const hgt = s.reduce((t, x) => Math.max(t, x.y + x.h), 0) - Math.min(...s.map(x => x.y)); const shift = up ? (rect.y + rect.h - (Math.min(...s.map(x => x.y)) + hgt)) : (rect.y - Math.min(...s.map(x => x.y))); for (const x of s) x.y += shift; }
+    }
+    return out;
+  };
+  L.mindmap = (d, r, st, H, g) => {
+    const top = roots(d); if (!top.length) return null;
+    const [, ci] = top[0]; const branches = [...kids(d, ci), ...top.slice(1)].slice(0, 10); if (!branches.length) return null;
+    const cx = r.x + r.w / 2, cy = r.y + r.h / 2; const cw = Math.min(r.w * 0.24, r.h * 0.5), ch = cw * 0.5;
+    const out = []; const c = nodeBox(H, g, st, { x: cx - cw / 2, y: cy - ch / 2, w: cw, h: ch }, d.nodes[ci], ci, { hi: true, radius: ch / 2, noText: false }); if (!c) return null; out.push(...c);
+    const left = branches.filter((_, k) => k % 2 === 1), right = branches.filter((_, k) => k % 2 === 0);
+    const bw = Math.min(r.w * 0.26, (r.w - cw) / 2 * 0.82);
+    for (const [side, list] of [[1, right], [-1, left]]) {
+      const n = list.length; if (!n) continue; const gap = r.h * 0.04; const bh = Math.min(r.h * 0.3, (r.h - gap * (n - 1)) / n);
+      const y0 = cy - (n * bh + (n - 1) * gap) / 2;
+      list.forEach(([, j], k) => {
+        const x = side > 0 ? r.x + r.w - bw : r.x; const y = y0 + k * (bh + gap);
+        const b = nodeBox(H, g, st, { x, y, w: bw, h: bh }, folded(d, j), j, { align: side > 0 ? 'left' : 'right' }); if (!b) { out.length = 0; return; }
+        out.push(...b); out.push(...connector(st, cx + side * cw / 2, cy, side > 0 ? x : x + bw, y + bh / 2, 'curve', false));
+      });
+      if (!out.length) return null;
+    }
+    return out.length ? out : null;
+  };
+  L.pyramid = (d, r, st, H, g) => {
+    const top = roots(d).slice(0, 7); const n = top.length; if (n < 2) return null;
+    const pw = Math.min(r.w * (r.w > r.h * 1.6 ? 0.55 : 1), r.h * 1.4); const x0 = r.x + (r.w > r.h * 1.6 ? 0 : (r.w - pw) / 2); const bh = r.h / n; const out = [];
+    for (let k = 0; k < n; k++) {
+      const wTop = pw * (k / n), wBot = pw * ((k + 1) / n); const y = r.y + k * bh; const cxm = x0 + pw / 2;
+      const pts = [[cxm - wTop / 2, y], [cxm + wTop / 2, y], [cxm + wBot / 2, y + bh - 2], [cxm - wBot / 2, y + bh - 2]];
+      const mx = Math.min(...pts.map(p => p[0])); const shade = k === 0 ? st.hi : st.card;
+      out.push({ kind: 'vector', role: 'diagram-node', x: r1(mx), y: r1(y), w: r1(wBot), h: r1(bh - 2), viewBox: [0, 0, r1(wBot), r1(bh - 2)], d: `M ${pts.map(p => `${r1(p[0] - mx)} ${r1(p[1] - y)}`).join(' L ')} Z`, fill: shade, decorative: true, label: 'level' });
+      const node = folded(d, top[k][1]); const wide = r.w > r.h * 1.6;
+      const lab = nodeBox(H, g, st, { x: cxm - Math.max(wBot, pw * 0.3) * 0.36, y, w: Math.max(wBot, pw * 0.3) * 0.72, h: bh - 2 }, wide ? { ...node, text: '' } : node, top[k][1], { fill: 'none', fg: k === 0 ? st.hiText : st.cardText, fg2: k === 0 ? st.hiText : st.cardText2, noText: wide });
+      if (lab) out.push(...lab.slice(1));
+      if (wide && node.text) { const t = nodeBox(H, g, st, { x: x0 + pw + st.unit * 3, y, w: r.x + r.w - (x0 + pw + st.unit * 3), h: bh - 2 }, { label: node.text, text: '' }, top[k][1], { fill: 'none', fg: st.fg2, align: 'left' }); if (t) { const tb = t.slice(1); for (const b of tb) { b.path = `diagram.nodes.${top[k][1]}.text`; b.font = { ...b.font, weight: st.weight }; } out.push(...tb); } }
+    }
+    return out;
+  };
+  L.staircase = (d, r, st, H, g) => {
+    const top = roots(d).slice(0, 7); const n = top.length; if (n < 2) return null;
+    const gap = Math.max(st.unit * 2, r.w * 0.02); const bw = (r.w - gap * (n - 1)) / n; const out = [];
+    for (let k = 0; k < n; k++) {
+      const h = r.h * (0.38 + 0.62 * (k + 1) / n); const x = r.x + k * (bw + gap), y = r.y + r.h - h;
+      const b = nodeBox(H, g, st, { x, y, w: bw, h }, folded(d, top[k][1]), top[k][1], { hi: k === n - 1, radius: st.radius }); if (!b) return null;
+      // words at the top of each step, not the middle
+      const words = b.slice(1); if (words.length) { const minY = Math.min(...words.map(w => w.y)); for (const w of words) w.y += (y + Math.max(8, bw * 0.08)) - minY; }
+      out.push(...b);
+    }
+    return out;
+  };
+  L.matrix = (d, r, st, H, g) => {
+    const top = roots(d).slice(0, 4); if (top.length < 2) return null; const gap = Math.max(st.unit * 2, r.w * 0.015);
+    const s = Math.min(r.w, r.h * 1.8); const x0 = r.x + (r.w - s) / 2; const w = (s - gap) / 2, h = (r.h - gap) / 2; const out = [];
+    top.forEach(([, i], k) => { const b = nodeBox(H, g, st, { x: x0 + (k % 2) * (w + gap), y: r.y + Math.floor(k / 2) * (h + gap), w, h }, folded(d, i), i, { hi: k === 1, align: 'left' }); if (b) out.push(...b); });
+    return out.length ? out : null;
+  };
+
+  // ---- Blocks for a spec in a rectangle --------------------------------------------------------------------------------------
+  function blocks(spec, rect, st, H, g) {
+    const d = norm(spec); if (!d) return null;
+    const fn = L[d.type] || L.flow; let out = null;
+    for (const sc of [1, 0.88, 0.76, 0.66]) { out = fn(d, rect, { ...st, bodySize: Math.round(st.bodySize * sc) }, H, g); if (out) break; }
+    if (!out) return null;
+    const gid = 'dg' + Math.random().toString(36).slice(2, 7);
+    const frame = { kind: 'field', role: 'diagram', x: rect.x, y: rect.y, w: rect.w, h: rect.h, fill: 'none', decorative: true, label: `${LABEL[d.type]} diagram`, diagram: d, diagramStyle: { ...st }, group: gid };
+    for (const b of out) b.group = gid;
+    return [frame, ...out];
+  }
+  // Colors and type from a slide's palette and type set (the engine's), kept on the diagram for later redraws.
+  function styleFrom(pal, ts, kit, g, radius, H) {
+    const mix = (a, b, t) => (typeof Color !== 'undefined' && Color.mix) ? Color.mix(a, b, t) : a;
+    const card = pal.card || mix(pal.fg, pal.bg, 0.9);
+    return {
+      fg: pal.fg, fg2: mix(pal.fg, pal.bg, 0.25), line: mix(pal.fg, pal.bg, 0.45), accent: pal.accentText || pal.accent,
+      card, cardText: pal.fg, cardText2: mix(pal.fg, card, 0.28), hi: pal.accentCard || pal.accent, hiText: pal.accentCardText || pal.bg,
+      font: { family: ts.body.family, weight: ts.body.weight, size: ts.body.size, lineHeight: 1.25, letterSpacing: 0 }, weight: ts.body.weight,
+      boldWeight: H && H.nearestWeight && kit ? H.nearestWeight(kit.fonts.body, 600) : 600,
+      bodySize: ts.body.size, radius, unit: g.unit, stroke: Math.max(2, Math.round(g.unit / 3)), highlightLast: true,
+    };
+  }
+
+  // ---- As an engine archetype: headline (and subhead) over the diagram --------------------------------------------------------
+  function archetype(ctx, H) {
+    const { g, pal, ts, content } = ctx; const spec = norm(content.diagram); if (!spec || !content.headline) return null;
+    const C = g.cols, R = ctx.R; const blocksOut = []; const avoid = [];
+    const head = [{ kind: 'text', role: 'headline', path: 'headline', text: content.headline, font: { ...ts.headline, size: H.snapFont(ts.headline.size * 0.7, g.unit) }, fill: pal.fg, maxLines: 2, gap: H.snap(ts.body.size * 0.6, g.unit) }];
+    if (content.subhead) head.push({ kind: 'text', role: 'subhead', path: 'subhead', text: content.subhead, font: { ...ts.subhead, size: H.snapFont(ts.subhead.size * 0.85, g.unit) }, fill: pal.fg2, maxLines: 2 });
+    const hr = H.headlineRegion(ctx, Math.min(3, R - 3), Math.round(C * 0.8));
+    const hs = H.buildStack(head, hr, 'left', 'top', g); if (!hs) return null; blocksOut.push(...hs.blocks); avoid.push(H.inkRect(hs, hr, 'left'));
+    const area = Grid.rect(g, 0, ctx.r0, C, R); const top = H.snap(hs.y1 + Math.max(g.unit * 4, ts.body.size * 1.6), g.unit);
+    const rect = { x: area.x, y: top, w: area.w, h: area.y + area.h - top }; if (rect.h < g.unit * 12) return null;
+    const st = styleFrom(pal, ts, ctx.kit, g, ctx.radius(g.unit * 2), H);
+    const bl = blocks(spec, rect, st, { buildStack: H.buildStack }, g); if (!bl) return null;
+    blocksOut.push(...bl); avoid.push(rect);
+    const logo = H.placeLogo(ctx, avoid, ['TR', 'BR']); if (logo) blocksOut.push(logo);
+    return { blocks: blocksOut, meta: { diagram: spec.type, nodes: spec.nodes.length } };
+  }
+  return { TYPES, LABEL, norm, toText, fromText, blocks, styleFrom, archetype };
 })();
 
 /* js/looks.js */
@@ -7318,6 +7791,7 @@ const CanvasUI = (() => {
     $('cvNewFrame').addEventListener('click', () => createFrame({ center: true }));
     $('cvZoomIn').addEventListener('click', () => zoomBy(1.25)); $('cvZoomOut').addEventListener('click', () => zoomBy(1 / 1.25)); $('cvFit').addEventListener('click', fit);
     $('cvZoom').addEventListener('click', () => zoomTo(1));
+    $('cvAddDiagram').addEventListener('click', addDiagram);
     { const mod = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent) ? '⌘' : 'Ctrl '; $('cvZoomIn').title = `Zoom in (${mod}+ or +)`; $('cvZoomOut').title = `Zoom out (${mod}− or −)`; $('cvFit').title = 'Fit everything (Shift 1, or 0) · Shift 2 fits the selection'; $('cvZoom').title = `Back to 100% (${mod}0 or Shift 0)`; }
     $('cvUndo').addEventListener('click', undo); $('cvRedo').addEventListener('click', redo);
     $('cvSnap').addEventListener('change', e => { doc.grid.snap = e.target.checked; persist(); });
@@ -7467,8 +7941,55 @@ const CanvasUI = (() => {
     if (!frames.length) { el.innerHTML = canvasProps(); return; }
     if (frames.length > 1) { el.innerHTML = screensProps(frames); return; }
     if (!bs.length) { el.innerHTML = frameProps(f); return; }
-    if (bs.length > 1) { el.innerHTML = blocksProps(f, bs); return; }
-    el.innerHTML = blockProps(f, bs[0]);
+    const dg = diagramOf(f, bs); const dgHtml = dg ? diagramSection(f, dg) : '';
+    if (bs.length > 1) { el.innerHTML = dgHtml + blocksProps(f, bs); return; }
+    el.innerHTML = dgHtml + blockProps(f, bs[0]);
+  }
+  // ---- Diagrams: a group whose frame block keeps the spec. Redrawn from the spec, with words typed on the canvas read
+  // back first, so nothing typed by hand is lost. --------------------------------------------------------------------------
+  function diagramOf(f, bs) {
+    if (!f || !bs.length || typeof Diagram === 'undefined') return null; const gid = bs[0].group;
+    if (gid && bs.every(b => b.group === gid)) return f.layout.blocks.find(b => b.group === gid && b.role === 'diagram' && b.diagram) || null;
+    return bs.length === 1 && bs[0].role === 'diagram' && bs[0].diagram ? bs[0] : null;
+  }
+  function diagramSpec(f, fr) {
+    const spec = JSON.parse(JSON.stringify(fr.diagram));
+    for (const b of f.layout.blocks) { if (b.group !== fr.group || !b.path) continue; const m = /^diagram\.nodes\.(\d+)\.(label|text)$/.exec(b.path); if (m && spec.nodes[+m[1]]) spec.nodes[+m[1]][m[2]] = Canvas.sourceText(b).replace(/\s+/g, ' ').trim(); }
+    return spec;
+  }
+  function diagramSection(f, fr) {
+    const spec = diagramSpec(f, fr); const lines = Diagram.toText(spec).split('\n').slice(1).join('\n');
+    return `<div class="cv-section" data-dgsec><h3>Diagram <span class="cv-token">${esc(Diagram.LABEL[spec.type])}</span></h3>
+      <label class="cv-f"><span>Type</span><select data-dg="type">${Diagram.TYPES.map(t => `<option value="${t}" ${t === spec.type ? 'selected' : ''}>${esc(Diagram.LABEL[t])}</option>`).join('')}</select></label>
+      <textarea class="cv-dg-text" data-dg="text" data-orig="${esc(lines)}" rows="${Math.min(12, spec.nodes.length + 2)}" aria-label="Diagram nodes" spellcheck="false">${esc(lines)}</textarea>
+      <p class="hint">One node per line, <code>Label — note</code>. Indent a line under another to make it a child (trees, mind maps). It redraws as you type.</p>
+      <div class="cv-row"><button type="button" class="btn small" data-dg-act="redraw">Redraw</button><button type="button" class="btn small ghost" data-dg-act="explode" title="Keep the pieces, forget the diagram (no more redraws)">Detach</button></div></div>`;
+  }
+  function diagramStyleFor(f) {
+    const kit = env.getKit(); const P = f.layout.palette; const g = Grid.compute(Grid.byId[f.layout.format.id] || f.layout.format, kit.grid); const ts = Engine.typeSet(kit, g, 3);
+    const bg = Color.normalize(P.bg || '#FFFFFF'), fg = Color.normalize(P.fg || '#111111'), acc = Color.normalize(P.accent || fg);
+    const accText = Color.bestForeground(acc, kit.colors.map(c => Color.normalize(c.hex)).concat(['#FFFFFF', '#000000']), 4.5)[0];
+    return Diagram.styleFrom({ fg, bg, accentText: acc, accent: acc, card: Color.mix(fg, bg, 0.9), accentCard: acc, accentCardText: accText }, ts, kit, g, Math.round(g.unit * 2));
+  }
+  function drawDiagram(f, rect, spec, st, replaceGroup) {
+    const out = Diagram.blocks(spec, rect, st, { buildStack: Engine.buildStack }, { unit: f.layout.grid.unit, gutter: f.layout.grid.gutter });
+    if (!out) { env.toast('That does not fit here: fewer words, another type, or a bigger diagram'); return null; }
+    const fresh = out.map(b => ({ ...b, id: Canvas.uid() }));
+    mutate(() => {
+      const at = replaceGroup ? f.layout.blocks.findIndex(b => b.group === replaceGroup) : -1;
+      const keep = replaceGroup ? f.layout.blocks.filter(b => b.group !== replaceGroup) : f.layout.blocks;
+      f.layout.blocks = at >= 0 ? [...keep.slice(0, at), ...fresh, ...keep.slice(at)] : [...keep, ...fresh];
+    }, { frames: [f.id] });
+    select(f.id, fresh.map(b => b.id));
+    return fresh;
+  }
+  function redrawDiagram(f, fr, spec) { return drawDiagram(f, { x: fr.x, y: fr.y, w: fr.w, h: fr.h }, spec, fr.diagramStyle || diagramStyleFor(f), fr.group); }
+  // A new diagram in the selected screen (or the first one), centered, ready to edit in the panel.
+  function addDiagram() {
+    const f = selFrame() || doc.frames.find(x => !x.hidden); if (!f) { env.toast('Add a screen first'); return; }
+    const W = f.layout.format.w, H = f.layout.format.h; const rect = { x: Math.round(W * 0.1), y: Math.round(H * 0.3), w: Math.round(W * 0.8), h: Math.round(H * 0.45) };
+    const spec = { type: 'flow', nodes: [{ label: 'First step', text: '' }, { label: 'Second step', text: '' }, { label: 'Third step', text: '' }] };
+    if (drawDiagram(f, rect, spec, diagramStyleFor(f), null)) emit('action', 'diagram.add', 'flow');
   }
   function canvasProps() {
     return `<div class="cv-section"><h3>Canvas</h3><label class="cv-f"><span>Name</span><input type="text" data-doc="name" value="${esc(doc.name)}"></label>
@@ -7770,10 +8291,20 @@ const CanvasUI = (() => {
   }
   function bindProps() {
     const el = $('cvProps');
+    // diagram section: type and nodes redraw the diagram (the nodes as you pause typing)
+    let dgT = 0;
+    const dgApply = () => { const f = selFrame(); const fr = diagramOf(f, selBlocks()); if (!fr) return; const sec = el.querySelector('[data-dgsec]'); if (!sec) return; const ta0 = sec.querySelector('[data-dg="text"]'); const type = sec.querySelector('[data-dg="type"]').value; const spec = ta0.value === ta0.dataset.orig ? { ...diagramSpec(f, fr), type } : Diagram.fromText(ta0.value, type); if (!spec.nodes.length) return; spec.type = type; const keepFocus = document.activeElement && document.activeElement.dataset.dg === 'text'; const caret = keepFocus ? document.activeElement.selectionStart : 0; if (redrawDiagram(f, fr, spec) && keepFocus) { const ta = el.querySelector('[data-dg="text"]'); if (ta) { ta.focus(); ta.setSelectionRange(caret, caret); } } };
+    el.addEventListener('input', e => { if (e.target.dataset.dg === 'text') { clearTimeout(dgT); dgT = setTimeout(dgApply, 500); } });
+    el.addEventListener('change', e => { if (e.target.dataset.dg === 'type') dgApply(); });
+    el.addEventListener('click', e => {
+      const a = e.target.closest('[data-dg-act]'); if (!a) return;
+      if (a.dataset.dgAct === 'redraw') { clearTimeout(dgT); dgApply(); return; }
+      if (a.dataset.dgAct === 'explode') { const f = selFrame(); const fr = diagramOf(f, selBlocks()); if (!fr) return; mutate(() => { f.layout.blocks = f.layout.blocks.filter(b => b !== fr); }, { frames: [f.id] }); env.toast('Detached: the pieces stay, the diagram no longer redraws'); }
+    });
     const apply = (e, live) => {
       const t = e.target; const fs = selFrames(); const f = selFrame();
       if (t.dataset.doc === 'name') { doc.name = t.value; persist(); return; }
-      if (!f || t.dataset.var || t.dataset.fr || (t.dataset.p && t.dataset.p.startsWith('batch-'))) return;
+      if (!f || t.dataset.var || t.dataset.fr || t.dataset.dg || (t.dataset.p && t.dataset.p.startsWith('batch-'))) return;
       const bs = selBlocks();
       const val = t.type === 'checkbox' ? t.checked : t.value;
       if (t.dataset.f) {
@@ -9970,6 +10501,7 @@ Change the canvas with the tools; the person sees each change live and can undo 
   function context() {
     const d = CanvasUI.doc; const sel = CanvasUI.selection(); const kit = env.getKit() || { name: '', colors: [], fonts: {} };
     const lines = [`Canvas "${d.name}": ${d.frames.length} screen${d.frames.length === 1 ? '' : 's'}.`];
+    if (Brand.voiceText(kit)) lines.push('When you write or change copy, follow these. ' + Brand.voiceText(kit));
     if (!sel.frameIds.length) lines.push('Nothing is selected; act on the whole canvas or ask which screen.');
     else {
       lines.push(`Selected: ${sel.frameIds.length} screen${sel.frameIds.length === 1 ? '' : 's'}${sel.blockIds.length ? `, blocks ${sel.blockIds.join(', ')}` : ''}.`);
@@ -10608,7 +11140,9 @@ Layer kinds:
   function openSlideEditor(id) {
     const l = findLayout(id); if (!l) return;
     $('detail').hidden = true;
-    Object.assign(se, { l, content: JSON.parse(JSON.stringify(Canvas.extractContent(l))), level: l.type.level, seed: l.seed, next: l });
+    Object.assign(se, { l, content: JSON.parse(JSON.stringify(Canvas.extractContent(l))), level: l.type.level, seed: l.seed, next: l, merged: null, diagramType: null });
+    const dg = l.blocks.find(b => b.role === 'diagram' && b.diagram);
+    $('seDiagram').hidden = !dg; if (dg) $('seDiagramType').innerHTML = Diagram.TYPES.map(t => `<option value="${t}" ${t === dg.diagram.type ? 'selected' : ''}>${Diagram.LABEL[t]}</option>`).join('');
     const o = l.deckIndex != null && state.outline && state.outline.slides[l.deckIndex];
     $('seTitle').textContent = o ? `Slide ${l.deckIndex + 1} · ${Deck.INTENT_LABEL[o.intent] || o.intent}` : `${l.archetypeLabel} · ${l.format.name}`;
     renderSlideFields(); drawSlideEdit(l); $('seNote').textContent = ''; $('slideEdit').hidden = false;
@@ -10628,9 +11162,15 @@ Layer kinds:
   }
   function drawSlideEdit(l) { $('sePreview').innerHTML = Render.toSVG(l, { kit: state.kit, assets: state.assets, width: 1000 }); }
   // Redraw from the edited words: same layout and palette, the chosen type size and arrangement.
+  // Edited words over the slide's full content: a diagram keeps its type and links, a list its hidden items.
+  const deepMerge = (a, b) => { if (Array.isArray(a) && Array.isArray(b)) { const out = a.slice(); for (let i = 0; i < b.length; i++) if (b[i] !== undefined) out[i] = deepMerge(a[i], b[i]); return out; } if (a && b && typeof a === 'object' && typeof b === 'object' && !Array.isArray(b)) { const out = { ...a }; for (const [k, v] of Object.entries(b)) out[k] = deepMerge(a[k], v); return out; } return b === undefined ? a : b; };
   function slideEditRedraw() {
     const base = { ...se.l, seed: se.seed, type: { ...se.l.type, level: se.level } };
-    let next = null; try { next = Engine.hydrate(base, se.content, seEnv(se.l)); } catch (e) { console.warn(e); }
+    const orig = (se.l.genIntent && se.l.genIntent.content) || {};
+    const content = {}; for (const [k, v] of Object.entries(se.content)) content[k] = orig[k] && typeof orig[k] === 'object' ? deepMerge(orig[k], v) : v;
+    if (se.diagramType && content.diagram) content.diagram = { ...content.diagram, type: se.diagramType };
+    se.merged = content;
+    let next = null; try { next = Engine.hydrate(base, content, seEnv(se.l)); } catch (e) { console.warn(e); }
     if (!next) { $('seNote').textContent = 'That does not fit this layout: shorten it, make the text smaller, or rearrange.'; return false; }
     se.next = next; drawSlideEdit(next); $('seNote').textContent = ''; return true;
   }
@@ -10654,7 +11194,7 @@ Layer kinds:
         if (l.deckIndex != null && state.deck) {
           const row = state.deck.slides[l.deckIndex]; const j = row.variations.indexOf(l); if (j >= 0) { row.variations[j] = next; row.pick = j; }
           const o = state.outline && state.outline.slides[l.deckIndex];
-          if (o) { for (const k of ['eyebrow', 'headline', 'subhead', 'body', 'stat', 'quote', 'attribution', 'cta', 'items', 'steps', 'columns', 'bullets', 'sections']) if (k in se.content) o[k] = JSON.parse(JSON.stringify(se.content[k])); state.outlineEdited = true; renderOutline(); }
+          if (o) { const src = se.merged || se.content; for (const k of ['eyebrow', 'headline', 'subhead', 'body', 'stat', 'quote', 'attribution', 'cta', 'items', 'steps', 'columns', 'bullets', 'sections', 'diagram']) if (k in src) o[k] = JSON.parse(JSON.stringify(src[k])); state.outlineEdited = true; renderOutline(); }
           renderDeck();
         } else { const j = state.layouts.indexOf(l); if (j >= 0) state.layouts[j] = next; renderGallery(); }
         Stats.track('slide.edit');
@@ -10665,6 +11205,7 @@ Layer kinds:
   });
   let seCount = 0;
   $('detailEdit').addEventListener('click', () => { if (state.detail) openSlideEditor(state.detail.id); });
+  $('seDiagramType').addEventListener('change', e => { const prev = se.diagramType; se.diagramType = e.target.value; if (!slideEditRedraw()) { se.diagramType = prev; $('seNote').textContent = 'That kind of diagram does not fit these words here: try another, or fewer words.'; } });
   function openDetail(id) {
     const l = findLayout(id); if (!l) return;
     state.detail = l; state.family = null;
@@ -10861,14 +11402,14 @@ Layer kinds:
     $('outlinePanel').hidden = !deck; $('deckBar').hidden = !deck; $('deckView').hidden = !deck;
     $('gallery').hidden = deck; $('empty').hidden = deck || state.layouts.length > 0;
     for (const id of ['count', 'sort', 'filterArch', 'favOnly', 'compareBtn', 'exportFavBtn', 'exportFavPptxBtn', 'toCanvasBtn']) $(id).closest('label, button').hidden = deck;
-    $('prompt').placeholder = deck ? 'Describe the deck, e.g. "8-slide launch deck for Deel Global Payroll: cover, why now, what you get, how it works, proof, before and after, customer quote, next steps"' : 'Describe what you need, e.g. "36 bold image-led square posts for Deel Payroll, dark, with a CTA"';
+    $('prompt').placeholder = deck ? 'Describe the deck, e.g. "8-slide launch deck for Deel Payroll: cover, why now, what you get, how it works, proof, before and after, customer quote, next steps"' : 'Describe what you need, e.g. "36 bold image-led square posts for Deel Payroll, dark, with a CTA"';
     if (deck) { state.formats = [state.deckFormat]; renderChips(); if (!state.outline) { state.outline = Deck.outlineFromBrief($('prompt').value, state.kit); renderOutline(); } }
     LS.set('lg.mode', mode);
   }
   $('modeSeg').addEventListener('click', e => { const b = e.target.closest('[data-mode]'); if (b) setMode(b.dataset.mode); });
 
   // Outline editor --------------------------------------------------------------------------------------
-  const DETAIL_HINT = { cards: 'Title — text, one per line', process: 'Step title — text, one per line', agenda: 'One entry per line', comparison: 'Left title\nbullet\nbullet\n---\nRight title\nbullet\nbullet', quote: 'Quote\nAttribution', stat: 'Stat (e.g. 150+)\nSubhead', cover: 'Subhead', statement: 'Subhead', body: 'Body copy', closing: 'Subhead\nCTA label' };
+  const DETAIL_HINT = { cards: 'Title — text, one per line', process: 'Step title — text, one per line', agenda: 'One entry per line', comparison: 'Left title\nbullet\nbullet\n---\nRight title\nbullet\nbullet', quote: 'Quote\nAttribution', stat: 'Stat (e.g. 150+)\nSubhead', cover: 'Subhead', statement: 'Subhead', body: 'Body copy', closing: 'Subhead\nCTA label' , sections: 'Section title\nIts paragraph\n- or bullets\n---\nNext section title\n…', diagram: 'type: flow (or cycle, tree, timeline, mindmap, pyramid, staircase, matrix)\nStep one — note\nStep two\n  child (indent under a parent for tree and mindmap)'};
   function detailsText(sl) {
     const i = sl.intent;
     if (i === 'cards' || i === 'process') return Engine.normItems(i === 'cards' ? sl.items : (sl.steps && sl.steps.length ? sl.steps : sl.items)).map(x => x.text ? `${x.title} — ${x.text}` : x.title).join('\n');
@@ -10878,6 +11419,9 @@ Layer kinds:
     if (i === 'stat') return [sl.stat || '', sl.subhead || ''].join('\n');
     if (i === 'closing') return [sl.subhead || '', sl.cta || ''].join('\n');
     if (i === 'body') return sl.body || '';
+    if (i === 'sections' && !(sl.sections && sl.sections.length)) return sl.body || '';
+    if (i === 'sections') return (sl.sections || []).map(x => [x.title || '', ...(x.text ? [x.text] : []), ...(x.bullets || []).map(b => '- ' + b)].join('\n')).join('\n---\n');
+    if (i === 'diagram') return typeof Diagram !== 'undefined' && sl.diagram ? Diagram.toText(sl.diagram) : '';
     return sl.subhead || '';
   }
   function parseDetails(sl, text) {
@@ -10889,6 +11433,8 @@ Layer kinds:
     else if (i === 'agenda') sl.items = lines.map(l => ({ title: l, text: '' }));
     else if (i === 'comparison') { sl.columns = text.split(/\n-{3,}\n?/).map(block => { const ls = block.split('\n').map(x => x.trim()).filter(Boolean); return { title: ls[0] || '', bullets: ls.slice(1) }; }).filter(c => c.title); }
     else if (i === 'quote') { sl.quote = lines[0] || ''; sl.attribution = lines[1] || ''; }
+    else if (i === 'sections') { sl.sections = text.split(/\n-{3,}\n?/).map(block => { const ls = block.split('\n').map(x => x.trim()).filter(Boolean); const bul = ls.filter(l => /^[-•*]\s+/.test(l)).map(l => l.replace(/^[-•*]\s+/, '')); const rest = ls.filter(l => !/^[-•*]\s+/.test(l)); const title = rest.length > 1 || (rest[0] && rest[0].length <= 60 && bul.length) ? rest.shift() : ''; return { title, text: rest.join(' '), bullets: bul }; }).filter(x => x.title || x.text || x.bullets.length); }
+    else if (i === 'diagram') { if (typeof Diagram !== 'undefined') sl.diagram = Diagram.fromText(text, sl.diagram && sl.diagram.type); }
     else if (i === 'stat') { sl.stat = lines[0] || ''; sl.subhead = lines.slice(1).join(' '); }
     else if (i === 'closing') { sl.subhead = lines[0] || ''; sl.cta = lines[1] || sl.cta || state.kit.content.cta; }
     else if (i === 'body') sl.body = lines.join(' ');
@@ -10980,10 +11526,10 @@ Layer kinds:
     return deck;
   }
   async function outlineFromDeck(deck) {
-    const asker = await deckAsker();
-    if (!asker) return DeckDigest.rules(deck);
+    const asker = await deckAsker(); const opts = { keepText: $('keepText').checked };
+    if (!asker) return DeckDigest.rules(deck, opts);
     $('generateBtn').textContent = 'Claude is reading the deck…';
-    const o = await DeckDigest.withClaude(deck, state.kit, asker.ask, (d, n) => { $('generateBtn').textContent = `Claude is reading the deck… ${d}/${n}`; });
+    const o = await DeckDigest.withClaude(deck, state.kit, asker.ask, (d, n) => { $('generateBtn').textContent = `Claude is reading the deck… ${d}/${n}`; }, opts);
     if (o.by === 'rules') toast('Claude did not answer, so rules sorted the slides. Generate again to retry, or edit the outline.');
     else if (o.failed) toast(`Claude sorted most slides; ${o.failed} part${o.failed > 1 ? 's were' : ' was'} sorted by rules.`);
     return o;
@@ -11052,6 +11598,9 @@ Layer kinds:
     row.querySelectorAll('.deck-card').forEach(c => c.classList.toggle('pick', c === card));
   });
   $('deckView').addEventListener('dblclick', e => { const card = e.target.closest('.deck-card'); if (card) openSlideEditor(card.dataset.id); });
+  // Keep long slides whole, or condense them: remembered, and a deck in play is sorted again
+  $('keepText').checked = LS.get('lg.keepText', true) !== false;
+  $('keepText').addEventListener('change', () => { LS.set('lg.keepText', $('keepText').checked); if (state.deckSource && state.outline && state.outline.source === 'deck' && !state.busy) { state.outlineEdited = false; generateDeck($('prompt').value, { rebuild: true }); } });
   // A .pptx chosen in the outline panel or dropped anywhere in Deck mode
   $('outlineFromDeck').addEventListener('click', () => $('deckFile').click());
   $('deckFile').addEventListener('change', e => { const f = e.target.files[0]; e.target.value = ''; if (f && !state.busy) generateDeck(($('prompt').value || '').replace(slidesLinkIn($('prompt').value) || '', '').trim(), { file: f }); });
@@ -11640,7 +12189,7 @@ Layer kinds:
     await ensureDemoImages(false);
     // First frame: a working state, not an empty shell.
     const savedMode = LS.get('lg.mode', 'single');
-    if (!$('prompt').value) $('prompt').value = savedMode === 'deck' ? '8-slide launch deck for Deel Global Payroll' : 'Launch posts for Deel Global Payroll, bold, image-led, square and story';
+    if (!$('prompt').value) $('prompt').value = savedMode === 'deck' ? '8-slide launch deck for Deel Payroll' : 'Launch posts for Deel Payroll, bold, image-led, square and story';
     $('promptClear').hidden = !$('prompt').value;
     if (savedMode === 'deck') setMode('deck');
     updateCanvasBadge();

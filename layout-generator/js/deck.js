@@ -1,7 +1,7 @@
 /* Deck mode: a brief becomes an outline (one intent per slide), the engine generates variations per slide
    under one palette and type level, you pick one per slide, and the picks export as one editable deck. */
 const Deck = (() => {
-  const INTENT_LABEL = { cover: 'Cover', agenda: 'Agenda', statement: 'Statement', stat: 'Big number', comparison: 'Comparison', process: 'Process', cards: 'Cards', quote: 'Quote', body: 'Body copy', closing: 'Closing' };
+  const INTENT_LABEL = { cover: 'Cover', agenda: 'Agenda', statement: 'Statement', stat: 'Big number', comparison: 'Comparison', process: 'Process', cards: 'Cards', quote: 'Quote', body: 'Body copy', sections: 'Text-heavy', diagram: 'Diagram', closing: 'Closing' };
   const INTENT_KEYS = [
     [/\b(cover|title|intro|opening|welcome)\b/i, 'cover'], [/\b(agenda|contents|overview|what we.ll cover|toc)\b/i, 'agenda'],
     [/\b(problem|why now|challenge|context|statement|thesis|belief|pain)\b/i, 'statement'], [/\b(stat|number|metric|kpi|proof|results?|numbers)\b/i, 'stat'],
@@ -101,7 +101,7 @@ const Deck = (() => {
     const system = `You write presentation outlines for a layout engine. Return JSON that follows the schema exactly.
 Intents and what each needs: cover (eyebrow, headline, subhead) · agenda (headline, items: titles of the other slides) · statement (headline ≤ 90 chars, subhead) · stat (stat like "150+" or "3 min", headline as its caption, subhead) · comparison (headline, exactly 2 columns with a title and 3 bullets each) · process (headline, 3 to 5 steps with title ≤ 32 chars and text ≤ 90 chars) · cards (headline, 3 to 4 items with title ≤ 32 chars and text ≤ 110 chars) · quote (quote ≤ 160 chars, attribution) · body (headline, body ≤ 300 chars) · closing (headline, subhead, cta).
 Rules: first slide is a cover, last is a closing. 6 to 10 slides unless the brief says otherwise. Sentence case headlines, no exclamation marks, no emojis, active voice, concrete facts only from the brief and brand facts; never invent numbers. Fields a slide does not use must be empty strings or empty arrays. Write in the brand's voice.`;
-    const brand = { name: kit.name, tagline: kit.content.subhead, products: kit.content.body, cta: kit.content.cta, sampleDeck: kit.deck ? kit.deck.slides.slice(0, 3) : null };
+    const brand = { name: kit.name, tagline: kit.content.subhead, products: kit.content.body, cta: kit.content.cta, sampleDeck: kit.deck ? kit.deck.slides.slice(0, 3) : null, writing: kit.voice || null };
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },

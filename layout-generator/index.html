@@ -94,6 +94,7 @@
       <div class="panel-head"><h2>Deck outline</h2><span class="hint" id="outlineSource"></span></div>
       <p class="hint">One row per slide. Edit anything, then Generate again. Details take one item per line: <code>Title — text</code> for cards and steps, two blocks split by <code>---</code> for a comparison, quote then attribution for a quote.</p>
       <p class="hint"><b>From a deck:</b> paste a Google Slides link as the brief, or use a .pptx (or drop it here): every slide is read and rebuilt in the brand.</p>
+      <label class="check" title="Off: long slides are condensed (the cut detail goes to speaker notes)"><input id="keepText" type="checkbox" checked> Keep text-heavy slides whole</label>
       <div id="outlineList" class="outline"></div>
       <div class="row">
         <button id="outlineAdd" class="btn small" type="button">Add slide</button>
@@ -212,6 +213,7 @@
         </div>
         <div class="cv-newframe">
           <button id="cvNewFrame" class="btn small" type="button" data-tip="Add a blank frame in view · ⇧N">＋ Frame</button>
+          <button id="cvAddDiagram" class="btn small" type="button" data-tip="Add a diagram to the selected screen: flow, cycle, tree, timeline, mind map…">◇ Diagram</button>
           <select id="cvFrameFormat" class="select" aria-label="Frame format"></select>
         </div>
         <div class="cv-center">
@@ -336,6 +338,7 @@
           <button class="btn small" data-se-size="-1" type="button" title="Smaller type">A−</button>
           <button class="btn small" data-se-size="1" type="button" title="Larger type">A+</button>
           <button class="btn small" data-se-shuffle type="button" title="The same kind of layout, arranged differently">Rearrange</button>
+          <label class="inline" id="seDiagram" hidden>Diagram <select id="seDiagramType" class="select"></select></label>
         </div>
         <div class="se-fields" id="seFields"></div>
         <p class="hint" id="seNote" aria-live="polite"></p>
@@ -475,6 +478,7 @@
 <script src="js/pptx-import.js"></script>
 <script src="js/gslides.js"></script>
 <script src="js/deck-digest.js"></script>
+<script src="js/diagram.js"></script>
 <script src="js/looks.js"></script>
 <script src="js/webimport.js"></script>
 <script src="js/canvas.js"></script>
