@@ -718,6 +718,29 @@ input[disabled] { opacity: .5; cursor: not-allowed; }
 
 .cv-dg-text { width: 100%; min-height: 90px; resize: vertical; font: 12.5px/1.45 var(--font-mono); background: var(--panel-2); color: var(--fg); border: 1px solid var(--line-2); border-radius: var(--r); padding: 6px 8px; margin: 4px 0; white-space: pre; }
 
+/* Quick Look and Present */
+.look { position: fixed; inset: 0; z-index: 400; background: rgba(8,8,12,.86); backdrop-filter: blur(6px); display: grid; grid-template-rows: 1fr auto auto; align-items: center; justify-items: center; padding: 24px 24px 10px; animation: lookIn .18s ease-out; }
+@keyframes lookIn { from { opacity: 0; transform: scale(.98); } to { opacity: 1; transform: none; } }
+.look-stage { display: grid; place-items: center; width: 100%; height: 100%; min-height: 0; cursor: pointer; }
+.look-stage svg { display: block; box-shadow: 0 30px 80px rgba(0,0,0,.55); border-radius: 6px; }
+.look-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; width: min(100%, 1100px); color: #ecebf0; font-size: 13px; padding: 10px 0 4px; }
+.look-bar .inline { color: #a9a8b4; }
+.look-bar .btn:not(.primary) { background: rgba(255,255,255,.08); color: #ecebf0; border-color: rgba(255,255,255,.14); }
+.look-title { font-weight: 600; max-width: 40ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.look-count, .look-step { color: #a9a8b4; font-size: 12px; }
+.look-hint { color: #6f6e7c; font-size: 11.5px; margin: 2px 0 0; text-align: center; }
+.look.present { background: #000; padding: 0; grid-template-rows: 1fr; }
+.look.present .look-bar, .look.present .look-hint { display: none; }
+.look.present .look-stage svg { box-shadow: none; border-radius: 0; }
+.card.looking, .deck-card.looking { outline: 2px solid var(--cta); outline-offset: 2px; }
+.se-motion { border-top: 1px solid var(--line); padding-top: 8px; }
+.se-motion summary { cursor: pointer; font-weight: 600; font-size: 13px; }
+.se-motion-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 8px 0; }
+.se-units { display: grid; gap: 4px; max-height: 220px; overflow: auto; }
+.se-unit { display: grid; grid-template-columns: 1fr auto auto; gap: 6px; align-items: center; font-size: 12px; color: var(--fg-2); }
+.se-unit.custom > span { color: var(--fg); font-weight: 600; }
+.se-unit .select { padding: 3px 6px; font-size: 12px; }
+
 </style>
 </head>
 <body>
@@ -890,6 +913,11 @@ input[disabled] { opacity: .5; cursor: not-allowed; }
       </label>
       <button id="deckShuffleAll" class="btn small" type="button">Reshuffle deck</button>
       <label class="inline size-slider" title="Make the slides bigger or smaller">Size <input class="thumbSize" type="range" min="120" max="720" step="10" aria-label="Slide size"></label>
+      <label class="inline" title="Animations on every slide, only on the first, or none. They export as PowerPoint animations and stay editable.">Motion
+        <select id="motionMode" class="select"><option value="all">On</option><option value="cover">First slide only</option><option value="off">Off</option></select></label>
+      <label class="inline" title="All at once: each slide plays when it opens. Click by click: each card, step, section or node waits for its click (choose per part in the slide editor).">Builds
+        <select id="motionBuilds" class="select"><option value="enter">All at once</option><option value="click">Click by click</option></select></label>
+      <button id="presentBtn" class="btn small" type="button" title="Play the deck full screen: → or click for the next build, ← back, Esc to stop. Select any slide and press Space for Quick Look.">▶ Present</button>
       <span class="grow"></span>
       <button id="deckPptxBtn" class="btn small primary" type="button" disabled>Export deck (PPTX)</button>
       <button id="deckPngBtn" class="btn small" type="button" disabled>Export picks (PNG)</button>
@@ -1036,6 +1064,21 @@ input[disabled] { opacity: .5; cursor: not-allowed; }
     </div>
   </div>
 
+  <div id="look" class="look" hidden role="dialog" aria-modal="true" aria-label="Quick Look">
+    <div class="look-stage" id="lookStage"></div>
+    <div class="look-bar">
+      <span class="look-title" id="lookTitle"></span>
+      <span class="look-count mono" id="lookCount"></span>
+      <span class="grow"></span>
+      <span class="look-step mono" id="lookStep" aria-live="polite"></span>
+      <button class="btn small" id="lookReplay" type="button" title="Play it again (R)">↺ Replay</button>
+      <label class="inline">Motion <select id="lookMotion" class="select"><option value="all">On</option><option value="cover">First slide only</option><option value="off">Off</option></select></label>
+      <label class="inline">Builds <select id="lookBuilds" class="select"><option value="enter">All at once</option><option value="click">Click by click</option></select></label>
+      <button class="btn small" id="lookPresent" type="button" title="Full screen from here">▶ Present</button>
+      <button class="btn ghost icon" id="lookClose" type="button" aria-label="Close">✕</button>
+    </div>
+    <p class="look-hint">Space or Esc closes · ← → previous and next · click, Enter or ↓ plays the next build · R replays</p>
+  </div>
   <div id="slideEdit" class="modal" hidden>
     <div class="modal-inner detail slide-edit" role="dialog" aria-modal="true" aria-labelledby="seTitle">
       <div class="detail-preview" id="sePreview"></div>
@@ -1055,6 +1098,10 @@ input[disabled] { opacity: .5; cursor: not-allowed; }
           <button class="btn small" data-se-bal="claude" type="button" title="Claude rewrites just that part to about the others' length; the full text goes to the speaker notes">Shorten it with Claude</button>
           <button class="btn small" data-se-bal="split" type="button" title="Its first points stay; the rest moves to a new slide right after this one">Move the rest to a new slide</button></div>
         <div class="se-fields" id="seFields"></div>
+        <details class="se-motion" id="seMotion"><summary>Motion <span class="hint" id="seMotionSum"></span></summary>
+          <div class="se-motion-head"><label class="inline">Builds <select id="seBuilds" class="select"><option value="">Deck setting</option><option value="enter">All at once</option><option value="click">Click by click</option></select></label><button class="btn small" id="sePlay" type="button" title="Play this slide's motion in the preview (or press Space)">▶ Play</button></div>
+          <div id="seUnits" class="se-units"></div>
+        </details>
         <p class="hint" id="seNote" aria-live="polite"></p>
         <div class="detail-actions">
           <button class="btn primary" data-se-save type="button">Save</button>
@@ -3098,8 +3145,11 @@ const Render = (() => {
     const it = f.style === 'italic' ? ' font-style="italic"' : '';
     const deco = b.decoration === 'underline' || b.decoration === 'line-through' ? ` text-decoration="${b.decoration}"` : '';
     const bold = n(b.emphWeight || 700);
-    const spans = (b.lines || []).map((line, i) => `<tspan x="${n(x)}" y="${n(first + i * lh)}">${emphRuns(typeof line === 'string' ? line : line.text, b.emph).map(r => r.on ? `<tspan font-weight="${bold}">${esc(r.text)}</tspan>` : esc(r.text)).join('')}</tspan>`).join('');
-    return `<text font-family='${fam(f)}' font-size="${size}" font-weight="${n(f.weight || 400)}"${it}${deco} fill="${paint(b, ctx)}" text-anchor="${anchor}"${ls}>${spans}</text>`;
+    const span = (line, i) => `<tspan x="${n(x)}" y="${n(first + i * lh)}">${emphRuns(typeof line === 'string' ? line : line.text, b.emph).map(r => r.on ? `<tspan font-weight="${bold}">${esc(r.text)}</tspan>` : esc(r.text)).join('')}</tspan>`;
+    const open = `<text font-family='${fam(f)}' font-size="${size}" font-weight="${n(f.weight || 400)}"${it}${deco} fill="${paint(b, ctx)}" text-anchor="${anchor}"${ls}`;
+    // drawn for motion: each line its own text in a mask, so lines can rise into view one after another
+    if (ctx.tag) return (b.lines || []).map((line, i) => { const id = ctx.id('ln'); const top = first + i * lh - size * 1.02; ctx.defs.push(`<clipPath id="${id}"><rect x="${n(b.x - size)}" y="${n(top)}" width="${n(b.w + size * 2)}" height="${n(size * 1.36)}"/></clipPath>`); return `<g data-line="${i}" clip-path="url(#${id})">${open} data-lh="${n(size * 1.3)}">${span(line, i)}</text></g>`; }).join('');
+    return `${open}>${(b.lines || []).map(span).join('')}</text>`;
   }
   function listEl(b, ctx) {
     const f = b.font || {}; const size = n(f.size || 16);
@@ -3161,7 +3211,7 @@ const Render = (() => {
     const W = n(layout.format.w), H = n(layout.format.h);
     const prefix = String(layout.id || 'l').replace(/[^A-Za-z0-9_-]/g, '') || 'l';
     let seq = 0;
-    const ctx = { defs: [], id: k => `${prefix}-${k}${seq++}` };
+    const ctx = { defs: [], id: k => `${prefix}-${k}${seq++}`, tag: !!opts.tag };
     const parts = [];
     if (!opts.transparent) parts.push(`<rect width="${W}" height="${H}" fill="${layout.palette && layout.palette.bgGradient ? (() => { const id = ctx.id('bg'); ctx.defs.push(gradientDef(layout.palette.bgGradient, id)); return `url(#${id})`; })() : col(layout.palette && layout.palette.bg, '#FFFFFF')}"/>`);
     // Boxes draw their fill, then their children (clipped when the box clips); siblings in list order.
@@ -3201,7 +3251,11 @@ const Render = (() => {
     const I = typeof Auto !== 'undefined' ? Auto.index({ layout }) : null;
     const kidsOf = pid => I ? (I.kids.get(pid) || []) : (pid ? [] : layout.blocks);
     const drawList = pid => kidsOf(pid).filter(b => !b.hidden).map(drawBlock).join('');
-    const drawBlock = b => {
+    // drawn for motion: every block in a group tagged with its key, so its unit can move it
+    const order = opts.tag ? new Map((layout.blocks || []).map((b, i) => [b, String(b.id || ('n' + i))])) : null;
+    const tagged = (b, el) => order && el ? `<g data-b="${esc(order.get(b) || '')}">${el}</g>` : el;
+    const drawBlock = b => tagged(b, drawBlock0(b));
+    const drawBlock0 = b => {
       if (b.kind !== 'box') { const el = blockEl(b); return el ? fx(b, el, ctx) : ''; }
       const hasFill = (b.fill && b.fill !== 'none') || (b.gradient && Array.isArray(b.gradient.stops) && b.gradient.stops.length >= 2);
       const st = strokeAttr(b);
@@ -3387,24 +3441,31 @@ const ExportPptx = (() => {
     return Render.svgToPngDataUrl(svg, layout.format.w, layout.format.h, 1);
   }
 
-  async function addLayoutSlide(pptx, slide, layout, opts) {
+  // mv (when the slide moves): which motion unit each block belongs to. Every shape of a unit gets a name the export
+  // finds again in the slide XML, and pictures merged from several blocks never mix two units.
+  async function addLayoutSlide(pptx, slide0, layout, opts, mv) {
     const { kit } = opts;
+    let cur = null;
+    const named = o => mv && cur != null ? { ...o, objectName: `mv${mv.slide}_${cur}_${mv.seq++}` } : o;
+    const slide = mv ? { addText: (t, o) => slide0.addText(t, named(o)), addShape: (k, o) => slide0.addShape(k, named(o)), addImage: o => slide0.addImage(named(o)), set background(v) { slide0.background = v; } } : slide0;
     const W = layout.format.w, H = layout.format.h;
     slide.background = { color: hex(layout.palette.bg) };
     // Paint order (a box, then what is inside it); a hidden box hides its contents. Positions are already absolute.
     const order = typeof Auto !== 'undefined' ? (() => { const I = Auto.index({ layout }); const out = []; const walk = id => { for (const k of Auto.childrenOf(I, id)) { if (k.hidden) continue; out.push(k); if (k.kind === 'box') walk(k.id); } }; walk(''); return out; })() : layout.blocks;
     const blocks = order.map(b => b.kind === 'logo' ? { ...b, logoKind: kit.logo.kind } : b);
-    let pending = [];
+    const unitOf = (b, i) => mv ? mv.unitOf.get(order[i]) ?? null : null;
+    let pending = [], pendingUnit = null;
     const flush = async () => {
       if (!pending.length) return;
       const data = await rasterLayer(layout, pending, opts);
-      slide.addImage({ data: stripData(data), x: 0, y: 0, w: inch(W), h: inch(H) });
+      const keep = cur; cur = pendingUnit; slide.addImage({ data: stripData(data), x: 0, y: 0, w: inch(W), h: inch(H) }); cur = keep;
       pending = [];
     };
-    for (const b of blocks) {
+    for (const [i, b] of blocks.entries()) {
       if (b.hidden) continue;
-      if (isRaster(b)) { pending.push(b); continue; }
-      await flush();
+      const u = unitOf(b, i);
+      if (isRaster(b)) { if (pending.length && u !== pendingUnit) await flush(); pending.push(b); pendingUnit = u; continue; }
+      await flush(); cur = u;
       const box = { x: inch(b.x), y: inch(b.y), w: inch(b.w), h: inch(b.h) };
       if (b.kind === 'box') {
         const filled = b.fill && b.fill !== 'none'; const st = b.stroke && Number(b.stroke.width) > 0;
@@ -3473,14 +3534,35 @@ const ExportPptx = (() => {
     pptx.defineLayout({ name: 'LAYOUT_ENGINE', width: inch(f.w), height: inch(f.h) });
     pptx.layout = 'LAYOUT_ENGINE';
     pptx.title = `${opts.kit.name} layouts`;
-    for (const L of layouts) {
+    const moves = [];
+    for (const [k, L] of layouts.entries()) {
       const slide = pptx.addSlide();
-      await addLayoutSlide(pptx, slide, L, opts);
+      // motion: the plan this slide plays with (opts.motion(L) gives its settings, or null when it stays still)
+      const m = opts.motion && typeof Motion !== 'undefined' ? opts.motion(L) : null; let mv = null;
+      if (m) { const plan = Motion.plan(L, m); const unitOf = new Map(); plan.units.forEach((u, j) => { if (u.step >= 0) for (const b of u.blocks) unitOf.set(b, j); }); if (unitOf.size) mv = { slide: k, unitOf, seq: 0, plan }; }
+      moves.push(mv);
+      await addLayoutSlide(pptx, slide, L, opts, mv);
       // a deck's speaker notes (detail cut from the slide, a long part in full); otherwise where the layout came from
       const notes = opts.notes && opts.notes(L);
       slide.addNotes(notes ? String(notes) : `${L.archetypeLabel} · ${L.format.name} · seed ${L.seed} · ${L.id}`);
     }
-    return pptx.write({ outputType: 'blob' });
+    if (!moves.some(Boolean)) return pptx.write({ outputType: 'blob' });
+    return withMotion(await pptx.write({ outputType: 'arraybuffer' }), moves);
+  }
+  // Native PowerPoint animations: each slide's named shapes are found again in its XML and get the plan's entrance
+  // effects, step by step (with the slide, then one click each), plus a fade between slides. Shapes stay editable.
+  async function withMotion(buf, moves) {
+    const Z = window.JSZip; if (!Z) return new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' });
+    const zip = await Z.loadAsync(buf);
+    for (const [k, mv] of moves.entries()) {
+      if (!mv) continue; const path = `ppt/slides/slide${k + 1}.xml`; const f = zip.file(path); if (!f) continue;
+      let xml = await f.async('string'); const spids = new Map();
+      for (const m of xml.matchAll(/<p:cNvPr id="(\d+)" name="mv\d+_(\d+)_\d+"/g)) { const j = +m[2]; if (!spids.has(j)) spids.set(j, []); spids.get(j).push(m[1]); }
+      const timing = Motion.pptTiming(mv.plan.steps, u => spids.get(mv.plan.units.indexOf(u)) || []);
+      xml = xml.replace('</p:clrMapOvr>', '</p:clrMapOvr><p:transition spd="med"><p:fade/></p:transition>' + timing);
+      zip.file(path, xml);
+    }
+    return zip.generateAsync({ type: 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', compression: 'DEFLATE' });
   }
   // Mixed formats -> one deck per format
   async function buildDecks(layouts, opts) {
@@ -5654,6 +5736,195 @@ const Diagram = (() => {
   return { TYPES, LABEL, norm, toText, fromText, blocks, styleFrom, archetype };
 })();
 
+/* js/motion.js */
+/* Motion: slides that move and stay editable. Nothing is baked into pictures: a layout's blocks are grouped into units
+   (a card with its words, a diagram node with its connector, a headline), each unit gets an effect and a step (with the
+   slide, or on click N) from its role, and any unit can be told otherwise (the slide editor, the canvas). One plan plays
+   in the app (Quick Look, Present, a card's hover) and becomes native PowerPoint animations in the export.
+   settings: { builds: 'enter' (all at once) | 'click' (one part per click) }; a layout's own layout.motion
+   { builds, units: { [unitKey]: { step: 0..n | 'none', effect } } } and a block's b.anim { step, effect } win over it. */
+const Motion = (() => {
+  const EFFECTS = ['auto', 'rise', 'lines', 'fade', 'pop', 'reveal', 'count', 'draw', 'none'];
+  const LABEL = { auto: 'Auto', rise: 'Rise', lines: 'Lines rise', fade: 'Fade', pop: 'Pop', reveal: 'Reveal', count: 'Count up', draw: 'Draw', none: 'No motion' };
+  const EASE = 'cubic-bezier(0.22, 1, 0.36, 1)', BOUNCE = 'cubic-bezier(0.34, 1.32, 0.64, 1)';
+  const tagOf = (b, i) => String(b.id || ('n' + i)); // the block's tag in a tagged drawing (Render.toSVG with tag: true)
+  const center = b => [b.x + (b.w || 0) / 2, b.y + (b.h || 0) / 2];
+  const inside = (b, r) => { const [x, y] = center(b); return x >= r.x - 1 && x <= r.x + r.w + 1 && y >= r.y - 1 && y <= r.y + r.h + 1; };
+  const ITEM = /^(items|steps|sections|columns|diagram\.nodes)\.(\d+)/;
+  const ROLE = { eyebrow: 'eyebrow', headline: 'headline', subhead: 'subhead', body: 'body', stat: 'stat', caption: 'caption', quote: 'quote', mark: 'quote', attribution: 'attribution', cta: 'cta', footer: 'footer', bullets: 'body', list: 'body', title: 'headline' };
+  const NAME = { bg: 'Background', deco: 'Shape', visual: 'Number visual', eyebrow: 'Eyebrow', headline: 'Headline', subhead: 'Subhead', body: 'Body', stat: 'Number', caption: 'Caption', quote: 'Quote', attribution: 'Attribution', cta: 'Button', logo: 'Logo', footer: 'Footer', other: 'Text' };
+  const LIST_NAME = { items: 'Card', steps: 'Step', sections: 'Section', columns: 'Column', 'diagram.nodes': 'Node' };
+
+  // ---- Units: what moves together ----------------------------------------------------------------------------------
+  function units(layout) {
+    const W = layout.format.w, H = layout.format.h, A = W * H; const bs = layout.blocks || [];
+    const U = new Map(), of = new Map(); const idx = new Map(bs.map((b, i) => [b, i]));
+    const add = (key, b, props) => { let u = U.get(key); if (!u) { u = { key, blocks: [], ...props }; U.set(key, u); } u.blocks.push(b); of.set(b, u); return u; };
+    const live = bs.filter(b => !b.hidden);
+    // words with a place in a list belong to their item
+    for (const b of live) { const m = b.path && ITEM.exec(b.path); if (m) add(`${m[1]}.${m[2]}`, b, { cat: 'item', list: m[1], n: +m[2] }); }
+    const items = [...U.values()];
+    const box = u => { const xs = u.blocks.map(b => b.x), ys = u.blocks.map(b => b.y), x2 = u.blocks.map(b => b.x + (b.w || 0)), y2 = u.blocks.map(b => b.y + (b.h || 0)); return { x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...x2) - Math.min(...xs), h: Math.max(...y2) - Math.min(...ys) }; };
+    const nearest = (pt, list) => { let best = null, d = Infinity; for (const u of list) { const r = box(u); const c = [r.x + r.w / 2, r.y + r.h / 2]; const dd = Math.hypot(c[0] - pt[0], c[1] - pt[1]); if (dd < d) { d = dd; best = u; } } return best; };
+    // a surface holding an item's words (a card, a node's shape) moves with it; so do a box's children
+    for (const b of live) {
+      if (of.has(b) || !(b.kind === 'field' || b.kind === 'box' || b.kind === 'shape' || b.kind === 'vector') || b.role === 'diagram-link' || b.role === 'diagram-arrow') continue;
+      if ((b.w || 0) * (b.h || 0) > A * 0.45 || b.role === 'diagram' || b.role === 'panel') continue;
+      const u = items.find(u => u.blocks.some(t => (t.kind === 'text' || t.kind === 'list') && inside(t, b))); if (u) add(u.key, b);
+    }
+    for (const b of live) { if (of.has(b) || !b.parent) continue; const p = bs.find(x => x.id === b.parent); if (p && of.has(p)) add(of.get(p).key, b); }
+    const nodes = items.filter(u => u.list === 'diagram.nodes');
+    for (const b of live) {
+      if (of.has(b)) continue;
+      if ((b.role === 'diagram-link' || b.role === 'diagram-arrow') && nodes.length) { const u = nearest(b.to || (b.role === 'diagram-arrow' ? center(b) : [b.x + b.w, b.y + b.h]), nodes); if (u) add(u.key, b); continue; }
+      if (b.role === 'diagram-node' && nodes.length) { const u = nearest(center(b), nodes); if (u) add(u.key, b); }
+    }
+    // the rest, one unit each: words by role, the logo, big grounds, smaller shapes and visuals
+    live.forEach(b => {
+      if (of.has(b)) return; const i = idx.get(b);
+      if (b.kind === 'logo') return add('logo', b, { cat: 'logo' });
+      if (b.kind === 'text' || b.kind === 'list' || b.kind === 'button' || b.kind === 'badge') { const cat = b.kind === 'button' ? 'cta' : ROLE[b.role] || 'other'; return add(b.path || `${cat}#${i}`, b, { cat }); }
+      if (b.role === 'diagram') return; // the invisible frame of a diagram
+      if (b.role === 'stat-visual') return add(`visual#${i}`, b, { cat: 'visual' });
+      const big = (b.w || 0) * (b.h || 0) >= A * (b.kind === 'image' ? 0.2 : 0.3) || b.role === 'panel';
+      add(`${big ? 'bg' : 'deco'}#${i}`, b, { cat: big ? 'bg' : 'deco' });
+    });
+    const list = [...U.values()];
+    for (const u of list) {
+      const r = box(u); u.y = r.y; u.x = r.x; u.n = u.n ?? 0;
+      u.label = u.cat === 'item' ? `${LIST_NAME[u.list] || 'Item'} ${u.n + 1}` : (NAME[u.cat] || 'Part');
+      u.tags = u.blocks.map(b => tagOf(b, idx.get(b)));
+    }
+    return list;
+  }
+
+  // ---- Plan: which step and effect each unit gets, and when ---------------------------------------------------------
+  const ORDER = { bg: 0, deco: 1, eyebrow: 2, headline: 3, quote: 3, other: 4, subhead: 5, stat: 6, caption: 7, body: 7, attribution: 7, visual: 8, item: 9, cta: 10, logo: 11, footer: 11 };
+  const AT = { bg: 0, deco: 260, eyebrow: 120, headline: 180, quote: 180, other: 320, subhead: 420, stat: 360, caption: 620, body: 520, attribution: 640, visual: 520, item: 640, cta: 820, logo: 900, footer: 900 };
+  const NUMERIC = /^\s*[^\d]{0,2}\d[\d,]*(\.\d+)?\s*[^\d\s]{0,4}\s*$/;
+  function autoEffect(u) {
+    const b = u.blocks[0];
+    if (u.cat === 'bg') return b.kind === 'image' ? 'reveal' : 'fade';
+    if (u.cat === 'deco') return 'pop';
+    if (u.cat === 'visual') return /ring|whole/.test(b.label || '') ? 'draw' : 'pop';
+    if (u.cat === 'headline' || u.cat === 'quote') return 'lines';
+    if (u.cat === 'stat') return NUMERIC.test(b.text || '') ? 'count' : 'lines';
+    if (u.cat === 'cta') return 'pop';
+    if (u.cat === 'logo' || u.cat === 'footer') return 'fade';
+    if (u.cat === 'item') return u.list === 'diagram.nodes' ? 'pop' : 'rise';
+    return 'rise';
+  }
+  function plan(layout, settings = {}) {
+    const lm = layout.motion || {}; const builds = lm.builds || settings.builds || 'enter'; const ov = lm.units || {};
+    const us = units(layout).sort((a, b) => (ORDER[a.cat] - ORDER[b.cat]) || (a.cat === 'item' && b.cat === 'item' ? (a.list === b.list ? a.n - b.n : a.y - b.y || a.x - b.x) : (a.y - b.y || a.x - b.x)));
+    const items = us.filter(u => u.cat === 'item'); const click = builds === 'click';
+    // one part per click: each card, step, section or node; a lone number waits for its click
+    for (const u of us) u.step = 0;
+    if (click) {
+      if (items.length) items.forEach((u, k) => { u.step = k + 1; });
+      else { const st = us.find(u => u.cat === 'stat'); if (st) for (const u of us) if (u.cat === 'stat' || u.cat === 'caption' || u.cat === 'visual') u.step = 1; }
+    }
+    for (const u of us) {
+      u.effect = autoEffect(u);
+      const own = u.blocks.find(b => b.anim) ; const o = { ...(ov[u.key] || {}), ...(own ? own.anim : {}) };
+      if (o.effect && o.effect !== 'auto') u.effect = o.effect;
+      if (o.step === 'none' || u.effect === 'none') { u.step = -1; u.effect = 'none'; }
+      else if (o.step != null && o.step !== 'auto' && Number.isFinite(+o.step)) u.step = Math.max(0, +o.step);
+      u.custom = !!(ov[u.key] || own);
+    }
+    const n = Math.max(0, ...us.map(u => u.step)); const steps = [...Array(n + 1)].map(() => []);
+    for (const u of us) if (u.step >= 0) steps[u.step].push(u);
+    // timing inside a step: the slide's own order on enter, a short stagger on a click
+    steps.forEach((list, s) => {
+      let k = 0; const seen = {};
+      for (const u of list) {
+        if (s === 0) { const j = seen[u.cat] = (seen[u.cat] ?? -1) + 1; u.delay = (AT[u.cat] ?? 400) + j * (u.cat === 'item' ? 110 : 80); }
+        else u.delay = (k++) * 120;
+        u.dur = { lines: 900, rise: 750, fade: 650, pop: 700, reveal: 1200, count: 1500, draw: 1000 }[u.effect] || 700;
+      }
+    });
+    // empty click steps (a unit moved away) fold up
+    const kept = steps.filter((l, s) => s === 0 || l.length);
+    return { builds, units: us, steps: kept, clicks: kept.length - 1, still: us.filter(u => u.step < 0) };
+  }
+
+  // ---- Playing it on a tagged drawing --------------------------------------------------------------------------------
+  const fmtLike = (final, v) => { const m = /^(\s*[^\d]{0,2})(\d[\d,]*)(\.\d+)?(.*)$/.exec(final); if (!m) return final; const dec = m[3] ? m[3].length - 1 : 0; let s = v.toFixed(dec); if (m[2].includes(',')) s = Number(s).toLocaleString('en-US', { minimumFractionDigits: dec, maximumFractionDigits: dec }); return m[1] + s + m[4]; };
+  function player(svg, layout, settings = {}, opts = {}) {
+    const p = plan(layout, settings); const H = layout.format.h; const all = []; let at = -1; const counters = [];
+    const els = tags => { const set = new Set(tags); return tags.flatMap(t => [...svg.querySelectorAll(`[data-b="${CSS.escape(t)}"]`)]).filter(el => { let a = el.parentElement && el.parentElement.closest('[data-b]'); while (a) { if (set.has(a.getAttribute('data-b'))) return false; a = a.parentElement && a.parentElement.closest('[data-b]'); } return true; }); };
+    const prep = u => {
+      const out = []; const rise = Math.round(H * 0.03);
+      for (const el of els(u.tags)) {
+        const b = u.blocks[u.tags.indexOf(el.getAttribute('data-b'))] || u.blocks[0];
+        el.style.transformBox = 'fill-box'; el.style.transformOrigin = 'center';
+        let eff = u.effect; if (b && (b.role === 'diagram-link') && eff !== 'none') eff = 'draw'; if (b && b.role === 'diagram-arrow' && eff !== 'none') eff = 'fade';
+        const o = { duration: u.dur, delay: u.delay, easing: EASE, fill: 'both' };
+        if (eff === 'lines' || eff === 'count') {
+          const lines = [...el.querySelectorAll('[data-line] > text')];
+          if (lines.length) { lines.forEach((t, k) => out.push(t.animate([{ transform: `translateY(${t.getAttribute('data-lh') || rise * 2}px)` }, { transform: 'none' }], { ...o, delay: u.delay + k * 90 }))); }
+          else out.push(el.animate([{ opacity: 0, transform: `translateY(${rise}px)` }, { opacity: 1, transform: 'none' }], o));
+          if (eff === 'count') { const spans = [...el.querySelectorAll('text tspan')].filter(t => /\d/.test(t.textContent)); for (const t of spans) { const final = t.textContent; const m = /(\d[\d,]*(?:\.\d+)?)/.exec(final); if (!m) continue; const to = parseFloat(m[1].replace(/,/g, '')); counters.push({ t, final, to, delay: u.delay, dur: u.dur, step: u.step }); t.textContent = fmtLike(final, 0); } }
+        } else if (eff === 'draw') {
+          const strokes = [...el.querySelectorAll('path, circle, line, polyline, ellipse, rect')].filter(x => (x.getAttribute('stroke') || 'none') !== 'none');
+          if (strokes.length) for (const s of strokes) { let L = 0; try { L = s.getTotalLength(); } catch { } if (!L) continue; s.style.strokeDasharray = `${L} ${L}`; out.push(s.animate([{ strokeDashoffset: L }, { strokeDashoffset: 0 }], { ...o, easing: 'cubic-bezier(0.65, 0, 0.35, 1)' })); }
+          out.push(el.animate([{ opacity: 0 }, { opacity: 1, offset: 0.15 }, { opacity: 1 }], o));
+        } else if (eff === 'fade') out.push(el.animate([{ opacity: 0 }, { opacity: 1 }], o));
+        else if (eff === 'pop') out.push(el.animate([{ opacity: 0, transform: 'scale(0.82)' }, { opacity: 1, transform: 'none' }], { ...o, easing: BOUNCE }));
+        else if (eff === 'reveal') out.push(el.animate([{ opacity: 0, transform: 'scale(1.08)' }, { opacity: 1, transform: 'none' }], o));
+        else if (eff === 'rise') out.push(el.animate([{ opacity: 0, transform: `translateY(${rise}px)` }, { opacity: 1, transform: 'none' }], o));
+      }
+      return out;
+    };
+    p.steps.forEach((list, s) => { const anims = list.flatMap(prep); anims.forEach(a => { a.pause(); a.currentTime = 0; }); all[s] = anims; });
+    let raf = 0; const t0 = {};
+    const tick = now => { let live = false; for (const c of counters) { if (c.step > at || c.done) continue; const st = t0[c.step]; if (st == null) continue; const k = Math.min(1, Math.max(0, (now - st - c.delay) / c.dur)); const e = 1 - Math.pow(1 - k, 3); c.t.textContent = k >= 1 ? c.final : fmtLike(c.final, c.to * e); if (k >= 1) c.done = true; else live = true; } raf = live ? requestAnimationFrame(tick) : 0; };
+    const api = {
+      plan: p, get step() { return at; }, get clicks() { return p.clicks; },
+      // play the next step; false when every step has played
+      next() { if (at >= p.steps.length - 1) return false; at++; (all[at] || []).forEach(a => a.play()); t0[at] = performance.now(); if (!raf) raf = requestAnimationFrame(tick); return true; },
+      // everything shown at once (skip)
+      finish() { while (at < p.steps.length - 1) { at++; } all.flat().forEach(a => { try { a.finish(); } catch { } }); for (const c of counters) { c.t.textContent = c.final; c.done = true; } if (raf) cancelAnimationFrame(raf); raf = 0; },
+      cancel() { all.flat().forEach(a => { try { a.cancel(); } catch { } }); for (const c of counters) c.t.textContent = c.final; if (raf) cancelAnimationFrame(raf); raf = 0; },
+    };
+    if (opts.autoplay !== false) api.next();
+    return api;
+  }
+
+  // ---- PowerPoint: the same plan as native entrance animations ------------------------------------------------------
+  // presetID/filter per effect: Float In for rises, Fade, Zoom for pops, Wipe for drawn lines.
+  const PPT = { rise: { id: 42, kind: 'float' }, lines: { id: 42, kind: 'float' }, count: { id: 42, kind: 'float' }, fade: { id: 10, kind: 'fade' }, reveal: { id: 10, kind: 'fade' }, pop: { id: 53, sub: 16, kind: 'zoom' }, draw: { id: 22, sub: 8, kind: 'wipe' } };
+  function pptTiming(steps, spidsOf) {
+    let id = 2; const nid = () => ++id;
+    const tgt = sp => `<p:tgtEl><p:spTgt spid="${sp}"/></p:tgtEl>`;
+    const effect = (sp, u, first, auto) => {
+      const P = PPT[u.effect] || PPT.fade; const dur = Math.round(u.dur);
+      const vis = `<p:set><p:cBhvr><p:cTn id="${nid()}" dur="1" fill="hold"><p:stCondLst><p:cond delay="0"/></p:stCondLst></p:cTn>${tgt(sp)}<p:attrNameLst><p:attrName>style.visibility</p:attrName></p:attrNameLst></p:cBhvr><p:to><p:strVal val="visible"/></p:to></p:set>`;
+      const fade = `<p:animEffect transition="in" filter="fade"><p:cBhvr><p:cTn id="${nid()}" dur="${dur}"/>${tgt(sp)}</p:cBhvr></p:animEffect>`;
+      const prop = (name, from, to) => `<p:anim calcmode="lin" valueType="num"><p:cBhvr><p:cTn id="${nid()}" dur="${dur}" fill="hold"/>${tgt(sp)}<p:attrNameLst><p:attrName>${name}</p:attrName></p:attrNameLst></p:cBhvr><p:tavLst><p:tav tm="0"><p:val>${from}</p:val></p:tav><p:tav tm="100000"><p:val>${to}</p:val></p:tav></p:tavLst></p:anim>`;
+      const sv = v => `<p:strVal val="${v}"/>`;
+      let body = vis;
+      if (P.kind === 'float') body += fade + prop('ppt_x', sv('#ppt_x'), sv('#ppt_x')) + prop('ppt_y', sv('#ppt_y+.1'), sv('#ppt_y'));
+      else if (P.kind === 'zoom') body += prop('ppt_w', '<p:fltVal val="0"/>', sv('#ppt_w')) + prop('ppt_h', '<p:fltVal val="0"/>', sv('#ppt_h')) + fade;
+      else if (P.kind === 'wipe') body += `<p:animEffect transition="in" filter="wipe(left)"><p:cBhvr><p:cTn id="${nid()}" dur="${dur}"/>${tgt(sp)}</p:cBhvr></p:animEffect>`;
+      else body += fade;
+      return `<p:par><p:cTn id="${nid()}" presetID="${P.id}" presetClass="entr" presetSubtype="${P.sub || 0}" fill="hold" nodeType="${first ? (auto ? 'afterEffect' : 'clickEffect') : 'withEffect'}"><p:stCondLst><p:cond delay="${Math.round(u.delay)}"/></p:stCondLst><p:childTnLst>${body}</p:childTnLst></p:cTn></p:par>`;
+    };
+    const groups = [];
+    steps.forEach((list, s) => {
+      const parts = []; let first = true;
+      for (const u of list) for (const sp of spidsOf(u)) { parts.push(effect(sp, u, first, s === 0)); first = false; }
+      if (!parts.length) return;
+      const start = s === 0 ? `<p:cond delay="indefinite"/><p:cond evt="onBegin" delay="0"><p:tn val="2"/></p:cond>` : `<p:cond delay="indefinite"/>`;
+      groups.push(`<p:par><p:cTn id="${nid()}" fill="hold"><p:stCondLst>${start}</p:stCondLst><p:childTnLst><p:par><p:cTn id="${nid()}" fill="hold"><p:stCondLst><p:cond delay="0"/></p:stCondLst><p:childTnLst>${parts.join('')}</p:childTnLst></p:cTn></p:par></p:childTnLst></p:cTn></p:par>`);
+    });
+    if (!groups.length) return '';
+    return `<p:timing><p:tnLst><p:par><p:cTn id="1" dur="indefinite" restart="never" nodeType="tmRoot"><p:childTnLst><p:seq concurrent="1" nextAc="seek"><p:cTn id="2" dur="indefinite" nodeType="mainSeq"><p:childTnLst>${groups.join('')}</p:childTnLst></p:cTn><p:prevCondLst><p:cond evt="onPrev" delay="0"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:prevCondLst><p:nextCondLst><p:cond evt="onNext" delay="0"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:nextCondLst></p:seq></p:childTnLst></p:cTn></p:par></p:tnLst></p:timing>`;
+  }
+
+  return { EFFECTS, LABEL, units, plan, player, pptTiming, tagOf };
+})();
+
 /* js/looks.js */
 /* Looks: one frame, three treatments. Original is the frame as it was; Wireframe strips it to grey boxes, placeholder
    images and one typeface; Rebrand keeps the structure and images and moves colors and type onto the brand kit.
@@ -7065,6 +7336,7 @@ const CanvasUI = (() => {
   let env = null, doc = null, hist = null, active = false;
   // frameIds holds every selected screen; blockIds are blocks inside the one frame in frameId.
   const sel = { frameId: null, blockIds: [], frameIds: [] };
+  let spaceAt = 0, spacePanned = false;
   let tool = 'select', hover = null, drag = null, spaceDown = false, clipboard = null, lastPointer = null, dropTarget = null;
   let guides = [], editing = null, groupFocus = null, peers = [], undoMerge = null;
   // Simple editing (default) hides auto layout, sizing and code, and treats stacks as tidy containers; Advanced is
@@ -7392,6 +7664,7 @@ const CanvasUI = (() => {
   function onDown(e) {
     if (e.target.closest && e.target.closest('.cv-editor')) return;
     if (editing) endEdit();
+    if (spaceDown) spacePanned = true;
     if (e.button === 1 || tool === 'hand' || spaceDown || e.button === 2) { drag = { type: 'pan', sx: e.clientX, sy: e.clientY, vx: doc.view.x, vy: doc.view.y }; stage().setPointerCapture(e.pointerId); stage().style.cursor = 'grabbing'; return; }
     const p = toWorld(e.clientX, e.clientY);
     if (tool === 'frame') { drag = { type: 'draw-frame', start: p, cur: p, moved: false }; stage().setPointerCapture(e.pointerId); return; }
@@ -7805,7 +8078,7 @@ const CanvasUI = (() => {
       if (!active || editing) return;
       const tag = (e.target.tagName || '').toLowerCase(); const typing = tag === 'input' || tag === 'textarea' || tag === 'select' || e.target.isContentEditable;
       if (e.target.closest && e.target.closest('.modal:not([hidden]), .agent-panel')) return;
-      if (e.key === ' ' && !typing) { spaceDown = true; stage().style.cursor = 'grab'; e.preventDefault(); return; }
+      if (e.key === ' ' && !typing) { if (!e.repeat && !spaceDown) { spaceAt = performance.now(); spacePanned = false; } spaceDown = true; stage().style.cursor = 'grab'; e.preventDefault(); return; }
       const meta = e.metaKey || e.ctrlKey; const k = e.key.toLowerCase();
       if (meta && k === 'z' && !typing) { e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
       if (meta && k === 'y' && !typing) { e.preventDefault(); redo(); return; }
@@ -7854,7 +8127,13 @@ const CanvasUI = (() => {
       }
       if (k === '[' || k === ']') { const f = selFrame(); const bs = selBlocks(); if (!f || !bs.length) return; hist.push(doc); bs.forEach(b => Canvas.reorder(f, b, k === '[' ? (e.shiftKey ? 'back' : -1) : (e.shiftKey ? 'front' : 1))); rerenderFrame(f); renderLayers(); persist(); updateUndo(); }
     });
-    document.addEventListener('keyup', e => { if (e.key === ' ') { spaceDown = false; if (active) stage().style.cursor = tool === 'hand' ? 'grab' : 'default'; } });
+    document.addEventListener('keyup', e => {
+      if (e.key !== ' ') return;
+      // a tap (no drag) shows the selected screen big, with its motion, like Quick Look
+      const tap = spaceDown && !spacePanned && performance.now() - spaceAt < 320 && active && !editing;
+      spaceDown = false; if (active) stage().style.cursor = tool === 'hand' ? 'grab' : 'default';
+      if (tap && !(e.target.closest && e.target.closest('input, textarea, select, [contenteditable="true"]'))) { const f = selFrame() || selFrames()[0]; if (f) frameLook(f); }
+    });
     // JSON copied from another tab or session pastes as blocks or frames.
     document.addEventListener('paste', e => {
       if (!active || editing) return; const tag = (e.target.tagName || '').toLowerCase(); if (tag === 'input' || tag === 'textarea' || e.target.isContentEditable) return;
@@ -8120,11 +8399,32 @@ const CanvasUI = (() => {
     const el = $('cvProps'); const frames = selFrames(); const f = selFrame(); const bs = selBlocks();
     if (!frames.length) { el.innerHTML = canvasProps(); return; }
     if (frames.length > 1) { el.innerHTML = screensProps(frames); return; }
-    if (!bs.length) { el.innerHTML = frameProps(f); return; }
+    if (!bs.length) { el.innerHTML = frameProps(f) + motionSection(f, []); return; }
     const dg = diagramOf(f, bs); const dgHtml = dg ? diagramSection(f, dg) : '';
-    if (bs.length > 1) { el.innerHTML = dgHtml + blocksProps(f, bs); return; }
-    el.innerHTML = dgHtml + blockProps(f, bs[0]);
+    if (bs.length > 1) { el.innerHTML = dgHtml + blocksProps(f, bs) + motionSection(f, bs); return; }
+    el.innerHTML = dgHtml + blockProps(f, bs[0]) + motionSection(f, bs);
   }
+  // ---- Motion: when a part comes in and how, kept on the blocks themselves (b.anim), so moving, restyling or retyping
+  // a block keeps its motion; a frame sets builds for the whole screen. Space (a tap) plays the selection in Quick Look.
+  function motionSection(f, bs) {
+    if (typeof Motion === 'undefined' || !f) return '';
+    const p = Motion.plan(f.layout, { builds: (f.layout.motion && f.layout.motion.builds) || 'enter' });
+    if (!bs.length) {
+      const b = (f.layout.motion && f.layout.motion.builds) || '';
+      return `<div class="cv-section"><h3>Motion <span class="cv-token">${p.clicks ? `${p.clicks} click${p.clicks > 1 ? 's' : ''}` : 'all at once'}</span></h3>
+        <label class="cv-f"><span>Builds</span><select data-mv="builds"><option value="" ${!b ? 'selected' : ''}>Deck setting</option><option value="enter" ${b === 'enter' ? 'selected' : ''}>All at once</option><option value="click" ${b === 'click' ? 'selected' : ''}>Click by click</option></select></label>
+        <div class="cv-row"><button type="button" class="btn small" data-mv-act="look">▶ Preview</button><span class="hint">or tap Space</span></div></div>`;
+    }
+    const ids = new Set(bs.map(b => b.id)); const us = p.units.filter(u => u.blocks.some(b => ids.has(b.id))); if (!us.length) return '';
+    const own = bs.find(b => b.anim) ; const a = own ? own.anim : {}; const u = us[0];
+    const max = Math.max(p.clicks + 1, 3);
+    const step = a.step != null ? String(a.step) : 'auto'; const eff = a.effect || 'auto';
+    return `<div class="cv-section"><h3>Motion <span class="cv-token">${esc(us.length > 1 ? `${us.length} parts` : u.label)}</span></h3>
+      <label class="cv-f"><span>Starts</span><select data-mv="step"><option value="auto" ${step === 'auto' ? 'selected' : ''}>Auto (${u.step < 0 ? 'still' : u.step ? `click ${u.step}` : 'with the screen'})</option><option value="0" ${step === '0' ? 'selected' : ''}>With the screen</option>${[...Array(max)].map((_, k) => `<option value="${k + 1}" ${step === String(k + 1) ? 'selected' : ''}>On click ${k + 1}</option>`).join('')}<option value="none" ${step === 'none' ? 'selected' : ''}>No motion</option></select></label>
+      <label class="cv-f"><span>Effect</span><select data-mv="effect">${Motion.EFFECTS.filter(x => x !== 'none').map(x => `<option value="${x}" ${eff === x ? 'selected' : ''}>${esc(x === 'auto' ? `Auto (${Motion.LABEL[u.effect] || u.effect})` : Motion.LABEL[x])}</option>`).join('')}</select></label>
+      <div class="cv-row"><button type="button" class="btn small" data-mv-act="look">▶ Preview</button></div></div>`;
+  }
+  function frameLook(f) { const all = doc.frames.filter(x => !x.hidden); if (env.quickLook) env.quickLook(all.map(x => ({ ...x.layout, name: x.name })), Math.max(0, all.indexOf(f))); }
   // ---- Diagrams: a group whose frame block keeps the spec. Redrawn from the spec, with words typed on the canvas read
   // back first, so nothing typed by hand is lost. --------------------------------------------------------------------------
   function diagramOf(f, bs) {
@@ -8476,6 +8776,13 @@ const CanvasUI = (() => {
     const dgApply = () => { const f = selFrame(); const fr = diagramOf(f, selBlocks()); if (!fr) return; const sec = el.querySelector('[data-dgsec]'); if (!sec) return; const ta0 = sec.querySelector('[data-dg="text"]'); const type = sec.querySelector('[data-dg="type"]').value; const spec = ta0.value === ta0.dataset.orig ? { ...diagramSpec(f, fr), type } : Diagram.fromText(ta0.value, type); if (!spec.nodes.length) return; spec.type = type; const keepFocus = document.activeElement && document.activeElement.dataset.dg === 'text'; const caret = keepFocus ? document.activeElement.selectionStart : 0; if (redrawDiagram(f, fr, spec) && keepFocus) { const ta = el.querySelector('[data-dg="text"]'); if (ta) { ta.focus(); ta.setSelectionRange(caret, caret); } } };
     el.addEventListener('input', e => { if (e.target.dataset.dg === 'text') { clearTimeout(dgT); dgT = setTimeout(dgApply, 500); } });
     el.addEventListener('change', e => { if (e.target.dataset.dg === 'type') dgApply(); });
+    el.addEventListener('change', e => {
+      const k = e.target.dataset.mv; if (!k) return; const f = selFrame(); if (!f) return; const v = e.target.value; hist.push(doc);
+      if (k === 'builds') { f.layout.motion = { ...(f.layout.motion || {}) }; if (v) f.layout.motion.builds = v; else delete f.layout.motion.builds; }
+      else for (const b of selBlocks()) { const a = { ...(b.anim || {}) }; if (v === 'auto') delete a[k]; else a[k] = k === 'step' && v !== 'none' ? +v : v; if (Object.keys(a).length) b.anim = a; else delete b.anim; }
+      persist(); updateUndo(); renderProps();
+    });
+    el.addEventListener('click', e => { const a = e.target.closest('[data-mv-act]'); if (a) { const f = selFrame(); if (f) frameLook(f); } });
     el.addEventListener('click', e => {
       const a = e.target.closest('[data-dg-act]'); if (!a) return;
       if (a.dataset.dgAct === 'redraw') { clearTimeout(dgT); dgApply(); return; }
@@ -8484,7 +8791,7 @@ const CanvasUI = (() => {
     const apply = (e, live) => {
       const t = e.target; const fs = selFrames(); const f = selFrame();
       if (t.dataset.doc === 'name') { doc.name = t.value; persist(); return; }
-      if (!f || t.dataset.var || t.dataset.fr || t.dataset.dg || (t.dataset.p && t.dataset.p.startsWith('batch-'))) return;
+      if (!f || t.dataset.var || t.dataset.fr || t.dataset.dg || t.dataset.mv || (t.dataset.p && t.dataset.p.startsWith('batch-'))) return;
       const bs = selBlocks();
       const val = t.type === 'checkbox' ? t.checked : t.value;
       if (t.dataset.f) {
@@ -11325,8 +11632,8 @@ Layer kinds:
     $('seDiagram').hidden = !dg; if (dg) $('seDiagramType').innerHTML = Diagram.TYPES.map(t => `<option value="${t}" ${t === dg.diagram.type ? 'selected' : ''}>${Diagram.LABEL[t]}</option>`).join('');
     const o = l.deckIndex != null && state.outline && state.outline.slides[l.deckIndex];
     $('seTitle').textContent = o ? `Slide ${l.deckIndex + 1} · ${Deck.INTENT_LABEL[o.intent] || o.intent}` : `${l.archetypeLabel} · ${l.format.name}`;
-    se.replace = new Set(); se.addNotes = '';
-    renderSlideFields(); drawSlideEdit(l); $('seNote').textContent = ''; seBalanceCheck(); $('slideEdit').hidden = false;
+    se.replace = new Set(); se.addNotes = ''; se.motion = JSON.parse(JSON.stringify(l.motion || {})); if (!se.motion.units) se.motion.units = {};
+    renderSlideFields(); drawSlideEdit(l); $('seNote').textContent = ''; seBalanceCheck(); seMotionRender(); $('slideEdit').hidden = false;
     const first = $('seFields').querySelector('input, textarea'); if (first) first.focus();
   }
   function renderSlideFields() {
@@ -11389,6 +11696,34 @@ Layer kinds:
     finally { btn.disabled = false; btn.textContent = 'Move the rest to a new slide'; }
     $('slideEdit').hidden = true; renderOutline(); renderDeck(); Stats.track('slide.split'); toast(`The rest of that part is on a new slide ${i + 2}`);
   }
+  // Motion for this slide: when each part comes in (with the slide, or on which click) and how; Play shows it here.
+  function seMotionLayout() { return { ...(se.next || se.l), motion: se.motion }; }
+  function seMotionRender() {
+    const L = seMotionLayout(); const p = Motion.plan(L, { builds: state.motion.builds }); const esc = escapeHtml;
+    $('seBuilds').value = se.motion.builds || '';
+    const max = Math.max(p.clicks + 1, p.units.filter(u => u.cat === 'item').length, 3);
+    const stepOpts = `<option value="auto">Auto</option><option value="0">With the slide</option>${[...Array(max)].map((_, k) => `<option value="${k + 1}">Click ${k + 1}</option>`).join('')}<option value="none">No motion</option>`;
+    const effOpts = Motion.EFFECTS.filter(x => x !== 'none').map(x => `<option value="${x}">${Motion.LABEL[x]}</option>`).join('');
+    $('seUnits').innerHTML = p.units.map(u => `<div class="se-unit ${se.motion.units[u.key] ? 'custom' : ''}" title="${u.step < 0 ? 'Stays still' : u.step ? `Comes in on click ${u.step}` : 'Comes in with the slide'} · ${Motion.LABEL[u.effect] || u.effect}"><span>${esc(u.label)}</span><select class="select" data-mu-step="${esc(u.key)}" aria-label="When ${esc(u.label)} comes in">${stepOpts}</select><select class="select" data-mu-eff="${esc(u.key)}" aria-label="How ${esc(u.label)} comes in">${effOpts}</select></div>`).join('') || '<p class="hint">Nothing on this slide moves.</p>';
+    for (const u of p.units) { const o = se.motion.units[u.key] || {}; const a = $('seUnits').querySelector(`[data-mu-step="${CSS.escape(u.key)}"]`), b = $('seUnits').querySelector(`[data-mu-eff="${CSS.escape(u.key)}"]`); if (a) a.value = o.step != null ? String(o.step) : 'auto'; if (b) b.value = o.effect || 'auto'; }
+    const m = motionFor(se.l);
+    $('seMotionSum').textContent = !m ? '· off for this slide (deck setting)' : `· ${p.units.length} parts, ${p.clicks ? `${p.clicks} click${p.clicks > 1 ? 's' : ''}` : 'all at once'}`;
+  }
+  let sePlayer = null, sePlayTimer = 0;
+  function seMotionPlay() {
+    clearInterval(sePlayTimer); if (sePlayer) sePlayer.cancel();
+    const L = seMotionLayout(); $('sePreview').innerHTML = Render.toSVG(L, { kit: state.kit, assets: state.assets, tag: true, width: 1000 });
+    sePlayer = Motion.player($('sePreview').querySelector('svg'), L, { builds: state.motion.builds });
+    sePlayTimer = setInterval(() => { if (!sePlayer || !sePlayer.next()) clearInterval(sePlayTimer); }, 1100);
+  }
+  $('sePlay').addEventListener('click', seMotionPlay);
+  $('seBuilds').addEventListener('change', e => { if (e.target.value) se.motion.builds = e.target.value; else delete se.motion.builds; seMotionRender(); seMotionPlay(); });
+  $('seUnits').addEventListener('change', e => {
+    const t = e.target; const key = t.dataset.muStep || t.dataset.muEff; if (!key) return;
+    const o = { ...(se.motion.units[key] || {}) }; if (t.dataset.muStep) { if (t.value === 'auto') delete o.step; else o.step = t.value === 'none' ? 'none' : +t.value; } else { if (t.value === 'auto') delete o.effect; else o.effect = t.value; }
+    if (Object.keys(o).length) se.motion.units[key] = o; else delete se.motion.units[key];
+    seMotionRender(); seMotionPlay();
+  });
   $('seFields').addEventListener('input', e => {
     const t = e.target; const path = t.dataset.se; if (!path) return;
     const val = t.dataset.lines ? t.value.split('\n').map(x => x.trim()).filter(Boolean) : t.value;
@@ -11406,6 +11741,8 @@ Layer kinds:
     if (save || canvas) {
       clearTimeout(se.timer); if (se.next !== se.l && !slideEditRedraw()) return;
       const l = se.l, next = se.next === l ? l : Object.assign(se.next, { id: l.id.replace(/-e\d+$/, '') + '-e' + (++seCount), deckIndex: l.deckIndex, genIntent: l.genIntent, poolIds: l.poolIds });
+      const mv = (se.motion.builds || Object.keys(se.motion.units || {}).length) ? JSON.parse(JSON.stringify(se.motion)) : null; const movedMotion = JSON.stringify(mv || null) !== JSON.stringify(l.motion || null);
+      if (mv) next.motion = mv; else delete next.motion;
       if (next !== l) {
         if (l.deckIndex != null && state.deck) {
           const row = state.deck.slides[l.deckIndex]; const j = row.variations.indexOf(l); if (j >= 0) { row.variations[j] = next; row.pick = j; }
@@ -11416,7 +11753,7 @@ Layer kinds:
         Stats.track('slide.edit');
       }
       $('slideEdit').hidden = true;
-      if (canvas) await sendToCanvas([next]); else if (next !== l) toast('Slide saved');
+      if (canvas) await sendToCanvas([next]); else if (next !== l) toast('Slide saved'); else if (movedMotion) toast('Motion saved');
     }
   });
   let seCount = 0;
@@ -11839,11 +12176,99 @@ Layer kinds:
     if (state.mode !== 'deck') return; const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
     if (!f || !(/\.pptx$/i.test(f.name) || f.type === GSlides.PPTX)) return; e.preventDefault(); if (!state.busy) generateDeck(($('prompt').value || '').replace(slidesLinkIn($('prompt').value) || '', '').trim(), { file: f });
   });
+  // ---- Motion: deck settings, Quick Look (select a slide or poster, press Space), Present, hover previews ----------
+  state.motion = { mode: LS.get('lg.motionMode', 'all') || 'all', builds: LS.get('lg.motionBuilds', 'enter') || 'enter' };
+  const reduceMotion = () => window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function syncMotionUI() { for (const id of ['motionMode', 'lookMotion']) $(id).value = state.motion.mode; for (const id of ['motionBuilds', 'lookBuilds']) $(id).value = state.motion.builds; }
+  function setMotion(patch) { Object.assign(state.motion, patch); LS.set('lg.motionMode', state.motion.mode); LS.set('lg.motionBuilds', state.motion.builds); syncMotionUI(); if (!$('look').hidden) lookShow(); if (!$('slideEdit').hidden) seMotionRender(); }
+  syncMotionUI();
+  for (const id of ['motionMode', 'lookMotion']) $(id).addEventListener('change', e => setMotion({ mode: e.target.value }));
+  for (const id of ['motionBuilds', 'lookBuilds']) $(id).addEventListener('change', e => setMotion({ builds: e.target.value }));
+  // The settings a layout plays with, or null when it stays still ('First slide only' moves the deck's first slide).
+  function motionFor(L) { const m = state.motion; if (!L || m.mode === 'off') return null; if (m.mode === 'cover' && L.deckIndex != null && L.deckIndex !== 0) return null; return { builds: m.builds }; }
+  const look = { list: [], i: 0, player: null, present: false };
+  function lookOpen(list, i, opts = {}) {
+    list = list.filter(Boolean); if (!list.length) return;
+    look.list = list; look.i = Math.max(0, Math.min(list.length - 1, i || 0)); look.present = !!opts.present;
+    $('look').classList.toggle('present', look.present); $('look').hidden = false;
+    if (look.present && document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().then(() => setTimeout(lookShow, 60)).catch(() => { });
+    lookShow(); Stats.track(look.present ? 'motion.present' : 'motion.quicklook');
+  }
+  function lookClose() { if (look.player) look.player.cancel(); look.player = null; $('look').hidden = true; $('lookStage').innerHTML = ''; look.present = false; if (document.fullscreenElement) document.exitFullscreen().catch(() => { }); document.querySelectorAll('.looking').forEach(x => x.classList.remove('looking')); }
+  function lookShow() {
+    const L = look.list[look.i]; if (!L) return; if (look.player) look.player.cancel(); look.player = null;
+    const st = $('lookStage'); const W = L.format.w, H = L.format.h;
+    const room = look.present ? { w: innerWidth, h: innerHeight } : { w: Math.max(200, st.clientWidth), h: Math.max(150, st.clientHeight) };
+    const k = Math.min(room.w / W, room.h / H);
+    st.innerHTML = Render.toSVG(L, { kit: state.kit, assets: state.assets, tag: true, width: Math.round(W * k) });
+    const svg = st.querySelector('svg'); svg.style.width = Math.round(W * k) + 'px'; svg.style.height = Math.round(H * k) + 'px';
+    const m = motionFor(L); look.player = m ? Motion.player(svg, L, m) : null; if (look.player && reduceMotion()) look.player.finish();
+    const o = L.deckIndex != null && state.outline && state.outline.slides[L.deckIndex];
+    $('lookTitle').textContent = o ? `Slide ${L.deckIndex + 1} · ${o.headline || o.quote || ''}` : `${L.archetypeLabel || L.name || 'Frame'} · ${L.format.name || `${W} × ${H}`}`;
+    $('lookCount').textContent = look.list.length > 1 ? `${look.i + 1} of ${look.list.length}` : '';
+    lookStep();
+  }
+  function lookStep() { const p = look.player; $('lookStep').textContent = !p ? (motionFor(look.list[look.i]) ? '' : 'No motion on this one') : p.clicks ? (p.clicks - p.step > 0 ? `${p.clicks - p.step} click${p.clicks - p.step > 1 ? 's' : ''} to go` : 'All in') : 'Plays as it opens'; }
+  function lookAdvance() { if (look.player && look.player.next()) { lookStep(); return true; } return false; }
+  function lookGo(d) { const j = look.i + d; if (j < 0 || j >= look.list.length) { if (look.present && d > 0) lookClose(); return; } look.i = j; lookShow(); }
+  document.addEventListener('keydown', e => {
+    if ($('look').hidden) return;
+    const k = e.key; const stop = () => { e.preventDefault(); e.stopPropagation(); };
+    if (k === 'Escape' || (k === ' ' && !look.present)) { stop(); lookClose(); return; }
+    if (k === 'ArrowRight' || k === 'PageDown' || (k === ' ' && look.present)) { stop(); if (!look.present || !lookAdvance()) lookGo(1); return; }
+    if (k === 'ArrowLeft' || k === 'PageUp') { stop(); lookGo(-1); return; }
+    if (k === 'ArrowDown' || k === 'Enter') { stop(); if (!lookAdvance() && look.present) lookGo(1); return; }
+    if (k === 'r' || k === 'R') { stop(); lookShow(); return; }
+    if (e.target.closest && !e.target.closest('.look-bar')) e.stopPropagation();
+  }, true);
+  $('lookStage').addEventListener('click', () => { if (!lookAdvance() && look.present) lookGo(1); });
+  $('lookClose').addEventListener('click', lookClose);
+  $('lookReplay').addEventListener('click', lookShow);
+  $('lookPresent').addEventListener('click', () => lookOpen(look.list, look.i, { present: true }));
+  document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && look.present && !$('look').hidden) lookClose(); });
+  window.addEventListener('resize', () => { if (!$('look').hidden) lookShow(); });
+  // what Space opens: the card under the pointer, else the one last clicked; a deck plays its picks in order
+  let hoverCard = null, lastCard = null;
+  document.addEventListener('mouseover', e => { hoverCard = e.target.closest ? e.target.closest('.card, .deck-card') : null; });
+  document.addEventListener('click', e => { const c = e.target.closest && e.target.closest('.card, .deck-card'); if (c) lastCard = c; }, true);
+  function deckLookList(card) {
+    const rows = state.deck ? state.deck.slides : []; let at = 0;
+    const list = rows.map((r, k) => { if (card && card.closest('.deck-row') && +card.closest('.deck-row').dataset.i === k) { at = k; return r.variations[+card.dataset.j]; } return r.pick >= 0 ? r.variations[r.pick] : null; });
+    const keep = list.map((L, k) => [L, k]).filter(([L]) => L); return { list: keep.map(([L]) => L), i: Math.max(0, keep.findIndex(([, k]) => k === at)) };
+  }
+  document.addEventListener('keydown', e => {
+    if (e.key !== ' ' || e.repeat || !$('look').hidden || e.metaKey || e.ctrlKey || e.altKey) return;
+    const tag = (e.target.tagName || '').toLowerCase(); if (tag === 'input' || tag === 'textarea' || tag === 'select' || tag === 'button' || e.target.isContentEditable) return;
+    if (state.mode === 'canvas') return; // the canvas opens it on a tap of Space (holding Space pans)
+    if (!$('slideEdit').hidden) { e.preventDefault(); seMotionPlay(); return; }
+    if (!$('detail').hidden && state.detail) { e.preventDefault(); lookOpen([state.detail], 0); return; }
+    if (document.querySelector('.modal:not([hidden])')) return;
+    const card = (hoverCard && hoverCard.isConnected && hoverCard) || (lastCard && lastCard.isConnected && lastCard) || null;
+    if (state.mode === 'deck' && state.deck) { e.preventDefault(); const r = deckLookList(card && card.classList.contains('deck-card') ? card : null); if (card) card.classList.add('looking'); lookOpen(r.list, r.i); return; }
+    const cards = [...$('gallery').querySelectorAll('.card')]; if (!cards.length) return;
+    e.preventDefault(); const c = card && cards.includes(card) ? card : cards[0]; c.classList.add('looking');
+    lookOpen(cards.map(x => findLayout(x.dataset.id)), cards.indexOf(c));
+  });
+  $('presentBtn').addEventListener('click', () => { const r = deckLookList(null); if (!r.list.length) { toast('Pick a slide in each row first'); return; } lookOpen(r.list, 0, { present: true }); });
+  // hovering a card a moment plays its motion in place (all builds, one after another)
+  const hov = { card: null, t: 0, timer: 0, player: null };
+  function hoverStop() { clearTimeout(hov.t); clearInterval(hov.timer); if (hov.player) hov.player.cancel(); hov.player = null; hov.card = null; }
+  document.addEventListener('mouseover', e => {
+    const c = e.target.closest ? e.target.closest('.card, .deck-card') : null; if (c === hov.card) return;
+    hoverStop(); if (!c || reduceMotion() || state.motion.mode === 'off') return; hov.card = c;
+    hov.t = setTimeout(() => {
+      const L = findLayout(c.dataset.id); const m = motionFor(L); const old = c.querySelector(':scope > svg, .canvas > svg'); if (!L || !m || !old || hov.card !== c) return;
+      const holder = document.createElement('div'); holder.innerHTML = Render.toSVG(L, { kit: state.kit, assets: state.assets, showGrid: state.showGrid, tag: true, width: +old.getAttribute('width') || 480 });
+      const svg = holder.firstChild; if (old.getAttribute('style')) svg.setAttribute('style', old.getAttribute('style')); old.replaceWith(svg);
+      hov.player = Motion.player(svg, L, m); hov.timer = setInterval(() => { if (!hov.player || !hov.player.next()) clearInterval(hov.timer); }, 1100);
+    }, 450);
+  });
+
   $('deckShuffleAll').addEventListener('click', () => generateDeck($('prompt').value));
   const deckNotes = L => { const o = L.deckIndex != null && state.outline && state.outline.slides[L.deckIndex]; return o && o.notes ? o.notes : ''; };
   $('deckPptxBtn').addEventListener('click', e => withBusy(e.target, async () => {
     const picks = Deck.picks(state.deck); if (!picks.length) return;
-    const blob = await ExportPptx.buildDeck(picks, { kit: state.kit, assets: state.assets, notes: deckNotes });
+    const blob = await ExportPptx.buildDeck(picks, { kit: state.kit, assets: state.assets, notes: deckNotes, motion: motionFor });
     if (await Render.download(blob, `${slug(state.outline.title || state.kit.name)}-deck-${picks.length}-slides.pptx`)) toast(`Deck saved: ${picks.length} editable slides`);
   }));
   $('deckPngBtn').addEventListener('click', e => withBusy(e.target, async () => {
@@ -12065,7 +12490,8 @@ Layer kinds:
     relayout: (frame, fmt) => relayout(frame, fmt),
     exportSVG: layout => Render.exportSVG(layout, { kit: state.kit, assets: state.assets }),
     shareLink: async () => { const link = Sync.roomLink(); if (!link) return false; try { await navigator.clipboard.writeText(link); } catch { } toast('Room link copied: anyone with it edits this canvas with you'); return true; },
-    buildPptx: layouts => ExportPptx.buildDeck(layouts, { kit: state.kit, assets: state.assets }),
+    buildPptx: layouts => ExportPptx.buildDeck(layouts, { kit: state.kit, assets: state.assets, motion: motionFor }),
+    quickLook: (layouts, i) => lookOpen(layouts, i),
     libraryDrop: (id, at) => Library.insert(id, at),
     saveToGoogleSlides: frames => saveToGoogleSlides(frames),
     traceImage: (f, b) => Trace.run(f, b, { getAssets: () => state.assets, getKit: () => state.kit, addImageData: (url, name) => addImage(url, name), toast, canvas: CanvasUI }),

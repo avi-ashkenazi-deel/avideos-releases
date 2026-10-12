@@ -390,8 +390,8 @@
     $('seDiagram').hidden = !dg; if (dg) $('seDiagramType').innerHTML = Diagram.TYPES.map(t => `<option value="${t}" ${t === dg.diagram.type ? 'selected' : ''}>${Diagram.LABEL[t]}</option>`).join('');
     const o = l.deckIndex != null && state.outline && state.outline.slides[l.deckIndex];
     $('seTitle').textContent = o ? `Slide ${l.deckIndex + 1} · ${Deck.INTENT_LABEL[o.intent] || o.intent}` : `${l.archetypeLabel} · ${l.format.name}`;
-    se.replace = new Set(); se.addNotes = '';
-    renderSlideFields(); drawSlideEdit(l); $('seNote').textContent = ''; seBalanceCheck(); $('slideEdit').hidden = false;
+    se.replace = new Set(); se.addNotes = ''; se.motion = JSON.parse(JSON.stringify(l.motion || {})); if (!se.motion.units) se.motion.units = {};
+    renderSlideFields(); drawSlideEdit(l); $('seNote').textContent = ''; seBalanceCheck(); seMotionRender(); $('slideEdit').hidden = false;
     const first = $('seFields').querySelector('input, textarea'); if (first) first.focus();
   }
   function renderSlideFields() {
@@ -454,6 +454,34 @@
     finally { btn.disabled = false; btn.textContent = 'Move the rest to a new slide'; }
     $('slideEdit').hidden = true; renderOutline(); renderDeck(); Stats.track('slide.split'); toast(`The rest of that part is on a new slide ${i + 2}`);
   }
+  // Motion for this slide: when each part comes in (with the slide, or on which click) and how; Play shows it here.
+  function seMotionLayout() { return { ...(se.next || se.l), motion: se.motion }; }
+  function seMotionRender() {
+    const L = seMotionLayout(); const p = Motion.plan(L, { builds: state.motion.builds }); const esc = escapeHtml;
+    $('seBuilds').value = se.motion.builds || '';
+    const max = Math.max(p.clicks + 1, p.units.filter(u => u.cat === 'item').length, 3);
+    const stepOpts = `<option value="auto">Auto</option><option value="0">With the slide</option>${[...Array(max)].map((_, k) => `<option value="${k + 1}">Click ${k + 1}</option>`).join('')}<option value="none">No motion</option>`;
+    const effOpts = Motion.EFFECTS.filter(x => x !== 'none').map(x => `<option value="${x}">${Motion.LABEL[x]}</option>`).join('');
+    $('seUnits').innerHTML = p.units.map(u => `<div class="se-unit ${se.motion.units[u.key] ? 'custom' : ''}" title="${u.step < 0 ? 'Stays still' : u.step ? `Comes in on click ${u.step}` : 'Comes in with the slide'} · ${Motion.LABEL[u.effect] || u.effect}"><span>${esc(u.label)}</span><select class="select" data-mu-step="${esc(u.key)}" aria-label="When ${esc(u.label)} comes in">${stepOpts}</select><select class="select" data-mu-eff="${esc(u.key)}" aria-label="How ${esc(u.label)} comes in">${effOpts}</select></div>`).join('') || '<p class="hint">Nothing on this slide moves.</p>';
+    for (const u of p.units) { const o = se.motion.units[u.key] || {}; const a = $('seUnits').querySelector(`[data-mu-step="${CSS.escape(u.key)}"]`), b = $('seUnits').querySelector(`[data-mu-eff="${CSS.escape(u.key)}"]`); if (a) a.value = o.step != null ? String(o.step) : 'auto'; if (b) b.value = o.effect || 'auto'; }
+    const m = motionFor(se.l);
+    $('seMotionSum').textContent = !m ? '· off for this slide (deck setting)' : `· ${p.units.length} parts, ${p.clicks ? `${p.clicks} click${p.clicks > 1 ? 's' : ''}` : 'all at once'}`;
+  }
+  let sePlayer = null, sePlayTimer = 0;
+  function seMotionPlay() {
+    clearInterval(sePlayTimer); if (sePlayer) sePlayer.cancel();
+    const L = seMotionLayout(); $('sePreview').innerHTML = Render.toSVG(L, { kit: state.kit, assets: state.assets, tag: true, width: 1000 });
+    sePlayer = Motion.player($('sePreview').querySelector('svg'), L, { builds: state.motion.builds });
+    sePlayTimer = setInterval(() => { if (!sePlayer || !sePlayer.next()) clearInterval(sePlayTimer); }, 1100);
+  }
+  $('sePlay').addEventListener('click', seMotionPlay);
+  $('seBuilds').addEventListener('change', e => { if (e.target.value) se.motion.builds = e.target.value; else delete se.motion.builds; seMotionRender(); seMotionPlay(); });
+  $('seUnits').addEventListener('change', e => {
+    const t = e.target; const key = t.dataset.muStep || t.dataset.muEff; if (!key) return;
+    const o = { ...(se.motion.units[key] || {}) }; if (t.dataset.muStep) { if (t.value === 'auto') delete o.step; else o.step = t.value === 'none' ? 'none' : +t.value; } else { if (t.value === 'auto') delete o.effect; else o.effect = t.value; }
+    if (Object.keys(o).length) se.motion.units[key] = o; else delete se.motion.units[key];
+    seMotionRender(); seMotionPlay();
+  });
   $('seFields').addEventListener('input', e => {
     const t = e.target; const path = t.dataset.se; if (!path) return;
     const val = t.dataset.lines ? t.value.split('\n').map(x => x.trim()).filter(Boolean) : t.value;
@@ -471,6 +499,8 @@
     if (save || canvas) {
       clearTimeout(se.timer); if (se.next !== se.l && !slideEditRedraw()) return;
       const l = se.l, next = se.next === l ? l : Object.assign(se.next, { id: l.id.replace(/-e\d+$/, '') + '-e' + (++seCount), deckIndex: l.deckIndex, genIntent: l.genIntent, poolIds: l.poolIds });
+      const mv = (se.motion.builds || Object.keys(se.motion.units || {}).length) ? JSON.parse(JSON.stringify(se.motion)) : null; const movedMotion = JSON.stringify(mv || null) !== JSON.stringify(l.motion || null);
+      if (mv) next.motion = mv; else delete next.motion;
       if (next !== l) {
         if (l.deckIndex != null && state.deck) {
           const row = state.deck.slides[l.deckIndex]; const j = row.variations.indexOf(l); if (j >= 0) { row.variations[j] = next; row.pick = j; }
@@ -481,7 +511,7 @@
         Stats.track('slide.edit');
       }
       $('slideEdit').hidden = true;
-      if (canvas) await sendToCanvas([next]); else if (next !== l) toast('Slide saved');
+      if (canvas) await sendToCanvas([next]); else if (next !== l) toast('Slide saved'); else if (movedMotion) toast('Motion saved');
     }
   });
   let seCount = 0;
@@ -904,11 +934,99 @@
     if (state.mode !== 'deck') return; const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
     if (!f || !(/\.pptx$/i.test(f.name) || f.type === GSlides.PPTX)) return; e.preventDefault(); if (!state.busy) generateDeck(($('prompt').value || '').replace(slidesLinkIn($('prompt').value) || '', '').trim(), { file: f });
   });
+  // ---- Motion: deck settings, Quick Look (select a slide or poster, press Space), Present, hover previews ----------
+  state.motion = { mode: LS.get('lg.motionMode', 'all') || 'all', builds: LS.get('lg.motionBuilds', 'enter') || 'enter' };
+  const reduceMotion = () => window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function syncMotionUI() { for (const id of ['motionMode', 'lookMotion']) $(id).value = state.motion.mode; for (const id of ['motionBuilds', 'lookBuilds']) $(id).value = state.motion.builds; }
+  function setMotion(patch) { Object.assign(state.motion, patch); LS.set('lg.motionMode', state.motion.mode); LS.set('lg.motionBuilds', state.motion.builds); syncMotionUI(); if (!$('look').hidden) lookShow(); if (!$('slideEdit').hidden) seMotionRender(); }
+  syncMotionUI();
+  for (const id of ['motionMode', 'lookMotion']) $(id).addEventListener('change', e => setMotion({ mode: e.target.value }));
+  for (const id of ['motionBuilds', 'lookBuilds']) $(id).addEventListener('change', e => setMotion({ builds: e.target.value }));
+  // The settings a layout plays with, or null when it stays still ('First slide only' moves the deck's first slide).
+  function motionFor(L) { const m = state.motion; if (!L || m.mode === 'off') return null; if (m.mode === 'cover' && L.deckIndex != null && L.deckIndex !== 0) return null; return { builds: m.builds }; }
+  const look = { list: [], i: 0, player: null, present: false };
+  function lookOpen(list, i, opts = {}) {
+    list = list.filter(Boolean); if (!list.length) return;
+    look.list = list; look.i = Math.max(0, Math.min(list.length - 1, i || 0)); look.present = !!opts.present;
+    $('look').classList.toggle('present', look.present); $('look').hidden = false;
+    if (look.present && document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().then(() => setTimeout(lookShow, 60)).catch(() => { });
+    lookShow(); Stats.track(look.present ? 'motion.present' : 'motion.quicklook');
+  }
+  function lookClose() { if (look.player) look.player.cancel(); look.player = null; $('look').hidden = true; $('lookStage').innerHTML = ''; look.present = false; if (document.fullscreenElement) document.exitFullscreen().catch(() => { }); document.querySelectorAll('.looking').forEach(x => x.classList.remove('looking')); }
+  function lookShow() {
+    const L = look.list[look.i]; if (!L) return; if (look.player) look.player.cancel(); look.player = null;
+    const st = $('lookStage'); const W = L.format.w, H = L.format.h;
+    const room = look.present ? { w: innerWidth, h: innerHeight } : { w: Math.max(200, st.clientWidth), h: Math.max(150, st.clientHeight) };
+    const k = Math.min(room.w / W, room.h / H);
+    st.innerHTML = Render.toSVG(L, { kit: state.kit, assets: state.assets, tag: true, width: Math.round(W * k) });
+    const svg = st.querySelector('svg'); svg.style.width = Math.round(W * k) + 'px'; svg.style.height = Math.round(H * k) + 'px';
+    const m = motionFor(L); look.player = m ? Motion.player(svg, L, m) : null; if (look.player && reduceMotion()) look.player.finish();
+    const o = L.deckIndex != null && state.outline && state.outline.slides[L.deckIndex];
+    $('lookTitle').textContent = o ? `Slide ${L.deckIndex + 1} · ${o.headline || o.quote || ''}` : `${L.archetypeLabel || L.name || 'Frame'} · ${L.format.name || `${W} × ${H}`}`;
+    $('lookCount').textContent = look.list.length > 1 ? `${look.i + 1} of ${look.list.length}` : '';
+    lookStep();
+  }
+  function lookStep() { const p = look.player; $('lookStep').textContent = !p ? (motionFor(look.list[look.i]) ? '' : 'No motion on this one') : p.clicks ? (p.clicks - p.step > 0 ? `${p.clicks - p.step} click${p.clicks - p.step > 1 ? 's' : ''} to go` : 'All in') : 'Plays as it opens'; }
+  function lookAdvance() { if (look.player && look.player.next()) { lookStep(); return true; } return false; }
+  function lookGo(d) { const j = look.i + d; if (j < 0 || j >= look.list.length) { if (look.present && d > 0) lookClose(); return; } look.i = j; lookShow(); }
+  document.addEventListener('keydown', e => {
+    if ($('look').hidden) return;
+    const k = e.key; const stop = () => { e.preventDefault(); e.stopPropagation(); };
+    if (k === 'Escape' || (k === ' ' && !look.present)) { stop(); lookClose(); return; }
+    if (k === 'ArrowRight' || k === 'PageDown' || (k === ' ' && look.present)) { stop(); if (!look.present || !lookAdvance()) lookGo(1); return; }
+    if (k === 'ArrowLeft' || k === 'PageUp') { stop(); lookGo(-1); return; }
+    if (k === 'ArrowDown' || k === 'Enter') { stop(); if (!lookAdvance() && look.present) lookGo(1); return; }
+    if (k === 'r' || k === 'R') { stop(); lookShow(); return; }
+    if (e.target.closest && !e.target.closest('.look-bar')) e.stopPropagation();
+  }, true);
+  $('lookStage').addEventListener('click', () => { if (!lookAdvance() && look.present) lookGo(1); });
+  $('lookClose').addEventListener('click', lookClose);
+  $('lookReplay').addEventListener('click', lookShow);
+  $('lookPresent').addEventListener('click', () => lookOpen(look.list, look.i, { present: true }));
+  document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && look.present && !$('look').hidden) lookClose(); });
+  window.addEventListener('resize', () => { if (!$('look').hidden) lookShow(); });
+  // what Space opens: the card under the pointer, else the one last clicked; a deck plays its picks in order
+  let hoverCard = null, lastCard = null;
+  document.addEventListener('mouseover', e => { hoverCard = e.target.closest ? e.target.closest('.card, .deck-card') : null; });
+  document.addEventListener('click', e => { const c = e.target.closest && e.target.closest('.card, .deck-card'); if (c) lastCard = c; }, true);
+  function deckLookList(card) {
+    const rows = state.deck ? state.deck.slides : []; let at = 0;
+    const list = rows.map((r, k) => { if (card && card.closest('.deck-row') && +card.closest('.deck-row').dataset.i === k) { at = k; return r.variations[+card.dataset.j]; } return r.pick >= 0 ? r.variations[r.pick] : null; });
+    const keep = list.map((L, k) => [L, k]).filter(([L]) => L); return { list: keep.map(([L]) => L), i: Math.max(0, keep.findIndex(([, k]) => k === at)) };
+  }
+  document.addEventListener('keydown', e => {
+    if (e.key !== ' ' || e.repeat || !$('look').hidden || e.metaKey || e.ctrlKey || e.altKey) return;
+    const tag = (e.target.tagName || '').toLowerCase(); if (tag === 'input' || tag === 'textarea' || tag === 'select' || tag === 'button' || e.target.isContentEditable) return;
+    if (state.mode === 'canvas') return; // the canvas opens it on a tap of Space (holding Space pans)
+    if (!$('slideEdit').hidden) { e.preventDefault(); seMotionPlay(); return; }
+    if (!$('detail').hidden && state.detail) { e.preventDefault(); lookOpen([state.detail], 0); return; }
+    if (document.querySelector('.modal:not([hidden])')) return;
+    const card = (hoverCard && hoverCard.isConnected && hoverCard) || (lastCard && lastCard.isConnected && lastCard) || null;
+    if (state.mode === 'deck' && state.deck) { e.preventDefault(); const r = deckLookList(card && card.classList.contains('deck-card') ? card : null); if (card) card.classList.add('looking'); lookOpen(r.list, r.i); return; }
+    const cards = [...$('gallery').querySelectorAll('.card')]; if (!cards.length) return;
+    e.preventDefault(); const c = card && cards.includes(card) ? card : cards[0]; c.classList.add('looking');
+    lookOpen(cards.map(x => findLayout(x.dataset.id)), cards.indexOf(c));
+  });
+  $('presentBtn').addEventListener('click', () => { const r = deckLookList(null); if (!r.list.length) { toast('Pick a slide in each row first'); return; } lookOpen(r.list, 0, { present: true }); });
+  // hovering a card a moment plays its motion in place (all builds, one after another)
+  const hov = { card: null, t: 0, timer: 0, player: null };
+  function hoverStop() { clearTimeout(hov.t); clearInterval(hov.timer); if (hov.player) hov.player.cancel(); hov.player = null; hov.card = null; }
+  document.addEventListener('mouseover', e => {
+    const c = e.target.closest ? e.target.closest('.card, .deck-card') : null; if (c === hov.card) return;
+    hoverStop(); if (!c || reduceMotion() || state.motion.mode === 'off') return; hov.card = c;
+    hov.t = setTimeout(() => {
+      const L = findLayout(c.dataset.id); const m = motionFor(L); const old = c.querySelector(':scope > svg, .canvas > svg'); if (!L || !m || !old || hov.card !== c) return;
+      const holder = document.createElement('div'); holder.innerHTML = Render.toSVG(L, { kit: state.kit, assets: state.assets, showGrid: state.showGrid, tag: true, width: +old.getAttribute('width') || 480 });
+      const svg = holder.firstChild; if (old.getAttribute('style')) svg.setAttribute('style', old.getAttribute('style')); old.replaceWith(svg);
+      hov.player = Motion.player(svg, L, m); hov.timer = setInterval(() => { if (!hov.player || !hov.player.next()) clearInterval(hov.timer); }, 1100);
+    }, 450);
+  });
+
   $('deckShuffleAll').addEventListener('click', () => generateDeck($('prompt').value));
   const deckNotes = L => { const o = L.deckIndex != null && state.outline && state.outline.slides[L.deckIndex]; return o && o.notes ? o.notes : ''; };
   $('deckPptxBtn').addEventListener('click', e => withBusy(e.target, async () => {
     const picks = Deck.picks(state.deck); if (!picks.length) return;
-    const blob = await ExportPptx.buildDeck(picks, { kit: state.kit, assets: state.assets, notes: deckNotes });
+    const blob = await ExportPptx.buildDeck(picks, { kit: state.kit, assets: state.assets, notes: deckNotes, motion: motionFor });
     if (await Render.download(blob, `${slug(state.outline.title || state.kit.name)}-deck-${picks.length}-slides.pptx`)) toast(`Deck saved: ${picks.length} editable slides`);
   }));
   $('deckPngBtn').addEventListener('click', e => withBusy(e.target, async () => {
@@ -1130,7 +1248,8 @@
     relayout: (frame, fmt) => relayout(frame, fmt),
     exportSVG: layout => Render.exportSVG(layout, { kit: state.kit, assets: state.assets }),
     shareLink: async () => { const link = Sync.roomLink(); if (!link) return false; try { await navigator.clipboard.writeText(link); } catch { } toast('Room link copied: anyone with it edits this canvas with you'); return true; },
-    buildPptx: layouts => ExportPptx.buildDeck(layouts, { kit: state.kit, assets: state.assets }),
+    buildPptx: layouts => ExportPptx.buildDeck(layouts, { kit: state.kit, assets: state.assets, motion: motionFor }),
+    quickLook: (layouts, i) => lookOpen(layouts, i),
     libraryDrop: (id, at) => Library.insert(id, at),
     saveToGoogleSlides: frames => saveToGoogleSlides(frames),
     traceImage: (f, b) => Trace.run(f, b, { getAssets: () => state.assets, getKit: () => state.kit, addImageData: (url, name) => addImage(url, name), toast, canvas: CanvasUI }),

@@ -90,8 +90,11 @@ const Render = (() => {
     const it = f.style === 'italic' ? ' font-style="italic"' : '';
     const deco = b.decoration === 'underline' || b.decoration === 'line-through' ? ` text-decoration="${b.decoration}"` : '';
     const bold = n(b.emphWeight || 700);
-    const spans = (b.lines || []).map((line, i) => `<tspan x="${n(x)}" y="${n(first + i * lh)}">${emphRuns(typeof line === 'string' ? line : line.text, b.emph).map(r => r.on ? `<tspan font-weight="${bold}">${esc(r.text)}</tspan>` : esc(r.text)).join('')}</tspan>`).join('');
-    return `<text font-family='${fam(f)}' font-size="${size}" font-weight="${n(f.weight || 400)}"${it}${deco} fill="${paint(b, ctx)}" text-anchor="${anchor}"${ls}>${spans}</text>`;
+    const span = (line, i) => `<tspan x="${n(x)}" y="${n(first + i * lh)}">${emphRuns(typeof line === 'string' ? line : line.text, b.emph).map(r => r.on ? `<tspan font-weight="${bold}">${esc(r.text)}</tspan>` : esc(r.text)).join('')}</tspan>`;
+    const open = `<text font-family='${fam(f)}' font-size="${size}" font-weight="${n(f.weight || 400)}"${it}${deco} fill="${paint(b, ctx)}" text-anchor="${anchor}"${ls}`;
+    // drawn for motion: each line its own text in a mask, so lines can rise into view one after another
+    if (ctx.tag) return (b.lines || []).map((line, i) => { const id = ctx.id('ln'); const top = first + i * lh - size * 1.02; ctx.defs.push(`<clipPath id="${id}"><rect x="${n(b.x - size)}" y="${n(top)}" width="${n(b.w + size * 2)}" height="${n(size * 1.36)}"/></clipPath>`); return `<g data-line="${i}" clip-path="url(#${id})">${open} data-lh="${n(size * 1.3)}">${span(line, i)}</text></g>`; }).join('');
+    return `${open}>${(b.lines || []).map(span).join('')}</text>`;
   }
   function listEl(b, ctx) {
     const f = b.font || {}; const size = n(f.size || 16);
@@ -153,7 +156,7 @@ const Render = (() => {
     const W = n(layout.format.w), H = n(layout.format.h);
     const prefix = String(layout.id || 'l').replace(/[^A-Za-z0-9_-]/g, '') || 'l';
     let seq = 0;
-    const ctx = { defs: [], id: k => `${prefix}-${k}${seq++}` };
+    const ctx = { defs: [], id: k => `${prefix}-${k}${seq++}`, tag: !!opts.tag };
     const parts = [];
     if (!opts.transparent) parts.push(`<rect width="${W}" height="${H}" fill="${layout.palette && layout.palette.bgGradient ? (() => { const id = ctx.id('bg'); ctx.defs.push(gradientDef(layout.palette.bgGradient, id)); return `url(#${id})`; })() : col(layout.palette && layout.palette.bg, '#FFFFFF')}"/>`);
     // Boxes draw their fill, then their children (clipped when the box clips); siblings in list order.
@@ -193,7 +196,11 @@ const Render = (() => {
     const I = typeof Auto !== 'undefined' ? Auto.index({ layout }) : null;
     const kidsOf = pid => I ? (I.kids.get(pid) || []) : (pid ? [] : layout.blocks);
     const drawList = pid => kidsOf(pid).filter(b => !b.hidden).map(drawBlock).join('');
-    const drawBlock = b => {
+    // drawn for motion: every block in a group tagged with its key, so its unit can move it
+    const order = opts.tag ? new Map((layout.blocks || []).map((b, i) => [b, String(b.id || ('n' + i))])) : null;
+    const tagged = (b, el) => order && el ? `<g data-b="${esc(order.get(b) || '')}">${el}</g>` : el;
+    const drawBlock = b => tagged(b, drawBlock0(b));
+    const drawBlock0 = b => {
       if (b.kind !== 'box') { const el = blockEl(b); return el ? fx(b, el, ctx) : ''; }
       const hasFill = (b.fill && b.fill !== 'none') || (b.gradient && Array.isArray(b.gradient.stops) && b.gradient.stops.length >= 2);
       const st = strokeAttr(b);

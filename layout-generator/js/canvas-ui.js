@@ -6,6 +6,7 @@ const CanvasUI = (() => {
   let env = null, doc = null, hist = null, active = false;
   // frameIds holds every selected screen; blockIds are blocks inside the one frame in frameId.
   const sel = { frameId: null, blockIds: [], frameIds: [] };
+  let spaceAt = 0, spacePanned = false;
   let tool = 'select', hover = null, drag = null, spaceDown = false, clipboard = null, lastPointer = null, dropTarget = null;
   let guides = [], editing = null, groupFocus = null, peers = [], undoMerge = null;
   // Simple editing (default) hides auto layout, sizing and code, and treats stacks as tidy containers; Advanced is
@@ -333,6 +334,7 @@ const CanvasUI = (() => {
   function onDown(e) {
     if (e.target.closest && e.target.closest('.cv-editor')) return;
     if (editing) endEdit();
+    if (spaceDown) spacePanned = true;
     if (e.button === 1 || tool === 'hand' || spaceDown || e.button === 2) { drag = { type: 'pan', sx: e.clientX, sy: e.clientY, vx: doc.view.x, vy: doc.view.y }; stage().setPointerCapture(e.pointerId); stage().style.cursor = 'grabbing'; return; }
     const p = toWorld(e.clientX, e.clientY);
     if (tool === 'frame') { drag = { type: 'draw-frame', start: p, cur: p, moved: false }; stage().setPointerCapture(e.pointerId); return; }
@@ -746,7 +748,7 @@ const CanvasUI = (() => {
       if (!active || editing) return;
       const tag = (e.target.tagName || '').toLowerCase(); const typing = tag === 'input' || tag === 'textarea' || tag === 'select' || e.target.isContentEditable;
       if (e.target.closest && e.target.closest('.modal:not([hidden]), .agent-panel')) return;
-      if (e.key === ' ' && !typing) { spaceDown = true; stage().style.cursor = 'grab'; e.preventDefault(); return; }
+      if (e.key === ' ' && !typing) { if (!e.repeat && !spaceDown) { spaceAt = performance.now(); spacePanned = false; } spaceDown = true; stage().style.cursor = 'grab'; e.preventDefault(); return; }
       const meta = e.metaKey || e.ctrlKey; const k = e.key.toLowerCase();
       if (meta && k === 'z' && !typing) { e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
       if (meta && k === 'y' && !typing) { e.preventDefault(); redo(); return; }
@@ -795,7 +797,13 @@ const CanvasUI = (() => {
       }
       if (k === '[' || k === ']') { const f = selFrame(); const bs = selBlocks(); if (!f || !bs.length) return; hist.push(doc); bs.forEach(b => Canvas.reorder(f, b, k === '[' ? (e.shiftKey ? 'back' : -1) : (e.shiftKey ? 'front' : 1))); rerenderFrame(f); renderLayers(); persist(); updateUndo(); }
     });
-    document.addEventListener('keyup', e => { if (e.key === ' ') { spaceDown = false; if (active) stage().style.cursor = tool === 'hand' ? 'grab' : 'default'; } });
+    document.addEventListener('keyup', e => {
+      if (e.key !== ' ') return;
+      // a tap (no drag) shows the selected screen big, with its motion, like Quick Look
+      const tap = spaceDown && !spacePanned && performance.now() - spaceAt < 320 && active && !editing;
+      spaceDown = false; if (active) stage().style.cursor = tool === 'hand' ? 'grab' : 'default';
+      if (tap && !(e.target.closest && e.target.closest('input, textarea, select, [contenteditable="true"]'))) { const f = selFrame() || selFrames()[0]; if (f) frameLook(f); }
+    });
     // JSON copied from another tab or session pastes as blocks or frames.
     document.addEventListener('paste', e => {
       if (!active || editing) return; const tag = (e.target.tagName || '').toLowerCase(); if (tag === 'input' || tag === 'textarea' || e.target.isContentEditable) return;
@@ -1061,11 +1069,32 @@ const CanvasUI = (() => {
     const el = $('cvProps'); const frames = selFrames(); const f = selFrame(); const bs = selBlocks();
     if (!frames.length) { el.innerHTML = canvasProps(); return; }
     if (frames.length > 1) { el.innerHTML = screensProps(frames); return; }
-    if (!bs.length) { el.innerHTML = frameProps(f); return; }
+    if (!bs.length) { el.innerHTML = frameProps(f) + motionSection(f, []); return; }
     const dg = diagramOf(f, bs); const dgHtml = dg ? diagramSection(f, dg) : '';
-    if (bs.length > 1) { el.innerHTML = dgHtml + blocksProps(f, bs); return; }
-    el.innerHTML = dgHtml + blockProps(f, bs[0]);
+    if (bs.length > 1) { el.innerHTML = dgHtml + blocksProps(f, bs) + motionSection(f, bs); return; }
+    el.innerHTML = dgHtml + blockProps(f, bs[0]) + motionSection(f, bs);
   }
+  // ---- Motion: when a part comes in and how, kept on the blocks themselves (b.anim), so moving, restyling or retyping
+  // a block keeps its motion; a frame sets builds for the whole screen. Space (a tap) plays the selection in Quick Look.
+  function motionSection(f, bs) {
+    if (typeof Motion === 'undefined' || !f) return '';
+    const p = Motion.plan(f.layout, { builds: (f.layout.motion && f.layout.motion.builds) || 'enter' });
+    if (!bs.length) {
+      const b = (f.layout.motion && f.layout.motion.builds) || '';
+      return `<div class="cv-section"><h3>Motion <span class="cv-token">${p.clicks ? `${p.clicks} click${p.clicks > 1 ? 's' : ''}` : 'all at once'}</span></h3>
+        <label class="cv-f"><span>Builds</span><select data-mv="builds"><option value="" ${!b ? 'selected' : ''}>Deck setting</option><option value="enter" ${b === 'enter' ? 'selected' : ''}>All at once</option><option value="click" ${b === 'click' ? 'selected' : ''}>Click by click</option></select></label>
+        <div class="cv-row"><button type="button" class="btn small" data-mv-act="look">▶ Preview</button><span class="hint">or tap Space</span></div></div>`;
+    }
+    const ids = new Set(bs.map(b => b.id)); const us = p.units.filter(u => u.blocks.some(b => ids.has(b.id))); if (!us.length) return '';
+    const own = bs.find(b => b.anim) ; const a = own ? own.anim : {}; const u = us[0];
+    const max = Math.max(p.clicks + 1, 3);
+    const step = a.step != null ? String(a.step) : 'auto'; const eff = a.effect || 'auto';
+    return `<div class="cv-section"><h3>Motion <span class="cv-token">${esc(us.length > 1 ? `${us.length} parts` : u.label)}</span></h3>
+      <label class="cv-f"><span>Starts</span><select data-mv="step"><option value="auto" ${step === 'auto' ? 'selected' : ''}>Auto (${u.step < 0 ? 'still' : u.step ? `click ${u.step}` : 'with the screen'})</option><option value="0" ${step === '0' ? 'selected' : ''}>With the screen</option>${[...Array(max)].map((_, k) => `<option value="${k + 1}" ${step === String(k + 1) ? 'selected' : ''}>On click ${k + 1}</option>`).join('')}<option value="none" ${step === 'none' ? 'selected' : ''}>No motion</option></select></label>
+      <label class="cv-f"><span>Effect</span><select data-mv="effect">${Motion.EFFECTS.filter(x => x !== 'none').map(x => `<option value="${x}" ${eff === x ? 'selected' : ''}>${esc(x === 'auto' ? `Auto (${Motion.LABEL[u.effect] || u.effect})` : Motion.LABEL[x])}</option>`).join('')}</select></label>
+      <div class="cv-row"><button type="button" class="btn small" data-mv-act="look">▶ Preview</button></div></div>`;
+  }
+  function frameLook(f) { const all = doc.frames.filter(x => !x.hidden); if (env.quickLook) env.quickLook(all.map(x => ({ ...x.layout, name: x.name })), Math.max(0, all.indexOf(f))); }
   // ---- Diagrams: a group whose frame block keeps the spec. Redrawn from the spec, with words typed on the canvas read
   // back first, so nothing typed by hand is lost. --------------------------------------------------------------------------
   function diagramOf(f, bs) {
@@ -1417,6 +1446,13 @@ const CanvasUI = (() => {
     const dgApply = () => { const f = selFrame(); const fr = diagramOf(f, selBlocks()); if (!fr) return; const sec = el.querySelector('[data-dgsec]'); if (!sec) return; const ta0 = sec.querySelector('[data-dg="text"]'); const type = sec.querySelector('[data-dg="type"]').value; const spec = ta0.value === ta0.dataset.orig ? { ...diagramSpec(f, fr), type } : Diagram.fromText(ta0.value, type); if (!spec.nodes.length) return; spec.type = type; const keepFocus = document.activeElement && document.activeElement.dataset.dg === 'text'; const caret = keepFocus ? document.activeElement.selectionStart : 0; if (redrawDiagram(f, fr, spec) && keepFocus) { const ta = el.querySelector('[data-dg="text"]'); if (ta) { ta.focus(); ta.setSelectionRange(caret, caret); } } };
     el.addEventListener('input', e => { if (e.target.dataset.dg === 'text') { clearTimeout(dgT); dgT = setTimeout(dgApply, 500); } });
     el.addEventListener('change', e => { if (e.target.dataset.dg === 'type') dgApply(); });
+    el.addEventListener('change', e => {
+      const k = e.target.dataset.mv; if (!k) return; const f = selFrame(); if (!f) return; const v = e.target.value; hist.push(doc);
+      if (k === 'builds') { f.layout.motion = { ...(f.layout.motion || {}) }; if (v) f.layout.motion.builds = v; else delete f.layout.motion.builds; }
+      else for (const b of selBlocks()) { const a = { ...(b.anim || {}) }; if (v === 'auto') delete a[k]; else a[k] = k === 'step' && v !== 'none' ? +v : v; if (Object.keys(a).length) b.anim = a; else delete b.anim; }
+      persist(); updateUndo(); renderProps();
+    });
+    el.addEventListener('click', e => { const a = e.target.closest('[data-mv-act]'); if (a) { const f = selFrame(); if (f) frameLook(f); } });
     el.addEventListener('click', e => {
       const a = e.target.closest('[data-dg-act]'); if (!a) return;
       if (a.dataset.dgAct === 'redraw') { clearTimeout(dgT); dgApply(); return; }
@@ -1425,7 +1461,7 @@ const CanvasUI = (() => {
     const apply = (e, live) => {
       const t = e.target; const fs = selFrames(); const f = selFrame();
       if (t.dataset.doc === 'name') { doc.name = t.value; persist(); return; }
-      if (!f || t.dataset.var || t.dataset.fr || t.dataset.dg || (t.dataset.p && t.dataset.p.startsWith('batch-'))) return;
+      if (!f || t.dataset.var || t.dataset.fr || t.dataset.dg || t.dataset.mv || (t.dataset.p && t.dataset.p.startsWith('batch-'))) return;
       const bs = selBlocks();
       const val = t.type === 'checkbox' ? t.checked : t.value;
       if (t.dataset.f) {

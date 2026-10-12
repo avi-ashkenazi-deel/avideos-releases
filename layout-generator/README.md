@@ -66,6 +66,18 @@ Text-heavy slides are kept whole by default (**Keep text-heavy slides whole** in
 2. **Sort.** Claude (your claude.ai account; locally, the API key with *Use Claude* on) reads a few slides per request and gives each one an intent (cover, statement, big number, cards, process, comparison, quote, body, closing), keeps the deck's facts and numbers, condenses long text to what a slide holds, and puts what it cut in **Speaker notes** under the outline row. Without Claude, rules sort the slides and keep the deck's words as written (trimmed).
 3. **Generate.** Variations per slide as usual; each outline row shows the original slide number (↳). **Rebuild from the deck** sorts it again; editing the brief to something else leaves the deck.
 
+## Motion, Quick Look and Present
+
+Slides move, and stay editable: nothing is baked into video or pictures. Each slide's blocks are grouped into parts (a card with its words, a diagram node with its connector, the headline, the number) and each part gets an effect and a moment from its role: grounds fade or reveal, the headline rises line by line through a mask, a big number counts up, cards and sections rise in turn, diagram nodes pop and their connectors draw, the logo fades in last.
+
+- **Motion** (deck bar): **On**, **First slide only**, or **Off**.
+- **Builds**: **All at once** (each slide plays as it opens) or **Click by click** (each card, step, section or node waits for its click; a lone big number waits for one).
+- **What each click delivers**: double-click a slide, open **Motion**, and set any part to *With the slide*, *Click 1…n* or *No motion*, and its effect (Rise, Lines rise, Fade, Pop, Reveal, Count up, Draw). On the canvas the same choices sit in the properties panel for the selected blocks (kept on the blocks, so moving or retyping them keeps their motion), and a screen sets its own builds.
+- **Quick Look**: select (or point at) any slide, poster or post and press **Space**: it opens large and plays its motion. ← → move through the others, click / Enter / ↓ plays the next build, R replays, Space or Esc closes. On the canvas, tap Space with a screen selected (holding Space still pans).
+- **Present** plays the deck full screen: → or click for the next build, then the next slide; Esc stops.
+- Hovering a card a moment plays it in place.
+- **PowerPoint**: the export carries the same plan as native animations (Float In, Fade, Zoom, Wipe; with the slide or on click, in order) and a fade between slides; every shape stays editable and the animations can be changed in PowerPoint's Animation pane.
+
 ## Home: projects and folders
 
 **Home** (first in the mode switch) is where people start: folders on the left (Brand, Product, Sales…), projects as cards with a cover, screen count, who made it and when it last changed. **＋ New project** names it, picks a folder and opens its canvas. Click the **⌂ project name** at the top of the canvas to go back.
@@ -342,6 +354,7 @@ js/autolayout.js    auto layout engine: boxes, stacks, Fixed/Hug/Fill, wrap, abs
 js/canvas-ui.js     canvas editor: stage, selection, tools, layers tree, properties, Simple/Advanced, export
 js/library.js       Library tab: sections per library, save/insert, the Libraries window (on/off, admins)
 js/libstore.js      shared libraries: claude.ai database, server /api/libraries, or this browser
+js/motion.js        Motion: parts of a slide, plan (effect, step, timing), player, PowerPoint timing XML
 js/diagram.js       Diagrams: flow, cycle, tree, timeline, mind map, pyramid, staircase, matrix; spec ⇄ text, layout into blocks
 js/deck-digest.js   A finished deck (Slides text or .pptx) into a Deck-mode outline: Claude in batches, rules otherwise
 js/projects.js      Home: projects and folders, folder sharing, project links (claude.ai database and private part, server /api/projects, or this browser)

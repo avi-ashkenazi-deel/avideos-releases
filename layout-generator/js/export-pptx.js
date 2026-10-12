@@ -30,24 +30,31 @@ const ExportPptx = (() => {
     return Render.svgToPngDataUrl(svg, layout.format.w, layout.format.h, 1);
   }
 
-  async function addLayoutSlide(pptx, slide, layout, opts) {
+  // mv (when the slide moves): which motion unit each block belongs to. Every shape of a unit gets a name the export
+  // finds again in the slide XML, and pictures merged from several blocks never mix two units.
+  async function addLayoutSlide(pptx, slide0, layout, opts, mv) {
     const { kit } = opts;
+    let cur = null;
+    const named = o => mv && cur != null ? { ...o, objectName: `mv${mv.slide}_${cur}_${mv.seq++}` } : o;
+    const slide = mv ? { addText: (t, o) => slide0.addText(t, named(o)), addShape: (k, o) => slide0.addShape(k, named(o)), addImage: o => slide0.addImage(named(o)), set background(v) { slide0.background = v; } } : slide0;
     const W = layout.format.w, H = layout.format.h;
     slide.background = { color: hex(layout.palette.bg) };
     // Paint order (a box, then what is inside it); a hidden box hides its contents. Positions are already absolute.
     const order = typeof Auto !== 'undefined' ? (() => { const I = Auto.index({ layout }); const out = []; const walk = id => { for (const k of Auto.childrenOf(I, id)) { if (k.hidden) continue; out.push(k); if (k.kind === 'box') walk(k.id); } }; walk(''); return out; })() : layout.blocks;
     const blocks = order.map(b => b.kind === 'logo' ? { ...b, logoKind: kit.logo.kind } : b);
-    let pending = [];
+    const unitOf = (b, i) => mv ? mv.unitOf.get(order[i]) ?? null : null;
+    let pending = [], pendingUnit = null;
     const flush = async () => {
       if (!pending.length) return;
       const data = await rasterLayer(layout, pending, opts);
-      slide.addImage({ data: stripData(data), x: 0, y: 0, w: inch(W), h: inch(H) });
+      const keep = cur; cur = pendingUnit; slide.addImage({ data: stripData(data), x: 0, y: 0, w: inch(W), h: inch(H) }); cur = keep;
       pending = [];
     };
-    for (const b of blocks) {
+    for (const [i, b] of blocks.entries()) {
       if (b.hidden) continue;
-      if (isRaster(b)) { pending.push(b); continue; }
-      await flush();
+      const u = unitOf(b, i);
+      if (isRaster(b)) { if (pending.length && u !== pendingUnit) await flush(); pending.push(b); pendingUnit = u; continue; }
+      await flush(); cur = u;
       const box = { x: inch(b.x), y: inch(b.y), w: inch(b.w), h: inch(b.h) };
       if (b.kind === 'box') {
         const filled = b.fill && b.fill !== 'none'; const st = b.stroke && Number(b.stroke.width) > 0;
@@ -116,14 +123,35 @@ const ExportPptx = (() => {
     pptx.defineLayout({ name: 'LAYOUT_ENGINE', width: inch(f.w), height: inch(f.h) });
     pptx.layout = 'LAYOUT_ENGINE';
     pptx.title = `${opts.kit.name} layouts`;
-    for (const L of layouts) {
+    const moves = [];
+    for (const [k, L] of layouts.entries()) {
       const slide = pptx.addSlide();
-      await addLayoutSlide(pptx, slide, L, opts);
+      // motion: the plan this slide plays with (opts.motion(L) gives its settings, or null when it stays still)
+      const m = opts.motion && typeof Motion !== 'undefined' ? opts.motion(L) : null; let mv = null;
+      if (m) { const plan = Motion.plan(L, m); const unitOf = new Map(); plan.units.forEach((u, j) => { if (u.step >= 0) for (const b of u.blocks) unitOf.set(b, j); }); if (unitOf.size) mv = { slide: k, unitOf, seq: 0, plan }; }
+      moves.push(mv);
+      await addLayoutSlide(pptx, slide, L, opts, mv);
       // a deck's speaker notes (detail cut from the slide, a long part in full); otherwise where the layout came from
       const notes = opts.notes && opts.notes(L);
       slide.addNotes(notes ? String(notes) : `${L.archetypeLabel} · ${L.format.name} · seed ${L.seed} · ${L.id}`);
     }
-    return pptx.write({ outputType: 'blob' });
+    if (!moves.some(Boolean)) return pptx.write({ outputType: 'blob' });
+    return withMotion(await pptx.write({ outputType: 'arraybuffer' }), moves);
+  }
+  // Native PowerPoint animations: each slide's named shapes are found again in its XML and get the plan's entrance
+  // effects, step by step (with the slide, then one click each), plus a fade between slides. Shapes stay editable.
+  async function withMotion(buf, moves) {
+    const Z = window.JSZip; if (!Z) return new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' });
+    const zip = await Z.loadAsync(buf);
+    for (const [k, mv] of moves.entries()) {
+      if (!mv) continue; const path = `ppt/slides/slide${k + 1}.xml`; const f = zip.file(path); if (!f) continue;
+      let xml = await f.async('string'); const spids = new Map();
+      for (const m of xml.matchAll(/<p:cNvPr id="(\d+)" name="mv\d+_(\d+)_\d+"/g)) { const j = +m[2]; if (!spids.has(j)) spids.set(j, []); spids.get(j).push(m[1]); }
+      const timing = Motion.pptTiming(mv.plan.steps, u => spids.get(mv.plan.units.indexOf(u)) || []);
+      xml = xml.replace('</p:clrMapOvr>', '</p:clrMapOvr><p:transition spd="med"><p:fade/></p:transition>' + timing);
+      zip.file(path, xml);
+    }
+    return zip.generateAsync({ type: 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', compression: 'DEFLATE' });
   }
   // Mixed formats -> one deck per format
   async function buildDecks(layouts, opts) {

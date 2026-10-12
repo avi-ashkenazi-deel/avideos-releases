@@ -180,6 +180,11 @@
       </label>
       <button id="deckShuffleAll" class="btn small" type="button">Reshuffle deck</button>
       <label class="inline size-slider" title="Make the slides bigger or smaller">Size <input class="thumbSize" type="range" min="120" max="720" step="10" aria-label="Slide size"></label>
+      <label class="inline" title="Animations on every slide, only on the first, or none. They export as PowerPoint animations and stay editable.">Motion
+        <select id="motionMode" class="select"><option value="all">On</option><option value="cover">First slide only</option><option value="off">Off</option></select></label>
+      <label class="inline" title="All at once: each slide plays when it opens. Click by click: each card, step, section or node waits for its click (choose per part in the slide editor).">Builds
+        <select id="motionBuilds" class="select"><option value="enter">All at once</option><option value="click">Click by click</option></select></label>
+      <button id="presentBtn" class="btn small" type="button" title="Play the deck full screen: → or click for the next build, ← back, Esc to stop. Select any slide and press Space for Quick Look.">▶ Present</button>
       <span class="grow"></span>
       <button id="deckPptxBtn" class="btn small primary" type="button" disabled>Export deck (PPTX)</button>
       <button id="deckPngBtn" class="btn small" type="button" disabled>Export picks (PNG)</button>
@@ -326,6 +331,21 @@
     </div>
   </div>
 
+  <div id="look" class="look" hidden role="dialog" aria-modal="true" aria-label="Quick Look">
+    <div class="look-stage" id="lookStage"></div>
+    <div class="look-bar">
+      <span class="look-title" id="lookTitle"></span>
+      <span class="look-count mono" id="lookCount"></span>
+      <span class="grow"></span>
+      <span class="look-step mono" id="lookStep" aria-live="polite"></span>
+      <button class="btn small" id="lookReplay" type="button" title="Play it again (R)">↺ Replay</button>
+      <label class="inline">Motion <select id="lookMotion" class="select"><option value="all">On</option><option value="cover">First slide only</option><option value="off">Off</option></select></label>
+      <label class="inline">Builds <select id="lookBuilds" class="select"><option value="enter">All at once</option><option value="click">Click by click</option></select></label>
+      <button class="btn small" id="lookPresent" type="button" title="Full screen from here">▶ Present</button>
+      <button class="btn ghost icon" id="lookClose" type="button" aria-label="Close">✕</button>
+    </div>
+    <p class="look-hint">Space or Esc closes · ← → previous and next · click, Enter or ↓ plays the next build · R replays</p>
+  </div>
   <div id="slideEdit" class="modal" hidden>
     <div class="modal-inner detail slide-edit" role="dialog" aria-modal="true" aria-labelledby="seTitle">
       <div class="detail-preview" id="sePreview"></div>
@@ -345,6 +365,10 @@
           <button class="btn small" data-se-bal="claude" type="button" title="Claude rewrites just that part to about the others' length; the full text goes to the speaker notes">Shorten it with Claude</button>
           <button class="btn small" data-se-bal="split" type="button" title="Its first points stay; the rest moves to a new slide right after this one">Move the rest to a new slide</button></div>
         <div class="se-fields" id="seFields"></div>
+        <details class="se-motion" id="seMotion"><summary>Motion <span class="hint" id="seMotionSum"></span></summary>
+          <div class="se-motion-head"><label class="inline">Builds <select id="seBuilds" class="select"><option value="">Deck setting</option><option value="enter">All at once</option><option value="click">Click by click</option></select></label><button class="btn small" id="sePlay" type="button" title="Play this slide's motion in the preview (or press Space)">▶ Play</button></div>
+          <div id="seUnits" class="se-units"></div>
+        </details>
         <p class="hint" id="seNote" aria-live="polite"></p>
         <div class="detail-actions">
           <button class="btn primary" data-se-save type="button">Save</button>
@@ -483,6 +507,7 @@
 <script src="js/gslides.js"></script>
 <script src="js/deck-digest.js"></script>
 <script src="js/diagram.js"></script>
+<script src="js/motion.js"></script>
 <script src="js/looks.js"></script>
 <script src="js/webimport.js"></script>
 <script src="js/canvas.js"></script>
