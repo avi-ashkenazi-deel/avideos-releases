@@ -8,13 +8,15 @@
      libraries; the admin list picks which of them curate. Each person's on/off choices are private to them.
    - self-hosted server: /api/libraries, saved to server/data/libraries.json and pushed to every open tab; when the
      server sets LG_ADMIN_KEY, editing needs that key.
-   - neither: this browser's storage; libraries move between people as JSON (Export / Import). */
+   - neither: this browser's storage; libraries move between people as JSON (Export / Import).
+   Brand guidelines (design.md, layout.md, animation.md, illustration.md, photography.md, content.md) live in the same
+   three homes (the guides collection, the server's file, this browser), readable by everyone, written by admins. */
 const LibStore = (() => {
   const LS = { get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch { return d; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch { return false; } } };
   const ID = /^[A-Za-z0-9_.:-]{1,64}$/;
   const MAX_ITEM = 240 * 1024;
   let env = null, backend = null, started = null;
-  const S = { mode: 'local', libs: new Map(), items: new Map(), admins: [], uid: null, owner: false, canEdit: null, keyRequired: false, keyOk: false, ready: false, error: '' };
+  const S = { mode: 'local', libs: new Map(), items: new Map(), guides: new Map(), admins: [], uid: null, owner: false, canEdit: null, keyRequired: false, keyOk: false, ready: false, error: '' };
   let prefs = LS.get('lg.libsOn', {}) || {};
   const listeners = new Set();
   const emit = () => { for (const fn of listeners) { try { fn(); } catch (e) { console.error(e); } } };
@@ -32,6 +34,9 @@ const LibStore = (() => {
     if (it.assets && typeof it.assets === 'object') { out.assets = {}; for (const [k, a] of Object.entries(it.assets)) if (/^a_[0-9a-f]{16}$/.test(k) && a && (typeof a.url === 'string' || typeof a.dataUrl === 'string')) out.assets[k] = { url: typeof a.url === 'string' ? a.url : undefined, dataUrl: typeof a.dataUrl === 'string' && /^data:image\//.test(a.dataUrl) ? a.dataUrl : undefined, name: String(a.name || '').slice(0, 80), w: +a.w || 0, h: +a.h || 0 }; }
     return out;
   }
+  const GUIDE = /^(design|layout|animation|illustration|photography|content)$/;
+  const cleanGuide = g => g && typeof g === 'object' && GUIDE.test(String(g.id || '')) ? { id: g.id, text: String(g.text || '').slice(0, 120000), updated: +g.updated || 0, by: typeof g.by === 'string' ? g.by.slice(0, 80) : '' } : null;
+  function setGuides(list) { S.guides.clear(); for (const g of list || []) { const c = cleanGuide(g); if (c) S.guides.set(c.id, c); } emit(); }
   function setAll({ libraries, items, admins }) {
     if (libraries) { S.libs.clear(); for (const l of libraries) { const c = cleanLib(l); if (c) S.libs.set(c.id, c); } }
     if (items) { S.items.clear(); for (const it of items) { const c = cleanItem(it); if (c) S.items.set(c.id, c); } }
@@ -78,6 +83,7 @@ const LibStore = (() => {
       if (!ready.items && snap.metadata && snap.metadata.fromCache && !snap.size) return;
       ready.items = true; S.items.clear(); upsert('item', list); done();
     }, e => { S.error = (e && e.code) || 'db'; emit(); });
+    db.collection('guides').onSnapshot(snap => { const list = []; for (const d of snap.docs) { const v = d.data(); if (v) list.push({ ...v, id: d.id }); } setGuides(list); }, () => { });
     db.doc('config/admins').onSnapshot(s => { const d = s.data(); S.admins = d && Array.isArray(d.ids) ? d.ids.filter(x => typeof x === 'string') : []; emit(); }, () => { });
     // Each person's on/off choices: private to them, so they follow them across devices.
     if (S.uid) {
@@ -92,6 +98,7 @@ const LibStore = (() => {
       putItem: it => write(() => db.doc(`libitems/${it.id}`).set(it)),
       delItem: id => write(() => db.doc(`libitems/${id}`).delete()),
       setAdmins: ids => write(() => db.doc('config/admins').set({ ids })),
+      putGuide: g => write(() => db.doc(`guides/${g.id}`).set(g)),
       uploadImage: assets ? async blob => { const r = await assets.upload(blob); return { url: r.url }; } : null,
       profiles: user && user.profiles ? ids => user.profiles(ids) : null,
       search: user && user.search ? q => user.search(q) : null,
@@ -104,7 +111,7 @@ const LibStore = (() => {
     if (!j || !j.lgLibraries) return null;
     S.keyRequired = !!j.keyRequired;
     const key = () => LS.get('lg.adminKey', '') || '';
-    const apply = j => { S.keyRequired = !!j.keyRequired; setAll({ libraries: j.libraries || [], items: j.items || [] }); };
+    const apply = j => { S.keyRequired = !!j.keyRequired; setAll({ libraries: j.libraries || [], items: j.items || [] }); if (j.guides) setGuides(j.guides); };
     apply(j);
     async function op(body) {
       const r = await fetch('/api/libraries', { method: 'POST', headers: { 'content-type': 'application/json', 'x-lg-admin': key() }, body: JSON.stringify(body) });
@@ -121,12 +128,13 @@ const LibStore = (() => {
       delLib: id => op({ op: 'delLib', id }),
       putItem: item => op({ op: 'putItem', item }),
       delItem: id => op({ op: 'delItem', id }),
+      putGuide: guide => op({ op: 'putGuide', guide }),
       uploadImage: async (blob, name) => { const r = await fetch('/api/assets?room=library', { method: 'POST', headers: { 'content-type': blob.type || 'image/png', 'x-name': encodeURIComponent(name || '') }, body: blob }); if (!r.ok) throw new Error('Image upload failed (' + r.status + ')'); const o = await r.json(); return { url: o.url }; },
     };
   }
   function localBackend() {
     const KEY = 'lg.libs.v1';
-    const load = () => { const j = LS.get(KEY, null) || {}; setAll({ libraries: j.libraries || [], items: j.items || [] }); };
+    const load = () => { const j = LS.get(KEY, null) || {}; setAll({ libraries: j.libraries || [], items: j.items || [] }); setGuides(LS.get('lg.guides.v1', []) || []); };
     const save = () => { if (!LS.set(KEY, { libraries: [...S.libs.values()], items: [...S.items.values()] })) throw new Error('This browser\'s storage is full. Export the libraries, remove some pictures, and try again.'); };
     load();
     window.addEventListener('storage', e => { if (e.key === KEY) load(); });
@@ -137,6 +145,7 @@ const LibStore = (() => {
       delLib: id => change(() => S.libs.delete(id)),
       putItem: it => change(() => S.items.set(it.id, cleanItem(it))),
       delItem: id => change(() => S.items.delete(id)),
+      putGuide: g => { S.guides.set(g.id, g); if (!LS.set('lg.guides.v1', [...S.guides.values()])) throw new Error('This browser\'s storage is full.'); emit(); },
       uploadImage: null, // pictures ride inside the item as data URLs
     };
   }
@@ -224,11 +233,18 @@ const LibStore = (() => {
     }
     return { libraries: nl, items: ni };
   }
+  // Brand guidelines: everyone reads them (Claude gets them in its prompts); admins write them.
+  const guide = id => (S.guides.get(id) || {}).text || '';
+  const guides = () => Object.fromEntries([...S.guides.values()].map(g => [g.id, g]));
+  async function putGuide(id, text) {
+    if (!GUIDE.test(id)) throw new Error('Unknown guide'); must(); if (!backend.putGuide) throw new Error('Guides cannot be saved here');
+    const g = cleanGuide({ id, text, updated: Date.now(), by: S.uid || '' }); await backend.putGuide(g); S.guides.set(id, g); emit(); return g;
+  }
   async function people(ids) { if (!backend || !backend.profiles || !ids.length) return {}; try { return await backend.profiles(ids); } catch { return {}; } }
   async function searchPeople(q) { if (!backend || !backend.search) return []; try { return await backend.search(q); } catch { return []; } }
   return {
     init, start, libraries, items, isOn, setOn, role, createLibrary, updateLibrary, deleteLibrary, putItem, updateItem, deleteItem, setAdmins,
-    exportJSON, importJSON, people, searchPeople, assetInfo,
+    exportJSON, importJSON, people, searchPeople, assetInfo, guide, guides, putGuide, GUIDES: ['design', 'layout', 'animation', 'illustration', 'photography', 'content'],
     refresh: () => backend && backend.refresh ? backend.refresh() : null,
     checkKey: k => backend && backend.checkKey ? backend.checkKey(k) : Promise.reject(new Error('No admin key here')),
     on: fn => { listeners.add(fn); return () => listeners.delete(fn); },

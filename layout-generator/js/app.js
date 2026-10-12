@@ -193,6 +193,8 @@
     return asset;
   }
   function renderImages() {
+    const ex = state.assets.images.some(a => a.placeholder); const none = !state.assets.images.length;
+    if ($('clearExamples')) { $('clearExamples').hidden = !ex && !none; $('clearExamples').textContent = ex ? 'Clear examples' : 'Use example pictures'; }
     $('imageList').innerHTML = state.assets.images.map(a => `<div class="thumb" title="${a.name}"><img src="${a.url}" alt=""><button class="x" data-rm="${a.id}" title="Remove">✕</button>${a.placeholder ? '<span class="ph">placeholder</span>' : ''}</div>`).join('');
     const real = state.assets.images.filter(a => !a.placeholder);
     const pal = [...new Set(real.flatMap(a => a.palette))].slice(0, 8);
@@ -203,6 +205,12 @@
     const b = e.target.closest('[data-rm]'); if (!b) return;
     const i = state.assets.images.findIndex(a => a.id === b.dataset.rm); if (i >= 0) { URL.revokeObjectURL(state.assets.images[i].url); state.assets.images.splice(i, 1); renderImages(); }
   });
+  $('clearExamples').addEventListener('click', async () => {
+    const ph = state.assets.images.filter(a => a.placeholder);
+    if (ph.length) { for (const a of ph) URL.revokeObjectURL(a.url); state.assets.images = state.assets.images.filter(a => !a.placeholder); LS.set('lg.noExamples', true); renderImages(); toast(`Example pictures cleared${state.assets.images.length ? '' : ': layouts are type and color only until you add images'}`); }
+    else { LS.set('lg.noExamples', false); await ensureDemoImages(true); renderImages(); toast('Example pictures are back'); }
+  });
+  $('clearGallery').addEventListener('click', () => { state.layouts = []; state.picks.clear(); renderGallery(); $('readout').innerHTML = ''; if (typeof updateCompare === 'function') updateCompare(); toast('Gallery cleared: Generate to make new layouts'); });
   $('imageFiles').addEventListener('change', async e => {
     const files = [...e.target.files]; if (!files.length) return;
     // Real photos replace the placeholders.
@@ -211,7 +219,9 @@
     for (const f of files) { try { await addImage(await readAsDataURL(f), f.name); } catch (err) { console.warn(err); } }
     toast(`${files.length} image${files.length > 1 ? 's' : ''} added`); e.target.value = '';
   });
+  // Example pictures fill in until there are real ones; 'Clear examples' removes them for good (until asked back).
   async function ensureDemoImages(force) {
+    if (LS.get('lg.noExamples', false) && !force) return;
     if (!force && state.assets.images.length) return;
     if (state.assets.images.some(a => !a.placeholder)) return;
     for (const a of state.assets.images) URL.revokeObjectURL(a.url);
@@ -661,7 +671,7 @@
   $('prompt').addEventListener('input', syncClear); syncClear();
   $('promptClear').addEventListener('click', () => { $('prompt').value = ''; state.deckSource = null; LS.set('lg.prompt', ''); syncClear(); $('prompt').focus(); });
   $('aboutClose').addEventListener('click', () => $('about').hidden = true);
-  $('settingsBtn').addEventListener('click', () => $('settings').hidden = false);
+  $('settingsBtn').addEventListener('click', () => { $('settings').hidden = false; renderGuides(); });
   $('settingsClose').addEventListener('click', () => { LS.set('lg.apiKey', $('apiKey').value); LS.set('lg.useClaude', $('useClaude').checked); saveImageGen(); $('settings').hidden = true; });
   // Image generation settings: provider → models, key per provider.
   $('imgProvider').innerHTML += Object.values(ImageGen.PROVIDERS).map(p => `<option value="${p.id}">${p.name}</option>`).join('');
@@ -934,6 +944,46 @@
     if (state.mode !== 'deck') return; const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
     if (!f || !(/\.pptx$/i.test(f.name) || f.type === GSlides.PPTX)) return; e.preventDefault(); if (!state.busy) generateDeck(($('prompt').value || '').replace(slidesLinkIn($('prompt').value) || '', '').trim(), { file: f });
   });
+  // ---- Brand guidelines (Settings): design.md, layout.md, animation.md, illustration.md, photography.md, content.md.
+  // Everyone can read them; admins (the shared-library admins) edit, import and save them. Claude gets them in its prompts.
+  const GUIDE_NOTE = { design: 'colors, type, logo, shapes, icons, charts', layout: 'grid, margins, hierarchy per slide type, text per slide', animation: 'easing, durations, entrances, builds', illustration: 'illustration and 3D render style', photography: 'subjects, light, color, cropping', content: 'voice, tone, grammar, naming, words to use and avoid' };
+  let guideCur = 'design', guideDirty = false, guidePreview = false;
+  const mdInline = t => escapeHtml(t).replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>').replace(/(^|[^*])\*([^*\s][^*]*)\*/g, '$1<i>$2</i>');
+  function mdToHtml(md) {
+    const out = []; const lines = String(md || '').split('\n'); let list = null, table = null;
+    const close = () => { if (list) { out.push(`</${list}>`); list = null; } if (table) { out.push('</table>'); table = null; } };
+    for (const raw of lines) {
+      const l = raw.replace(/\s+$/, '');
+      if (/^\s*\|.*\|\s*$/.test(l)) { if (/^\s*\|[\s:|-]+\|\s*$/.test(l)) continue; if (!table) { close(); out.push('<table>'); table = 'open'; } out.push('<tr>' + l.trim().slice(1, -1).split('|').map(c => `<td>${mdInline(c.trim())}</td>`).join('') + '</tr>'); continue; }
+      const h = /^(#{1,4})\s+(.*)$/.exec(l); if (h) { close(); out.push(`<h${h[1].length}>${mdInline(h[2])}</h${h[1].length}>`); continue; }
+      const b = /^\s*[-*]\s+(.*)$/.exec(l), n = /^\s*\d+[.)]\s+(.*)$/.exec(l);
+      if (b || n) { const tag = b ? 'ul' : 'ol'; if (list !== tag) { close(); out.push(`<${tag}>`); list = tag; } out.push(`<li>${mdInline((b || n)[1])}</li>`); continue; }
+      if (!l.trim()) { close(); continue; }
+      close(); out.push(`<p>${mdInline(l)}</p>`);
+    }
+    close(); return out.join('');
+  }
+  function renderGuides() {
+    if (typeof LibStore === 'undefined') return;
+    const all = LibStore.guides(); const role = LibStore.role(); const admin = !!role.admin;
+    $('guideTabs').innerHTML = LibStore.GUIDES.map(id => `<button type="button" role="tab" data-guide="${id}" class="${id === guideCur ? 'on' : ''}" aria-selected="${id === guideCur}" title="${GUIDE_NOTE[id]}">${id}.md<span class="dot ${all[id] && all[id].text.trim() ? 'full' : ''}"></span></button>`).join('');
+    const g = all[guideCur];
+    if (!guideDirty) $('guideText').value = g ? g.text : '';
+    $('guideText').readOnly = !admin; $('guideSave').hidden = !admin; $('guideImport').hidden = !admin;
+    $('guideText').placeholder = admin ? `# ${guideCur[0].toUpperCase() + guideCur.slice(1)} guidelines\n\nWrite or import the ${guideCur} rules (${GUIDE_NOTE[guideCur]}).` : 'No guidelines here yet. An admin can add them.';
+    $('guideMeta').textContent = `${GUIDE_NOTE[guideCur]}${g && g.updated ? ` · saved ${new Date(g.updated).toLocaleString()}` : ''}${guideDirty ? ' · not saved' : ''}`;
+    $('guidesWho').textContent = admin ? 'The rules Claude follows when it writes, lays out and animates: one Markdown file each. You can edit them (admin).' : 'The rules Claude follows when it writes, lays out and animates. Only admins can change them.';
+    const show = guidePreview || !admin; $('guidePreview').hidden = !show; $('guideText').hidden = show; $('guideView').textContent = show ? 'Edit' : 'Preview'; $('guideView').hidden = !admin;
+    if (show) $('guidePreview').innerHTML = mdToHtml($('guideText').value) || '<p class="hint">Empty.</p>';
+  }
+  $('guideTabs').addEventListener('click', e => { const b = e.target.closest('[data-guide]'); if (!b) return; if (guideDirty && !confirm('Leave this guide without saving your changes?')) return; guideDirty = false; guideCur = b.dataset.guide; renderGuides(); });
+  $('guideText').addEventListener('input', () => { guideDirty = true; $('guideMeta').textContent = `${GUIDE_NOTE[guideCur]} · not saved`; });
+  $('guideView').addEventListener('click', () => { guidePreview = !guidePreview; renderGuides(); });
+  $('guideSave').addEventListener('click', e => withBusy(e.target, async () => { try { await LibStore.putGuide(guideCur, $('guideText').value); guideDirty = false; renderGuides(); toast(`${guideCur}.md saved`); Stats.track('guide.save', { detail: guideCur }); } catch (err) { toast(err.message || String(err)); } }));
+  $('guideDownload').addEventListener('click', async () => { const blob = new Blob([$('guideText').value], { type: 'text/markdown' }); await Render.download(blob, `${guideCur}.md`); });
+  $('guideFile').addEventListener('change', async e => { const f = e.target.files[0]; e.target.value = ''; if (!f) return; const t = await f.text(); const m = /^(design|layout|animation|illustration|photography|content)\b/i.exec(f.name); if (m) guideCur = m[1].toLowerCase(); $('guideText').value = t; guideDirty = true; guidePreview = false; renderGuides(); toast(`${f.name} loaded into ${guideCur}.md: Save to keep it`); });
+  LibStore.on(() => { if (!$('settings').hidden) renderGuides(); });
+
   // ---- Motion: deck settings, Quick Look (select a slide or poster, press Space), Present, hover previews ----------
   state.motion = { mode: LS.get('lg.motionMode', 'all') || 'all', builds: LS.get('lg.motionBuilds', 'enter') || 'enter' };
   const reduceMotion = () => window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -1239,7 +1289,7 @@
     addImageData: (dataUrl, name) => addImage(dataUrl, name),
     updateColors: colors => { state.kit.colors = colors.map(c => ({ name: c.name || c.hex, hex: Color.normalize(c.hex), role: c.role || 'accent' })); renderColors(); persistKit(); },
     resetColors: () => { const preset = Brand.PRESETS[state.kit.presetId]; if (!preset) return false; state.kit.colors = preset.colors.map(c => ({ ...c })); renderColors(); persistKit(); return true; },
-    openSettings: () => { $('settings').hidden = false; $('imgProvider').focus(); },
+    openSettings: () => { $('settings').hidden = false; renderGuides(); $('imgProvider').focus(); },
     download: (blob, name) => Render.download(blob, name),
     renderSVG: (layout, opts) => Render.toSVG(layout, { kit: state.kit, assets: state.assets, showGrid: !!(opts && opts.showGrid) }),
     exportPNG: (layout, scale) => Render.exportPNG(layout, { kit: state.kit, assets: state.assets }, scale || 1),
@@ -1278,7 +1328,7 @@
     variations: opts => makeVariations(opts),
     onExternal: name => { toast(`Outside agent: ${name.replace(/_/g, ' ')}`); Stats.track('agent.tool', { detail: name }); },
   });
-  Agent.init({ getKit: () => state.kit, toast, openSettings: () => { $('settings').hidden = false; }, onRun: text => Stats.track('agent.run', { detail: String(text).slice(0, 60) }) });
+  Agent.init({ getKit: () => state.kit, toast, openSettings: () => { $('settings').hidden = false; renderGuides(); }, onRun: text => Stats.track('agent.run', { detail: String(text).slice(0, 60) }) });
 
   // ---- Multiplayer ------------------------------------------------------------------------------------------------
   Sync.init(CanvasUI, {

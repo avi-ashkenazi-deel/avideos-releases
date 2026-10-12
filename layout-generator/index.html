@@ -85,7 +85,8 @@
       <div class="field">
         <label>Images <span class="hint">photos, renders, product shots</span></label>
         <div id="imageList" class="images"></div>
-        <label class="btn small file">Add images<input id="imageFiles" type="file" accept="image/*" multiple hidden></label>
+        <div class="row"><label class="btn small file">Add images<input id="imageFiles" type="file" accept="image/*" multiple hidden></label>
+          <button id="clearExamples" class="btn small" type="button" title="Remove the example pictures: layouts use only your own images (or none)">Clear examples</button></div>
       </div>
     </section>
 
@@ -167,6 +168,7 @@
         </label>
         <label class="check"><input id="favOnly" type="checkbox"> Favorites</label>
         <button id="compareBtn" class="btn small" type="button" disabled>Compare (0)</button>
+        <button id="clearGallery" class="btn small" type="button" title="Empty the gallery (favorites stay favorites)">Clear</button>
         <label class="inline size-slider" title="Make the previews bigger or smaller">Size <input class="thumbSize" type="range" min="120" max="720" step="10" aria-label="Preview size"></label>
         <button id="exportFavBtn" class="btn small" type="button" disabled>Export favorites</button>
         <button id="exportFavPptxBtn" class="btn small" type="button" disabled title="All favorites as one editable deck per format">Favorites → PPTX</button>
@@ -468,6 +470,16 @@
         <h4>Appearance</h4>
         <div class="field"><label for="themeSelect">Theme</label><select id="themeSelect" class="select"><option value="system">Same as the system</option><option value="light">Light</option><option value="dark">Dark</option></select></div>
         <p class="hint"><button type="button" class="linkish" id="aboutLink">How the layouts are made</button></p>
+        <h4>Brand guidelines</h4>
+        <p class="hint" id="guidesWho">The rules Claude follows when it writes, lays out and animates: one Markdown file each.</p>
+        <div class="guide-tabs" id="guideTabs" role="tablist" aria-label="Guideline files"></div>
+        <div class="guide-tools"><span class="hint" id="guideMeta"></span><span class="grow"></span>
+          <button id="guideView" class="btn small" type="button">Preview</button>
+          <label class="btn small file" id="guideImport" title="Replace this guide with a .md file">Import .md<input id="guideFile" type="file" accept=".md,.markdown,text/markdown,text/plain" hidden></label>
+          <button id="guideDownload" class="btn small" type="button">Download</button>
+          <button id="guideSave" class="btn small primary" type="button">Save</button></div>
+        <textarea id="guideText" class="input guide-text" rows="16" spellcheck="true" aria-label="Guideline text (Markdown)"></textarea>
+        <div id="guidePreview" class="guide-preview" hidden></div>
         <h4>Prompt interpreter</h4>
         <p>By default the brief is read by a built-in rule parser (formats, mood, emphasis, count, quoted copy, brand color names). Optionally, let Claude read the brief and turn it into the same constraint JSON. The key stays in this browser only and is sent straight to Anthropic.</p>
         <div class="field"><label for="apiKey">Anthropic API key</label><input id="apiKey" class="input" type="password" placeholder="sk-ant-..." autocomplete="off"></div>

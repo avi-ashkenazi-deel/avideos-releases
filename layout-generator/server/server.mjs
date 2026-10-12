@@ -181,19 +181,20 @@ const LIB_ID = /^[A-Za-z0-9_.:-]{1,64}$/;
 let libs = null; let libSave = null;
 async function getLibs() {
   if (libs) return libs;
-  libs = { libraries: new Map(), items: new Map() };
-  try { const j = JSON.parse(await readFile(path.join(DATA, 'libraries.json'), 'utf8')); for (const l of j.libraries || []) if (l && LIB_ID.test(l.id)) libs.libraries.set(l.id, l); for (const it of j.items || []) if (it && LIB_ID.test(it.id)) libs.items.set(it.id, it); } catch { }
+  libs = { libraries: new Map(), items: new Map(), guides: new Map() };
+  try { const j = JSON.parse(await readFile(path.join(DATA, 'libraries.json'), 'utf8')); for (const l of j.libraries || []) if (l && LIB_ID.test(l.id)) libs.libraries.set(l.id, l); for (const it of j.items || []) if (it && LIB_ID.test(it.id)) libs.items.set(it.id, it); for (const g of j.guides || []) if (g && typeof g.id === 'string') libs.guides.set(g.id, g); } catch { }
   return libs;
 }
 function saveLibs() {
   clearTimeout(libSave);
   libSave = setTimeout(async () => {
-    try { await mkdir(DATA, { recursive: true }); const file = path.join(DATA, 'libraries.json'); await writeFile(file + '.tmp', JSON.stringify({ v: 1, saved: new Date().toISOString(), libraries: [...libs.libraries.values()], items: [...libs.items.values()] })); await rename(file + '.tmp', file); } catch (e) { log('library save failed', e.message); }
+    try { await mkdir(DATA, { recursive: true }); const file = path.join(DATA, 'libraries.json'); await writeFile(file + '.tmp', JSON.stringify({ v: 1, saved: new Date().toISOString(), libraries: [...libs.libraries.values()], items: [...libs.items.values()], guides: [...libs.guides.values()] })); await rename(file + '.tmp', file); } catch (e) { log('library save failed', e.message); }
   }, 300);
 }
-const libsBody = L => ({ lgLibraries: 1, keyRequired: !!ADMIN_KEY, libraries: [...L.libraries.values()], items: [...L.items.values()] });
+const libsBody = L => ({ lgLibraries: 1, keyRequired: !!ADMIN_KEY, libraries: [...L.libraries.values()], items: [...L.items.values()], guides: [...(L.guides || new Map()).values()] });
 function libOp(L, m) {
   if (m.op === 'check') return;
+  if (m.op === 'putGuide') { const g = m.guide; if (!g || !/^(design|layout|animation|illustration|photography|content)$/.test(g.id)) throw new Error('bad guide'); L.guides.set(g.id, { id: g.id, text: String(g.text || '').slice(0, 120000), updated: Date.now(), by: String(g.by || '').slice(0, 80) }); return; }
   if (m.op === 'putLib') { const l = m.lib; if (!l || !LIB_ID.test(l.id) || typeof l.name !== 'string') throw new Error('bad library'); L.libraries.set(l.id, { id: l.id, name: l.name.slice(0, 60), description: String(l.description || '').slice(0, 200), order: +l.order || 0, defaultOn: l.defaultOn !== false, updated: Date.now(), by: String(l.by || '').slice(0, 80) }); return; }
   if (m.op === 'delLib') { L.libraries.delete(m.id); for (const [k, it] of L.items) if (it.lib === m.id) L.items.delete(k); return; }
   if (m.op === 'putItem') { const it = m.item; if (!it || !LIB_ID.test(it.id) || !LIB_ID.test(it.lib) || !Array.isArray(it.blocks)) throw new Error('bad item'); if (!L.libraries.has(it.lib)) throw new Error('no such library'); if (JSON.stringify(it).length > 2 * 1024 * 1024) throw new Error('item over 2 MB'); L.items.set(it.id, it); return; }

@@ -19,8 +19,8 @@
   --fg: #ecebf0;
   --fg-2: #a9a8b4;
   --fg-3: #6f6e7c;
-  --accent: #d8c9a3;      /* warm parchment: reads on dark, stays out of the brand palettes' way */
-  --accent-ink: #14120c;
+  --accent: #f0707f;      /* red that reads as text and lines on dark; filled states use --cta, the dark red */
+  --accent-ink: #ffffff;
   --good: #7fcf9a;
   --warn: #e0a85a;
   --danger: #e07a7a;
@@ -30,11 +30,11 @@
   --r-lg: 12px;
   --side: 340px;
   /* surfaces the light theme redefines */
-  --accent-soft: rgba(216,201,163,.12);
-  --accent-faint: rgba(216,201,163,.06);
+  --accent-soft: rgba(240,112,127,.14);
+  --accent-faint: rgba(240,112,127,.07);
   --cta: #ad1f37;          /* calls to action: dark red */
   --cta-ink: #ffffff;
-  --accent-line: rgba(216,201,163,.35);
+  --accent-line: rgba(240,112,127,.4);
   --checker-a: #20202a; --checker-b: #191921;
   --stage: #121216;
   --topbar: rgba(13,13,16,.85);
@@ -48,18 +48,18 @@
 /* Light: follows the system unless a theme was picked (Settings, or the sun/moon button) */
 @media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) {
   --bg: #f5f4f7; --bg-grid: #eceaf0; --panel: #ffffff; --panel-2: #f2f1f5; --line: #e4e2ea; --line-2: #d3d1db;
-  --fg: #17161c; --fg-2: #4d4b58; --fg-3: #7d7b89; --accent: #7a5d1f; --accent-ink: #ffffff;
+  --fg: #17161c; --fg-2: #4d4b58; --fg-3: #7d7b89; --accent: #8e1528; --accent-ink: #ffffff;
   --good: #1f8a52; --warn: #a3650f; --danger: #c43c3c;
-  --accent-soft: rgba(122,93,31,.12); --accent-faint: rgba(122,93,31,.06); --accent-line: rgba(122,93,31,.35); --cta: #8e1528; --cta-ink: #ffffff;
+  --accent-soft: rgba(142,21,40,.1); --accent-faint: rgba(142,21,40,.05); --accent-line: rgba(142,21,40,.35); --cta: #8e1528; --cta-ink: #ffffff;
   --checker-a: #e9e7ee; --checker-b: #f4f3f7; --stage: #e8e7ed; --topbar: rgba(245,244,247,.88);
   --overlay: rgba(23,22,28,.35); --shadow: rgba(23,22,40,.16); --shadow-strong: rgba(23,22,40,.22); --chip-ring: rgba(0,0,0,.14); --live: #0e8f6a;
   color-scheme: light;
 } }
 :root[data-theme="light"] {
   --bg: #f5f4f7; --bg-grid: #eceaf0; --panel: #ffffff; --panel-2: #f2f1f5; --line: #e4e2ea; --line-2: #d3d1db;
-  --fg: #17161c; --fg-2: #4d4b58; --fg-3: #7d7b89; --accent: #7a5d1f; --accent-ink: #ffffff;
+  --fg: #17161c; --fg-2: #4d4b58; --fg-3: #7d7b89; --accent: #8e1528; --accent-ink: #ffffff;
   --good: #1f8a52; --warn: #a3650f; --danger: #c43c3c;
-  --accent-soft: rgba(122,93,31,.12); --accent-faint: rgba(122,93,31,.06); --accent-line: rgba(122,93,31,.35); --cta: #8e1528; --cta-ink: #ffffff;
+  --accent-soft: rgba(142,21,40,.1); --accent-faint: rgba(142,21,40,.05); --accent-line: rgba(142,21,40,.35); --cta: #8e1528; --cta-ink: #ffffff;
   --checker-a: #e9e7ee; --checker-b: #f4f3f7; --stage: #e8e7ed; --topbar: rgba(245,244,247,.88);
   --overlay: rgba(23,22,28,.35); --shadow: rgba(23,22,40,.16); --shadow-strong: rgba(23,22,40,.22); --chip-ring: rgba(0,0,0,.14); --live: #0e8f6a;
   color-scheme: light;
@@ -100,7 +100,7 @@ p { margin: 0 0 .75em; }
   position: sticky; top: 0; z-index: 5;
 }
 .brandmark { display: flex; align-items: center; gap: 10px; white-space: nowrap; min-width: var(--side); }
-.brandmark .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.brandmark .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--cta); box-shadow: 0 0 0 3px var(--accent-soft); }
 .brandmark .name { font-weight: 700; letter-spacing: -.01em; }
 .brandmark .tag { color: var(--fg-3); font-family: var(--font-mono); font-size: 12px; }
 .promptbar { flex: 1; display: flex; gap: 8px; min-width: 0; }
@@ -338,7 +338,7 @@ details.json pre { font-size: 11px; line-height: 1.45; background: var(--bg); bo
 @media (max-width: 640px) { .seg button { padding: 8px 9px; } }
 
 /* Canvas mode */
-.badge { display: inline-block; min-width: 16px; padding: 0 5px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); font-size: 10px; line-height: 16px; margin-left: 4px; vertical-align: middle; }
+.badge { display: inline-block; min-width: 16px; padding: 0 5px; border-radius: 999px; background: var(--cta); color: var(--cta-ink); font-size: 10px; line-height: 16px; margin-left: 4px; vertical-align: middle; }
 body.canvas-mode .app, body.home-mode .app { grid-template-columns: 1fr; grid-template-areas: "top" "main"; }
 body.canvas-mode .sidebar, body.canvas-mode .controls, body.canvas-mode #readout, body.canvas-mode #empty,
 body.home-mode .sidebar, body.home-mode .controls, body.home-mode #readout, body.home-mode #empty, body.home-mode #prompt, body.home-mode #generateBtn { display: none; }
@@ -351,7 +351,7 @@ body.canvas-mode .main { overflow: hidden; background-image: none; }
 .cv-tools button:hover { color: var(--fg); background: var(--panel-2); }
 .cv-tools button:active { transform: translateY(1px); }
 .cv-tools button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-.cv-tools button.on { background: var(--accent); color: var(--accent-ink); }
+.cv-tools button.on { background: var(--cta); color: var(--cta-ink); }
 .cv-tools button.on:hover { filter: brightness(1.08); }
 /* Instant tooltips for the toolbar: the native title waits a second, these do not. */
 [data-tip] { position: relative; }
@@ -448,7 +448,7 @@ body.canvas-mode .main { overflow: hidden; background-image: none; }
 .cv-seg { display: grid; grid-template-columns: repeat(3, 1fr); background: var(--bg); border: 1px solid var(--line-2); border-radius: 6px; padding: 2px; gap: 2px; }
 .cv-seg button { border: 0; background: transparent; color: var(--fg-2); padding: 6px 4px; border-radius: 4px; font-size: 12.5px; cursor: pointer; }
 .cv-seg button:hover { color: var(--fg); background: var(--panel-2); }
-.cv-seg button.on { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
+.cv-seg button.on { background: var(--cta); color: var(--cta-ink); font-weight: 600; }
 .import-body .bm { cursor: grab; }
 /* ---- Multiplayer ---- */
 .cv-peers { display: flex; align-items: center; gap: 4px; }
@@ -506,7 +506,7 @@ body.canvas-mode .main { overflow: hidden; background-image: none; }
 .al-cell { border: 0; border-radius: 3px; background: transparent; cursor: pointer; position: relative; padding: 0; }
 .al-cell::after { content: ''; position: absolute; left: 50%; top: 50%; width: 3px; height: 3px; border-radius: 50%; background: var(--fg-3); transform: translate(-50%, -50%); }
 .al-cell:hover { background: var(--panel-2); }
-.al-cell.on::after { width: 10px; height: 10px; border-radius: 2px; background: var(--accent); }
+.al-cell.on::after { width: 10px; height: 10px; border-radius: 2px; background: var(--cta); }
 .al-fields { display: flex; flex-direction: column; gap: 6px; }
 .al-fields .cv-f { grid-template-columns: 52px 1fr; }
 .al-rm { float: right; margin-top: -3px; padding: 0 8px; }
@@ -549,7 +549,7 @@ input[disabled] { opacity: .5; cursor: not-allowed; }
 .lib-cats { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
 .lib-cats button { border: 1px solid var(--line-2); background: var(--bg); color: var(--fg-2); border-radius: 12px; padding: 3px 9px; font-size: 11.5px; cursor: pointer; }
 .lib-cats button:hover { color: var(--fg); border-color: var(--fg-3); }
-.lib-cats button.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+.lib-cats button.on { background: var(--cta); color: var(--cta-ink); border-color: var(--cta); font-weight: 600; }
 .lib-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .lib-item { background: var(--bg); border: 1px solid var(--line-2); border-radius: 8px; padding: 6px; cursor: grab; display: flex; flex-direction: column; gap: 4px; transition: border-color .1s; }
 .lib-item:hover { border-color: var(--accent); }
@@ -589,7 +589,7 @@ input[disabled] { opacity: .5; cursor: not-allowed; }
 .libs-switch input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
 .libs-switch span { position: absolute; inset: 0; border-radius: 10px; background: var(--line-2); transition: background .15s; }
 .libs-switch span::after { content: ''; position: absolute; left: 3px; top: 3px; width: 14px; height: 14px; border-radius: 50%; background: #fff; transition: transform .15s; }
-.libs-switch input:checked + span { background: var(--accent); }
+.libs-switch input:checked + span { background: var(--cta); }
 .libs-switch input:checked + span::after { transform: translateX(14px); }
 .libs-switch input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
 .libs-edit { display: flex; flex-direction: column; gap: 6px; margin: 0 6px 8px 52px; padding: 10px; border: 1px solid var(--line-2); border-radius: 8px; }
@@ -741,6 +741,19 @@ input[disabled] { opacity: .5; cursor: not-allowed; }
 .se-unit.custom > span { color: var(--fg); font-weight: 600; }
 .se-unit .select { padding: 3px 6px; font-size: 12px; }
 
+/* Brand guidelines in Settings */
+.guide-tabs { display: flex; flex-wrap: wrap; gap: 4px; margin: 8px 0; }
+.guide-tabs button { font: 500 12px var(--font-mono); padding: 5px 9px; border-radius: 6px; border: 1px solid var(--line-2); background: var(--panel-2); color: var(--fg-2); cursor: pointer; }
+.guide-tabs button.on { background: var(--cta); color: var(--cta-ink); border-color: var(--cta); }
+.guide-tabs button .dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--fg-3); margin-left: 6px; vertical-align: middle; }
+.guide-tabs button .dot.full { background: var(--good); }
+.guide-tools { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; }
+.guide-text { width: 100%; min-height: 280px; font: 12.5px/1.5 var(--font-mono); resize: vertical; }
+.guide-preview { border: 1px solid var(--line); border-radius: 8px; padding: 12px 16px; max-height: 420px; overflow: auto; font-size: 13px; line-height: 1.5; background: var(--panel-2); }
+.guide-preview h1 { font-size: 18px; } .guide-preview h2 { font-size: 15px; margin-top: 14px; } .guide-preview h3 { font-size: 13.5px; }
+.guide-preview table { border-collapse: collapse; margin: 6px 0; font-size: 12px; } .guide-preview td, .guide-preview th { border: 1px solid var(--line-2); padding: 3px 6px; text-align: left; vertical-align: top; }
+.guide-preview code { font-family: var(--font-mono); font-size: 12px; background: var(--accent-faint); padding: 0 3px; border-radius: 3px; }
+
 </style>
 </head>
 <body>
@@ -818,7 +831,8 @@ input[disabled] { opacity: .5; cursor: not-allowed; }
       <div class="field">
         <label>Images <span class="hint">photos, renders, product shots</span></label>
         <div id="imageList" class="images"></div>
-        <label class="btn small file">Add images<input id="imageFiles" type="file" accept="image/*" multiple hidden></label>
+        <div class="row"><label class="btn small file">Add images<input id="imageFiles" type="file" accept="image/*" multiple hidden></label>
+          <button id="clearExamples" class="btn small" type="button" title="Remove the example pictures: layouts use only your own images (or none)">Clear examples</button></div>
       </div>
     </section>
 
@@ -900,6 +914,7 @@ input[disabled] { opacity: .5; cursor: not-allowed; }
         </label>
         <label class="check"><input id="favOnly" type="checkbox"> Favorites</label>
         <button id="compareBtn" class="btn small" type="button" disabled>Compare (0)</button>
+        <button id="clearGallery" class="btn small" type="button" title="Empty the gallery (favorites stay favorites)">Clear</button>
         <label class="inline size-slider" title="Make the previews bigger or smaller">Size <input class="thumbSize" type="range" min="120" max="720" step="10" aria-label="Preview size"></label>
         <button id="exportFavBtn" class="btn small" type="button" disabled>Export favorites</button>
         <button id="exportFavPptxBtn" class="btn small" type="button" disabled title="All favorites as one editable deck per format">Favorites → PPTX</button>
@@ -1201,6 +1216,16 @@ input[disabled] { opacity: .5; cursor: not-allowed; }
         <h4>Appearance</h4>
         <div class="field"><label for="themeSelect">Theme</label><select id="themeSelect" class="select"><option value="system">Same as the system</option><option value="light">Light</option><option value="dark">Dark</option></select></div>
         <p class="hint"><button type="button" class="linkish" id="aboutLink">How the layouts are made</button></p>
+        <h4>Brand guidelines</h4>
+        <p class="hint" id="guidesWho">The rules Claude follows when it writes, lays out and animates: one Markdown file each.</p>
+        <div class="guide-tabs" id="guideTabs" role="tablist" aria-label="Guideline files"></div>
+        <div class="guide-tools"><span class="hint" id="guideMeta"></span><span class="grow"></span>
+          <button id="guideView" class="btn small" type="button">Preview</button>
+          <label class="btn small file" id="guideImport" title="Replace this guide with a .md file">Import .md<input id="guideFile" type="file" accept=".md,.markdown,text/markdown,text/plain" hidden></label>
+          <button id="guideDownload" class="btn small" type="button">Download</button>
+          <button id="guideSave" class="btn small primary" type="button">Save</button></div>
+        <textarea id="guideText" class="input guide-text" rows="16" spellcheck="true" aria-label="Guideline text (Markdown)"></textarea>
+        <div id="guidePreview" class="guide-preview" hidden></div>
         <h4>Prompt interpreter</h4>
         <p>By default the brief is read by a built-in rule parser (formats, mood, emphasis, count, quoted copy, brand color names). Optionally, let Claude read the brief and turn it into the same constraint JSON. The key stays in this browser only and is sent straight to Anthropic.</p>
         <div class="field"><label for="apiKey">Anthropic API key</label><input id="apiKey" class="input" type="password" placeholder="sk-ant-..." autocomplete="off"></div>
@@ -1655,8 +1680,16 @@ const Brand = (() => {
   }
 
   // The kit's writing rules as prompt text ('' when the kit has none).
-  function voiceText(kit) { const v = kit && kit.voice; if (!v || !Array.isArray(v.rules) || !v.rules.length) return ''; return `${kit.name} writing rules${v.summary ? ` (${v.summary})` : ''}:\n- ` + v.rules.join('\n- '); }
-  return { voiceText, FONTS, customFonts, fontCss, fontWeights, allFontNames, PRESETS, fromPreset, pairs, parseSvg, logoInner, logoColorFor, logosOf, logoVariant, logoAspectOf, makeDemoImage, serialize, clone };
+  function voiceText(kit) {
+    const v = kit && kit.voice; const rules = v && Array.isArray(v.rules) && v.rules.length ? `${kit.name} writing rules${v.summary ? ` (${v.summary})` : ''}:\n- ` + v.rules.join('\n- ') : '';
+    const guide = guidesText(['content'], 9000); return [rules, guide].filter(Boolean).join('\n');
+  }
+  // The brand's own guideline files (Settings → Brand guidelines), for prompts: each under its file name, trimmed.
+  function guidesText(ids, max = 6000) {
+    if (typeof LibStore === 'undefined' || !LibStore.guide) return '';
+    return ids.map(id => { const t = String(LibStore.guide(id) || '').trim(); return t ? `Brand guidelines, ${id}.md (follow them):\n${t.length > max ? t.slice(0, max) + '\n…' : t}` : ''; }).filter(Boolean).join('\n\n');
+  }
+  return { voiceText, guidesText, FONTS, customFonts, fontCss, fontWeights, allFontNames, PRESETS, fromPreset, pairs, parseSvg, logoInner, logoColorFor, logosOf, logoVariant, logoAspectOf, makeDemoImage, serialize, clone };
 })();
 
 /* js/grid.js */
@@ -5377,7 +5410,7 @@ Intents and the fields each uses:
 ${first ? 'The first source slide is the cover: its headline is the presentation\'s own title as that slide shows it, and its subtitle the subhead.' : ''}${last ? ' If the last source slide ends the talk (thanks, questions, next steps) it is the closing.' : ''}
 
 Vary the intents where the content allows (a key number as a stat slide, a sequence as a process, two sides as a comparison, a section title as a statement): cards should not be most of the deck.
-${typeof Brand !== 'undefined' && Brand.voiceText(kit) ? Brand.voiceText(kit) + '\n' : ''}Rules: keep the presentation's own facts, numbers, names and terms; ${keep ? 'on slides that are not kept whole, ' : ''}condense long text to what a slide can hold (it is read in seconds) and put the detail you cut, in full sentences, in "notes" for the speaker; never invent facts or numbers; fix obvious typos; sentence case headlines; no emojis, no exclamation marks. Unused fields are "" or [].
+${typeof Brand !== 'undefined' && Brand.voiceText(kit) ? Brand.voiceText(kit) + '\n' : ''}${typeof Brand !== 'undefined' && Brand.guidesText ? (g => g ? g + '\n' : '')(Brand.guidesText(['layout'], 4000)) : ''}Rules: keep the presentation's own facts, numbers, names and terms; ${keep ? 'on slides that are not kept whole, ' : ''}condense long text to what a slide can hold (it is read in seconds) and put the detail you cut, in full sentences, in "notes" for the speaker; never invent facts or numbers; fix obvious typos; sentence case headlines; no emojis, no exclamation marks. Unused fields are "" or [].
 
 Reply with only JSON: {"slides":[{"source":2,"intent":"stat","eyebrow":"","headline":"…","subhead":"","body":"","items":[],"steps":[],"columns":[],"sections":[],"diagram":null,"quote":"","attribution":"","stat":"$2M","cta":"","notes":"…"}]}
 Fields: ${FIELDS}.
@@ -6198,7 +6231,7 @@ const WebImport = (() => {
       let host = document.getElementById('__lg_capture_panel'); if (host) host.remove();
       host = document.createElement('div'); host.id = '__lg_capture_panel'; host.style.cssText = 'position:fixed;top:16px;right:16px;z-index:2147483647;';
       const root = host.attachShadow ? host.attachShadow({ mode: 'open' }) : host;
-      root.innerHTML = `<style>.p{font:13px/1.45 system-ui,-apple-system,sans-serif;background:#14141a;color:#ecebf0;border:1px solid #33333e;border-radius:10px;padding:14px 16px;width:300px;box-shadow:0 12px 40px rgba(0,0,0,.4)}b{color:#d8c9a3}button{font:600 13px system-ui,sans-serif;border:0;border-radius:6px;padding:8px 12px;cursor:pointer;margin:10px 6px 0 0}.a{background:#d8c9a3;color:#14141a}.g{background:#26262f;color:#ecebf0}.s{color:#a9a8b4;font-size:12px;margin-top:6px}</style><div class="p"><div><b>Dugma</b> · capture</div><div class="m">${msg}</div><div class="s" id="s"></div><div>${json ? '<button class="a" id="c">Copy capture</button><button class="g" id="d">Download</button>' : ''}<button class="g" id="x">Close</button></div></div>`;
+      root.innerHTML = `<style>.p{font:13px/1.45 system-ui,-apple-system,sans-serif;background:#14141a;color:#ecebf0;border:1px solid #33333e;border-radius:10px;padding:14px 16px;width:300px;box-shadow:0 12px 40px rgba(0,0,0,.4)}b{color:#f0707f}button{font:600 13px system-ui,sans-serif;border:0;border-radius:6px;padding:8px 12px;cursor:pointer;margin:10px 6px 0 0}.a{background:#ad1f37;color:#ffffff}.g{background:#26262f;color:#ecebf0}.s{color:#a9a8b4;font-size:12px;margin-top:6px}</style><div class="p"><div><b>Dugma</b> · capture</div><div class="m">${msg}</div><div class="s" id="s"></div><div>${json ? '<button class="a" id="c">Copy capture</button><button class="g" id="d">Download</button>' : ''}<button class="g" id="x">Close</button></div></div>`;
       document.documentElement.appendChild(host);
       const $ = id => root.querySelector('#' + id);
       $('x').onclick = () => host.remove();
@@ -7569,15 +7602,15 @@ const CanvasUI = (() => {
       if (g.axis === 'x') { const a = toScreen(g.v, g.from), b = toScreen(g.v, g.to); parts.push(`<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="#FF3B8D" stroke-width="1"/>`); }
       else { const a = toScreen(g.from, g.v), b = toScreen(g.to, g.v); parts.push(`<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="#FF3B8D" stroke-width="1"/>`); }
     }
-    if (drag && drag.type === 'draw-frame' && drag.moved) { const a = toScreen(Math.min(drag.start.x, drag.cur.x), Math.min(drag.start.y, drag.cur.y)); const w = Math.abs(drag.cur.x - drag.start.x), h = Math.abs(drag.cur.y - drag.start.y); parts.push(`<rect x="${a.x}" y="${a.y}" width="${w * Z}" height="${h * Z}" fill="rgba(216,201,163,.06)" stroke="var(--accent)" stroke-dasharray="6 4" stroke-width="1.5"/><text x="${a.x}" y="${a.y - 6}" fill="var(--accent)" font-size="11" font-family="var(--font-mono)">${Math.round(w / 8) * 8}×${Math.round(h / 8) * 8}</text>`); }
+    if (drag && drag.type === 'draw-frame' && drag.moved) { const a = toScreen(Math.min(drag.start.x, drag.cur.x), Math.min(drag.start.y, drag.cur.y)); const w = Math.abs(drag.cur.x - drag.start.x), h = Math.abs(drag.cur.y - drag.start.y); parts.push(`<rect x="${a.x}" y="${a.y}" width="${w * Z}" height="${h * Z}" fill="var(--accent-faint)" stroke="var(--accent)" stroke-dasharray="6 4" stroke-width="1.5"/><text x="${a.x}" y="${a.y - 6}" fill="var(--accent)" font-size="11" font-family="var(--font-mono)">${Math.round(w / 8) * 8}×${Math.round(h / 8) * 8}</text>`); }
     if (dropHint && dropHint.frame) {
       const fr = dropHint.frame; const c = dropHint.container;
       if (c) parts.push(rect(fr.x + c.x, fr.y + c.y, c.w, c.h, 'fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-dasharray="5 3"'));
       if (dropHint.line) { const L = dropHint.line; const a = toScreen(fr.x + L.x0, fr.y + L.y0), b = toScreen(fr.x + L.x1, fr.y + L.y1); parts.push(`<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="#FF3B8D" stroke-width="3" stroke-linecap="round"/>`); }
       if (dropHint.flatten) { const a = toScreen(fr.x, fr.y); parts.push(`<text x="${a.x + 8}" y="${a.y + 18}" fill="var(--accent)" font-size="12" font-weight="600" font-family="var(--font-mono)">Drop to place freely (screen switches to free positions)</text>`); }
     }
-    if (dropTarget) { const a = toScreen(dropTarget.x, dropTarget.y); parts.push(`<rect x="${a.x}" y="${a.y}" width="${FW(dropTarget) * Z}" height="${FH(dropTarget) * Z}" fill="rgba(216,201,163,.1)" stroke="var(--accent)" stroke-dasharray="6 4" stroke-width="2"/><text x="${a.x + 8}" y="${a.y + 18}" fill="var(--accent)" font-size="12" font-weight="600" font-family="var(--font-mono)">Move into ${esc(dropTarget.name)}</text>`); }
-    if (drag && drag.type === 'marquee') { const a = toScreen(Math.min(drag.start.x, drag.cur.x), Math.min(drag.start.y, drag.cur.y)); parts.push(`<rect x="${a.x}" y="${a.y}" width="${Math.abs(drag.cur.x - drag.start.x) * Z}" height="${Math.abs(drag.cur.y - drag.start.y) * Z}" fill="rgba(216,201,163,.08)" stroke="var(--accent)" stroke-dasharray="4 3"/>`); }
+    if (dropTarget) { const a = toScreen(dropTarget.x, dropTarget.y); parts.push(`<rect x="${a.x}" y="${a.y}" width="${FW(dropTarget) * Z}" height="${FH(dropTarget) * Z}" fill="var(--accent-soft)" stroke="var(--accent)" stroke-dasharray="6 4" stroke-width="2"/><text x="${a.x + 8}" y="${a.y + 18}" fill="var(--accent)" font-size="12" font-weight="600" font-family="var(--font-mono)">Move into ${esc(dropTarget.name)}</text>`); }
+    if (drag && drag.type === 'marquee') { const a = toScreen(Math.min(drag.start.x, drag.cur.x), Math.min(drag.start.y, drag.cur.y)); parts.push(`<rect x="${a.x}" y="${a.y}" width="${Math.abs(drag.cur.x - drag.start.x) * Z}" height="${Math.abs(drag.cur.y - drag.start.y) * Z}" fill="var(--accent-faint)" stroke="var(--accent)" stroke-dasharray="4 3"/>`); }
     // other people's cursors, last so they sit on top
     for (const pr of peers) {
       if (!pr.cursor || !Number.isFinite(pr.cursor.x) || !Number.isFinite(pr.cursor.y)) continue;
@@ -8936,13 +8969,15 @@ const CanvasUI = (() => {
      libraries; the admin list picks which of them curate. Each person's on/off choices are private to them.
    - self-hosted server: /api/libraries, saved to server/data/libraries.json and pushed to every open tab; when the
      server sets LG_ADMIN_KEY, editing needs that key.
-   - neither: this browser's storage; libraries move between people as JSON (Export / Import). */
+   - neither: this browser's storage; libraries move between people as JSON (Export / Import).
+   Brand guidelines (design.md, layout.md, animation.md, illustration.md, photography.md, content.md) live in the same
+   three homes (the guides collection, the server's file, this browser), readable by everyone, written by admins. */
 const LibStore = (() => {
   const LS = { get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch { return d; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch { return false; } } };
   const ID = /^[A-Za-z0-9_.:-]{1,64}$/;
   const MAX_ITEM = 240 * 1024;
   let env = null, backend = null, started = null;
-  const S = { mode: 'local', libs: new Map(), items: new Map(), admins: [], uid: null, owner: false, canEdit: null, keyRequired: false, keyOk: false, ready: false, error: '' };
+  const S = { mode: 'local', libs: new Map(), items: new Map(), guides: new Map(), admins: [], uid: null, owner: false, canEdit: null, keyRequired: false, keyOk: false, ready: false, error: '' };
   let prefs = LS.get('lg.libsOn', {}) || {};
   const listeners = new Set();
   const emit = () => { for (const fn of listeners) { try { fn(); } catch (e) { console.error(e); } } };
@@ -8960,6 +8995,9 @@ const LibStore = (() => {
     if (it.assets && typeof it.assets === 'object') { out.assets = {}; for (const [k, a] of Object.entries(it.assets)) if (/^a_[0-9a-f]{16}$/.test(k) && a && (typeof a.url === 'string' || typeof a.dataUrl === 'string')) out.assets[k] = { url: typeof a.url === 'string' ? a.url : undefined, dataUrl: typeof a.dataUrl === 'string' && /^data:image\//.test(a.dataUrl) ? a.dataUrl : undefined, name: String(a.name || '').slice(0, 80), w: +a.w || 0, h: +a.h || 0 }; }
     return out;
   }
+  const GUIDE = /^(design|layout|animation|illustration|photography|content)$/;
+  const cleanGuide = g => g && typeof g === 'object' && GUIDE.test(String(g.id || '')) ? { id: g.id, text: String(g.text || '').slice(0, 120000), updated: +g.updated || 0, by: typeof g.by === 'string' ? g.by.slice(0, 80) : '' } : null;
+  function setGuides(list) { S.guides.clear(); for (const g of list || []) { const c = cleanGuide(g); if (c) S.guides.set(c.id, c); } emit(); }
   function setAll({ libraries, items, admins }) {
     if (libraries) { S.libs.clear(); for (const l of libraries) { const c = cleanLib(l); if (c) S.libs.set(c.id, c); } }
     if (items) { S.items.clear(); for (const it of items) { const c = cleanItem(it); if (c) S.items.set(c.id, c); } }
@@ -9006,6 +9044,7 @@ const LibStore = (() => {
       if (!ready.items && snap.metadata && snap.metadata.fromCache && !snap.size) return;
       ready.items = true; S.items.clear(); upsert('item', list); done();
     }, e => { S.error = (e && e.code) || 'db'; emit(); });
+    db.collection('guides').onSnapshot(snap => { const list = []; for (const d of snap.docs) { const v = d.data(); if (v) list.push({ ...v, id: d.id }); } setGuides(list); }, () => { });
     db.doc('config/admins').onSnapshot(s => { const d = s.data(); S.admins = d && Array.isArray(d.ids) ? d.ids.filter(x => typeof x === 'string') : []; emit(); }, () => { });
     // Each person's on/off choices: private to them, so they follow them across devices.
     if (S.uid) {
@@ -9020,6 +9059,7 @@ const LibStore = (() => {
       putItem: it => write(() => db.doc(`libitems/${it.id}`).set(it)),
       delItem: id => write(() => db.doc(`libitems/${id}`).delete()),
       setAdmins: ids => write(() => db.doc('config/admins').set({ ids })),
+      putGuide: g => write(() => db.doc(`guides/${g.id}`).set(g)),
       uploadImage: assets ? async blob => { const r = await assets.upload(blob); return { url: r.url }; } : null,
       profiles: user && user.profiles ? ids => user.profiles(ids) : null,
       search: user && user.search ? q => user.search(q) : null,
@@ -9032,7 +9072,7 @@ const LibStore = (() => {
     if (!j || !j.lgLibraries) return null;
     S.keyRequired = !!j.keyRequired;
     const key = () => LS.get('lg.adminKey', '') || '';
-    const apply = j => { S.keyRequired = !!j.keyRequired; setAll({ libraries: j.libraries || [], items: j.items || [] }); };
+    const apply = j => { S.keyRequired = !!j.keyRequired; setAll({ libraries: j.libraries || [], items: j.items || [] }); if (j.guides) setGuides(j.guides); };
     apply(j);
     async function op(body) {
       const r = await fetch('/api/libraries', { method: 'POST', headers: { 'content-type': 'application/json', 'x-lg-admin': key() }, body: JSON.stringify(body) });
@@ -9049,12 +9089,13 @@ const LibStore = (() => {
       delLib: id => op({ op: 'delLib', id }),
       putItem: item => op({ op: 'putItem', item }),
       delItem: id => op({ op: 'delItem', id }),
+      putGuide: guide => op({ op: 'putGuide', guide }),
       uploadImage: async (blob, name) => { const r = await fetch('/api/assets?room=library', { method: 'POST', headers: { 'content-type': blob.type || 'image/png', 'x-name': encodeURIComponent(name || '') }, body: blob }); if (!r.ok) throw new Error('Image upload failed (' + r.status + ')'); const o = await r.json(); return { url: o.url }; },
     };
   }
   function localBackend() {
     const KEY = 'lg.libs.v1';
-    const load = () => { const j = LS.get(KEY, null) || {}; setAll({ libraries: j.libraries || [], items: j.items || [] }); };
+    const load = () => { const j = LS.get(KEY, null) || {}; setAll({ libraries: j.libraries || [], items: j.items || [] }); setGuides(LS.get('lg.guides.v1', []) || []); };
     const save = () => { if (!LS.set(KEY, { libraries: [...S.libs.values()], items: [...S.items.values()] })) throw new Error('This browser\'s storage is full. Export the libraries, remove some pictures, and try again.'); };
     load();
     window.addEventListener('storage', e => { if (e.key === KEY) load(); });
@@ -9065,6 +9106,7 @@ const LibStore = (() => {
       delLib: id => change(() => S.libs.delete(id)),
       putItem: it => change(() => S.items.set(it.id, cleanItem(it))),
       delItem: id => change(() => S.items.delete(id)),
+      putGuide: g => { S.guides.set(g.id, g); if (!LS.set('lg.guides.v1', [...S.guides.values()])) throw new Error('This browser\'s storage is full.'); emit(); },
       uploadImage: null, // pictures ride inside the item as data URLs
     };
   }
@@ -9152,11 +9194,18 @@ const LibStore = (() => {
     }
     return { libraries: nl, items: ni };
   }
+  // Brand guidelines: everyone reads them (Claude gets them in its prompts); admins write them.
+  const guide = id => (S.guides.get(id) || {}).text || '';
+  const guides = () => Object.fromEntries([...S.guides.values()].map(g => [g.id, g]));
+  async function putGuide(id, text) {
+    if (!GUIDE.test(id)) throw new Error('Unknown guide'); must(); if (!backend.putGuide) throw new Error('Guides cannot be saved here');
+    const g = cleanGuide({ id, text, updated: Date.now(), by: S.uid || '' }); await backend.putGuide(g); S.guides.set(id, g); emit(); return g;
+  }
   async function people(ids) { if (!backend || !backend.profiles || !ids.length) return {}; try { return await backend.profiles(ids); } catch { return {}; } }
   async function searchPeople(q) { if (!backend || !backend.search) return []; try { return await backend.search(q); } catch { return []; } }
   return {
     init, start, libraries, items, isOn, setOn, role, createLibrary, updateLibrary, deleteLibrary, putItem, updateItem, deleteItem, setAdmins,
-    exportJSON, importJSON, people, searchPeople, assetInfo,
+    exportJSON, importJSON, people, searchPeople, assetInfo, guide, guides, putGuide, GUIDES: ['design', 'layout', 'animation', 'illustration', 'photography', 'content'],
     refresh: () => backend && backend.refresh ? backend.refresh() : null,
     checkKey: k => backend && backend.checkKey ? backend.checkKey(k) : Promise.reject(new Error('No admin key here')),
     on: fn => { listeners.add(fn); return () => listeners.delete(fn); },
@@ -10989,6 +11038,7 @@ Change the canvas with the tools; the person sees each change live and can undo 
     const d = CanvasUI.doc; const sel = CanvasUI.selection(); const kit = env.getKit() || { name: '', colors: [], fonts: {} };
     const lines = [`Canvas "${d.name}": ${d.frames.length} screen${d.frames.length === 1 ? '' : 's'}.`];
     if (Brand.voiceText(kit)) lines.push('When you write or change copy, follow these. ' + Brand.voiceText(kit));
+    { const g = Brand.guidesText(['design', 'layout', 'animation', 'illustration', 'photography'], 3500); if (g) lines.push('When you design, lay out, animate or pick pictures, follow the brand guidelines:\n' + g); }
     if (!sel.frameIds.length) lines.push('Nothing is selected; act on the whole canvas or ask which screen.');
     else {
       lines.push(`Selected: ${sel.frameIds.length} screen${sel.frameIds.length === 1 ? '' : 's'}${sel.blockIds.length ? `, blocks ${sel.blockIds.join(', ')}` : ''}.`);
@@ -11435,6 +11485,8 @@ Layer kinds:
     return asset;
   }
   function renderImages() {
+    const ex = state.assets.images.some(a => a.placeholder); const none = !state.assets.images.length;
+    if ($('clearExamples')) { $('clearExamples').hidden = !ex && !none; $('clearExamples').textContent = ex ? 'Clear examples' : 'Use example pictures'; }
     $('imageList').innerHTML = state.assets.images.map(a => `<div class="thumb" title="${a.name}"><img src="${a.url}" alt=""><button class="x" data-rm="${a.id}" title="Remove">✕</button>${a.placeholder ? '<span class="ph">placeholder</span>' : ''}</div>`).join('');
     const real = state.assets.images.filter(a => !a.placeholder);
     const pal = [...new Set(real.flatMap(a => a.palette))].slice(0, 8);
@@ -11445,6 +11497,12 @@ Layer kinds:
     const b = e.target.closest('[data-rm]'); if (!b) return;
     const i = state.assets.images.findIndex(a => a.id === b.dataset.rm); if (i >= 0) { URL.revokeObjectURL(state.assets.images[i].url); state.assets.images.splice(i, 1); renderImages(); }
   });
+  $('clearExamples').addEventListener('click', async () => {
+    const ph = state.assets.images.filter(a => a.placeholder);
+    if (ph.length) { for (const a of ph) URL.revokeObjectURL(a.url); state.assets.images = state.assets.images.filter(a => !a.placeholder); LS.set('lg.noExamples', true); renderImages(); toast(`Example pictures cleared${state.assets.images.length ? '' : ': layouts are type and color only until you add images'}`); }
+    else { LS.set('lg.noExamples', false); await ensureDemoImages(true); renderImages(); toast('Example pictures are back'); }
+  });
+  $('clearGallery').addEventListener('click', () => { state.layouts = []; state.picks.clear(); renderGallery(); $('readout').innerHTML = ''; if (typeof updateCompare === 'function') updateCompare(); toast('Gallery cleared: Generate to make new layouts'); });
   $('imageFiles').addEventListener('change', async e => {
     const files = [...e.target.files]; if (!files.length) return;
     // Real photos replace the placeholders.
@@ -11453,7 +11511,9 @@ Layer kinds:
     for (const f of files) { try { await addImage(await readAsDataURL(f), f.name); } catch (err) { console.warn(err); } }
     toast(`${files.length} image${files.length > 1 ? 's' : ''} added`); e.target.value = '';
   });
+  // Example pictures fill in until there are real ones; 'Clear examples' removes them for good (until asked back).
   async function ensureDemoImages(force) {
+    if (LS.get('lg.noExamples', false) && !force) return;
     if (!force && state.assets.images.length) return;
     if (state.assets.images.some(a => !a.placeholder)) return;
     for (const a of state.assets.images) URL.revokeObjectURL(a.url);
@@ -11903,7 +11963,7 @@ Layer kinds:
   $('prompt').addEventListener('input', syncClear); syncClear();
   $('promptClear').addEventListener('click', () => { $('prompt').value = ''; state.deckSource = null; LS.set('lg.prompt', ''); syncClear(); $('prompt').focus(); });
   $('aboutClose').addEventListener('click', () => $('about').hidden = true);
-  $('settingsBtn').addEventListener('click', () => $('settings').hidden = false);
+  $('settingsBtn').addEventListener('click', () => { $('settings').hidden = false; renderGuides(); });
   $('settingsClose').addEventListener('click', () => { LS.set('lg.apiKey', $('apiKey').value); LS.set('lg.useClaude', $('useClaude').checked); saveImageGen(); $('settings').hidden = true; });
   // Image generation settings: provider → models, key per provider.
   $('imgProvider').innerHTML += Object.values(ImageGen.PROVIDERS).map(p => `<option value="${p.id}">${p.name}</option>`).join('');
@@ -12176,6 +12236,46 @@ Layer kinds:
     if (state.mode !== 'deck') return; const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
     if (!f || !(/\.pptx$/i.test(f.name) || f.type === GSlides.PPTX)) return; e.preventDefault(); if (!state.busy) generateDeck(($('prompt').value || '').replace(slidesLinkIn($('prompt').value) || '', '').trim(), { file: f });
   });
+  // ---- Brand guidelines (Settings): design.md, layout.md, animation.md, illustration.md, photography.md, content.md.
+  // Everyone can read them; admins (the shared-library admins) edit, import and save them. Claude gets them in its prompts.
+  const GUIDE_NOTE = { design: 'colors, type, logo, shapes, icons, charts', layout: 'grid, margins, hierarchy per slide type, text per slide', animation: 'easing, durations, entrances, builds', illustration: 'illustration and 3D render style', photography: 'subjects, light, color, cropping', content: 'voice, tone, grammar, naming, words to use and avoid' };
+  let guideCur = 'design', guideDirty = false, guidePreview = false;
+  const mdInline = t => escapeHtml(t).replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>').replace(/(^|[^*])\*([^*\s][^*]*)\*/g, '$1<i>$2</i>');
+  function mdToHtml(md) {
+    const out = []; const lines = String(md || '').split('\n'); let list = null, table = null;
+    const close = () => { if (list) { out.push(`</${list}>`); list = null; } if (table) { out.push('</table>'); table = null; } };
+    for (const raw of lines) {
+      const l = raw.replace(/\s+$/, '');
+      if (/^\s*\|.*\|\s*$/.test(l)) { if (/^\s*\|[\s:|-]+\|\s*$/.test(l)) continue; if (!table) { close(); out.push('<table>'); table = 'open'; } out.push('<tr>' + l.trim().slice(1, -1).split('|').map(c => `<td>${mdInline(c.trim())}</td>`).join('') + '</tr>'); continue; }
+      const h = /^(#{1,4})\s+(.*)$/.exec(l); if (h) { close(); out.push(`<h${h[1].length}>${mdInline(h[2])}</h${h[1].length}>`); continue; }
+      const b = /^\s*[-*]\s+(.*)$/.exec(l), n = /^\s*\d+[.)]\s+(.*)$/.exec(l);
+      if (b || n) { const tag = b ? 'ul' : 'ol'; if (list !== tag) { close(); out.push(`<${tag}>`); list = tag; } out.push(`<li>${mdInline((b || n)[1])}</li>`); continue; }
+      if (!l.trim()) { close(); continue; }
+      close(); out.push(`<p>${mdInline(l)}</p>`);
+    }
+    close(); return out.join('');
+  }
+  function renderGuides() {
+    if (typeof LibStore === 'undefined') return;
+    const all = LibStore.guides(); const role = LibStore.role(); const admin = !!role.admin;
+    $('guideTabs').innerHTML = LibStore.GUIDES.map(id => `<button type="button" role="tab" data-guide="${id}" class="${id === guideCur ? 'on' : ''}" aria-selected="${id === guideCur}" title="${GUIDE_NOTE[id]}">${id}.md<span class="dot ${all[id] && all[id].text.trim() ? 'full' : ''}"></span></button>`).join('');
+    const g = all[guideCur];
+    if (!guideDirty) $('guideText').value = g ? g.text : '';
+    $('guideText').readOnly = !admin; $('guideSave').hidden = !admin; $('guideImport').hidden = !admin;
+    $('guideText').placeholder = admin ? `# ${guideCur[0].toUpperCase() + guideCur.slice(1)} guidelines\n\nWrite or import the ${guideCur} rules (${GUIDE_NOTE[guideCur]}).` : 'No guidelines here yet. An admin can add them.';
+    $('guideMeta').textContent = `${GUIDE_NOTE[guideCur]}${g && g.updated ? ` · saved ${new Date(g.updated).toLocaleString()}` : ''}${guideDirty ? ' · not saved' : ''}`;
+    $('guidesWho').textContent = admin ? 'The rules Claude follows when it writes, lays out and animates: one Markdown file each. You can edit them (admin).' : 'The rules Claude follows when it writes, lays out and animates. Only admins can change them.';
+    const show = guidePreview || !admin; $('guidePreview').hidden = !show; $('guideText').hidden = show; $('guideView').textContent = show ? 'Edit' : 'Preview'; $('guideView').hidden = !admin;
+    if (show) $('guidePreview').innerHTML = mdToHtml($('guideText').value) || '<p class="hint">Empty.</p>';
+  }
+  $('guideTabs').addEventListener('click', e => { const b = e.target.closest('[data-guide]'); if (!b) return; if (guideDirty && !confirm('Leave this guide without saving your changes?')) return; guideDirty = false; guideCur = b.dataset.guide; renderGuides(); });
+  $('guideText').addEventListener('input', () => { guideDirty = true; $('guideMeta').textContent = `${GUIDE_NOTE[guideCur]} · not saved`; });
+  $('guideView').addEventListener('click', () => { guidePreview = !guidePreview; renderGuides(); });
+  $('guideSave').addEventListener('click', e => withBusy(e.target, async () => { try { await LibStore.putGuide(guideCur, $('guideText').value); guideDirty = false; renderGuides(); toast(`${guideCur}.md saved`); Stats.track('guide.save', { detail: guideCur }); } catch (err) { toast(err.message || String(err)); } }));
+  $('guideDownload').addEventListener('click', async () => { const blob = new Blob([$('guideText').value], { type: 'text/markdown' }); await Render.download(blob, `${guideCur}.md`); });
+  $('guideFile').addEventListener('change', async e => { const f = e.target.files[0]; e.target.value = ''; if (!f) return; const t = await f.text(); const m = /^(design|layout|animation|illustration|photography|content)\b/i.exec(f.name); if (m) guideCur = m[1].toLowerCase(); $('guideText').value = t; guideDirty = true; guidePreview = false; renderGuides(); toast(`${f.name} loaded into ${guideCur}.md: Save to keep it`); });
+  LibStore.on(() => { if (!$('settings').hidden) renderGuides(); });
+
   // ---- Motion: deck settings, Quick Look (select a slide or poster, press Space), Present, hover previews ----------
   state.motion = { mode: LS.get('lg.motionMode', 'all') || 'all', builds: LS.get('lg.motionBuilds', 'enter') || 'enter' };
   const reduceMotion = () => window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -12481,7 +12581,7 @@ Layer kinds:
     addImageData: (dataUrl, name) => addImage(dataUrl, name),
     updateColors: colors => { state.kit.colors = colors.map(c => ({ name: c.name || c.hex, hex: Color.normalize(c.hex), role: c.role || 'accent' })); renderColors(); persistKit(); },
     resetColors: () => { const preset = Brand.PRESETS[state.kit.presetId]; if (!preset) return false; state.kit.colors = preset.colors.map(c => ({ ...c })); renderColors(); persistKit(); return true; },
-    openSettings: () => { $('settings').hidden = false; $('imgProvider').focus(); },
+    openSettings: () => { $('settings').hidden = false; renderGuides(); $('imgProvider').focus(); },
     download: (blob, name) => Render.download(blob, name),
     renderSVG: (layout, opts) => Render.toSVG(layout, { kit: state.kit, assets: state.assets, showGrid: !!(opts && opts.showGrid) }),
     exportPNG: (layout, scale) => Render.exportPNG(layout, { kit: state.kit, assets: state.assets }, scale || 1),
@@ -12520,7 +12620,7 @@ Layer kinds:
     variations: opts => makeVariations(opts),
     onExternal: name => { toast(`Outside agent: ${name.replace(/_/g, ' ')}`); Stats.track('agent.tool', { detail: name }); },
   });
-  Agent.init({ getKit: () => state.kit, toast, openSettings: () => { $('settings').hidden = false; }, onRun: text => Stats.track('agent.run', { detail: String(text).slice(0, 60) }) });
+  Agent.init({ getKit: () => state.kit, toast, openSettings: () => { $('settings').hidden = false; renderGuides(); }, onRun: text => Stats.track('agent.run', { detail: String(text).slice(0, 60) }) });
 
   // ---- Multiplayer ------------------------------------------------------------------------------------------------
   Sync.init(CanvasUI, {

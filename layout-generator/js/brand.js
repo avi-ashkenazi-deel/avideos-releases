@@ -289,6 +289,14 @@ const Brand = (() => {
   }
 
   // The kit's writing rules as prompt text ('' when the kit has none).
-  function voiceText(kit) { const v = kit && kit.voice; if (!v || !Array.isArray(v.rules) || !v.rules.length) return ''; return `${kit.name} writing rules${v.summary ? ` (${v.summary})` : ''}:\n- ` + v.rules.join('\n- '); }
-  return { voiceText, FONTS, customFonts, fontCss, fontWeights, allFontNames, PRESETS, fromPreset, pairs, parseSvg, logoInner, logoColorFor, logosOf, logoVariant, logoAspectOf, makeDemoImage, serialize, clone };
+  function voiceText(kit) {
+    const v = kit && kit.voice; const rules = v && Array.isArray(v.rules) && v.rules.length ? `${kit.name} writing rules${v.summary ? ` (${v.summary})` : ''}:\n- ` + v.rules.join('\n- ') : '';
+    const guide = guidesText(['content'], 9000); return [rules, guide].filter(Boolean).join('\n');
+  }
+  // The brand's own guideline files (Settings → Brand guidelines), for prompts: each under its file name, trimmed.
+  function guidesText(ids, max = 6000) {
+    if (typeof LibStore === 'undefined' || !LibStore.guide) return '';
+    return ids.map(id => { const t = String(LibStore.guide(id) || '').trim(); return t ? `Brand guidelines, ${id}.md (follow them):\n${t.length > max ? t.slice(0, max) + '\n…' : t}` : ''; }).filter(Boolean).join('\n\n');
+  }
+  return { voiceText, guidesText, FONTS, customFonts, fontCss, fontWeights, allFontNames, PRESETS, fromPreset, pairs, parseSvg, logoInner, logoColorFor, logosOf, logoVariant, logoAspectOf, makeDemoImage, serialize, clone };
 })();
