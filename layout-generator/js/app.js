@@ -390,7 +390,8 @@
     $('seDiagram').hidden = !dg; if (dg) $('seDiagramType').innerHTML = Diagram.TYPES.map(t => `<option value="${t}" ${t === dg.diagram.type ? 'selected' : ''}>${Diagram.LABEL[t]}</option>`).join('');
     const o = l.deckIndex != null && state.outline && state.outline.slides[l.deckIndex];
     $('seTitle').textContent = o ? `Slide ${l.deckIndex + 1} · ${Deck.INTENT_LABEL[o.intent] || o.intent}` : `${l.archetypeLabel} · ${l.format.name}`;
-    renderSlideFields(); drawSlideEdit(l); $('seNote').textContent = ''; $('slideEdit').hidden = false;
+    se.replace = new Set(); se.addNotes = '';
+    renderSlideFields(); drawSlideEdit(l); $('seNote').textContent = ''; seBalanceCheck(); $('slideEdit').hidden = false;
     const first = $('seFields').querySelector('input, textarea'); if (first) first.focus();
   }
   function renderSlideFields() {
@@ -412,23 +413,58 @@
   function slideEditRedraw() {
     const base = { ...se.l, seed: se.seed, type: { ...se.l.type, level: se.level } };
     const orig = (se.l.genIntent && se.l.genIntent.content) || {};
-    const content = {}; for (const [k, v] of Object.entries(se.content)) content[k] = orig[k] && typeof orig[k] === 'object' ? deepMerge(orig[k], v) : v;
+    const content = {}; for (const [k, v] of Object.entries(se.content)) content[k] = orig[k] && typeof orig[k] === 'object' && !se.replace.has(k) ? deepMerge(orig[k], v) : v;
     if (se.diagramType && content.diagram) content.diagram = { ...content.diagram, type: se.diagramType };
     se.merged = content;
     let next = null; try { next = Engine.hydrate(base, content, seEnv(se.l)); } catch (e) { console.warn(e); }
     if (!next) { $('seNote').textContent = 'That does not fit this layout: shorten it, make the text smaller, or rearrange.'; return false; }
     se.next = next; drawSlideEdit(next); $('seNote').textContent = ''; return true;
   }
+  // A text-heavy slide whose one part is far longer than the rest offers to even it out
+  function seSectionsNow() { const orig = (se.l.genIntent && se.l.genIntent.content) || {}; return se.content.sections ? (se.replace.has('sections') ? se.content.sections : deepMerge(orig.sections || [], se.content.sections)) : orig.sections; }
+  function seBalanceCheck() {
+    const secs = se.l.archetype === 'sections' ? seSectionsNow() : null; const lp = secs && DeckDigest.lopsided({ intent: 'sections', sections: secs });
+    $('seBalance').hidden = !lp; if (!lp) return;
+    const t = secs[lp.k].title;
+    $('seBalanceText').textContent = `${t ? `“${t}”` : 'One part'} is about ${Math.max(2, Math.round(lp.words / Math.max(1, lp.others)))}× as long as the others (${lp.words} words), so every part is set smaller.`;
+    $('seBalance').querySelector('[data-se-bal="split"]').hidden = se.l.deckIndex == null || !state.deck || !state.outline;
+  }
+  async function seBalance(how, btn) {
+    if (how === 'claude') {
+      const asker = await deckAsker(); if (!asker) { $('seNote').textContent = 'Claude is not available here (open the page in claude.ai, or add an API key in Settings). Move the rest to a new slide instead, or edit the part by hand.'; return; }
+      const sl = { intent: 'sections', headline: se.content.headline || '', sections: JSON.parse(JSON.stringify(seSectionsNow() || [])) };
+      btn.disabled = true; const label = btn.textContent; btn.textContent = 'Claude is shortening…';
+      try {
+        const n = await DeckDigest.shortenLong([sl], asker.ask, state.kit, 0);
+        if (!n) { $('seNote').textContent = 'Claude did not shorten it this time. Try again, or move the rest to a new slide.'; return; }
+        se.content.sections = sl.sections; se.replace.add('sections'); se.addNotes = [se.addNotes, sl.notes].filter(Boolean).join('\n\n');
+        renderSlideFields(); slideEditRedraw(); seBalanceCheck(); $('seNote').textContent = 'Shortened. The full text goes to the speaker notes when you save.';
+      } catch (e) { $('seNote').textContent = 'Claude could not shorten it: ' + (e && e.message ? e.message : e); }
+      finally { btn.disabled = false; btn.textContent = label; }
+      return;
+    }
+    // split: the outline gets the new slide, and only the two slides involved are drawn again
+    const i = se.l.deckIndex; const o = state.outline.slides[i]; if (!o) return;
+    o.sections = JSON.parse(JSON.stringify(seSectionsNow() || [])); if (se.content.headline) o.headline = se.content.headline;
+    const r = DeckDigest.splitLong(state.outline.slides, i); if (!r.moved) { $('seNote').textContent = 'That part has nothing to move: it is one long sentence. Shorten it instead.'; return; }
+    state.outline.slides = r.slides.map((sl, k) => { sl.section = String(k + 1).padStart(2, '0'); return sl; }); state.outlineEdited = true;
+    btn.disabled = true; btn.textContent = 'Making the new slide…';
+    const env = { outline: state.outline, kit: state.kit, assets: state.assets, format: state.deck.format, baseIntent: { ...state.intent, lockPalette: state.deck.palette, level: state.deck.level }, perSlide: +$('perSlide').value };
+    try { state.deck.slides[i].outline = state.outline.slides[i]; await Deck.reshuffle(state.deck, i, env); await Deck.insertAfter(state.deck, i, state.outline.slides[i + 1], env); state.deck.slides.forEach((row, k) => { row.outline = state.outline.slides[k]; }); }
+    finally { btn.disabled = false; btn.textContent = 'Move the rest to a new slide'; }
+    $('slideEdit').hidden = true; renderOutline(); renderDeck(); Stats.track('slide.split'); toast(`The rest of that part is on a new slide ${i + 2}`);
+  }
   $('seFields').addEventListener('input', e => {
     const t = e.target; const path = t.dataset.se; if (!path) return;
     const val = t.dataset.lines ? t.value.split('\n').map(x => x.trim()).filter(Boolean) : t.value;
     const ks = path.split('.'); let o = se.content; for (let i = 0; i < ks.length - 1; i++) o = o[/^\d+$/.test(ks[i]) ? +ks[i] : ks[i]]; o[ks[ks.length - 1]] = val;
-    clearTimeout(se.timer); se.timer = setTimeout(slideEditRedraw, 160);
+    clearTimeout(se.timer); se.timer = setTimeout(() => { slideEditRedraw(); seBalanceCheck(); }, 160);
   });
   $('slideEdit').addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Escape') $('slideEdit').hidden = true; if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) $('slideEdit').querySelector('[data-se-save]').click(); });
   $('slideEdit').addEventListener('click', async e => {
     const t = e.target;
     if (t === $('slideEdit') || t.closest('[data-se-close]')) { $('slideEdit').hidden = true; return; }
+    const bal = t.closest('[data-se-bal]'); if (bal) { await seBalance(bal.dataset.seBal, bal); return; }
     const sz = t.closest('[data-se-size]'); if (sz) { const prev = se.level; se.level = Math.max(0, Math.min(Engine.H_LEVELS.length - 1, se.level + +sz.dataset.seSize)); if (se.level !== prev && !slideEditRedraw()) { se.level = prev; slideEditRedraw(); $('seNote').textContent = 'That size does not fit: the text stays as it was.'; } return; }
     if (t.closest('[data-se-shuffle]')) { for (let k = 0; k < 12; k++) { se.seed = (Math.random() * 2 ** 32) >>> 0; if (slideEditRedraw()) break; } return; }
     const save = t.closest('[data-se-save]'); const canvas = t.closest('[data-se-canvas]');
@@ -439,7 +475,7 @@
         if (l.deckIndex != null && state.deck) {
           const row = state.deck.slides[l.deckIndex]; const j = row.variations.indexOf(l); if (j >= 0) { row.variations[j] = next; row.pick = j; }
           const o = state.outline && state.outline.slides[l.deckIndex];
-          if (o) { const src = se.merged || se.content; for (const k of ['eyebrow', 'headline', 'subhead', 'body', 'stat', 'quote', 'attribution', 'cta', 'items', 'steps', 'columns', 'bullets', 'sections', 'diagram']) if (k in src) o[k] = JSON.parse(JSON.stringify(src[k])); state.outlineEdited = true; renderOutline(); }
+          if (o) { const src = se.merged || se.content; for (const k of ['eyebrow', 'headline', 'subhead', 'body', 'stat', 'quote', 'attribution', 'cta', 'items', 'steps', 'columns', 'bullets', 'sections', 'diagram']) if (k in src) o[k] = JSON.parse(JSON.stringify(src[k])); if (se.addNotes) o.notes = [o.notes, se.addNotes].filter(Boolean).join('\n\n').slice(0, 4000); state.outlineEdited = true; renderOutline(); }
           renderDeck();
         } else { const j = state.layouts.indexOf(l); if (j >= 0) state.layouts[j] = next; renderGallery(); }
         Stats.track('slide.edit');
@@ -772,11 +808,23 @@
   }
   async function outlineFromDeck(deck) {
     const asker = await deckAsker(); const opts = { keepText: $('keepText').checked };
-    if (!asker) return DeckDigest.rules(deck, opts);
+    if (!asker) return balanceOutline(DeckDigest.rules(deck, opts), null);
     $('generateBtn').textContent = 'Claude is reading the deck…';
     const o = await DeckDigest.withClaude(deck, state.kit, asker.ask, (d, n) => { $('generateBtn').textContent = `Claude is reading the deck… ${d}/${n}`; }, opts);
     if (o.by === 'rules') toast('Claude did not answer, so rules sorted the slides. Generate again to retry, or edit the outline.');
     else if (o.failed) toast(`Claude sorted most slides; ${o.failed} part${o.failed > 1 ? 's were' : ' was'} sorted by rules.`);
+    return balanceOutline(o, o.by === 'rules' ? null : asker);
+  }
+  // A slide where one part is far longer than the others: Claude shortens that part, or its overflow gets a slide of its own.
+  async function balanceOutline(o, asker) {
+    const mode = $('longPart').value; if (mode === 'keep' || !o.slides.some(sl => DeckDigest.lopsided(sl))) return o;
+    if (mode === 'claude' && asker) {
+      $('generateBtn').textContent = 'Claude is evening out long parts…';
+      try { const n = await DeckDigest.shortenLong(o.slides, asker.ask, state.kit); if (n) o.balanced = { by: 'claude', n }; } catch (e) { console.warn(e); }
+    }
+    if (o.slides.some(sl => DeckDigest.lopsided(sl))) {
+      const r = DeckDigest.splitLong(o.slides); if (r.moved) { o.slides = r.slides.map((sl, k) => ({ ...sl, section: String(k + 1).padStart(2, '0') })); o.balanced = { by: (o.balanced ? 'both' : 'split'), n: r.moved }; if (mode === 'claude') toast(`${r.moved} long part${r.moved > 1 ? 's' : ''} moved on to a new slide (Claude was not available to shorten ${r.moved > 1 ? 'them' : 'it'}).`); }
+    }
     return o;
   }
 
@@ -846,6 +894,8 @@
   // Keep long slides whole, or condense them: remembered, and a deck in play is sorted again
   $('keepText').checked = LS.get('lg.keepText', true) !== false;
   $('keepText').addEventListener('change', () => { LS.set('lg.keepText', $('keepText').checked); if (state.deckSource && state.outline && state.outline.source === 'deck' && !state.busy) { state.outlineEdited = false; generateDeck($('prompt').value, { rebuild: true }); } });
+  $('longPart').value = LS.get('lg.longPart', 'claude') || 'claude';
+  $('longPart').addEventListener('change', () => { LS.set('lg.longPart', $('longPart').value); if (state.deckSource && state.outline && state.outline.source === 'deck' && !state.busy) { state.outlineEdited = false; generateDeck($('prompt').value, { rebuild: true }); } });
   // A .pptx chosen in the outline panel or dropped anywhere in Deck mode
   $('outlineFromDeck').addEventListener('click', () => $('deckFile').click());
   $('deckFile').addEventListener('change', e => { const f = e.target.files[0]; e.target.value = ''; if (f && !state.busy) generateDeck(($('prompt').value || '').replace(slidesLinkIn($('prompt').value) || '', '').trim(), { file: f }); });
@@ -855,9 +905,10 @@
     if (!f || !(/\.pptx$/i.test(f.name) || f.type === GSlides.PPTX)) return; e.preventDefault(); if (!state.busy) generateDeck(($('prompt').value || '').replace(slidesLinkIn($('prompt').value) || '', '').trim(), { file: f });
   });
   $('deckShuffleAll').addEventListener('click', () => generateDeck($('prompt').value));
+  const deckNotes = L => { const o = L.deckIndex != null && state.outline && state.outline.slides[L.deckIndex]; return o && o.notes ? o.notes : ''; };
   $('deckPptxBtn').addEventListener('click', e => withBusy(e.target, async () => {
     const picks = Deck.picks(state.deck); if (!picks.length) return;
-    const blob = await ExportPptx.buildDeck(picks, { kit: state.kit, assets: state.assets });
+    const blob = await ExportPptx.buildDeck(picks, { kit: state.kit, assets: state.assets, notes: deckNotes });
     if (await Render.download(blob, `${slug(state.outline.title || state.kit.name)}-deck-${picks.length}-slides.pptx`)) toast(`Deck saved: ${picks.length} editable slides`);
   }));
   $('deckPngBtn').addEventListener('click', e => withBusy(e.target, async () => {

@@ -303,5 +303,55 @@ ${src}`;
   }
   // Tolerant JSON out of a reply: the whole text, else from the first { to the last }.
   function parseJSON(text) { try { return JSON.parse(text); } catch { } const a = text.indexOf('{'), b = text.lastIndexOf('}'); if (a >= 0 && b > a) return JSON.parse(text.slice(a, b + 1)); throw new Error('Claude did not reply with JSON'); }
-  return { fromText, fromPptx, prune, rules, withClaude, shorten, parseJSON, _promptFor: promptFor };
+  // ---- Balance: one part of a slide far longer than the others ------------------------------------------------------
+  // A text-heavy slide reads as a set; one part three times the length of the rest drags every part's type down with
+  // it. That part is either shortened by Claude (the full text goes to the speaker notes) or split: it keeps its lead
+  // on the slide and the rest moves to a slide of its own right after.
+  const partWords = x => words([x.title, x.text, ...(x.bullets || [])].join(' '));
+  function lopsided(sl) {
+    if (!sl || sl.intent !== 'sections' || !Array.isArray(sl.sections) || sl.sections.length < 2) return null;
+    const w = sl.sections.map(partWords); let k = 0; w.forEach((x, i) => { if (x > w[k]) k = i; });
+    const rest = w.filter((_, i) => i !== k).sort((a, b) => a - b); const med = rest[Math.floor(rest.length / 2)] || 0, top = rest[rest.length - 1] || 0;
+    if (w[k] < 70 || w[k] < Math.max(med * 2, med + 50)) return null;
+    return { k, words: w[k], others: med, target: Math.max(30, Math.round(Math.max(med * 1.25, top))) };
+  }
+  const partText = x => [x.text, ...(x.bullets || []).map(b => '- ' + b)].filter(Boolean).join('\n');
+  async function shortenLong(slides, ask, kit, only) {
+    const jobs = slides.map((sl, i) => ({ i, sl, lp: (only == null || only === i) && lopsided(sl) })).filter(x => x.lp);
+    if (!jobs.length) return 0;
+    const voice = typeof Brand !== 'undefined' && kit ? Brand.voiceText(kit) : '';
+    const prompt = `Each slide below has one part far longer than its others, so it crowds the slide. Rewrite only that part to about the given number of words: keep its facts, numbers, names and terms and the points that matter most; merge or drop the rest. Keep its form: bullets stay bullets (one sentence each), a paragraph stays a paragraph. Never invent anything.
+${voice ? voice + '\n' : ''}
+` + jobs.map(j => `### Slide ${j.i + 1}: ${j.sl.headline}\nPart: ${j.sl.sections[j.lp.k].title || '(untitled)'} (now ${j.lp.words} words, the other parts about ${j.lp.others}; aim for ${j.lp.target})\n${partText(j.sl.sections[j.lp.k])}`).join('\n\n') + `\n\nReply with only JSON: {"parts":[{"slide":1,"text":"","bullets":["…"]}]}`;
+    const res = await ask(prompt); const parts = (res && Array.isArray(res.parts)) ? res.parts : [];
+    let done = 0;
+    for (const j of jobs) {
+      const p = parts.find(x => x && +x.slide === j.i + 1); if (!p) continue;
+      const sec = j.sl.sections[j.lp.k]; const before = partText(sec);
+      const next = { ...sec, text: sp(p.text), bullets: (Array.isArray(p.bullets) ? p.bullets : []).map(sp).filter(Boolean).slice(0, 10) };
+      if (!next.text && !next.bullets.length) continue;
+      if (partWords(next) >= j.lp.words * 0.9) continue; // not shorter: leave it as written
+      j.sl.sections[j.lp.k] = next; done++;
+      j.sl.notes = [j.sl.notes, `${sec.title ? `“${sec.title}”` : 'The long part'} in full:\n${before}`].filter(Boolean).join('\n\n').slice(0, 4000);
+    }
+    return done;
+  }
+  // The long part keeps its first points (about as much as the others hold) and the rest goes to a new slide after it,
+  // set in two columns under the part's own title. Nothing is cut.
+  function splitLong(slides, only) {
+    const out = []; let moved = 0;
+    slides.forEach((sl, i) => {
+      out.push(sl); const lp = (only == null || only === i) && lopsided(sl); if (!lp) return;
+      const sec = sl.sections[lp.k]; const units = sec.bullets.length >= 2 ? sec.bullets.slice() : (sec.text.match(/[^.!?]+[.!?]+(\s|$)|[^.!?]+$/g) || [sec.text]).map(sp).filter(Boolean);
+      if (units.length < 2) return;
+      let keep = 0, w = words(sec.title); while (keep < units.length - 1 && (keep === 0 || w + words(units[keep]) <= lp.target)) w += words(units[keep++]);
+      const rest = units.slice(keep); if (!rest.length) return;
+      sl.sections[lp.k] = sec.bullets.length >= 2 ? { ...sec, bullets: [...units.slice(0, keep), 'More on the next slide'] } : { ...sec, text: units.slice(0, keep).join(' ') + ' (continued on the next slide)' };
+      const h = Math.ceil(rest.length / 2); const cols = rest.length >= 4 ? [rest.slice(0, h), rest.slice(h)] : [rest];
+      out.push({ ...JSON.parse(JSON.stringify(sl)), intent: 'sections', eyebrow: cut(sl.headline, 60), headline: sec.title ? `${sec.title}, continued` : `${sl.headline}, continued`, subhead: '', notes: '', sections: cols.map(c => sec.bullets.length >= 2 ? { title: '', text: '', bullets: c } : { title: '', text: c.join(' '), bullets: [] }), continued: true });
+      moved++;
+    });
+    return { slides: out, moved };
+  }
+  return { fromText, fromPptx, prune, rules, withClaude, shorten, parseJSON, lopsided, shortenLong, splitLong, _promptFor: promptFor };
 })();

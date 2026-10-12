@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Layout Engine</title>
-<meta name="description" content="Structured randomization for brand layouts: give it a prompt and your brand assets, get 180 on-grid variations to scan and compare.">
+<title>Dugma</title>
+<meta name="description" content="Dugma: on-brand slides, decks and screens from a brief and your brand assets, as many on-grid variations as you want to scan and compare.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,300..800&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Fraunces:opsz,wght@9..144,300..900&family=Manrope:wght@400;500;700;800&family=Schibsted+Grotesk:wght@400;500;700;900&family=Instrument+Serif:ital@0;1&display=swap">
@@ -16,8 +16,7 @@
   <header class="topbar">
     <div class="brandmark">
       <span class="dot"></span>
-      <span class="name">Layout Engine</span>
-      <span class="tag">structured randomization</span>
+      <span class="name">Dugma</span>
     </div>
     <form id="promptForm" class="promptbar" autocomplete="off">
       <div class="seg" id="modeSeg" role="group" aria-label="Mode">
@@ -95,6 +94,8 @@
       <p class="hint">One row per slide. Edit anything, then Generate again. Details take one item per line: <code>Title — text</code> for cards and steps, two blocks split by <code>---</code> for a comparison, quote then attribution for a quote.</p>
       <p class="hint"><b>From a deck:</b> paste a Google Slides link as the brief, or use a .pptx (or drop it here): every slide is read and rebuilt in the brand.</p>
       <label class="check" title="Off: long slides are condensed (the cut detail goes to speaker notes)"><input id="keepText" type="checkbox" checked> Keep text-heavy slides whole</label>
+      <label class="inline-field" title="A slide where one part is far longer than its others: that part is shortened (the full text goes to the speaker notes), or its overflow moves to a slide of its own">When one part is much longer
+        <select id="longPart" class="select"><option value="claude">Shorten it with Claude</option><option value="split">Move the rest to a new slide</option><option value="keep">Leave it</option></select></label>
       <div id="outlineList" class="outline"></div>
       <div class="row">
         <button id="outlineAdd" class="btn small" type="button">Add slide</button>
@@ -340,6 +341,9 @@
           <button class="btn small" data-se-shuffle type="button" title="The same kind of layout, arranged differently">Rearrange</button>
           <label class="inline" id="seDiagram" hidden>Diagram <select id="seDiagramType" class="select"></select></label>
         </div>
+        <div class="se-balance" id="seBalance" hidden><span id="seBalanceText"></span>
+          <button class="btn small" data-se-bal="claude" type="button" title="Claude rewrites just that part to about the others' length; the full text goes to the speaker notes">Shorten it with Claude</button>
+          <button class="btn small" data-se-bal="split" type="button" title="Its first points stay; the rest moves to a new slide right after this one">Move the rest to a new slide</button></div>
         <div class="se-fields" id="seFields"></div>
         <p class="hint" id="seNote" aria-live="polite"></p>
         <div class="detail-actions">

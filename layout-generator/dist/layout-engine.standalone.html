@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Layout Engine</title>
-<meta name="description" content="Structured randomization for brand layouts: give it a prompt and your brand assets, get 180 on-grid variations to scan and compare.">
+<title>Dugma</title>
+<meta name="description" content="Dugma: on-brand slides, decks and screens from a brief and your brand assets, as many on-grid variations as you want to scan and compare.">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,300..800&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Fraunces:opsz,wght@9..144,300..900&family=Manrope:wght@400;500;700;800&family=Schibsted+Grotesk:wght@400;500;700;900&family=Instrument+Serif:ital@0;1&display=swap">
 <style>
 /* Layout concept: a dark instrument panel. Left rail holds the rules (brand kit, content, grid),
@@ -30,8 +30,10 @@
   --r-lg: 12px;
   --side: 340px;
   /* surfaces the light theme redefines */
-  --accent-soft: var(--accent-soft);
-  --accent-faint: var(--accent-faint);
+  --accent-soft: rgba(216,201,163,.12);
+  --accent-faint: rgba(216,201,163,.06);
+  --cta: #ad1f37;          /* calls to action: dark red */
+  --cta-ink: #ffffff;
   --accent-line: rgba(216,201,163,.35);
   --checker-a: #20202a; --checker-b: #191921;
   --stage: #121216;
@@ -48,7 +50,7 @@
   --bg: #f5f4f7; --bg-grid: #eceaf0; --panel: #ffffff; --panel-2: #f2f1f5; --line: #e4e2ea; --line-2: #d3d1db;
   --fg: #17161c; --fg-2: #4d4b58; --fg-3: #7d7b89; --accent: #7a5d1f; --accent-ink: #ffffff;
   --good: #1f8a52; --warn: #a3650f; --danger: #c43c3c;
-  --accent-soft: rgba(122,93,31,.12); --accent-faint: rgba(122,93,31,.06); --accent-line: rgba(122,93,31,.35);
+  --accent-soft: rgba(122,93,31,.12); --accent-faint: rgba(122,93,31,.06); --accent-line: rgba(122,93,31,.35); --cta: #8e1528; --cta-ink: #ffffff;
   --checker-a: #e9e7ee; --checker-b: #f4f3f7; --stage: #e8e7ed; --topbar: rgba(245,244,247,.88);
   --overlay: rgba(23,22,28,.35); --shadow: rgba(23,22,40,.16); --shadow-strong: rgba(23,22,40,.22); --chip-ring: rgba(0,0,0,.14); --live: #0e8f6a;
   color-scheme: light;
@@ -57,7 +59,7 @@
   --bg: #f5f4f7; --bg-grid: #eceaf0; --panel: #ffffff; --panel-2: #f2f1f5; --line: #e4e2ea; --line-2: #d3d1db;
   --fg: #17161c; --fg-2: #4d4b58; --fg-3: #7d7b89; --accent: #7a5d1f; --accent-ink: #ffffff;
   --good: #1f8a52; --warn: #a3650f; --danger: #c43c3c;
-  --accent-soft: rgba(122,93,31,.12); --accent-faint: rgba(122,93,31,.06); --accent-line: rgba(122,93,31,.35);
+  --accent-soft: rgba(122,93,31,.12); --accent-faint: rgba(122,93,31,.06); --accent-line: rgba(122,93,31,.35); --cta: #8e1528; --cta-ink: #ffffff;
   --checker-a: #e9e7ee; --checker-b: #f4f3f7; --stage: #e8e7ed; --topbar: rgba(245,244,247,.88);
   --overlay: rgba(23,22,28,.35); --shadow: rgba(23,22,40,.16); --shadow-strong: rgba(23,22,40,.22); --chip-ring: rgba(0,0,0,.14); --live: #0e8f6a;
   color-scheme: light;
@@ -126,8 +128,8 @@ p { margin: 0 0 .75em; }
 .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .btn:disabled { opacity: .45; cursor: default; }
 .btn:disabled:hover { border-color: var(--line-2); background: var(--panel-2); transform: none; }
-.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
-.btn.primary:hover { filter: brightness(1.08); background: var(--accent); color: var(--accent-ink); }
+.btn.primary { background: var(--cta); color: var(--cta-ink); border-color: var(--cta); font-weight: 600; }
+.btn.primary:hover { filter: brightness(1.12); background: var(--cta); color: var(--cta-ink); }
 .btn.primary:active { filter: brightness(.95); }
 .btn.ghost { background: transparent; border-color: transparent; color: var(--fg-2); }
 .btn.ghost:hover { color: var(--fg); border-color: var(--line-2); background: var(--panel-2); }
@@ -701,6 +703,10 @@ input[disabled] { opacity: .5; cursor: not-allowed; }
 /* slide editor */
 .slide-edit .detail-side { display: flex; flex-direction: column; gap: 10px; }
 .se-tools { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.se-balance { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 8px 10px; border-radius: 8px; background: var(--accent-soft); font-size: 12px; color: var(--fg); }
+.se-balance > span { flex: 1 1 100%; }
+.inline-field { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12.5px; color: var(--fg-2); margin: 6px 0; }
+.inline-field .select { max-width: 60%; }
 .se-fields { flex: 1; overflow: auto; display: grid; gap: 10px; padding-right: 4px; min-height: 0; align-content: start; }
 .se-fields label { display: block; font-size: 11.5px; color: var(--fg-3); margin-bottom: 3px; text-transform: uppercase; letter-spacing: .04em; }
 .se-fields .input { width: 100%; }
@@ -720,8 +726,7 @@ input[disabled] { opacity: .5; cursor: not-allowed; }
   <header class="topbar">
     <div class="brandmark">
       <span class="dot"></span>
-      <span class="name">Layout Engine</span>
-      <span class="tag">structured randomization</span>
+      <span class="name">Dugma</span>
     </div>
     <form id="promptForm" class="promptbar" autocomplete="off">
       <div class="seg" id="modeSeg" role="group" aria-label="Mode">
@@ -799,6 +804,8 @@ input[disabled] { opacity: .5; cursor: not-allowed; }
       <p class="hint">One row per slide. Edit anything, then Generate again. Details take one item per line: <code>Title — text</code> for cards and steps, two blocks split by <code>---</code> for a comparison, quote then attribution for a quote.</p>
       <p class="hint"><b>From a deck:</b> paste a Google Slides link as the brief, or use a .pptx (or drop it here): every slide is read and rebuilt in the brand.</p>
       <label class="check" title="Off: long slides are condensed (the cut detail goes to speaker notes)"><input id="keepText" type="checkbox" checked> Keep text-heavy slides whole</label>
+      <label class="inline-field" title="A slide where one part is far longer than its others: that part is shortened (the full text goes to the speaker notes), or its overflow moves to a slide of its own">When one part is much longer
+        <select id="longPart" class="select"><option value="claude">Shorten it with Claude</option><option value="split">Move the rest to a new slide</option><option value="keep">Leave it</option></select></label>
       <div id="outlineList" class="outline"></div>
       <div class="row">
         <button id="outlineAdd" class="btn small" type="button">Add slide</button>
@@ -1044,6 +1051,9 @@ input[disabled] { opacity: .5; cursor: not-allowed; }
           <button class="btn small" data-se-shuffle type="button" title="The same kind of layout, arranged differently">Rearrange</button>
           <label class="inline" id="seDiagram" hidden>Diagram <select id="seDiagramType" class="select"></select></label>
         </div>
+        <div class="se-balance" id="seBalance" hidden><span id="seBalanceText"></span>
+          <button class="btn small" data-se-bal="claude" type="button" title="Claude rewrites just that part to about the others' length; the full text goes to the speaker notes">Shorten it with Claude</button>
+          <button class="btn small" data-se-bal="split" type="button" title="Its first points stay; the rest moves to a new slide right after this one">Move the rest to a new slide</button></div>
         <div class="se-fields" id="seFields"></div>
         <p class="hint" id="seNote" aria-live="polite"></p>
         <div class="detail-actions">
@@ -3358,7 +3368,9 @@ const ExportPptx = (() => {
     for (const L of layouts) {
       const slide = pptx.addSlide();
       await addLayoutSlide(pptx, slide, L, opts);
-      slide.addNotes(`${L.archetypeLabel} · ${L.format.name} · seed ${L.seed} · ${L.id}`);
+      // a deck's speaker notes (detail cut from the slide, a long part in full); otherwise where the layout came from
+      const notes = opts.notes && opts.notes(L);
+      slide.addNotes(notes ? String(notes) : `${L.archetypeLabel} · ${L.format.name} · seed ${L.seed} · ${L.id}`);
     }
     return pptx.write({ outputType: 'blob' });
   }
@@ -3876,11 +3888,18 @@ Rules: first slide is a cover, last is a closing. 6 to 10 slides unless the brie
     const res = await generate({ ...env, outline: one, seedBase: (Math.random() * 2 ** 32) >>> 0, baseIntent: { ...env.baseIntent }, perSlide: env.perSlide });
     // keep the deck's palette and level: regenerate with the lock
     const s = res.slides[0];
-    deck.slides[index] = { ...s, index };
+    deck.slides[index] = { ...s, index }; reindex(deck);
     return deck;
   }
+  // Rows and their layouts know their place in the deck (after a slide is added, or one row regenerated alone).
+  function reindex(deck) { deck.slides.forEach((s, k) => { s.index = k; for (const L of s.variations) L.deckIndex = k; }); return deck; }
+  // A new slide after `index`, generated in the deck's palette and type level.
+  async function insertAfter(deck, index, outlineSlide, env) {
+    deck.slides.splice(index + 1, 0, { index: index + 1, outline: outlineSlide, variations: [], pick: -1 }); reindex(deck);
+    return reshuffle(deck, index + 1, env);
+  }
   function picks(deck) { return deck.slides.map(s => s.pick >= 0 ? s.variations[s.pick] : null).filter(Boolean); }
-  return { INTENT_LABEL, outlineFromBrief, outlineWithClaude, OUTLINE_SCHEMA, generate, reshuffle, picks, slideFromTitle };
+  return { INTENT_LABEL, outlineFromBrief, outlineWithClaude, OUTLINE_SCHEMA, generate, reshuffle, insertAfter, reindex, picks, slideFromTitle };
 })();
 
 /* js/imagegen.js */
@@ -5208,7 +5227,57 @@ ${src}`;
   }
   // Tolerant JSON out of a reply: the whole text, else from the first { to the last }.
   function parseJSON(text) { try { return JSON.parse(text); } catch { } const a = text.indexOf('{'), b = text.lastIndexOf('}'); if (a >= 0 && b > a) return JSON.parse(text.slice(a, b + 1)); throw new Error('Claude did not reply with JSON'); }
-  return { fromText, fromPptx, prune, rules, withClaude, shorten, parseJSON, _promptFor: promptFor };
+  // ---- Balance: one part of a slide far longer than the others ------------------------------------------------------
+  // A text-heavy slide reads as a set; one part three times the length of the rest drags every part's type down with
+  // it. That part is either shortened by Claude (the full text goes to the speaker notes) or split: it keeps its lead
+  // on the slide and the rest moves to a slide of its own right after.
+  const partWords = x => words([x.title, x.text, ...(x.bullets || [])].join(' '));
+  function lopsided(sl) {
+    if (!sl || sl.intent !== 'sections' || !Array.isArray(sl.sections) || sl.sections.length < 2) return null;
+    const w = sl.sections.map(partWords); let k = 0; w.forEach((x, i) => { if (x > w[k]) k = i; });
+    const rest = w.filter((_, i) => i !== k).sort((a, b) => a - b); const med = rest[Math.floor(rest.length / 2)] || 0, top = rest[rest.length - 1] || 0;
+    if (w[k] < 70 || w[k] < Math.max(med * 2, med + 50)) return null;
+    return { k, words: w[k], others: med, target: Math.max(30, Math.round(Math.max(med * 1.25, top))) };
+  }
+  const partText = x => [x.text, ...(x.bullets || []).map(b => '- ' + b)].filter(Boolean).join('\n');
+  async function shortenLong(slides, ask, kit, only) {
+    const jobs = slides.map((sl, i) => ({ i, sl, lp: (only == null || only === i) && lopsided(sl) })).filter(x => x.lp);
+    if (!jobs.length) return 0;
+    const voice = typeof Brand !== 'undefined' && kit ? Brand.voiceText(kit) : '';
+    const prompt = `Each slide below has one part far longer than its others, so it crowds the slide. Rewrite only that part to about the given number of words: keep its facts, numbers, names and terms and the points that matter most; merge or drop the rest. Keep its form: bullets stay bullets (one sentence each), a paragraph stays a paragraph. Never invent anything.
+${voice ? voice + '\n' : ''}
+` + jobs.map(j => `### Slide ${j.i + 1}: ${j.sl.headline}\nPart: ${j.sl.sections[j.lp.k].title || '(untitled)'} (now ${j.lp.words} words, the other parts about ${j.lp.others}; aim for ${j.lp.target})\n${partText(j.sl.sections[j.lp.k])}`).join('\n\n') + `\n\nReply with only JSON: {"parts":[{"slide":1,"text":"","bullets":["…"]}]}`;
+    const res = await ask(prompt); const parts = (res && Array.isArray(res.parts)) ? res.parts : [];
+    let done = 0;
+    for (const j of jobs) {
+      const p = parts.find(x => x && +x.slide === j.i + 1); if (!p) continue;
+      const sec = j.sl.sections[j.lp.k]; const before = partText(sec);
+      const next = { ...sec, text: sp(p.text), bullets: (Array.isArray(p.bullets) ? p.bullets : []).map(sp).filter(Boolean).slice(0, 10) };
+      if (!next.text && !next.bullets.length) continue;
+      if (partWords(next) >= j.lp.words * 0.9) continue; // not shorter: leave it as written
+      j.sl.sections[j.lp.k] = next; done++;
+      j.sl.notes = [j.sl.notes, `${sec.title ? `“${sec.title}”` : 'The long part'} in full:\n${before}`].filter(Boolean).join('\n\n').slice(0, 4000);
+    }
+    return done;
+  }
+  // The long part keeps its first points (about as much as the others hold) and the rest goes to a new slide after it,
+  // set in two columns under the part's own title. Nothing is cut.
+  function splitLong(slides, only) {
+    const out = []; let moved = 0;
+    slides.forEach((sl, i) => {
+      out.push(sl); const lp = (only == null || only === i) && lopsided(sl); if (!lp) return;
+      const sec = sl.sections[lp.k]; const units = sec.bullets.length >= 2 ? sec.bullets.slice() : (sec.text.match(/[^.!?]+[.!?]+(\s|$)|[^.!?]+$/g) || [sec.text]).map(sp).filter(Boolean);
+      if (units.length < 2) return;
+      let keep = 0, w = words(sec.title); while (keep < units.length - 1 && (keep === 0 || w + words(units[keep]) <= lp.target)) w += words(units[keep++]);
+      const rest = units.slice(keep); if (!rest.length) return;
+      sl.sections[lp.k] = sec.bullets.length >= 2 ? { ...sec, bullets: [...units.slice(0, keep), 'More on the next slide'] } : { ...sec, text: units.slice(0, keep).join(' ') + ' (continued on the next slide)' };
+      const h = Math.ceil(rest.length / 2); const cols = rest.length >= 4 ? [rest.slice(0, h), rest.slice(h)] : [rest];
+      out.push({ ...JSON.parse(JSON.stringify(sl)), intent: 'sections', eyebrow: cut(sl.headline, 60), headline: sec.title ? `${sec.title}, continued` : `${sl.headline}, continued`, subhead: '', notes: '', sections: cols.map(c => sec.bullets.length >= 2 ? { title: '', text: '', bullets: c } : { title: '', text: c.join(' '), bullets: [] }), continued: true });
+      moved++;
+    });
+    return { slides: out, moved };
+  }
+  return { fromText, fromPptx, prune, rules, withClaude, shorten, parseJSON, lopsided, shortenLong, splitLong, _promptFor: promptFor };
 })();
 
 /* js/diagram.js */
@@ -5750,7 +5819,7 @@ const WebImport = (() => {
       let host = document.getElementById('__lg_capture_panel'); if (host) host.remove();
       host = document.createElement('div'); host.id = '__lg_capture_panel'; host.style.cssText = 'position:fixed;top:16px;right:16px;z-index:2147483647;';
       const root = host.attachShadow ? host.attachShadow({ mode: 'open' }) : host;
-      root.innerHTML = `<style>.p{font:13px/1.45 system-ui,-apple-system,sans-serif;background:#14141a;color:#ecebf0;border:1px solid #33333e;border-radius:10px;padding:14px 16px;width:300px;box-shadow:0 12px 40px rgba(0,0,0,.4)}b{color:#d8c9a3}button{font:600 13px system-ui,sans-serif;border:0;border-radius:6px;padding:8px 12px;cursor:pointer;margin:10px 6px 0 0}.a{background:#d8c9a3;color:#14141a}.g{background:#26262f;color:#ecebf0}.s{color:#a9a8b4;font-size:12px;margin-top:6px}</style><div class="p"><div><b>Layout Engine</b> · capture</div><div class="m">${msg}</div><div class="s" id="s"></div><div>${json ? '<button class="a" id="c">Copy capture</button><button class="g" id="d">Download</button>' : ''}<button class="g" id="x">Close</button></div></div>`;
+      root.innerHTML = `<style>.p{font:13px/1.45 system-ui,-apple-system,sans-serif;background:#14141a;color:#ecebf0;border:1px solid #33333e;border-radius:10px;padding:14px 16px;width:300px;box-shadow:0 12px 40px rgba(0,0,0,.4)}b{color:#d8c9a3}button{font:600 13px system-ui,sans-serif;border:0;border-radius:6px;padding:8px 12px;cursor:pointer;margin:10px 6px 0 0}.a{background:#d8c9a3;color:#14141a}.g{background:#26262f;color:#ecebf0}.s{color:#a9a8b4;font-size:12px;margin-top:6px}</style><div class="p"><div><b>Dugma</b> · capture</div><div class="m">${msg}</div><div class="s" id="s"></div><div>${json ? '<button class="a" id="c">Copy capture</button><button class="g" id="d">Download</button>' : ''}<button class="g" id="x">Close</button></div></div>`;
       document.documentElement.appendChild(host);
       const $ = id => root.querySelector('#' + id);
       $('x').onclick = () => host.remove();
@@ -9194,7 +9263,7 @@ const Library = (() => {
         <p class="hint">Admins also need <b>Editor</b> access to this page (claude.ai → Share). The page only accepts library changes from Editors, so people who are not on the list cannot change libraries, even by other means.</p>` : ''}`;
     } else if (mode === 'server') {
       admins = `<h4>Admins</h4>${LibStore._state.keyRequired ? (role.admin ? '<p class="hint">Library editing is unlocked in this browser.</p>' : `<p class="hint">This server limits library editing to people with the admin key.</p><div class="cv-row"><input type="password" class="input grow" data-lib-key placeholder="Admin key"><button type="button" class="btn small" data-lib-unlock>Unlock</button></div>`) : '<p class="hint">Anyone using this server can edit libraries. To limit it, start the server with LG_ADMIN_KEY=… and share the key with your admins.</p>'}`;
-    } else admins = '<h4>Sharing</h4><p class="hint">Libraries live in this browser. Export one and import it elsewhere, or open the page in claude.ai or from the Layout Engine server to share them with everyone.</p>';
+    } else admins = '<h4>Sharing</h4><p class="hint">Libraries live in this browser. Export one and import it elsewhere, or open the page in claude.ai or from the Dugma server to share them with everyone.</p>';
     body.innerHTML = `<div class="libs-list">${srcs.map(row).join('')}</div>
       ${role.admin ? `<div class="cv-row libs-new"><input type="text" class="input grow" data-new-lib placeholder="New library, e.g. Sales" maxlength="60"><button type="button" class="btn small primary" data-create-lib>Create</button></div>` : ''}
       ${admins}
@@ -10485,7 +10554,7 @@ const Agent = (() => {
   let env = null, sample = null, sampleAny = null, sampleTools = 0, busy = false, ctl = null, stopped = false;
   const turns = [];     // text history for claude.ai sample calls
   const apiTurns = [];  // text history for API calls
-  const SYSTEM = `You are the design agent inside Layout Engine, a canvas for brand layouts. The canvas holds screens (frames) made of blocks: text, body text, buttons, images, rectangles (field), shapes, vectors, icons and the logo. Block boxes are pixels from the frame's top left.
+  const SYSTEM = `You are the design agent inside Dugma, a canvas for brand layouts. The canvas holds screens (frames) made of blocks: text, body text, buttons, images, rectangles (field), shapes, vectors, icons and the logo. Block boxes are pixels from the frame's top left.
 
 Change the canvas with the tools; the person sees each change live and can undo your whole run in one step. Work on the selected screens unless they say otherwise. Stay on brand: palette colors (by name or hex), brand fonts, sentence-case headlines, no exclamation marks, no invented facts or numbers. Prefer the broadest tool that does the job: recolor_frames, apply_look, replace_text, make_variations and duplicate_frames before editing blocks one by one. Boxes can hold blocks (parent); a box or the screen with auto layout stacks its children like Figma (set_auto_layout, wrap_in_stack, size_w/size_h fixed|hug|fill). Approved pieces (logos, cards, device frames, design-system code components) come from list_components and insert_component; prefer them over drawing your own, and give code components props rather than restyling their blocks. Keep text inside its box: when copy grows, widen the box or lower the size. When you are done, say in one or two short sentences what you changed.`;
 
@@ -11148,7 +11217,8 @@ Layer kinds:
     $('seDiagram').hidden = !dg; if (dg) $('seDiagramType').innerHTML = Diagram.TYPES.map(t => `<option value="${t}" ${t === dg.diagram.type ? 'selected' : ''}>${Diagram.LABEL[t]}</option>`).join('');
     const o = l.deckIndex != null && state.outline && state.outline.slides[l.deckIndex];
     $('seTitle').textContent = o ? `Slide ${l.deckIndex + 1} · ${Deck.INTENT_LABEL[o.intent] || o.intent}` : `${l.archetypeLabel} · ${l.format.name}`;
-    renderSlideFields(); drawSlideEdit(l); $('seNote').textContent = ''; $('slideEdit').hidden = false;
+    se.replace = new Set(); se.addNotes = '';
+    renderSlideFields(); drawSlideEdit(l); $('seNote').textContent = ''; seBalanceCheck(); $('slideEdit').hidden = false;
     const first = $('seFields').querySelector('input, textarea'); if (first) first.focus();
   }
   function renderSlideFields() {
@@ -11170,23 +11240,58 @@ Layer kinds:
   function slideEditRedraw() {
     const base = { ...se.l, seed: se.seed, type: { ...se.l.type, level: se.level } };
     const orig = (se.l.genIntent && se.l.genIntent.content) || {};
-    const content = {}; for (const [k, v] of Object.entries(se.content)) content[k] = orig[k] && typeof orig[k] === 'object' ? deepMerge(orig[k], v) : v;
+    const content = {}; for (const [k, v] of Object.entries(se.content)) content[k] = orig[k] && typeof orig[k] === 'object' && !se.replace.has(k) ? deepMerge(orig[k], v) : v;
     if (se.diagramType && content.diagram) content.diagram = { ...content.diagram, type: se.diagramType };
     se.merged = content;
     let next = null; try { next = Engine.hydrate(base, content, seEnv(se.l)); } catch (e) { console.warn(e); }
     if (!next) { $('seNote').textContent = 'That does not fit this layout: shorten it, make the text smaller, or rearrange.'; return false; }
     se.next = next; drawSlideEdit(next); $('seNote').textContent = ''; return true;
   }
+  // A text-heavy slide whose one part is far longer than the rest offers to even it out
+  function seSectionsNow() { const orig = (se.l.genIntent && se.l.genIntent.content) || {}; return se.content.sections ? (se.replace.has('sections') ? se.content.sections : deepMerge(orig.sections || [], se.content.sections)) : orig.sections; }
+  function seBalanceCheck() {
+    const secs = se.l.archetype === 'sections' ? seSectionsNow() : null; const lp = secs && DeckDigest.lopsided({ intent: 'sections', sections: secs });
+    $('seBalance').hidden = !lp; if (!lp) return;
+    const t = secs[lp.k].title;
+    $('seBalanceText').textContent = `${t ? `“${t}”` : 'One part'} is about ${Math.max(2, Math.round(lp.words / Math.max(1, lp.others)))}× as long as the others (${lp.words} words), so every part is set smaller.`;
+    $('seBalance').querySelector('[data-se-bal="split"]').hidden = se.l.deckIndex == null || !state.deck || !state.outline;
+  }
+  async function seBalance(how, btn) {
+    if (how === 'claude') {
+      const asker = await deckAsker(); if (!asker) { $('seNote').textContent = 'Claude is not available here (open the page in claude.ai, or add an API key in Settings). Move the rest to a new slide instead, or edit the part by hand.'; return; }
+      const sl = { intent: 'sections', headline: se.content.headline || '', sections: JSON.parse(JSON.stringify(seSectionsNow() || [])) };
+      btn.disabled = true; const label = btn.textContent; btn.textContent = 'Claude is shortening…';
+      try {
+        const n = await DeckDigest.shortenLong([sl], asker.ask, state.kit, 0);
+        if (!n) { $('seNote').textContent = 'Claude did not shorten it this time. Try again, or move the rest to a new slide.'; return; }
+        se.content.sections = sl.sections; se.replace.add('sections'); se.addNotes = [se.addNotes, sl.notes].filter(Boolean).join('\n\n');
+        renderSlideFields(); slideEditRedraw(); seBalanceCheck(); $('seNote').textContent = 'Shortened. The full text goes to the speaker notes when you save.';
+      } catch (e) { $('seNote').textContent = 'Claude could not shorten it: ' + (e && e.message ? e.message : e); }
+      finally { btn.disabled = false; btn.textContent = label; }
+      return;
+    }
+    // split: the outline gets the new slide, and only the two slides involved are drawn again
+    const i = se.l.deckIndex; const o = state.outline.slides[i]; if (!o) return;
+    o.sections = JSON.parse(JSON.stringify(seSectionsNow() || [])); if (se.content.headline) o.headline = se.content.headline;
+    const r = DeckDigest.splitLong(state.outline.slides, i); if (!r.moved) { $('seNote').textContent = 'That part has nothing to move: it is one long sentence. Shorten it instead.'; return; }
+    state.outline.slides = r.slides.map((sl, k) => { sl.section = String(k + 1).padStart(2, '0'); return sl; }); state.outlineEdited = true;
+    btn.disabled = true; btn.textContent = 'Making the new slide…';
+    const env = { outline: state.outline, kit: state.kit, assets: state.assets, format: state.deck.format, baseIntent: { ...state.intent, lockPalette: state.deck.palette, level: state.deck.level }, perSlide: +$('perSlide').value };
+    try { state.deck.slides[i].outline = state.outline.slides[i]; await Deck.reshuffle(state.deck, i, env); await Deck.insertAfter(state.deck, i, state.outline.slides[i + 1], env); state.deck.slides.forEach((row, k) => { row.outline = state.outline.slides[k]; }); }
+    finally { btn.disabled = false; btn.textContent = 'Move the rest to a new slide'; }
+    $('slideEdit').hidden = true; renderOutline(); renderDeck(); Stats.track('slide.split'); toast(`The rest of that part is on a new slide ${i + 2}`);
+  }
   $('seFields').addEventListener('input', e => {
     const t = e.target; const path = t.dataset.se; if (!path) return;
     const val = t.dataset.lines ? t.value.split('\n').map(x => x.trim()).filter(Boolean) : t.value;
     const ks = path.split('.'); let o = se.content; for (let i = 0; i < ks.length - 1; i++) o = o[/^\d+$/.test(ks[i]) ? +ks[i] : ks[i]]; o[ks[ks.length - 1]] = val;
-    clearTimeout(se.timer); se.timer = setTimeout(slideEditRedraw, 160);
+    clearTimeout(se.timer); se.timer = setTimeout(() => { slideEditRedraw(); seBalanceCheck(); }, 160);
   });
   $('slideEdit').addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Escape') $('slideEdit').hidden = true; if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) $('slideEdit').querySelector('[data-se-save]').click(); });
   $('slideEdit').addEventListener('click', async e => {
     const t = e.target;
     if (t === $('slideEdit') || t.closest('[data-se-close]')) { $('slideEdit').hidden = true; return; }
+    const bal = t.closest('[data-se-bal]'); if (bal) { await seBalance(bal.dataset.seBal, bal); return; }
     const sz = t.closest('[data-se-size]'); if (sz) { const prev = se.level; se.level = Math.max(0, Math.min(Engine.H_LEVELS.length - 1, se.level + +sz.dataset.seSize)); if (se.level !== prev && !slideEditRedraw()) { se.level = prev; slideEditRedraw(); $('seNote').textContent = 'That size does not fit: the text stays as it was.'; } return; }
     if (t.closest('[data-se-shuffle]')) { for (let k = 0; k < 12; k++) { se.seed = (Math.random() * 2 ** 32) >>> 0; if (slideEditRedraw()) break; } return; }
     const save = t.closest('[data-se-save]'); const canvas = t.closest('[data-se-canvas]');
@@ -11197,7 +11302,7 @@ Layer kinds:
         if (l.deckIndex != null && state.deck) {
           const row = state.deck.slides[l.deckIndex]; const j = row.variations.indexOf(l); if (j >= 0) { row.variations[j] = next; row.pick = j; }
           const o = state.outline && state.outline.slides[l.deckIndex];
-          if (o) { const src = se.merged || se.content; for (const k of ['eyebrow', 'headline', 'subhead', 'body', 'stat', 'quote', 'attribution', 'cta', 'items', 'steps', 'columns', 'bullets', 'sections', 'diagram']) if (k in src) o[k] = JSON.parse(JSON.stringify(src[k])); state.outlineEdited = true; renderOutline(); }
+          if (o) { const src = se.merged || se.content; for (const k of ['eyebrow', 'headline', 'subhead', 'body', 'stat', 'quote', 'attribution', 'cta', 'items', 'steps', 'columns', 'bullets', 'sections', 'diagram']) if (k in src) o[k] = JSON.parse(JSON.stringify(src[k])); if (se.addNotes) o.notes = [o.notes, se.addNotes].filter(Boolean).join('\n\n').slice(0, 4000); state.outlineEdited = true; renderOutline(); }
           renderDeck();
         } else { const j = state.layouts.indexOf(l); if (j >= 0) state.layouts[j] = next; renderGallery(); }
         Stats.track('slide.edit');
@@ -11530,11 +11635,23 @@ Layer kinds:
   }
   async function outlineFromDeck(deck) {
     const asker = await deckAsker(); const opts = { keepText: $('keepText').checked };
-    if (!asker) return DeckDigest.rules(deck, opts);
+    if (!asker) return balanceOutline(DeckDigest.rules(deck, opts), null);
     $('generateBtn').textContent = 'Claude is reading the deck…';
     const o = await DeckDigest.withClaude(deck, state.kit, asker.ask, (d, n) => { $('generateBtn').textContent = `Claude is reading the deck… ${d}/${n}`; }, opts);
     if (o.by === 'rules') toast('Claude did not answer, so rules sorted the slides. Generate again to retry, or edit the outline.');
     else if (o.failed) toast(`Claude sorted most slides; ${o.failed} part${o.failed > 1 ? 's were' : ' was'} sorted by rules.`);
+    return balanceOutline(o, o.by === 'rules' ? null : asker);
+  }
+  // A slide where one part is far longer than the others: Claude shortens that part, or its overflow gets a slide of its own.
+  async function balanceOutline(o, asker) {
+    const mode = $('longPart').value; if (mode === 'keep' || !o.slides.some(sl => DeckDigest.lopsided(sl))) return o;
+    if (mode === 'claude' && asker) {
+      $('generateBtn').textContent = 'Claude is evening out long parts…';
+      try { const n = await DeckDigest.shortenLong(o.slides, asker.ask, state.kit); if (n) o.balanced = { by: 'claude', n }; } catch (e) { console.warn(e); }
+    }
+    if (o.slides.some(sl => DeckDigest.lopsided(sl))) {
+      const r = DeckDigest.splitLong(o.slides); if (r.moved) { o.slides = r.slides.map((sl, k) => ({ ...sl, section: String(k + 1).padStart(2, '0') })); o.balanced = { by: (o.balanced ? 'both' : 'split'), n: r.moved }; if (mode === 'claude') toast(`${r.moved} long part${r.moved > 1 ? 's' : ''} moved on to a new slide (Claude was not available to shorten ${r.moved > 1 ? 'them' : 'it'}).`); }
+    }
     return o;
   }
 
@@ -11604,6 +11721,8 @@ Layer kinds:
   // Keep long slides whole, or condense them: remembered, and a deck in play is sorted again
   $('keepText').checked = LS.get('lg.keepText', true) !== false;
   $('keepText').addEventListener('change', () => { LS.set('lg.keepText', $('keepText').checked); if (state.deckSource && state.outline && state.outline.source === 'deck' && !state.busy) { state.outlineEdited = false; generateDeck($('prompt').value, { rebuild: true }); } });
+  $('longPart').value = LS.get('lg.longPart', 'claude') || 'claude';
+  $('longPart').addEventListener('change', () => { LS.set('lg.longPart', $('longPart').value); if (state.deckSource && state.outline && state.outline.source === 'deck' && !state.busy) { state.outlineEdited = false; generateDeck($('prompt').value, { rebuild: true }); } });
   // A .pptx chosen in the outline panel or dropped anywhere in Deck mode
   $('outlineFromDeck').addEventListener('click', () => $('deckFile').click());
   $('deckFile').addEventListener('change', e => { const f = e.target.files[0]; e.target.value = ''; if (f && !state.busy) generateDeck(($('prompt').value || '').replace(slidesLinkIn($('prompt').value) || '', '').trim(), { file: f }); });
@@ -11613,9 +11732,10 @@ Layer kinds:
     if (!f || !(/\.pptx$/i.test(f.name) || f.type === GSlides.PPTX)) return; e.preventDefault(); if (!state.busy) generateDeck(($('prompt').value || '').replace(slidesLinkIn($('prompt').value) || '', '').trim(), { file: f });
   });
   $('deckShuffleAll').addEventListener('click', () => generateDeck($('prompt').value));
+  const deckNotes = L => { const o = L.deckIndex != null && state.outline && state.outline.slides[L.deckIndex]; return o && o.notes ? o.notes : ''; };
   $('deckPptxBtn').addEventListener('click', e => withBusy(e.target, async () => {
     const picks = Deck.picks(state.deck); if (!picks.length) return;
-    const blob = await ExportPptx.buildDeck(picks, { kit: state.kit, assets: state.assets });
+    const blob = await ExportPptx.buildDeck(picks, { kit: state.kit, assets: state.assets, notes: deckNotes });
     if (await Render.download(blob, `${slug(state.outline.title || state.kit.name)}-deck-${picks.length}-slides.pptx`)) toast(`Deck saved: ${picks.length} editable slides`);
   }));
   $('deckPngBtn').addEventListener('click', e => withBusy(e.target, async () => {

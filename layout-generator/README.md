@@ -1,6 +1,6 @@
-# Layout Engine
+# Dugma
 
-Structured randomization for brand layouts. Give it a brief and your brand assets, get up to 360 on-grid variations you can scan, compare, favorite, and export.
+Dugma (Hebrew for "example", "pattern") makes brand layouts by structured randomization. Give it a brief and your brand assets, get up to 360 on-grid variations you can scan, compare, favorite, and export.
 
 Then work on the results like in Paper or Figma: an infinite canvas with frames, multi-screen edits, Figma import, captured web pages, live multiplayer, and a design agent (in the app and over MCP).
 

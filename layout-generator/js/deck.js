@@ -155,9 +155,16 @@ Rules: first slide is a cover, last is a closing. 6 to 10 slides unless the brie
     const res = await generate({ ...env, outline: one, seedBase: (Math.random() * 2 ** 32) >>> 0, baseIntent: { ...env.baseIntent }, perSlide: env.perSlide });
     // keep the deck's palette and level: regenerate with the lock
     const s = res.slides[0];
-    deck.slides[index] = { ...s, index };
+    deck.slides[index] = { ...s, index }; reindex(deck);
     return deck;
   }
+  // Rows and their layouts know their place in the deck (after a slide is added, or one row regenerated alone).
+  function reindex(deck) { deck.slides.forEach((s, k) => { s.index = k; for (const L of s.variations) L.deckIndex = k; }); return deck; }
+  // A new slide after `index`, generated in the deck's palette and type level.
+  async function insertAfter(deck, index, outlineSlide, env) {
+    deck.slides.splice(index + 1, 0, { index: index + 1, outline: outlineSlide, variations: [], pick: -1 }); reindex(deck);
+    return reshuffle(deck, index + 1, env);
+  }
   function picks(deck) { return deck.slides.map(s => s.pick >= 0 ? s.variations[s.pick] : null).filter(Boolean); }
-  return { INTENT_LABEL, outlineFromBrief, outlineWithClaude, OUTLINE_SCHEMA, generate, reshuffle, picks, slideFromTitle };
+  return { INTENT_LABEL, outlineFromBrief, outlineWithClaude, OUTLINE_SCHEMA, generate, reshuffle, insertAfter, reindex, picks, slideFromTitle };
 })();

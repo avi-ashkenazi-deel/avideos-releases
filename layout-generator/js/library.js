@@ -350,7 +350,7 @@ const Library = (() => {
         <p class="hint">Admins also need <b>Editor</b> access to this page (claude.ai → Share). The page only accepts library changes from Editors, so people who are not on the list cannot change libraries, even by other means.</p>` : ''}`;
     } else if (mode === 'server') {
       admins = `<h4>Admins</h4>${LibStore._state.keyRequired ? (role.admin ? '<p class="hint">Library editing is unlocked in this browser.</p>' : `<p class="hint">This server limits library editing to people with the admin key.</p><div class="cv-row"><input type="password" class="input grow" data-lib-key placeholder="Admin key"><button type="button" class="btn small" data-lib-unlock>Unlock</button></div>`) : '<p class="hint">Anyone using this server can edit libraries. To limit it, start the server with LG_ADMIN_KEY=… and share the key with your admins.</p>'}`;
-    } else admins = '<h4>Sharing</h4><p class="hint">Libraries live in this browser. Export one and import it elsewhere, or open the page in claude.ai or from the Layout Engine server to share them with everyone.</p>';
+    } else admins = '<h4>Sharing</h4><p class="hint">Libraries live in this browser. Export one and import it elsewhere, or open the page in claude.ai or from the Dugma server to share them with everyone.</p>';
     body.innerHTML = `<div class="libs-list">${srcs.map(row).join('')}</div>
       ${role.admin ? `<div class="cv-row libs-new"><input type="text" class="input grow" data-new-lib placeholder="New library, e.g. Sales" maxlength="60"><button type="button" class="btn small primary" data-create-lib>Create</button></div>` : ''}
       ${admins}

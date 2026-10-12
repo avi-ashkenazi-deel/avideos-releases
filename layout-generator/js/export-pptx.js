@@ -117,7 +117,9 @@ const ExportPptx = (() => {
     for (const L of layouts) {
       const slide = pptx.addSlide();
       await addLayoutSlide(pptx, slide, L, opts);
-      slide.addNotes(`${L.archetypeLabel} · ${L.format.name} · seed ${L.seed} · ${L.id}`);
+      // a deck's speaker notes (detail cut from the slide, a long part in full); otherwise where the layout came from
+      const notes = opts.notes && opts.notes(L);
+      slide.addNotes(notes ? String(notes) : `${L.archetypeLabel} · ${L.format.name} · seed ${L.seed} · ${L.id}`);
     }
     return pptx.write({ outputType: 'blob' });
   }
