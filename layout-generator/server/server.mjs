@@ -181,19 +181,20 @@ const LIB_ID = /^[A-Za-z0-9_.:-]{1,64}$/;
 let libs = null; let libSave = null;
 async function getLibs() {
   if (libs) return libs;
-  libs = { libraries: new Map(), items: new Map(), guides: new Map() };
-  try { const j = JSON.parse(await readFile(path.join(DATA, 'libraries.json'), 'utf8')); for (const l of j.libraries || []) if (l && LIB_ID.test(l.id)) libs.libraries.set(l.id, l); for (const it of j.items || []) if (it && LIB_ID.test(it.id)) libs.items.set(it.id, it); for (const g of j.guides || []) if (g && typeof g.id === 'string') libs.guides.set(g.id, g); } catch { }
+  libs = { libraries: new Map(), items: new Map(), guides: new Map(), notes: new Map() };
+  try { const j = JSON.parse(await readFile(path.join(DATA, 'libraries.json'), 'utf8')); for (const l of j.libraries || []) if (l && LIB_ID.test(l.id)) libs.libraries.set(l.id, l); for (const it of j.items || []) if (it && LIB_ID.test(it.id)) libs.items.set(it.id, it); for (const g of j.guides || []) if (g && typeof g.id === 'string') libs.guides.set(g.id, g); for (const n of j.notes || []) if (n && typeof n.id === 'string') libs.notes.set(n.id, n); } catch { }
   return libs;
 }
 function saveLibs() {
   clearTimeout(libSave);
   libSave = setTimeout(async () => {
-    try { await mkdir(DATA, { recursive: true }); const file = path.join(DATA, 'libraries.json'); await writeFile(file + '.tmp', JSON.stringify({ v: 1, saved: new Date().toISOString(), libraries: [...libs.libraries.values()], items: [...libs.items.values()], guides: [...libs.guides.values()] })); await rename(file + '.tmp', file); } catch (e) { log('library save failed', e.message); }
+    try { await mkdir(DATA, { recursive: true }); const file = path.join(DATA, 'libraries.json'); await writeFile(file + '.tmp', JSON.stringify({ v: 1, saved: new Date().toISOString(), libraries: [...libs.libraries.values()], items: [...libs.items.values()], guides: [...libs.guides.values()], notes: [...libs.notes.values()] })); await rename(file + '.tmp', file); } catch (e) { log('library save failed', e.message); }
   }, 300);
 }
-const libsBody = L => ({ lgLibraries: 1, keyRequired: !!ADMIN_KEY, libraries: [...L.libraries.values()], items: [...L.items.values()], guides: [...(L.guides || new Map()).values()] });
+const libsBody = L => ({ lgLibraries: 1, keyRequired: !!ADMIN_KEY, libraries: [...L.libraries.values()], items: [...L.items.values()], guides: [...(L.guides || new Map()).values()], notes: [...(L.notes || new Map()).values()] });
 function libOp(L, m) {
   if (m.op === 'check') return;
+  if (m.op === 'putNote') { const n = m.note; if (!n || !LIB_ID.test(String(n.id || '')) || !/^(design|layout|animation|illustration|photography|content)$/.test(n.guide)) throw new Error('bad note'); L.notes.set(n.id, JSON.parse(JSON.stringify(n))); if (L.notes.size > 2000) L.notes.delete(L.notes.keys().next().value); return; }
   if (m.op === 'putGuide') { const g = m.guide; if (!g || !/^(design|layout|animation|illustration|photography|content)$/.test(g.id)) throw new Error('bad guide'); L.guides.set(g.id, { id: g.id, text: String(g.text || '').slice(0, 120000), updated: Date.now(), by: String(g.by || '').slice(0, 80) }); return; }
   if (m.op === 'putLib') { const l = m.lib; if (!l || !LIB_ID.test(l.id) || typeof l.name !== 'string') throw new Error('bad library'); L.libraries.set(l.id, { id: l.id, name: l.name.slice(0, 60), description: String(l.description || '').slice(0, 200), order: +l.order || 0, defaultOn: l.defaultOn !== false, updated: Date.now(), by: String(l.by || '').slice(0, 80) }); return; }
   if (m.op === 'delLib') { L.libraries.delete(m.id); for (const [k, it] of L.items) if (it.lib === m.id) L.items.delete(k); return; }
@@ -454,8 +455,9 @@ const server = http.createServer(async (req, res) => {
       const L = await getLibs();
       if (req.method === 'GET') return json(res, 200, libsBody(L));
       if (req.method !== 'POST') return send(res, 405, '', { allow: 'GET, POST' });
-      if (ADMIN_KEY && String(req.headers['x-lg-admin'] || '') !== ADMIN_KEY) return send(res, 401, 'admin key required');
       const m = JSON.parse((await readBody(req, 4 * 1024 * 1024)).toString('utf8') || 'null') || {};
+      const open = m.op === 'putNote' && m.note && (m.note.status === 'open' || m.note.status === 'withdrawn');
+      if (ADMIN_KEY && !open && String(req.headers['x-lg-admin'] || '') !== ADMIN_KEY) return send(res, 401, 'admin key required');
       try { libOp(L, m); } catch (e) { return send(res, 400, e.message); }
       if (m.op !== 'check') { saveLibs(); broadcastLibs(); }
       // item writes answer small (a big import is hundreds of them); library changes send everything back

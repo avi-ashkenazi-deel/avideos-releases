@@ -474,12 +474,21 @@
         <p class="hint" id="guidesWho">The rules Claude follows when it writes, lays out and animates: one Markdown file each.</p>
         <div class="guide-tabs" id="guideTabs" role="tablist" aria-label="Guideline files"></div>
         <div class="guide-tools"><span class="hint" id="guideMeta"></span><span class="grow"></span>
+          <button id="guideSuggest" class="btn small" type="button" title="Change the text; editors get each change to accept or decline" hidden>Suggest edits</button>
+          <button id="guideComment" class="btn small" type="button" title="Select words in the guide first to comment on them" hidden>Comment</button>
           <button id="guideView" class="btn small" type="button">Preview</button>
           <label class="btn small file" id="guideImport" title="Replace this guide with a .md file">Import .md<input id="guideFile" type="file" accept=".md,.markdown,text/markdown,text/plain" hidden></label>
           <button id="guideDownload" class="btn small" type="button">Download</button>
           <button id="guideSave" class="btn small primary" type="button">Save</button></div>
         <textarea id="guideText" class="input guide-text" rows="16" spellcheck="true" aria-label="Guideline text (Markdown)"></textarea>
         <div id="guidePreview" class="guide-preview" hidden></div>
+        <div class="guide-suggest" id="guideSuggestBar" hidden><span><b>Suggesting.</b> Change the text above, then send. Editors accept or decline each change.</span>
+          <input id="guideSuggestWhy" class="input" type="text" maxlength="300" placeholder="Why (optional)" aria-label="Why you suggest this">
+          <button id="guideSuggestSend" class="btn small primary" type="button">Send suggestions</button><button id="guideSuggestCancel" class="btn small ghost" type="button">Cancel</button></div>
+        <div class="guide-suggest" id="guideCommentBox" hidden><blockquote id="guideCommentQuote"></blockquote>
+          <textarea id="guideCommentText" class="input" rows="3" maxlength="2000" placeholder="Your comment for the editors" aria-label="Comment"></textarea>
+          <div class="row"><button id="guideCommentSend" class="btn small primary" type="button">Send comment</button><button id="guideCommentCancel" class="btn small ghost" type="button">Cancel</button></div></div>
+        <div class="guide-notes" id="guideNotes"></div>
         <h4>Prompt interpreter</h4>
         <p>By default the brief is read by a built-in rule parser (formats, mood, emphasis, count, quoted copy, brand color names). Optionally, let Claude read the brief and turn it into the same constraint JSON. The key stays in this browser only and is sent straight to Anthropic.</p>
         <div class="field"><label for="apiKey">Anthropic API key</label><input id="apiKey" class="input" type="password" placeholder="sk-ant-..." autocomplete="off"></div>

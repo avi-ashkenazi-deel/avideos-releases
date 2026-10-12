@@ -947,7 +947,7 @@
   // ---- Brand guidelines (Settings): design.md, layout.md, animation.md, illustration.md, photography.md, content.md.
   // Everyone can read them; admins (the shared-library admins) edit, import and save them. Claude gets them in its prompts.
   const GUIDE_NOTE = { design: 'colors, type, logo, shapes, icons, charts', layout: 'grid, margins, hierarchy per slide type, text per slide', animation: 'easing, durations, entrances, builds', illustration: 'illustration and 3D render style', photography: 'subjects, light, color, cropping', content: 'voice, tone, grammar, naming, words to use and avoid' };
-  let guideCur = 'design', guideDirty = false, guidePreview = false;
+  let guideCur = 'design', guideDirty = false, guidePreview = false, guideMode = '', guideQuote = '', guideComments = null;
   const mdInline = t => escapeHtml(t).replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>').replace(/(^|[^*])\*([^*\s][^*]*)\*/g, '$1<i>$2</i>');
   function mdToHtml(md) {
     const out = []; const lines = String(md || '').split('\n'); let list = null, table = null;
@@ -966,23 +966,109 @@
   function renderGuides() {
     if (typeof LibStore === 'undefined') return;
     const all = LibStore.guides(); const role = LibStore.role(); const admin = !!role.admin;
-    $('guideTabs').innerHTML = LibStore.GUIDES.map(id => `<button type="button" role="tab" data-guide="${id}" class="${id === guideCur ? 'on' : ''}" aria-selected="${id === guideCur}" title="${GUIDE_NOTE[id]}">${id}.md<span class="dot ${all[id] && all[id].text.trim() ? 'full' : ''}"></span></button>`).join('');
+    const open = id => LibStore.notes(id).filter(n => n.status === 'open').length;
+    $('guideTabs').innerHTML = LibStore.GUIDES.map(id => `<button type="button" role="tab" data-guide="${id}" class="${id === guideCur ? 'on' : ''}" aria-selected="${id === guideCur}" title="${GUIDE_NOTE[id]}">${id}.md<span class="dot ${all[id] && all[id].text.trim() ? 'full' : ''}"></span>${open(id) ? `<span class="count" title="Open suggestions and comments">${open(id)}</span>` : ''}</button>`).join('');
     const g = all[guideCur];
     if (!guideDirty) $('guideText').value = g ? g.text : '';
-    $('guideText').readOnly = !admin; $('guideSave').hidden = !admin; $('guideImport').hidden = !admin;
+    const suggesting = guideMode === 'suggest';
+    $('guideText').readOnly = !admin && !suggesting; $('guideSave').hidden = !admin; $('guideImport').hidden = !admin;
+    $('guideSuggest').hidden = admin || suggesting || !LibStore.canSuggest() || !(g && g.text.trim());
+    $('guideComment').hidden = suggesting || !(g && g.text.trim()) || (!LibStore.canSuggest() && !guideComments);
+    $('guideSuggestBar').hidden = !suggesting; $('guideCommentBox').hidden = guideMode !== 'comment';
+    if (guideMode === 'comment') $('guideCommentQuote').textContent = guideQuote || 'The whole guide';
     $('guideText').placeholder = admin ? `# ${guideCur[0].toUpperCase() + guideCur.slice(1)} guidelines\n\nWrite or import the ${guideCur} rules (${GUIDE_NOTE[guideCur]}).` : 'No guidelines here yet. An admin can add them.';
     $('guideMeta').textContent = `${GUIDE_NOTE[guideCur]}${g && g.updated ? ` · saved ${new Date(g.updated).toLocaleString()}` : ''}${guideDirty ? ' · not saved' : ''}`;
     $('guidesWho').textContent = admin ? 'The rules Claude follows when it writes, lays out and animates: one Markdown file each. You can edit them (admin).' : 'The rules Claude follows when it writes, lays out and animates. Only admins can change them.';
-    const show = guidePreview || !admin; $('guidePreview').hidden = !show; $('guideText').hidden = show; $('guideView').textContent = show ? 'Edit' : 'Preview'; $('guideView').hidden = !admin;
+    const show = (guidePreview || !admin) && !suggesting; $('guidePreview').hidden = !show; $('guideText').hidden = show; $('guideView').textContent = show ? 'Edit' : 'Preview'; $('guideView').hidden = !admin;
     if (show) $('guidePreview').innerHTML = mdToHtml($('guideText').value) || '<p class="hint">Empty.</p>';
+    renderGuideNotes(admin);
   }
-  $('guideTabs').addEventListener('click', e => { const b = e.target.closest('[data-guide]'); if (!b) return; if (guideDirty && !confirm('Leave this guide without saving your changes?')) return; guideDirty = false; guideCur = b.dataset.guide; renderGuides(); });
+  // Suggestions and comments on the open guide: open ones first, with Accept / Decline / Resolve for admins and
+  // Withdraw for their author; settled ones folded below.
+  let guideNames = {};
+  function renderGuideNotes(admin) {
+    const list = LibStore.notes(guideCur); const me = LibStore.me; const esc = escapeHtml;
+    const ids = [...new Set(list.map(n => n.by).filter(Boolean))].filter(id => !(id in guideNames));
+    if (ids.length) LibStore.people(ids).then(ps => { for (const id of ids) guideNames[id] = (ps && ps[id] && ps[id].name) || ''; if (!$('settings').hidden) renderGuideNotes(LibStore.role().admin); });
+    const who = n => esc(guideNames[n.by] || n.byName || (n.by && n.by === me ? 'You' : 'Someone'));
+    const when = t => t ? new Date(t).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
+    const card = n => `<div class="guide-note ${n.status === 'open' ? '' : 'done'}" data-note="${esc(n.id)}">
+      <div class="who"><b>${who(n)}</b><span>${n.kind === 'edit' ? 'suggests' : 'comments'} · ${when(n.at)}</span><span class="chip">${n.status === 'open' ? 'Open' : n.status[0].toUpperCase() + n.status.slice(1)}</span></div>
+      ${n.kind === 'edit' ? `${n.quote ? `<del>${esc(n.quote)}</del>` : ''}<ins>${esc(n.replacement) || '(remove it)'}</ins>` : n.quote ? `<blockquote>${esc(n.quote)}</blockquote>` : ''}
+      ${n.text ? `<div>${esc(n.text)}</div>` : ''}${n.reply ? `<div class="hint">Reply: ${esc(n.reply)}</div>` : ''}
+      ${n.status === 'open' ? `<div class="acts">${admin ? `${n.kind === 'edit' ? '<button class="btn small primary" data-note-act="accept" type="button">Accept</button><button class="btn small" data-note-act="declined" type="button">Decline</button>' : '<button class="btn small primary" data-note-act="resolved" type="button">Resolve</button>'}<input class="input" data-note-reply type="text" maxlength="300" placeholder="Reply (optional)">` : ''}${!admin && n.by && n.by === me ? '<button class="btn small ghost" data-note-act="withdrawn" type="button">Withdraw</button>' : ''}</div>` : ''}</div>`;
+    const openL = list.filter(n => n.status === 'open').reverse(), done = list.filter(n => n.status !== 'open').reverse();
+    $('guideNotes').innerHTML = (openL.length ? `<h5>Suggestions and comments · ${openL.length} open</h5>${openL.map(card).join('')}` : '') + (done.length ? `<details><summary class="hint">${done.length} settled</summary>${done.map(card).join('')}</details>` : '');
+  }
+  // Lines that changed between the guide and the edited copy, as separate replaceable pieces (each found once).
+  function guideHunks(a, b) {
+    const A = a.split('\n'), B = b.split('\n'); const n = A.length, m = B.length;
+    let p = 0; while (p < n && p < m && A[p] === B[p]) p++;
+    let q = 0; while (q < n - p && q < m - p && A[n - 1 - q] === B[m - 1 - q]) q++;
+    const a2 = A.slice(p, n - q), b2 = B.slice(p, m - q); const ops = [];
+    if (a2.length * b2.length > 200000) ops.push(...a2.map(t => ['-', t]), ...b2.map(t => ['+', t]));
+    else {
+      const L = [...Array(a2.length + 1)].map(() => new Int32Array(b2.length + 1));
+      for (let i = a2.length - 1; i >= 0; i--) for (let j = b2.length - 1; j >= 0; j--) L[i][j] = a2[i] === b2[j] ? L[i + 1][j + 1] + 1 : Math.max(L[i + 1][j], L[i][j + 1]);
+      let i = 0, j = 0; while (i < a2.length || j < b2.length) { if (i < a2.length && j < b2.length && a2[i] === b2[j]) { ops.push(['=', a2[i]]); i++; j++; } else if (j < b2.length && (i >= a2.length || L[i][j + 1] >= L[i + 1][j])) ops.push(['+', b2[j++]]); else ops.push(['-', a2[i++]]); }
+    }
+    const hunks = []; let at = p, cur = null;
+    for (const [k, t] of ops) { if (k === '=') { if (cur) { hunks.push(cur); cur = null; } at++; continue; } if (!cur) cur = { at, old: [], neu: [] }; if (k === '-') { cur.old.push(t); at++; } else cur.neu.push(t); }
+    if (cur) hunks.push(cur);
+    // each piece quotes enough of the guide to be found exactly once (a pure insertion borrows the line before it)
+    const count = (h, x) => x ? h.split(x).length - 1 : 0;
+    return hunks.map(h => {
+      let s0 = h.at, e0 = h.at + h.old.length, pre = [], post = [];
+      if (!h.old.length) { if (s0 > 0) pre = [A[--s0]]; else if (e0 < n) post = [A[e0++]]; }
+      let quote = A.slice(s0, e0).join('\n'); let k = 0;
+      while (quote && count(a, quote) !== 1 && k++ < 4) { if (s0 > 0) { s0--; pre.unshift(A[s0]); } else if (e0 < n) { post.push(A[e0]); e0++; } else break; quote = A.slice(s0, e0).join('\n'); }
+      return { quote, replacement: [...pre, ...h.neu, ...post].join('\n') };
+    });
+  }
+  $('guideTabs').addEventListener('click', e => { const b = e.target.closest('[data-guide]'); if (!b) return; if (guideDirty && !confirm('Leave this guide without saving your changes?')) return; guideDirty = false; guideMode = ''; guideCur = b.dataset.guide; renderGuides(); });
   $('guideText').addEventListener('input', () => { guideDirty = true; $('guideMeta').textContent = `${GUIDE_NOTE[guideCur]} · not saved`; });
   $('guideView').addEventListener('click', () => { guidePreview = !guidePreview; renderGuides(); });
   $('guideSave').addEventListener('click', e => withBusy(e.target, async () => { try { await LibStore.putGuide(guideCur, $('guideText').value); guideDirty = false; renderGuides(); toast(`${guideCur}.md saved`); Stats.track('guide.save', { detail: guideCur }); } catch (err) { toast(err.message || String(err)); } }));
   $('guideDownload').addEventListener('click', async () => { const blob = new Blob([$('guideText').value], { type: 'text/markdown' }); await Render.download(blob, `${guideCur}.md`); });
   $('guideFile').addEventListener('change', async e => { const f = e.target.files[0]; e.target.value = ''; if (!f) return; const t = await f.text(); const m = /^(design|layout|animation|illustration|photography|content)\b/i.exec(f.name); if (m) guideCur = m[1].toLowerCase(); $('guideText').value = t; guideDirty = true; guidePreview = false; renderGuides(); toast(`${f.name} loaded into ${guideCur}.md: Save to keep it`); });
   LibStore.on(() => { if (!$('settings').hidden) renderGuides(); });
+  // claude.ai's own comment box for people who can comment but not write the page's data (Commenters)
+  if (window.claude && typeof window.claude.use === 'function') window.claude.use('comments').then(c => { guideComments = c; }).catch(() => { });
+  $('guideSuggest').addEventListener('click', () => { guideMode = 'suggest'; guideDirty = false; renderGuides(); $('guideText').focus(); });
+  $('guideSuggestCancel').addEventListener('click', () => { guideMode = ''; guideDirty = false; renderGuides(); });
+  $('guideSuggestSend').addEventListener('click', e => withBusy(e.target, async () => {
+    const before = (LibStore.guides()[guideCur] || {}).text || ''; const after = $('guideText').value;
+    const hunks = guideHunks(before, after).filter(h => h.quote !== h.replacement);
+    if (!hunks.length) { toast('Nothing changed yet: edit the text, then send'); return; }
+    const why = $('guideSuggestWhy').value.trim(); const name = (typeof Sync !== 'undefined' && Sync.me && Sync.me.name) || '';
+    try { for (const h of hunks) await LibStore.addNote({ guide: guideCur, kind: 'edit', quote: h.quote, replacement: h.replacement, text: why, byName: name }); }
+    catch (err) { toast(err.message || String(err)); return; }
+    guideMode = ''; guideDirty = false; $('guideSuggestWhy').value = ''; renderGuides(); toast(`${hunks.length} suggestion${hunks.length > 1 ? 's' : ''} sent to the editors`); Stats.track('guide.suggest', { detail: guideCur });
+  }));
+  $('guideComment').addEventListener('click', async () => {
+    const sel = window.getSelection(); const inside = sel && sel.rangeCount && $('guidePreview').contains(sel.anchorNode) ? sel.getRangeAt(0) : null;
+    if (!LibStore.canSuggest() && guideComments) { try { const r = await guideComments.openComposer(inside ? { range: inside } : { element: $('guidePreview') }); if (!r.opened) toast('Click into the guide, then press Comment again'); } catch (err) { toast(err && err.code === 'unavailable' ? 'Comments are off here' : 'Could not open the comment box'); } return; }
+    guideQuote = inside ? String(inside).trim().slice(0, 600) : ''; guideMode = 'comment'; renderGuides(); $('guideCommentText').focus();
+  });
+  $('guideCommentCancel').addEventListener('click', () => { guideMode = ''; renderGuides(); });
+  $('guideCommentSend').addEventListener('click', e => withBusy(e.target, async () => {
+    const text = $('guideCommentText').value.trim(); if (!text) { toast('Write the comment first'); return; }
+    try { await LibStore.addNote({ guide: guideCur, kind: 'comment', quote: guideQuote, text, byName: (typeof Sync !== 'undefined' && Sync.me && Sync.me.name) || '' }); } catch (err) { toast(err.message || String(err)); return; }
+    $('guideCommentText').value = ''; guideMode = ''; guideQuote = ''; renderGuides(); toast('Comment sent to the editors'); Stats.track('guide.comment', { detail: guideCur });
+  }));
+  $('guideNotes').addEventListener('click', e => { const b = e.target.closest('[data-note-act]'); if (b) withBusy(b, async () => {
+    const box = b.closest('[data-note]'); const n = LibStore.notes().find(x => x.id === box.dataset.note); if (!n) return;
+    const reply = (box.querySelector('[data-note-reply]') || {}).value || ''; const act = b.dataset.noteAct;
+    try {
+      if (act === 'accept') {
+        const cur = (LibStore.guides()[n.guide] || {}).text || ''; const k = n.quote ? cur.split(n.quote).length - 1 : 0;
+        if (n.quote && k !== 1) { toast(k ? 'That text appears more than once now: make the change by hand, then Resolve' : 'That text has changed since: make the change by hand, then Decline or Resolve'); guidePreview = false; renderGuides(); return; }
+        const next = n.quote ? cur.replace(n.quote, () => n.replacement) : (cur ? cur + '\n' : '') + n.replacement;
+        await LibStore.putGuide(n.guide, next); guideDirty = false; await LibStore.setNote(n.id, { status: 'accepted', reply }); toast(`Accepted into ${n.guide}.md`);
+      } else { await LibStore.setNote(n.id, { status: act, reply }); toast(act === 'withdrawn' ? 'Withdrawn' : act === 'declined' ? 'Declined' : 'Resolved'); }
+      Stats.track('guide.' + act, { detail: n.guide });
+    } catch (err) { toast(err.message || String(err)); }
+  }); });
 
   // ---- Motion: deck settings, Quick Look (select a slide or poster, press Space), Present, hover previews ----------
   state.motion = { mode: LS.get('lg.motionMode', 'all') || 'all', builds: LS.get('lg.motionBuilds', 'enter') || 'enter' };

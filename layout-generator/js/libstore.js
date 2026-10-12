@@ -16,7 +16,7 @@ const LibStore = (() => {
   const ID = /^[A-Za-z0-9_.:-]{1,64}$/;
   const MAX_ITEM = 240 * 1024;
   let env = null, backend = null, started = null;
-  const S = { mode: 'local', libs: new Map(), items: new Map(), guides: new Map(), admins: [], uid: null, owner: false, canEdit: null, keyRequired: false, keyOk: false, ready: false, error: '' };
+  const S = { mode: 'local', libs: new Map(), items: new Map(), guides: new Map(), notes: new Map(), canWrite: null, admins: [], uid: null, owner: false, canEdit: null, keyRequired: false, keyOk: false, ready: false, error: '' };
   let prefs = LS.get('lg.libsOn', {}) || {};
   const listeners = new Set();
   const emit = () => { for (const fn of listeners) { try { fn(); } catch (e) { console.error(e); } } };
@@ -36,6 +36,11 @@ const LibStore = (() => {
   }
   const GUIDE = /^(design|layout|animation|illustration|photography|content)$/;
   const cleanGuide = g => g && typeof g === 'object' && GUIDE.test(String(g.id || '')) ? { id: g.id, text: String(g.text || '').slice(0, 120000), updated: +g.updated || 0, by: typeof g.by === 'string' ? g.by.slice(0, 80) : '' } : null;
+  // Suggestions and comments on a guide, from people who are not admins; admins accept, decline or resolve them.
+  const NOTE_STATUS = /^(open|accepted|declined|resolved|withdrawn)$/;
+  const str = (v, n) => typeof v === 'string' ? v.slice(0, n) : '';
+  const cleanNote = (n, doc) => n && typeof n === 'object' && ID.test(String(n.id || '')) && GUIDE.test(String(n.guide || '')) ? { id: n.id, guide: n.guide, kind: n.kind === 'edit' ? 'edit' : 'comment', by: str(n.by, 80), byName: str(n.byName, 80), at: +n.at || 0, quote: str(n.quote, 8000), replacement: n.kind === 'edit' ? str(n.replacement, 8000) : '', text: str(n.text, 2000), status: NOTE_STATUS.test(n.status) ? n.status : 'open', reply: str(n.reply, 1000), doneBy: str(n.doneBy, 80), doneAt: +n.doneAt || 0, _doc: doc || n._doc || '' } : null;
+  function setNotes(list) { S.notes.clear(); for (const n of list || []) { const c = cleanNote(n); if (c) S.notes.set(c.id, c); } emit(); }
   function setGuides(list) { S.guides.clear(); for (const g of list || []) { const c = cleanGuide(g); if (c) S.guides.set(c.id, c); } emit(); }
   function setAll({ libraries, items, admins }) {
     if (libraries) { S.libs.clear(); for (const l of libraries) { const c = cleanLib(l); if (c) S.libs.set(c.id, c); } }
@@ -84,6 +89,9 @@ const LibStore = (() => {
       ready.items = true; S.items.clear(); upsert('item', list); done();
     }, e => { S.error = (e && e.code) || 'db'; emit(); });
     db.collection('guides').onSnapshot(snap => { const list = []; for (const d of snap.docs) { const v = d.data(); if (v) list.push({ ...v, id: d.id }); } setGuides(list); }, () => { });
+    // one document per person (guidenotes/<their id>): each writes only their own, admins write all to resolve
+    db.collection('guidenotes').onSnapshot(snap => { const list = []; for (const d of snap.docs) { const v = d.data(); if (v && Array.isArray(v.notes)) for (const n of v.notes) list.push({ ...n, _doc: d.id }); } setNotes(list); }, () => { });
+    try { S.canWrite = user && user.can ? await user.can('data.write') : null; } catch { S.canWrite = null; }
     db.doc('config/admins').onSnapshot(s => { const d = s.data(); S.admins = d && Array.isArray(d.ids) ? d.ids.filter(x => typeof x === 'string') : []; emit(); }, () => { });
     // Each person's on/off choices: private to them, so they follow them across devices.
     if (S.uid) {
@@ -99,6 +107,7 @@ const LibStore = (() => {
       delItem: id => write(() => db.doc(`libitems/${id}`).delete()),
       setAdmins: ids => write(() => db.doc('config/admins').set({ ids })),
       putGuide: g => write(() => db.doc(`guides/${g.id}`).set(g)),
+      putNote: n => { const doc = n._doc || S.uid; if (!doc) throw new Error('Sign in to claude.ai to suggest changes'); const mine = [...S.notes.values()].filter(x => x._doc === doc && x.id !== n.id).concat([{ ...n, _doc: doc }]).map(({ _doc, ...x }) => x).slice(-200); return db.doc(`guidenotes/${doc}`).set({ notes: mine }).catch(e => { throw denied(e) ? new Error('You can view these guidelines but not suggest changes. Ask the page owner for Contributor access, or use Comment.') : e; }); },
       uploadImage: assets ? async blob => { const r = await assets.upload(blob); return { url: r.url }; } : null,
       profiles: user && user.profiles ? ids => user.profiles(ids) : null,
       search: user && user.search ? q => user.search(q) : null,
@@ -111,7 +120,7 @@ const LibStore = (() => {
     if (!j || !j.lgLibraries) return null;
     S.keyRequired = !!j.keyRequired;
     const key = () => LS.get('lg.adminKey', '') || '';
-    const apply = j => { S.keyRequired = !!j.keyRequired; setAll({ libraries: j.libraries || [], items: j.items || [] }); if (j.guides) setGuides(j.guides); };
+    const apply = j => { S.keyRequired = !!j.keyRequired; setAll({ libraries: j.libraries || [], items: j.items || [] }); if (j.guides) setGuides(j.guides); if (j.notes) setNotes(j.notes); };
     apply(j);
     async function op(body) {
       const r = await fetch('/api/libraries', { method: 'POST', headers: { 'content-type': 'application/json', 'x-lg-admin': key() }, body: JSON.stringify(body) });
@@ -129,12 +138,13 @@ const LibStore = (() => {
       putItem: item => op({ op: 'putItem', item }),
       delItem: id => op({ op: 'delItem', id }),
       putGuide: guide => op({ op: 'putGuide', guide }),
+      putNote: note => op({ op: 'putNote', note }),
       uploadImage: async (blob, name) => { const r = await fetch('/api/assets?room=library', { method: 'POST', headers: { 'content-type': blob.type || 'image/png', 'x-name': encodeURIComponent(name || '') }, body: blob }); if (!r.ok) throw new Error('Image upload failed (' + r.status + ')'); const o = await r.json(); return { url: o.url }; },
     };
   }
   function localBackend() {
     const KEY = 'lg.libs.v1';
-    const load = () => { const j = LS.get(KEY, null) || {}; setAll({ libraries: j.libraries || [], items: j.items || [] }); setGuides(LS.get('lg.guides.v1', []) || []); };
+    const load = () => { const j = LS.get(KEY, null) || {}; setAll({ libraries: j.libraries || [], items: j.items || [] }); setGuides(LS.get('lg.guides.v1', []) || []); setNotes(LS.get('lg.guidenotes.v1', []) || []); };
     const save = () => { if (!LS.set(KEY, { libraries: [...S.libs.values()], items: [...S.items.values()] })) throw new Error('This browser\'s storage is full. Export the libraries, remove some pictures, and try again.'); };
     load();
     window.addEventListener('storage', e => { if (e.key === KEY) load(); });
@@ -145,6 +155,7 @@ const LibStore = (() => {
       delLib: id => change(() => S.libs.delete(id)),
       putItem: it => change(() => S.items.set(it.id, cleanItem(it))),
       delItem: id => change(() => S.items.delete(id)),
+      putNote: n => { S.notes.set(n.id, cleanNote(n)); LS.set('lg.guidenotes.v1', [...S.notes.values()]); emit(); },
       putGuide: g => { S.guides.set(g.id, g); if (!LS.set('lg.guides.v1', [...S.guides.values()])) throw new Error('This browser\'s storage is full.'); emit(); },
       uploadImage: null, // pictures ride inside the item as data URLs
     };
@@ -237,14 +248,26 @@ const LibStore = (() => {
   const guide = id => (S.guides.get(id) || {}).text || '';
   const guides = () => Object.fromEntries([...S.guides.values()].map(g => [g.id, g]));
   async function putGuide(id, text) {
-    if (!GUIDE.test(id)) throw new Error('Unknown guide'); must(); if (!backend.putGuide) throw new Error('Guides cannot be saved here');
+    if (!GUIDE.test(id)) throw new Error('Unknown guide'); if (!backend) throw new Error('Still loading'); if (!role().admin) throw new Error('Only admins can change the brand guidelines: use Suggest edits or Comment instead.'); if (!backend.putGuide) throw new Error('Guides cannot be saved here');
     const g = cleanGuide({ id, text, updated: Date.now(), by: S.uid || '' }); await backend.putGuide(g); S.guides.set(id, g); emit(); return g;
+  }
+  const notes = id => [...S.notes.values()].filter(n => !id || n.guide === id).sort((a, b) => a.at - b.at);
+  // who may suggest: anyone who can write shared data here (Contributors and up in claude.ai; everyone on a server or locally)
+  const canSuggest = () => S.mode !== 'artifact' || (!!S.uid && S.canWrite !== false);
+  async function addNote(n) {
+    if (!backend || !backend.putNote) throw new Error('Suggestions cannot be saved here'); if (!canSuggest()) throw new Error('You can view these guidelines but not suggest changes here.');
+    const c = cleanNote({ ...n, id: uid('n'), by: S.uid || n.by || '', at: Date.now(), status: 'open' }); await backend.putNote(c); S.notes.set(c.id, { ...c, _doc: c._doc || S.uid || '' }); emit(); return c;
+  }
+  // an admin resolves (accepted, declined, resolved); the author may withdraw their own
+  async function setNote(id, patch) {
+    const cur = S.notes.get(id); if (!cur) throw new Error('That suggestion is gone');
+    if (patch.status !== 'withdrawn' && !role().admin) throw new Error('Only admins can accept, decline or resolve suggestions.'); const c = cleanNote({ ...cur, ...patch, doneBy: S.uid || '', doneAt: Date.now() }, cur._doc); await backend.putNote(c); S.notes.set(id, c); emit(); return c;
   }
   async function people(ids) { if (!backend || !backend.profiles || !ids.length) return {}; try { return await backend.profiles(ids); } catch { return {}; } }
   async function searchPeople(q) { if (!backend || !backend.search) return []; try { return await backend.search(q); } catch { return []; } }
   return {
     init, start, libraries, items, isOn, setOn, role, createLibrary, updateLibrary, deleteLibrary, putItem, updateItem, deleteItem, setAdmins,
-    exportJSON, importJSON, people, searchPeople, assetInfo, guide, guides, putGuide, GUIDES: ['design', 'layout', 'animation', 'illustration', 'photography', 'content'],
+    exportJSON, importJSON, people, searchPeople, assetInfo, guide, guides, putGuide, notes, addNote, setNote, canSuggest, GUIDES: ['design', 'layout', 'animation', 'illustration', 'photography', 'content'],
     refresh: () => backend && backend.refresh ? backend.refresh() : null,
     checkKey: k => backend && backend.checkKey ? backend.checkKey(k) : Promise.reject(new Error('No admin key here')),
     on: fn => { listeners.add(fn); return () => listeners.delete(fn); },

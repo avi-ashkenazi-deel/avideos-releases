@@ -744,3 +744,20 @@ input[disabled] { opacity: .5; cursor: not-allowed; }
 .guide-preview h1 { font-size: 18px; } .guide-preview h2 { font-size: 15px; margin-top: 14px; } .guide-preview h3 { font-size: 13.5px; }
 .guide-preview table { border-collapse: collapse; margin: 6px 0; font-size: 12px; } .guide-preview td, .guide-preview th { border: 1px solid var(--line-2); padding: 3px 6px; text-align: left; vertical-align: top; }
 .guide-preview code { font-family: var(--font-mono); font-size: 12px; background: var(--accent-faint); padding: 0 3px; border-radius: 3px; }
+.guide-suggest { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0; padding: 10px 12px; border-radius: 8px; background: var(--accent-soft); font-size: 12.5px; }
+.guide-suggest > span { flex: 1 1 100%; }
+.guide-suggest input { flex: 1 1 200px; }
+.guide-suggest textarea { flex: 1 1 100%; }
+.guide-suggest blockquote, .guide-note blockquote { margin: 0; padding: 4px 8px; border-left: 3px solid var(--accent-line); color: var(--fg-2); white-space: pre-wrap; max-height: 120px; overflow: auto; font-size: 12px; flex: 1 1 100%; }
+.guide-notes { display: grid; gap: 8px; margin-top: 10px; }
+.guide-notes > h5 { margin: 6px 0 0; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--fg-3); }
+.guide-note { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 12.5px; display: grid; gap: 6px; background: var(--panel); }
+.guide-note.done { opacity: .65; }
+.guide-note .who { display: flex; gap: 8px; align-items: center; color: var(--fg-3); font-size: 11.5px; }
+.guide-note .who b { color: var(--fg); }
+.guide-note .chip { margin-left: auto; font-size: 10.5px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--line-2); }
+.guide-note del { background: rgba(196,60,60,.12); text-decoration: line-through; white-space: pre-wrap; display: block; padding: 2px 6px; border-radius: 4px; }
+.guide-note ins { background: rgba(31,138,82,.14); text-decoration: none; white-space: pre-wrap; display: block; padding: 2px 6px; border-radius: 4px; }
+.guide-note .acts { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.guide-note .acts input { flex: 1 1 160px; }
+.guide-tabs .count { display: inline-block; min-width: 16px; padding: 0 4px; margin-left: 5px; border-radius: 999px; background: var(--accent); color: #fff; font-size: 10px; line-height: 15px; text-align: center; }
