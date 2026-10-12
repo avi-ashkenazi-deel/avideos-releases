@@ -149,6 +149,9 @@ const Diagram = (() => {
         const b = nodeBox(H, g, st, col, folded(d, top[k][1]), top[k][1], { fill: 'none', fg: st.fg, fg2: st.fg2, radius: 0, pad: 0, align: 'left', valign: 'top', noteLines: 14 });
         if (!b) return null; b[0].fill = 'none'; out.push(...b.slice(1));
       }
+      // the track and its columns sit in the middle of the room they have, not at its top
+      const bottom = Math.max(...out.map(x => x.y + x.h)); const off = Math.max(0, Math.round((r.y + r.h - bottom) / 2));
+      for (const x of out) x.y += off;
       return out;
     }
     const y = r.y + r.h / 2; const slot = r.w / n; const dot = Math.max(st.unit * 1.5, Math.min(slot * 0.12, r.h * 0.06));
