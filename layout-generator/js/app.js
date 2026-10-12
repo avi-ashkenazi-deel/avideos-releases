@@ -361,8 +361,11 @@
   $('gallery').addEventListener('click', e => {
     const fav = e.target.closest('[data-fav]'); if (fav) { toggleFav(fav.dataset.fav); return; }
     const pick = e.target.closest('[data-pick]'); if (pick) { if (pick.checked) state.picks.add(pick.dataset.pick); else state.picks.delete(pick.dataset.pick); pick.closest('.card').classList.toggle('selected', pick.checked); updateBars(); return; }
-    const card = e.target.closest('.card'); if (card) openDetail(card.dataset.id);
+    // one click opens the details, two open the slide editor
+    const card = e.target.closest('.card'); if (card) { clearTimeout(cardClickT); cardClickT = setTimeout(() => openDetail(card.dataset.id), 240); }
   });
+  let cardClickT = 0;
+  $('gallery').addEventListener('dblclick', e => { const card = e.target.closest('.card'); if (!card || e.target.closest('[data-fav], [data-pick]')) return; clearTimeout(cardClickT); openSlideEditor(card.dataset.id); });
   function toggleFav(id) {
     if (state.favs.has(id)) state.favs.delete(id); else state.favs.add(id);
     document.querySelectorAll(`[data-fav="${id}"]`).forEach(b => b.classList.toggle('on', state.favs.has(id)));
@@ -374,6 +377,71 @@
 
   // ---- Detail --------------------------------------------------------------------------
   function findLayout(id) { return state.layouts.find(l => l.id === id) || state.family?.find(l => l.id === id) || state.deck?.slides.flatMap(s => s.variations).find(l => l.id === id); }
+  // ---- Edit one slide: its words and type size, redrawn live in the same layout (double-click a slide) -------------
+  const SE_LABEL = { eyebrow: 'Eyebrow', headline: 'Headline', subhead: 'Subhead', body: 'Body', stat: 'Number', quote: 'Quote', attribution: 'Attribution', cta: 'Button', footer: 'Footer', items: 'Cards', steps: 'Steps', columns: 'Columns', bullets: 'Bullets', sections: 'Sections', title: 'Title', text: 'Text' };
+  const se = { l: null, content: null, level: 0, seed: 0, next: null, timer: 0 };
+  const seLabel = k => SE_LABEL[k] || (k[0].toUpperCase() + k.slice(1)).replace(/_/g, ' ');
+  function seEnv(l) { return { intent: l.genIntent || state.intent, kit: state.kit, assets: l.poolIds ? { ...state.assets, images: state.assets.images.filter(a => l.poolIds.includes(a.id)) } : state.assets }; }
+  function openSlideEditor(id) {
+    const l = findLayout(id); if (!l) return;
+    $('detail').hidden = true;
+    Object.assign(se, { l, content: JSON.parse(JSON.stringify(Canvas.extractContent(l))), level: l.type.level, seed: l.seed, next: l });
+    const o = l.deckIndex != null && state.outline && state.outline.slides[l.deckIndex];
+    $('seTitle').textContent = o ? `Slide ${l.deckIndex + 1} · ${Deck.INTENT_LABEL[o.intent] || o.intent}` : `${l.archetypeLabel} · ${l.format.name}`;
+    renderSlideFields(); drawSlideEdit(l); $('seNote').textContent = ''; $('slideEdit').hidden = false;
+    const first = $('seFields').querySelector('input, textarea'); if (first) first.focus();
+  }
+  function renderSlideFields() {
+    const c = se.content; const esc = escapeHtml;
+    const field = (path, label, v, long) => `<div><label for="se-${esc(path)}">${esc(label)}</label>${long || String(v).length > 60 ? `<textarea class="input" id="se-${esc(path)}" data-se="${esc(path)}" rows="${Math.min(8, Math.max(2, Math.ceil(String(v).length / 48)))}">${esc(v)}</textarea>` : `<input class="input" id="se-${esc(path)}" data-se="${esc(path)}" value="${esc(v)}">`}</div>`;
+    const lines = (path, label, arr) => `<div><label for="se-${esc(path)}">${esc(label)} <span class="hint">(one per line)</span></label><textarea class="input" id="se-${esc(path)}" data-se="${esc(path)}" data-lines="1" rows="${Math.min(8, Math.max(2, arr.length + 1))}">${esc(arr.join('\n'))}</textarea></div>`;
+    const out = [];
+    for (const [k, v] of Object.entries(c)) {
+      if (typeof v === 'string') out.push(field(k, seLabel(k), v, k === 'body' || k === 'quote'));
+      else if (Array.isArray(v) && v.every(x => typeof x === 'string')) out.push(lines(k, seLabel(k), v));
+      else if (Array.isArray(v)) out.push(`<div class="se-group"><b>${esc(seLabel(k))}</b>${v.map((it, i) => !it || typeof it !== 'object' ? '' : `<div class="se-group">${Object.entries(it).map(([kk, vv]) => typeof vv === 'string' ? field(`${k}.${i}.${kk}`, `${seLabel(kk)} ${i + 1}`, vv, kk === 'text') : Array.isArray(vv) ? lines(`${k}.${i}.${kk}`, `${seLabel(kk)} ${i + 1}`, vv.map(String)) : '').join('')}</div>`).join('')}</div>`);
+    }
+    $('seFields').innerHTML = out.join('') || '<p class="hint">This layout has no words to edit.</p>';
+  }
+  function drawSlideEdit(l) { $('sePreview').innerHTML = Render.toSVG(l, { kit: state.kit, assets: state.assets, width: 1000 }); }
+  // Redraw from the edited words: same layout and palette, the chosen type size and arrangement.
+  function slideEditRedraw() {
+    const base = { ...se.l, seed: se.seed, type: { ...se.l.type, level: se.level } };
+    let next = null; try { next = Engine.hydrate(base, se.content, seEnv(se.l)); } catch (e) { console.warn(e); }
+    if (!next) { $('seNote').textContent = 'That does not fit this layout: shorten it, make the text smaller, or rearrange.'; return false; }
+    se.next = next; drawSlideEdit(next); $('seNote').textContent = ''; return true;
+  }
+  $('seFields').addEventListener('input', e => {
+    const t = e.target; const path = t.dataset.se; if (!path) return;
+    const val = t.dataset.lines ? t.value.split('\n').map(x => x.trim()).filter(Boolean) : t.value;
+    const ks = path.split('.'); let o = se.content; for (let i = 0; i < ks.length - 1; i++) o = o[/^\d+$/.test(ks[i]) ? +ks[i] : ks[i]]; o[ks[ks.length - 1]] = val;
+    clearTimeout(se.timer); se.timer = setTimeout(slideEditRedraw, 160);
+  });
+  $('slideEdit').addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Escape') $('slideEdit').hidden = true; if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) $('slideEdit').querySelector('[data-se-save]').click(); });
+  $('slideEdit').addEventListener('click', async e => {
+    const t = e.target;
+    if (t === $('slideEdit') || t.closest('[data-se-close]')) { $('slideEdit').hidden = true; return; }
+    const sz = t.closest('[data-se-size]'); if (sz) { const prev = se.level; se.level = Math.max(0, Math.min(Engine.H_LEVELS.length - 1, se.level + +sz.dataset.seSize)); if (se.level !== prev && !slideEditRedraw()) { se.level = prev; slideEditRedraw(); $('seNote').textContent = 'That size does not fit: the text stays as it was.'; } return; }
+    if (t.closest('[data-se-shuffle]')) { for (let k = 0; k < 12; k++) { se.seed = (Math.random() * 2 ** 32) >>> 0; if (slideEditRedraw()) break; } return; }
+    const save = t.closest('[data-se-save]'); const canvas = t.closest('[data-se-canvas]');
+    if (save || canvas) {
+      clearTimeout(se.timer); if (se.next !== se.l && !slideEditRedraw()) return;
+      const l = se.l, next = se.next === l ? l : Object.assign(se.next, { id: l.id.replace(/-e\d+$/, '') + '-e' + (++seCount), deckIndex: l.deckIndex, genIntent: l.genIntent, poolIds: l.poolIds });
+      if (next !== l) {
+        if (l.deckIndex != null && state.deck) {
+          const row = state.deck.slides[l.deckIndex]; const j = row.variations.indexOf(l); if (j >= 0) { row.variations[j] = next; row.pick = j; }
+          const o = state.outline && state.outline.slides[l.deckIndex];
+          if (o) { for (const k of ['eyebrow', 'headline', 'subhead', 'body', 'stat', 'quote', 'attribution', 'cta', 'items', 'steps', 'columns', 'bullets', 'sections']) if (k in se.content) o[k] = JSON.parse(JSON.stringify(se.content[k])); state.outlineEdited = true; renderOutline(); }
+          renderDeck();
+        } else { const j = state.layouts.indexOf(l); if (j >= 0) state.layouts[j] = next; renderGallery(); }
+        Stats.track('slide.edit');
+      }
+      $('slideEdit').hidden = true;
+      if (canvas) await sendToCanvas([next]); else if (next !== l) toast('Slide saved');
+    }
+  });
+  let seCount = 0;
+  $('detailEdit').addEventListener('click', () => { if (state.detail) openSlideEditor(state.detail.id); });
   function openDetail(id) {
     const l = findLayout(id); if (!l) return;
     state.detail = l; state.family = null;
@@ -497,7 +565,26 @@
   });
 
   // ---- Modals: about + settings ------------------------------------------------------------------
-  $('aboutBtn').addEventListener('click', () => $('about').hidden = false);
+  $('aboutLink').addEventListener('click', () => { $('settings').hidden = true; $('about').hidden = false; });
+  // ---- Appearance: light, dark, or whatever the system uses -------------------------------------
+  const sysLight = matchMedia('(prefers-color-scheme: light)');
+  function applyTheme(t) {
+    const root = document.documentElement; if (t === 'light' || t === 'dark') root.dataset.theme = t; else delete root.dataset.theme;
+    const eff = root.dataset.theme || (sysLight.matches ? 'light' : 'dark');
+    $('themeBtn').textContent = eff === 'light' ? '☾' : '☀'; $('themeBtn').title = eff === 'light' ? 'Dark mode' : 'Light mode'; $('themeSelect').value = t === 'light' || t === 'dark' ? t : 'system';
+  }
+  applyTheme(LS.get('lg.theme', 'system'));
+  $('themeBtn').addEventListener('click', () => { const eff = document.documentElement.dataset.theme || (sysLight.matches ? 'light' : 'dark'); const t = eff === 'light' ? 'dark' : 'light'; LS.set('lg.theme', t); applyTheme(t); });
+  $('themeSelect').addEventListener('change', e => { LS.set('lg.theme', e.target.value); applyTheme(e.target.value); });
+  sysLight.addEventListener('change', () => applyTheme(LS.get('lg.theme', 'system')));
+  // ---- Preview size: one slider (Single and Deck), like a photo browser's ----------------------------
+  function applyThumb(v) { v = Math.max(120, Math.min(720, +v || 210)); document.documentElement.style.setProperty('--thumb', v + 'px'); document.documentElement.style.setProperty('--thumb-deck', Math.round(v * 1.05) + 'px'); document.querySelectorAll('.thumbSize').forEach(r => { r.value = v; }); }
+  applyThumb(LS.get('lg.thumb', 210));
+  document.querySelectorAll('.thumbSize').forEach(r => r.addEventListener('input', e => { applyThumb(e.target.value); LS.set('lg.thumb', +e.target.value); }));
+  // ---- The brief's clear button ------------------------------------------------------------------------
+  const syncClear = () => { $('promptClear').hidden = !$('prompt').value; };
+  $('prompt').addEventListener('input', syncClear); syncClear();
+  $('promptClear').addEventListener('click', () => { $('prompt').value = ''; state.deckSource = null; LS.set('lg.prompt', ''); syncClear(); $('prompt').focus(); });
   $('aboutClose').addEventListener('click', () => $('about').hidden = true);
   $('settingsBtn').addEventListener('click', () => $('settings').hidden = false);
   $('settingsClose').addEventListener('click', () => { LS.set('lg.apiKey', $('apiKey').value); LS.set('lg.useClaude', $('useClaude').checked); saveImageGen(); $('settings').hidden = true; });
@@ -741,7 +828,7 @@
     const row = card.closest('.deck-row'); const i = +row.dataset.i; state.deck.slides[i].pick = +card.dataset.j;
     row.querySelectorAll('.deck-card').forEach(c => c.classList.toggle('pick', c === card));
   });
-  $('deckView').addEventListener('dblclick', e => { const card = e.target.closest('.deck-card'); if (card) openDetail(card.dataset.id); });
+  $('deckView').addEventListener('dblclick', e => { const card = e.target.closest('.deck-card'); if (card) openSlideEditor(card.dataset.id); });
   // A .pptx chosen in the outline panel or dropped anywhere in Deck mode
   $('outlineFromDeck').addEventListener('click', () => $('deckFile').click());
   $('deckFile').addEventListener('change', e => { const f = e.target.files[0]; e.target.value = ''; if (f && !state.busy) generateDeck(($('prompt').value || '').replace(slidesLinkIn($('prompt').value) || '', '').trim(), { file: f }); });
@@ -1331,6 +1418,7 @@
     // First frame: a working state, not an empty shell.
     const savedMode = LS.get('lg.mode', 'single');
     if (!$('prompt').value) $('prompt').value = savedMode === 'deck' ? '8-slide launch deck for Deel Global Payroll' : 'Launch posts for Deel Global Payroll, bold, image-led, square and story';
+    $('promptClear').hidden = !$('prompt').value;
     if (savedMode === 'deck') setMode('deck');
     updateCanvasBadge();
     if (savedMode === 'canvas' || savedMode === 'home') { await ensureDemoImages(false); await loadFonts(state.kit); setMode(savedMode); return; }

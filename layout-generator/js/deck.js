@@ -139,7 +139,7 @@ Rules: first slide is a cover, last is a closing. 6 to 10 slides unless the brie
         seed = (seed + 0x9E3779B9) >>> 0; attempts++;
         const L = Engine.generate({ intent: it, kit, assets: pool, format, seed });
         if (!L || seen.has(L.signature)) continue;
-        seen.add(L.signature); L.deckIndex = i; variations.push(L);
+        seen.add(L.signature); L.deckIndex = i; L.genIntent = it; L.poolIds = pool.images.map(x => x.id); variations.push(L);
       } };
       tryAll(intent);
       // copy from a real deck can be more than any layout holds: try once more with it tightened

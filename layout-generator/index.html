@@ -26,12 +26,12 @@
         <button type="button" data-mode="deck">Deck</button>
         <button type="button" data-mode="canvas">Canvas <span id="canvasBadge" class="badge" hidden></span></button>
       </div>
-      <input id="prompt" name="prompt" type="text" spellcheck="false"
-        placeholder='Describe what you need, e.g. "36 bold image-led square posts for Deel Payroll, dark, with a CTA"'>
+      <span class="prompt-wrap"><input id="prompt" name="prompt" type="text" spellcheck="false"
+        placeholder='Describe what you need, or paste a Google Slides link, e.g. "36 bold image-led square posts for Deel Payroll, dark, with a CTA"'><button id="promptClear" class="prompt-clear" type="button" aria-label="Clear the brief" title="Clear the brief" hidden>✕</button></span>
       <button id="generateBtn" type="submit" class="btn primary">Generate</button>
     </form>
     <div class="topbar-right">
-      <button id="aboutBtn" class="btn ghost" type="button">Why this works</button>
+      <button id="themeBtn" class="btn ghost icon" type="button" aria-label="Switch between light and dark">☀</button>
       <button id="adminBtn" class="btn ghost" type="button" title="Who worked, when, on what" hidden>Admin</button>
       <button id="settingsBtn" class="btn ghost" type="button" title="Interpreter settings">Settings</button>
     </div>
@@ -165,6 +165,7 @@
         </label>
         <label class="check"><input id="favOnly" type="checkbox"> Favorites</label>
         <button id="compareBtn" class="btn small" type="button" disabled>Compare (0)</button>
+        <label class="inline size-slider" title="Make the previews bigger or smaller">Size <input class="thumbSize" type="range" min="120" max="720" step="10" aria-label="Preview size"></label>
         <button id="exportFavBtn" class="btn small" type="button" disabled>Export favorites</button>
         <button id="exportFavPptxBtn" class="btn small" type="button" disabled title="All favorites as one editable deck per format">Favorites → PPTX</button>
         <button id="toCanvasBtn" class="btn small" type="button" disabled title="Open the picked (or favorited) layouts on the canvas to edit">Send to canvas</button>
@@ -176,6 +177,7 @@
         <select id="perSlide" class="select"><option>4</option><option selected>6</option><option>8</option><option>12</option></select>
       </label>
       <button id="deckShuffleAll" class="btn small" type="button">Reshuffle deck</button>
+      <label class="inline size-slider" title="Make the slides bigger or smaller">Size <input class="thumbSize" type="range" min="120" max="720" step="10" aria-label="Slide size"></label>
       <span class="grow"></span>
       <button id="deckPptxBtn" class="btn small primary" type="button" disabled>Export deck (PPTX)</button>
       <button id="deckPngBtn" class="btn small" type="button" disabled>Export picks (PNG)</button>
@@ -306,6 +308,7 @@
           <button class="btn small" id="detailCopySvg" type="button">Copy SVG</button>
         </div>
         <div class="detail-actions">
+          <button class="btn small" id="detailEdit" type="button" title="Edit the words on this slide (or double-click it)">Edit text</button>
           <button class="btn small" id="detailCanvas" type="button" title="Open this layout on the canvas to edit it">Edit on canvas</button>
           <button class="btn small" id="detailFill" type="button" title="Ask Claude for copy that fits this exact layout (needs an API key in Settings)">Fill copy with Claude</button>
           <button class="btn small" id="detailSchema" type="button" title="Copy the content schema for this layout">Copy content schema</button>
@@ -320,6 +323,31 @@
     </div>
   </div>
 
+  <div id="slideEdit" class="modal" hidden>
+    <div class="modal-inner detail slide-edit" role="dialog" aria-modal="true" aria-labelledby="seTitle">
+      <div class="detail-preview" id="sePreview"></div>
+      <div class="detail-side">
+        <div class="detail-head">
+          <div><div class="mono" id="seSub">Edit the words; the slide redraws as you type</div><h3 id="seTitle">Edit slide</h3></div>
+          <button class="btn ghost icon" data-se-close type="button" aria-label="Close">✕</button>
+        </div>
+        <div class="se-tools">
+          <span class="hint">Text size</span>
+          <button class="btn small" data-se-size="-1" type="button" title="Smaller type">A−</button>
+          <button class="btn small" data-se-size="1" type="button" title="Larger type">A+</button>
+          <button class="btn small" data-se-shuffle type="button" title="The same kind of layout, arranged differently">Rearrange</button>
+        </div>
+        <div class="se-fields" id="seFields"></div>
+        <p class="hint" id="seNote" aria-live="polite"></p>
+        <div class="detail-actions">
+          <button class="btn primary" data-se-save type="button">Save</button>
+          <button class="btn ghost" data-se-close type="button">Cancel</button>
+          <span class="grow"></span>
+          <button class="btn small" data-se-canvas type="button" title="Every layer, font and color: the full editor">Open on canvas</button>
+        </div>
+      </div>
+    </div>
+  </div>
   <div id="compare" class="modal" hidden>
     <div class="modal-inner compare">
       <div class="detail-head">
@@ -406,6 +434,9 @@
         <button class="btn ghost icon" id="settingsClose" type="button" aria-label="Close">✕</button>
       </div>
       <div class="prose">
+        <h4>Appearance</h4>
+        <div class="field"><label for="themeSelect">Theme</label><select id="themeSelect" class="select"><option value="system">Same as the system</option><option value="light">Light</option><option value="dark">Dark</option></select></div>
+        <p class="hint"><button type="button" class="linkish" id="aboutLink">How the layouts are made</button></p>
         <h4>Prompt interpreter</h4>
         <p>By default the brief is read by a built-in rule parser (formats, mood, emphasis, count, quoted copy, brand color names). Optionally, let Claude read the brief and turn it into the same constraint JSON. The key stays in this browser only and is sent straight to Anthropic.</p>
         <div class="field"><label for="apiKey">Anthropic API key</label><input id="apiKey" class="input" type="password" placeholder="sk-ant-..." autocomplete="off"></div>
