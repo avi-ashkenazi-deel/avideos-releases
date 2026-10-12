@@ -653,6 +653,8 @@ input[disabled] { opacity: .5; cursor: not-allowed; }
 .ol-notes { font-size: 12px; color: var(--fg-3); }
 .ol-notes summary { cursor: pointer; }
 .ol-notes p { margin: 4px 0 0; white-space: pre-wrap; max-height: 140px; overflow: auto; }
+.cv-zoom-pct { background: none; border: 0; color: inherit; font: inherit; font-size: 12px; cursor: pointer; padding: 2px 6px; border-radius: 6px; min-width: 44px; }
+.cv-zoom-pct:hover { background: rgba(127,127,127,.12); }
 
 </style>
 
@@ -858,7 +860,7 @@ input[disabled] { opacity: .5; cursor: not-allowed; }
         </div>
         <div class="cv-center">
           <button id="cvZoomOut" class="btn small" type="button" title="Zoom out (-)">−</button>
-          <span id="cvZoom" class="mono">50%</span>
+          <button id="cvZoom" class="mono cv-zoom-pct" type="button">50%</button>
           <button id="cvZoomIn" class="btn small" type="button" title="Zoom in (+)">+</button>
           <button id="cvFit" class="btn small" type="button" title="Fit (0)">Fit</button>
           <label class="check"><input id="cvSnap" type="checkbox" checked> Snap to grid</label>
@@ -6469,6 +6471,8 @@ const CanvasUI = (() => {
     const v = doc.view; const z = Math.min(4, Math.max(0.03, v.zoom * factor));
     v.x = px - (px - v.x) * (z / v.zoom); v.y = py - (py - v.y) * (z / v.zoom); v.zoom = z; applyView();
   }
+  // 100% (or any zoom) around the middle of the view.
+  function zoomTo(z) { zoomBy(z / doc.view.zoom); }
   function applyView() {
     const v = doc.view; $('world').style.transform = `translate(${v.x}px, ${v.y}px) scale(${v.zoom})`; $('cvZoom').textContent = Math.round(v.zoom * 100) + '%';
     if (stale.size && !staleTimer) staleTimer = requestAnimationFrame(flushStale);
@@ -7046,6 +7050,17 @@ const CanvasUI = (() => {
 
   // ---- Keyboard --------------------------------------------------------------------------------------------
   function bindKeys() {
+    // ⌘/Ctrl + and − zoom the canvas instead of the browser page, ⌘/Ctrl 0 goes to 100%; they work while typing in a
+    // panel or editing text too (⌘/Ctrl 1-9 stay the browser's tab keys).
+    document.addEventListener('keydown', e => {
+      if (!active || !(e.metaKey || e.ctrlKey) || e.altKey) return;
+      if (e.target.closest && e.target.closest('.modal:not([hidden])')) return;
+      const c = e.code, k = e.key;
+      const act = (k === '+' || k === '=' || c === 'Equal' || c === 'NumpadAdd') ? 'in' : (k === '-' || k === '_' || c === 'Minus' || c === 'NumpadSubtract') ? 'out' : (k === '0' || c === 'Digit0' || c === 'Numpad0') ? 'reset' : null;
+      if (!act) return;
+      e.preventDefault(); e.stopPropagation();
+      if (act === 'in') zoomBy(1.25); else if (act === 'out') zoomBy(1 / 1.25); else zoomTo(1);
+    }, true);
     document.addEventListener('keydown', e => {
       if (!active || editing) return;
       const tag = (e.target.tagName || '').toLowerCase(); const typing = tag === 'input' || tag === 'textarea' || tag === 'select' || e.target.isContentEditable;
@@ -7087,8 +7102,9 @@ const CanvasUI = (() => {
         return;
       }
       if (k === 'delete' || k === 'backspace') { e.preventDefault(); deleteSelection(); return; }
-      if (k === '0' && !meta) { fit(); return; } if (k === '=' || k === '+') { zoomBy(1.2); return; } if (k === '-') { zoomBy(1 / 1.2); return; }
-      if (k === '1' && e.shiftKey) { fit(); return; } if (k === '2' && e.shiftKey) { const fs = selFrames(); if (fs.length) fitTo(fs); return; }
+      if (e.shiftKey && !meta && e.code === 'Digit0') { zoomTo(1); return; }
+      if (e.shiftKey && !meta && e.code === 'Digit1') { fit(); return; } if (e.shiftKey && !meta && e.code === 'Digit2') { const fs = selFrames(); if (fs.length) fitTo(fs); else fit(); return; }
+      if (k === '0' && !meta) { fit(); return; } if ((k === '=' || k === '+') && !meta) { zoomBy(1.2); return; } if (k === '-' && !meta) { zoomBy(1 / 1.2); return; }
       if (k.startsWith('arrow')) {
         const fs = selFrames(); const f = selFrame(); const bs = selBlocks().filter(b => !b.locked); if (!fs.length) return; e.preventDefault();
         const step = e.shiftKey ? (f ? f.layout.grid.unit : 8) : 1; const dx = k === 'arrowleft' ? -step : k === 'arrowright' ? step : 0, dy = k === 'arrowup' ? -step : k === 'arrowdown' ? step : 0;
@@ -7214,6 +7230,8 @@ const CanvasUI = (() => {
     setEditMode(editMode);
     $('cvNewFrame').addEventListener('click', () => createFrame({ center: true }));
     $('cvZoomIn').addEventListener('click', () => zoomBy(1.25)); $('cvZoomOut').addEventListener('click', () => zoomBy(1 / 1.25)); $('cvFit').addEventListener('click', fit);
+    $('cvZoom').addEventListener('click', () => zoomTo(1));
+    { const mod = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent) ? '⌘' : 'Ctrl '; $('cvZoomIn').title = `Zoom in (${mod}+ or +)`; $('cvZoomOut').title = `Zoom out (${mod}− or −)`; $('cvFit').title = 'Fit everything (Shift 1, or 0) · Shift 2 fits the selection'; $('cvZoom').title = `Back to 100% (${mod}0 or Shift 0)`; }
     $('cvUndo').addEventListener('click', undo); $('cvRedo').addEventListener('click', redo);
     $('cvSnap').addEventListener('change', e => { doc.grid.snap = e.target.checked; persist(); });
     $('cvLink').addEventListener('click', copyLink);

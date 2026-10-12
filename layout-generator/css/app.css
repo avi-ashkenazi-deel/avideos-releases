@@ -649,3 +649,5 @@ input[disabled] { opacity: .5; cursor: not-allowed; }
 .ol-notes { font-size: 12px; color: var(--fg-3); }
 .ol-notes summary { cursor: pointer; }
 .ol-notes p { margin: 4px 0 0; white-space: pre-wrap; max-height: 140px; overflow: auto; }
+.cv-zoom-pct { background: none; border: 0; color: inherit; font: inherit; font-size: 12px; cursor: pointer; padding: 2px 6px; border-radius: 6px; min-width: 44px; }
+.cv-zoom-pct:hover { background: rgba(127,127,127,.12); }
