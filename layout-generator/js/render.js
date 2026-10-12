@@ -69,6 +69,17 @@ const Render = (() => {
     return attrs ? `<g${attrs}>${el}</g>` : el;
   }
 
+  // Words set in bold inside a line (the figures in a sentence): b.emph lists the phrases; one split over two lines
+  // is bolded on both. Returns the line as runs.
+  function emphRuns(line, emph) {
+    const list = (Array.isArray(emph) ? emph : []).map(String).filter(x => x.trim()); if (!list.length) return [{ text: line, on: false }];
+    const parts = new Set(); for (const e of list) { parts.add(e); for (const w of e.split(/\s+/)) if (w.length >= 3 || (w.length >= 2 && /\d/.test(w))) parts.add(w); }
+    const re = new RegExp([...parts].sort((a, b) => b.length - a.length).map(x => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'), 'g');
+    const out = []; let at = 0; let m;
+    while ((m = re.exec(line))) { if (!m[0]) { re.lastIndex++; continue; } if (m.index > at) out.push({ text: line.slice(at, m.index), on: false }); out.push({ text: m[0], on: true }); at = m.index + m[0].length; }
+    if (at < line.length) out.push({ text: line.slice(at), on: false });
+    return out.length ? out : [{ text: line, on: false }];
+  }
   function textEl(b, ctx) {
     const f = b.font || {};
     const anchor = b.align === 'center' ? 'middle' : b.align === 'right' ? 'end' : 'start';
@@ -78,7 +89,8 @@ const Render = (() => {
     const ls = f.letterSpacing ? ` letter-spacing="${n(f.letterSpacing * size)}"` : '';
     const it = f.style === 'italic' ? ' font-style="italic"' : '';
     const deco = b.decoration === 'underline' || b.decoration === 'line-through' ? ` text-decoration="${b.decoration}"` : '';
-    const spans = (b.lines || []).map((line, i) => `<tspan x="${n(x)}" y="${n(first + i * lh)}">${esc(typeof line === 'string' ? line : line.text)}</tspan>`).join('');
+    const bold = n(b.emphWeight || 700);
+    const spans = (b.lines || []).map((line, i) => `<tspan x="${n(x)}" y="${n(first + i * lh)}">${emphRuns(typeof line === 'string' ? line : line.text, b.emph).map(r => r.on ? `<tspan font-weight="${bold}">${esc(r.text)}</tspan>` : esc(r.text)).join('')}</tspan>`).join('');
     return `<text font-family='${fam(f)}' font-size="${size}" font-weight="${n(f.weight || 400)}"${it}${deco} fill="${paint(b, ctx)}" text-anchor="${anchor}"${ls}>${spans}</text>`;
   }
   function listEl(b, ctx) {
@@ -331,5 +343,5 @@ const Render = (() => {
     }
     return pdf ? pdf.output('blob') : null;
   }
-  return { toSVG, gridOverlay, exportSVG, exportPNG, exportPDF, svgToPngDataUrl, download, fontFaceCss, fontsEmbedded, bufToBase64, sanitizeSvgInner, col };
+  return { toSVG, gridOverlay, exportSVG, exportPNG, exportPDF, svgToPngDataUrl, download, fontFaceCss, fontsEmbedded, bufToBase64, sanitizeSvgInner, col, emphRuns };
 })();

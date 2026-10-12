@@ -69,7 +69,9 @@ const ExportPptx = (() => {
         if (a) slide.addImage({ data: stripData(a.dataUrl), ...box, sizing: { type: 'cover', w: box.w, h: box.h } });
       } else if (b.kind === 'text') {
         const f = b.font;
-        slide.addText(b.lines.join('\n'), {
+        // bold figures inside a line stay bold: the text goes in as runs
+        const body = b.emph && b.emph.length ? b.lines.flatMap((ln, i) => Render.emphRuns(typeof ln === 'string' ? ln : ln.text, b.emph).map((r, j, a) => ({ text: r.text, options: { bold: r.on ? true : f.weight >= 600, breakLine: j === a.length - 1 && i < b.lines.length - 1 } }))) : b.lines.join('\n');
+        slide.addText(body, {
           ...box, h: inch(b.h + f.size * 0.4),
           fontFace: fontName(f.family), fontSize: pt(f.size), color: hex(b.fill), bold: f.weight >= 600,
           align: b.align || 'left', valign: 'top', margin: 0, lineSpacingMultiple: f.lineHeight || 1.2,

@@ -4,10 +4,10 @@
    Anything that breaks a rule (overflowing text, text off the safe area, unreadable contrast) is rejected. */
 const Engine = (() => {
   const H_LEVELS = [0.055, 0.07, 0.09, 0.115, 0.145, 0.18];
-  const ARCHETYPES = ['type-led', 'split', 'full-bleed', 'poster', 'mosaic', 'color-block', 'editorial', 'stat', 'agenda', 'comparison', 'process', 'cards', 'quote', 'sections', 'diagram'];
+  const ARCHETYPES = ['type-led', 'split', 'full-bleed', 'poster', 'mosaic', 'color-block', 'editorial', 'stat', 'hero-stat', 'agenda', 'comparison', 'process', 'cards', 'quote', 'sections', 'diagram'];
   const ARCH_LABEL = {
     'type-led': 'Type-led', 'split': 'Split', 'full-bleed': 'Full-bleed image', 'poster': 'Framed image',
-    'mosaic': 'Mosaic', 'color-block': 'Color blocks', 'editorial': 'Editorial', 'stat': 'Statement stat',
+    'mosaic': 'Mosaic', 'color-block': 'Color blocks', 'editorial': 'Editorial', 'stat': 'Statement stat', 'hero-stat': 'Hero number',
     'agenda': 'Agenda', 'comparison': 'Comparison', 'process': 'Process', 'cards': 'Cards', 'quote': 'Quote',
     'sections': 'Sections', 'diagram': 'Diagram',
   };
@@ -17,7 +17,7 @@ const Engine = (() => {
     cover: { 'type-led': 3, 'full-bleed': 3, split: 2, 'color-block': 1.5, poster: 1 },
     agenda: { agenda: 1 },
     statement: { 'type-led': 3, 'color-block': 1.5, editorial: 1 },
-    stat: { stat: 1 },
+    stat: { 'hero-stat': 3, stat: 1 },
     comparison: { comparison: 1 },
     process: { process: 1 },
     cards: { cards: 1 },
@@ -87,7 +87,8 @@ const Engine = (() => {
         total += res.height; continue;
       }
       const text = Text.transform(it.text, it.font.transform);
-      const f = Text.fit(text, it.font, region.w, region.h, { minSize: it.minSize || Math.max(10, it.font.size * 0.62), step: Math.max(2, g.unit / 4), maxLines: it.maxLines || 12 });
+      // bold words run wider than the regular face the lines are measured in: a little room for them
+      const f = Text.fit(text, it.font, it.emph && it.emph.length ? region.w * 0.95 : region.w, region.h, { minSize: it.minSize || Math.max(10, it.font.size * 0.62), step: Math.max(2, g.unit / 4), maxLines: it.maxLines || 12 });
       if (!f) return null;
       const lineW = Math.max(...f.lines.map(l => Text.width(l, { ...it.font, size: f.size })));
       blocks.push({ ...it, kind: 'text', lines: f.lines, font: { ...it.font, size: f.size }, h: snap(f.height, g.unit / 2) || f.height, w: region.w, inkW: Math.min(region.w, lineW) });
@@ -627,6 +628,98 @@ const Engine = (() => {
   };
 
 
+  // ---- Hero number ---------------------------------------------------------------------
+  // The number as the slide's hero: as large as the slide allows, the sentence that frames it above (its figures in
+  // bold), its caption below, and on the other side a visual that shows what the number is when that can be drawn
+  // honestly (a ring for a share of a whole, a dot per unit for a countable few), else a brand picture or shape.
+  // Or a color panel holding the number, with the statement beside it.
+  function readStat(s) {
+    const m = /^([^\d]*?)(\d[\d,]*(?:\.\d+)?)\s*(.*)$/.exec(String(s || '').trim()); if (!m) return null;
+    const value = parseFloat(m[2].replace(/,/g, '')); const prefix = m[1].trim(), suffix = m[3].trim();
+    return { value, prefix, suffix, pct: !prefix && suffix === '%' && value > 0 && value <= 100 ? value : null, count: !prefix && /^\+?$/.test(suffix) && Number.isInteger(value) && value >= 3 && value <= 240 ? value : null };
+  }
+  const FIGURE = /(?:[$€£¥]\s?)?\d[\d,.]*(?:\s?(?:%|x|×|k|K|m|M|bn|BN|B|million|billion|thousand|trillion))?(?:\s?(?:ARR|MRR|YoY|PEPM|PUPM))?\+?/g;
+  const figuresIn = t => [...new Set((String(t || '').match(FIGURE) || []).map(x => x.trim()).filter(x => x.length >= 2 && !/^(19|20)\d{2}$/.test(x)))];
+  const r1 = v => Math.round(v * 10) / 10;
+  function ringVisual(ctx, r, pct) {
+    const { pal } = ctx; const d = Math.min(r.w, r.h); const x = r.x + (r.w - d) / 2, y = r.y + (r.h - d) / 2;
+    const sw = d * 0.12, R = (d - sw) / 2, c = d / 2; const a = Math.PI * 2 * pct / 100 - Math.PI / 2;
+    const track = Color.mix(pal.bg, pal.fg, pal.dark ? 0.16 : 0.1);
+    const arc = pct >= 99.9 ? `<circle cx="${r1(c)}" cy="${r1(c)}" r="${r1(R)}" fill="none" stroke="${pal.accent}" stroke-width="${r1(sw)}"/>`
+      : `<path d="M${r1(c)} ${r1(c - R)} A${r1(R)} ${r1(R)} 0 ${pct > 50 ? 1 : 0} 1 ${r1(c + R * Math.cos(a))} ${r1(c + R * Math.sin(a))}" fill="none" stroke="${pal.accent}" stroke-width="${r1(sw)}" stroke-linecap="round"/>`;
+    return { kind: 'vector', role: 'stat-visual', x, y, w: d, h: d, viewBox: [0, 0, r1(d), r1(d)], keepAspect: true, svg: `<circle cx="${r1(c)}" cy="${r1(c)}" r="${r1(R)}" fill="none" stroke="${track}" stroke-width="${r1(sw)}"/>${arc}`, fill: pal.accent, decorative: true, label: `${pct}% of a whole` };
+  }
+  function dotsVisual(ctx, r, count) {
+    const { pal } = ctx; let cols = Math.max(1, Math.round(Math.sqrt(count * r.w / r.h))); const rows = Math.ceil(count / cols); cols = Math.ceil(count / rows);
+    const cell = Math.min(r.w / cols, r.h / rows); const dd = cell * 0.64; const w = cols * cell, h = rows * cell;
+    let dots = ''; for (let i = 0; i < count; i++) { const cx = (i % cols + 0.5) * cell, cy = (Math.floor(i / cols) + 0.5) * cell; dots += `<circle cx="${r1(cx)}" cy="${r1(cy)}" r="${r1(dd / 2)}"/>`; }
+    return { kind: 'vector', role: 'stat-visual', x: r.x + (r.w - w) / 2, y: r.y + (r.h - h) / 2, w, h, viewBox: [0, 0, r1(w), r1(h)], keepAspect: true, svg: `<g fill="${pal.accent}">${dots}</g>`, fill: pal.accent, decorative: true, label: `${count} dots, one each` };
+  }
+  A['hero-stat'] = ctx => {
+    const { g, rng, pal, ts, content } = ctx;
+    if (!content.stat) return null;
+    const C = g.cols, R = ctx.R, wide = g.w >= g.h * 1.15;
+    const st = readStat(content.stat); const stat = String(content.stat).trim();
+    const lede = content.subhead || ''; const caption = content.headline || '';
+    const variant = rng.weighted([{ v: 'giant', w: 3 }, { v: 'panel', w: wide ? 1.6 : 0 }]);
+    const unitW = Text.width(stat, { ...ts.stat, size: 100 }) / 100 || 1;
+    const area = Grid.rect(g, 0, ctx.r0, C, R);
+    const blocks = []; const avoid = [];
+    const capFont = { ...ts.subhead, size: snapFont(ts.subhead.size * (wide ? 1.45 : 1.3), g.unit), weight: nearestWeight(ctx.kit.fonts.body, 500), lineHeight: 1.18 };
+    if (variant === 'panel') {
+      const pw = snap(g.w * rng.pick([0.48, 0.52]), g.unit); const left = rng.chance(0.65);
+      const panel = { kind: 'field', role: 'panel', x: left ? 0 : g.w - pw, y: 0, w: pw, h: g.h, fill: pal.accent, decorative: true };
+      const m = g.safe.left; const inner = { x: panel.x + m, y: area.y, w: pw - m * 2, h: area.h };
+      const size = snapFont(Math.min(inner.w * 0.96 / unitW, g.h * 0.56), g.unit);
+      const pItems = [{ kind: 'text', role: 'stat', path: 'stat', text: stat, font: { ...ts.stat, size }, fill: pal.onAccent, maxLines: 1, minSize: size * 0.6, gap: snap(size * 0.08, g.unit) }];
+      if (lede && caption) pItems.push({ kind: 'text', role: 'caption', path: 'headline', text: caption, font: capFont, fill: pal.onAccent, maxLines: 3 });
+      const ps = buildStack(pItems, inner, 'left', rng.pick(['bottom', 'center']), g); if (!ps) return null;
+      const side = { x: left ? pw + g.gutter * 2 : area.x, y: area.y, w: g.w - pw - g.gutter * 2 - (left ? g.safe.right : g.safe.left), h: area.h };
+      const statement = lede || caption; const sItems = [];
+      if (content.eyebrow) sItems.push({ kind: 'text', role: 'eyebrow', path: 'eyebrow', text: content.eyebrow, font: ts.eyebrow, fill: pal.accentText, maxLines: 1, gap: snap(ts.body.size, g.unit) });
+      sItems.push({ kind: 'text', role: lede ? 'subhead' : 'headline', path: lede ? 'subhead' : 'headline', text: statement, font: { ...ts.headline, size: snapFont(ts.headline.size * 0.62, g.unit), lineHeight: 1.12 }, fill: pal.fg, maxLines: 6, emph: figuresIn(statement), emphWeight: 800, gap: snap(ts.body.size * 1.2, g.unit) });
+      if (content.body) sItems.push({ kind: 'text', role: 'body', path: 'body', text: content.body, font: ts.body, fill: pal.fg2, maxLines: 6 });
+      const ss = buildStack(sItems, side, 'left', 'center', g); if (!ss) return null;
+      blocks.push(panel, ...ps.blocks, ...ss.blocks); avoid.push(panel, inkRect(ss, side, 'left'));
+      const logo = placeLogo(ctx, avoid, left ? ['TR', 'BR'] : ['TL', 'BL']); if (logo) blocks.push(logo);
+      return { blocks, meta: { variant, side: left ? 'left' : 'right' } };
+    }
+    // giant: the number fills its column; a visual takes the other side when there is one to draw
+    const imgs = ctx.assets.images.length;
+    // a quarter of the time the number alone, across the slide; otherwise the visual the number allows
+    const vis = !wide || rng.chance(0.25) ? null : st && st.pct && rng.chance(0.85) ? 'ring' : st && st.count && rng.chance(0.75) ? 'dots' : imgs && rng.chance(0.55) ? 'image' : (ctx.kit.shapes || []).length && rng.chance(0.6) ? 'shape' : null;
+    const cs = vis ? Math.round(C * (vis === 'image' ? 0.6 : vis === 'shape' ? 0.66 : 0.6)) : C;
+    const region = Grid.rect(g, 0, ctx.r0, cs, R);
+    const valign = rng.pick(['center', 'bottom', 'center']);
+    let stack = null, size0 = Math.min(region.w * 0.97 / unitW, g.h * (lede ? 0.4 : 0.5));
+    for (const k of [1, 0.88, 0.77, 0.67, 0.58]) {
+      const size = snapFont(size0 * k, g.unit); const items = [];
+      if (content.eyebrow) items.push({ kind: 'text', role: 'eyebrow', path: 'eyebrow', text: content.eyebrow, font: ts.eyebrow, fill: pal.fg2, maxLines: 1, gap: snap(ts.body.size * 1.1, g.unit) });
+      if (lede) items.push({ kind: 'text', role: 'subhead', path: 'subhead', text: lede, font: { ...ts.subhead, size: snapFont(ts.subhead.size * (wide ? 1.4 : 1.25), g.unit), lineHeight: 1.22 }, fill: pal.fg, maxLines: 3, emph: figuresIn(lede), emphWeight: 700, gap: snap(size * 0.12, g.unit) });
+      items.push({ kind: 'text', role: 'stat', path: 'stat', text: stat, font: { ...ts.stat, size, lineHeight: 0.9 }, fill: pal.accentText, maxLines: 1, minSize: size, gap: snap(size * 0.1, g.unit) });
+      if (caption) items.push({ kind: 'text', role: 'caption', path: 'headline', text: caption, font: capFont, fill: pal.fg, maxLines: 3 });
+      stack = buildStack(items, region, 'left', valign, g); if (stack) break;
+    }
+    if (!stack) return null;
+    blocks.push(...stack.blocks); const ink = inkRect(stack, region, 'left'); avoid.push(ink);
+    if (vis) {
+      const x0 = region.x + region.w + g.gutter * 2;
+      const vr = { x: x0, y: area.y, w: g.w - g.safe.right - x0, h: area.h };
+      if (vis === 'ring') { const v = ringVisual(ctx, { x: vr.x, y: vr.y + vr.h * 0.08, w: vr.w, h: vr.h * 0.84 }, st.pct); blocks.push(v); avoid.push(v); }
+      else if (vis === 'dots') { const v = dotsVisual(ctx, { x: vr.x, y: vr.y + vr.h * 0.1, w: vr.w, h: vr.h * 0.8 }, st.count); blocks.push(v); avoid.push(v); }
+      else if (vis === 'image') { const a = pickImage(ctx); if (a) { const r = { x: x0 - g.gutter, y: 0, w: g.w - x0 + g.gutter, h: g.h }; blocks.unshift(imageBlock(ctx, r, a, 0)); avoid.push(r); } }
+      else {
+        const shape = rng.pick(ctx.kit.shapes); const d = snap(g.h * rng.pick([0.8, 0.95, 1.1]), g.unit);
+        const blk = shape === 'quarter' ? { kind: 'shape', shape, x: g.w - d, y: g.h - d, w: d, h: d, fill: pal.accent, rot: 0 }
+          : shape === 'pill' ? { kind: 'shape', shape, x: x0 + g.gutter, y: snap(g.h * 0.18, g.unit), w: g.w, h: snap(g.h * 0.34, g.unit), fill: pal.accent }
+          : { kind: 'shape', shape: 'circle', x: Math.max(x0, g.w - d * 0.7), y: (g.h - d) / 2 + rng.pick([-1, 1]) * g.h * 0.12, w: d, h: d, fill: pal.accent };
+        if (!inter(blk, grow(ink, g.gutter))) { blocks.unshift({ ...blk, decorative: true }); avoid.push(blk); }
+      }
+    }
+    const logo = placeLogo(ctx, avoid, vis === 'image' ? ['TL', 'BL'] : ['TR', 'BR', 'TL']); if (logo) blocks.push(logo);
+    return { blocks, meta: { variant, visual: vis || 'none', valign } };
+  };
+
   // ---- Deck families -----------------------------------------------------------------
   // A card: a surface rect plus an inner stack. Returns blocks or null.
   function card(ctx, r, items, opts = {}) {
@@ -950,7 +1043,8 @@ const Engine = (() => {
     } else { for (const k of ['agenda', 'comparison', 'process', 'cards', 'quote', 'sections', 'diagram']) w[k] = (intent.archetypes && intent.archetypes.includes(k)) ? 1 : 0; }
     if (!content.diagram) w.diagram = 0;
     if (!n) { w['full-bleed'] = 0; w.mosaic = 0; w.poster *= 0.6; w.split *= 0.7; }
-    if (!content.stat) w.stat = 0;
+    w['hero-stat'] = intent.slideIntent ? (w['hero-stat'] || 0) : (w.stat || 0) * 1.6;
+    if (!content.stat) { w.stat = 0; w['hero-stat'] = 0; }
     if (!content.quote) w.quote = 0;
     if (intent.archetypes && intent.archetypes.length) for (const k of Object.keys(w)) if (!intent.archetypes.includes(k)) w[k] = 0;
     return w;
