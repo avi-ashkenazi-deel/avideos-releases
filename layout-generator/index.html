@@ -93,10 +93,13 @@
     <section class="panel" id="outlinePanel" hidden>
       <div class="panel-head"><h2>Deck outline</h2><span class="hint" id="outlineSource"></span></div>
       <p class="hint">One row per slide. Edit anything, then Generate again. Details take one item per line: <code>Title — text</code> for cards and steps, two blocks split by <code>---</code> for a comparison, quote then attribution for a quote.</p>
+      <p class="hint"><b>From a deck:</b> paste a Google Slides link as the brief, or use a .pptx (or drop it here): every slide is read and rebuilt in the brand.</p>
       <div id="outlineList" class="outline"></div>
       <div class="row">
         <button id="outlineAdd" class="btn small" type="button">Add slide</button>
         <button id="outlineReset" class="btn small" type="button">Rebuild from brief</button>
+        <button id="outlineFromDeck" class="btn small" type="button">Use a deck (.pptx)…</button>
+        <input id="deckFile" type="file" accept=".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation" hidden>
       </div>
     </section>
 
@@ -440,6 +443,7 @@
 <script src="js/figma.js"></script>
 <script src="js/pptx-import.js"></script>
 <script src="js/gslides.js"></script>
+<script src="js/deck-digest.js"></script>
 <script src="js/looks.js"></script>
 <script src="js/webimport.js"></script>
 <script src="js/canvas.js"></script>

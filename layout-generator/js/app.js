@@ -258,6 +258,7 @@
   async function generate(text, opts = {}) {
     if (state.busy) return;
     if (state.mode === 'deck' && !opts.intent) return generateDeck(text);
+    if (!opts.intent && slidesLinkIn(text)) { setMode('deck'); toast('That is a presentation: rebuilding it as a deck'); return generateDeck(text); }
     if (!opts.auto) Stats.track('generate', { detail: String(text).slice(0, 60) });
     state.busy = true; $('generateBtn').disabled = true; $('generateBtn').textContent = 'Reading brief…';
     try {
@@ -585,13 +586,15 @@
   }
   function renderOutline() {
     const o = state.outline; if (!o) return;
-    $('outlineSource').textContent = `${o.slides.length} slides · ${o.source === 'claude' ? 'written by Claude' : state.outlineEdited ? 'edited' : 'from brief'}`;
+    $('outlineSource').textContent = `${o.slides.length} slides · ${o.source === 'deck' ? `from “${o.title}”${state.outlineEdited ? ', edited' : o.by === 'claude' ? ', sorted by Claude' : ''}` : o.source === 'claude' ? 'written by Claude' : state.outlineEdited ? 'edited' : 'from brief'}`;
+    $('outlineReset').textContent = o.source === 'deck' ? 'Rebuild from the deck' : 'Rebuild from brief';
     $('outlineList').innerHTML = o.slides.map((sl, i) => `<div class="outline-row" data-i="${i}">
-      <div class="num">${String(i + 1).padStart(2, '0')}</div>
+      <div class="num">${String(i + 1).padStart(2, '0')}${sl.source ? `<small title="Slide ${sl.source} of the original deck">↳${sl.source}</small>` : ''}</div>
       <div class="fields">
         <select class="select" data-k="intent" id="ol-intent-${i}" aria-label="Slide intent">${Engine.SLIDE_INTENTS.map(k => `<option value="${k}" ${k === sl.intent ? 'selected' : ''}>${Deck.INTENT_LABEL[k]}</option>`).join('')}</select>
         <input class="input" data-k="headline" id="ol-headline-${i}" type="text" placeholder="${sl.intent === 'quote' ? 'Headline (optional)' : 'Headline'}" value="${escapeHtml(sl.headline || '')}">
         <textarea class="input" data-k="details" id="ol-details-${i}" rows="3" placeholder="${escapeHtml(DETAIL_HINT[sl.intent] || '')}">${escapeHtml(detailsText(sl))}</textarea>
+        ${sl.notes ? `<details class="ol-notes"><summary>Speaker notes (what the slide leaves out)</summary><p>${escapeHtml(sl.notes)}</p></details>` : ''}
       </div>
       <div class="ops"><button class="btn small" data-op="up" title="Move up" type="button">↑</button><button class="btn small" data-op="down" title="Move down" type="button">↓</button><button class="btn small" data-op="rm" title="Remove" type="button">✕</button></div>
     </div>`).join('');
@@ -614,7 +617,7 @@
     state.outlineEdited = true; renderOutline();
   });
   $('outlineAdd').addEventListener('click', () => { const sl = state.outline.slides; sl.splice(Math.max(0, sl.length - 1), 0, Deck.slideFromTitle(state.kit, '', 'cards')); sl.forEach((x, j) => x.section = String(j + 1).padStart(2, '0')); state.outlineEdited = true; renderOutline(); });
-  $('outlineReset').addEventListener('click', async () => { state.outlineEdited = false; state.outline = await resolveOutline($('prompt').value, true); renderOutline(); toast('Outline rebuilt'); });
+  $('outlineReset').addEventListener('click', async () => { if (state.outline && state.outline.source === 'deck' && state.deckSource) { if (state.busy) return; state.outlineEdited = false; return generateDeck($('prompt').value, { rebuild: true }); } state.outlineEdited = false; state.outline = await resolveOutline($('prompt').value, true); renderOutline(); toast('Outline rebuilt'); });
 
   async function resolveOutline(text, force) {
     if (state.outline && state.outlineEdited && !force) return state.outline;
@@ -627,18 +630,74 @@
     return Deck.outlineFromBrief(text, state.kit, { subject: d ? d.subject : null });
   }
 
-  async function generateDeck(text) {
-    Stats.track('generate.deck', { detail: String(text).slice(0, 60) });
+  // ---- A deck from a finished presentation: a Google Slides link in the brief, or a .pptx chosen or dropped -------------
+  const slidesLinkIn = t => (String(t || '').match(/https?:\/\/docs\.google\.com\/presentation\/\S+/) || [])[0] || null;
+  let sampleP = null;
+  const sampleFn = () => { if (!sampleP) sampleP = (window.claude && typeof window.claude.use === 'function') ? window.claude.use('sample').catch(() => null) : Promise.resolve(null); return sampleP; };
+  // Who reads the deck: the viewer's claude.ai account, else Claude with the API key (when "Use Claude" is on), else rules.
+  async function deckAsker() {
+    const sm = await sampleFn();
+    if (sm) return { who: 'Claude', ask: prompt => sm.json(prompt, { modelTier: 'default' }) };
+    const key = $('apiKey').value.trim();
+    if (key && $('useClaude').checked) return { who: 'Claude', ask: async prompt => {
+      const res = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' }, body: JSON.stringify({ model: 'claude-opus-5-5', max_tokens: 16000, messages: [{ role: 'user', content: prompt }], output_config: { effort: 'medium' } }) });
+      if (!res.ok) throw new Error(`Claude request failed (${res.status})`);
+      const data = await res.json(); const block = (data.content || []).find(b => b.type === 'text'); if (!block) throw new Error('No text in the reply');
+      return DeckDigest.parseJSON(block.text);
+    } };
+    return null;
+  }
+  // In claude.ai a link is read as text through the Drive connector (fast even for a heavy deck); on the server, and for
+  // files, the .pptx itself is read, pictures included.
+  async function readDeckLink(url) {
+    if (await GSlides.route() === 'connector') { const t = await GSlides.fetchText(url); return DeckDigest.fromText(t.text, t.title); }
+    return readDeckBytes(await GSlides.fetchDeck(url), 'Google Slides deck');
+  }
+  const deckImages = new Map();
+  async function readDeckBytes(bytes, name) {
+    const res = await PptxImport.read(bytes, {
+      addImage: async (url, nm) => { const key = nm + ':' + url.length + ':' + url.slice(-48); if (deckImages.has(key)) return deckImages.get(key); const a = await addImage(url, nm); a.deck = true; deckImages.set(key, a); return a; },
+      layout: 'fixed', onProgress: (i, n) => { $('generateBtn').textContent = `Reading slide ${i}/${n}…`; },
+    });
+    if (!res.slides.length) throw new Error('No slides found in that deck');
+    const deck = DeckDigest.fromPptx(res, name);
+    // pictures no slide keeps (logos, icons, backgrounds) leave the image list again
+    const keep = new Set(deck.slides.flatMap(sl => sl.images));
+    const drop = state.assets.images.filter(a => a.deck && !keep.has(a.id));
+    for (const a of drop) { const i = state.assets.images.indexOf(a); if (i >= 0) state.assets.images.splice(i, 1); try { URL.revokeObjectURL(a.url); } catch { } }
+    for (const [k, a] of deckImages) if (drop.includes(a)) deckImages.delete(k);
+    if (drop.length) renderImages();
+    return deck;
+  }
+  async function outlineFromDeck(deck) {
+    const asker = await deckAsker();
+    if (!asker) return DeckDigest.rules(deck);
+    $('generateBtn').textContent = 'Claude is reading the deck…';
+    const o = await DeckDigest.withClaude(deck, state.kit, asker.ask, (d, n) => { $('generateBtn').textContent = `Claude is reading the deck… ${d}/${n}`; });
+    if (o.by === 'rules') toast('Claude did not answer, so rules sorted the slides. Generate again to retry, or edit the outline.');
+    else if (o.failed) toast(`Claude sorted most slides; ${o.failed} part${o.failed > 1 ? 's were' : ' was'} sorted by rules.`);
+    return o;
+  }
+
+  async function generateDeck(text, opts = {}) {
+    Stats.track('generate.deck', { detail: opts.file ? 'file' : slidesLinkIn(text) ? 'slides link' : String(text).slice(0, 60) });
     state.busy = true; $('generateBtn').disabled = true; $('generateBtn').textContent = 'Reading brief…';
     try {
+      const link = slidesLinkIn(text); const src = state.deckSource;
+      // a deck is in play when the brief holds its link, a file was just given, or the brief has not changed since
+      if (opts.file) { $('generateBtn').textContent = 'Reading the deck…'; const deck = await readDeckBytes(new Uint8Array(await opts.file.arrayBuffer()), opts.file.name); state.deckSource = { key: 'file:' + opts.file.name + ':' + opts.file.size, prompt: text, deck }; Stats.track('import.deck', { detail: 'pptx' }); }
+      else if (link && (!src || src.key !== link)) { $('generateBtn').textContent = 'Opening the deck…'; const deck = await readDeckLink(link); state.deckSource = { key: link, prompt: text, deck }; Stats.track('import.deck', { detail: 'slides link' }); }
+      else if (!link && src && src.prompt !== text) state.deckSource = null;
+      const ds = state.deckSource; if (ds) ds.prompt = text;
       const promptChanged = text !== state.lastPrompt;
-      const base = await resolveIntent(text);
-      applyBriefCopy(text, base);
+      const base = await resolveIntent(ds ? (text.replace(link || '', '').trim() || ds.deck.title) : text);
+      if (!ds) applyBriefCopy(text, base);
       const kit = readKit();
       await ensureDemoImages(false); await loadFonts(kit);
       if (promptChanged) { state.outlineEdited = false; state.lastPrompt = text; }
       state.intent = base;
-      state.outline = await resolveOutline(text, promptChanged && !state.outlineEdited);
+      if (ds) { if (!(state.outline && state.outline.source === 'deck' && ds.outlineFor === ds.key && (state.outlineEdited || !opts.rebuild))) { state.outline = await outlineFromDeck(ds.deck); ds.outlineFor = ds.key; state.outlineEdited = false; } }
+      else state.outline = await resolveOutline(text, promptChanged && !state.outlineEdited);
       renderOutline();
       LS.set('lg.prompt', text);
       const format = Grid.byId[state.deckFormat] || Grid.byId.slide;
@@ -647,19 +706,23 @@
       state.deck = await Deck.generate({ outline: state.outline, kit, assets: state.assets, format, baseIntent: base, perSlide: +$('perSlide').value, seedBase, onProgress: (i, n) => { $('generateBtn').textContent = `Slide ${i}/${n}…`; } });
       const ms = Math.round(performance.now() - t0);
       const made = state.deck.slides.reduce((s, x) => s + x.variations.length, 0);
+      const o = state.outline; const fr = o.source === 'deck' && o.from;
       $('readout').innerHTML = [
-        `<span><span class="k">deck</span> <b>${escapeHtml(state.outline.title)}</b> · ${state.deck.slides.length} slides · ${format.name}</span>`,
-        `<span><span class="k">outline by</span> <b>${state.outline.source === 'claude' ? 'Claude' : 'rules'}</b> · <span class="k">brief read by</span> <b>${base.source === 'claude' ? 'Claude' : 'rules'}</b></span>`,
+        `<span><span class="k">deck</span> <b>${escapeHtml(o.title)}</b> · ${state.deck.slides.length} slides · ${format.name}</span>`,
+        fr ? `<span><span class="k">from</span> <b>${fr.used} of ${fr.slides} slides</b>${fr.ignored ? ` (${fr.ignored} after “ignore” left out)` : ''} · <span class="k">sorted by</span> <b>${o.by === 'claude' ? 'Claude' : 'rules'}</b>${fr.pictures ? '' : ' · <span class="k">pictures</span> from the brand library'}</span>`
+          : `<span><span class="k">outline by</span> <b>${o.source === 'claude' ? 'Claude' : 'rules'}</b> · <span class="k">brief read by</span> <b>${base.source === 'claude' ? 'Claude' : 'rules'}</b></span>`,
         `<span><span class="k">palette</span> <b>${state.deck.palette ? state.deck.palette.bgName : '—'}</b> · <span class="k">type step</span> <b>${state.deck.level + 1}/6</b></span>`,
         `<span><span class="k">variations</span> <b>${made}</b> <span class="k">in ${ms} ms</span></span>`,
       ].join('');
       renderDeck();
     } catch (err) {
       console.error(err);
-      $('readout').innerHTML = `<span style="color:var(--danger)">Deck generation failed: ${escapeHtml(err && err.message ? err.message : String(err))}. Reload the page and try again; if it repeats, copy this message to Claude.</span>`;
-      toast('Deck generation failed: ' + (err && err.message ? err.message : err));
+      const msg = err && err.message ? err.message : String(err);
+      $('readout').innerHTML = `<span style="color:var(--danger)">${slidesLinkIn(text) || opts.file ? 'Could not read that deck' : 'Deck generation failed'}: ${escapeHtml(msg)}</span>`;
+      toast((slidesLinkIn(text) || opts.file ? 'Could not read that deck: ' : 'Deck generation failed: ') + msg);
     } finally { state.busy = false; $('generateBtn').disabled = false; $('generateBtn').textContent = 'Generate'; }
   }
+
   function renderDeck() {
     const d = state.deck; if (!d) return;
     const tall = d.format.h > d.format.w;
@@ -679,6 +742,14 @@
     row.querySelectorAll('.deck-card').forEach(c => c.classList.toggle('pick', c === card));
   });
   $('deckView').addEventListener('dblclick', e => { const card = e.target.closest('.deck-card'); if (card) openDetail(card.dataset.id); });
+  // A .pptx chosen in the outline panel or dropped anywhere in Deck mode
+  $('outlineFromDeck').addEventListener('click', () => $('deckFile').click());
+  $('deckFile').addEventListener('change', e => { const f = e.target.files[0]; e.target.value = ''; if (f && !state.busy) generateDeck(($('prompt').value || '').replace(slidesLinkIn($('prompt').value) || '', '').trim(), { file: f }); });
+  document.addEventListener('dragover', e => { if (state.mode === 'deck' && e.dataTransfer && [...e.dataTransfer.types].includes('Files')) e.preventDefault(); });
+  document.addEventListener('drop', e => {
+    if (state.mode !== 'deck') return; const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (!f || !(/\.pptx$/i.test(f.name) || f.type === GSlides.PPTX)) return; e.preventDefault(); if (!state.busy) generateDeck(($('prompt').value || '').replace(slidesLinkIn($('prompt').value) || '', '').trim(), { file: f });
+  });
   $('deckShuffleAll').addEventListener('click', () => generateDeck($('prompt').value));
   $('deckPptxBtn').addEventListener('click', e => withBusy(e.target, async () => {
     const picks = Deck.picks(state.deck); if (!picks.length) return;

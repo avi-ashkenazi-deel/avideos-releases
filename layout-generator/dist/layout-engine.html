@@ -648,6 +648,12 @@ input[disabled] { opacity: .5; cursor: not-allowed; }
 .ad-table th { text-align: left; color: var(--fg-3); font-weight: 600; font-size: 11.5px; padding: 6px 8px; border-bottom: 1px solid var(--line-2); position: sticky; top: 0; background: var(--panel); }
 .ad-table td { padding: 6px 8px; border-bottom: 1px solid rgba(127,127,127,.12); vertical-align: top; }
 
+/* deck from a presentation */
+.outline-row .num small { display: block; font-size: 10px; color: var(--fg-3); font-weight: 400; margin-top: 2px; }
+.ol-notes { font-size: 12px; color: var(--fg-3); }
+.ol-notes summary { cursor: pointer; }
+.ol-notes p { margin: 4px 0 0; white-space: pre-wrap; max-height: 140px; overflow: auto; }
+
 </style>
 
 <div id="app" class="app">
@@ -731,10 +737,13 @@ input[disabled] { opacity: .5; cursor: not-allowed; }
     <section class="panel" id="outlinePanel" hidden>
       <div class="panel-head"><h2>Deck outline</h2><span class="hint" id="outlineSource"></span></div>
       <p class="hint">One row per slide. Edit anything, then Generate again. Details take one item per line: <code>Title — text</code> for cards and steps, two blocks split by <code>---</code> for a comparison, quote then attribution for a quote.</p>
+      <p class="hint"><b>From a deck:</b> paste a Google Slides link as the brief, or use a .pptx (or drop it here): every slide is read and rebuilt in the brand.</p>
       <div id="outlineList" class="outline"></div>
       <div class="row">
         <button id="outlineAdd" class="btn small" type="button">Add slide</button>
         <button id="outlineReset" class="btn small" type="button">Rebuild from brief</button>
+        <button id="outlineFromDeck" class="btn small" type="button">Use a deck (.pptx)…</button>
+        <input id="deckFile" type="file" accept=".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation" hidden>
       </div>
     </section>
 
@@ -3652,13 +3661,19 @@ Rules: first slide is a cover, last is a closing. 6 to 10 slides unless the brie
       if (!content.eyebrow && o.intent !== 'cover' && o.intent !== 'closing' && o.intent !== 'quote') content.eyebrow = o.section ? `${o.section}` : '';
       if (o.intent === 'closing' && !content.footer) content.footer = kit.content.footer;
       const intent = { ...baseIntent, content, slideIntent: o.intent, lockPalette: palette, level, ctaAlways: o.intent === 'closing', includeCta: o.intent === 'closing' || o.intent === 'cover' ? baseIntent.includeCta !== false : false, logoPrefer: i === 0 ? null : ['TR', 'BR'] };
+      // A slide rebuilt from a deck shows its own pictures; other slides draw on the brand's, not on another slide's.
+      const own = o.images && o.images.length ? assets.images.filter(a => o.images.includes(a.id)) : [];
+      const pool = { ...assets, images: own.length ? own : assets.images.filter(a => !a.deck) };
       const variations = []; const seen = new Set(); let attempts = 0;
-      while (variations.length < perSlide && attempts < perSlide * 12) {
+      const tryAll = it => { while (variations.length < perSlide && attempts < perSlide * 12) {
         seed = (seed + 0x9E3779B9) >>> 0; attempts++;
-        const L = Engine.generate({ intent, kit, assets, format, seed });
+        const L = Engine.generate({ intent: it, kit, assets: pool, format, seed });
         if (!L || seen.has(L.signature)) continue;
         seen.add(L.signature); L.deckIndex = i; variations.push(L);
-      }
+      } };
+      tryAll(intent);
+      // copy from a real deck can be more than any layout holds: try once more with it tightened
+      if (!variations.length && o.source && typeof DeckDigest !== 'undefined') { attempts = 0; tryAll({ ...intent, content: { ...content, ...DeckDigest.shorten(o) } }); }
       slides.push({ index: i, outline: o, variations, pick: variations.length ? 0 : -1, attempts });
       if (onProgress) { onProgress(i + 1, outline.slides.length); await new Promise(r => setTimeout(r, 0)); }
     }
@@ -4666,6 +4681,17 @@ const GSlides = (() => {
     }
     throw new Error('From here, download the deck first: in Google Slides choose File → Download → Microsoft PowerPoint (.pptx), then drop the file on the canvas.');
   }
+  // A Slides link -> the deck's words, slide by slide, through the connector's text reader: light (a 30 MB deck reads
+  // as a few dozen KB) and enough to rebuild every slide; pictures stay behind. null when there is no connector.
+  async function fetchText(url) {
+    const id = idOf(url); if (!id) throw new Error('That does not look like a Google Slides link (docs.google.com/presentation/d/…).');
+    const m = await mcp(); if (!m) return null;
+    let res; try { res = await m.callTool(SERVER, 'read_file_content', { fileId: id }, { cache: false }); } catch (e) { throw friendly(e, 'read that deck'); }
+    let text = findKey(res && res.payload, 'fileContent'); let title = findKey(res && res.payload, 'title');
+    if (!text) for (const c of (res && res.content) || []) { if (!c || c.type !== 'text') continue; try { const j = JSON.parse(c.text); text = findKey(j, 'fileContent') || text; title = findKey(j, 'title') || title; } catch { text = text || c.text; } }
+    if (!text || !String(text).trim()) throw new Error('Google Drive sent no text for that deck.');
+    return { text: String(text), title: title || '' };
+  }
   // A .pptx blob -> a new Google Slides file in the viewer's Drive. Returns {id, url}; throws 'manual' when no route.
   async function saveDeck(blob, title) {
     const m = await mcp(); if (!m) { const err = new Error('manual'); err.manual = true; throw err; }
@@ -4680,7 +4706,210 @@ const GSlides = (() => {
     const url = findKey(p, 'webViewLink') || findKey(p, 'alternateLink') || (id ? `https://docs.google.com/presentation/d/${id}/edit` : null);
     return { id, url };
   }
-  return { idOf, isLink, route, fetchDeck, saveDeck, PPTX };
+  return { idOf, isLink, route, fetchDeck, fetchText, saveDeck, PPTX };
+})();
+
+/* js/deck-digest.js */
+/* A finished deck in, a Deck-mode outline out. The deck's words are read slide by slide (Google Slides' text through
+   the Drive connector, or a .pptx with its pictures), then each slide is sorted into what the layout engine draws: a
+   title, a subtitle, cards, steps, two columns, a big number, a quote, a paragraph. Claude does the sorting and the
+   condensing when it is at hand (the viewer's claude.ai account, or an API key), a few slides per request; rules do
+   it otherwise, keeping the deck's own words. Each new slide keeps its source slide's number and pictures. */
+const DeckDigest = (() => {
+  const sp = s => String(s == null ? '' : s).replace(/\s+/g, ' ').trim();
+  const cut = (s, n) => { s = sp(s); if (s.length <= n) return s; const c = s.slice(0, n - 1); const i = c.lastIndexOf(' '); return (i > n * 0.6 ? c.slice(0, i) : c).replace(/[\s,;:.–—-]+$/, '') + '…'; };
+  const words = s => sp(s).split(' ').filter(Boolean).length;
+  const NUM = /^(?:[~≈<>]\s?)?[$€£¥]?\s?\d[\d,.]*\s?(?:%|\+|x|×|k|K|m|M|bn|BN|B|pp|pts)?\+?$/;
+  const NUM_LEAD = /^((?:[~≈<>]\s?)?[$€£¥]?\d[\d,.]*\s?(?:%|\+|x|×|k|K|m|M|bn|BN|B)?\+?)\s+(?:[-–—:]\s*)?([A-Za-z].{2,90})$/;
+  const IGNORE = /\bignore (?:anything|everything|all|the rest)\b.{0,40}\b(?:from|after|below|beyond|forwards?|onwards?)\b/i;
+
+  // ---- Reading ---------------------------------------------------------------------------------------------------------
+  // Google Drive's text for a Slides file: slides between "-----" rules, the title as "# …", Markdown escapes.
+  const unescape = s => String(s).replace(/(?:&#11;)+/g, ' ').replace(/&#(\d+);/g, (m, n) => String.fromCharCode(+n)).replace(/&amp;/g, '&').replace(/\\([\\`*_{}[\]()#+\-.!<>|&$~])/g, '$1');
+  function fromText(text, docTitle) {
+    const slides = [];
+    for (const chunk of String(text || '').split(/^\s*-{5,}\s*$/m)) {
+      const lines = chunk.split('\n').map(l => unescape(l).trim()).filter(Boolean); if (!lines.length) continue;
+      let title = ''; const out = [];
+      for (const l of lines) {
+        const h = /^#{1,6}\s+(.*)$/.exec(l);
+        if (h) { const t = sp(h[1]); if (!title) title = t; else if (t) out.push({ text: t, head: true }); }
+        else { const li = /^(?:[-*•]|\d+[.)])\s+/.test(l); const t = sp(l.replace(/^[-*•]\s+/, '')); if (t) out.push({ text: t, list: li }); }
+      }
+      slides.push({ n: slides.length + 1, title, lines: out, images: [] });
+    }
+    return { title: sp(docTitle) || (slides[0] && slides[0].title) || 'Deck', slides, pictures: false };
+  }
+  // A .pptx read by PptxImport: words in reading order (title first), tables as "a | b" rows, and the slide's own
+  // pictures (not logos and backgrounds that repeat on many slides, not small icons).
+  function fromPptx(res, name) {
+    const n = res.slides.length; const area = res.W * res.H;
+    const uses = new Map(); for (const sl of res.slides) for (const a of new Set(sl.blocks.filter(b => b.kind === 'image' && b.asset).map(b => b.asset))) uses.set(a, (uses.get(a) || 0) + 1);
+    const textOf = b => b.kind === 'list' ? (b.items || []).map(it => sp(typeof it === 'string' ? it : it && (it.text || it.title))).filter(Boolean) : String(b.text != null ? b.text : '').split('\n').map(sp).filter(Boolean);
+    const slides = res.slides.map((sl, i) => {
+      const B = sl.blocks; const byId = new Map(B.map(b => [b.id, b]));
+      const inCell = b => { let p = b.parent && byId.get(b.parent); while (p) { if (p.label === 'cell') return true; p = p.parent && byId.get(p.parent); } return false; };
+      const texts = B.filter(b => (b.kind === 'text' || b.kind === 'list') && !inCell(b)).sort((a, b) => Math.abs(a.y - b.y) < 12 ? a.x - b.x : a.y - b.y);
+      const sizes = texts.map(b => (b.font && b.font.size) || 16).sort((a, b) => a - b); const med = sizes[Math.floor(sizes.length / 2)] || 16;
+      let head = texts.find(b => b.role === 'headline' && textOf(b).length);
+      if (!head) { const big = texts.filter(b => b.kind === 'text' && ((b.font && b.font.size) || 0) >= med * 1.25 && textOf(b).join(' ').length <= 160).sort((a, b) => b.font.size - a.font.size)[0]; head = big || null; }
+      const lines = [];
+      for (const b of texts) {
+        if (b === head) continue; const size = (b.font && b.font.size) || med;
+        for (const t of textOf(b)) { if (/^\d{1,3}$/.test(t) && size <= med) continue; lines.push({ text: t, list: b.kind === 'list', big: size >= med * 1.6, size }); }
+      }
+      // tables: boxes holding "row" boxes holding "cell" boxes (the table box carries the shape's own name)
+      for (const t of B.filter(b => b.kind === 'box' && B.some(r => r.parent === b.id && r.label === 'row'))) {
+        for (const r of B.filter(x => x.parent === t.id && x.label === 'row')) {
+          const cells = B.filter(c => c.parent === r.id && c.label === 'cell').map(c => B.filter(x => x.parent === c.id && x.kind === 'text').map(x => textOf(x).join(' ')).join(' '));
+          if (cells.some(Boolean)) lines.push({ text: cells.map(sp).join(' | '), table: true });
+        }
+      }
+      const pics = B.filter(b => b.kind === 'image' && b.asset && !b.decorative && b.w * b.h >= area * 0.035 && (uses.get(b.asset) || 0) < Math.max(3, n * 0.4)).sort((a, b) => b.w * b.h - a.w * a.h);
+      return { n: i + 1, title: head ? textOf(head).join(' ') : '', lines, images: [...new Set(pics.map(b => b.asset))].slice(0, 2) };
+    });
+    // words that repeat on many slides are a footer ("Confidential", the company name), not content
+    const seen = new Map(); for (const s of slides) for (const t of new Set(s.lines.map(l => l.text))) seen.set(t, (seen.get(t) || 0) + 1);
+    const limit = Math.max(3, n * 0.4); for (const s of slides) s.lines = s.lines.filter(l => (seen.get(l.text) || 0) < limit);
+    return { title: sp(name).replace(/\.pptx$/i, '') || (slides[0] && slides[0].title) || 'Deck', slides, pictures: true };
+  }
+  // The deck as it should be rebuilt: nothing after a slide that says to ignore the rest, no empty slides.
+  function prune(deck) {
+    let slides = deck.slides; const stop = slides.findIndex(s => IGNORE.test(s.title + ' ' + s.lines.map(l => l.text).join(' ')));
+    const ignored = stop >= 0 ? slides.length - stop : 0; if (stop >= 0) slides = slides.slice(0, stop);
+    const empty = slides.filter(s => !s.title && !s.lines.length).length;
+    slides = slides.filter(s => s.title || s.lines.length).map((s, i) => ({ ...s, k: i }));
+    return { ...deck, slides, ignored, empty };
+  }
+
+  // ---- Rules: each slide sorted by what is on it ---------------------------------------------------------------------------
+  const pairOf = t => { const m = /^(.{2,48}?)\s*(?::|\s[–—-])\s+(.{3,})$/.exec(t); return m ? { title: sp(m[1]), text: sp(m[2]) } : null; };
+  function slideByRules(s, i, n, deck) {
+    const lines = s.lines.map(l => l.text); const all = lines.join(' ');
+    let title = s.title; if (!title && lines.length && lines[0].length <= 90) title = lines.shift();
+    const headline = cut(title || deck.title, 110);
+    const base = { source: s.n, images: s.images, headline };
+    const t = (title || '').toLowerCase();
+    // a slide led by a number is that number's slide
+    if (i > 0 && NUM.test(title || '') && lines.length <= 4) return { ...base, intent: 'stat', stat: cut(title, 14), headline: cut(lines[0] || '', 90), subhead: cut(lines.slice(1).join(' '), 140) };
+    if (i === 0) return { ...base, intent: 'cover', headline: cut(title || deck.title, 90), subhead: cut(lines[0] || '', 160) };
+    if (i === n - 1 && /\b(thank|questions|q ?& ?a|contact|next steps?|get in touch|let'?s talk|get started)\b/.test(t)) return { ...base, intent: 'closing', subhead: cut(lines.find(l => !/@|https?:/.test(l)) || '', 140), cta: cut(lines.find(l => /@|https?:\/\/|www\./.test(l)) || '', 40) };
+    if (/^(agenda|contents|table of contents|overview|today|what we('|’)ll cover|outline|topics)\b/.test(t) && lines.length >= 2) return { ...base, intent: 'agenda', items: lines.slice(0, 8).map(l => ({ title: cut(l, 60), text: '' })) };
+    const q = lines.findIndex(l => /^[“"‘]/.test(l) && l.length >= 30);
+    if (q >= 0) return { ...base, intent: 'quote', quote: cut(lines[q].replace(/^[“"‘]+|[”"’]+$/g, ''), 220), attribution: cut((lines[q + 1] || '').replace(/^[—–~-]\s*/, ''), 60) };
+    const rows = s.lines.filter(l => l.table).map(l => l.text.split(' | ').map(sp));
+    if (rows.length >= 2) {
+      const w = rows[0].length;
+      if (w === 2 || w === 3) { const off = w - 2; return { ...base, intent: 'comparison', columns: [1, 2].map(c => ({ title: cut(rows[0][c - 1 + off] || '', 40), bullets: rows.slice(1, 5).map(r => cut(off ? `${r[0]}: ${r[c]}` : r[c - 1], 80)).filter(Boolean) })) }; }
+      return { ...base, intent: 'cards', items: rows.slice(1, 7).map(r => ({ title: cut(r[0], 32), text: cut(r.slice(1).join(' · '), 110) })) };
+    }
+    const nums = lines.map(l => NUM.test(l) ? { stat: l, text: '' } : (() => { const m = NUM_LEAD.exec(l); return m ? { stat: m[1], text: m[2] } : null; })()).filter(Boolean);
+    if (nums.length === 1 && lines.length <= 4) { const other = lines.filter(l => !l.startsWith(nums[0].stat)); return { ...base, intent: 'stat', stat: cut(nums[0].stat, 14), headline: cut(nums[0].text || title || other[0] || '', 90), subhead: cut(other.join(' '), 140) }; }
+    if (nums.length >= 2 && nums.length <= 6 && nums.length >= lines.length / 2) return { ...base, intent: 'cards', items: nums.map(x => ({ title: cut(x.stat, 16), text: cut(x.text, 90) })) };
+    // a short label followed by its text, repeated: steps when the slide is about a sequence, cards otherwise
+    const pairs = []; for (let j = 0; j < lines.length; j++) { const p = pairOf(lines[j]); if (p && p.title.length <= 48) { pairs.push(p); continue; } if (lines[j].length <= 48 && !/[.!?]$/.test(lines[j]) && lines[j + 1] && lines[j + 1].length > 48) { pairs.push({ title: lines[j], text: lines[j + 1] }); j++; } }
+    const sequence = /\b(process|how it works|steps?|timeline|roadmap|phases?|journey|milestones?|plan)\b/.test(t) || pairs.filter(p => /^(step|phase|milestone|stage|p)\s*\d|^\d+[.)]|^#\d/i.test(p.title)).length >= 2;
+    if (/\b(vs\.?|versus|before|after|compar|pros|cons|old way|new way)\b/.test(t) && pairs.length >= 2) { const h = Math.ceil(pairs.length / 2); return { ...base, intent: 'comparison', columns: [pairs.slice(0, h), pairs.slice(h)].map(g => ({ title: cut(g[0].title, 40), bullets: g.map(p => cut(p.text, 80)).slice(0, 4) })) }; }
+    if (pairs.length >= 2 && pairs.length <= 6) return sequence ? { ...base, intent: 'process', steps: pairs.map(p => ({ title: cut(p.title, 32), text: cut(p.text, 100) })) } : { ...base, intent: 'cards', items: pairs.map(p => ({ title: cut(p.title, 32), text: cut(p.text, 110) })) };
+    if (lines.length >= 2 && lines.length <= 6 && lines.every(l => l.length <= 70)) return { ...base, intent: sequence ? 'process' : 'cards', [sequence ? 'steps' : 'items']: lines.map(l => ({ title: cut(l, 60), text: '' })) };
+    if (words(all) <= 30) return { ...base, intent: 'statement', headline: cut(title || lines.shift() || deck.title, 110), subhead: cut(lines.join(' '), 140) };
+    return { ...base, intent: 'body', body: cut(all, 360) };
+  }
+  function rules(deck0) {
+    const deck = prune(deck0); const n = deck.slides.length;
+    const slides = deck.slides.map((s, i) => slideByRules(s, i, n, deck)).map(finish);
+    return { title: deck.title, slides, source: 'deck', by: 'rules', from: { title: deck.title, slides: deck0.slides.length, used: n, ignored: deck.ignored, pictures: deck.pictures } };
+  }
+  // Every outline slide carries every field the engine reads, so nothing falls back to the brand's sample copy.
+  function finish(o, k) {
+    const s = { intent: Engine.SLIDE_INTENTS.includes(o.intent) ? o.intent : 'body', eyebrow: sp(o.eyebrow), headline: sp(o.headline), subhead: sp(o.subhead), body: sp(o.body), quote: sp(o.quote), attribution: sp(o.attribution), stat: sp(o.stat), cta: sp(o.cta), source: o.source, images: o.images || [], section: String(k + 1).padStart(2, '0') };
+    const pairs = a => (Array.isArray(a) ? a : []).map(x => typeof x === 'string' ? { title: sp(x), text: '' } : { title: sp(x && x.title), text: sp(x && x.text) }).filter(x => x.title || x.text);
+    if (o.items && o.items.length) s.items = pairs(o.items).slice(0, 8);
+    if (o.steps && o.steps.length) s.steps = pairs(o.steps).slice(0, 6);
+    if (o.bullets && o.bullets.length) s.bullets = o.bullets.map(sp).filter(Boolean).slice(0, 8);
+    if (o.columns && o.columns.length) s.columns = o.columns.slice(0, 2).map(c => ({ title: sp(c && c.title), bullets: (c && Array.isArray(c.bullets) ? c.bullets : []).map(sp).filter(Boolean).slice(0, 5) }));
+    if (s.intent === 'quote' && !s.quote) { s.intent = 'statement'; }
+    if (s.intent === 'stat' && !s.stat) s.intent = 'statement';
+    if ((s.intent === 'cards' || s.intent === 'agenda') && !(s.items && s.items.length)) s.intent = s.body ? 'body' : 'statement';
+    if (s.intent === 'process' && !(s.steps && s.steps.length)) s.intent = s.body ? 'body' : 'statement';
+    if (s.intent === 'comparison' && !(s.columns && s.columns.length === 2)) s.intent = s.body ? 'body' : 'statement';
+    if (o.notes) s.notes = String(o.notes).slice(0, 2000);
+    return s;
+  }
+  // Tighter copy for a slide nothing could be laid out for.
+  function shorten(o) {
+    const s = JSON.parse(JSON.stringify(o));
+    s.headline = cut(s.headline, 64); s.subhead = cut(s.subhead, 90); s.body = cut(s.body, 180); s.quote = cut(s.quote, 140); s.eyebrow = cut(s.eyebrow, 24);
+    if (s.items) s.items = s.items.slice(0, 4).map(x => ({ title: cut(x.title, 26), text: cut(x.text, 70) }));
+    if (s.steps) s.steps = s.steps.slice(0, 4).map(x => ({ title: cut(x.title, 26), text: cut(x.text, 70) }));
+    if (s.columns) s.columns = s.columns.map(c => ({ title: cut(c.title, 28), bullets: c.bullets.slice(0, 3).map(b => cut(b, 56)) }));
+    if (s.bullets) s.bullets = s.bullets.slice(0, 4).map(b => cut(b, 60));
+    return s;
+  }
+
+  // ---- Claude: a few slides per request ----------------------------------------------------------------------------------------
+  const FIELDS = 'intent, eyebrow, headline, subhead, body, items [{title, text}], steps [{title, text}], columns [{title, bullets}], quote, attribution, stat, cta, notes';
+  function promptFor(batch, deck, kit, first, last) {
+    const src = batch.map(s => `### Slide ${s.n}${s.title ? `: ${s.title}` : ''}${s.images.length ? ` (has ${s.images.length} picture${s.images.length > 1 ? 's' : ''})` : ''}\n` + s.lines.map(l => (l.table ? '| ' : l.list ? '- ' : l.head ? '## ' : '') + l.text).join('\n').slice(0, 6000)).join('\n\n');
+    return `You turn slides from an existing presentation into an outline for a brand layout engine that redraws every slide in the ${kit.name} brand. The presentation is "${deck.title}".
+
+Return one outline slide for each source slide below, in the same order, each with "source" set to its slide number. A very dense source slide may become two outline slides with the same "source"; a slide that only repeats the previous one may be left out.
+
+Intents and the fields each uses:
+- cover: eyebrow (≤ 24 chars), headline (≤ 70), subhead (≤ 140)
+- agenda: headline, items (3 to 8, title ≤ 50, text "")
+- statement: headline (≤ 90) and subhead (≤ 140). Section dividers and single big ideas.
+- stat: stat (the number as written, e.g. "$1BN", "1.5-2x", "+237%"), headline as its caption (≤ 70), subhead (≤ 140)
+- comparison: headline, exactly 2 columns, each a title (≤ 30) and 2 to 4 bullets (≤ 70)
+- process: headline, 3 to 6 steps (title ≤ 32, text ≤ 90). Sequences, milestones, phases, timelines.
+- cards: headline, 2 to 6 items (title ≤ 32, text ≤ 110). Parallel points, pillars, options, several numbers (the number as the title).
+- quote: quote (≤ 200), attribution
+- body: headline, body (≤ 360). Only when nothing above fits.
+- closing: headline, subhead, cta (≤ 30)
+${first ? 'The first source slide is the cover: its headline is the presentation\'s own title as that slide shows it, and its subtitle the subhead.' : ''}${last ? ' If the last source slide ends the talk (thanks, questions, next steps) it is the closing.' : ''}
+
+Vary the intents where the content allows (a key number as a stat slide, a sequence as a process, two sides as a comparison, a section title as a statement): cards should not be most of the deck.
+Rules: keep the presentation's own facts, numbers, names and terms; condense long text to what a slide can hold (it is read in seconds) and put the detail you cut, in full sentences, in "notes" for the speaker; never invent facts or numbers; fix obvious typos; sentence case headlines; no emojis, no exclamation marks. Unused fields are "" or [].
+
+Reply with only JSON: {"slides":[{"source":2,"intent":"stat","eyebrow":"","headline":"…","subhead":"","body":"","items":[],"steps":[],"columns":[],"quote":"","attribution":"","stat":"$1BN","cta":"","notes":"…"}]}
+Fields: ${FIELDS}.
+
+Source slides:
+
+${src}`;
+  }
+  function batches(slides) { const out = []; let cur = [], size = 0; for (const s of slides) { const n = s.lines.reduce((t, l) => t + l.text.length, s.title.length); if (cur.length && (cur.length >= 6 || size + n > 9000)) { out.push(cur); cur = []; size = 0; } cur.push(s); size += n; } if (cur.length) out.push(cur); return out; }
+  // ask(prompt) -> parsed JSON. Batches go two at a time; one that fails falls back to rules for its slides.
+  async function withClaude(deck0, kit, ask, onProgress) {
+    const deck = prune(deck0); const n = deck.slides.length; const groups = batches(deck.slides);
+    const results = new Array(groups.length); let done = 0, failed = 0, next = 0, stop = null;
+    const runOne = async () => { if (next < groups.length) await step(); };
+    const run = async () => { while (next < groups.length) await step(); };
+    const step = async () => {
+      {
+        const gi = next++; const g = groups[gi];
+        // once Claude is declined or out of turns, the rest goes by rules at once
+        try {
+          if (stop) throw stop;
+          const res = await ask(promptFor(g, deck, kit, gi === 0, gi === groups.length - 1));
+          const list = (res && Array.isArray(res.slides) ? res.slides : Array.isArray(res) ? res : []).filter(x => x && typeof x === 'object');
+          const own = new Set(g.map(s => s.n));
+          const ok = list.filter(x => own.has(+x.source)).map(x => ({ ...x, source: +x.source, images: (g.find(s => s.n === +x.source) || {}).images || [] }));
+          if (!ok.length) throw new Error('no slides came back');
+          results[gi] = ok;
+        } catch (e) { failed++; if (e && ['not_granted', 'rate_limited', 'unavailable', 'capability_disabled'].includes(e.code)) stop = e; if (e !== stop) console.warn('deck digest batch', e); results[gi] = g.map(s => slideByRules(s, s.k, n, deck)); }
+        done++; if (onProgress) onProgress(done, groups.length, g);
+      }
+    };
+    // the first request goes alone (in claude.ai it is the one that asks the viewer's permission), then two at a time
+    await runOne(); await Promise.all([run(), run()]);
+    const slides = results.flat().map(finish);
+    if (slides.length && slides[0].intent !== 'cover') slides[0].intent = 'cover';
+    return { title: deck.title, slides, source: 'deck', by: failed === groups.length ? 'rules' : 'claude', failed, from: { title: deck.title, slides: deck0.slides.length, used: n, ignored: deck.ignored, pictures: deck.pictures } };
+  }
+  // Tolerant JSON out of a reply: the whole text, else from the first { to the last }.
+  function parseJSON(text) { try { return JSON.parse(text); } catch { } const a = text.indexOf('{'), b = text.lastIndexOf('}'); if (a >= 0 && b > a) return JSON.parse(text.slice(a, b + 1)); throw new Error('Claude did not reply with JSON'); }
+  return { fromText, fromPptx, prune, rules, withClaude, shorten, parseJSON, _promptFor: promptFor };
 })();
 
 /* js/looks.js */
@@ -10147,6 +10376,7 @@ Layer kinds:
   async function generate(text, opts = {}) {
     if (state.busy) return;
     if (state.mode === 'deck' && !opts.intent) return generateDeck(text);
+    if (!opts.intent && slidesLinkIn(text)) { setMode('deck'); toast('That is a presentation: rebuilding it as a deck'); return generateDeck(text); }
     if (!opts.auto) Stats.track('generate', { detail: String(text).slice(0, 60) });
     state.busy = true; $('generateBtn').disabled = true; $('generateBtn').textContent = 'Reading brief…';
     try {
@@ -10474,13 +10704,15 @@ Layer kinds:
   }
   function renderOutline() {
     const o = state.outline; if (!o) return;
-    $('outlineSource').textContent = `${o.slides.length} slides · ${o.source === 'claude' ? 'written by Claude' : state.outlineEdited ? 'edited' : 'from brief'}`;
+    $('outlineSource').textContent = `${o.slides.length} slides · ${o.source === 'deck' ? `from “${o.title}”${state.outlineEdited ? ', edited' : o.by === 'claude' ? ', sorted by Claude' : ''}` : o.source === 'claude' ? 'written by Claude' : state.outlineEdited ? 'edited' : 'from brief'}`;
+    $('outlineReset').textContent = o.source === 'deck' ? 'Rebuild from the deck' : 'Rebuild from brief';
     $('outlineList').innerHTML = o.slides.map((sl, i) => `<div class="outline-row" data-i="${i}">
-      <div class="num">${String(i + 1).padStart(2, '0')}</div>
+      <div class="num">${String(i + 1).padStart(2, '0')}${sl.source ? `<small title="Slide ${sl.source} of the original deck">↳${sl.source}</small>` : ''}</div>
       <div class="fields">
         <select class="select" data-k="intent" id="ol-intent-${i}" aria-label="Slide intent">${Engine.SLIDE_INTENTS.map(k => `<option value="${k}" ${k === sl.intent ? 'selected' : ''}>${Deck.INTENT_LABEL[k]}</option>`).join('')}</select>
         <input class="input" data-k="headline" id="ol-headline-${i}" type="text" placeholder="${sl.intent === 'quote' ? 'Headline (optional)' : 'Headline'}" value="${escapeHtml(sl.headline || '')}">
         <textarea class="input" data-k="details" id="ol-details-${i}" rows="3" placeholder="${escapeHtml(DETAIL_HINT[sl.intent] || '')}">${escapeHtml(detailsText(sl))}</textarea>
+        ${sl.notes ? `<details class="ol-notes"><summary>Speaker notes (what the slide leaves out)</summary><p>${escapeHtml(sl.notes)}</p></details>` : ''}
       </div>
       <div class="ops"><button class="btn small" data-op="up" title="Move up" type="button">↑</button><button class="btn small" data-op="down" title="Move down" type="button">↓</button><button class="btn small" data-op="rm" title="Remove" type="button">✕</button></div>
     </div>`).join('');
@@ -10503,7 +10735,7 @@ Layer kinds:
     state.outlineEdited = true; renderOutline();
   });
   $('outlineAdd').addEventListener('click', () => { const sl = state.outline.slides; sl.splice(Math.max(0, sl.length - 1), 0, Deck.slideFromTitle(state.kit, '', 'cards')); sl.forEach((x, j) => x.section = String(j + 1).padStart(2, '0')); state.outlineEdited = true; renderOutline(); });
-  $('outlineReset').addEventListener('click', async () => { state.outlineEdited = false; state.outline = await resolveOutline($('prompt').value, true); renderOutline(); toast('Outline rebuilt'); });
+  $('outlineReset').addEventListener('click', async () => { if (state.outline && state.outline.source === 'deck' && state.deckSource) { if (state.busy) return; state.outlineEdited = false; return generateDeck($('prompt').value, { rebuild: true }); } state.outlineEdited = false; state.outline = await resolveOutline($('prompt').value, true); renderOutline(); toast('Outline rebuilt'); });
 
   async function resolveOutline(text, force) {
     if (state.outline && state.outlineEdited && !force) return state.outline;
@@ -10516,18 +10748,74 @@ Layer kinds:
     return Deck.outlineFromBrief(text, state.kit, { subject: d ? d.subject : null });
   }
 
-  async function generateDeck(text) {
-    Stats.track('generate.deck', { detail: String(text).slice(0, 60) });
+  // ---- A deck from a finished presentation: a Google Slides link in the brief, or a .pptx chosen or dropped -------------
+  const slidesLinkIn = t => (String(t || '').match(/https?:\/\/docs\.google\.com\/presentation\/\S+/) || [])[0] || null;
+  let sampleP = null;
+  const sampleFn = () => { if (!sampleP) sampleP = (window.claude && typeof window.claude.use === 'function') ? window.claude.use('sample').catch(() => null) : Promise.resolve(null); return sampleP; };
+  // Who reads the deck: the viewer's claude.ai account, else Claude with the API key (when "Use Claude" is on), else rules.
+  async function deckAsker() {
+    const sm = await sampleFn();
+    if (sm) return { who: 'Claude', ask: prompt => sm.json(prompt, { modelTier: 'default' }) };
+    const key = $('apiKey').value.trim();
+    if (key && $('useClaude').checked) return { who: 'Claude', ask: async prompt => {
+      const res = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' }, body: JSON.stringify({ model: 'claude-opus-5-5', max_tokens: 16000, messages: [{ role: 'user', content: prompt }], output_config: { effort: 'medium' } }) });
+      if (!res.ok) throw new Error(`Claude request failed (${res.status})`);
+      const data = await res.json(); const block = (data.content || []).find(b => b.type === 'text'); if (!block) throw new Error('No text in the reply');
+      return DeckDigest.parseJSON(block.text);
+    } };
+    return null;
+  }
+  // In claude.ai a link is read as text through the Drive connector (fast even for a heavy deck); on the server, and for
+  // files, the .pptx itself is read, pictures included.
+  async function readDeckLink(url) {
+    if (await GSlides.route() === 'connector') { const t = await GSlides.fetchText(url); return DeckDigest.fromText(t.text, t.title); }
+    return readDeckBytes(await GSlides.fetchDeck(url), 'Google Slides deck');
+  }
+  const deckImages = new Map();
+  async function readDeckBytes(bytes, name) {
+    const res = await PptxImport.read(bytes, {
+      addImage: async (url, nm) => { const key = nm + ':' + url.length + ':' + url.slice(-48); if (deckImages.has(key)) return deckImages.get(key); const a = await addImage(url, nm); a.deck = true; deckImages.set(key, a); return a; },
+      layout: 'fixed', onProgress: (i, n) => { $('generateBtn').textContent = `Reading slide ${i}/${n}…`; },
+    });
+    if (!res.slides.length) throw new Error('No slides found in that deck');
+    const deck = DeckDigest.fromPptx(res, name);
+    // pictures no slide keeps (logos, icons, backgrounds) leave the image list again
+    const keep = new Set(deck.slides.flatMap(sl => sl.images));
+    const drop = state.assets.images.filter(a => a.deck && !keep.has(a.id));
+    for (const a of drop) { const i = state.assets.images.indexOf(a); if (i >= 0) state.assets.images.splice(i, 1); try { URL.revokeObjectURL(a.url); } catch { } }
+    for (const [k, a] of deckImages) if (drop.includes(a)) deckImages.delete(k);
+    if (drop.length) renderImages();
+    return deck;
+  }
+  async function outlineFromDeck(deck) {
+    const asker = await deckAsker();
+    if (!asker) return DeckDigest.rules(deck);
+    $('generateBtn').textContent = 'Claude is reading the deck…';
+    const o = await DeckDigest.withClaude(deck, state.kit, asker.ask, (d, n) => { $('generateBtn').textContent = `Claude is reading the deck… ${d}/${n}`; });
+    if (o.by === 'rules') toast('Claude did not answer, so rules sorted the slides. Generate again to retry, or edit the outline.');
+    else if (o.failed) toast(`Claude sorted most slides; ${o.failed} part${o.failed > 1 ? 's were' : ' was'} sorted by rules.`);
+    return o;
+  }
+
+  async function generateDeck(text, opts = {}) {
+    Stats.track('generate.deck', { detail: opts.file ? 'file' : slidesLinkIn(text) ? 'slides link' : String(text).slice(0, 60) });
     state.busy = true; $('generateBtn').disabled = true; $('generateBtn').textContent = 'Reading brief…';
     try {
+      const link = slidesLinkIn(text); const src = state.deckSource;
+      // a deck is in play when the brief holds its link, a file was just given, or the brief has not changed since
+      if (opts.file) { $('generateBtn').textContent = 'Reading the deck…'; const deck = await readDeckBytes(new Uint8Array(await opts.file.arrayBuffer()), opts.file.name); state.deckSource = { key: 'file:' + opts.file.name + ':' + opts.file.size, prompt: text, deck }; Stats.track('import.deck', { detail: 'pptx' }); }
+      else if (link && (!src || src.key !== link)) { $('generateBtn').textContent = 'Opening the deck…'; const deck = await readDeckLink(link); state.deckSource = { key: link, prompt: text, deck }; Stats.track('import.deck', { detail: 'slides link' }); }
+      else if (!link && src && src.prompt !== text) state.deckSource = null;
+      const ds = state.deckSource; if (ds) ds.prompt = text;
       const promptChanged = text !== state.lastPrompt;
-      const base = await resolveIntent(text);
-      applyBriefCopy(text, base);
+      const base = await resolveIntent(ds ? (text.replace(link || '', '').trim() || ds.deck.title) : text);
+      if (!ds) applyBriefCopy(text, base);
       const kit = readKit();
       await ensureDemoImages(false); await loadFonts(kit);
       if (promptChanged) { state.outlineEdited = false; state.lastPrompt = text; }
       state.intent = base;
-      state.outline = await resolveOutline(text, promptChanged && !state.outlineEdited);
+      if (ds) { if (!(state.outline && state.outline.source === 'deck' && ds.outlineFor === ds.key && (state.outlineEdited || !opts.rebuild))) { state.outline = await outlineFromDeck(ds.deck); ds.outlineFor = ds.key; state.outlineEdited = false; } }
+      else state.outline = await resolveOutline(text, promptChanged && !state.outlineEdited);
       renderOutline();
       LS.set('lg.prompt', text);
       const format = Grid.byId[state.deckFormat] || Grid.byId.slide;
@@ -10536,19 +10824,23 @@ Layer kinds:
       state.deck = await Deck.generate({ outline: state.outline, kit, assets: state.assets, format, baseIntent: base, perSlide: +$('perSlide').value, seedBase, onProgress: (i, n) => { $('generateBtn').textContent = `Slide ${i}/${n}…`; } });
       const ms = Math.round(performance.now() - t0);
       const made = state.deck.slides.reduce((s, x) => s + x.variations.length, 0);
+      const o = state.outline; const fr = o.source === 'deck' && o.from;
       $('readout').innerHTML = [
-        `<span><span class="k">deck</span> <b>${escapeHtml(state.outline.title)}</b> · ${state.deck.slides.length} slides · ${format.name}</span>`,
-        `<span><span class="k">outline by</span> <b>${state.outline.source === 'claude' ? 'Claude' : 'rules'}</b> · <span class="k">brief read by</span> <b>${base.source === 'claude' ? 'Claude' : 'rules'}</b></span>`,
+        `<span><span class="k">deck</span> <b>${escapeHtml(o.title)}</b> · ${state.deck.slides.length} slides · ${format.name}</span>`,
+        fr ? `<span><span class="k">from</span> <b>${fr.used} of ${fr.slides} slides</b>${fr.ignored ? ` (${fr.ignored} after “ignore” left out)` : ''} · <span class="k">sorted by</span> <b>${o.by === 'claude' ? 'Claude' : 'rules'}</b>${fr.pictures ? '' : ' · <span class="k">pictures</span> from the brand library'}</span>`
+          : `<span><span class="k">outline by</span> <b>${o.source === 'claude' ? 'Claude' : 'rules'}</b> · <span class="k">brief read by</span> <b>${base.source === 'claude' ? 'Claude' : 'rules'}</b></span>`,
         `<span><span class="k">palette</span> <b>${state.deck.palette ? state.deck.palette.bgName : '—'}</b> · <span class="k">type step</span> <b>${state.deck.level + 1}/6</b></span>`,
         `<span><span class="k">variations</span> <b>${made}</b> <span class="k">in ${ms} ms</span></span>`,
       ].join('');
       renderDeck();
     } catch (err) {
       console.error(err);
-      $('readout').innerHTML = `<span style="color:var(--danger)">Deck generation failed: ${escapeHtml(err && err.message ? err.message : String(err))}. Reload the page and try again; if it repeats, copy this message to Claude.</span>`;
-      toast('Deck generation failed: ' + (err && err.message ? err.message : err));
+      const msg = err && err.message ? err.message : String(err);
+      $('readout').innerHTML = `<span style="color:var(--danger)">${slidesLinkIn(text) || opts.file ? 'Could not read that deck' : 'Deck generation failed'}: ${escapeHtml(msg)}</span>`;
+      toast((slidesLinkIn(text) || opts.file ? 'Could not read that deck: ' : 'Deck generation failed: ') + msg);
     } finally { state.busy = false; $('generateBtn').disabled = false; $('generateBtn').textContent = 'Generate'; }
   }
+
   function renderDeck() {
     const d = state.deck; if (!d) return;
     const tall = d.format.h > d.format.w;
@@ -10568,6 +10860,14 @@ Layer kinds:
     row.querySelectorAll('.deck-card').forEach(c => c.classList.toggle('pick', c === card));
   });
   $('deckView').addEventListener('dblclick', e => { const card = e.target.closest('.deck-card'); if (card) openDetail(card.dataset.id); });
+  // A .pptx chosen in the outline panel or dropped anywhere in Deck mode
+  $('outlineFromDeck').addEventListener('click', () => $('deckFile').click());
+  $('deckFile').addEventListener('change', e => { const f = e.target.files[0]; e.target.value = ''; if (f && !state.busy) generateDeck(($('prompt').value || '').replace(slidesLinkIn($('prompt').value) || '', '').trim(), { file: f }); });
+  document.addEventListener('dragover', e => { if (state.mode === 'deck' && e.dataTransfer && [...e.dataTransfer.types].includes('Files')) e.preventDefault(); });
+  document.addEventListener('drop', e => {
+    if (state.mode !== 'deck') return; const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (!f || !(/\.pptx$/i.test(f.name) || f.type === GSlides.PPTX)) return; e.preventDefault(); if (!state.busy) generateDeck(($('prompt').value || '').replace(slidesLinkIn($('prompt').value) || '', '').trim(), { file: f });
+  });
   $('deckShuffleAll').addEventListener('click', () => generateDeck($('prompt').value));
   $('deckPptxBtn').addEventListener('click', e => withBusy(e.target, async () => {
     const picks = Deck.picks(state.deck); if (!picks.length) return;

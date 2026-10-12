@@ -131,13 +131,19 @@ Rules: first slide is a cover, last is a closing. 6 to 10 slides unless the brie
       if (!content.eyebrow && o.intent !== 'cover' && o.intent !== 'closing' && o.intent !== 'quote') content.eyebrow = o.section ? `${o.section}` : '';
       if (o.intent === 'closing' && !content.footer) content.footer = kit.content.footer;
       const intent = { ...baseIntent, content, slideIntent: o.intent, lockPalette: palette, level, ctaAlways: o.intent === 'closing', includeCta: o.intent === 'closing' || o.intent === 'cover' ? baseIntent.includeCta !== false : false, logoPrefer: i === 0 ? null : ['TR', 'BR'] };
+      // A slide rebuilt from a deck shows its own pictures; other slides draw on the brand's, not on another slide's.
+      const own = o.images && o.images.length ? assets.images.filter(a => o.images.includes(a.id)) : [];
+      const pool = { ...assets, images: own.length ? own : assets.images.filter(a => !a.deck) };
       const variations = []; const seen = new Set(); let attempts = 0;
-      while (variations.length < perSlide && attempts < perSlide * 12) {
+      const tryAll = it => { while (variations.length < perSlide && attempts < perSlide * 12) {
         seed = (seed + 0x9E3779B9) >>> 0; attempts++;
-        const L = Engine.generate({ intent, kit, assets, format, seed });
+        const L = Engine.generate({ intent: it, kit, assets: pool, format, seed });
         if (!L || seen.has(L.signature)) continue;
         seen.add(L.signature); L.deckIndex = i; variations.push(L);
-      }
+      } };
+      tryAll(intent);
+      // copy from a real deck can be more than any layout holds: try once more with it tightened
+      if (!variations.length && o.source && typeof DeckDigest !== 'undefined') { attempts = 0; tryAll({ ...intent, content: { ...content, ...DeckDigest.shorten(o) } }); }
       slides.push({ index: i, outline: o, variations, pick: variations.length ? 0 : -1, attempts });
       if (onProgress) { onProgress(i + 1, outline.slides.length); await new Promise(r => setTimeout(r, 0)); }
     }

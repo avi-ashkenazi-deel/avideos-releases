@@ -50,6 +50,17 @@ const GSlides = (() => {
     }
     throw new Error('From here, download the deck first: in Google Slides choose File → Download → Microsoft PowerPoint (.pptx), then drop the file on the canvas.');
   }
+  // A Slides link -> the deck's words, slide by slide, through the connector's text reader: light (a 30 MB deck reads
+  // as a few dozen KB) and enough to rebuild every slide; pictures stay behind. null when there is no connector.
+  async function fetchText(url) {
+    const id = idOf(url); if (!id) throw new Error('That does not look like a Google Slides link (docs.google.com/presentation/d/…).');
+    const m = await mcp(); if (!m) return null;
+    let res; try { res = await m.callTool(SERVER, 'read_file_content', { fileId: id }, { cache: false }); } catch (e) { throw friendly(e, 'read that deck'); }
+    let text = findKey(res && res.payload, 'fileContent'); let title = findKey(res && res.payload, 'title');
+    if (!text) for (const c of (res && res.content) || []) { if (!c || c.type !== 'text') continue; try { const j = JSON.parse(c.text); text = findKey(j, 'fileContent') || text; title = findKey(j, 'title') || title; } catch { text = text || c.text; } }
+    if (!text || !String(text).trim()) throw new Error('Google Drive sent no text for that deck.');
+    return { text: String(text), title: title || '' };
+  }
   // A .pptx blob -> a new Google Slides file in the viewer's Drive. Returns {id, url}; throws 'manual' when no route.
   async function saveDeck(blob, title) {
     const m = await mcp(); if (!m) { const err = new Error('manual'); err.manual = true; throw err; }
@@ -64,5 +75,5 @@ const GSlides = (() => {
     const url = findKey(p, 'webViewLink') || findKey(p, 'alternateLink') || (id ? `https://docs.google.com/presentation/d/${id}/edit` : null);
     return { id, url };
   }
-  return { idOf, isLink, route, fetchDeck, saveDeck, PPTX };
+  return { idOf, isLink, route, fetchDeck, fetchText, saveDeck, PPTX };
 })();

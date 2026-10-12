@@ -52,6 +52,14 @@ Switch the top-left toggle to **Deck**. The brief becomes an outline (one intent
 - **Consistency.** One background, text, and accent color for the whole deck; one type step; the logo stays in the same corner after the cover.
 - **Shuffle** regenerates one slide's variations; **Reshuffle deck** starts over with a new palette.
 
+### From an existing presentation
+
+Paste a **Google Slides link** as the brief (in Deck mode, or in Single mode, which switches to Deck), or use **Use a deck (.pptx)…** in the outline panel (or drop a .pptx anywhere in Deck mode), then Generate. Every slide is read and rebuilt in the brand:
+
+1. **Read.** In claude.ai a link is read as text through your Google Drive connector (fast even for a 30 MB deck; pictures stay behind and the brand's are used). On the server, and for .pptx files, the deck itself is read, and each slide keeps its own pictures (logos and backgrounds that repeat on many slides, and small icons, are left out). Slides after one that says "ignore anything from this point" are left out, and so are empty ones.
+2. **Sort.** Claude (your claude.ai account; locally, the API key with *Use Claude* on) reads a few slides per request and gives each one an intent (cover, statement, big number, cards, process, comparison, quote, body, closing), keeps the deck's facts and numbers, condenses long text to what a slide holds, and puts what it cut in **Speaker notes** under the outline row. Without Claude, rules sort the slides and keep the deck's words as written (trimmed).
+3. **Generate.** Variations per slide as usual; each outline row shows the original slide number (↳). **Rebuild from the deck** sorts it again; editing the brief to something else leaves the deck.
+
 ## Home: projects and folders
 
 **Home** (first in the mode switch) is where people start: folders on the left (Brand, Product, Sales…), projects as cards with a cover, screen count, who made it and when it last changed. **＋ New project** names it, picks a folder and opens its canvas. Click the **⌂ project name** at the top of the canvas to go back.
@@ -155,7 +163,7 @@ The agent sees the same: `list_components` returns code components with their pr
 
 - **In.** Import → **From Google Slides or PowerPoint**: paste a Google Slides link, or choose (or drop) a .pptx. Each slide becomes a screen with its background, editable text (title, body and bullets with the theme's fonts and colors, inherited from the layout and master like PowerPoint does), shapes, pictures (with crops), groups, lines and tables; charts come in as placeholders. Text boxes become stacks unless **Fixed positions** is chosen.
 - **Out.** Export → **Google Slides** sends the selected screens (or all) to your Drive as a new Slides deck. Export → PowerPoint gives the .pptx.
-- **How links work.** In the published copy, links and Save to Google Slides go through your own Google Drive connector in claude.ai (private decks you can open work too; the first use asks to allow it). On the local server, links work for decks shared "Anyone with the link". Elsewhere, download the deck as .pptx in Google Slides (File → Download) and drop it in; to go back, import the .pptx in Google Slides.
+- **How links work.** In the published copy, links and Save to Google Slides go through your own Google Drive connector in claude.ai (private decks you can open work too; the first use asks to allow it). In Deck mode a link is rebuilt in the brand instead (see Deck mode → From an existing presentation). On the local server, links work for decks shared "Anyone with the link". Elsewhere, download the deck as .pptx in Google Slides (File → Download) and drop it in; to go back, import the .pptx in Google Slides.
 
 ## Import from Figma
 
@@ -321,6 +329,7 @@ js/autolayout.js    auto layout engine: boxes, stacks, Fixed/Hug/Fill, wrap, abs
 js/canvas-ui.js     canvas editor: stage, selection, tools, layers tree, properties, Simple/Advanced, export
 js/library.js       Library tab: sections per library, save/insert, the Libraries window (on/off, admins)
 js/libstore.js      shared libraries: claude.ai database, server /api/libraries, or this browser
+js/deck-digest.js   A finished deck (Slides text or .pptx) into a Deck-mode outline: Claude in batches, rules otherwise
 js/projects.js      Home: projects and folders, folder sharing, project links (claude.ai database and private part, server /api/projects, or this browser)
 js/stats.js         usage summaries per person and month; the admin report
 js/admin.js         Admin window: totals, per-day charts, people, projects, latest actions, CSV
