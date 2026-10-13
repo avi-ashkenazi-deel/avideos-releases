@@ -99,29 +99,10 @@
   .btn.ghost { border-color: transparent; background: transparent; color: var(--muted); }
   .btn.ghost:hover { color: var(--text); background: rgba(255,255,255,0.04); }
 
-  /* ── Nav ────────────────────────────────────────────────────── */
-  .nav {
-    position: sticky; top: 0; z-index: 50;
-    padding-block: 14px;
-    backdrop-filter: blur(14px) saturate(1.2);
-    -webkit-backdrop-filter: blur(14px) saturate(1.2);
-    background: linear-gradient(to bottom, rgba(6,5,10,0.85), rgba(6,5,10,0.45));
-    border-bottom: 1px solid rgba(196,181,253,0.06);
-  }
-  .nav .wrap { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+  /* ── Logo (footer) ──────────────────────────────────────────── */
   .logo { display: inline-flex; align-items: baseline; gap: 6px; font-family: var(--ff-logo); font-weight: 700; font-size: 26px; letter-spacing: -0.03em; }
   .logo .dot { color: var(--purple); }
   .logo small { font-family: var(--ff-body); font-weight: 500; font-size: 13px; color: var(--muted); letter-spacing: 0.02em; margin-left: 4px; }
-  .pill {
-    display: flex; gap: 4px; padding: 5px;
-    border-radius: 999px;
-    background: linear-gradient(var(--nebula), var(--nebula)) padding-box,
-                linear-gradient(120deg, rgba(139,92,246,.7), rgba(196,181,253,.15), rgba(139,92,246,.7)) border-box;
-    border: 1px solid transparent;
-  }
-  .pill a { padding: 9px 16px; border-radius: 999px; font-size: 14px; font-weight: 500; color: var(--muted); transition: color .2s, background .2s; }
-  .pill a:hover { color: var(--text); background: rgba(196,181,253,0.08); }
-  @media (max-width: 760px) { .pill { display: none; } }
 
   /* ── Hero ───────────────────────────────────────────────────── */
   .hero {
@@ -369,20 +350,6 @@
     html { scroll-behavior: auto; }
   }
 </style>
-
-<!-- ── Nav ─────────────────────────────────────────────────── -->
-<header class="nav">
-  <div class="wrap">
-    <a class="logo" href="#top" aria-label="Deel Design home">d<span class="dot">.</span><small>design</small></a>
-    <nav class="pill" aria-label="Sections">
-      <a href="#work">Work</a>
-      <a href="#life">Life</a>
-      <a href="#people">People</a>
-      <a href="#principles">Principles</a>
-    </nav>
-    <a class="btn" href="#join">Join us <span class="arrow" aria-hidden="true">↗</span></a>
-  </div>
-</header>
 
 <!-- ── Hero ─────────────────────────────────────────────────── -->
 <section class="hero" id="top" aria-label="Introduction">
