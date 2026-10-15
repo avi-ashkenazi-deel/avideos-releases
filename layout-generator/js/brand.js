@@ -42,7 +42,7 @@ const Brand = (() => {
         { id: 'appicon', name: 'App icon', kind: 'appicon', text: 'd.', bg: '#5938B8', fg: '#FFFFFF' },
         { id: 'lockup', name: 'Product lockup', kind: 'lockup', text: 'deel.', product: 'Payroll' },
       ],
-      fonts: { display: 'Bricolage Grotesque', body: 'Inter', displayWeight: 600, bodyWeight: 400, headlineCase: 'sentence', tracking: -0.025 },
+      fonts: { display: 'Bagoss', displayFallback: 'Bricolage Grotesque', body: 'Inter', displayWeight: 600, bodyWeight: 400, headlineCase: 'sentence', tracking: -0.025 },
       // How Deel writes (from the brand playbook, in our words): Claude reads these whenever it writes or condenses copy.
       voice: {
         summary: 'A savvy mentor: bold, not boastful; clear, not corporate; clever, not cute; action-first; globally fluent.',
@@ -174,7 +174,20 @@ const Brand = (() => {
   };
 
   function clone(o) { return JSON.parse(JSON.stringify(o)); }
-  function fromPreset(id) { const p = clone(PRESETS[id] || PRESETS.deel); p.presetId = id; return p; }
+  // A preset's display face may be a licensed one served only by a private build (Bagoss): without it, its stand-in.
+  function fromPreset(id) { const p = clone(PRESETS[id] || PRESETS.deel); p.presetId = id; const f = p.fonts || {}; if (f.displayFallback && !FONTS[f.display] && !customFonts[f.display]) f.display = f.displayFallback; return p; }
+  // Private builds (node build.mjs --private <dir>) add kits and font files that stay out of the public repo.
+  const PRIV = typeof window !== 'undefined' && window.__LG_PRIVATE ? window.__LG_PRIVATE : null;
+  const privateFonts = [];
+  if (PRIV) {
+    for (const [id, kit] of Object.entries(PRIV.presets || {})) if (/^[a-z0-9_-]{1,40}$/i.test(id) && kit && kit.colors && kit.fonts) PRESETS[id] = kit;
+    const fams = new Map(); for (const f of PRIV.fonts || []) { if (!f || !f.family || !f.b64) continue; if (!fams.has(f.family)) fams.set(f.family, []); fams.get(f.family).push(f); }
+    for (const [family, faces] of fams) {
+      customFonts[family] = { css: `"${family}", "Bricolage Grotesque", "Inter", system-ui, sans-serif`, weights: [400, 500, 600, 700], faces: faces.map(f => ({ weight: String(f.weight || '400'), style: f.style || 'normal', dataUrl: `data:font/woff2;base64,${f.b64}` })), private: true };
+      for (const f of faces) { try { const bin = atob(f.b64); const buf = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i); const face = new FontFace(family, buf, { weight: String(f.weight || '400'), style: f.style || 'normal' }); document.fonts.add(face); privateFonts.push(face.load().catch(() => null)); } catch (e) { console.warn('font', family, e); } }
+    }
+  }
+  const fontsReady = () => Promise.all(privateFonts);
 
   // Approved color pairs for a kit: backgrounds with readable foregrounds and accents.
   function pairs(kit) {
@@ -234,6 +247,7 @@ const Brand = (() => {
   function logoInner(kit, color, variant) {
     const l = variant || kit.logo;
     if (l.kind !== 'svg' || !l.svg) return '';
+    if (l.recolor === 'ink' && l.inkFill) { const ink = String(l.inkFill).toLowerCase(); return l.svg.inner.replace(/(\sfill=")(#[0-9a-fA-F]{3,8})(")/g, (m, a, c, b) => c.toLowerCase() === ink ? a + color + b : m); }
     if (!l.monochrome) return l.svg.inner;
     let s = l.svg.inner;
     s = s.replace(/\sfill="(?!none)[^"]*"/g, ` fill="${color}"`);
@@ -291,12 +305,15 @@ const Brand = (() => {
   // The kit's writing rules as prompt text ('' when the kit has none).
   function voiceText(kit) {
     const v = kit && kit.voice; const rules = v && Array.isArray(v.rules) && v.rules.length ? `${kit.name} writing rules${v.summary ? ` (${v.summary})` : ''}:\n- ` + v.rules.join('\n- ') : '';
-    const guide = guidesText(['content'], 9000); return [rules, guide].filter(Boolean).join('\n');
+    const guide = guidesText(['content'], 9000, kit); return [rules, guide].filter(Boolean).join('\n');
   }
   // The brand's own guideline files (Settings → Brand guidelines), for prompts: each under its file name, trimmed.
-  function guidesText(ids, max = 6000) {
-    if (typeof LibStore === 'undefined' || !LibStore.guide) return '';
-    return ids.map(id => { const t = String(LibStore.guide(id) || '').trim(); return t ? `Brand guidelines, ${id}.md (follow them):\n${t.length > max ? t.slice(0, max) + '\n…' : t}` : ''; }).filter(Boolean).join('\n\n');
+  // Every kit has its own set (Deel's, Akai's…); the kit in use is the current one when none is given.
+  let currentKit = null; const useKit = kit => { currentKit = kit; };
+  const kitGuideId = kit => (kit && kit.presetId && kit.presetId !== '__custom' ? kit.presetId : kit && kit.name ? String(kit.name).toLowerCase() : 'deel');
+  function guidesText(ids, max = 6000, kit) {
+    if (typeof LibStore === 'undefined' || !LibStore.guide) return ''; const k = kitGuideId(kit || currentKit);
+    return ids.map(id => { const t = String(LibStore.guide(LibStore.guideKey(k, id)) || '').trim(); return t ? `${(kit || currentKit || {}).name || 'Brand'} guidelines, ${id}.md (follow them):\n${t.length > max ? t.slice(0, max) + '\n…' : t}` : ''; }).filter(Boolean).join('\n\n');
   }
-  return { voiceText, guidesText, FONTS, customFonts, fontCss, fontWeights, allFontNames, PRESETS, fromPreset, pairs, parseSvg, logoInner, logoColorFor, logosOf, logoVariant, logoAspectOf, makeDemoImage, serialize, clone };
+  return { fontsReady, useKit, kitGuideId, voiceText, guidesText, FONTS, customFonts, fontCss, fontWeights, allFontNames, PRESETS, fromPreset, pairs, parseSvg, logoInner, logoColorFor, logosOf, logoVariant, logoAspectOf, makeDemoImage, serialize, clone };
 })();

@@ -34,7 +34,9 @@ const LibStore = (() => {
     if (it.assets && typeof it.assets === 'object') { out.assets = {}; for (const [k, a] of Object.entries(it.assets)) if (/^a_[0-9a-f]{16}$/.test(k) && a && (typeof a.url === 'string' || typeof a.dataUrl === 'string')) out.assets[k] = { url: typeof a.url === 'string' ? a.url : undefined, dataUrl: typeof a.dataUrl === 'string' && /^data:image\//.test(a.dataUrl) ? a.dataUrl : undefined, name: String(a.name || '').slice(0, 80), w: +a.w || 0, h: +a.h || 0 }; }
     return out;
   }
-  const GUIDE = /^(design|layout|animation|illustration|photography|content)$/;
+  const GUIDE = /^(?:[a-z0-9_-]{1,40}\.)?(design|layout|animation|illustration|photography|content)$/;
+  // each brand kit has its own guides: Deel's under the plain names, any other kit's as <kit>.<name>
+  const guideKey = (kit, name) => !kit || kit === 'deel' ? name : `${String(kit).toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 40) || 'custom'}.${name}`;
   const cleanGuide = g => g && typeof g === 'object' && GUIDE.test(String(g.id || '')) ? { id: g.id, text: String(g.text || '').slice(0, 120000), updated: +g.updated || 0, by: typeof g.by === 'string' ? g.by.slice(0, 80) : '' } : null;
   // Suggestions and comments on a guide, from people who are not admins; admins accept, decline or resolve them.
   const NOTE_STATUS = /^(open|accepted|declined|resolved|withdrawn)$/;
@@ -267,7 +269,7 @@ const LibStore = (() => {
   async function searchPeople(q) { if (!backend || !backend.search) return []; try { return await backend.search(q); } catch { return []; } }
   return {
     init, start, libraries, items, isOn, setOn, role, createLibrary, updateLibrary, deleteLibrary, putItem, updateItem, deleteItem, setAdmins,
-    exportJSON, importJSON, people, searchPeople, assetInfo, guide, guides, putGuide, notes, addNote, setNote, canSuggest, GUIDES: ['design', 'layout', 'animation', 'illustration', 'photography', 'content'],
+    exportJSON, importJSON, people, searchPeople, assetInfo, guide, guides, putGuide, notes, addNote, setNote, canSuggest, guideKey, GUIDES: ['design', 'layout', 'animation', 'illustration', 'photography', 'content'],
     refresh: () => backend && backend.refresh ? backend.refresh() : null,
     checkKey: k => backend && backend.checkKey ? backend.checkKey(k) : Promise.reject(new Error('No admin key here')),
     on: fn => { listeners.add(fn); return () => listeners.delete(fn); },

@@ -1,0 +1,3 @@
+# private builds (brand kits and licensed fonts that stay out of this public repo)
+dist/*.private*.html
+private/

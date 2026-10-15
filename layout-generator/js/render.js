@@ -255,7 +255,8 @@ const Render = (() => {
     for (const fam of families) {
       if (Brand.customFonts[fam]) {
         const cf = Brand.customFonts[fam];
-        if (cf.dataUrl) out.push(`@font-face{font-family:"${fam}";src:url(${cf.dataUrl});font-weight:100 900;}`);
+        if (cf.faces) for (const f of cf.faces) out.push(`@font-face{font-family:"${fam}";src:url(${f.dataUrl}) format("woff2");font-weight:${f.weight};font-style:${f.style || 'normal'};}`);
+        else if (cf.dataUrl) out.push(`@font-face{font-family:"${fam}";src:url(${cf.dataUrl});font-weight:100 900;}`);
         continue;
       }
       if (!Brand.FONTS[fam]) continue;

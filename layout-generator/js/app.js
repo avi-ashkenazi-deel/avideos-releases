@@ -28,7 +28,7 @@
   }
   function loadKit(kit) {
     registerKitFonts(kit); fillFontSelects();
-    state.kit = kit;
+    state.kit = kit; Brand.useKit(kit); if (!$('settings').hidden) { guideDirty = false; guideMode = ''; renderGuides(); }
     $('brandName').value = kit.name;
     $('displayFont').value = kit.fonts.display; $('bodyFont').value = kit.fonts.body;
     for (const k of ['eyebrow', 'headline', 'subhead', 'body', 'cta', 'stat', 'footer']) $(k).value = kit.content[k] || '';
@@ -963,12 +963,14 @@
     }
     close(); return out.join('');
   }
+  // the kit's own guides: Deel's under their plain names, another kit's as <kit>.<name>
+  const gk = id => LibStore.guideKey(Brand.kitGuideId(state.kit), id);
   function renderGuides() {
     if (typeof LibStore === 'undefined') return;
     const all = LibStore.guides(); const role = LibStore.role(); const admin = !!role.admin;
-    const open = id => LibStore.notes(id).filter(n => n.status === 'open').length;
-    $('guideTabs').innerHTML = LibStore.GUIDES.map(id => `<button type="button" role="tab" data-guide="${id}" class="${id === guideCur ? 'on' : ''}" aria-selected="${id === guideCur}" title="${GUIDE_NOTE[id]}">${id}.md<span class="dot ${all[id] && all[id].text.trim() ? 'full' : ''}"></span>${open(id) ? `<span class="count" title="Open suggestions and comments">${open(id)}</span>` : ''}</button>`).join('');
-    const g = all[guideCur];
+    const open = id => LibStore.notes(gk(id)).filter(n => n.status === 'open').length;
+    $('guideTabs').innerHTML = LibStore.GUIDES.map(id => `<button type="button" role="tab" data-guide="${id}" class="${id === guideCur ? 'on' : ''}" aria-selected="${id === guideCur}" title="${GUIDE_NOTE[id]}">${id}.md<span class="dot ${all[gk(id)] && all[gk(id)].text.trim() ? 'full' : ''}"></span>${open(id) ? `<span class="count" title="Open suggestions and comments">${open(id)}</span>` : ''}</button>`).join('');
+    const g = all[gk(guideCur)];
     if (!guideDirty) $('guideText').value = g ? g.text : '';
     const suggesting = guideMode === 'suggest';
     $('guideText').readOnly = !admin && !suggesting; $('guideSave').hidden = !admin; $('guideImport').hidden = !admin;
@@ -978,7 +980,8 @@
     if (guideMode === 'comment') $('guideCommentQuote').textContent = guideQuote || 'The whole guide';
     $('guideText').placeholder = admin ? `# ${guideCur[0].toUpperCase() + guideCur.slice(1)} guidelines\n\nWrite or import the ${guideCur} rules (${GUIDE_NOTE[guideCur]}).` : 'No guidelines here yet. An admin can add them.';
     $('guideMeta').textContent = `${GUIDE_NOTE[guideCur]}${g && g.updated ? ` · saved ${new Date(g.updated).toLocaleString()}` : ''}${guideDirty ? ' · not saved' : ''}`;
-    $('guidesWho').textContent = admin ? 'The rules Claude follows when it writes, lays out and animates: one Markdown file each. You can edit them (admin).' : 'The rules Claude follows when it writes, lays out and animates. Only admins can change them.';
+    const kn = (state.kit && state.kit.name) || 'This brand';
+    $('guidesWho').textContent = admin ? `${kn}'s rules, which Claude follows when it writes, lays out and animates for this kit: one Markdown file each. You can edit them (admin).` : `${kn}'s rules, which Claude follows when it writes, lays out and animates for this kit. Only admins can change them.`;
     const show = (guidePreview || !admin) && !suggesting; $('guidePreview').hidden = !show; $('guideText').hidden = show; $('guideView').textContent = show ? 'Edit' : 'Preview'; $('guideView').hidden = !admin;
     if (show) $('guidePreview').innerHTML = mdToHtml($('guideText').value) || '<p class="hint">Empty.</p>';
     renderGuideNotes(admin);
@@ -987,7 +990,7 @@
   // Withdraw for their author; settled ones folded below.
   let guideNames = {};
   function renderGuideNotes(admin) {
-    const list = LibStore.notes(guideCur); const me = LibStore.me; const esc = escapeHtml;
+    const list = LibStore.notes(gk(guideCur)); const me = LibStore.me; const esc = escapeHtml;
     const ids = [...new Set(list.map(n => n.by).filter(Boolean))].filter(id => !(id in guideNames));
     if (ids.length) LibStore.people(ids).then(ps => { for (const id of ids) guideNames[id] = (ps && ps[id] && ps[id].name) || ''; if (!$('settings').hidden) renderGuideNotes(LibStore.role().admin); });
     const who = n => esc(guideNames[n.by] || n.byName || (n.by && n.by === me ? 'You' : 'Someone'));
@@ -1028,7 +1031,7 @@
   $('guideTabs').addEventListener('click', e => { const b = e.target.closest('[data-guide]'); if (!b) return; if (guideDirty && !confirm('Leave this guide without saving your changes?')) return; guideDirty = false; guideMode = ''; guideCur = b.dataset.guide; renderGuides(); });
   $('guideText').addEventListener('input', () => { guideDirty = true; $('guideMeta').textContent = `${GUIDE_NOTE[guideCur]} · not saved`; });
   $('guideView').addEventListener('click', () => { guidePreview = !guidePreview; renderGuides(); });
-  $('guideSave').addEventListener('click', e => withBusy(e.target, async () => { try { await LibStore.putGuide(guideCur, $('guideText').value); guideDirty = false; renderGuides(); toast(`${guideCur}.md saved`); Stats.track('guide.save', { detail: guideCur }); } catch (err) { toast(err.message || String(err)); } }));
+  $('guideSave').addEventListener('click', e => withBusy(e.target, async () => { try { await LibStore.putGuide(gk(guideCur), $('guideText').value); guideDirty = false; renderGuides(); toast(`${guideCur}.md saved for ${state.kit.name}`); Stats.track('guide.save', { detail: guideCur }); } catch (err) { toast(err.message || String(err)); } }));
   $('guideDownload').addEventListener('click', async () => { const blob = new Blob([$('guideText').value], { type: 'text/markdown' }); await Render.download(blob, `${guideCur}.md`); });
   $('guideFile').addEventListener('change', async e => { const f = e.target.files[0]; e.target.value = ''; if (!f) return; const t = await f.text(); const m = /^(design|layout|animation|illustration|photography|content)\b/i.exec(f.name); if (m) guideCur = m[1].toLowerCase(); $('guideText').value = t; guideDirty = true; guidePreview = false; renderGuides(); toast(`${f.name} loaded into ${guideCur}.md: Save to keep it`); });
   LibStore.on(() => { if (!$('settings').hidden) renderGuides(); });
@@ -1037,11 +1040,11 @@
   $('guideSuggest').addEventListener('click', () => { guideMode = 'suggest'; guideDirty = false; renderGuides(); $('guideText').focus(); });
   $('guideSuggestCancel').addEventListener('click', () => { guideMode = ''; guideDirty = false; renderGuides(); });
   $('guideSuggestSend').addEventListener('click', e => withBusy(e.target, async () => {
-    const before = (LibStore.guides()[guideCur] || {}).text || ''; const after = $('guideText').value;
+    const before = (LibStore.guides()[gk(guideCur)] || {}).text || ''; const after = $('guideText').value;
     const hunks = guideHunks(before, after).filter(h => h.quote !== h.replacement);
     if (!hunks.length) { toast('Nothing changed yet: edit the text, then send'); return; }
     const why = $('guideSuggestWhy').value.trim(); const name = (typeof Sync !== 'undefined' && Sync.me && Sync.me.name) || '';
-    try { for (const h of hunks) await LibStore.addNote({ guide: guideCur, kind: 'edit', quote: h.quote, replacement: h.replacement, text: why, byName: name }); }
+    try { for (const h of hunks) await LibStore.addNote({ guide: gk(guideCur), kind: 'edit', quote: h.quote, replacement: h.replacement, text: why, byName: name }); }
     catch (err) { toast(err.message || String(err)); return; }
     guideMode = ''; guideDirty = false; $('guideSuggestWhy').value = ''; renderGuides(); toast(`${hunks.length} suggestion${hunks.length > 1 ? 's' : ''} sent to the editors`); Stats.track('guide.suggest', { detail: guideCur });
   }));
@@ -1053,7 +1056,7 @@
   $('guideCommentCancel').addEventListener('click', () => { guideMode = ''; renderGuides(); });
   $('guideCommentSend').addEventListener('click', e => withBusy(e.target, async () => {
     const text = $('guideCommentText').value.trim(); if (!text) { toast('Write the comment first'); return; }
-    try { await LibStore.addNote({ guide: guideCur, kind: 'comment', quote: guideQuote, text, byName: (typeof Sync !== 'undefined' && Sync.me && Sync.me.name) || '' }); } catch (err) { toast(err.message || String(err)); return; }
+    try { await LibStore.addNote({ guide: gk(guideCur), kind: 'comment', quote: guideQuote, text, byName: (typeof Sync !== 'undefined' && Sync.me && Sync.me.name) || '' }); } catch (err) { toast(err.message || String(err)); return; }
     $('guideCommentText').value = ''; guideMode = ''; guideQuote = ''; renderGuides(); toast('Comment sent to the editors'); Stats.track('guide.comment', { detail: guideCur });
   }));
   $('guideNotes').addEventListener('click', e => { const b = e.target.closest('[data-note-act]'); if (b) withBusy(b, async () => {
@@ -1064,7 +1067,7 @@
         const cur = (LibStore.guides()[n.guide] || {}).text || ''; const k = n.quote ? cur.split(n.quote).length - 1 : 0;
         if (n.quote && k !== 1) { toast(k ? 'That text appears more than once now: make the change by hand, then Resolve' : 'That text has changed since: make the change by hand, then Decline or Resolve'); guidePreview = false; renderGuides(); return; }
         const next = n.quote ? cur.replace(n.quote, () => n.replacement) : (cur ? cur + '\n' : '') + n.replacement;
-        await LibStore.putGuide(n.guide, next); guideDirty = false; await LibStore.setNote(n.id, { status: 'accepted', reply }); toast(`Accepted into ${n.guide}.md`);
+        await LibStore.putGuide(n.guide, next); guideDirty = false; await LibStore.setNote(n.id, { status: 'accepted', reply }); toast(`Accepted into ${n.guide.replace(/^.*\./, '')}.md`);
       } else { await LibStore.setNote(n.id, { status: act, reply }); toast(act === 'withdrawn' ? 'Withdrawn' : act === 'declined' ? 'Declined' : 'Resolved'); }
       Stats.track('guide.' + act, { detail: n.guide });
     } catch (err) { toast(err.message || String(err)); }
@@ -1721,6 +1724,7 @@
 
   // ---- Init --------------------------------------------------------------------------------------
   async function init() {
+    await Brand.fontsReady(); // a private build's brand faces (Bagoss) are measured before anything is laid out
     fillPresets(); fillFontSelects();
     const savedKit = LS.get('lg.kit', null); const savedPreset = LS.get('lg.preset', 'deel');
     try {
@@ -1728,6 +1732,9 @@
         // Saved kits from older versions get the preset's sample deck back.
         if (!savedKit.deck && savedKit.presetId && Brand.PRESETS[savedKit.presetId]) savedKit.deck = Brand.PRESETS[savedKit.presetId].deck;
         if (!savedKit.logos && savedKit.presetId && Brand.PRESETS[savedKit.presetId] && Brand.PRESETS[savedKit.presetId].logos) savedKit.logos = Brand.clone(Brand.PRESETS[savedKit.presetId].logos);
+        // the brand's own face when this build has it (a private build serves Bagoss), its stand-in when it does not
+        const pf = savedKit.presetId && Brand.PRESETS[savedKit.presetId] && Brand.PRESETS[savedKit.presetId].fonts; const avail = n => Brand.allFontNames().includes(n);
+        if (pf && pf.displayFallback) { if (savedKit.fonts.display === pf.displayFallback && avail(pf.display)) savedKit.fonts.display = pf.display; else if (!avail(savedKit.fonts.display)) savedKit.fonts.display = pf.displayFallback; }
         loadKit(savedKit); $('presetSelect').value = savedKit.presetId && Brand.PRESETS[savedKit.presetId] ? savedKit.presetId : '__custom';
       } else throw new Error('no saved kit');
     } catch { loadKit(Brand.fromPreset(savedPreset in Brand.PRESETS ? savedPreset : 'deel')); $('presetSelect').value = state.kit.presetId; }

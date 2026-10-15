@@ -168,7 +168,10 @@ const Engine = (() => {
     if (content.body && intent.includeBody !== false && rng.chance(opts.body ?? P[2])) items.push({ kind: 'text', role: 'body', text: content.body, font: ts.body, fill: pal.fg2, maxLines: 6, gap: gap(ts.body.size * 1.2) });
     if (content.cta && intent.includeCta !== false && (intent.ctaAlways || rng.chance(opts.cta ?? P[3]))) {
       const asButton = rng.chance(0.7);
-      if (asButton) items.push({ kind: 'button', role: 'cta', text: content.cta, font: ts.cta, fill: pal.accent, color: pal.onAccent, radius: ctx.radius(ts.cta.size * 1.35) });
+      // a kit may name its button color (kit.ctaColor); it is used where it stands off the ground
+      const kc = ctx.kit.ctaColor && Color.contrast(Color.normalize(ctx.kit.ctaColor), pal.bg) >= 1.6 ? Color.normalize(ctx.kit.ctaColor) : null;
+      const ctaFill = kc || pal.accent, ctaInk = kc ? (Color.contrast(kc, '#FFFFFF') >= Color.contrast(kc, '#000000') ? '#FFFFFF' : '#000000') : pal.onAccent;
+      if (asButton) items.push({ kind: 'button', role: 'cta', text: content.cta, font: ts.cta, fill: ctaFill, color: ctaInk, radius: ctx.radius(ts.cta.size * 1.35) });
       else items.push({ kind: 'text', role: 'cta', text: content.cta + '  →', font: { ...ts.cta, weight: ts.eyebrow.weight }, fill: pal.accentText, maxLines: 1 });
     }
     // gap of last item is irrelevant

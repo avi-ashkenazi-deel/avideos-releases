@@ -71,7 +71,19 @@ Text-heavy slides are kept whole by default (**Keep text-heavy slides whole** in
 
 **Settings → Brand guidelines** holds the brand's rules as six Markdown files: `design.md` (colors, type, logo, shapes, icons, charts), `layout.md` (grid, margins, hierarchy per slide type, how much text a slide holds), `animation.md`, `illustration.md`, `photography.md` and `content.md` (voice, tone, grammar, naming, words to use and avoid). Everyone can read them; admins (the same people who curate shared libraries) edit, import a `.md`, and save. Claude reads them: `content.md` goes into every prompt that writes copy, `layout.md` into the prompt that turns a presentation into slides, and all of them into the canvas agent's context. They are stored with the shared libraries: the page's database in claude.ai (only Editors can write the `guides` collection), the server's `libraries.json`, or this browser. They are not part of this repository.
 
+**Per brand kit.** Each brand kit has its own six files: Deel's under the plain names (`content`), any other kit's as `<kit>.<name>` (`acme.content`). Settings shows the files of the kit in use, and Claude reads only that kit's rules.
+
 **Suggestions and comments.** People who are not editors help shape the guides. **Suggest edits** makes the text editable for them; on **Send suggestions** each changed passage becomes its own suggestion (old text struck through, new text beside it, an optional reason). **Comment** quotes the words selected in the guide and sends a comment. Editors see a count on each guide's tab and, under the guide, **Accept** (the change goes into the guide), **Decline** or **Resolve**, with an optional reply; authors can withdraw their own. In claude.ai each person's suggestions sit in `guidenotes/<their id>` (they write only their own, editors write all to resolve them); Contributors suggest and comment in the page, and Commenters get claude.ai's own comment box on the words they select (the threads show in the page's comments). On the self-hosted server anyone may suggest and resolving needs the admin key.
+
+## Private kits and licensed fonts
+
+Some brands can't live in this public repository: internal product brands, and licensed typefaces such as Bagoss. A private build adds them to the published page only:
+
+```
+node build.mjs --private /path/to/private
+```
+
+The folder holds `private.json` (`{ "presets": { "<id>": <brand kit> }, "fonts": [{ "family", "weight", "file" }] }`) and the font files it names. The build writes `dist/layout-engine.private.html` (git-ignored) with the kits and fonts inside it; they show up as presets and font choices, and a preset can name a licensed face with a stand-in (`"display": "Bagoss", "displayFallback": "Bricolage Grotesque"`) so the public build still works. A kit can also set `ctaColor` (its button color) and an SVG logo whose letters alone take the logo color (`"recolor": "ink", "inkFill": "#141414"`), so a colored mark keeps its colors.
 
 ## Motion, Quick Look and Present
 

@@ -29,7 +29,7 @@ Change the canvas with the tools; the person sees each change live and can undo 
     const d = CanvasUI.doc; const sel = CanvasUI.selection(); const kit = env.getKit() || { name: '', colors: [], fonts: {} };
     const lines = [`Canvas "${d.name}": ${d.frames.length} screen${d.frames.length === 1 ? '' : 's'}.`];
     if (Brand.voiceText(kit)) lines.push('When you write or change copy, follow these. ' + Brand.voiceText(kit));
-    { const g = Brand.guidesText(['design', 'layout', 'animation', 'illustration', 'photography'], 3500); if (g) lines.push('When you design, lay out, animate or pick pictures, follow the brand guidelines:\n' + g); }
+    { const g = Brand.guidesText(['design', 'layout', 'animation', 'illustration', 'photography'], 3500, kit); if (g) lines.push('When you design, lay out, animate or pick pictures, follow the brand guidelines:\n' + g); }
     if (!sel.frameIds.length) lines.push('Nothing is selected; act on the whole canvas or ask which screen.');
     else {
       lines.push(`Selected: ${sel.frameIds.length} screen${sel.frameIds.length === 1 ? '' : 's'}${sel.blockIds.length ? `, blocks ${sel.blockIds.join(', ')}` : ''}.`);

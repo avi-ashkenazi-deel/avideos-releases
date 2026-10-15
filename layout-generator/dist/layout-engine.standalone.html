@@ -1459,7 +1459,7 @@ const Brand = (() => {
         { id: 'appicon', name: 'App icon', kind: 'appicon', text: 'd.', bg: '#5938B8', fg: '#FFFFFF' },
         { id: 'lockup', name: 'Product lockup', kind: 'lockup', text: 'deel.', product: 'Payroll' },
       ],
-      fonts: { display: 'Bricolage Grotesque', body: 'Inter', displayWeight: 600, bodyWeight: 400, headlineCase: 'sentence', tracking: -0.025 },
+      fonts: { display: 'Bagoss', displayFallback: 'Bricolage Grotesque', body: 'Inter', displayWeight: 600, bodyWeight: 400, headlineCase: 'sentence', tracking: -0.025 },
       // How Deel writes (from the brand playbook, in our words): Claude reads these whenever it writes or condenses copy.
       voice: {
         summary: 'A savvy mentor: bold, not boastful; clear, not corporate; clever, not cute; action-first; globally fluent.',
@@ -1591,7 +1591,20 @@ const Brand = (() => {
   };
 
   function clone(o) { return JSON.parse(JSON.stringify(o)); }
-  function fromPreset(id) { const p = clone(PRESETS[id] || PRESETS.deel); p.presetId = id; return p; }
+  // A preset's display face may be a licensed one served only by a private build (Bagoss): without it, its stand-in.
+  function fromPreset(id) { const p = clone(PRESETS[id] || PRESETS.deel); p.presetId = id; const f = p.fonts || {}; if (f.displayFallback && !FONTS[f.display] && !customFonts[f.display]) f.display = f.displayFallback; return p; }
+  // Private builds (node build.mjs --private <dir>) add kits and font files that stay out of the public repo.
+  const PRIV = typeof window !== 'undefined' && window.__LG_PRIVATE ? window.__LG_PRIVATE : null;
+  const privateFonts = [];
+  if (PRIV) {
+    for (const [id, kit] of Object.entries(PRIV.presets || {})) if (/^[a-z0-9_-]{1,40}$/i.test(id) && kit && kit.colors && kit.fonts) PRESETS[id] = kit;
+    const fams = new Map(); for (const f of PRIV.fonts || []) { if (!f || !f.family || !f.b64) continue; if (!fams.has(f.family)) fams.set(f.family, []); fams.get(f.family).push(f); }
+    for (const [family, faces] of fams) {
+      customFonts[family] = { css: `"${family}", "Bricolage Grotesque", "Inter", system-ui, sans-serif`, weights: [400, 500, 600, 700], faces: faces.map(f => ({ weight: String(f.weight || '400'), style: f.style || 'normal', dataUrl: `data:font/woff2;base64,${f.b64}` })), private: true };
+      for (const f of faces) { try { const bin = atob(f.b64); const buf = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i); const face = new FontFace(family, buf, { weight: String(f.weight || '400'), style: f.style || 'normal' }); document.fonts.add(face); privateFonts.push(face.load().catch(() => null)); } catch (e) { console.warn('font', family, e); } }
+    }
+  }
+  const fontsReady = () => Promise.all(privateFonts);
 
   // Approved color pairs for a kit: backgrounds with readable foregrounds and accents.
   function pairs(kit) {
@@ -1651,6 +1664,7 @@ const Brand = (() => {
   function logoInner(kit, color, variant) {
     const l = variant || kit.logo;
     if (l.kind !== 'svg' || !l.svg) return '';
+    if (l.recolor === 'ink' && l.inkFill) { const ink = String(l.inkFill).toLowerCase(); return l.svg.inner.replace(/(\sfill=")(#[0-9a-fA-F]{3,8})(")/g, (m, a, c, b) => c.toLowerCase() === ink ? a + color + b : m); }
     if (!l.monochrome) return l.svg.inner;
     let s = l.svg.inner;
     s = s.replace(/\sfill="(?!none)[^"]*"/g, ` fill="${color}"`);
@@ -1708,14 +1722,17 @@ const Brand = (() => {
   // The kit's writing rules as prompt text ('' when the kit has none).
   function voiceText(kit) {
     const v = kit && kit.voice; const rules = v && Array.isArray(v.rules) && v.rules.length ? `${kit.name} writing rules${v.summary ? ` (${v.summary})` : ''}:\n- ` + v.rules.join('\n- ') : '';
-    const guide = guidesText(['content'], 9000); return [rules, guide].filter(Boolean).join('\n');
+    const guide = guidesText(['content'], 9000, kit); return [rules, guide].filter(Boolean).join('\n');
   }
   // The brand's own guideline files (Settings → Brand guidelines), for prompts: each under its file name, trimmed.
-  function guidesText(ids, max = 6000) {
-    if (typeof LibStore === 'undefined' || !LibStore.guide) return '';
-    return ids.map(id => { const t = String(LibStore.guide(id) || '').trim(); return t ? `Brand guidelines, ${id}.md (follow them):\n${t.length > max ? t.slice(0, max) + '\n…' : t}` : ''; }).filter(Boolean).join('\n\n');
+  // Every kit has its own set (Deel's, Akai's…); the kit in use is the current one when none is given.
+  let currentKit = null; const useKit = kit => { currentKit = kit; };
+  const kitGuideId = kit => (kit && kit.presetId && kit.presetId !== '__custom' ? kit.presetId : kit && kit.name ? String(kit.name).toLowerCase() : 'deel');
+  function guidesText(ids, max = 6000, kit) {
+    if (typeof LibStore === 'undefined' || !LibStore.guide) return ''; const k = kitGuideId(kit || currentKit);
+    return ids.map(id => { const t = String(LibStore.guide(LibStore.guideKey(k, id)) || '').trim(); return t ? `${(kit || currentKit || {}).name || 'Brand'} guidelines, ${id}.md (follow them):\n${t.length > max ? t.slice(0, max) + '\n…' : t}` : ''; }).filter(Boolean).join('\n\n');
   }
-  return { voiceText, guidesText, FONTS, customFonts, fontCss, fontWeights, allFontNames, PRESETS, fromPreset, pairs, parseSvg, logoInner, logoColorFor, logosOf, logoVariant, logoAspectOf, makeDemoImage, serialize, clone };
+  return { fontsReady, useKit, kitGuideId, voiceText, guidesText, FONTS, customFonts, fontCss, fontWeights, allFontNames, PRESETS, fromPreset, pairs, parseSvg, logoInner, logoColorFor, logosOf, logoVariant, logoAspectOf, makeDemoImage, serialize, clone };
 })();
 
 /* js/grid.js */
@@ -2023,7 +2040,10 @@ const Engine = (() => {
     if (content.body && intent.includeBody !== false && rng.chance(opts.body ?? P[2])) items.push({ kind: 'text', role: 'body', text: content.body, font: ts.body, fill: pal.fg2, maxLines: 6, gap: gap(ts.body.size * 1.2) });
     if (content.cta && intent.includeCta !== false && (intent.ctaAlways || rng.chance(opts.cta ?? P[3]))) {
       const asButton = rng.chance(0.7);
-      if (asButton) items.push({ kind: 'button', role: 'cta', text: content.cta, font: ts.cta, fill: pal.accent, color: pal.onAccent, radius: ctx.radius(ts.cta.size * 1.35) });
+      // a kit may name its button color (kit.ctaColor); it is used where it stands off the ground
+      const kc = ctx.kit.ctaColor && Color.contrast(Color.normalize(ctx.kit.ctaColor), pal.bg) >= 1.6 ? Color.normalize(ctx.kit.ctaColor) : null;
+      const ctaFill = kc || pal.accent, ctaInk = kc ? (Color.contrast(kc, '#FFFFFF') >= Color.contrast(kc, '#000000') ? '#FFFFFF' : '#000000') : pal.onAccent;
+      if (asButton) items.push({ kind: 'button', role: 'cta', text: content.cta, font: ts.cta, fill: ctaFill, color: ctaInk, radius: ctx.radius(ts.cta.size * 1.35) });
       else items.push({ kind: 'text', role: 'cta', text: content.cta + '  →', font: { ...ts.cta, weight: ts.eyebrow.weight }, fill: pal.accentText, maxLines: 1 });
     }
     // gap of last item is irrelevant
@@ -3369,7 +3389,8 @@ const Render = (() => {
     for (const fam of families) {
       if (Brand.customFonts[fam]) {
         const cf = Brand.customFonts[fam];
-        if (cf.dataUrl) out.push(`@font-face{font-family:"${fam}";src:url(${cf.dataUrl});font-weight:100 900;}`);
+        if (cf.faces) for (const f of cf.faces) out.push(`@font-face{font-family:"${fam}";src:url(${f.dataUrl}) format("woff2");font-weight:${f.weight};font-style:${f.style || 'normal'};}`);
+        else if (cf.dataUrl) out.push(`@font-face{font-family:"${fam}";src:url(${cf.dataUrl});font-weight:100 900;}`);
         continue;
       }
       if (!Brand.FONTS[fam]) continue;
@@ -5436,7 +5457,7 @@ Intents and the fields each uses:
 ${first ? 'The first source slide is the cover: its headline is the presentation\'s own title as that slide shows it, and its subtitle the subhead.' : ''}${last ? ' If the last source slide ends the talk (thanks, questions, next steps) it is the closing.' : ''}
 
 Vary the intents where the content allows (a key number as a stat slide, a sequence as a process, two sides as a comparison, a section title as a statement): cards should not be most of the deck.
-${typeof Brand !== 'undefined' && Brand.voiceText(kit) ? Brand.voiceText(kit) + '\n' : ''}${typeof Brand !== 'undefined' && Brand.guidesText ? (g => g ? g + '\n' : '')(Brand.guidesText(['layout'], 4000)) : ''}Rules: keep the presentation's own facts, numbers, names and terms; ${keep ? 'on slides that are not kept whole, ' : ''}condense long text to what a slide can hold (it is read in seconds) and put the detail you cut, in full sentences, in "notes" for the speaker; never invent facts or numbers; fix obvious typos; sentence case headlines; no emojis, no exclamation marks. Unused fields are "" or [].
+${typeof Brand !== 'undefined' && Brand.voiceText(kit) ? Brand.voiceText(kit) + '\n' : ''}${typeof Brand !== 'undefined' && Brand.guidesText ? (g => g ? g + '\n' : '')(Brand.guidesText(['layout'], 4000, kit)) : ''}Rules: keep the presentation's own facts, numbers, names and terms; ${keep ? 'on slides that are not kept whole, ' : ''}condense long text to what a slide can hold (it is read in seconds) and put the detail you cut, in full sentences, in "notes" for the speaker; never invent facts or numbers; fix obvious typos; sentence case headlines; no emojis, no exclamation marks. Unused fields are "" or [].
 
 Reply with only JSON: {"slides":[{"source":2,"intent":"stat","eyebrow":"","headline":"…","subhead":"","body":"","items":[],"steps":[],"columns":[],"sections":[],"diagram":null,"quote":"","attribution":"","stat":"$2M","cta":"","notes":"…"}]}
 Fields: ${FIELDS}.
@@ -9021,7 +9042,9 @@ const LibStore = (() => {
     if (it.assets && typeof it.assets === 'object') { out.assets = {}; for (const [k, a] of Object.entries(it.assets)) if (/^a_[0-9a-f]{16}$/.test(k) && a && (typeof a.url === 'string' || typeof a.dataUrl === 'string')) out.assets[k] = { url: typeof a.url === 'string' ? a.url : undefined, dataUrl: typeof a.dataUrl === 'string' && /^data:image\//.test(a.dataUrl) ? a.dataUrl : undefined, name: String(a.name || '').slice(0, 80), w: +a.w || 0, h: +a.h || 0 }; }
     return out;
   }
-  const GUIDE = /^(design|layout|animation|illustration|photography|content)$/;
+  const GUIDE = /^(?:[a-z0-9_-]{1,40}\.)?(design|layout|animation|illustration|photography|content)$/;
+  // each brand kit has its own guides: Deel's under the plain names, any other kit's as <kit>.<name>
+  const guideKey = (kit, name) => !kit || kit === 'deel' ? name : `${String(kit).toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 40) || 'custom'}.${name}`;
   const cleanGuide = g => g && typeof g === 'object' && GUIDE.test(String(g.id || '')) ? { id: g.id, text: String(g.text || '').slice(0, 120000), updated: +g.updated || 0, by: typeof g.by === 'string' ? g.by.slice(0, 80) : '' } : null;
   // Suggestions and comments on a guide, from people who are not admins; admins accept, decline or resolve them.
   const NOTE_STATUS = /^(open|accepted|declined|resolved|withdrawn)$/;
@@ -9254,7 +9277,7 @@ const LibStore = (() => {
   async function searchPeople(q) { if (!backend || !backend.search) return []; try { return await backend.search(q); } catch { return []; } }
   return {
     init, start, libraries, items, isOn, setOn, role, createLibrary, updateLibrary, deleteLibrary, putItem, updateItem, deleteItem, setAdmins,
-    exportJSON, importJSON, people, searchPeople, assetInfo, guide, guides, putGuide, notes, addNote, setNote, canSuggest, GUIDES: ['design', 'layout', 'animation', 'illustration', 'photography', 'content'],
+    exportJSON, importJSON, people, searchPeople, assetInfo, guide, guides, putGuide, notes, addNote, setNote, canSuggest, guideKey, GUIDES: ['design', 'layout', 'animation', 'illustration', 'photography', 'content'],
     refresh: () => backend && backend.refresh ? backend.refresh() : null,
     checkKey: k => backend && backend.checkKey ? backend.checkKey(k) : Promise.reject(new Error('No admin key here')),
     on: fn => { listeners.add(fn); return () => listeners.delete(fn); },
@@ -11087,7 +11110,7 @@ Change the canvas with the tools; the person sees each change live and can undo 
     const d = CanvasUI.doc; const sel = CanvasUI.selection(); const kit = env.getKit() || { name: '', colors: [], fonts: {} };
     const lines = [`Canvas "${d.name}": ${d.frames.length} screen${d.frames.length === 1 ? '' : 's'}.`];
     if (Brand.voiceText(kit)) lines.push('When you write or change copy, follow these. ' + Brand.voiceText(kit));
-    { const g = Brand.guidesText(['design', 'layout', 'animation', 'illustration', 'photography'], 3500); if (g) lines.push('When you design, lay out, animate or pick pictures, follow the brand guidelines:\n' + g); }
+    { const g = Brand.guidesText(['design', 'layout', 'animation', 'illustration', 'photography'], 3500, kit); if (g) lines.push('When you design, lay out, animate or pick pictures, follow the brand guidelines:\n' + g); }
     if (!sel.frameIds.length) lines.push('Nothing is selected; act on the whole canvas or ask which screen.');
     else {
       lines.push(`Selected: ${sel.frameIds.length} screen${sel.frameIds.length === 1 ? '' : 's'}${sel.blockIds.length ? `, blocks ${sel.blockIds.join(', ')}` : ''}.`);
@@ -11369,7 +11392,7 @@ Layer kinds:
   }
   function loadKit(kit) {
     registerKitFonts(kit); fillFontSelects();
-    state.kit = kit;
+    state.kit = kit; Brand.useKit(kit); if (!$('settings').hidden) { guideDirty = false; guideMode = ''; renderGuides(); }
     $('brandName').value = kit.name;
     $('displayFont').value = kit.fonts.display; $('bodyFont').value = kit.fonts.body;
     for (const k of ['eyebrow', 'headline', 'subhead', 'body', 'cta', 'stat', 'footer']) $(k).value = kit.content[k] || '';
@@ -12304,12 +12327,14 @@ Layer kinds:
     }
     close(); return out.join('');
   }
+  // the kit's own guides: Deel's under their plain names, another kit's as <kit>.<name>
+  const gk = id => LibStore.guideKey(Brand.kitGuideId(state.kit), id);
   function renderGuides() {
     if (typeof LibStore === 'undefined') return;
     const all = LibStore.guides(); const role = LibStore.role(); const admin = !!role.admin;
-    const open = id => LibStore.notes(id).filter(n => n.status === 'open').length;
-    $('guideTabs').innerHTML = LibStore.GUIDES.map(id => `<button type="button" role="tab" data-guide="${id}" class="${id === guideCur ? 'on' : ''}" aria-selected="${id === guideCur}" title="${GUIDE_NOTE[id]}">${id}.md<span class="dot ${all[id] && all[id].text.trim() ? 'full' : ''}"></span>${open(id) ? `<span class="count" title="Open suggestions and comments">${open(id)}</span>` : ''}</button>`).join('');
-    const g = all[guideCur];
+    const open = id => LibStore.notes(gk(id)).filter(n => n.status === 'open').length;
+    $('guideTabs').innerHTML = LibStore.GUIDES.map(id => `<button type="button" role="tab" data-guide="${id}" class="${id === guideCur ? 'on' : ''}" aria-selected="${id === guideCur}" title="${GUIDE_NOTE[id]}">${id}.md<span class="dot ${all[gk(id)] && all[gk(id)].text.trim() ? 'full' : ''}"></span>${open(id) ? `<span class="count" title="Open suggestions and comments">${open(id)}</span>` : ''}</button>`).join('');
+    const g = all[gk(guideCur)];
     if (!guideDirty) $('guideText').value = g ? g.text : '';
     const suggesting = guideMode === 'suggest';
     $('guideText').readOnly = !admin && !suggesting; $('guideSave').hidden = !admin; $('guideImport').hidden = !admin;
@@ -12319,7 +12344,8 @@ Layer kinds:
     if (guideMode === 'comment') $('guideCommentQuote').textContent = guideQuote || 'The whole guide';
     $('guideText').placeholder = admin ? `# ${guideCur[0].toUpperCase() + guideCur.slice(1)} guidelines\n\nWrite or import the ${guideCur} rules (${GUIDE_NOTE[guideCur]}).` : 'No guidelines here yet. An admin can add them.';
     $('guideMeta').textContent = `${GUIDE_NOTE[guideCur]}${g && g.updated ? ` · saved ${new Date(g.updated).toLocaleString()}` : ''}${guideDirty ? ' · not saved' : ''}`;
-    $('guidesWho').textContent = admin ? 'The rules Claude follows when it writes, lays out and animates: one Markdown file each. You can edit them (admin).' : 'The rules Claude follows when it writes, lays out and animates. Only admins can change them.';
+    const kn = (state.kit && state.kit.name) || 'This brand';
+    $('guidesWho').textContent = admin ? `${kn}'s rules, which Claude follows when it writes, lays out and animates for this kit: one Markdown file each. You can edit them (admin).` : `${kn}'s rules, which Claude follows when it writes, lays out and animates for this kit. Only admins can change them.`;
     const show = (guidePreview || !admin) && !suggesting; $('guidePreview').hidden = !show; $('guideText').hidden = show; $('guideView').textContent = show ? 'Edit' : 'Preview'; $('guideView').hidden = !admin;
     if (show) $('guidePreview').innerHTML = mdToHtml($('guideText').value) || '<p class="hint">Empty.</p>';
     renderGuideNotes(admin);
@@ -12328,7 +12354,7 @@ Layer kinds:
   // Withdraw for their author; settled ones folded below.
   let guideNames = {};
   function renderGuideNotes(admin) {
-    const list = LibStore.notes(guideCur); const me = LibStore.me; const esc = escapeHtml;
+    const list = LibStore.notes(gk(guideCur)); const me = LibStore.me; const esc = escapeHtml;
     const ids = [...new Set(list.map(n => n.by).filter(Boolean))].filter(id => !(id in guideNames));
     if (ids.length) LibStore.people(ids).then(ps => { for (const id of ids) guideNames[id] = (ps && ps[id] && ps[id].name) || ''; if (!$('settings').hidden) renderGuideNotes(LibStore.role().admin); });
     const who = n => esc(guideNames[n.by] || n.byName || (n.by && n.by === me ? 'You' : 'Someone'));
@@ -12369,7 +12395,7 @@ Layer kinds:
   $('guideTabs').addEventListener('click', e => { const b = e.target.closest('[data-guide]'); if (!b) return; if (guideDirty && !confirm('Leave this guide without saving your changes?')) return; guideDirty = false; guideMode = ''; guideCur = b.dataset.guide; renderGuides(); });
   $('guideText').addEventListener('input', () => { guideDirty = true; $('guideMeta').textContent = `${GUIDE_NOTE[guideCur]} · not saved`; });
   $('guideView').addEventListener('click', () => { guidePreview = !guidePreview; renderGuides(); });
-  $('guideSave').addEventListener('click', e => withBusy(e.target, async () => { try { await LibStore.putGuide(guideCur, $('guideText').value); guideDirty = false; renderGuides(); toast(`${guideCur}.md saved`); Stats.track('guide.save', { detail: guideCur }); } catch (err) { toast(err.message || String(err)); } }));
+  $('guideSave').addEventListener('click', e => withBusy(e.target, async () => { try { await LibStore.putGuide(gk(guideCur), $('guideText').value); guideDirty = false; renderGuides(); toast(`${guideCur}.md saved for ${state.kit.name}`); Stats.track('guide.save', { detail: guideCur }); } catch (err) { toast(err.message || String(err)); } }));
   $('guideDownload').addEventListener('click', async () => { const blob = new Blob([$('guideText').value], { type: 'text/markdown' }); await Render.download(blob, `${guideCur}.md`); });
   $('guideFile').addEventListener('change', async e => { const f = e.target.files[0]; e.target.value = ''; if (!f) return; const t = await f.text(); const m = /^(design|layout|animation|illustration|photography|content)\b/i.exec(f.name); if (m) guideCur = m[1].toLowerCase(); $('guideText').value = t; guideDirty = true; guidePreview = false; renderGuides(); toast(`${f.name} loaded into ${guideCur}.md: Save to keep it`); });
   LibStore.on(() => { if (!$('settings').hidden) renderGuides(); });
@@ -12378,11 +12404,11 @@ Layer kinds:
   $('guideSuggest').addEventListener('click', () => { guideMode = 'suggest'; guideDirty = false; renderGuides(); $('guideText').focus(); });
   $('guideSuggestCancel').addEventListener('click', () => { guideMode = ''; guideDirty = false; renderGuides(); });
   $('guideSuggestSend').addEventListener('click', e => withBusy(e.target, async () => {
-    const before = (LibStore.guides()[guideCur] || {}).text || ''; const after = $('guideText').value;
+    const before = (LibStore.guides()[gk(guideCur)] || {}).text || ''; const after = $('guideText').value;
     const hunks = guideHunks(before, after).filter(h => h.quote !== h.replacement);
     if (!hunks.length) { toast('Nothing changed yet: edit the text, then send'); return; }
     const why = $('guideSuggestWhy').value.trim(); const name = (typeof Sync !== 'undefined' && Sync.me && Sync.me.name) || '';
-    try { for (const h of hunks) await LibStore.addNote({ guide: guideCur, kind: 'edit', quote: h.quote, replacement: h.replacement, text: why, byName: name }); }
+    try { for (const h of hunks) await LibStore.addNote({ guide: gk(guideCur), kind: 'edit', quote: h.quote, replacement: h.replacement, text: why, byName: name }); }
     catch (err) { toast(err.message || String(err)); return; }
     guideMode = ''; guideDirty = false; $('guideSuggestWhy').value = ''; renderGuides(); toast(`${hunks.length} suggestion${hunks.length > 1 ? 's' : ''} sent to the editors`); Stats.track('guide.suggest', { detail: guideCur });
   }));
@@ -12394,7 +12420,7 @@ Layer kinds:
   $('guideCommentCancel').addEventListener('click', () => { guideMode = ''; renderGuides(); });
   $('guideCommentSend').addEventListener('click', e => withBusy(e.target, async () => {
     const text = $('guideCommentText').value.trim(); if (!text) { toast('Write the comment first'); return; }
-    try { await LibStore.addNote({ guide: guideCur, kind: 'comment', quote: guideQuote, text, byName: (typeof Sync !== 'undefined' && Sync.me && Sync.me.name) || '' }); } catch (err) { toast(err.message || String(err)); return; }
+    try { await LibStore.addNote({ guide: gk(guideCur), kind: 'comment', quote: guideQuote, text, byName: (typeof Sync !== 'undefined' && Sync.me && Sync.me.name) || '' }); } catch (err) { toast(err.message || String(err)); return; }
     $('guideCommentText').value = ''; guideMode = ''; guideQuote = ''; renderGuides(); toast('Comment sent to the editors'); Stats.track('guide.comment', { detail: guideCur });
   }));
   $('guideNotes').addEventListener('click', e => { const b = e.target.closest('[data-note-act]'); if (b) withBusy(b, async () => {
@@ -12405,7 +12431,7 @@ Layer kinds:
         const cur = (LibStore.guides()[n.guide] || {}).text || ''; const k = n.quote ? cur.split(n.quote).length - 1 : 0;
         if (n.quote && k !== 1) { toast(k ? 'That text appears more than once now: make the change by hand, then Resolve' : 'That text has changed since: make the change by hand, then Decline or Resolve'); guidePreview = false; renderGuides(); return; }
         const next = n.quote ? cur.replace(n.quote, () => n.replacement) : (cur ? cur + '\n' : '') + n.replacement;
-        await LibStore.putGuide(n.guide, next); guideDirty = false; await LibStore.setNote(n.id, { status: 'accepted', reply }); toast(`Accepted into ${n.guide}.md`);
+        await LibStore.putGuide(n.guide, next); guideDirty = false; await LibStore.setNote(n.id, { status: 'accepted', reply }); toast(`Accepted into ${n.guide.replace(/^.*\./, '')}.md`);
       } else { await LibStore.setNote(n.id, { status: act, reply }); toast(act === 'withdrawn' ? 'Withdrawn' : act === 'declined' ? 'Declined' : 'Resolved'); }
       Stats.track('guide.' + act, { detail: n.guide });
     } catch (err) { toast(err.message || String(err)); }
@@ -13062,6 +13088,7 @@ Layer kinds:
 
   // ---- Init --------------------------------------------------------------------------------------
   async function init() {
+    await Brand.fontsReady(); // a private build's brand faces (Bagoss) are measured before anything is laid out
     fillPresets(); fillFontSelects();
     const savedKit = LS.get('lg.kit', null); const savedPreset = LS.get('lg.preset', 'deel');
     try {
@@ -13069,6 +13096,9 @@ Layer kinds:
         // Saved kits from older versions get the preset's sample deck back.
         if (!savedKit.deck && savedKit.presetId && Brand.PRESETS[savedKit.presetId]) savedKit.deck = Brand.PRESETS[savedKit.presetId].deck;
         if (!savedKit.logos && savedKit.presetId && Brand.PRESETS[savedKit.presetId] && Brand.PRESETS[savedKit.presetId].logos) savedKit.logos = Brand.clone(Brand.PRESETS[savedKit.presetId].logos);
+        // the brand's own face when this build has it (a private build serves Bagoss), its stand-in when it does not
+        const pf = savedKit.presetId && Brand.PRESETS[savedKit.presetId] && Brand.PRESETS[savedKit.presetId].fonts; const avail = n => Brand.allFontNames().includes(n);
+        if (pf && pf.displayFallback) { if (savedKit.fonts.display === pf.displayFallback && avail(pf.display)) savedKit.fonts.display = pf.display; else if (!avail(savedKit.fonts.display)) savedKit.fonts.display = pf.displayFallback; }
         loadKit(savedKit); $('presetSelect').value = savedKit.presetId && Brand.PRESETS[savedKit.presetId] ? savedKit.presetId : '__custom';
       } else throw new Error('no saved kit');
     } catch { loadKit(Brand.fromPreset(savedPreset in Brand.PRESETS ? savedPreset : 'deel')); $('presetSelect').value = state.kit.presetId; }
