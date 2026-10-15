@@ -308,7 +308,7 @@ const Brand = (() => {
     const guide = guidesText(['content'], 9000, kit); return [rules, guide].filter(Boolean).join('\n');
   }
   // The brand's own guideline files (Settings → Brand guidelines), for prompts: each under its file name, trimmed.
-  // Every kit has its own set (Deel's, Akai's…); the kit in use is the current one when none is given.
+  // Every kit has its own set; the kit in use is the current one when none is given.
   let currentKit = null; const useKit = kit => { currentKit = kit; };
   const kitGuideId = kit => (kit && kit.presetId && kit.presetId !== '__custom' ? kit.presetId : kit && kit.name ? String(kit.name).toLowerCase() : 'deel');
   function guidesText(ids, max = 6000, kit) {
