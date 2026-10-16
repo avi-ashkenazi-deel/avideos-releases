@@ -30,6 +30,11 @@ Change the canvas with the tools; the person sees each change live and can undo 
     const lines = [`Canvas "${d.name}": ${d.frames.length} screen${d.frames.length === 1 ? '' : 's'}.`];
     if (Brand.voiceText(kit)) lines.push('When you write or change copy, follow these. ' + Brand.voiceText(kit));
     { const g = Brand.guidesText(['design', 'layout', 'animation', 'illustration', 'photography'], 3500, kit); if (g) lines.push('When you design, lay out, animate or pick pictures, follow the brand guidelines:\n' + g); }
+    // product design: the design system's rules, its text styles, and how to build a screen from its parts
+    { const g = Brand.guidesText(['product'], 6000, kit); if (g) lines.push('When you design product UI (app screens, flows, components), follow the product guidelines:\n' + g); }
+    if (Array.isArray(kit.textStyles) && kit.textStyles.length) lines.push('Text styles (use these for product UI, never other sizes): ' + kit.textStyles.map(st => `${st.name} ${st.family} ${st.size}/${Math.round(st.size * (st.lineHeight || 1.2))} ${st.weight}${st.color ? ' ' + st.color : ''}`).join('; ') + '.');
+    { const ds = Icons.sets().filter(st => st.id); if (ds.length) lines.push(`Icons: ${ds.map(st => `${st.name} (${st.names.length}, names like "${st.id}:${st.names[0]}")`).join(', ')} plus the basic set. Find names with search_icons; add with add_blocks kind icon.`); }
+    lines.push('For an app screen, start from list_components (shared libraries such as a design system: real components, and Screens such as an app shell), insert_component into the screen, then change text and props; add only what the library lacks.');
     if (!sel.frameIds.length) lines.push('Nothing is selected; act on the whole canvas or ask which screen.');
     else {
       lines.push(`Selected: ${sel.frameIds.length} screen${sel.frameIds.length === 1 ? '' : 's'}${sel.blockIds.length ? `, blocks ${sel.blockIds.join(', ')}` : ''}.`);

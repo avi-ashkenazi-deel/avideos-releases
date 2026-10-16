@@ -18,17 +18,21 @@ const WebImport = (() => {
     const famOf = ff => { const first = String(ff || '').split(',').map(s => s.trim().replace(/^["']|["']$/g, '')).find(Boolean) || 'Inter'; return first; };
     const isCookie = el => { const t = (el.innerText || '').slice(0, 400).toLowerCase(); return /cookie|consent|gdpr|privacy preferences/.test(t) && t.length < 1600; };
     const nameOf = el => { const tag = el.tagName.toLowerCase(); const cls = (typeof el.className === 'string' ? el.className : '').split(/\s+/).filter(c => c && c.length < 28 && !/^(css|sc|jsx|_|svelte)-/.test(c))[0]; const role = el.getAttribute('aria-label') || el.getAttribute('alt') || ''; return (tag + (cls ? '.' + cls : '') + (role ? ' ' + role.slice(0, 24) : '')).slice(0, 60); };
+    // stacking: a layer under a positioned ancestor with a z-index paints above its plain siblings (labels over fields,
+    // dialogs over the page). The outermost such ancestor decides, so a whole dialog moves together.
+    const zs = new Map();
+    function zp(el) { if (zs.has(el)) return zs.get(el); let z = 0; for (let e = el; e && e !== document.body && e !== document.documentElement; e = e.parentElement) { const cs = getComputedStyle(e); if (cs.position !== 'static' && cs.zIndex !== 'auto') z = parseInt(cs.zIndex, 10) || 0; } const o = z ? { z } : {}; zs.set(el, o); return o; }
     function rectOf(el) { const r = el.getBoundingClientRect(); return { x: r1(r.left + sx), y: r1(r.top + sy), w: r1(r.width), h: r1(r.height) }; }
     function visible(r, clip) { if (r.w < 1 || r.h < 1) return false; if (r.y > H || r.x > W + 2 || r.x + r.w < -2 || r.y + r.h < 0) return false; if (clip && (r.x >= clip.x + clip.w || r.y >= clip.y + clip.h || r.x + r.w <= clip.x || r.y + r.h <= clip.y)) return false; return true; }
     function shadowOf(cs) { const s = cs.boxShadow; if (!s || s === 'none') return null; const m = /(rgba?\([^)]*\))\s+(-?[\d.]+)px\s+(-?[\d.]+)px\s+([\d.]+)px/.exec(s); if (!m || /inset/.test(s.split(m[0])[0])) return null; const c = hexA(m[1]); return c && c.a > 0.01 ? { color: c.hex, alpha: c.a, x: +m[2], y: +m[3], blur: +m[4] } : null; }
-    function radiusOf(cs, r) { const v = cs.borderTopLeftRadius; if (!v || v === '0px') return 0; return /%$/.test(v) ? Math.min(r.w, r.h) * parseFloat(v) / 100 : px(v); }
+    function radiusOf(cs, r) { const v = cs.borderTopLeftRadius; if (!v || v === '0px') return 0; return Math.min(/%$/.test(v) ? Math.min(r.w, r.h) * parseFloat(v) / 100 : px(v), Math.min(r.w, r.h) / 2); }
     function imgRef(src) { if (!src || /^data:image\/svg/.test(src) && src.length > 400000) return null; if (!imgs.has(src)) imgs.set(src, null); return src; }
-    function pushText(el, cs, op, text, box, fixed, p, flow) {
+    function pushText(el, cs, op, text, box, fixed, p, flow, more) {
       text = text.replace(/[ \t ]+/g, ' ').replace(/ *\n */g, '\n').trim(); if (!text) return;
       fonts.add(famOf(cs.fontFamily));
       const c = hexA(cs.color) || { hex: '#000000', a: 1 }; const size = px(cs.fontSize) || 16;
       const lh = cs.lineHeight === 'normal' ? 1.2 : Math.round(px(cs.lineHeight) / size * 100) / 100;
-      out.push({ t: 'text', name: nameOf(el), ...box, text, color: c.hex, alpha: c.a * op, family: famOf(cs.fontFamily), size, weight: parseInt(cs.fontWeight, 10) || 400, italic: cs.fontStyle === 'italic', lh: lh || 1.2, ls: cs.letterSpacing === 'normal' ? 0 : Math.round(px(cs.letterSpacing) / size * 1000) / 1000, align: /center/.test(cs.textAlign) ? 'center' : /right|end/.test(cs.textAlign) ? 'right' : 'left', transform: cs.textTransform === 'uppercase' ? 'upper' : cs.textTransform === 'lowercase' ? 'lower' : '', deco: /underline/.test(cs.textDecorationLine) ? 'underline' : /line-through/.test(cs.textDecorationLine) ? 'line-through' : '', fixed: !!fixed, p: fixed ? 0 : p || 0, flow: !!flow && !fixed });
+      out.push({ t: 'text', name: nameOf(el), ...zp(el), ...box, text, color: c.hex, alpha: c.a * op, family: famOf(cs.fontFamily), size, weight: parseInt(cs.fontWeight, 10) || 400, italic: cs.fontStyle === 'italic', lh: lh || 1.2, ls: cs.letterSpacing === 'normal' ? 0 : Math.round(px(cs.letterSpacing) / size * 1000) / 1000, align: /center/.test(cs.textAlign) ? 'center' : /right|end/.test(cs.textAlign) ? 'right' : 'left', transform: cs.textTransform === 'uppercase' ? 'upper' : cs.textTransform === 'lowercase' ? 'lower' : '', deco: /underline/.test(cs.textDecorationLine) ? 'underline' : /line-through/.test(cs.textDecorationLine) ? 'line-through' : '', fixed: !!fixed, p: fixed ? 0 : p || 0, flow: !!flow && !fixed, ...(more || {}) });
     }
     function svgMarkup(svg) {
       const clone = svg.cloneNode(true); const src = svg.querySelectorAll('*'); const dst = clone.querySelectorAll('*');
@@ -53,6 +57,8 @@ const WebImport = (() => {
       if (/^(SCRIPT|STYLE|NOSCRIPT|TEMPLATE|HEAD|META|LINK|TITLE)$/.test(tag) || el.id === '__lg_capture_panel') return;
       const cs = getComputedStyle(el);
       if (cs.display === 'none' || cs.visibility === 'hidden' || cs.visibility === 'collapse') return;
+      // fixed layers (modals, drawers, toasts) sit on the viewport, outside any scrolling ancestor's clip
+      if (cs.position === 'fixed') clip = null;
       const o = op * (parseFloat(cs.opacity) || 0); if (o < 0.02) return;
       const isFixed = fixed || cs.position === 'fixed' || cs.position === 'sticky';
       if ((cs.position === 'fixed' || cs.position === 'sticky') && isCookie(el) && (OPTS && OPTS.dropCookies !== false)) return;
@@ -61,8 +67,8 @@ const WebImport = (() => {
       const outOfFlow = cs.position === 'absolute' || cs.position === 'fixed';
       const item = !!flexParent && vis && !isFixed && !outOfFlow;
       const it = item ? { grow: parseFloat(cs.flexGrow) || 0, self: cs.alignSelf } : undefined;
-      if (tag === 'svg' || el instanceof SVGSVGElement) { if (vis) { const m = svgMarkup(el); out.push({ t: 'svg', name: nameOf(el), ...r, svg: m.inner, viewBox: m.viewBox, color: m.color, alpha: o, fixed: isFixed, p: P, flow: item, it }); } return; }
-      if (tag === 'IFRAME' || tag === 'EMBED' || tag === 'OBJECT') { if (vis) out.push({ t: 'box', name: nameOf(el), ...r, bg: '#E4E4EA', bga: 1, radius: 0, alpha: o, fixed: isFixed, p: P, flow: item, it }); return; }
+      if (tag === 'svg' || el instanceof SVGSVGElement) { if (vis) { const m = svgMarkup(el); out.push({ t: 'svg', name: nameOf(el), ...zp(el), ...r, svg: m.inner, viewBox: m.viewBox, color: m.color, alpha: o, fixed: isFixed, p: P, flow: item, it }); } return; }
+      if (tag === 'IFRAME' || tag === 'EMBED' || tag === 'OBJECT') { if (vis) out.push({ t: 'box', name: nameOf(el), ...zp(el), ...r, bg: '#E4E4EA', bga: 1, radius: 0, alpha: o, fixed: isFixed, p: P, flow: item, it }); return; }
       const leaf = tag === 'IMG' || tag === 'VIDEO' || tag === 'CANVAS' || tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
       // grids read as stacks too: several columns wrap like a row, one column stacks vertically
       const isGrid = /^(grid|inline-grid)$/.test(cs.display); const cols = isGrid ? String(cs.gridTemplateColumns || '').split(/\s+(?![^(]*\))/).filter(v => v && v !== 'none').length : 0;
@@ -70,26 +76,30 @@ const WebImport = (() => {
       let frame = null, myP = P;
       if (vis && !isFixed && !leaf && (isFlex || item) && fseq < 800) {
         const v = visualsOf(el, cs, r);
-        frame = { t: 'frame', id: ++fseq, p: P, name: nameOf(el), ...r, alpha: o, flow: item, it, bg: v.bg && v.bg.a > 0.02 ? v.bg.hex : null, bga: v.bg ? v.bg.a : 0, grad: v.grad, radius: v.radius, border: v.uniform ? { w: v.bw[0], c: v.bc[0].hex } : null, shadow: v.sh,
+        frame = { t: 'frame', id: ++fseq, p: P, name: nameOf(el), ...zp(el), ...r, alpha: o, flow: item, it, bg: v.bg && v.bg.a > 0.02 ? v.bg.hex : null, bga: v.bg ? v.bg.a : 0, grad: v.grad, radius: v.radius, border: v.uniform ? { w: v.bw[0], c: v.bc[0].hex } : null, shadow: v.sh,
           clip: cs.overflowX !== 'visible' || cs.overflowY !== 'visible', pad: [px(cs.paddingTop) + v.bw[0], px(cs.paddingRight) + v.bw[1], px(cs.paddingBottom) + v.bw[2], px(cs.paddingLeft) + v.bw[3]], textAlign: cs.textAlign };
         if (isFlex) frame.flex = isGrid ? { dir: cols > 1 ? 'row' : 'column', wrap: cols > 1, gapC: px(cs.columnGap), gapR: px(cs.rowGap), justify: cs.justifyContent, align: cs.alignItems, grid: cols } : { dir: cs.flexDirection, wrap: cs.flexWrap !== 'nowrap', gapC: px(cs.columnGap), gapR: px(cs.rowGap), justify: cs.justifyContent, align: cs.alignItems };
         out.push(frame); myP = frame.id;
       }
       if (vis) {
         const v = visualsOf(el, cs, r); const { bg, bi, bw, bc, sides, radius, sh, grad, uniform } = v;
-        if (!frame && ((bg && bg.a > 0.02) || grad || uniform || sh)) out.push({ t: 'box', name: nameOf(el), ...r, bg: bg && bg.a > 0.02 ? bg.hex : null, bga: bg ? bg.a : 0, grad, radius, border: uniform ? { w: bw[0], c: bc[0].hex } : null, shadow: sh, alpha: o, fixed: isFixed, p: P, flow: false });
-        if (!uniform) sides.forEach((on, i) => { if (!on) return; const w = bw[i]; const b = i === 0 ? { x: r.x, y: r.y, w: r.w, h: w } : i === 1 ? { x: r.x + r.w - w, y: r.y, w, h: r.h } : i === 2 ? { x: r.x, y: r.y + r.h - w, w: r.w, h: w } : { x: r.x, y: r.y, w, h: r.h }; out.push({ t: 'box', name: nameOf(el) + ' border', ...b, bg: bc[i].hex, bga: bc[i].a, radius: 0, alpha: o, fixed: isFixed, p: myP, flow: false }); });
+        if (!frame && ((bg && bg.a > 0.02) || grad || uniform || sh)) out.push({ t: 'box', name: nameOf(el), ...zp(el), ...r, bg: bg && bg.a > 0.02 ? bg.hex : null, bga: bg ? bg.a : 0, grad, radius, border: uniform ? { w: bw[0], c: bc[0].hex } : null, shadow: sh, alpha: o, fixed: isFixed, p: P, flow: false });
+        if (!uniform) sides.forEach((on, i) => { if (!on) return; const w = bw[i]; const b = i === 0 ? { x: r.x, y: r.y, w: r.w, h: w } : i === 1 ? { x: r.x + r.w - w, y: r.y, w, h: r.h } : i === 2 ? { x: r.x, y: r.y + r.h - w, w: r.w, h: w } : { x: r.x, y: r.y, w, h: r.h }; out.push({ t: 'box', name: nameOf(el) + ' border', ...zp(el), ...b, bg: bc[i].hex, bga: bc[i].a, radius: 0, alpha: o, fixed: isFixed, p: myP, flow: false }); });
         const url = bi && /url\(/.test(bi) ? (/url\(["']?([^"')]+)["']?\)/.exec(bi) || [])[1] : null;
-        if (url) out.push({ t: 'img', name: nameOf(el) + ' bg', ...r, src: imgRef(new URL(url, location.href).href), fit: cs.backgroundSize === 'contain' ? 'contain' : 'cover', radius, alpha: o, fixed: isFixed, p: myP, flow: false });
+        if (url) out.push({ t: 'img', name: nameOf(el) + ' bg', ...zp(el), ...r, src: imgRef(new URL(url, location.href).href), fit: cs.backgroundSize === 'contain' ? 'contain' : 'cover', radius, alpha: o, fixed: isFixed, p: myP, flow: false });
         if (tag === 'IMG' || tag === 'VIDEO' || tag === 'CANVAS') {
           let src = tag === 'IMG' ? (el.currentSrc || el.src) : tag === 'VIDEO' ? el.poster : null;
           if (tag === 'CANVAS') { try { src = el.toDataURL('image/png'); } catch { src = null; } }
-          out.push({ t: 'img', name: nameOf(el), ...r, src: src ? imgRef(src) : null, fit: cs.objectFit === 'contain' ? 'contain' : 'cover', radius, alpha: o, fixed: isFixed, p: P, flow: item, it });
+          out.push({ t: 'img', name: nameOf(el), ...zp(el), ...r, src: src ? imgRef(src) : null, fit: cs.objectFit === 'contain' ? 'contain' : 'cover', radius, alpha: o, fixed: isFixed, p: P, flow: item, it });
           return;
         }
         if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
-          const val = tag === 'SELECT' ? (el.options[el.selectedIndex] || {}).text || '' : (el.type === 'password' ? '••••••' : el.value || el.placeholder || '');
-          if (val && el.type !== 'checkbox' && el.type !== 'radio' && el.type !== 'hidden') { const pl = px(cs.paddingLeft), pt = px(cs.paddingTop); pushText(el, cs, el.value ? o : o * 0.6, val, { x: r.x + pl, y: r.y + Math.max(pt, (r.h - px(cs.fontSize) * 1.2) / 2), w: Math.max(4, r.w - pl - px(cs.paddingRight)), h: px(cs.fontSize) * 1.3 }, isFixed, P, false); }
+          // a placeholder the page hides (floating labels do) stays out
+          const phShown = () => { try { return parseFloat(getComputedStyle(el, '::placeholder').opacity || '1') > 0.05; } catch { return true; } };
+          const val = tag === 'SELECT' ? (el.options[el.selectedIndex] || {}).text || '' : (el.type === 'password' ? '••••••' : el.value || (el.placeholder && phShown() ? el.placeholder : ''));
+          // an empty field still takes its room in the row (the icon after it stays at the end)
+          if (!val && item && tag !== 'SELECT' && el.type !== 'checkbox' && el.type !== 'radio' && el.type !== 'hidden') out.push({ t: 'frame', id: ++fseq, p: P, name: nameOf(el), ...zp(el), ...r, alpha: o, flow: true, it, field: 1, bg: null, bga: 0, radius: 0, pad: [0, 0, 0, 0] });
+          if (val && el.type !== 'checkbox' && el.type !== 'radio' && el.type !== 'hidden') { const pl = px(cs.paddingLeft), pt = px(cs.paddingTop); pushText(el, cs, el.value ? o : o * 0.6, val, { x: r.x + pl, y: r.y + Math.max(pt, (r.h - px(cs.fontSize) * 1.2) / 2), w: Math.max(4, r.w - pl - px(cs.paddingRight)), h: px(cs.fontSize) * 1.3 }, isFixed, P, item, { field: 1, it }); }
           return;
         }
       }
@@ -113,6 +123,8 @@ const WebImport = (() => {
         for (const k of kids) if (k.nodeType === 3 && k.nodeValue.trim()) { const range = document.createRange(); range.selectNodeContents(k); const rr = range.getBoundingClientRect(); const box = { x: r1(rr.left + sx), y: r1(rr.top + sy), w: r1(rr.width), h: r1(rr.height) }; if (visible(box, clip)) pushText(el, cs, o, k.nodeValue, box, isFixed, myP, !!(frame && frame.flex)); }
       }
       const clips = cs.overflowX !== 'visible' || cs.overflowY !== 'visible';
+      // a collapsed clipping box (an accordion or menu that is shut) shows none of what is inside
+      if (clips && (r.w < 1 || r.h < 1) && !(el instanceof SVGElement)) return;
       const nextClip = clips && r.w > 0 && r.h > 0 ? (clip ? { x: Math.max(clip.x, r.x), y: Math.max(clip.y, r.y), w: Math.min(clip.x + clip.w, r.x + r.w) - Math.max(clip.x, r.x), h: Math.min(clip.y + clip.h, r.y + r.h) - Math.max(clip.y, r.y) } : r) : clip;
       for (const k of el.children) {
         // children of a text layer are already in its text: collect only their boxes, icons and images
@@ -126,9 +138,9 @@ const WebImport = (() => {
       const cs = getComputedStyle(el); if (cs.display === 'none' || cs.visibility === 'hidden') return;
       const o = op * (parseFloat(cs.opacity) || 0); const r = rectOf(el); if (!visible(r, clip)) return;
       const P = fixed ? 0 : p || 0;
-      if (el instanceof SVGSVGElement) { const m = svgMarkup(el); out.push({ t: 'svg', name: nameOf(el), ...r, svg: m.inner, viewBox: m.viewBox, color: m.color, alpha: o, fixed, p: P, flow: false }); return; }
-      if (el.tagName === 'IMG') { out.push({ t: 'img', name: nameOf(el), ...r, src: imgRef(el.currentSrc || el.src), fit: cs.objectFit === 'contain' ? 'contain' : 'cover', radius: radiusOf(cs, r), alpha: o, fixed, p: P, flow: false }); return; }
-      const bg = hexA(cs.backgroundColor); if (bg && bg.a > 0.02) out.push({ t: 'box', name: nameOf(el), ...r, bg: bg.hex, bga: bg.a, radius: radiusOf(cs, r), alpha: o, fixed, p: P, flow: false });
+      if (el instanceof SVGSVGElement) { const m = svgMarkup(el); out.push({ t: 'svg', name: nameOf(el), ...zp(el), ...r, svg: m.inner, viewBox: m.viewBox, color: m.color, alpha: o, fixed, p: P, flow: false }); return; }
+      if (el.tagName === 'IMG') { out.push({ t: 'img', name: nameOf(el), ...zp(el), ...r, src: imgRef(el.currentSrc || el.src), fit: cs.objectFit === 'contain' ? 'contain' : 'cover', radius: radiusOf(cs, r), alpha: o, fixed, p: P, flow: false }); return; }
+      const bg = hexA(cs.backgroundColor); if (bg && bg.a > 0.02) out.push({ t: 'box', name: nameOf(el), ...zp(el), ...r, bg: bg.hex, bga: bg.a, radius: radiusOf(cs, r), alpha: o, fixed, p: P, flow: false });
       for (const k of el.children) walkBoxesOnly(k, o, clip, fixed, depth + 1, p);
     }
     async function embed(src) {
@@ -285,6 +297,8 @@ const WebImport = (() => {
       }
       if (b) { blocks.push(b); meta.set(b.id, n); }
     }
+    // elevated layers (z-index) after their plain siblings, keeping page order otherwise
+    if (blocks.some(b => (meta.get(b.id) || {}).z)) { const zi = new Map(blocks.map((b, i) => [b.id, i])); blocks.sort((a, b) => ((meta.get(a.id).z || 0) - (meta.get(b.id).z || 0)) || zi.get(a.id) - zi.get(b.id)); }
     if (AUTO) stackUp(blocks, meta);
     const host = (() => { try { return new URL(cap.url).hostname.replace(/^www\./, ''); } catch { return 'web page'; } })();
     const layout = FigmaImport.toLayouts([{ name: host, x: 0, y: 0, w: W, h: H, bg: safeHex(cap.bg) || '#FFFFFF', clip: true, blocks }], kit)[0].layout;
@@ -335,13 +349,18 @@ const WebImport = (() => {
         const it = meta.get(k.id).it || {}; const own = hug.get(k.id) || {};
         const huggyW = k.kind === 'text' || k._textStack || own.w, huggyH = k.kind === 'text' || k._textStack || own.h;
         const crossFill = (stretch && (!it.self || /auto|stretch|normal/.test(it.self))) || it.self === 'stretch';
+        if (meta.get(k.id).field) { if (row) { k.sizeW = 'fill'; k.sizeH = 'hug'; } else { k.sizeW = near(k.w, innerW, 6) ? 'fill' : 'fixed'; k.sizeH = 'hug'; } continue; }
         if (row) { k.sizeW = it.grow > 0 ? 'fill' : huggyW ? 'hug' : 'fixed'; k.sizeH = crossFill && near(k.h, innerH) && !k._textStack && !own.h ? 'fill' : huggyH ? 'hug' : 'fixed'; }
         else { k.sizeH = it.grow > 0 ? 'fill' : huggyH ? 'hug' : 'fixed'; k.sizeW = crossFill && near(k.w, innerW) ? 'fill' : huggyW ? 'hug' : 'fixed'; }
-        if (k.kind === 'text' && k.sizeW === 'hug' && (k.lines || []).length > 1) k.sizeW = row ? 'fixed' : (near(k.w, innerW, 3) ? 'fill' : 'fixed');
+        // wrapped text keeps its width; the line count comes from the page, not from fonts that may not have loaded here
+        const mk = meta.get(k.id); const pageLines = k.kind === 'text' && mk ? Math.round(mk.h / ((mk.size || 16) * (mk.lh || 1.2))) : 1;
+        if (k.kind === 'text' && k.sizeW === 'hug' && pageLines > 1) k.sizeW = row ? 'fixed' : (near(k.w, innerW, 3) ? 'fill' : 'fixed');
       }
     }
     // 3. stacks outside any flow hug where they did
     for (const P of stacks) { const own = hug.get(P.id); if (!own) continue; if (!P.sizeW && own.w) P.sizeW = 'hug'; if (!P.sizeH && own.h) P.sizeH = 'hug'; }
+    // 4. as in Figma, a stack that hugs cannot hold a child that fills the same side: that side keeps its measured size
+    for (const P of stacks) { const flow = flowOf(P); if (P.sizeW === 'hug' && flow.some(k => k.sizeW === 'fill')) P.sizeW = 'fixed'; if (P.sizeH === 'hug' && flow.some(k => k.sizeH === 'fill')) P.sizeH = 'fixed'; }
     for (const b of blocks) delete b._textStack;
   }
   return { init, capturePage, source, bookmarklet, renderSection, handlePaste, importCapture, parseGradient };

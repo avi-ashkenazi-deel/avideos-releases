@@ -83,7 +83,7 @@ Some brands can't live in this public repository: internal product brands, and l
 node build.mjs --private /path/to/private
 ```
 
-The folder holds `private.json` (`{ "presets": { "<id>": <brand kit> }, "fonts": [{ "family", "weight", "file" }] }`) and the font files it names. The build writes `dist/layout-engine.private.html` (git-ignored) with the kits and fonts inside it; they show up as presets and font choices, and a preset can name a licensed face with a stand-in (`"display": "Bagoss", "displayFallback": "Bricolage Grotesque"`) so the public build still works. A kit can also set `ctaColor` (its button color) and an SVG logo whose letters alone take the logo color (`"recolor": "ink", "inkFill": "#141414"`), so a colored mark keeps its colors.
+The folder holds `private.json` (`{ "presets": { "<id>": <brand kit> }, "fonts": [{ "family", "weight", "file" }] }`) and the font files it names. The build writes `dist/layout-engine.private.html` (git-ignored) with the kits and fonts inside it; they show up as presets and font choices, and a preset can name a licensed face with a stand-in (`"display": "Bagoss", "displayFallback": "Bricolage Grotesque"`) so the public build still works. A kit can also set `ctaColor` (its button color) and an SVG logo whose letters alone take the logo color (`"recolor": "ink", "inkFill": "#141414"`), so a colored mark keeps its colors. A private kit can build on a public one with `"base": "deel"` (it keeps that kit's logos and voice) and add `textStyles`. `"iconSets": [{ "id", "name", "viewBox", "file" }]` adds icon sets, each file a JSON object of icon name to SVG markup (paths filled with `currentColor`).
 
 ## Motion, Quick Look and Present
 
@@ -192,6 +192,22 @@ Coded components (React, for example `@deel-ui/core`) can sit in a library next 
 Anything can be tied to a component: when saving a selection (say a capture of a Storybook story or a live page), name the code component in the save form and the item exports as that component.
 
 The agent sees the same: `list_components` returns code components with their props, and `insert_component` takes `props` and `text`.
+
+### Real components from Storybook
+
+A manifest gives props; a **capture** gives the real look. `node tools/storybook-capture.mjs --storybook <url> --list stories.json --out library.json` (with the app served locally) opens stories in a headless browser, records each rendered component with the web capture (boxes, text, icons, images in page coordinates), and turns it into a library item: auto layout stacks for components, exact positions for whole screens, tied to the component with the story's props (`Button` with `variant`, `size`, `color`…).
+
+- **Variants.** Several captures of one component (Button contained, outlined, text; Alert info, success, warning, error) are variants of it. Changing a prop in the panel swaps in the captured variant that matches, keeping its place in the stack and its words, instead of a drawn stand-in.
+- **Screens.** Whole pages (an app shell with sidebar, tabs, a form flow, master–detail) go in the **Screens** category. Adding one makes a screen of its own size to design in.
+- **Agent.** `insert_component` with `props` picks the matching variant and `text` replaces its label.
+
+## Product design
+
+Dugma also lays out product screens with a design system:
+
+- **Icons.** Library → **Icons** (or the search box, which also finds icons under All) shows the built-in set and any design-system icon set; click or drag one onto a screen. A selected icon has a searchable picker in its properties. The agent has `search_icons`. Icon sets register with `Icons.addSet({ id, name, viewBox, icons })` (names become `<set>:<Name>`); a private build carries them (see Private kits).
+- **Text styles.** A kit can list `textStyles` (for example H1, H2, H3, H4, P, Caption, Group title with font, size, weight, line height and color). Text then has a **Style** menu in its properties that applies one in a click, and the agent is told to use only those.
+- **Product guidelines.** Settings → Brand guidelines has **product.md** next to the brand guides: the design system's rules (tokens, type styles, components, screen patterns, icons, product motion, product writing). Claude reads it whenever it designs product UI.
 
 ## Mobile screens
 
@@ -366,7 +382,7 @@ js/grid.js          formats and the modular grid
 js/text.js          canvas text measurement and fitting
 js/engine.js        the generator: eight families, validation, metrics, dedup
 js/render.js        SVG renderer, PNG/SVG export with embedded fonts
-js/icons.js         curated Phosphor icon set (MIT) and keyword picker
+js/icons.js         curated Phosphor icon set (MIT), keyword picker, design-system icon sets and search
 js/deck.js          outline from brief (rules or Claude), per-slide variations, picks
 js/canvas.js        canvas document: frames, block ops, links, HTML/React export (nested flexbox), history
 js/autolayout.js    auto layout engine: boxes, stacks, Fixed/Hug/Fill, wrap, absolute, sync view
@@ -400,6 +416,7 @@ js/app.js           UI state and wiring
 build.mjs           single-file bundler
 tools/pptx_to_kit.py  deck -> brand-kit draft + layout priors
 tools/ds-manifest.mjs design-system repo -> component manifest (lgComponents)
+tools/storybook-capture.mjs Storybook stories -> library of real components (captured, editable, tied to code)
 docs/pitch.md       the case for building this properly
 docs/landscape.md   research: how other tools generate layouts
 docs/learnings.md   what Presenton and a 2,415-slide corpus taught us

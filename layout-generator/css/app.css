@@ -542,6 +542,15 @@ input[disabled] { opacity: .5; cursor: not-allowed; }
 .lib-cats button:hover { color: var(--fg); border-color: var(--fg-3); }
 .lib-cats button.on { background: var(--cta); color: var(--cta-ink); border-color: var(--cta); font-weight: 600; }
 .lib-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+/* icon picker (properties panel and the library's Icons) */
+.cv-icons, .lib-icons { display: grid; grid-template-columns: repeat(auto-fill, minmax(34px, 1fr)); gap: 4px; margin-top: 8px; max-height: 260px; overflow: auto; }
+.lib-icons { max-height: none; }
+.cv-ico { display: grid; place-items: center; aspect-ratio: 1; border: 1px solid transparent; border-radius: 6px; background: var(--panel-2); color: var(--fg); cursor: pointer; padding: 6px; }
+.cv-ico svg { width: 20px; height: 20px; }
+.cv-ico:hover { border-color: var(--line-2); }
+.cv-ico.on { border-color: var(--cta); background: var(--accent-soft); }
+.cv-ico:focus-visible { outline: 2px solid var(--cta); outline-offset: 1px; }
+
 .lib-item { background: var(--bg); border: 1px solid var(--line-2); border-radius: 8px; padding: 6px; cursor: grab; display: flex; flex-direction: column; gap: 4px; transition: border-color .1s; }
 .lib-item:hover { border-color: var(--accent); }
 .lib-item:active { cursor: grabbing; }

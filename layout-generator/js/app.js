@@ -944,9 +944,9 @@
     if (state.mode !== 'deck') return; const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
     if (!f || !(/\.pptx$/i.test(f.name) || f.type === GSlides.PPTX)) return; e.preventDefault(); if (!state.busy) generateDeck(($('prompt').value || '').replace(slidesLinkIn($('prompt').value) || '', '').trim(), { file: f });
   });
-  // ---- Brand guidelines (Settings): design.md, layout.md, animation.md, illustration.md, photography.md, content.md.
+  // ---- Brand guidelines (Settings): design.md, layout.md, animation.md, illustration.md, photography.md, content.md, product.md.
   // Everyone can read them; admins (the shared-library admins) edit, import and save them. Claude gets them in its prompts.
-  const GUIDE_NOTE = { design: 'colors, type, logo, shapes, icons, charts', layout: 'grid, margins, hierarchy per slide type, text per slide', animation: 'easing, durations, entrances, builds', illustration: 'illustration and 3D render style', photography: 'subjects, light, color, cropping', content: 'voice, tone, grammar, naming, words to use and avoid' };
+  const GUIDE_NOTE = { design: 'colors, type, logo, shapes, icons, charts', layout: 'grid, margins, hierarchy per slide type, text per slide', animation: 'easing, durations, entrances, builds', illustration: 'illustration and 3D render style', photography: 'subjects, light, color, cropping', content: 'voice, tone, grammar, naming, words to use and avoid', product: 'product UI: design system components, tokens, type styles, icons, screen patterns' };
   let guideCur = 'design', guideDirty = false, guidePreview = false, guideMode = '', guideQuote = '', guideComments = null;
   const mdInline = t => escapeHtml(t).replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>').replace(/(^|[^*])\*([^*\s][^*]*)\*/g, '$1<i>$2</i>');
   function mdToHtml(md) {
@@ -1033,7 +1033,7 @@
   $('guideView').addEventListener('click', () => { guidePreview = !guidePreview; renderGuides(); });
   $('guideSave').addEventListener('click', e => withBusy(e.target, async () => { try { await LibStore.putGuide(gk(guideCur), $('guideText').value); guideDirty = false; renderGuides(); toast(`${guideCur}.md saved for ${state.kit.name}`); Stats.track('guide.save', { detail: guideCur }); } catch (err) { toast(err.message || String(err)); } }));
   $('guideDownload').addEventListener('click', async () => { const blob = new Blob([$('guideText').value], { type: 'text/markdown' }); await Render.download(blob, `${guideCur}.md`); });
-  $('guideFile').addEventListener('change', async e => { const f = e.target.files[0]; e.target.value = ''; if (!f) return; const t = await f.text(); const m = /^(design|layout|animation|illustration|photography|content)\b/i.exec(f.name); if (m) guideCur = m[1].toLowerCase(); $('guideText').value = t; guideDirty = true; guidePreview = false; renderGuides(); toast(`${f.name} loaded into ${guideCur}.md: Save to keep it`); });
+  $('guideFile').addEventListener('change', async e => { const f = e.target.files[0]; e.target.value = ''; if (!f) return; const t = await f.text(); const m = /^(design|layout|animation|illustration|photography|content|product)\b/i.exec(f.name); if (m) guideCur = m[1].toLowerCase(); $('guideText').value = t; guideDirty = true; guidePreview = false; renderGuides(); toast(`${f.name} loaded into ${guideCur}.md: Save to keep it`); });
   LibStore.on(() => { if (!$('settings').hidden) renderGuides(); });
   // claude.ai's own comment box for people who can comment but not write the page's data (Commenters)
   if (window.claude && typeof window.claude.use === 'function') window.claude.use('comments').then(c => { guideComments = c; }).catch(() => { });

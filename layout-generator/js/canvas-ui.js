@@ -623,11 +623,12 @@ const CanvasUI = (() => {
     emit('action', 'library.insert', opts.name);
     let f = null, into = null, lp = null;
     if (opts.at) { f = frameAt(opts.at); if (f) lp = { x: opts.at.x - f.x, y: opts.at.y - f.y }; }
-    if (!f) { f = selFrames().length === 1 ? selFrame() : null; const bs = f ? selBlocks() : []; if (bs.length === 1 && bs[0].kind === 'box') into = bs[0]; }
-    if (!f) { const r = stage().getBoundingClientRect(); f = frameAt(toWorld(r.left + r.width / 2, r.top + r.height / 2)) || doc.frames[doc.frames.length - 1] || null; }
+    // a whole screen (an app shell, a page) gets a frame of its own size unless it was dropped onto one
+    if (!f && !opts.screen) { f = selFrames().length === 1 ? selFrame() : null; const bs = f ? selBlocks() : []; if (bs.length === 1 && bs[0].kind === 'box') into = bs[0]; }
+    if (!f && !opts.screen) { const r = stage().getBoundingClientRect(); f = frameAt(toWorld(r.left + r.width / 2, r.top + r.height / 2)) || doc.frames[doc.frames.length - 1] || null; }
     const copies = Canvas.clone(blocks); const inSet = new Set(copies.map(b => b.id)); const tops = copies.filter(b => !b.parent || !inSet.has(b.parent));
     const bb = Canvas.bounds(tops);
-    if (!f) { f = createFrame({ center: true, format: Canvas.customFormat(bb.w + 160, bb.h + 160), name: opts.name || 'Component', history: opts.history !== false }); opts = { ...opts, history: false }; }
+    if (!f) { const pad = opts.screen ? 0 : 160; f = createFrame({ center: true, format: Canvas.customFormat(bb.w + pad, bb.h + pad), name: opts.name || 'Component', history: opts.history !== false }); opts = { ...opts, history: false }; }
     if (opts.history !== false) hist.push(doc);
     Auto.remap(copies, null);
     if (lp && !into) into = Auto.containerAt(f, lp, []);
@@ -1273,7 +1274,7 @@ const CanvasUI = (() => {
     const ctl = p => {
       const v = props[p.name]; const lab = `<span title="${esc((p.type || '') + (p.description ? ' — ' + p.description : ''))}">${esc(p.name)}${p.required ? '*' : ''}</span>`;
       if (p.values && p.values.length) return `<label class="cv-f">${lab}<select data-cprop="${esc(p.name)}"><option value="">${p.default ? `default (${esc(p.default)})` : '—'}</option>${p.values.map(x => `<option value="${esc(x)}" ${String(v) === x ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></label>`;
-      if (CodeKit.isBool(p)) return `<label class="cv-check"><input type="checkbox" data-cprop="${esc(p.name)}" data-ctype="bool" ${v === true ? 'checked' : ''}> ${esc(p.name)}</label>`;
+      if (CodeKit.isBool(p)) return `<label class="cv-check"><input type="checkbox" data-cprop="${esc(p.name)}" data-ctype="bool" ${v === true || (v == null && p.default === 'true') ? 'checked' : ''}> ${esc(p.name)}</label>`;
       return `<label class="cv-f">${lab}<input type="text" data-cprop="${esc(p.name)}" value="${esc(v == null ? '' : typeof v === 'object' ? JSON.stringify(v) : v)}" placeholder="${esc(p.default || '')}"></label>`;
     };
     const list = spec ? spec.props.filter(p => !skip(p)) : Object.keys(props).map(n => ({ name: n, type: typeof props[n] === 'boolean' ? 'boolean' : 'string' }));
@@ -1306,6 +1307,22 @@ const CanvasUI = (() => {
       ${s.on ? `<div class="cv-grid2">${num('shadow.x', 'X', s.x || 0, 1)}${num('shadow.y', 'Y', s.y ?? 8, 1)}${num('shadow.blur', 'Blur', s.blur ?? 24, 1, 'min="0"')}${num('shadow.alpha', 'α', s.alpha ?? 0.25, 0.05, 'min="0" max="1"')}</div>${color('shadow.color', 'Color', s.color || '#000000')}` : ''}
     </div>`;
   }
+  // Icons: the built-in set plus any design-system set, searched by name.
+  let iconQuery = '';
+  const iconCell = (n, cur) => { const g = Icons.get(n); return g ? `<button type="button" class="cv-ico${n === cur ? ' on' : ''}" data-icon="${esc(n)}" title="${esc(n)}"><svg viewBox="${g.viewBox}" aria-hidden="true">${g.inner}</svg></button>` : ''; };
+  const iconGrid = cur => { const list = Icons.search(iconQuery, 96); return list.length ? list.map(n => iconCell(n, cur)).join('') : '<p class="hint">No icon by that name.</p>'; };
+  function iconSection(b) {
+    const total = Icons.sets().reduce((t, st) => t + st.names.length, 0);
+    return `<div class="cv-section"><h3>Icon</h3><div class="cv-row"><span class="cv-token" title="Icon name">${esc(b.name)}</span></div>
+      <input type="search" class="input cv-mini" data-icon-q placeholder="Search ${total} icons" value="${esc(iconQuery)}" aria-label="Search icons"><div class="cv-icons" data-icon-grid>${iconGrid(b.name)}</div></div>`;
+  }
+  // Text styles from the kit (a design system's H1…Caption): one pick sets font, size, weight, line height and color.
+  const styleOf = (kit, b) => (kit.textStyles || []).find(st => b.font && Math.abs((st.size || 0) - b.font.size) < 0.5 && +st.weight === +b.font.weight && String(b.font.family).replace(/["']/g, '').split(',')[0].trim() === st.family);
+  function textStyleField(b) {
+    const kit = env.getKit(); if (!Array.isArray(kit.textStyles) || !kit.textStyles.length) return '';
+    const cur = styleOf(kit, b);
+    return selectF('textStyle', 'Style', cur ? cur.id : '', [['', cur ? '—' : 'Custom'], ...kit.textStyles.map(st => [st.id, `${st.name} · ${st.size}/${Math.round(st.size * (st.lineHeight || 1.2))}`])]);
+  }
   function blockProps(f, b) {
     const isText = b.kind === 'text' || b.kind === 'list' || b.kind === 'button';
     const fontNames = Brand.allFontNames();
@@ -1324,6 +1341,7 @@ const CanvasUI = (() => {
     ${b.kind === 'list' ? `<div class="cv-section"><h3>Items</h3><textarea class="cv-text" data-p="items" rows="4" spellcheck="true">${esc((b.items || []).join('\n'))}</textarea>${selectF('marker', 'Marker', b.marker || 'bullet', [['bullet', 'Bullet'], ['number', 'Number'], ['none', 'None']])}</div>` : ''}
     ${b.kind === 'button' ? `<div class="cv-section"><h3>Label</h3><input type="text" class="cv-text" data-p="text" value="${esc(b.text)}">${color('color', 'Text color', b.color, b.colorToken)}</div>` : ''}
     ${isText && b.font ? `<div class="cv-section"><h3>Typography</h3>
+      ${textStyleField(b)}
       ${selectF('font.familyName', 'Font', famName, fontNames.map(n => [n, n]).concat(fontNames.includes(famName) ? [] : [[famName, famName]]))}
       <div class="cv-grid2">${num('font.size', 'Size', b.font.size, 2)}${selectF('font.weight', 'Weight', b.font.weight, Brand.fontWeights(famName).map(w => [w, w]).concat(Brand.fontWeights(famName).includes(b.font.weight) ? [] : [[b.font.weight, b.font.weight]]))}</div>
       <div class="cv-grid2">${num('font.lineHeight', 'LH', b.font.lineHeight || 1.2, 0.05)}${num('font.letterSpacing', 'Tr', b.font.letterSpacing || 0, 0.01)}</div>
@@ -1336,7 +1354,7 @@ const CanvasUI = (() => {
     ${b.kind === 'image' && env.traceImage ? `<div class="cv-section"><h3>Rebuild as layers</h3><p class="hint">Claude reads this image (an app screen, a slide, a mockup) and rebuilds it next to it as editable text, shapes and image crops.</p><div class="cv-row">${btn('trace', '✦ Rebuild as layers')}</div></div>` : ''}
     ${b.kind === 'image' ? genSection(f, b) : ''}
     ${b.kind === 'logo' ? logoSection(f, b) : ''}
-    ${b.kind === 'icon' ? `<div class="cv-section"><h3>Icon</h3>${selectF('name', 'Icon', b.name, Icons.names.map(n => [n, n]))}</div>` : ''}
+    ${b.kind === 'icon' ? iconSection(b) : ''}
     ${b.kind === 'shape' ? `<div class="cv-section"><h3>Shape</h3>${selectF('shape', 'Shape', b.shape, [['circle', 'Circle'], ['ellipse', 'Ellipse'], ['pill', 'Pill'], ['quarter', 'Quarter circle']])}</div>` : ''}
     ${b.kind === 'box' ? autoSection(f, b) : ''}
     ${sizingSection(f, b)}
@@ -1348,12 +1366,27 @@ const CanvasUI = (() => {
   function setCodeProp(f, b, k, v) {
     const root = CodeKit.ownerOf(f, b); if (!root) return;
     hist.push(doc);
-    const props = { ...(root.code.props || {}) };
-    if (v === '' || v === false) delete props[k]; else if (v === true) props[k] = true; else { const t = String(v).trim(); props[k] = /^-?\d+(\.\d+)?$/.test(t) ? +t : /^[[{]/.test(t) ? (() => { try { return JSON.parse(t); } catch { return t; } })() : t; }
+    const props = { ...(root.code.props || {}) }; const sp0 = Library.specFor(root.code); const pd = sp0 && (sp0.props || []).find(x => x.name === k);
+    // off is only written when the prop is on by default; otherwise unset means off
+    if (v === false && pd && pd.default === 'true') props[k] = false;
+    else if (v === '' || v === false) delete props[k]; else if (v === true) props[k] = true; else { const t = String(v).trim(); props[k] = /^-?\d+(\.\d+)?$/.test(t) ? +t : /^[[{]/.test(t) ? (() => { try { return JSON.parse(t); } catch { return t; } })() : t; }
     root.code = { ...root.code, props };
     const spec = Library.specFor(root.code);
     if (root.code.standIn && spec) { CodeKit.restyle(f, root, spec, env.getKit()); select(f.id, [root.id]); }
+    else if (root.code.from) { const it = Library.variantFor(root.code, props, [k]); if (it && it.id !== root.code.from) { const nt = swapVariant(f, root, it); if (nt) select(f.id, [nt.id]); } }
     rerenderFrame(f); renderLayers(); drawOverlay(); renderProps(); persist(); updateUndo();
+  }
+  // Replace a captured component with another captured variant of it: same place in its stack, same props and words.
+  function swapVariant(f, root, it) {
+    const old = Auto.withDescendants(f, [root]); const oldIds = new Set(old.map(b => b.id));
+    const copies = Canvas.clone(it.blocks); Auto.remap(copies, null); const top = copies.find(b => !b.parent); if (!top) return null;
+    const dx = root.x - top.x, dy = root.y - top.y; for (const c of copies) { c.x += dx; c.y += dy; }
+    if (root.parent) top.parent = root.parent; if (root.absolute) top.absolute = true; if (root.label) top.label = root.label;
+    top.code = { ...top.code, props: { ...(root.code.props || {}) }, from: it.id };
+    const ot = old.filter(b => b.kind === 'text'), nt = copies.filter(b => b.kind === 'text');
+    (ot.length === nt.length ? nt : nt.slice(0, 1)).forEach((b, i) => { if (ot[i]) { b.text = ot[i].text; Canvas.refit(b); } });
+    const at = f.layout.blocks.indexOf(root); f.layout.blocks = f.layout.blocks.filter(b => !oldIds.has(b.id)); f.layout.blocks.splice(Math.max(0, Math.min(at, f.layout.blocks.length)), 0, ...copies);
+    return top;
   }
   function stripBlock(b) { const c = Canvas.clone(b); delete c.lines; delete c.inkW; delete c.capacity; delete c.gap; delete c.maxLines; delete c.minSize; delete c.overflow; delete c.genPrompt; delete c.genMeta; return c; }
   function stripLayout(L) { const c = Canvas.clone(L); delete c.signature; c.blocks = c.blocks.map(stripBlock); return c; }
@@ -1368,6 +1401,7 @@ const CanvasUI = (() => {
     if (k === 'text') { b.text = v; Canvas.refit(b); }
     else if (k === 'items') { b.items = String(v).split('\n').map(x => x.trim()).filter(Boolean); Canvas.refit(b); }
     else if (k === 'label') { if (v) b.label = String(v).slice(0, 80); else delete b.label; }
+    else if (k === 'textStyle') { const st = (env.getKit().textStyles || []).find(x => x.id === v); if (!st || !b.font) return; b.font.family = Brand.fontCss(st.family); b.font.size = +st.size; b.font.weight = +st.weight; b.font.lineHeight = +st.lineHeight || 1.2; b.font.letterSpacing = +st.letterSpacing || 0; if (st.color && b.kind !== 'button') { b.fill = toHex(st.color); delete b.fillToken; } Canvas.refit(b); }
     else if (k === 'font.familyName') { b.font.family = Brand.fontCss(v); const ws = Brand.fontWeights(v); if (!ws.includes(b.font.weight)) b.font.weight = ws.reduce((p, c) => Math.abs(c - b.font.weight) < Math.abs(p - b.font.weight) ? c : p, ws[0]); Canvas.refit(b); }
     else if (k.startsWith('font.')) { const kk = k.slice(5); b.font[kk] = (kk === 'transform' || kk === 'style') ? v : +v; Canvas.refit(b); }
     else if (k === 'x' || k === 'y') b[k] = +v;
@@ -1453,6 +1487,11 @@ const CanvasUI = (() => {
       persist(); updateUndo(); renderProps();
     });
     el.addEventListener('click', e => { const a = e.target.closest('[data-mv-act]'); if (a) { const f = selFrame(); if (f) frameLook(f); } });
+    el.addEventListener('input', e => { if (!('iconQ' in e.target.dataset)) return; iconQuery = e.target.value; const g = el.querySelector('[data-icon-grid]'); const b = selBlocks()[0]; if (g) g.innerHTML = iconGrid(b && b.name); });
+    el.addEventListener('click', e => {
+      const ic = e.target.closest('[data-icon]'); if (!ic) return; const f = selFrame(); const bs = selBlocks().filter(b => b.kind === 'icon'); if (!f || !bs.length) return;
+      hist.push(doc); const short = n => String(n || '').replace(/^[^:]*:/, ''); for (const b of bs) { if (b.label && b.label === short(b.name)) b.label = short(ic.dataset.icon); b.name = ic.dataset.icon; } rerenderFrame(f); renderLayers(); drawOverlay(); persist(); updateUndo(); renderProps();
+    });
     el.addEventListener('click', e => {
       const a = e.target.closest('[data-dg-act]'); if (!a) return;
       if (a.dataset.dgAct === 'redraw') { clearTimeout(dgT); dgApply(); return; }

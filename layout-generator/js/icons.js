@@ -82,15 +82,49 @@ const Icons = (() => {
     [/travel|relocat|mobility|visa|immigration/i, 'airplane'], [/cloud|host|server/i, 'cloud'], [/code|develop|engineer/i, 'code'],
   ];
   const FALLBACK = ['check-circle', 'star', 'sparkle', 'lightning', 'target', 'cube', 'compass', 'puzzle-piece'];
-  function has(name) { return !!SET[name]; }
+  // More sets (a design system's icons) register at run time: names are "<set>:<Name>", e.g. "ds:Search".
+  const SETS = new Map();
+  const SAFE = /<(script|foreignObject|iframe|image|use)\b|\son\w+\s*=|href\s*=|javascript:|url\(/i;
+  function addSet(s) {
+    if (!s || !/^[a-z0-9_-]{1,24}$/.test(String(s.id || '')) || !s.icons || typeof s.icons !== 'object') return 0;
+    const icons = {};
+    for (const [k, v] of Object.entries(s.icons)) if (/^[A-Za-z0-9_-]{1,60}$/.test(k) && typeof v === 'string' && v.length < 20000 && !SAFE.test(v)) icons[k] = v;
+    const vb = /^-?[\d.]+(\s+-?[\d.]+){3}$/.test(String(s.viewBox || '').trim()) ? String(s.viewBox).trim() : '0 0 24 24';
+    SETS.set(s.id, { id: s.id, name: String(s.name || s.id).slice(0, 40), viewBox: vb, icons });
+    return Object.keys(icons).length;
+  }
+  function get(name) {
+    const n = String(name || ''); if (SET[n]) return { inner: SET[n], viewBox: '0 0 256 256' };
+    const i = n.indexOf(':'); if (i > 0) { const st = SETS.get(n.slice(0, i)); const inner = st && st.icons[n.slice(i + 1)]; if (inner) return { inner, viewBox: st.viewBox }; }
+    return null;
+  }
+  function has(name) { return !!get(name); }
+  // Every set, the built-in one first (its names have no prefix).
+  function sets() { return [{ id: '', name: 'Basic', viewBox: '0 0 256 256', names: Object.keys(SET) }, ...[...SETS.values()].map(st => ({ id: st.id, name: st.name, viewBox: st.viewBox, names: Object.keys(st.icons) }))]; }
+  // Search by words, camelCase split ("arrow back" finds ArrowBack); design-system sets first.
+  function search(q, limit = 60, setId) {
+    const words = String(q || '').toLowerCase().split(/[^a-z0-9]+/).filter(Boolean); const out = [];
+    const all = sets().filter(st => setId == null || st.id === setId); all.push(all.shift());
+    for (const st of all) {
+      if (!st) continue;
+      for (const nm of st.names) {
+        const hay = nm.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/[-_]/g, ' ').toLowerCase();
+        if (words.every(w => hay.includes(w))) out.push(st.id ? `${st.id}:${nm}` : nm);
+        if (out.length >= limit) return out;
+      }
+    }
+    return out;
+  }
   function forText(text, index = 0) {
     const t = String(text || '');
     for (const [re, name] of KEYWORDS) if (re.test(t)) return name;
     return FALLBACK[index % FALLBACK.length];
   }
   function svg(name, x, y, size, color) {
-    const inner = SET[name] || SET['check-circle'];
-    return `<svg x="${x}" y="${y}" width="${size}" height="${size}" viewBox="0 0 256 256" overflow="visible">${inner.replace(/currentColor/g, color)}</svg>`;
+    const g = get(name) || get('check-circle');
+    return `<svg x="${x}" y="${y}" width="${size}" height="${size}" viewBox="${g.viewBox}" overflow="visible">${g.inner.replace(/currentColor/g, color)}</svg>`;
   }
-  return { SET, names: Object.keys(SET), has, forText, svg };
+  // A private build can carry a design system's icons (window.__LG_PRIVATE.iconSets).
+  if (typeof window !== 'undefined' && window.__LG_PRIVATE && Array.isArray(window.__LG_PRIVATE.iconSets)) for (const st of window.__LG_PRIVATE.iconSets) addSet(st);
+  return { SET, names: Object.keys(SET), has, get, sets, search, addSet, forText, svg };
 })();

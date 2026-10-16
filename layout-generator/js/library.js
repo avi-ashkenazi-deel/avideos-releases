@@ -8,7 +8,7 @@
    you pick. Code components (from a design-system manifest, see CodeKit) are items whose top box names the real
    component. */
 const Library = (() => {
-  const CATEGORIES = [['all', 'All'], ['logos', 'Logos'], ['components', 'Components'], ['code', 'Code'], ['cards', 'Cards'], ['devices', 'Devices'], ['illustrations', 'Illustrations']];
+  const CATEGORIES = [['all', 'All'], ['logos', 'Logos'], ['components', 'Components'], ['code', 'Code'], ['screens', 'Screens'], ['icons', 'Icons'], ['cards', 'Cards'], ['devices', 'Devices'], ['illustrations', 'Illustrations']];
   const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   let env = null; let cat = 'all'; let query = ''; let el = null; let naming = false; let pendingManifest = null; let publishing = null; let mgr = null; let editing = null; let confirmDel = null; let peopleHits = []; let names = {};
   const LS = { get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch { return d; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { } } };
@@ -112,7 +112,7 @@ const Library = (() => {
     const pad = Math.max(item.w, item.h) * 0.08; const W = item.w + pad * 2, H = item.h + pad * 2;
     const blocks = Canvas.clone(item.blocks).map(b => ({ ...b, x: b.x + pad, y: b.y + pad }));
     // code components are product UI: shown on a light page so dark text reads
-    const light = !!item.code;
+    const light = !!item.code || !!item.capture || item.category === 'screens';
     const svg = Render.toSVG({ id: 'th-' + String(item.id).replace(/[^\w-]/g, ''), format: { w: W, h: H }, palette: { bg: light ? '#F6F5FA' : '#000' }, blocks }, { kit, assets: env ? env.getAssets() : { images: [] }, transparent: !light, width: 120 });
     cache.thumbs.set(key, svg); return svg;
   }
@@ -129,10 +129,40 @@ const Library = (() => {
   const tag = (src, it) => ({ ...it, libId: src.id, libName: src.name, team: !!src.local, shared: !!src.shared, editable: src.editable });
   // Items from the libraries this person has on (all of them with {any: true}).
   function all(doc, kit, opts = {}) { return sources(doc, kit).filter(s => opts.any || LibStore.isOn(s.id)).flatMap(s => s.items.map(it => tag(s, it))); }
-  function find(itemId) { return all(env.canvas.doc, env.getKit(), { any: true }).find(x => x.id === itemId); }
+  function find(itemId) { if (/^icon:/.test(itemId)) return iconItem(itemId.slice(5)); return all(env.canvas.doc, env.getKit(), { any: true }).find(x => x.id === itemId); }
+  // Icons (built in and any design-system set) behave like items: click or drag one onto a screen.
+  function iconItem(name) {
+    if (!Icons.has(name)) return null; const ds = name.includes(':'); const s = ds ? 24 : 48;
+    return { id: 'icon:' + name, name, category: 'icons', approved: true, w: s, h: s, blocks: [{ id: 'ic1', kind: 'icon', name, x: 0, y: 0, w: s, h: s, fill: palette(env.getKit()).ink, decorative: true, label: name.replace(/^[^:]*:/, '') }] };
+  }
+  const iconTile = n => { const g = Icons.get(n); return `<button type="button" class="cv-ico" draggable="true" data-item="icon:${esc(n)}" title="${esc(n)} · click to add, or drag onto a screen"><svg viewBox="${g.viewBox}" aria-hidden="true">${g.inner}</svg></button>`; };
+  function iconSections(q, max) {
+    return Icons.sets().slice().sort((a, b) => (a.id ? 0 : 1) - (b.id ? 0 : 1)).map(st => {
+      const names = q ? Icons.search(q, 400, st.id) : st.names.map(n => st.id ? `${st.id}:${n}` : n); if (!names.length) return '';
+      const sid = 'icons-' + (st.id || 'basic'); const fold = folded.has(sid) && !q; const lim = expanded.has(sid) || q ? Math.min(max, 400) : 60;
+      return `<section class="lib-sec"><button type="button" class="lib-sec-head" data-fold="${esc(sid)}" aria-expanded="${!fold}"><span class="lib-caret">${fold ? '▸' : '▾'}</span>${esc(st.name)} icons <span class="lib-count">${names.length}</span></button>
+        ${fold ? '' : `<div class="lib-icons">${names.slice(0, lim).map(iconTile).join('')}</div>${names.length > lim ? `<button type="button" class="btn small ghost lib-more" data-more="${esc(sid)}">Show ${q ? 'more' : 'all ' + names.length}</button>` : ''}`}</section>`;
+    }).join('');
+  }
   // Every code component spec any library knows about (for the props panel and for binding).
   function codeSpecs() { return all(env.canvas.doc, env.getKit(), { any: true }).filter(it => it.code && it.code.spec); }
   function specFor(code) { return CodeKit.specFor(code, codeSpecs()); }
+  // Captured components (real renders, e.g. from Storybook) come in variants: the one whose props match best.
+  // mustKeys must match exactly; the text prop never counts.
+  const normP = v => v === false || v == null || v === '' ? '' : v;
+  function variantFor(code, props, mustKeys = []) {
+    if (!code) return null; let best = null, top = -1;
+    for (const it of all(env.canvas.doc, env.getKit(), { any: true })) {
+      if (!it.capture || !it.code || it.code.name !== code.name || it.code.pkg !== code.pkg) continue;
+      const root = it.blocks.find(x => !x.parent) || {}; const p = (root.code && root.code.props) || {}; const tp = root.code && root.code.text;
+      // an unset prop is its documented default
+      const defs = it.code.spec ? CodeKit.specDefaults({ props: it.code.spec.props || [] }) : {}; const val = (o, k) => normP(o[k] ?? defs[k]);
+      if (mustKeys.some(k => val(p, k) !== val(props || {}, k))) continue;
+      let sc = 0; for (const k of new Set([...Object.keys(props || {}), ...Object.keys(p)])) if (k !== tp && val(p, k) === val(props || {}, k)) sc++;
+      if (sc > top) { top = sc; best = it; }
+    }
+    return best;
+  }
 
   // Selected blocks (with what is inside boxes) -> a library item.
   function fromSelection(frame, blocks, name, category) {
@@ -166,12 +196,12 @@ const Library = (() => {
     const on = srcs.filter(s => LibStore.isOn(s.id));
     const sel = env.canvas.selection(); const canSave = sel.blockIds.length > 0;
     const match = it => (cat === 'all' || it.category === cat) && (!query || `${it.name} ${it.category} ${it.code ? it.code.name + ' ' + (it.code.spec && it.code.spec.group || '') : ''}`.toLowerCase().includes(query));
-    const sections = on.map(s => {
+    const sections = cat === 'icons' ? iconSections(query, 400) : on.map(s => {
       const list = s.items.map(it => tag(s, it)).filter(match); if (!list.length && (query || cat !== 'all' || s.builtin)) return '';
       const fold = folded.has(s.id) && !query; const max = expanded.has(s.id) || query ? 400 : 24;
       return `<section class="lib-sec"><button type="button" class="lib-sec-head" data-fold="${esc(s.id)}" aria-expanded="${!fold}"><span class="lib-caret">${fold ? '▸' : '▾'}</span>${esc(s.name)} <span class="lib-count">${list.length}</span>${s.shared ? '' : s.builtin ? ' <span class="lib-tag">built in</span>' : ' <span class="lib-tag">local</span>'}</button>
         ${fold ? '' : `<div class="lib-grid">${list.slice(0, max).map(it => itemCard(it, kit)).join('') || '<p class="hint" style="padding:6px 8px">Nothing here yet.</p>'}</div>${list.length > max ? `<button type="button" class="btn small ghost lib-more" data-more="${esc(s.id)}">Show all ${list.length}</button>` : ''}`}</section>`;
-    }).join('');
+    }).join('') + (cat === 'all' && query ? iconSections(query, 48) : '');
     const dests = [{ id: 'canvas', name: 'This canvas' }, ...(role.admin ? LibStore.libraries().map(l => ({ id: l.id, name: l.name })) : [])];
     const lastDest = LS.get('lg.libDest', 'canvas'); const dest = dests.some(d => d.id === lastDest) ? lastDest : 'canvas';
     const destSel = (attr, cur, list) => `<select class="input cv-mini" data-lib="${attr}" aria-label="Save to">${list.map(d => `<option value="${esc(d.id)}" ${d.id === cur ? 'selected' : ''}>${esc(d.name)}</option>`).join('')}</select>`;
@@ -224,7 +254,7 @@ const Library = (() => {
   // Insert into the selected screen (or box), else the screen in view; at a point when dropped.
   function insert(itemId, at) {
     const it = find(itemId); if (!it) return;
-    const out = env.canvas.insertComponent(it.blocks, { at, name: it.name });
+    const out = env.canvas.insertComponent(it.blocks, { at, name: it.name, screen: it.category === 'screens' });
     if (out) env.toast(`${it.name} added${it.approved ? '' : ' (not yet approved)'}`);
   }
   async function submitSave() {
@@ -388,5 +418,5 @@ const Library = (() => {
     const nm = ids && ids.length === 1 ? (LibStore.libraries().find(l => l.id === ids[0]) || {}).name : 'libraries';
     if (await env.download(blob, `${String(nm || 'libraries').toLowerCase().replace(/[^a-z0-9]+/g, '-')}.json`)) env.toast(`Exported ${j.lgLibrary.items.length} items`);
   }
-  return { init, bind, bindManager, render, refresh, imagesChanged, openManager, all, sources, builtins, thumb, fromSelection, insert, specFor, codeSpecs, palette, settle, CATEGORIES };
+  return { init, bind, bindManager, render, refresh, imagesChanged, openManager, all, sources, builtins, thumb, fromSelection, insert, specFor, codeSpecs, variantFor, palette, settle, CATEGORIES };
 })();

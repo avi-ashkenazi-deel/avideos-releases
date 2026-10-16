@@ -20,13 +20,15 @@ const full = `<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\
 writeFileSync(join(root, 'dist/layout-engine.standalone.html'), full);
 console.log('built dist/layout-engine.html', (out.length / 1024).toFixed(0) + ' KB');
 // Private build: node build.mjs --private <dir> adds brand kits and licensed fonts that must not live in this repo
-// (<dir>/private.json: { presets: { id: kit }, fonts: [{ family, weight, file }] }, font files beside it). They ride
+// (<dir>/private.json: { presets: { id: kit }, fonts: [{ family, weight, file }], iconSets: [{ id, name, viewBox, file }] },
+// font and icon files beside it; an icon file is { Name: '<path …/>' }). They ride
 // in the page as window.__LG_PRIVATE; the output files are git-ignored.
 const pi = process.argv.indexOf('--private');
 if (pi > 0 && process.argv[pi + 1]) {
   const dir = process.argv[pi + 1]; const priv = JSON.parse(readFileSync(join(dir, 'private.json'), 'utf8'));
   const fontsIn = (priv.fonts || []).map(f => ({ family: f.family, weight: f.weight || '400', style: f.style || 'normal', b64: readFileSync(join(dir, f.file)).toString('base64') }));
-  const tag = `<script>window.__LG_PRIVATE = ${JSON.stringify({ presets: priv.presets || {}, fonts: fontsIn }).replace(/</g, '\\u003c')};</script>\n`;
+  const iconSets = (priv.iconSets || []).map(st => ({ id: st.id, name: st.name, viewBox: st.viewBox, icons: JSON.parse(readFileSync(join(dir, st.file), 'utf8')) }));
+  const tag = `<script>window.__LG_PRIVATE = ${JSON.stringify({ presets: priv.presets || {}, fonts: fontsIn, iconSets }).replace(/</g, '\\u003c')};</script>\n`;
   const at = s => s.replace('<script>\n', tag + '<script>\n');
   writeFileSync(join(root, 'dist/layout-engine.private.html'), at(out));
   writeFileSync(join(root, 'dist/layout-engine.private.standalone.html'), at(full));

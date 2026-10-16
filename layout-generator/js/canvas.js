@@ -236,7 +236,7 @@ const Canvas = (() => {
     if (b.kind === 'text') return { tag: /^(headline|stat|quote)$/.test(b.role) ? 'h2' : 'p', text: sourceText(b), color: cssColor(b.fill), bgText: bg, type, align: b.align || 'left', upper: f.transform === 'upper', fxs, role: b.role || 'text' };
     if (b.kind === 'list') return { tag: b.marker === 'number' ? 'ol' : 'ul', items: b.items || [], color: cssColor(b.fill), type, indent: b.indent || 24, fxs, role: b.role || 'list' };
     if (b.kind === 'button') return { tag: 'a', text: b.text, color: cssColor(b.color), bg: bg || cssColor(b.fill), radius: b.radius || 0, type: { ...type, weight: f.weight || 600 }, fxs, role: 'cta' };
-    if (b.kind === 'icon') return { tag: 'svg', inner: (Icons.SET[b.name] || '').replace(/currentColor/g, cssColor(b.fill)), viewBox: '0 0 256 256', fxs, role: 'icon ' + b.name };
+    if (b.kind === 'icon') { const g = Icons.get(b.name) || { inner: '', viewBox: '0 0 256 256' }; return { tag: 'svg', inner: g.inner.replace(/currentColor/g, cssColor(b.fill)), viewBox: g.viewBox, fxs, role: 'icon ' + b.name }; }
     if (b.kind === 'vector') return { tag: 'svg', inner: b.d ? `<path d="${String(b.d).replace(/[^MmLlHhVvCcSsQqTtAaZz0-9eE.,\s+-]/g, '')}" fill="${cssColor(b.fill)}"/>` : (typeof Render !== 'undefined' ? Render.sanitizeSvgInner(b.svg) : ''), viewBox: Array.isArray(b.viewBox) ? b.viewBox.join(' ') : `0 0 ${b.vw || b.w} ${b.vh || b.h}`, fxs, role: 'vector' };
     if (b.kind === 'logo') return { tag: 'div', text: (env && env.kit && env.kit.logo && env.kit.logo.text) || 'logo', color: cssColor(b.fill), type: { ...type, weight: 700, size: Math.round(b.h / 0.74) }, fxs, role: 'logo' };
     if (b.kind === 'line') return { tag: 'div', bg: cssColor(b.fill), fxs, role: 'line', minH: 2 };
@@ -347,7 +347,8 @@ const Canvas = (() => {
       const C = nd.code; const nm = String(C.name).replace(/[^A-Za-z0-9_]/g, '') || 'Component'; const pkg = String(C.pkg || 'components');
       if (!imports.has(pkg)) imports.set(pkg, new Set()); imports.get(pkg).add(nm);
       const props = { ...(C.props || {}) }; const tp = C.text; let kids = '';
-      if (tp && C.label) { if (tp === 'children') kids = e(C.label); else if (props[tp] == null) props[tp] = C.label; }
+      // the words on the canvas are the text prop (children inside the tag), never written twice
+      if (tp && C.label) { if (tp === 'children') { kids = e(C.label); delete props.children; } else props[tp] = C.label; }
       const tag = `<${nm}${typeof CodeKit !== 'undefined' ? CodeKit.jsxProps(props) : ''}${kids ? `>${kids}</${nm}>` : ' />'}`;
       const PLACE = new Set(['left', 'top', 'flex', 'align-self', 'min-width', 'min-height']);
       const place = cssOf(nd).filter(([k, v]) => k === 'position' ? v === 'absolute' : PLACE.has(k));

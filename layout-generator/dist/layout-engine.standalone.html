@@ -551,6 +551,15 @@ input[disabled] { opacity: .5; cursor: not-allowed; }
 .lib-cats button:hover { color: var(--fg); border-color: var(--fg-3); }
 .lib-cats button.on { background: var(--cta); color: var(--cta-ink); border-color: var(--cta); font-weight: 600; }
 .lib-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+/* icon picker (properties panel and the library's Icons) */
+.cv-icons, .lib-icons { display: grid; grid-template-columns: repeat(auto-fill, minmax(34px, 1fr)); gap: 4px; margin-top: 8px; max-height: 260px; overflow: auto; }
+.lib-icons { max-height: none; }
+.cv-ico { display: grid; place-items: center; aspect-ratio: 1; border: 1px solid transparent; border-radius: 6px; background: var(--panel-2); color: var(--fg); cursor: pointer; padding: 6px; }
+.cv-ico svg { width: 20px; height: 20px; }
+.cv-ico:hover { border-color: var(--line-2); }
+.cv-ico.on { border-color: var(--cta); background: var(--accent-soft); }
+.cv-ico:focus-visible { outline: 2px solid var(--cta); outline-offset: 1px; }
+
 .lib-item { background: var(--bg); border: 1px solid var(--line-2); border-radius: 8px; padding: 6px; cursor: grab; display: flex; flex-direction: column; gap: 4px; transition: border-color .1s; }
 .lib-item:hover { border-color: var(--accent); }
 .lib-item:active { cursor: grabbing; }
@@ -1597,7 +1606,8 @@ const Brand = (() => {
   const PRIV = typeof window !== 'undefined' && window.__LG_PRIVATE ? window.__LG_PRIVATE : null;
   const privateFonts = [];
   if (PRIV) {
-    for (const [id, kit] of Object.entries(PRIV.presets || {})) if (/^[a-z0-9_-]{1,40}$/i.test(id) && kit && kit.colors && kit.fonts) PRESETS[id] = kit;
+    // a private kit can build on a public one (base: 'deel'): it keeps that kit's logos and voice and changes the rest
+    for (const [id, k0] of Object.entries(PRIV.presets || {})) { const kit = k0 && k0.base && PRESETS[k0.base] ? { ...clone(PRESETS[k0.base]), ...k0 } : k0; if (/^[a-z0-9_-]{1,40}$/i.test(id) && kit && kit.colors && kit.fonts) PRESETS[id] = kit; }
     const fams = new Map(); for (const f of PRIV.fonts || []) { if (!f || !f.family || !f.b64) continue; if (!fams.has(f.family)) fams.set(f.family, []); fams.get(f.family).push(f); }
     for (const [family, faces] of fams) {
       customFonts[family] = { css: `"${family}", "Bricolage Grotesque", "Inter", system-ui, sans-serif`, weights: [400, 500, 600, 700], faces: faces.map(f => ({ weight: String(f.weight || '400'), style: f.style || 'normal', dataUrl: `data:font/woff2;base64,${f.b64}` })), private: true };
@@ -3118,17 +3128,51 @@ const Icons = (() => {
     [/travel|relocat|mobility|visa|immigration/i, 'airplane'], [/cloud|host|server/i, 'cloud'], [/code|develop|engineer/i, 'code'],
   ];
   const FALLBACK = ['check-circle', 'star', 'sparkle', 'lightning', 'target', 'cube', 'compass', 'puzzle-piece'];
-  function has(name) { return !!SET[name]; }
+  // More sets (a design system's icons) register at run time: names are "<set>:<Name>", e.g. "ds:Search".
+  const SETS = new Map();
+  const SAFE = /<(script|foreignObject|iframe|image|use)\b|\son\w+\s*=|href\s*=|javascript:|url\(/i;
+  function addSet(s) {
+    if (!s || !/^[a-z0-9_-]{1,24}$/.test(String(s.id || '')) || !s.icons || typeof s.icons !== 'object') return 0;
+    const icons = {};
+    for (const [k, v] of Object.entries(s.icons)) if (/^[A-Za-z0-9_-]{1,60}$/.test(k) && typeof v === 'string' && v.length < 20000 && !SAFE.test(v)) icons[k] = v;
+    const vb = /^-?[\d.]+(\s+-?[\d.]+){3}$/.test(String(s.viewBox || '').trim()) ? String(s.viewBox).trim() : '0 0 24 24';
+    SETS.set(s.id, { id: s.id, name: String(s.name || s.id).slice(0, 40), viewBox: vb, icons });
+    return Object.keys(icons).length;
+  }
+  function get(name) {
+    const n = String(name || ''); if (SET[n]) return { inner: SET[n], viewBox: '0 0 256 256' };
+    const i = n.indexOf(':'); if (i > 0) { const st = SETS.get(n.slice(0, i)); const inner = st && st.icons[n.slice(i + 1)]; if (inner) return { inner, viewBox: st.viewBox }; }
+    return null;
+  }
+  function has(name) { return !!get(name); }
+  // Every set, the built-in one first (its names have no prefix).
+  function sets() { return [{ id: '', name: 'Basic', viewBox: '0 0 256 256', names: Object.keys(SET) }, ...[...SETS.values()].map(st => ({ id: st.id, name: st.name, viewBox: st.viewBox, names: Object.keys(st.icons) }))]; }
+  // Search by words, camelCase split ("arrow back" finds ArrowBack); design-system sets first.
+  function search(q, limit = 60, setId) {
+    const words = String(q || '').toLowerCase().split(/[^a-z0-9]+/).filter(Boolean); const out = [];
+    const all = sets().filter(st => setId == null || st.id === setId); all.push(all.shift());
+    for (const st of all) {
+      if (!st) continue;
+      for (const nm of st.names) {
+        const hay = nm.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/[-_]/g, ' ').toLowerCase();
+        if (words.every(w => hay.includes(w))) out.push(st.id ? `${st.id}:${nm}` : nm);
+        if (out.length >= limit) return out;
+      }
+    }
+    return out;
+  }
   function forText(text, index = 0) {
     const t = String(text || '');
     for (const [re, name] of KEYWORDS) if (re.test(t)) return name;
     return FALLBACK[index % FALLBACK.length];
   }
   function svg(name, x, y, size, color) {
-    const inner = SET[name] || SET['check-circle'];
-    return `<svg x="${x}" y="${y}" width="${size}" height="${size}" viewBox="0 0 256 256" overflow="visible">${inner.replace(/currentColor/g, color)}</svg>`;
+    const g = get(name) || get('check-circle');
+    return `<svg x="${x}" y="${y}" width="${size}" height="${size}" viewBox="${g.viewBox}" overflow="visible">${g.inner.replace(/currentColor/g, color)}</svg>`;
   }
-  return { SET, names: Object.keys(SET), has, forText, svg };
+  // A private build can carry a design system's icons (window.__LG_PRIVATE.iconSets).
+  if (typeof window !== 'undefined' && window.__LG_PRIVATE && Array.isArray(window.__LG_PRIVATE.iconSets)) for (const st of window.__LG_PRIVATE.iconSets) addSet(st);
+  return { SET, names: Object.keys(SET), has, get, sets, search, addSet, forText, svg };
 })();
 
 /* js/render.js */
@@ -6148,17 +6192,21 @@ const WebImport = (() => {
     const famOf = ff => { const first = String(ff || '').split(',').map(s => s.trim().replace(/^["']|["']$/g, '')).find(Boolean) || 'Inter'; return first; };
     const isCookie = el => { const t = (el.innerText || '').slice(0, 400).toLowerCase(); return /cookie|consent|gdpr|privacy preferences/.test(t) && t.length < 1600; };
     const nameOf = el => { const tag = el.tagName.toLowerCase(); const cls = (typeof el.className === 'string' ? el.className : '').split(/\s+/).filter(c => c && c.length < 28 && !/^(css|sc|jsx|_|svelte)-/.test(c))[0]; const role = el.getAttribute('aria-label') || el.getAttribute('alt') || ''; return (tag + (cls ? '.' + cls : '') + (role ? ' ' + role.slice(0, 24) : '')).slice(0, 60); };
+    // stacking: a layer under a positioned ancestor with a z-index paints above its plain siblings (labels over fields,
+    // dialogs over the page). The outermost such ancestor decides, so a whole dialog moves together.
+    const zs = new Map();
+    function zp(el) { if (zs.has(el)) return zs.get(el); let z = 0; for (let e = el; e && e !== document.body && e !== document.documentElement; e = e.parentElement) { const cs = getComputedStyle(e); if (cs.position !== 'static' && cs.zIndex !== 'auto') z = parseInt(cs.zIndex, 10) || 0; } const o = z ? { z } : {}; zs.set(el, o); return o; }
     function rectOf(el) { const r = el.getBoundingClientRect(); return { x: r1(r.left + sx), y: r1(r.top + sy), w: r1(r.width), h: r1(r.height) }; }
     function visible(r, clip) { if (r.w < 1 || r.h < 1) return false; if (r.y > H || r.x > W + 2 || r.x + r.w < -2 || r.y + r.h < 0) return false; if (clip && (r.x >= clip.x + clip.w || r.y >= clip.y + clip.h || r.x + r.w <= clip.x || r.y + r.h <= clip.y)) return false; return true; }
     function shadowOf(cs) { const s = cs.boxShadow; if (!s || s === 'none') return null; const m = /(rgba?\([^)]*\))\s+(-?[\d.]+)px\s+(-?[\d.]+)px\s+([\d.]+)px/.exec(s); if (!m || /inset/.test(s.split(m[0])[0])) return null; const c = hexA(m[1]); return c && c.a > 0.01 ? { color: c.hex, alpha: c.a, x: +m[2], y: +m[3], blur: +m[4] } : null; }
-    function radiusOf(cs, r) { const v = cs.borderTopLeftRadius; if (!v || v === '0px') return 0; return /%$/.test(v) ? Math.min(r.w, r.h) * parseFloat(v) / 100 : px(v); }
+    function radiusOf(cs, r) { const v = cs.borderTopLeftRadius; if (!v || v === '0px') return 0; return Math.min(/%$/.test(v) ? Math.min(r.w, r.h) * parseFloat(v) / 100 : px(v), Math.min(r.w, r.h) / 2); }
     function imgRef(src) { if (!src || /^data:image\/svg/.test(src) && src.length > 400000) return null; if (!imgs.has(src)) imgs.set(src, null); return src; }
-    function pushText(el, cs, op, text, box, fixed, p, flow) {
+    function pushText(el, cs, op, text, box, fixed, p, flow, more) {
       text = text.replace(/[ \t ]+/g, ' ').replace(/ *\n */g, '\n').trim(); if (!text) return;
       fonts.add(famOf(cs.fontFamily));
       const c = hexA(cs.color) || { hex: '#000000', a: 1 }; const size = px(cs.fontSize) || 16;
       const lh = cs.lineHeight === 'normal' ? 1.2 : Math.round(px(cs.lineHeight) / size * 100) / 100;
-      out.push({ t: 'text', name: nameOf(el), ...box, text, color: c.hex, alpha: c.a * op, family: famOf(cs.fontFamily), size, weight: parseInt(cs.fontWeight, 10) || 400, italic: cs.fontStyle === 'italic', lh: lh || 1.2, ls: cs.letterSpacing === 'normal' ? 0 : Math.round(px(cs.letterSpacing) / size * 1000) / 1000, align: /center/.test(cs.textAlign) ? 'center' : /right|end/.test(cs.textAlign) ? 'right' : 'left', transform: cs.textTransform === 'uppercase' ? 'upper' : cs.textTransform === 'lowercase' ? 'lower' : '', deco: /underline/.test(cs.textDecorationLine) ? 'underline' : /line-through/.test(cs.textDecorationLine) ? 'line-through' : '', fixed: !!fixed, p: fixed ? 0 : p || 0, flow: !!flow && !fixed });
+      out.push({ t: 'text', name: nameOf(el), ...zp(el), ...box, text, color: c.hex, alpha: c.a * op, family: famOf(cs.fontFamily), size, weight: parseInt(cs.fontWeight, 10) || 400, italic: cs.fontStyle === 'italic', lh: lh || 1.2, ls: cs.letterSpacing === 'normal' ? 0 : Math.round(px(cs.letterSpacing) / size * 1000) / 1000, align: /center/.test(cs.textAlign) ? 'center' : /right|end/.test(cs.textAlign) ? 'right' : 'left', transform: cs.textTransform === 'uppercase' ? 'upper' : cs.textTransform === 'lowercase' ? 'lower' : '', deco: /underline/.test(cs.textDecorationLine) ? 'underline' : /line-through/.test(cs.textDecorationLine) ? 'line-through' : '', fixed: !!fixed, p: fixed ? 0 : p || 0, flow: !!flow && !fixed, ...(more || {}) });
     }
     function svgMarkup(svg) {
       const clone = svg.cloneNode(true); const src = svg.querySelectorAll('*'); const dst = clone.querySelectorAll('*');
@@ -6183,6 +6231,8 @@ const WebImport = (() => {
       if (/^(SCRIPT|STYLE|NOSCRIPT|TEMPLATE|HEAD|META|LINK|TITLE)$/.test(tag) || el.id === '__lg_capture_panel') return;
       const cs = getComputedStyle(el);
       if (cs.display === 'none' || cs.visibility === 'hidden' || cs.visibility === 'collapse') return;
+      // fixed layers (modals, drawers, toasts) sit on the viewport, outside any scrolling ancestor's clip
+      if (cs.position === 'fixed') clip = null;
       const o = op * (parseFloat(cs.opacity) || 0); if (o < 0.02) return;
       const isFixed = fixed || cs.position === 'fixed' || cs.position === 'sticky';
       if ((cs.position === 'fixed' || cs.position === 'sticky') && isCookie(el) && (OPTS && OPTS.dropCookies !== false)) return;
@@ -6191,8 +6241,8 @@ const WebImport = (() => {
       const outOfFlow = cs.position === 'absolute' || cs.position === 'fixed';
       const item = !!flexParent && vis && !isFixed && !outOfFlow;
       const it = item ? { grow: parseFloat(cs.flexGrow) || 0, self: cs.alignSelf } : undefined;
-      if (tag === 'svg' || el instanceof SVGSVGElement) { if (vis) { const m = svgMarkup(el); out.push({ t: 'svg', name: nameOf(el), ...r, svg: m.inner, viewBox: m.viewBox, color: m.color, alpha: o, fixed: isFixed, p: P, flow: item, it }); } return; }
-      if (tag === 'IFRAME' || tag === 'EMBED' || tag === 'OBJECT') { if (vis) out.push({ t: 'box', name: nameOf(el), ...r, bg: '#E4E4EA', bga: 1, radius: 0, alpha: o, fixed: isFixed, p: P, flow: item, it }); return; }
+      if (tag === 'svg' || el instanceof SVGSVGElement) { if (vis) { const m = svgMarkup(el); out.push({ t: 'svg', name: nameOf(el), ...zp(el), ...r, svg: m.inner, viewBox: m.viewBox, color: m.color, alpha: o, fixed: isFixed, p: P, flow: item, it }); } return; }
+      if (tag === 'IFRAME' || tag === 'EMBED' || tag === 'OBJECT') { if (vis) out.push({ t: 'box', name: nameOf(el), ...zp(el), ...r, bg: '#E4E4EA', bga: 1, radius: 0, alpha: o, fixed: isFixed, p: P, flow: item, it }); return; }
       const leaf = tag === 'IMG' || tag === 'VIDEO' || tag === 'CANVAS' || tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
       // grids read as stacks too: several columns wrap like a row, one column stacks vertically
       const isGrid = /^(grid|inline-grid)$/.test(cs.display); const cols = isGrid ? String(cs.gridTemplateColumns || '').split(/\s+(?![^(]*\))/).filter(v => v && v !== 'none').length : 0;
@@ -6200,26 +6250,30 @@ const WebImport = (() => {
       let frame = null, myP = P;
       if (vis && !isFixed && !leaf && (isFlex || item) && fseq < 800) {
         const v = visualsOf(el, cs, r);
-        frame = { t: 'frame', id: ++fseq, p: P, name: nameOf(el), ...r, alpha: o, flow: item, it, bg: v.bg && v.bg.a > 0.02 ? v.bg.hex : null, bga: v.bg ? v.bg.a : 0, grad: v.grad, radius: v.radius, border: v.uniform ? { w: v.bw[0], c: v.bc[0].hex } : null, shadow: v.sh,
+        frame = { t: 'frame', id: ++fseq, p: P, name: nameOf(el), ...zp(el), ...r, alpha: o, flow: item, it, bg: v.bg && v.bg.a > 0.02 ? v.bg.hex : null, bga: v.bg ? v.bg.a : 0, grad: v.grad, radius: v.radius, border: v.uniform ? { w: v.bw[0], c: v.bc[0].hex } : null, shadow: v.sh,
           clip: cs.overflowX !== 'visible' || cs.overflowY !== 'visible', pad: [px(cs.paddingTop) + v.bw[0], px(cs.paddingRight) + v.bw[1], px(cs.paddingBottom) + v.bw[2], px(cs.paddingLeft) + v.bw[3]], textAlign: cs.textAlign };
         if (isFlex) frame.flex = isGrid ? { dir: cols > 1 ? 'row' : 'column', wrap: cols > 1, gapC: px(cs.columnGap), gapR: px(cs.rowGap), justify: cs.justifyContent, align: cs.alignItems, grid: cols } : { dir: cs.flexDirection, wrap: cs.flexWrap !== 'nowrap', gapC: px(cs.columnGap), gapR: px(cs.rowGap), justify: cs.justifyContent, align: cs.alignItems };
         out.push(frame); myP = frame.id;
       }
       if (vis) {
         const v = visualsOf(el, cs, r); const { bg, bi, bw, bc, sides, radius, sh, grad, uniform } = v;
-        if (!frame && ((bg && bg.a > 0.02) || grad || uniform || sh)) out.push({ t: 'box', name: nameOf(el), ...r, bg: bg && bg.a > 0.02 ? bg.hex : null, bga: bg ? bg.a : 0, grad, radius, border: uniform ? { w: bw[0], c: bc[0].hex } : null, shadow: sh, alpha: o, fixed: isFixed, p: P, flow: false });
-        if (!uniform) sides.forEach((on, i) => { if (!on) return; const w = bw[i]; const b = i === 0 ? { x: r.x, y: r.y, w: r.w, h: w } : i === 1 ? { x: r.x + r.w - w, y: r.y, w, h: r.h } : i === 2 ? { x: r.x, y: r.y + r.h - w, w: r.w, h: w } : { x: r.x, y: r.y, w, h: r.h }; out.push({ t: 'box', name: nameOf(el) + ' border', ...b, bg: bc[i].hex, bga: bc[i].a, radius: 0, alpha: o, fixed: isFixed, p: myP, flow: false }); });
+        if (!frame && ((bg && bg.a > 0.02) || grad || uniform || sh)) out.push({ t: 'box', name: nameOf(el), ...zp(el), ...r, bg: bg && bg.a > 0.02 ? bg.hex : null, bga: bg ? bg.a : 0, grad, radius, border: uniform ? { w: bw[0], c: bc[0].hex } : null, shadow: sh, alpha: o, fixed: isFixed, p: P, flow: false });
+        if (!uniform) sides.forEach((on, i) => { if (!on) return; const w = bw[i]; const b = i === 0 ? { x: r.x, y: r.y, w: r.w, h: w } : i === 1 ? { x: r.x + r.w - w, y: r.y, w, h: r.h } : i === 2 ? { x: r.x, y: r.y + r.h - w, w: r.w, h: w } : { x: r.x, y: r.y, w, h: r.h }; out.push({ t: 'box', name: nameOf(el) + ' border', ...zp(el), ...b, bg: bc[i].hex, bga: bc[i].a, radius: 0, alpha: o, fixed: isFixed, p: myP, flow: false }); });
         const url = bi && /url\(/.test(bi) ? (/url\(["']?([^"')]+)["']?\)/.exec(bi) || [])[1] : null;
-        if (url) out.push({ t: 'img', name: nameOf(el) + ' bg', ...r, src: imgRef(new URL(url, location.href).href), fit: cs.backgroundSize === 'contain' ? 'contain' : 'cover', radius, alpha: o, fixed: isFixed, p: myP, flow: false });
+        if (url) out.push({ t: 'img', name: nameOf(el) + ' bg', ...zp(el), ...r, src: imgRef(new URL(url, location.href).href), fit: cs.backgroundSize === 'contain' ? 'contain' : 'cover', radius, alpha: o, fixed: isFixed, p: myP, flow: false });
         if (tag === 'IMG' || tag === 'VIDEO' || tag === 'CANVAS') {
           let src = tag === 'IMG' ? (el.currentSrc || el.src) : tag === 'VIDEO' ? el.poster : null;
           if (tag === 'CANVAS') { try { src = el.toDataURL('image/png'); } catch { src = null; } }
-          out.push({ t: 'img', name: nameOf(el), ...r, src: src ? imgRef(src) : null, fit: cs.objectFit === 'contain' ? 'contain' : 'cover', radius, alpha: o, fixed: isFixed, p: P, flow: item, it });
+          out.push({ t: 'img', name: nameOf(el), ...zp(el), ...r, src: src ? imgRef(src) : null, fit: cs.objectFit === 'contain' ? 'contain' : 'cover', radius, alpha: o, fixed: isFixed, p: P, flow: item, it });
           return;
         }
         if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
-          const val = tag === 'SELECT' ? (el.options[el.selectedIndex] || {}).text || '' : (el.type === 'password' ? '••••••' : el.value || el.placeholder || '');
-          if (val && el.type !== 'checkbox' && el.type !== 'radio' && el.type !== 'hidden') { const pl = px(cs.paddingLeft), pt = px(cs.paddingTop); pushText(el, cs, el.value ? o : o * 0.6, val, { x: r.x + pl, y: r.y + Math.max(pt, (r.h - px(cs.fontSize) * 1.2) / 2), w: Math.max(4, r.w - pl - px(cs.paddingRight)), h: px(cs.fontSize) * 1.3 }, isFixed, P, false); }
+          // a placeholder the page hides (floating labels do) stays out
+          const phShown = () => { try { return parseFloat(getComputedStyle(el, '::placeholder').opacity || '1') > 0.05; } catch { return true; } };
+          const val = tag === 'SELECT' ? (el.options[el.selectedIndex] || {}).text || '' : (el.type === 'password' ? '••••••' : el.value || (el.placeholder && phShown() ? el.placeholder : ''));
+          // an empty field still takes its room in the row (the icon after it stays at the end)
+          if (!val && item && tag !== 'SELECT' && el.type !== 'checkbox' && el.type !== 'radio' && el.type !== 'hidden') out.push({ t: 'frame', id: ++fseq, p: P, name: nameOf(el), ...zp(el), ...r, alpha: o, flow: true, it, field: 1, bg: null, bga: 0, radius: 0, pad: [0, 0, 0, 0] });
+          if (val && el.type !== 'checkbox' && el.type !== 'radio' && el.type !== 'hidden') { const pl = px(cs.paddingLeft), pt = px(cs.paddingTop); pushText(el, cs, el.value ? o : o * 0.6, val, { x: r.x + pl, y: r.y + Math.max(pt, (r.h - px(cs.fontSize) * 1.2) / 2), w: Math.max(4, r.w - pl - px(cs.paddingRight)), h: px(cs.fontSize) * 1.3 }, isFixed, P, item, { field: 1, it }); }
           return;
         }
       }
@@ -6243,6 +6297,8 @@ const WebImport = (() => {
         for (const k of kids) if (k.nodeType === 3 && k.nodeValue.trim()) { const range = document.createRange(); range.selectNodeContents(k); const rr = range.getBoundingClientRect(); const box = { x: r1(rr.left + sx), y: r1(rr.top + sy), w: r1(rr.width), h: r1(rr.height) }; if (visible(box, clip)) pushText(el, cs, o, k.nodeValue, box, isFixed, myP, !!(frame && frame.flex)); }
       }
       const clips = cs.overflowX !== 'visible' || cs.overflowY !== 'visible';
+      // a collapsed clipping box (an accordion or menu that is shut) shows none of what is inside
+      if (clips && (r.w < 1 || r.h < 1) && !(el instanceof SVGElement)) return;
       const nextClip = clips && r.w > 0 && r.h > 0 ? (clip ? { x: Math.max(clip.x, r.x), y: Math.max(clip.y, r.y), w: Math.min(clip.x + clip.w, r.x + r.w) - Math.max(clip.x, r.x), h: Math.min(clip.y + clip.h, r.y + r.h) - Math.max(clip.y, r.y) } : r) : clip;
       for (const k of el.children) {
         // children of a text layer are already in its text: collect only their boxes, icons and images
@@ -6256,9 +6312,9 @@ const WebImport = (() => {
       const cs = getComputedStyle(el); if (cs.display === 'none' || cs.visibility === 'hidden') return;
       const o = op * (parseFloat(cs.opacity) || 0); const r = rectOf(el); if (!visible(r, clip)) return;
       const P = fixed ? 0 : p || 0;
-      if (el instanceof SVGSVGElement) { const m = svgMarkup(el); out.push({ t: 'svg', name: nameOf(el), ...r, svg: m.inner, viewBox: m.viewBox, color: m.color, alpha: o, fixed, p: P, flow: false }); return; }
-      if (el.tagName === 'IMG') { out.push({ t: 'img', name: nameOf(el), ...r, src: imgRef(el.currentSrc || el.src), fit: cs.objectFit === 'contain' ? 'contain' : 'cover', radius: radiusOf(cs, r), alpha: o, fixed, p: P, flow: false }); return; }
-      const bg = hexA(cs.backgroundColor); if (bg && bg.a > 0.02) out.push({ t: 'box', name: nameOf(el), ...r, bg: bg.hex, bga: bg.a, radius: radiusOf(cs, r), alpha: o, fixed, p: P, flow: false });
+      if (el instanceof SVGSVGElement) { const m = svgMarkup(el); out.push({ t: 'svg', name: nameOf(el), ...zp(el), ...r, svg: m.inner, viewBox: m.viewBox, color: m.color, alpha: o, fixed, p: P, flow: false }); return; }
+      if (el.tagName === 'IMG') { out.push({ t: 'img', name: nameOf(el), ...zp(el), ...r, src: imgRef(el.currentSrc || el.src), fit: cs.objectFit === 'contain' ? 'contain' : 'cover', radius: radiusOf(cs, r), alpha: o, fixed, p: P, flow: false }); return; }
+      const bg = hexA(cs.backgroundColor); if (bg && bg.a > 0.02) out.push({ t: 'box', name: nameOf(el), ...zp(el), ...r, bg: bg.hex, bga: bg.a, radius: radiusOf(cs, r), alpha: o, fixed, p: P, flow: false });
       for (const k of el.children) walkBoxesOnly(k, o, clip, fixed, depth + 1, p);
     }
     async function embed(src) {
@@ -6415,6 +6471,8 @@ const WebImport = (() => {
       }
       if (b) { blocks.push(b); meta.set(b.id, n); }
     }
+    // elevated layers (z-index) after their plain siblings, keeping page order otherwise
+    if (blocks.some(b => (meta.get(b.id) || {}).z)) { const zi = new Map(blocks.map((b, i) => [b.id, i])); blocks.sort((a, b) => ((meta.get(a.id).z || 0) - (meta.get(b.id).z || 0)) || zi.get(a.id) - zi.get(b.id)); }
     if (AUTO) stackUp(blocks, meta);
     const host = (() => { try { return new URL(cap.url).hostname.replace(/^www\./, ''); } catch { return 'web page'; } })();
     const layout = FigmaImport.toLayouts([{ name: host, x: 0, y: 0, w: W, h: H, bg: safeHex(cap.bg) || '#FFFFFF', clip: true, blocks }], kit)[0].layout;
@@ -6465,13 +6523,18 @@ const WebImport = (() => {
         const it = meta.get(k.id).it || {}; const own = hug.get(k.id) || {};
         const huggyW = k.kind === 'text' || k._textStack || own.w, huggyH = k.kind === 'text' || k._textStack || own.h;
         const crossFill = (stretch && (!it.self || /auto|stretch|normal/.test(it.self))) || it.self === 'stretch';
+        if (meta.get(k.id).field) { if (row) { k.sizeW = 'fill'; k.sizeH = 'hug'; } else { k.sizeW = near(k.w, innerW, 6) ? 'fill' : 'fixed'; k.sizeH = 'hug'; } continue; }
         if (row) { k.sizeW = it.grow > 0 ? 'fill' : huggyW ? 'hug' : 'fixed'; k.sizeH = crossFill && near(k.h, innerH) && !k._textStack && !own.h ? 'fill' : huggyH ? 'hug' : 'fixed'; }
         else { k.sizeH = it.grow > 0 ? 'fill' : huggyH ? 'hug' : 'fixed'; k.sizeW = crossFill && near(k.w, innerW) ? 'fill' : huggyW ? 'hug' : 'fixed'; }
-        if (k.kind === 'text' && k.sizeW === 'hug' && (k.lines || []).length > 1) k.sizeW = row ? 'fixed' : (near(k.w, innerW, 3) ? 'fill' : 'fixed');
+        // wrapped text keeps its width; the line count comes from the page, not from fonts that may not have loaded here
+        const mk = meta.get(k.id); const pageLines = k.kind === 'text' && mk ? Math.round(mk.h / ((mk.size || 16) * (mk.lh || 1.2))) : 1;
+        if (k.kind === 'text' && k.sizeW === 'hug' && pageLines > 1) k.sizeW = row ? 'fixed' : (near(k.w, innerW, 3) ? 'fill' : 'fixed');
       }
     }
     // 3. stacks outside any flow hug where they did
     for (const P of stacks) { const own = hug.get(P.id); if (!own) continue; if (!P.sizeW && own.w) P.sizeW = 'hug'; if (!P.sizeH && own.h) P.sizeH = 'hug'; }
+    // 4. as in Figma, a stack that hugs cannot hold a child that fills the same side: that side keeps its measured size
+    for (const P of stacks) { const flow = flowOf(P); if (P.sizeW === 'hug' && flow.some(k => k.sizeW === 'fill')) P.sizeW = 'fixed'; if (P.sizeH === 'hug' && flow.some(k => k.sizeH === 'fill')) P.sizeH = 'fixed'; }
     for (const b of blocks) delete b._textStack;
   }
   return { init, capturePage, source, bookmarklet, renderSection, handlePaste, importCapture, parseGradient };
@@ -6716,7 +6779,7 @@ const Canvas = (() => {
     if (b.kind === 'text') return { tag: /^(headline|stat|quote)$/.test(b.role) ? 'h2' : 'p', text: sourceText(b), color: cssColor(b.fill), bgText: bg, type, align: b.align || 'left', upper: f.transform === 'upper', fxs, role: b.role || 'text' };
     if (b.kind === 'list') return { tag: b.marker === 'number' ? 'ol' : 'ul', items: b.items || [], color: cssColor(b.fill), type, indent: b.indent || 24, fxs, role: b.role || 'list' };
     if (b.kind === 'button') return { tag: 'a', text: b.text, color: cssColor(b.color), bg: bg || cssColor(b.fill), radius: b.radius || 0, type: { ...type, weight: f.weight || 600 }, fxs, role: 'cta' };
-    if (b.kind === 'icon') return { tag: 'svg', inner: (Icons.SET[b.name] || '').replace(/currentColor/g, cssColor(b.fill)), viewBox: '0 0 256 256', fxs, role: 'icon ' + b.name };
+    if (b.kind === 'icon') { const g = Icons.get(b.name) || { inner: '', viewBox: '0 0 256 256' }; return { tag: 'svg', inner: g.inner.replace(/currentColor/g, cssColor(b.fill)), viewBox: g.viewBox, fxs, role: 'icon ' + b.name }; }
     if (b.kind === 'vector') return { tag: 'svg', inner: b.d ? `<path d="${String(b.d).replace(/[^MmLlHhVvCcSsQqTtAaZz0-9eE.,\s+-]/g, '')}" fill="${cssColor(b.fill)}"/>` : (typeof Render !== 'undefined' ? Render.sanitizeSvgInner(b.svg) : ''), viewBox: Array.isArray(b.viewBox) ? b.viewBox.join(' ') : `0 0 ${b.vw || b.w} ${b.vh || b.h}`, fxs, role: 'vector' };
     if (b.kind === 'logo') return { tag: 'div', text: (env && env.kit && env.kit.logo && env.kit.logo.text) || 'logo', color: cssColor(b.fill), type: { ...type, weight: 700, size: Math.round(b.h / 0.74) }, fxs, role: 'logo' };
     if (b.kind === 'line') return { tag: 'div', bg: cssColor(b.fill), fxs, role: 'line', minH: 2 };
@@ -6827,7 +6890,8 @@ const Canvas = (() => {
       const C = nd.code; const nm = String(C.name).replace(/[^A-Za-z0-9_]/g, '') || 'Component'; const pkg = String(C.pkg || 'components');
       if (!imports.has(pkg)) imports.set(pkg, new Set()); imports.get(pkg).add(nm);
       const props = { ...(C.props || {}) }; const tp = C.text; let kids = '';
-      if (tp && C.label) { if (tp === 'children') kids = e(C.label); else if (props[tp] == null) props[tp] = C.label; }
+      // the words on the canvas are the text prop (children inside the tag), never written twice
+      if (tp && C.label) { if (tp === 'children') { kids = e(C.label); delete props.children; } else props[tp] = C.label; }
       const tag = `<${nm}${typeof CodeKit !== 'undefined' ? CodeKit.jsxProps(props) : ''}${kids ? `>${kids}</${nm}>` : ' />'}`;
       const PLACE = new Set(['left', 'top', 'flex', 'align-self', 'min-width', 'min-height']);
       const place = cssOf(nd).filter(([k, v]) => k === 'position' ? v === 'absolute' : PLACE.has(k));
@@ -8033,11 +8097,12 @@ const CanvasUI = (() => {
     emit('action', 'library.insert', opts.name);
     let f = null, into = null, lp = null;
     if (opts.at) { f = frameAt(opts.at); if (f) lp = { x: opts.at.x - f.x, y: opts.at.y - f.y }; }
-    if (!f) { f = selFrames().length === 1 ? selFrame() : null; const bs = f ? selBlocks() : []; if (bs.length === 1 && bs[0].kind === 'box') into = bs[0]; }
-    if (!f) { const r = stage().getBoundingClientRect(); f = frameAt(toWorld(r.left + r.width / 2, r.top + r.height / 2)) || doc.frames[doc.frames.length - 1] || null; }
+    // a whole screen (an app shell, a page) gets a frame of its own size unless it was dropped onto one
+    if (!f && !opts.screen) { f = selFrames().length === 1 ? selFrame() : null; const bs = f ? selBlocks() : []; if (bs.length === 1 && bs[0].kind === 'box') into = bs[0]; }
+    if (!f && !opts.screen) { const r = stage().getBoundingClientRect(); f = frameAt(toWorld(r.left + r.width / 2, r.top + r.height / 2)) || doc.frames[doc.frames.length - 1] || null; }
     const copies = Canvas.clone(blocks); const inSet = new Set(copies.map(b => b.id)); const tops = copies.filter(b => !b.parent || !inSet.has(b.parent));
     const bb = Canvas.bounds(tops);
-    if (!f) { f = createFrame({ center: true, format: Canvas.customFormat(bb.w + 160, bb.h + 160), name: opts.name || 'Component', history: opts.history !== false }); opts = { ...opts, history: false }; }
+    if (!f) { const pad = opts.screen ? 0 : 160; f = createFrame({ center: true, format: Canvas.customFormat(bb.w + pad, bb.h + pad), name: opts.name || 'Component', history: opts.history !== false }); opts = { ...opts, history: false }; }
     if (opts.history !== false) hist.push(doc);
     Auto.remap(copies, null);
     if (lp && !into) into = Auto.containerAt(f, lp, []);
@@ -8683,7 +8748,7 @@ const CanvasUI = (() => {
     const ctl = p => {
       const v = props[p.name]; const lab = `<span title="${esc((p.type || '') + (p.description ? ' — ' + p.description : ''))}">${esc(p.name)}${p.required ? '*' : ''}</span>`;
       if (p.values && p.values.length) return `<label class="cv-f">${lab}<select data-cprop="${esc(p.name)}"><option value="">${p.default ? `default (${esc(p.default)})` : '—'}</option>${p.values.map(x => `<option value="${esc(x)}" ${String(v) === x ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></label>`;
-      if (CodeKit.isBool(p)) return `<label class="cv-check"><input type="checkbox" data-cprop="${esc(p.name)}" data-ctype="bool" ${v === true ? 'checked' : ''}> ${esc(p.name)}</label>`;
+      if (CodeKit.isBool(p)) return `<label class="cv-check"><input type="checkbox" data-cprop="${esc(p.name)}" data-ctype="bool" ${v === true || (v == null && p.default === 'true') ? 'checked' : ''}> ${esc(p.name)}</label>`;
       return `<label class="cv-f">${lab}<input type="text" data-cprop="${esc(p.name)}" value="${esc(v == null ? '' : typeof v === 'object' ? JSON.stringify(v) : v)}" placeholder="${esc(p.default || '')}"></label>`;
     };
     const list = spec ? spec.props.filter(p => !skip(p)) : Object.keys(props).map(n => ({ name: n, type: typeof props[n] === 'boolean' ? 'boolean' : 'string' }));
@@ -8716,6 +8781,22 @@ const CanvasUI = (() => {
       ${s.on ? `<div class="cv-grid2">${num('shadow.x', 'X', s.x || 0, 1)}${num('shadow.y', 'Y', s.y ?? 8, 1)}${num('shadow.blur', 'Blur', s.blur ?? 24, 1, 'min="0"')}${num('shadow.alpha', 'α', s.alpha ?? 0.25, 0.05, 'min="0" max="1"')}</div>${color('shadow.color', 'Color', s.color || '#000000')}` : ''}
     </div>`;
   }
+  // Icons: the built-in set plus any design-system set, searched by name.
+  let iconQuery = '';
+  const iconCell = (n, cur) => { const g = Icons.get(n); return g ? `<button type="button" class="cv-ico${n === cur ? ' on' : ''}" data-icon="${esc(n)}" title="${esc(n)}"><svg viewBox="${g.viewBox}" aria-hidden="true">${g.inner}</svg></button>` : ''; };
+  const iconGrid = cur => { const list = Icons.search(iconQuery, 96); return list.length ? list.map(n => iconCell(n, cur)).join('') : '<p class="hint">No icon by that name.</p>'; };
+  function iconSection(b) {
+    const total = Icons.sets().reduce((t, st) => t + st.names.length, 0);
+    return `<div class="cv-section"><h3>Icon</h3><div class="cv-row"><span class="cv-token" title="Icon name">${esc(b.name)}</span></div>
+      <input type="search" class="input cv-mini" data-icon-q placeholder="Search ${total} icons" value="${esc(iconQuery)}" aria-label="Search icons"><div class="cv-icons" data-icon-grid>${iconGrid(b.name)}</div></div>`;
+  }
+  // Text styles from the kit (a design system's H1…Caption): one pick sets font, size, weight, line height and color.
+  const styleOf = (kit, b) => (kit.textStyles || []).find(st => b.font && Math.abs((st.size || 0) - b.font.size) < 0.5 && +st.weight === +b.font.weight && String(b.font.family).replace(/["']/g, '').split(',')[0].trim() === st.family);
+  function textStyleField(b) {
+    const kit = env.getKit(); if (!Array.isArray(kit.textStyles) || !kit.textStyles.length) return '';
+    const cur = styleOf(kit, b);
+    return selectF('textStyle', 'Style', cur ? cur.id : '', [['', cur ? '—' : 'Custom'], ...kit.textStyles.map(st => [st.id, `${st.name} · ${st.size}/${Math.round(st.size * (st.lineHeight || 1.2))}`])]);
+  }
   function blockProps(f, b) {
     const isText = b.kind === 'text' || b.kind === 'list' || b.kind === 'button';
     const fontNames = Brand.allFontNames();
@@ -8734,6 +8815,7 @@ const CanvasUI = (() => {
     ${b.kind === 'list' ? `<div class="cv-section"><h3>Items</h3><textarea class="cv-text" data-p="items" rows="4" spellcheck="true">${esc((b.items || []).join('\n'))}</textarea>${selectF('marker', 'Marker', b.marker || 'bullet', [['bullet', 'Bullet'], ['number', 'Number'], ['none', 'None']])}</div>` : ''}
     ${b.kind === 'button' ? `<div class="cv-section"><h3>Label</h3><input type="text" class="cv-text" data-p="text" value="${esc(b.text)}">${color('color', 'Text color', b.color, b.colorToken)}</div>` : ''}
     ${isText && b.font ? `<div class="cv-section"><h3>Typography</h3>
+      ${textStyleField(b)}
       ${selectF('font.familyName', 'Font', famName, fontNames.map(n => [n, n]).concat(fontNames.includes(famName) ? [] : [[famName, famName]]))}
       <div class="cv-grid2">${num('font.size', 'Size', b.font.size, 2)}${selectF('font.weight', 'Weight', b.font.weight, Brand.fontWeights(famName).map(w => [w, w]).concat(Brand.fontWeights(famName).includes(b.font.weight) ? [] : [[b.font.weight, b.font.weight]]))}</div>
       <div class="cv-grid2">${num('font.lineHeight', 'LH', b.font.lineHeight || 1.2, 0.05)}${num('font.letterSpacing', 'Tr', b.font.letterSpacing || 0, 0.01)}</div>
@@ -8746,7 +8828,7 @@ const CanvasUI = (() => {
     ${b.kind === 'image' && env.traceImage ? `<div class="cv-section"><h3>Rebuild as layers</h3><p class="hint">Claude reads this image (an app screen, a slide, a mockup) and rebuilds it next to it as editable text, shapes and image crops.</p><div class="cv-row">${btn('trace', '✦ Rebuild as layers')}</div></div>` : ''}
     ${b.kind === 'image' ? genSection(f, b) : ''}
     ${b.kind === 'logo' ? logoSection(f, b) : ''}
-    ${b.kind === 'icon' ? `<div class="cv-section"><h3>Icon</h3>${selectF('name', 'Icon', b.name, Icons.names.map(n => [n, n]))}</div>` : ''}
+    ${b.kind === 'icon' ? iconSection(b) : ''}
     ${b.kind === 'shape' ? `<div class="cv-section"><h3>Shape</h3>${selectF('shape', 'Shape', b.shape, [['circle', 'Circle'], ['ellipse', 'Ellipse'], ['pill', 'Pill'], ['quarter', 'Quarter circle']])}</div>` : ''}
     ${b.kind === 'box' ? autoSection(f, b) : ''}
     ${sizingSection(f, b)}
@@ -8758,12 +8840,27 @@ const CanvasUI = (() => {
   function setCodeProp(f, b, k, v) {
     const root = CodeKit.ownerOf(f, b); if (!root) return;
     hist.push(doc);
-    const props = { ...(root.code.props || {}) };
-    if (v === '' || v === false) delete props[k]; else if (v === true) props[k] = true; else { const t = String(v).trim(); props[k] = /^-?\d+(\.\d+)?$/.test(t) ? +t : /^[[{]/.test(t) ? (() => { try { return JSON.parse(t); } catch { return t; } })() : t; }
+    const props = { ...(root.code.props || {}) }; const sp0 = Library.specFor(root.code); const pd = sp0 && (sp0.props || []).find(x => x.name === k);
+    // off is only written when the prop is on by default; otherwise unset means off
+    if (v === false && pd && pd.default === 'true') props[k] = false;
+    else if (v === '' || v === false) delete props[k]; else if (v === true) props[k] = true; else { const t = String(v).trim(); props[k] = /^-?\d+(\.\d+)?$/.test(t) ? +t : /^[[{]/.test(t) ? (() => { try { return JSON.parse(t); } catch { return t; } })() : t; }
     root.code = { ...root.code, props };
     const spec = Library.specFor(root.code);
     if (root.code.standIn && spec) { CodeKit.restyle(f, root, spec, env.getKit()); select(f.id, [root.id]); }
+    else if (root.code.from) { const it = Library.variantFor(root.code, props, [k]); if (it && it.id !== root.code.from) { const nt = swapVariant(f, root, it); if (nt) select(f.id, [nt.id]); } }
     rerenderFrame(f); renderLayers(); drawOverlay(); renderProps(); persist(); updateUndo();
+  }
+  // Replace a captured component with another captured variant of it: same place in its stack, same props and words.
+  function swapVariant(f, root, it) {
+    const old = Auto.withDescendants(f, [root]); const oldIds = new Set(old.map(b => b.id));
+    const copies = Canvas.clone(it.blocks); Auto.remap(copies, null); const top = copies.find(b => !b.parent); if (!top) return null;
+    const dx = root.x - top.x, dy = root.y - top.y; for (const c of copies) { c.x += dx; c.y += dy; }
+    if (root.parent) top.parent = root.parent; if (root.absolute) top.absolute = true; if (root.label) top.label = root.label;
+    top.code = { ...top.code, props: { ...(root.code.props || {}) }, from: it.id };
+    const ot = old.filter(b => b.kind === 'text'), nt = copies.filter(b => b.kind === 'text');
+    (ot.length === nt.length ? nt : nt.slice(0, 1)).forEach((b, i) => { if (ot[i]) { b.text = ot[i].text; Canvas.refit(b); } });
+    const at = f.layout.blocks.indexOf(root); f.layout.blocks = f.layout.blocks.filter(b => !oldIds.has(b.id)); f.layout.blocks.splice(Math.max(0, Math.min(at, f.layout.blocks.length)), 0, ...copies);
+    return top;
   }
   function stripBlock(b) { const c = Canvas.clone(b); delete c.lines; delete c.inkW; delete c.capacity; delete c.gap; delete c.maxLines; delete c.minSize; delete c.overflow; delete c.genPrompt; delete c.genMeta; return c; }
   function stripLayout(L) { const c = Canvas.clone(L); delete c.signature; c.blocks = c.blocks.map(stripBlock); return c; }
@@ -8778,6 +8875,7 @@ const CanvasUI = (() => {
     if (k === 'text') { b.text = v; Canvas.refit(b); }
     else if (k === 'items') { b.items = String(v).split('\n').map(x => x.trim()).filter(Boolean); Canvas.refit(b); }
     else if (k === 'label') { if (v) b.label = String(v).slice(0, 80); else delete b.label; }
+    else if (k === 'textStyle') { const st = (env.getKit().textStyles || []).find(x => x.id === v); if (!st || !b.font) return; b.font.family = Brand.fontCss(st.family); b.font.size = +st.size; b.font.weight = +st.weight; b.font.lineHeight = +st.lineHeight || 1.2; b.font.letterSpacing = +st.letterSpacing || 0; if (st.color && b.kind !== 'button') { b.fill = toHex(st.color); delete b.fillToken; } Canvas.refit(b); }
     else if (k === 'font.familyName') { b.font.family = Brand.fontCss(v); const ws = Brand.fontWeights(v); if (!ws.includes(b.font.weight)) b.font.weight = ws.reduce((p, c) => Math.abs(c - b.font.weight) < Math.abs(p - b.font.weight) ? c : p, ws[0]); Canvas.refit(b); }
     else if (k.startsWith('font.')) { const kk = k.slice(5); b.font[kk] = (kk === 'transform' || kk === 'style') ? v : +v; Canvas.refit(b); }
     else if (k === 'x' || k === 'y') b[k] = +v;
@@ -8863,6 +8961,11 @@ const CanvasUI = (() => {
       persist(); updateUndo(); renderProps();
     });
     el.addEventListener('click', e => { const a = e.target.closest('[data-mv-act]'); if (a) { const f = selFrame(); if (f) frameLook(f); } });
+    el.addEventListener('input', e => { if (!('iconQ' in e.target.dataset)) return; iconQuery = e.target.value; const g = el.querySelector('[data-icon-grid]'); const b = selBlocks()[0]; if (g) g.innerHTML = iconGrid(b && b.name); });
+    el.addEventListener('click', e => {
+      const ic = e.target.closest('[data-icon]'); if (!ic) return; const f = selFrame(); const bs = selBlocks().filter(b => b.kind === 'icon'); if (!f || !bs.length) return;
+      hist.push(doc); const short = n => String(n || '').replace(/^[^:]*:/, ''); for (const b of bs) { if (b.label && b.label === short(b.name)) b.label = short(ic.dataset.icon); b.name = ic.dataset.icon; } rerenderFrame(f); renderLayers(); drawOverlay(); persist(); updateUndo(); renderProps();
+    });
     el.addEventListener('click', e => {
       const a = e.target.closest('[data-dg-act]'); if (!a) return;
       if (a.dataset.dgAct === 'redraw') { clearTimeout(dgT); dgApply(); return; }
@@ -9017,7 +9120,7 @@ const CanvasUI = (() => {
    - self-hosted server: /api/libraries, saved to server/data/libraries.json and pushed to every open tab; when the
      server sets LG_ADMIN_KEY, editing needs that key.
    - neither: this browser's storage; libraries move between people as JSON (Export / Import).
-   Brand guidelines (design.md, layout.md, animation.md, illustration.md, photography.md, content.md) live in the same
+   Brand guidelines (design.md, layout.md, animation.md, illustration.md, photography.md, content.md, product.md) live in the same
    three homes (the guides collection, the server's file, this browser), readable by everyone, written by admins. */
 const LibStore = (() => {
   const LS = { get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch { return d; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch { return false; } } };
@@ -9042,7 +9145,7 @@ const LibStore = (() => {
     if (it.assets && typeof it.assets === 'object') { out.assets = {}; for (const [k, a] of Object.entries(it.assets)) if (/^a_[0-9a-f]{16}$/.test(k) && a && (typeof a.url === 'string' || typeof a.dataUrl === 'string')) out.assets[k] = { url: typeof a.url === 'string' ? a.url : undefined, dataUrl: typeof a.dataUrl === 'string' && /^data:image\//.test(a.dataUrl) ? a.dataUrl : undefined, name: String(a.name || '').slice(0, 80), w: +a.w || 0, h: +a.h || 0 }; }
     return out;
   }
-  const GUIDE = /^(?:[a-z0-9_-]{1,40}\.)?(design|layout|animation|illustration|photography|content)$/;
+  const GUIDE = /^(?:[a-z0-9_-]{1,40}\.)?(design|layout|animation|illustration|photography|content|product)$/;
   // each brand kit has its own guides: Deel's under the plain names, any other kit's as <kit>.<name>
   const guideKey = (kit, name) => !kit || kit === 'deel' ? name : `${String(kit).toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 40) || 'custom'}.${name}`;
   const cleanGuide = g => g && typeof g === 'object' && GUIDE.test(String(g.id || '')) ? { id: g.id, text: String(g.text || '').slice(0, 120000), updated: +g.updated || 0, by: typeof g.by === 'string' ? g.by.slice(0, 80) : '' } : null;
@@ -9277,7 +9380,7 @@ const LibStore = (() => {
   async function searchPeople(q) { if (!backend || !backend.search) return []; try { return await backend.search(q); } catch { return []; } }
   return {
     init, start, libraries, items, isOn, setOn, role, createLibrary, updateLibrary, deleteLibrary, putItem, updateItem, deleteItem, setAdmins,
-    exportJSON, importJSON, people, searchPeople, assetInfo, guide, guides, putGuide, notes, addNote, setNote, canSuggest, guideKey, GUIDES: ['design', 'layout', 'animation', 'illustration', 'photography', 'content'],
+    exportJSON, importJSON, people, searchPeople, assetInfo, guide, guides, putGuide, notes, addNote, setNote, canSuggest, guideKey, GUIDES: ['design', 'layout', 'animation', 'illustration', 'photography', 'content', 'product'],
     refresh: () => backend && backend.refresh ? backend.refresh() : null,
     checkKey: k => backend && backend.checkKey ? backend.checkKey(k) : Promise.reject(new Error('No admin key here')),
     on: fn => { listeners.add(fn); return () => listeners.delete(fn); },
@@ -9457,7 +9560,7 @@ const CodeKit = (() => {
    you pick. Code components (from a design-system manifest, see CodeKit) are items whose top box names the real
    component. */
 const Library = (() => {
-  const CATEGORIES = [['all', 'All'], ['logos', 'Logos'], ['components', 'Components'], ['code', 'Code'], ['cards', 'Cards'], ['devices', 'Devices'], ['illustrations', 'Illustrations']];
+  const CATEGORIES = [['all', 'All'], ['logos', 'Logos'], ['components', 'Components'], ['code', 'Code'], ['screens', 'Screens'], ['icons', 'Icons'], ['cards', 'Cards'], ['devices', 'Devices'], ['illustrations', 'Illustrations']];
   const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   let env = null; let cat = 'all'; let query = ''; let el = null; let naming = false; let pendingManifest = null; let publishing = null; let mgr = null; let editing = null; let confirmDel = null; let peopleHits = []; let names = {};
   const LS = { get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch { return d; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { } } };
@@ -9561,7 +9664,7 @@ const Library = (() => {
     const pad = Math.max(item.w, item.h) * 0.08; const W = item.w + pad * 2, H = item.h + pad * 2;
     const blocks = Canvas.clone(item.blocks).map(b => ({ ...b, x: b.x + pad, y: b.y + pad }));
     // code components are product UI: shown on a light page so dark text reads
-    const light = !!item.code;
+    const light = !!item.code || !!item.capture || item.category === 'screens';
     const svg = Render.toSVG({ id: 'th-' + String(item.id).replace(/[^\w-]/g, ''), format: { w: W, h: H }, palette: { bg: light ? '#F6F5FA' : '#000' }, blocks }, { kit, assets: env ? env.getAssets() : { images: [] }, transparent: !light, width: 120 });
     cache.thumbs.set(key, svg); return svg;
   }
@@ -9578,10 +9681,40 @@ const Library = (() => {
   const tag = (src, it) => ({ ...it, libId: src.id, libName: src.name, team: !!src.local, shared: !!src.shared, editable: src.editable });
   // Items from the libraries this person has on (all of them with {any: true}).
   function all(doc, kit, opts = {}) { return sources(doc, kit).filter(s => opts.any || LibStore.isOn(s.id)).flatMap(s => s.items.map(it => tag(s, it))); }
-  function find(itemId) { return all(env.canvas.doc, env.getKit(), { any: true }).find(x => x.id === itemId); }
+  function find(itemId) { if (/^icon:/.test(itemId)) return iconItem(itemId.slice(5)); return all(env.canvas.doc, env.getKit(), { any: true }).find(x => x.id === itemId); }
+  // Icons (built in and any design-system set) behave like items: click or drag one onto a screen.
+  function iconItem(name) {
+    if (!Icons.has(name)) return null; const ds = name.includes(':'); const s = ds ? 24 : 48;
+    return { id: 'icon:' + name, name, category: 'icons', approved: true, w: s, h: s, blocks: [{ id: 'ic1', kind: 'icon', name, x: 0, y: 0, w: s, h: s, fill: palette(env.getKit()).ink, decorative: true, label: name.replace(/^[^:]*:/, '') }] };
+  }
+  const iconTile = n => { const g = Icons.get(n); return `<button type="button" class="cv-ico" draggable="true" data-item="icon:${esc(n)}" title="${esc(n)} · click to add, or drag onto a screen"><svg viewBox="${g.viewBox}" aria-hidden="true">${g.inner}</svg></button>`; };
+  function iconSections(q, max) {
+    return Icons.sets().slice().sort((a, b) => (a.id ? 0 : 1) - (b.id ? 0 : 1)).map(st => {
+      const names = q ? Icons.search(q, 400, st.id) : st.names.map(n => st.id ? `${st.id}:${n}` : n); if (!names.length) return '';
+      const sid = 'icons-' + (st.id || 'basic'); const fold = folded.has(sid) && !q; const lim = expanded.has(sid) || q ? Math.min(max, 400) : 60;
+      return `<section class="lib-sec"><button type="button" class="lib-sec-head" data-fold="${esc(sid)}" aria-expanded="${!fold}"><span class="lib-caret">${fold ? '▸' : '▾'}</span>${esc(st.name)} icons <span class="lib-count">${names.length}</span></button>
+        ${fold ? '' : `<div class="lib-icons">${names.slice(0, lim).map(iconTile).join('')}</div>${names.length > lim ? `<button type="button" class="btn small ghost lib-more" data-more="${esc(sid)}">Show ${q ? 'more' : 'all ' + names.length}</button>` : ''}`}</section>`;
+    }).join('');
+  }
   // Every code component spec any library knows about (for the props panel and for binding).
   function codeSpecs() { return all(env.canvas.doc, env.getKit(), { any: true }).filter(it => it.code && it.code.spec); }
   function specFor(code) { return CodeKit.specFor(code, codeSpecs()); }
+  // Captured components (real renders, e.g. from Storybook) come in variants: the one whose props match best.
+  // mustKeys must match exactly; the text prop never counts.
+  const normP = v => v === false || v == null || v === '' ? '' : v;
+  function variantFor(code, props, mustKeys = []) {
+    if (!code) return null; let best = null, top = -1;
+    for (const it of all(env.canvas.doc, env.getKit(), { any: true })) {
+      if (!it.capture || !it.code || it.code.name !== code.name || it.code.pkg !== code.pkg) continue;
+      const root = it.blocks.find(x => !x.parent) || {}; const p = (root.code && root.code.props) || {}; const tp = root.code && root.code.text;
+      // an unset prop is its documented default
+      const defs = it.code.spec ? CodeKit.specDefaults({ props: it.code.spec.props || [] }) : {}; const val = (o, k) => normP(o[k] ?? defs[k]);
+      if (mustKeys.some(k => val(p, k) !== val(props || {}, k))) continue;
+      let sc = 0; for (const k of new Set([...Object.keys(props || {}), ...Object.keys(p)])) if (k !== tp && val(p, k) === val(props || {}, k)) sc++;
+      if (sc > top) { top = sc; best = it; }
+    }
+    return best;
+  }
 
   // Selected blocks (with what is inside boxes) -> a library item.
   function fromSelection(frame, blocks, name, category) {
@@ -9615,12 +9748,12 @@ const Library = (() => {
     const on = srcs.filter(s => LibStore.isOn(s.id));
     const sel = env.canvas.selection(); const canSave = sel.blockIds.length > 0;
     const match = it => (cat === 'all' || it.category === cat) && (!query || `${it.name} ${it.category} ${it.code ? it.code.name + ' ' + (it.code.spec && it.code.spec.group || '') : ''}`.toLowerCase().includes(query));
-    const sections = on.map(s => {
+    const sections = cat === 'icons' ? iconSections(query, 400) : on.map(s => {
       const list = s.items.map(it => tag(s, it)).filter(match); if (!list.length && (query || cat !== 'all' || s.builtin)) return '';
       const fold = folded.has(s.id) && !query; const max = expanded.has(s.id) || query ? 400 : 24;
       return `<section class="lib-sec"><button type="button" class="lib-sec-head" data-fold="${esc(s.id)}" aria-expanded="${!fold}"><span class="lib-caret">${fold ? '▸' : '▾'}</span>${esc(s.name)} <span class="lib-count">${list.length}</span>${s.shared ? '' : s.builtin ? ' <span class="lib-tag">built in</span>' : ' <span class="lib-tag">local</span>'}</button>
         ${fold ? '' : `<div class="lib-grid">${list.slice(0, max).map(it => itemCard(it, kit)).join('') || '<p class="hint" style="padding:6px 8px">Nothing here yet.</p>'}</div>${list.length > max ? `<button type="button" class="btn small ghost lib-more" data-more="${esc(s.id)}">Show all ${list.length}</button>` : ''}`}</section>`;
-    }).join('');
+    }).join('') + (cat === 'all' && query ? iconSections(query, 48) : '');
     const dests = [{ id: 'canvas', name: 'This canvas' }, ...(role.admin ? LibStore.libraries().map(l => ({ id: l.id, name: l.name })) : [])];
     const lastDest = LS.get('lg.libDest', 'canvas'); const dest = dests.some(d => d.id === lastDest) ? lastDest : 'canvas';
     const destSel = (attr, cur, list) => `<select class="input cv-mini" data-lib="${attr}" aria-label="Save to">${list.map(d => `<option value="${esc(d.id)}" ${d.id === cur ? 'selected' : ''}>${esc(d.name)}</option>`).join('')}</select>`;
@@ -9673,7 +9806,7 @@ const Library = (() => {
   // Insert into the selected screen (or box), else the screen in view; at a point when dropped.
   function insert(itemId, at) {
     const it = find(itemId); if (!it) return;
-    const out = env.canvas.insertComponent(it.blocks, { at, name: it.name });
+    const out = env.canvas.insertComponent(it.blocks, { at, name: it.name, screen: it.category === 'screens' });
     if (out) env.toast(`${it.name} added${it.approved ? '' : ' (not yet approved)'}`);
   }
   async function submitSave() {
@@ -9837,7 +9970,7 @@ const Library = (() => {
     const nm = ids && ids.length === 1 ? (LibStore.libraries().find(l => l.id === ids[0]) || {}).name : 'libraries';
     if (await env.download(blob, `${String(nm || 'libraries').toLowerCase().replace(/[^a-z0-9]+/g, '-')}.json`)) env.toast(`Exported ${j.lgLibrary.items.length} items`);
   }
-  return { init, bind, bindManager, render, refresh, imagesChanged, openManager, all, sources, builtins, thumb, fromSelection, insert, specFor, codeSpecs, palette, settle, CATEGORIES };
+  return { init, bind, bindManager, render, refresh, imagesChanged, openManager, all, sources, builtins, thumb, fromSelection, insert, specFor, codeSpecs, variantFor, palette, settle, CATEGORIES };
 })();
 
 /* js/projects.js */
@@ -10790,7 +10923,8 @@ const TOOL_DEFS = [
     inputSchema: { type: 'object', properties: { frame_id: { type: 'string' }, block_ids: { type: 'array', items: { type: 'string' } }, stack: { type: 'boolean' }, label: { type: 'string' } }, required: ['frame_id', 'block_ids'] } },
   { name: 'move_into', description: 'Move blocks into a box (box_id) or to the top level of the screen (box_id empty). In a stack they join the flow, before the block named in before_id or at the end.',
     inputSchema: { type: 'object', properties: { frame_id: { type: 'string' }, block_ids: { type: 'array', items: { type: 'string' } }, box_id: { type: 'string' }, before_id: { type: 'string' } }, required: ['frame_id', 'block_ids'] } },
-  { name: 'list_components', description: 'The libraries that are on for this person (brand kit, shared libraries such as Brand or Product design, and this canvas) and their pieces: logos, buttons, cards (including payment cards), device frames, illustrations and code components from the design system (with their props). Filter by category (logos, components, code, cards, devices, illustrations), library name or a query.', inputSchema: { type: 'object', properties: { category: { type: 'string' }, library: { type: 'string' }, query: { type: 'string' } } } },
+  { name: 'search_icons', description: 'Find icons by name words (e.g. "arrow back", "calendar", "delete"): the built-in set and any design-system icon set (names like "ds:Search"). Returns icon names for add_blocks kind icon.', inputSchema: { type: 'object', properties: { query: { type: 'string' }, set: { type: 'string', description: 'Only this set id' }, limit: { type: 'number' } }, required: ['query'] } },
+  { name: 'list_components', description: 'The libraries that are on for this person (brand kit, shared libraries such as Brand or Product design, and this canvas) and their pieces: logos, buttons, cards (including payment cards), device frames, illustrations and code components from the design system (with their props). Filter by category (logos, components, code, screens, cards, devices, illustrations), library name or a query. Screens are whole app screens (an app shell with sidebar, a form flow, a master-detail list) to start a product screen from.', inputSchema: { type: 'object', properties: { category: { type: 'string' }, library: { type: 'string' }, query: { type: 'string' } } } },
   { name: 'insert_component', description: 'Insert a library component (id or name from list_components) into a screen, centred, or into a box (box_id); in a stack it joins the flow. For a code component, props (e.g. {"variant":"secondary"}) and text set it up; React export then writes the real component. Returns the new top block ids.',
     inputSchema: { type: 'object', properties: { frame_id: { type: 'string' }, component: { type: 'string' }, box_id: { type: 'string' }, props: { type: 'object' }, text: { type: 'string' } }, required: ['frame_id', 'component'] } },
   { name: 'write_layout', description: 'Replace a screen\'s whole layout JSON (format, palette, blocks), as get_frame with full=true returns it. For rebuilding a screen from scratch; prefer the smaller tools for edits.', inputSchema: { type: 'object', properties: { frame_id: { type: 'string' }, layout: { type: 'object' } }, required: ['frame_id', 'layout'] } },
@@ -10881,7 +11015,7 @@ const AgentTools = (() => {
     if ('rotation' in p) { let r = num('rotation') % 360; if (r > 180) r -= 360; if (r < -180) r += 360; b.rotation = r; }
     if ('hidden' in p) b.hidden = !!p.hidden;
     if ('label' in p) { if (p.label) b.label = String(p.label).slice(0, 80); else delete b.label; }
-    if ('icon' in p && b.kind === 'icon') { if (!Icons.has(String(p.icon))) throw new Error(`Unknown icon. Available: ${Icons.names.join(', ')}`); b.name = String(p.icon); }
+    if ('icon' in p && b.kind === 'icon') { if (!Icons.has(String(p.icon))) { const near = Icons.search(String(p.icon).replace(/^[^:]*:/, ''), 12); throw new Error(`Unknown icon "${p.icon}".${near.length ? ' Close: ' + near.join(', ') + '.' : ''} Use search_icons to find names.`); } b.name = String(p.icon); }
     if ('shadow' in p) { const s = p.shadow; if (!s) delete b.shadow; else { const o = typeof s === 'object' ? s : {}; b.shadow = { on: true, x: Number(o.x) || 0, y: Number(o.y ?? 8), blur: Number(o.blur ?? 24), color: o.color ? color(o.color).hex : '#000000', alpha: Math.max(0, Math.min(1, Number(o.alpha ?? 0.25))) }; } }
     // padding of a stack (auto layout box): a number or {top,right,bottom,left}
     if ('padding' in p) {
@@ -10940,6 +11074,11 @@ const AgentTools = (() => {
       note(`Moved ${bs.length} block${bs.length === 1 ? '' : 's'} ${box ? 'into ' + (box.label || 'a box') : 'to the top level'}`);
       return { moved: bs.length };
     },
+    search_icons({ query, set, limit }) {
+      const sets = Icons.sets().map(st => ({ id: st.id || '(basic)', name: st.name, count: st.names.length }));
+      const names = Icons.search(String(query || ''), Math.max(1, Math.min(200, +limit || 40)), set == null || set === '' ? undefined : set === '(basic)' ? '' : String(set));
+      return { sets, icons: names, note: 'Pass a name as icon to add_blocks (kind icon) or update_blocks. Names with a prefix ("set:Name") are design-system icons; use them for product UI.' };
+    },
     list_components({ category, library, query }) {
       const q = String(query || '').toLowerCase(); const lib = String(library || '').toLowerCase();
       const items = Library.all(doc(), kit()).filter(i => (!category || i.category === category) && (!lib || i.libName.toLowerCase() === lib || i.libId === library) && (!q || `${i.name} ${i.code ? i.code.name : ''}`.toLowerCase().includes(q)));
@@ -10952,8 +11091,14 @@ const AgentTools = (() => {
       if (!it) throw new Error(`No component "${component}". Try list_components (libraries that are off are not searched).`);
       const box = box_id ? Bk(f, box_id) : null;
       let blocks = it.blocks;
-      // a code component with props or text: draw its stand-in for them
-      if (it.code && it.code.spec && (props || text != null)) {
+      // a captured component (a real render): the variant that best fits the props, with the words swapped in
+      if (it.capture && it.code && (props || text != null)) {
+        const top0 = it.blocks.find(b => !b.parent) || {}; const want = { ...((top0.code && top0.code.props) || {}), ...(props && typeof props === 'object' ? props : {}) };
+        const v = (props && Library.variantFor(it.code, want)) || it; blocks = Canvas.clone(v.blocks);
+        const top = blocks.find(b => !b.parent); if (top && top.code) { top.code = { ...top.code, props: want, from: v.id }; if (text != null && top.code.text) top.code.props[top.code.text] = String(text); }
+        const t = text != null ? blocks.find(b => b.kind === 'text') : null; if (t) { t.text = String(text); Canvas.refit(t); }
+      } else if (it.code && it.code.spec && (props || text != null)) {
+        // a code component with props or text: draw its stand-in for them
         const spec = { name: it.code.name, pkg: it.code.pkg, ...it.code.spec }; const p = { ...CodeKit.defaultProps(spec), ...(props && typeof props === 'object' ? props : {}) };
         blocks = Library.settle(CodeKit.standIn(spec, p, kit(), text != null ? [String(text)] : undefined)).blocks;
       }
@@ -10972,7 +11117,7 @@ const AgentTools = (() => {
     get_frame({ frame_id, full }) { const f = F(frame_id); if (full) { const L = Canvas.clone(f.layout); delete L.signature; if (L.meta) delete L.meta.original; L.blocks = L.blocks.map(b => { delete b.lines; delete b.inkW; delete b.capacity; return b; }); return { id: f.id, name: f.name, layout: L }; } return frameInfo(f, true); },
     get_brand() {
       const k = kit();
-      return { name: k.name, colors: k.colors.map(c => ({ name: c.name, hex: Color.normalize(c.hex), role: c.role })), pairs: Brand.pairs(k).slice(0, 12).map(p => ({ background: p.bgName, bg: p.bg, text: p.fgs[0], accent: p.accents[0] })), fonts: { display: k.fonts.display, body: k.fonts.body, available: Brand.allFontNames() }, voice: k.note || 'Clear, confident, human. Sentence case. No exclamation marks.', copy: k.content };
+      return { name: k.name, ...(Array.isArray(k.textStyles) && k.textStyles.length ? { textStyles: k.textStyles } : {}), colors: k.colors.map(c => ({ name: c.name, hex: Color.normalize(c.hex), role: c.role })), pairs: Brand.pairs(k).slice(0, 12).map(p => ({ background: p.bgName, bg: p.bg, text: p.fgs[0], accent: p.accents[0] })), fonts: { display: k.fonts.display, body: k.fonts.body, available: Brand.allFontNames() }, voice: k.note || 'Clear, confident, human. Sentence case. No exclamation marks.', copy: k.content };
     },
     async get_screenshot({ frame_id, scale }) { const f = F(frame_id); const s = Math.max(0.25, Math.min(1, Number(scale) || 0.5)); const blob = await env.exportPNG(f.layout, s); return { image: await dataUrlOf(blob), frame_id: f.id, width: Math.round(f.layout.format.w * s), height: Math.round(f.layout.format.h * s) }; },
     get_code({ frame_id, format }) { const f = F(frame_id); const e = { assets: env.getAssets(), kit: kit() }; return format === 'html' ? Canvas.toHTML(f, e) : Canvas.toReact(f, e); },
@@ -11111,6 +11256,11 @@ Change the canvas with the tools; the person sees each change live and can undo 
     const lines = [`Canvas "${d.name}": ${d.frames.length} screen${d.frames.length === 1 ? '' : 's'}.`];
     if (Brand.voiceText(kit)) lines.push('When you write or change copy, follow these. ' + Brand.voiceText(kit));
     { const g = Brand.guidesText(['design', 'layout', 'animation', 'illustration', 'photography'], 3500, kit); if (g) lines.push('When you design, lay out, animate or pick pictures, follow the brand guidelines:\n' + g); }
+    // product design: the design system's rules, its text styles, and how to build a screen from its parts
+    { const g = Brand.guidesText(['product'], 6000, kit); if (g) lines.push('When you design product UI (app screens, flows, components), follow the product guidelines:\n' + g); }
+    if (Array.isArray(kit.textStyles) && kit.textStyles.length) lines.push('Text styles (use these for product UI, never other sizes): ' + kit.textStyles.map(st => `${st.name} ${st.family} ${st.size}/${Math.round(st.size * (st.lineHeight || 1.2))} ${st.weight}${st.color ? ' ' + st.color : ''}`).join('; ') + '.');
+    { const ds = Icons.sets().filter(st => st.id); if (ds.length) lines.push(`Icons: ${ds.map(st => `${st.name} (${st.names.length}, names like "${st.id}:${st.names[0]}")`).join(', ')} plus the basic set. Find names with search_icons; add with add_blocks kind icon.`); }
+    lines.push('For an app screen, start from list_components (shared libraries such as a design system: real components, and Screens such as an app shell), insert_component into the screen, then change text and props; add only what the library lacks.');
     if (!sel.frameIds.length) lines.push('Nothing is selected; act on the whole canvas or ask which screen.');
     else {
       lines.push(`Selected: ${sel.frameIds.length} screen${sel.frameIds.length === 1 ? '' : 's'}${sel.blockIds.length ? `, blocks ${sel.blockIds.join(', ')}` : ''}.`);
@@ -12308,9 +12458,9 @@ Layer kinds:
     if (state.mode !== 'deck') return; const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
     if (!f || !(/\.pptx$/i.test(f.name) || f.type === GSlides.PPTX)) return; e.preventDefault(); if (!state.busy) generateDeck(($('prompt').value || '').replace(slidesLinkIn($('prompt').value) || '', '').trim(), { file: f });
   });
-  // ---- Brand guidelines (Settings): design.md, layout.md, animation.md, illustration.md, photography.md, content.md.
+  // ---- Brand guidelines (Settings): design.md, layout.md, animation.md, illustration.md, photography.md, content.md, product.md.
   // Everyone can read them; admins (the shared-library admins) edit, import and save them. Claude gets them in its prompts.
-  const GUIDE_NOTE = { design: 'colors, type, logo, shapes, icons, charts', layout: 'grid, margins, hierarchy per slide type, text per slide', animation: 'easing, durations, entrances, builds', illustration: 'illustration and 3D render style', photography: 'subjects, light, color, cropping', content: 'voice, tone, grammar, naming, words to use and avoid' };
+  const GUIDE_NOTE = { design: 'colors, type, logo, shapes, icons, charts', layout: 'grid, margins, hierarchy per slide type, text per slide', animation: 'easing, durations, entrances, builds', illustration: 'illustration and 3D render style', photography: 'subjects, light, color, cropping', content: 'voice, tone, grammar, naming, words to use and avoid', product: 'product UI: design system components, tokens, type styles, icons, screen patterns' };
   let guideCur = 'design', guideDirty = false, guidePreview = false, guideMode = '', guideQuote = '', guideComments = null;
   const mdInline = t => escapeHtml(t).replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>').replace(/(^|[^*])\*([^*\s][^*]*)\*/g, '$1<i>$2</i>');
   function mdToHtml(md) {
@@ -12397,7 +12547,7 @@ Layer kinds:
   $('guideView').addEventListener('click', () => { guidePreview = !guidePreview; renderGuides(); });
   $('guideSave').addEventListener('click', e => withBusy(e.target, async () => { try { await LibStore.putGuide(gk(guideCur), $('guideText').value); guideDirty = false; renderGuides(); toast(`${guideCur}.md saved for ${state.kit.name}`); Stats.track('guide.save', { detail: guideCur }); } catch (err) { toast(err.message || String(err)); } }));
   $('guideDownload').addEventListener('click', async () => { const blob = new Blob([$('guideText').value], { type: 'text/markdown' }); await Render.download(blob, `${guideCur}.md`); });
-  $('guideFile').addEventListener('change', async e => { const f = e.target.files[0]; e.target.value = ''; if (!f) return; const t = await f.text(); const m = /^(design|layout|animation|illustration|photography|content)\b/i.exec(f.name); if (m) guideCur = m[1].toLowerCase(); $('guideText').value = t; guideDirty = true; guidePreview = false; renderGuides(); toast(`${f.name} loaded into ${guideCur}.md: Save to keep it`); });
+  $('guideFile').addEventListener('change', async e => { const f = e.target.files[0]; e.target.value = ''; if (!f) return; const t = await f.text(); const m = /^(design|layout|animation|illustration|photography|content|product)\b/i.exec(f.name); if (m) guideCur = m[1].toLowerCase(); $('guideText').value = t; guideDirty = true; guidePreview = false; renderGuides(); toast(`${f.name} loaded into ${guideCur}.md: Save to keep it`); });
   LibStore.on(() => { if (!$('settings').hidden) renderGuides(); });
   // claude.ai's own comment box for people who can comment but not write the page's data (Commenters)
   if (window.claude && typeof window.claude.use === 'function') window.claude.use('comments').then(c => { guideComments = c; }).catch(() => { });

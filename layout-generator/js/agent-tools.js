@@ -82,7 +82,7 @@ const AgentTools = (() => {
     if ('rotation' in p) { let r = num('rotation') % 360; if (r > 180) r -= 360; if (r < -180) r += 360; b.rotation = r; }
     if ('hidden' in p) b.hidden = !!p.hidden;
     if ('label' in p) { if (p.label) b.label = String(p.label).slice(0, 80); else delete b.label; }
-    if ('icon' in p && b.kind === 'icon') { if (!Icons.has(String(p.icon))) throw new Error(`Unknown icon. Available: ${Icons.names.join(', ')}`); b.name = String(p.icon); }
+    if ('icon' in p && b.kind === 'icon') { if (!Icons.has(String(p.icon))) { const near = Icons.search(String(p.icon).replace(/^[^:]*:/, ''), 12); throw new Error(`Unknown icon "${p.icon}".${near.length ? ' Close: ' + near.join(', ') + '.' : ''} Use search_icons to find names.`); } b.name = String(p.icon); }
     if ('shadow' in p) { const s = p.shadow; if (!s) delete b.shadow; else { const o = typeof s === 'object' ? s : {}; b.shadow = { on: true, x: Number(o.x) || 0, y: Number(o.y ?? 8), blur: Number(o.blur ?? 24), color: o.color ? color(o.color).hex : '#000000', alpha: Math.max(0, Math.min(1, Number(o.alpha ?? 0.25))) }; } }
     // padding of a stack (auto layout box): a number or {top,right,bottom,left}
     if ('padding' in p) {
@@ -141,6 +141,11 @@ const AgentTools = (() => {
       note(`Moved ${bs.length} block${bs.length === 1 ? '' : 's'} ${box ? 'into ' + (box.label || 'a box') : 'to the top level'}`);
       return { moved: bs.length };
     },
+    search_icons({ query, set, limit }) {
+      const sets = Icons.sets().map(st => ({ id: st.id || '(basic)', name: st.name, count: st.names.length }));
+      const names = Icons.search(String(query || ''), Math.max(1, Math.min(200, +limit || 40)), set == null || set === '' ? undefined : set === '(basic)' ? '' : String(set));
+      return { sets, icons: names, note: 'Pass a name as icon to add_blocks (kind icon) or update_blocks. Names with a prefix ("set:Name") are design-system icons; use them for product UI.' };
+    },
     list_components({ category, library, query }) {
       const q = String(query || '').toLowerCase(); const lib = String(library || '').toLowerCase();
       const items = Library.all(doc(), kit()).filter(i => (!category || i.category === category) && (!lib || i.libName.toLowerCase() === lib || i.libId === library) && (!q || `${i.name} ${i.code ? i.code.name : ''}`.toLowerCase().includes(q)));
@@ -153,8 +158,14 @@ const AgentTools = (() => {
       if (!it) throw new Error(`No component "${component}". Try list_components (libraries that are off are not searched).`);
       const box = box_id ? Bk(f, box_id) : null;
       let blocks = it.blocks;
-      // a code component with props or text: draw its stand-in for them
-      if (it.code && it.code.spec && (props || text != null)) {
+      // a captured component (a real render): the variant that best fits the props, with the words swapped in
+      if (it.capture && it.code && (props || text != null)) {
+        const top0 = it.blocks.find(b => !b.parent) || {}; const want = { ...((top0.code && top0.code.props) || {}), ...(props && typeof props === 'object' ? props : {}) };
+        const v = (props && Library.variantFor(it.code, want)) || it; blocks = Canvas.clone(v.blocks);
+        const top = blocks.find(b => !b.parent); if (top && top.code) { top.code = { ...top.code, props: want, from: v.id }; if (text != null && top.code.text) top.code.props[top.code.text] = String(text); }
+        const t = text != null ? blocks.find(b => b.kind === 'text') : null; if (t) { t.text = String(text); Canvas.refit(t); }
+      } else if (it.code && it.code.spec && (props || text != null)) {
+        // a code component with props or text: draw its stand-in for them
         const spec = { name: it.code.name, pkg: it.code.pkg, ...it.code.spec }; const p = { ...CodeKit.defaultProps(spec), ...(props && typeof props === 'object' ? props : {}) };
         blocks = Library.settle(CodeKit.standIn(spec, p, kit(), text != null ? [String(text)] : undefined)).blocks;
       }
@@ -173,7 +184,7 @@ const AgentTools = (() => {
     get_frame({ frame_id, full }) { const f = F(frame_id); if (full) { const L = Canvas.clone(f.layout); delete L.signature; if (L.meta) delete L.meta.original; L.blocks = L.blocks.map(b => { delete b.lines; delete b.inkW; delete b.capacity; return b; }); return { id: f.id, name: f.name, layout: L }; } return frameInfo(f, true); },
     get_brand() {
       const k = kit();
-      return { name: k.name, colors: k.colors.map(c => ({ name: c.name, hex: Color.normalize(c.hex), role: c.role })), pairs: Brand.pairs(k).slice(0, 12).map(p => ({ background: p.bgName, bg: p.bg, text: p.fgs[0], accent: p.accents[0] })), fonts: { display: k.fonts.display, body: k.fonts.body, available: Brand.allFontNames() }, voice: k.note || 'Clear, confident, human. Sentence case. No exclamation marks.', copy: k.content };
+      return { name: k.name, ...(Array.isArray(k.textStyles) && k.textStyles.length ? { textStyles: k.textStyles } : {}), colors: k.colors.map(c => ({ name: c.name, hex: Color.normalize(c.hex), role: c.role })), pairs: Brand.pairs(k).slice(0, 12).map(p => ({ background: p.bgName, bg: p.bg, text: p.fgs[0], accent: p.accents[0] })), fonts: { display: k.fonts.display, body: k.fonts.body, available: Brand.allFontNames() }, voice: k.note || 'Clear, confident, human. Sentence case. No exclamation marks.', copy: k.content };
     },
     async get_screenshot({ frame_id, scale }) { const f = F(frame_id); const s = Math.max(0.25, Math.min(1, Number(scale) || 0.5)); const blob = await env.exportPNG(f.layout, s); return { image: await dataUrlOf(blob), frame_id: f.id, width: Math.round(f.layout.format.w * s), height: Math.round(f.layout.format.h * s) }; },
     get_code({ frame_id, format }) { const f = F(frame_id); const e = { assets: env.getAssets(), kit: kit() }; return format === 'html' ? Canvas.toHTML(f, e) : Canvas.toReact(f, e); },

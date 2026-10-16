@@ -180,7 +180,8 @@ const Brand = (() => {
   const PRIV = typeof window !== 'undefined' && window.__LG_PRIVATE ? window.__LG_PRIVATE : null;
   const privateFonts = [];
   if (PRIV) {
-    for (const [id, kit] of Object.entries(PRIV.presets || {})) if (/^[a-z0-9_-]{1,40}$/i.test(id) && kit && kit.colors && kit.fonts) PRESETS[id] = kit;
+    // a private kit can build on a public one (base: 'deel'): it keeps that kit's logos and voice and changes the rest
+    for (const [id, k0] of Object.entries(PRIV.presets || {})) { const kit = k0 && k0.base && PRESETS[k0.base] ? { ...clone(PRESETS[k0.base]), ...k0 } : k0; if (/^[a-z0-9_-]{1,40}$/i.test(id) && kit && kit.colors && kit.fonts) PRESETS[id] = kit; }
     const fams = new Map(); for (const f of PRIV.fonts || []) { if (!f || !f.family || !f.b64) continue; if (!fams.has(f.family)) fams.set(f.family, []); fams.get(f.family).push(f); }
     for (const [family, faces] of fams) {
       customFonts[family] = { css: `"${family}", "Bricolage Grotesque", "Inter", system-ui, sans-serif`, weights: [400, 500, 600, 700], faces: faces.map(f => ({ weight: String(f.weight || '400'), style: f.style || 'normal', dataUrl: `data:font/woff2;base64,${f.b64}` })), private: true };
