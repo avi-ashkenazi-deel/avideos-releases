@@ -3,6 +3,7 @@
    `core: true` marks the compact set offered where rounds and tool counts are tight (the claude.ai page). */
 const TOOL_DEFS = [
   { name: 'get_selection', core: true, description: 'What the person has selected on the canvas: the selected screens (frames) with their blocks, and any selected block ids. Start here when asked to change "this" or "these".', inputSchema: { type: 'object', properties: {} } },
+  { name: 'get_comments', description: 'Comments people left on screens (pins): who, when, the text, replies, resolved or open, and where on which screen. Read them to learn what the person wants changed; mention them by text when you act on one.', inputSchema: { type: 'object', properties: { frame_id: { type: 'string' }, include_resolved: { type: 'boolean' } } } },
   { name: 'get_canvas', core: true, description: 'Every screen on the canvas: id, name, position, size, look and block count. Use it to find frame ids.', inputSchema: { type: 'object', properties: {} } },
   { name: 'get_frame', core: true, description: 'One screen in detail: every block with id, kind, role, box (x, y, w, h in px from the frame\'s top left), text, colors and type.', inputSchema: { type: 'object', properties: { frame_id: { type: 'string' } }, required: ['frame_id'] } },
   { name: 'get_brand', core: true, description: 'The brand kit: palette colors (name, hex, role), approved background/text/accent pairs, display and body fonts, and the fonts available.', inputSchema: { type: 'object', properties: {} } },

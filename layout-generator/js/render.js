@@ -65,7 +65,10 @@ const Render = (() => {
       ctx.defs.push(`<filter id="${id}" x="-50%" y="-50%" width="200%" height="200%"><feDropShadow dx="${n(s.x || 0)}" dy="${n(s.y || 0)}" stdDeviation="${n((Number(s.blur) || 0) / 2)}" flood-color="${col(s.color, '#000000')}" flood-opacity="${n(clamp01(s.alpha ?? 0.25))}"/></filter>`);
       attrs += ` filter="url(#${id})"`;
     }
-    if (Number(b.rotation)) attrs += ` transform="rotate(${n(b.rotation)} ${n(b.x + b.w / 2)} ${n(b.y + b.h / 2)})"`;
+    const tf = []; const cx = n(b.x + b.w / 2), cy = n(b.y + b.h / 2);
+    if (Number(b.rotation)) tf.push(`rotate(${n(b.rotation)} ${cx} ${cy})`);
+    if (b.flipX || b.flipY) tf.push(`translate(${cx} ${cy}) scale(${b.flipX ? -1 : 1} ${b.flipY ? -1 : 1}) translate(${-cx} ${-cy})`);
+    if (tf.length) attrs += ` transform="${tf.join(' ')}"`;
     return attrs ? `<g${attrs}>${el}</g>` : el;
   }
 
@@ -195,7 +198,20 @@ const Render = (() => {
     };
     const I = typeof Auto !== 'undefined' ? Auto.index({ layout }) : null;
     const kidsOf = pid => I ? (I.kids.get(pid) || []) : (pid ? [] : layout.blocks);
-    const drawList = pid => kidsOf(pid).filter(b => !b.hidden).map(drawBlock).join('');
+    // A mask (like Figma's): the shape of one block clips the siblings painted after it (in its group when it has
+    // one); the mask itself is not painted.
+    const maskClip = m => { const s = Canvas.maskShape(m); const id = ctx.id('m'); const inner = s.kind === 'ellipse' ? `<ellipse cx="${n(s.cx)}" cy="${n(s.cy)}" rx="${n(s.rx)}" ry="${n(s.ry)}"/>` : s.kind === 'path' ? `<path d="${PATH_RE.test(s.d) ? s.d : ''}" transform="translate(${n(s.x)} ${n(s.y)}) scale(${n(s.sx)} ${n(s.sy)}) translate(${n(-s.ox)} ${n(-s.oy)})"/>` : `<rect x="${n(s.x)}" y="${n(s.y)}" width="${n(s.w)}" height="${n(s.h)}" rx="${n(s.r)}"/>`; ctx.defs.push(`<clipPath id="${id}">${inner}</clipPath>`); return id; };
+    const drawList = pid => {
+      const kids = kidsOf(pid).filter(b => !b.hidden); if (!kids.some(b => b.mask) || typeof Canvas === 'undefined') return kids.map(drawBlock).join('');
+      const out = []; const done = new Set();
+      for (const b of kids) {
+        if (done.has(b)) continue;
+        if (!b.mask) { out.push(drawBlock(b)); continue; }
+        const under = Canvas.maskedBy(kids, b); const id = maskClip(b); done.add(b);
+        if (under.length) { out.push(`<g clip-path="url(#${id})">${under.map(drawBlock).join('')}</g>`); under.forEach(u => done.add(u)); }
+      }
+      return out.join('');
+    };
     // drawn for motion: every block in a group tagged with its key, so its unit can move it
     const order = opts.tag ? new Map((layout.blocks || []).map((b, i) => [b, String(b.id || ('n' + i))])) : null;
     const tagged = (b, el) => order && el ? `<g data-b="${esc(order.get(b) || '')}">${el}</g>` : el;
@@ -351,5 +367,12 @@ const Render = (() => {
     }
     return pdf ? pdf.output('blob') : null;
   }
-  return { toSVG, gridOverlay, exportSVG, exportPNG, exportPDF, svgToPngDataUrl, download, fontFaceCss, fontsEmbedded, bufToBase64, sanitizeSvgInner, col, emphRuns };
+  // Blocks drawn through a mask (and the masks): what PowerPoint has to get as one picture.
+  function maskedIds(layout) {
+    const out = new Set(); if (typeof Canvas === 'undefined' || !(layout.blocks || []).some(b => b.mask)) return out;
+    const I = typeof Auto !== 'undefined' ? Auto.index({ layout }) : null; const kidsOf = pid => I ? (I.kids.get(pid) || []) : (pid ? [] : layout.blocks);
+    const walk = pid => { const kids = kidsOf(pid).filter(b => !b.hidden); for (const b of kids) { if (b.mask) { out.add(b.id); for (const u of Canvas.maskedBy(kids, b)) { out.add(u.id); if (u.kind === 'box') for (const d of (I ? Auto.descendants({ layout }, u, I) : [])) out.add(d.id); } } if (b.kind === 'box') walk(b.id); } };
+    walk(''); return out;
+  }
+  return { toSVG, gridOverlay, exportSVG, exportPNG, exportPDF, svgToPngDataUrl, download, fontFaceCss, fontsEmbedded, bufToBase64, sanitizeSvgInner, col, emphRuns, maskedIds };
 })();

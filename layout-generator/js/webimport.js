@@ -200,14 +200,18 @@ const WebImport = (() => {
   function renderSection(el) {
     if (!el || el.dataset.ready) return; el.dataset.ready = '1';
     el.innerHTML = `<h4>From a web page</h4>
+      <p class="hint">Any page you can open becomes editable layers here: boxes, text, images and SVG, with its stacks as auto layout. A browser cannot read another site from this page, so a small capture runs on the page itself (the bookmark below), and the copy lands here with ⌘V.</p>
+      <div class="cv-row"><input id="lgWebUrl" class="input grow" type="url" placeholder="https://www.deel.com/…" aria-label="Page address"><button id="lgWebOpen" class="btn small primary" type="button">Open page</button></div>
       <ol>
-        <li>Drag this button to your bookmarks bar: <a class="btn small primary bm" id="lgBookmarklet" href="#" draggable="true" title="Drag me to the bookmarks bar">⤓ Capture to canvas</a></li>
-        <li>Open any page, scrolled to where you want, and click the bookmark. Logged-in pages work too.</li>
+        <li><b>Once:</b> drag this button to your bookmarks bar: <a class="btn small primary bm" id="lgBookmarklet" href="#" draggable="true" title="Drag me to the bookmarks bar">⤓ Capture to canvas</a> (no bookmarks bar? use the console snippet below)</li>
+        <li>On the page (opened above, scrolled to where you want), click the bookmark. Logged-in pages work too.</li>
         <li>Click <b>Copy capture</b> on the panel that appears, come back here and press ⌘V.</li>
       </ol>
       <div class="cv-row wrap"><button class="btn small" type="button" id="lgCopySnippet">Copy console snippet</button><button class="btn small" type="button" id="lgCopyBm">Copy bookmarklet code</button><label class="btn small file">Open a capture .json<input id="lgCaptureFile" type="file" accept=".json,application/json" hidden></label></div>
       <p class="hint">No bookmarks bar? Open the page's DevTools console, paste the snippet and press Enter. The page becomes boxes, text, images and SVG you can edit; cookie banners are left out. Use <b>Look</b> on the frame to switch between the original, a grey wireframe and a rebrand in your palette.</p>`;
     const a = el.querySelector('#lgBookmarklet'); a.setAttribute('href', bookmarklet());
+    const urlIn = el.querySelector('#lgWebUrl'); const openPage = () => { let v = urlIn.value.trim(); if (!v) { urlIn.focus(); return; } if (!/^https?:\/\//i.test(v)) v = 'https://' + v; try { new URL(v); } catch { env.toast('That is not a web address'); return; } window.open(v, '_blank', 'noopener'); env.toast('Page opened in a new tab: click the Capture bookmark there, then paste here'); };
+    el.querySelector('#lgWebOpen').addEventListener('click', openPage); urlIn.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') openPage(); });
     a.addEventListener('click', e => { e.preventDefault(); env.toast('Drag this button to your bookmarks bar, then click it on any page'); });
     const copy = async (text, msg) => { try { await navigator.clipboard.writeText(text); } catch { const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); } env.toast(msg); };
     el.querySelector('#lgCopySnippet').addEventListener('click', () => copy(source(), 'Snippet copied: paste it in the page\'s DevTools console'));

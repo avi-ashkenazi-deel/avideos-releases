@@ -42,6 +42,7 @@ const ExportPptx = (() => {
     // Paint order (a box, then what is inside it); a hidden box hides its contents. Positions are already absolute.
     const order = typeof Auto !== 'undefined' ? (() => { const I = Auto.index({ layout }); const out = []; const walk = id => { for (const k of Auto.childrenOf(I, id)) { if (k.hidden) continue; out.push(k); if (k.kind === 'box') walk(k.id); } }; walk(''); return out; })() : layout.blocks;
     const blocks = order.map(b => b.kind === 'logo' ? { ...b, logoKind: kit.logo.kind } : b);
+    const masked = Render.maskedIds(layout);
     const unitOf = (b, i) => mv ? mv.unitOf.get(order[i]) ?? null : null;
     let pending = [], pendingUnit = null;
     const flush = async () => {
@@ -53,7 +54,7 @@ const ExportPptx = (() => {
     for (const [i, b] of blocks.entries()) {
       if (b.hidden) continue;
       const u = unitOf(b, i);
-      if (isRaster(b)) { if (pending.length && u !== pendingUnit) await flush(); pending.push(b); pendingUnit = u; continue; }
+      if (isRaster(b) || masked.has(b.id)) { if (pending.length && u !== pendingUnit) await flush(); pending.push(b); pendingUnit = u; continue; }
       await flush(); cur = u;
       const box = { x: inch(b.x), y: inch(b.y), w: inch(b.w), h: inch(b.h) };
       if (b.kind === 'box') {

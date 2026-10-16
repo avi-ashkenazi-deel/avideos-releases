@@ -9,6 +9,10 @@ const CanvasUI = (() => {
   let spaceAt = 0, spacePanned = false;
   let tool = 'select', hover = null, drag = null, spaceDown = false, clipboard = null, lastPointer = null, dropTarget = null;
   let guides = [], editing = null, groupFocus = null, peers = [], undoMerge = null;
+  // pen: penDraft is a path being drawn ({f, b, cursor}); penEdit a finished path whose points are being moved ({f, b, sel})
+  let penDraft = null, penEdit = null;
+  // comments: pins on screens; a thread or a new comment open in a popover
+  let pinsVisible = true, showResolved = false, thread = null, commentDraft = null; const names = new Map();
   // Simple editing (default) hides auto layout, sizing and code, and treats stacks as tidy containers; Advanced is
   // Figma-style. Per person, kept in this browser.
   let editMode = (() => { try { return localStorage.getItem('lg.editMode') === 'advanced' ? 'advanced' : 'simple'; } catch { return 'simple'; } })();
@@ -27,7 +31,7 @@ const CanvasUI = (() => {
     env = e;
     try { const saved = localStorage.getItem(e.backupKey ? e.backupKey() : 'lg.canvas'); doc = saved ? Canvas.deserialize(saved) : Canvas.create(); } catch { doc = Canvas.create(); }
     hist = Canvas.history();
-    bindStage(); bindToolbar(); bindKeys(); bindLayers(); bindProps();
+    bindStage(); bindToolbar(); bindKeys(); bindLayers(); bindProps(); bindComments();
     Canvas.fromHash(location.hash).then(d => { if (d) { doc = d; env.toast('Canvas loaded from link'); if (active) renderAll(); } }).catch(() => { });
   }
   function count() { return doc ? doc.frames.length : 0; }
@@ -166,7 +170,7 @@ const CanvasUI = (() => {
 
   // ---- Rendering ----------------------------------------------------------------------------------------
   function updateCount() { const n = doc.frames.length; const s = selFrames().length; $('cvCount').textContent = n ? `${n} frame${n > 1 ? 's' : ''}${s > 1 ? ` · ${s} selected` : ''}` : 'Empty canvas'; $('cvEmpty').hidden = n > 0; }
-  function renderAll() { renderFrames(); renderLayers(); renderProps(); applyView(); updateUndo(); updateCount(); }
+  function renderAll() { renderFrames(); renderLayers(); renderProps(); applyView(); updateUndo(); updateCount(); updateCommentsButton(); renderThread(); }
   function labelHTML(f) { return `<div class="cv-frame-label${sel.frameIds.includes(f.id) ? ' on' : ''}" data-label="${esc(f.id)}" style="left:${f.x}px;top:${f.y - Math.max(16, 18 / doc.view.zoom)}px;max-width:${FW(f)}px;font-size:${Math.max(11, 12 / doc.view.zoom)}px;${f.hidden ? 'display:none;' : ''}">${esc(f.name)}</div>`; }
   function renderFrames() {
     stale.clear();
@@ -208,7 +212,8 @@ const CanvasUI = (() => {
     }
     if (hover && hover.frame && !(drag && drag.type)) {
       const hf = hover.frame; const b = hover.block;
-      parts.push(b ? rect(hf.x + b.x, hf.y + b.y, b.w, b.h, 'fill="none" stroke="var(--accent)" stroke-opacity=".6" stroke-width="1"') : rect(hf.x, hf.y, FW(hf), FH(hf), 'fill="none" stroke="var(--accent)" stroke-opacity=".6" stroke-width="1"'));
+      const hs = hover.fromLayers ? 'fill="var(--accent-faint)" stroke="var(--accent)" stroke-opacity=".95" stroke-width="2"' : 'fill="none" stroke="var(--accent)" stroke-opacity=".6" stroke-width="1"';
+      parts.push(b ? rect(hf.x + b.x, hf.y + b.y, b.w, b.h, hs) : rect(hf.x, hf.y, FW(hf), FH(hf), hs));
     }
     const frames = selFrames(); const blocks = selBlocks();
     for (const f of frames) parts.push(rect(f.x, f.y, FW(f), FH(f), `fill="none" stroke="var(--accent)" stroke-width="${blocks.length ? 1 : 2}" stroke-opacity="${blocks.length ? .45 : 1}"`));
@@ -254,9 +259,73 @@ const CanvasUI = (() => {
       const c = PEER_COLOR(pr.color); const p = toScreen(pr.cursor.x, pr.cursor.y); const name = String(pr.name || 'Someone').slice(0, 28);
       parts.push(`<g transform="translate(${p.x},${p.y})" class="cv-peer"><path d="M0 0 L0 17 L4.6 12.6 L7.6 19.4 L10.3 18.2 L7.4 11.6 L13.4 11.6 Z" fill="${c}" stroke="#fff" stroke-width="1.2"/><rect x="14" y="16" rx="5" height="19" width="${name.length * 6.6 + 14}" fill="${c}"/><text x="21" y="29.5" fill="#fff" font-size="11.5" font-weight="600" font-family="var(--font-ui, system-ui)">${esc(name)}</text></g>`);
     }
+    parts.push(penOverlay());
+    if (drag && drag.type === 'line') { const a = toScreen(drag.start.x, drag.start.y), b = toScreen(drag.cur.x, drag.cur.y); parts.push(`<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="var(--accent)" stroke-width="2" stroke-linecap="round"/>`); }
     ov.innerHTML = parts.join('');
+    renderPins();
   }
-  function kindLabel(f, b) { if (b.kind === 'box') return b.label || (Auto.on(Auto.settingsOf(f, b)) ? 'stack' : 'box'); return b.role || b.kind; }
+  function kindLabel(f, b) { const m = b.mask ? 'mask · ' : ''; if (b.kind === 'box') return m + (b.label || (Auto.on(Auto.settingsOf(f, b)) ? 'stack' : 'box')); return m + (b.pen ? 'path' : b.role || b.kind); }
+  // ---- Pen: anchors, handles and the segment being drawn ------------------------------------------------------
+  const penPt = (f, b, p) => toScreen(f.x + b.x + p.x, f.y + b.y + p.y);
+  function penOverlay() {
+    const st = penDraft || penEdit; if (!st || !st.b.pen) return '';
+    const { f, b } = st; const P = b.pen.pts; const parts = [];
+    const H = (a, h) => { const q = penPt(f, b, a), r = penPt(f, b, h); return `<line x1="${q.x}" y1="${q.y}" x2="${r.x}" y2="${r.y}" stroke="var(--accent)" stroke-width="1"/><circle cx="${r.x}" cy="${r.y}" r="3.5" fill="#fff" stroke="var(--accent)" stroke-width="1.5"/>`; };
+    P.forEach((a, i) => { if (a.i) parts.push(H(a, a.i)); if (a.o) parts.push(H(a, a.o)); });
+    P.forEach((a, i) => { const q = penPt(f, b, a); const on = penEdit && penEdit.sel === i; parts.push(`<rect x="${q.x - 4}" y="${q.y - 4}" width="8" height="8" fill="${on ? 'var(--accent)' : '#fff'}" stroke="var(--accent)" stroke-width="1.5"${i === 0 && penDraft && P.length > 2 ? ' rx="4"' : ''}/>`); });
+    if (penDraft && penDraft.cursor && !(drag && drag.type === 'pen-point')) { const last = P[P.length - 1]; const q = penPt(f, b, last), c = toScreen(penDraft.cursor.x, penDraft.cursor.y); parts.push(`<line x1="${q.x}" y1="${q.y}" x2="${c.x}" y2="${c.y}" stroke="var(--accent)" stroke-dasharray="4 3" stroke-width="1"/>`); }
+    return parts.join('');
+  }
+  // What is under the pointer while editing a path: an anchor or a handle, by index.
+  function penHit(cx, cy) {
+    const st = penEdit; if (!st) return null; const r = stage().getBoundingClientRect(); const px = cx - r.left, py = cy - r.top; const { f, b } = st;
+    const near = p => Math.abs(px - p.x) <= 7 && Math.abs(py - p.y) <= 7;
+    for (const [i, a] of b.pen.pts.entries()) { if (a.i && near(penPt(f, b, a.i))) return { idx: i, which: 'i' }; if (a.o && near(penPt(f, b, a.o))) return { idx: i, which: 'o' }; }
+    for (const [i, a] of b.pen.pts.entries()) if (near(penPt(f, b, a))) return { idx: i, which: 'a' };
+    return null;
+  }
+  function penRefresh(st) { const { f, b } = st; Canvas.penFit(b); rerenderFrame(f); drawOverlay(); }
+  // A click with the pen: start a path, add a point, or close it on the first point. Dragging pulls out handles.
+  function penDown(e, p) {
+    if (!penDraft && penEdit && !penEdit.b.pen.closed) { penDraft = { f: penEdit.f, b: penEdit.b }; penEdit = null; }
+    const f = penDraft ? penDraft.f : frameAt(p); if (!f) { env.toast('Click inside a screen to start a path'); return; }
+    const lp = { x: p.x - f.x, y: p.y - f.y };
+    if (!penDraft) {
+      hist.push(doc); const ink = toHex(f.layout.palette.fg || '#111111');
+      const b = { id: Canvas.uid(), kind: 'vector', x: Math.round(lp.x), y: Math.round(lp.y), w: 1, h: 1, viewBox: [0, 0, 1, 1], d: '', fill: 'none', stroke: { color: ink, width: 2 }, keepAspect: false, decorative: true, label: 'Path', pen: { pts: [{ x: 0, y: 0 }], closed: false } };
+      f.layout.blocks.push(b); penDraft = { f, b };
+      drag = { type: 'pen-point', st: penDraft, idx: 0, start: p, moved: false }; stage().setPointerCapture(e.pointerId); return;
+    }
+    const b = penDraft.b; const P = b.pen.pts; const bl = { x: lp.x - b.x, y: lp.y - b.y };
+    if (P.length > 2 && Math.hypot(bl.x - P[0].x, bl.y - P[0].y) * doc.view.zoom < 10) { b.pen.closed = true; penFinish(); return; }
+    P.push({ x: bl.x, y: bl.y });
+    drag = { type: 'pen-point', st: penDraft, idx: P.length - 1, start: p, moved: false }; stage().setPointerCapture(e.pointerId);
+    penRefresh(penDraft);
+  }
+  function penFinish(cancel) {
+    const st = penDraft; if (!st) return; penDraft = null; drag = null; const { f, b } = st;
+    // a double-click leaves two points in the same place
+    const P = b.pen.pts; for (let i = P.length - 1; i > 0; i--) if (Math.hypot(P[i].x - P[i - 1].x, P[i].y - P[i - 1].y) < 1 && !P[i].i && !P[i].o) P.splice(i, 1);
+    if (cancel || P.length < 2) { f.layout.blocks = f.layout.blocks.filter(x => x !== b); rerenderFrame(f); renderLayers(); drawOverlay(); return; }
+    Canvas.penFit(b); select(f.id, [b.id]); setTool('select'); rerenderFrame(f); renderLayers(); renderProps(); drawOverlay(); persist(); updateUndo();
+    env.toast(b.pen.closed ? 'Path closed. Enter edits its points; set a fill in the panel.' : 'Path done. Enter edits its points.');
+  }
+  function penEditStart(f, b) { if (!b || !b.pen) return false; penDraft = null; penEdit = { f, b, sel: null }; setTool('select'); drawOverlay(); return true; }
+  function penEditEnd() { if (!penEdit) return; penEdit = null; drawOverlay(); }
+  function penDeletePoint() {
+    const st = penEdit; if (!st || st.sel == null) return false; const { f, b } = st; hist.push(doc);
+    if (b.pen.pts.length <= 2) { f.layout.blocks = f.layout.blocks.filter(x => x !== b); penEdit = null; select(f.id, []); rerenderFrame(f); renderLayers(); persist(); updateUndo(); return true; }
+    b.pen.pts.splice(st.sel, 1); st.sel = null; penRefresh(st); persist(); updateUndo(); return true;
+  }
+  // A straight line: a two-point path drawn by dragging (⇧ keeps it at 0°, 45° or 90°).
+  function lineFinish(d) {
+    const f = d.f; let { x: x1, y: y1 } = d.cur; const x0 = d.start.x, y0 = d.start.y;
+    if (Math.hypot(x1 - x0, y1 - y0) * doc.view.zoom < 4) { env.toast('Drag to draw a line'); return; }
+    hist.push(doc); const ink = toHex(f.layout.palette.fg || '#111111');
+    const b = { id: Canvas.uid(), kind: 'vector', x: Math.round(x0 - f.x), y: Math.round(y0 - f.y), w: 1, h: 1, viewBox: [0, 0, 1, 1], d: '', fill: 'none', stroke: { color: ink, width: 2 }, keepAspect: false, decorative: true, label: 'Line', pen: { pts: [{ x: 0, y: 0 }, { x: x1 - x0, y: y1 - y0 }], closed: false } };
+    f.layout.blocks.push(b); Canvas.penFit(b); select(f.id, [b.id]); setTool('select'); rerenderFrame(f); renderLayers(); renderProps(); drawOverlay(); persist(); updateUndo();
+  }
+  const constrain = (a, p) => { const dx = p.x - a.x, dy = p.y - a.y; const ang = Math.round(Math.atan2(dy, dx) / (Math.PI / 4)) * (Math.PI / 4); const L = Math.hypot(dx, dy); return { x: a.x + Math.cos(ang) * L, y: a.y + Math.sin(ang) * L }; };
   function sizeLabel(f, b) { if (!advanced()) return ''; const I = Auto.index(f); const w = Auto.sizing(I, b, 'w'), h = Auto.sizing(I, b, 'h'); const t = v => v === 'hug' ? 'Hug' : v === 'fill' ? 'Fill' : ''; const parts = [t(w) && 'W ' + t(w), t(h) && 'H ' + t(h)].filter(Boolean); return parts.length ? ' · ' + parts.join(' ') : ''; }
   function handles(x, y, w, h) {
     return [{ id: 'nw', x, y, cursor: 'nwse-resize' }, { id: 'n', x: x + w / 2, y, cursor: 'ns-resize' }, { id: 'ne', x: x + w, y, cursor: 'nesw-resize' }, { id: 'e', x: x + w, y: y + h / 2, cursor: 'ew-resize' }, { id: 'se', x: x + w, y: y + h, cursor: 'nwse-resize' }, { id: 's', x: x + w / 2, y: y + h, cursor: 'ns-resize' }, { id: 'sw', x, y: y + h, cursor: 'nesw-resize' }, { id: 'w', x, y: y + h / 2, cursor: 'ew-resize' }];
@@ -322,12 +391,15 @@ const CanvasUI = (() => {
   }
   function onDblClick(e) {
     if (e.target.closest && e.target.closest('.cv-editor')) return;
+    if (tool === 'pen' && penDraft) { penFinish(); return; }
+    if (tool !== 'select') return;
     const p = toWorld(e.clientX, e.clientY);
     const lf = labelAt(p); if (lf) { select(lf.id, []); const inp = $('cvProps').querySelector('[data-f="name"]'); if (inp) { inp.focus(); inp.select(); } return; }
     const f = frameAt(p); if (!f) return;
     const chain = hitChain(f, p); const b = pickLevel(f, chain, e);
     if (b && b.kind === 'box') { const i = chain.indexOf(b); const inner = chain[i + 1]; if (inner) { select(f.id, [inner.id]); if (inner.kind === 'text' || inner.kind === 'list' || inner.kind === 'button') startEdit(f, inner); return; } }
     if (b && b.group && groupFocus !== b.group) { groupFocus = b.group; select(f.id, [b.id], { keepGroupFocus: true }); return; }
+    if (b && b.kind === 'vector' && b.pen) { select(f.id, [b.id]); penEditStart(f, b); return; }
     if (b && (b.kind === 'text' || b.kind === 'list' || b.kind === 'button')) { startEdit(f, b); return; }
     if (!b) fitTo([f]);
   }
@@ -337,8 +409,19 @@ const CanvasUI = (() => {
     if (spaceDown) spacePanned = true;
     if (e.button === 1 || tool === 'hand' || spaceDown || e.button === 2) { drag = { type: 'pan', sx: e.clientX, sy: e.clientY, vx: doc.view.x, vy: doc.view.y }; stage().setPointerCapture(e.pointerId); stage().style.cursor = 'grabbing'; return; }
     const p = toWorld(e.clientX, e.clientY);
+    if (thread || commentDraft) closeThread();
     if (tool === 'frame') { drag = { type: 'draw-frame', start: p, cur: p, moved: false }; stage().setPointerCapture(e.pointerId); return; }
+    if (tool === 'pen') { penDown(e, p); return; }
+    if (tool === 'line') { const f = frameAt(p); if (!f) { env.toast('Drag inside a screen to draw a line'); return; } drag = { type: 'line', f, start: p, cur: p }; stage().setPointerCapture(e.pointerId); return; }
+    if (tool === 'comment') { const f = frameAt(p); if (!f) { env.toast('Click on a screen to leave a comment there'); return; } openCommentDraft(f, { x: p.x - f.x, y: p.y - f.y }); return; }
     if (tool !== 'select') { placeTool(frameAt(p), p); return; }
+    if (penEdit) {
+      const ph = penHit(e.clientX, e.clientY);
+      if (ph) { const st = penEdit; const a = st.b.pen.pts[ph.idx]; st.sel = ph.idx; drag = ph.which === 'a' ? { type: 'pen-anchor', st, idx: ph.idx, start: p, orig: Canvas.clone(a), alt: e.altKey, moved: false } : { type: 'pen-handle', st, idx: ph.idx, which: ph.which, start: p, moved: false }; stage().setPointerCapture(e.pointerId); drawOverlay(); return; }
+      const hf = frameAt(p); const hb = hf && blockAt(hf, p, e);
+      if (hb === penEdit.b) { penEdit.sel = null; drawOverlay(); return; }
+      penEditEnd();
+    }
     const h = handleAt(e.clientX, e.clientY);
     if (h) {
       const f = selFrame();
@@ -420,6 +503,8 @@ const CanvasUI = (() => {
   function onMove(e) {
     lastPointer = toWorld(e.clientX, e.clientY); emit('pointer', lastPointer);
     if (!drag) {
+      if (tool === 'pen' && penDraft) { penDraft.cursor = lastPointer; drawOverlay(); return; }
+      if (penEdit) { const ph = penHit(e.clientX, e.clientY); stage().style.cursor = ph ? 'move' : 'default'; if (ph) return; }
       const p = lastPointer; const lf = tool === 'select' ? labelAt(p) : null; const f = lf || (tool === 'select' ? frameAt(p) : null); const b = !lf && f && blockAt(f, p);
       const next = f ? { frame: f, block: b } : null;
       if ((next && next.frame) !== (hover && hover.frame) || (next && next.block) !== (hover && hover.block)) { hover = next; drawOverlay(); }
@@ -431,6 +516,17 @@ const CanvasUI = (() => {
     const p = lastPointer;
     if (drag.type === 'pan') { doc.view.x = drag.vx + (e.clientX - drag.sx); doc.view.y = drag.vy + (e.clientY - drag.sy); applyView(); return; }
     if (drag.type === 'marquee') { drag.cur = p; drawOverlay(); return; }
+    if (drag.type === 'line') { drag.cur = e.shiftKey ? constrain(drag.start, p) : p; drawOverlay(); return; }
+    if (drag.type === 'pen-point' || drag.type === 'pen-anchor' || drag.type === 'pen-handle') {
+      const { st, idx } = drag; const { f, b } = st; const P = b.pen.pts; const a = P[idx]; if (!a) return;
+      if (!drag.moved && Math.hypot(p.x - drag.start.x, p.y - drag.start.y) * doc.view.zoom < 3) return;
+      if (!drag.moved) { drag.moved = true; if (drag.type !== 'pen-point') hist.push(doc); }
+      const m = { x: p.x - f.x - b.x, y: p.y - f.y - b.y }; const mir = (c, h) => ({ x: 2 * c.x - h.x, y: 2 * c.y - h.y });
+      if (drag.type === 'pen-anchor' && !drag.alt) { const dx = m.x - a.x, dy = m.y - a.y; a.x = m.x; a.y = m.y; if (a.i) { a.i.x += dx; a.i.y += dy; } if (a.o) { a.o.x += dx; a.o.y += dy; } }
+      else if (drag.type === 'pen-handle') { a[drag.which] = m; if (!e.altKey) a[drag.which === 'i' ? 'o' : 'i'] = mir(a, m); }
+      else { a.o = m; a.i = mir(a, m); } // placing or ⌥ dragging an anchor pulls out symmetric handles
+      penRefresh(st); return;
+    }
     if (drag.type === 'draw-frame') { drag.cur = p; if (Math.hypot(p.x - drag.start.x, p.y - drag.start.y) * doc.view.zoom > 6) drag.moved = true; drawOverlay(); return; }
     const dx = p.x - drag.start.x, dy = p.y - drag.start.y;
     if (!drag.moved && Math.hypot(dx, dy) * doc.view.zoom < 3) return;
@@ -468,6 +564,9 @@ const CanvasUI = (() => {
     const d = drag; drag = null; stage().style.cursor = tool === 'hand' ? 'grab' : 'default';
     const hadGuides = guides.length; guides = [];
     if (d.type === 'pan') { persist({ silent: true }); return; }
+    if (d.type === 'line') { lineFinish(d); return; }
+    if (d.type === 'pen-point') { drag = null; drawOverlay(); return; }
+    if (d.type === 'pen-anchor' || d.type === 'pen-handle') { if (d.moved) { persist(); updateUndo(); renderProps(); } drawOverlay(); return; }
     if (d.type === 'marquee') {
       const x0 = Math.min(d.start.x, d.cur.x), y0 = Math.min(d.start.y, d.cur.y), x1 = Math.max(d.start.x, d.cur.x), y1 = Math.max(d.start.y, d.cur.y);
       if (x1 - x0 > 4 && y1 - y0 > 4) {
@@ -609,11 +708,15 @@ const CanvasUI = (() => {
   function placeFrames(items, opts = {}) {
     if (!items.length) return [];
     if (opts.history !== false) hist.push(doc);
+    // screens copied from far apart (a whole Figma page) come together in rows, in their reading order
+    let compacted = false;
+    if (opts.compact !== false) { const geo = items.map(it => ({ it, x: it.x, y: it.y, w: it.layout.format.w, h: it.layout.format.h, page: it.page || '' })); compacted = Canvas.compact(geo); if (compacted) for (const g of geo) { g.it.x = g.x; g.it.y = g.y; } }
     const bx = Math.min(...items.map(i => i.x)), by = Math.min(...items.map(i => i.y));
     const ox = doc.frames.length ? Math.min(...doc.frames.map(f => f.x)) : 0;
     const oy = doc.frames.length ? Math.max(...doc.frames.map(f => f.y + FH(f))) + 320 : 0;
     const added = items.map(it => { const f = Canvas.addFrame(doc, it.layout, { x: Canvas.snap(ox + (it.x - bx), 8), y: Canvas.snap(oy + (it.y - by), 8), name: it.name, autoLayout: it.autoLayout || undefined }); f.clip = it.clip !== false; return f; });
     selectFrames(added.map(f => f.id)); if (active) { renderAll(); fitTo(added); } persist(); updateUndo();
+    added.compacted = compacted;
     return added;
   }
   // A library item (blocks from 0,0) into a screen: at a dropped point, into the selected box, or centred in the
@@ -669,6 +772,7 @@ const CanvasUI = (() => {
     if (!opts.keepGroupFocus) groupFocus = null;
     if (groupFocus && f && !(blockIds || []).some(id => { const b = Canvas.blockById(f, id); return b && b.group === groupFocus; })) groupFocus = null;
     sel.frameId = f ? f.id : null; sel.blockIds = f ? expandGroups(f, blockIds || []) : []; sel.frameIds = f ? [f.id] : [];
+    if (penEdit && !(sel.frameId === penEdit.f.id && sel.blockIds.length === 1 && sel.blockIds[0] === penEdit.b.id)) penEdit = null;
     afterSelect();
   }
   function selectFrames(ids) {
@@ -755,6 +859,30 @@ const CanvasUI = (() => {
       if (meta && k === 'y' && !typing) { e.preventDefault(); redo(); return; }
       if (meta && k === 'l') { e.preventDefault(); copyLink(); return; }
       if (typing) return;
+      const code = e.code || ''; const ctrlAlt = e.ctrlKey && e.altKey && !e.metaKey;
+      // ---- Figma's shortcuts, where the model allows ----
+      if (((e.metaKey && e.ctrlKey) || ctrlAlt) && code === 'KeyM') { e.preventDefault(); toggleMask(); return; }
+      if (ctrlAlt && (code === 'KeyH' || code === 'KeyV')) { e.preventDefault(); distributeSel(code === 'KeyH' ? 'h' : 'v'); return; }
+      if (ctrlAlt && code === 'KeyT') { e.preventDefault(); tidySel(); return; }
+      if (meta && e.shiftKey && code === 'KeyH') { e.preventDefault(); toggleHidden(); return; }
+      if (meta && e.shiftKey && code === 'KeyL') { e.preventDefault(); toggleLock(); return; }
+      if (meta && e.shiftKey && code === 'KeyE') { e.preventDefault(); $('cvExport').setAttribute('open', ''); return; }
+      if (meta && e.shiftKey && (code === 'Comma' || code === 'Period')) { e.preventDefault(); fontSizeStep(code === 'Period' ? 1 : -1); return; }
+      if (meta && e.altKey && code === 'KeyC') { e.preventDefault(); copyStyle(); return; }
+      if (meta && e.altKey && code === 'KeyV') { e.preventDefault(); pasteStyle(); return; }
+      if (meta && e.altKey && code === 'KeyK') { e.preventDefault(); if (env.saveToLibrary) env.saveToLibrary(); return; }
+      if (meta && e.altKey && (code === 'KeyL' || code === 'KeyT' || code === 'KeyR')) { e.preventDefault(); textAlign(code === 'KeyL' ? 'left' : code === 'KeyT' ? 'center' : 'right'); return; }
+      if (meta && (code === 'BracketLeft' || code === 'BracketRight')) { e.preventDefault(); reorderSel(e.altKey ? (code === 'BracketLeft' ? 'back' : 'front') : (code === 'BracketLeft' ? -1 : 1)); return; }
+      if (meta && !e.shiftKey && !e.altKey && code === 'KeyR') { e.preventDefault(); renameSel(); return; }
+      if (meta && code === 'Backslash') { e.preventDefault(); togglePanels(); return; }
+      if (meta && code === 'Slash') { e.preventDefault(); showShortcuts(); return; }
+      if (meta && !e.shiftKey && !e.altKey && (code === 'KeyB' || code === 'KeyI' || code === 'KeyU')) { if (textStyleToggle(code === 'KeyB' ? 'bold' : code === 'KeyI' ? 'italic' : 'underline')) { e.preventDefault(); return; } }
+      if (!meta && e.altKey && !e.shiftKey && /^Key[ADWSHV]$/.test(code)) { e.preventDefault(); alignSel({ KeyA: 'left', KeyD: 'right', KeyW: 'top', KeyS: 'bottom', KeyH: 'hcenter', KeyV: 'vcenter' }[code]); return; }
+      if (!meta && !e.altKey && e.shiftKey && (code === 'KeyH' || code === 'KeyV')) { e.preventDefault(); flipSel(code === 'KeyH' ? 'x' : 'y'); return; }
+      if (!meta && !e.altKey && e.shiftKey && code === 'Slash') { e.preventDefault(); showShortcuts(); return; }
+      if (!meta && !e.altKey && code === 'KeyN') { e.preventDefault(); stepFrame(e.shiftKey ? -1 : 1); return; }
+      if (k === 'tab' && !meta && !e.altKey && selBlocks().length) { e.preventDefault(); stepSibling(e.shiftKey ? -1 : 1); return; }
+      if (!meta && !e.altKey && !e.shiftKey && /^Digit[0-9]$/.test(code) && opacityDigit(+code.slice(5))) { e.preventDefault(); return; }
       if (meta && k === 'd') { e.preventDefault(); duplicateSelection(); return; }
       if (meta && k === 'c') { if (copySelection()) e.preventDefault(); return; }
       if (meta && k === 'x') { if (copySelection()) { e.preventDefault(); deleteSelection(); } return; }
@@ -763,11 +891,12 @@ const CanvasUI = (() => {
       if (meta && k === 'g') { e.preventDefault(); if (e.shiftKey) ungroupSelection(); else groupSelection(); return; }
       if (e.shiftKey && !meta && k === 'a') { e.preventDefault(); if (e.altKey) removeAutoLayout(); else addAutoLayout(); return; }
       if (meta && k === 'a') { e.preventDefault(); const f = selFrame(); if (f && selFrames().length === 1) select(f.id, f.layout.blocks.filter(b => !b.hidden && !b.locked).map(b => b.id)); else selectFrames(doc.frames.filter(x => !x.hidden).map(x => x.id)); return; }
-      if (e.shiftKey && !meta && k === 'n') { e.preventDefault(); createFrame({ center: true }); return; }
       if (e.shiftKey && !meta && k === 'g') { e.preventDefault(); const fs = selFrames(); const on = !fs.every(f => f.showGrid); fs.forEach(f => { f.showGrid = on; rerenderFrame(f); }); persist(); return; }
       if (e.shiftKey && !meta && k === 'r') { e.preventDefault(); const fs = selFrames(); if (fs.length) { mutate(() => Canvas.tidy(fs, fs.length > 3 ? 'grid' : 'row')); env.toast('Tidied'); } return; }
       if (k === 'enter') {
         e.preventDefault(); const f = selFrame(); const bs = selBlocks();
+        if (penDraft) { penFinish(); return; }
+        if (f && bs.length === 1 && bs[0].kind === 'vector' && bs[0].pen && !penEdit) { penEditStart(f, bs[0]); return; }
         if (f && bs.length === 1 && (bs[0].kind === 'text' || bs[0].kind === 'button' || bs[0].kind === 'list')) startEdit(f, bs[0]);
         else if (f && bs.length && e.shiftKey) { const par = bs[0].parent && Canvas.blockById(f, bs[0].parent); if (par) select(f.id, [par.id]); else select(f.id, []); }
         else if (f && bs.length && bs.every(b => b.kind === 'box')) { const I = Auto.index(f); const kids = bs.flatMap(b => Auto.childrenOf(I, b.id)).filter(k => !k.hidden); if (kids.length) select(f.id, kids.map(k => k.id)); }
@@ -777,18 +906,22 @@ const CanvasUI = (() => {
       }
       if (!meta && !e.altKey) {
         if (k === 'v') return setTool('select'); if (k === 'h') return setTool('hand'); if (k === 't') return setTool('text'); if (k === 'r') return setTool('rect'); if (k === 'o') return setTool('ellipse'); if (k === 'f') return setTool('frame'); if (k === 'i') return setTool('image');
+        if (k === 'p') return setTool('pen'); if (k === 'l') return setTool('line'); if (k === 'c') return setTool('comment');
       }
       if (k === 'escape') {
         const f = selFrame();
+        if (thread || commentDraft) { closeThread(); return; }
+        if (penDraft) { penFinish(); return; }
+        if (penEdit) { penEditEnd(); return; }
         if (tool !== 'select') setTool('select');
         else if (groupFocus && f) { const g = groupFocus; groupFocus = null; select(f.id, f.layout.blocks.filter(b => b.group === g).map(b => b.id)); }
         else if (sel.blockIds.length) { const b = selBlocks()[0]; const par = b && b.parent && Canvas.blockById(f, b.parent); select(sel.frameId, par ? [par.id] : []); } else select(null, []);
         return;
       }
-      if (k === 'delete' || k === 'backspace') { e.preventDefault(); deleteSelection(); return; }
+      if (k === 'delete' || k === 'backspace') { e.preventDefault(); if (penEdit && penDeletePoint()) return; deleteSelection(); return; }
       if (e.shiftKey && !meta && e.code === 'Digit0') { zoomTo(1); return; }
       if (e.shiftKey && !meta && e.code === 'Digit1') { fit(); return; } if (e.shiftKey && !meta && e.code === 'Digit2') { const fs = selFrames(); if (fs.length) fitTo(fs); else fit(); return; }
-      if (k === '0' && !meta) { fit(); return; } if ((k === '=' || k === '+') && !meta) { zoomBy(1.2); return; } if (k === '-' && !meta) { zoomBy(1 / 1.2); return; }
+      if (k === '0' && !meta && !e.shiftKey) { fit(); return; } if ((k === '=' || k === '+') && !meta) { zoomBy(1.2); return; } if (k === '-' && !meta) { zoomBy(1 / 1.2); return; }
       if (k.startsWith('arrow')) {
         const fs = selFrames(); const f = selFrame(); const bs = selBlocks().filter(b => !b.locked); if (!fs.length) return; e.preventDefault();
         const step = e.shiftKey ? (f ? f.layout.grid.unit : 8) : 1; const dx = k === 'arrowleft' ? -step : k === 'arrowright' ? step : 0, dy = k === 'arrowup' ? -step : k === 'arrowdown' ? step : 0;
@@ -813,9 +946,9 @@ const CanvasUI = (() => {
       try { const j = JSON.parse(text); if (j && j.lgClip && /^(blocks|frame|frames)$/.test(j.lgClip.type)) { e.preventDefault(); pasteClipboard(j.lgClip); } } catch { }
     });
   }
-  function setTool(t) { tool = t; document.querySelectorAll('#cvTools [data-tool]').forEach(b => b.classList.toggle('on', b.dataset.tool === t)); stage().style.cursor = t === 'hand' ? 'grab' : t === 'select' ? 'default' : 'crosshair'; }
-  function undo() { if (editing) endEdit(); hover = null; const d = hist.undo(doc); if (d) { doc = undoMerge ? undoMerge(doc, d) : d; validateSelection(); persist(); renderAll(); } }
-  function redo() { if (editing) endEdit(); hover = null; const d = hist.redo(doc); if (d) { doc = undoMerge ? undoMerge(doc, d) : d; validateSelection(); persist(); renderAll(); } }
+  function setTool(t) { if (tool === 'pen' && t !== 'pen' && penDraft) penFinish(); tool = t; document.querySelectorAll('#cvTools [data-tool]').forEach(b => b.classList.toggle('on', b.dataset.tool === t)); stage().style.cursor = t === 'hand' ? 'grab' : t === 'select' ? 'default' : t === 'comment' ? 'copy' : 'crosshair'; if (t !== 'select' && penEdit) penEditEnd(); }
+  function undo() { if (editing) endEdit(); hover = null; penDraft = null; penEdit = null; const d = hist.undo(doc); if (d) { const keep = doc.comments; doc = undoMerge ? undoMerge(doc, d) : d; doc.comments = keep; validateSelection(); persist(); renderAll(); } }
+  function redo() { if (editing) endEdit(); hover = null; penDraft = null; penEdit = null; const d = hist.redo(doc); if (d) { const keep = doc.comments; doc = undoMerge ? undoMerge(doc, d) : d; doc.comments = keep; validateSelection(); persist(); renderAll(); } }
   function deleteSelection() {
     const fs = selFrames(); if (!fs.length) return; hist.push(doc);
     const f = selFrame();
@@ -913,6 +1046,192 @@ const CanvasUI = (() => {
     select(f.id, out.map(b => b.id)); rerenderFrame(f); renderLayers(); persist(); updateUndo();
   }
 
+  // ---- Commands behind the shortcuts -----------------------------------------------------------------------------
+  const done = f => { if (f) rerenderFrame(f); renderLayers(); if (!propsFocused()) renderProps(); drawOverlay(); persist(); updateUndo(); };
+  function toggleHidden() {
+    const f = selFrame(); const bs = selBlocks();
+    if (f && bs.length) { hist.push(doc); const on = !bs.every(b => b.hidden); bs.forEach(b => { b.hidden = on; }); done(f); return; }
+    const fs = selFrames(); if (!fs.length) return; hist.push(doc); const on = !fs.every(x => x.hidden); fs.forEach(x => { x.hidden = on; rerenderFrame(x); }); done(null);
+  }
+  function toggleLock() {
+    const f = selFrame(); const bs = selBlocks();
+    if (f && bs.length) { hist.push(doc); const on = !bs.every(b => b.locked); bs.forEach(b => { b.locked = on; }); done(null); env.toast(on ? 'Locked' : 'Unlocked'); return; }
+    const fs = selFrames(); if (!fs.length) return; hist.push(doc); const on = !fs.every(x => x.locked); fs.forEach(x => { x.locked = on; }); done(null); env.toast(on ? 'Locked' : 'Unlocked');
+  }
+  function renameSel() { renderProps(); const inp = $('cvProps').querySelector(selBlocks().length ? 'input[data-p="label"]' : 'input[data-f="name"]'); if (inp) { inp.focus(); inp.select(); } }
+  function reorderSel(dir) { const f = selFrame(); const bs = selBlocks(); if (!f || !bs.length) return; hist.push(doc); bs.forEach(b => Canvas.reorder(f, b, dir)); done(f); }
+  const framesGeo = fs => fs.map(x => ({ f: x, x: x.x, y: x.y, w: FW(x), h: FH(x) }));
+  function alignSel(mode) {
+    const f = selFrame(); const bs = selBlocks();
+    if (f && bs.length) { hist.push(doc); Canvas.align(f, bs, mode); done(f); liveProps(); return; }
+    const fs = selFrames(); if (fs.length < 2) return; hist.push(doc);
+    const b = Canvas.framesBounds(fs);
+    for (const x of fs) { if (mode === 'left') x.x = b.x; if (mode === 'right') x.x = b.x + b.w - FW(x); if (mode === 'hcenter') x.x = Math.round(b.x + (b.w - FW(x)) / 2); if (mode === 'top') x.y = b.y; if (mode === 'bottom') x.y = b.y + b.h - FH(x); if (mode === 'vcenter') x.y = Math.round(b.y + (b.h - FH(x)) / 2); positionFrame(x); }
+    done(null); liveProps();
+  }
+  function distributeSel(axis) {
+    const f = selFrame(); const bs = selBlocks();
+    if (f && bs.length >= 3) { hist.push(doc); Canvas.distribute(bs, axis); done(f); return; }
+    const fs = selFrames(); if (fs.length < 3) { env.toast('Select three or more to distribute'); return; }
+    hist.push(doc); const g = framesGeo(fs); Canvas.distribute(g, axis); for (const p of g) { p.f.x = p.x; p.f.y = p.y; positionFrame(p.f); } done(null);
+  }
+  function tidySel() { const fs = selFrames(); if (!fs.length) return; mutate(() => Canvas.tidy(fs, fs.length > 3 ? 'grid' : 'row')); env.toast('Tidied'); }
+  function flipSel(axis) { const f = selFrame(); const bs = selBlocks(); if (!f || !bs.length) return; hist.push(doc); const k = axis === 'x' ? 'flipX' : 'flipY'; for (const b of bs) { if (b[k]) delete b[k]; else b[k] = true; } done(f); }
+  // Copy and paste a block's look (fill, stroke, shadow, radius, opacity, type) onto others.
+  let styleClip = null; const STYLE_KEYS = ['fill', 'gradient', 'fillAlpha', 'alpha', 'stroke', 'shadow', 'radius', 'opacity', 'color', 'decoration'];
+  function copyStyle() { const bs = selBlocks(); if (bs.length !== 1) { env.toast('Select one block to copy its style'); return; } const b = bs[0]; styleClip = {}; for (const k of STYLE_KEYS) if (b[k] !== undefined) styleClip[k] = Canvas.clone(b[k]); if (b.font) styleClip.font = Canvas.clone(b.font); env.toast('Style copied (⌥⌘V pastes it)'); }
+  function pasteStyle() {
+    const f = selFrame(); const bs = selBlocks(); if (!styleClip || !f || !bs.length) { env.toast(styleClip ? 'Select blocks to paste the style onto' : 'Copy a style first (⌥⌘C)'); return; }
+    hist.push(doc);
+    for (const b of bs) {
+      const pic = b.kind === 'image' || b.kind === 'logo' || b.kind === 'icon';
+      for (const [k, v] of Object.entries(styleClip)) {
+        if (k === 'font') { if (b.font) b.font = { ...b.font, ...v }; continue; }
+        if (k === 'color' && b.kind !== 'button') continue; if (pic && (k === 'fill' || k === 'gradient' || k === 'fillAlpha' || k === 'alpha')) continue;
+        b[k] = Canvas.clone(v); if (k === 'fill') { delete b.fillToken; if (!('gradient' in styleClip)) delete b.gradient; }
+      }
+      if (b.font) Canvas.refit(b);
+    }
+    done(f); env.toast('Style pasted');
+  }
+  function textBlocks() { const f = selFrame(); const bs = selBlocks().filter(b => b.font && (b.kind === 'text' || b.kind === 'list' || b.kind === 'button')); return f && bs.length ? { f, bs } : null; }
+  function textStyleToggle(what) {
+    const t = textBlocks(); if (!t) return false; hist.push(doc);
+    for (const b of t.bs) {
+      if (what === 'bold') { const fam = String(b.font.family).split(',')[0].replace(/["']/g, '').trim(); const ws = Brand.fontWeights(fam); const want = b.font.weight >= 600 ? 400 : 700; b.font.weight = ws.includes(want) ? want : ws.reduce((p, c) => Math.abs(c - want) < Math.abs(p - want) ? c : p, ws[0]); }
+      else if (what === 'italic') b.font.style = b.font.style === 'italic' ? 'normal' : 'italic';
+      else if (b.decoration === 'underline') delete b.decoration; else b.decoration = 'underline';
+      Canvas.refit(b);
+    }
+    done(t.f); return true;
+  }
+  function fontSizeStep(dir) { const t = textBlocks(); if (!t) return; hist.push(doc); for (const b of t.bs) { const s = b.font.size; const step = s >= 48 ? 4 : s >= 24 ? 2 : 1; b.font.size = Math.max(4, s + dir * step); Canvas.refit(b); } done(t.f); }
+  function textAlign(a) { const t = textBlocks(); if (!t) return; hist.push(doc); for (const b of t.bs) if (b.kind === 'text') { b.align = a; Canvas.refit(b); } done(t.f); }
+  // 1…9, 0 set opacity 10%…90%, 100%; two digits in a row (4 then 5) make 45%.
+  let opAt = 0, opPrev = -1;
+  function opacityDigit(d) {
+    const f = selFrame(); const bs = selBlocks(); if (!f || !bs.length) return false;
+    const t = performance.now(); let v; if (t - opAt < 450 && opPrev >= 0) { v = (opPrev * 10 + d) / 100; opPrev = -1; } else { v = d === 0 ? 1 : d / 10; opPrev = d; } opAt = t;
+    hist.push(doc); for (const b of bs) b.opacity = v; done(f); env.toast(`Opacity ${Math.round(v * 100)}%`); return true;
+  }
+  function stepSibling(dir) { const f = selFrame(); const bs = selBlocks(); if (!f || !bs.length) return; const I = Auto.index(f); const cur = bs[bs.length - 1]; const sibs = Auto.childrenOf(I, I.par.get(cur.id) || '').filter(b => !b.hidden); if (sibs.length < 2) return; const i = sibs.indexOf(cur); select(f.id, [sibs[(i + dir + sibs.length) % sibs.length].id], { keepGroupFocus: true }); }
+  function stepFrame(dir) { const fs = doc.frames.filter(f => !f.hidden).slice().sort((a, b) => (a.y - b.y) || (a.x - b.x)); if (!fs.length) return; const cur = selFrame(); let i = cur ? fs.indexOf(cur) : -1; i = i < 0 ? (dir > 0 ? 0 : fs.length - 1) : (i + dir + fs.length) % fs.length; select(fs[i].id, []); fitTo([fs[i]]); }
+  function togglePanels() { const on = $('canvasView').classList.toggle('zen'); env.toast(on ? 'Panels hidden · ⌘\\ shows them again' : 'Panels shown'); requestAnimationFrame(drawOverlay); }
+  // A mask: one block's shape clips the layers painted above it (its group, or the box it is in). With several
+  // blocks selected, the bottom one becomes the mask and they are kept together in a box.
+  function toggleMask() {
+    const f = selFrame(); if (!f) return; const bs = Auto.topmost(f, selBlocks()).filter(b => !['text', 'list', 'button'].includes(b.kind));
+    if (!bs.length) { env.toast('Select a shape (with the layers it should clip above it) and press ⌃⌘M'); return; }
+    hist.push(doc);
+    if (bs.length === 1) { const b = bs[0]; if (b.mask) { delete b.mask; env.toast('Mask removed'); } else { b.mask = true; env.toast(`${label(b)} is now a mask: it clips the layers above it`); } }
+    else {
+      const I = Auto.index(f); const order = Auto.paintOrder(f, I); bs.sort((a, b) => order.indexOf(a) - order.indexOf(b)); const m = bs[0];
+      const same = bs.every(b => (I.par.get(b.id) || '') === (I.par.get(m.id) || ''));
+      const box = same ? Auto.wrap(f, bs, false) : null; m.mask = true; if (box) { box.label = 'Mask group'; select(f.id, [box.id]); }
+      env.toast(`${label(m)} masks ${bs.length - 1} layer${bs.length > 2 ? 's' : ''}`);
+    }
+    done(f);
+  }
+  // ---- Comments: pins on screens, threads in a popover ----------------------------------------------------------------
+  // doc.comments: [{id, frame, x, y (in the screen), by, byName, at, text, resolved, replies: [{id, by, byName, at, text}]}].
+  // They travel with the canvas (multiplayer, projects, files) and are never part of undo.
+  const comments = () => Array.isArray(doc.comments) ? doc.comments : (doc.comments = []);
+  const who = () => ({ id: (env.uid && env.uid()) || (env.me && env.me().id) || 'anon', name: (env.me && env.me().name) || '' });
+  const initials = s => String(s || '').trim().split(/\s+/).slice(0, 2).map(w => w[0] || '').join('').toUpperCase() || '?';
+  function nameOf(c) { if (c.byName) return c.byName; if (names.has(c.by)) return names.get(c.by) || 'Someone'; return 'Someone'; }
+  const when = t => { if (!t) return ''; const d = Date.now() - t; if (d < 60e3) return 'just now'; if (d < 3600e3) return Math.round(d / 60e3) + ' min ago'; if (d < 86400e3) return Math.round(d / 3600e3) + ' h ago'; return new Date(t).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }); };
+  let lookingUp = false;
+  function lookupNames(list) {
+    if (!env.people || lookingUp) return; const ids = [...new Set(list.flatMap(c => [c, ...(c.replies || [])]).filter(x => !x.byName && x.by && !names.has(x.by) && /^u_/.test(x.by)).map(x => x.by))].slice(0, 40);
+    if (!ids.length) return; lookingUp = true;
+    Promise.resolve(env.people(ids)).then(ps => { for (const id of ids) names.set(id, (ps && ps[id] && ps[id].name) || ''); }).catch(() => { for (const id of ids) names.set(id, ''); }).finally(() => { lookingUp = false; renderThread(); renderPins(); });
+  }
+  function commentsChanged() { if (!active) return; if (thread && !comments().some(c => c.id === thread)) thread = null; renderPins(); renderThread(); updateCommentsButton(); }
+  function saveComments() { persist({ full: true, frames: [] }); updateCommentsButton(); }
+  function openCommentDraft(f, lp) { thread = null; commentDraft = { f, x: Math.round(lp.x), y: Math.round(lp.y) }; renderPins(); renderThread(); const ta = $('cvThread').querySelector('textarea'); if (ta) ta.focus(); }
+  function postComment(text) {
+    const d = commentDraft; text = String(text || '').trim(); if (!d || !text) return;
+    const me = who(); const c = { id: 'c' + Canvas.uid(), frame: d.f.id, x: d.x, y: d.y, by: me.id, byName: me.name, at: Date.now(), text: text.slice(0, 4000), resolved: false, replies: [] };
+    comments().push(c); commentDraft = null; thread = c.id; emit('action', 'comment.add'); saveComments(); renderPins(); renderThread(); setTool('select');
+  }
+  function replyTo(id, text) { const c = comments().find(x => x.id === id); text = String(text || '').trim(); if (!c || !text) return; const me = who(); (c.replies = c.replies || []).push({ id: 'r' + Canvas.uid(), by: me.id, byName: me.name, at: Date.now(), text: text.slice(0, 4000) }); if (c.resolved) c.resolved = false; emit('action', 'comment.reply'); saveComments(); renderThread(); renderPins(); }
+  function resolveThread(id, on) { const c = comments().find(x => x.id === id); if (!c) return; c.resolved = on !== false; c.resolvedAt = Date.now(); emit('action', c.resolved ? 'comment.resolve' : 'comment.reopen'); saveComments(); if (c.resolved && !showResolved) thread = null; renderPins(); renderThread(); }
+  function deleteComment(id, rid) { const list = comments(); const i = list.findIndex(x => x.id === id); if (i < 0) return; if (rid) { list[i].replies = (list[i].replies || []).filter(r => r.id !== rid); } else { list.splice(i, 1); if (thread === id) thread = null; } saveComments(); renderPins(); renderThread(); }
+  function openThread(id) { commentDraft = null; thread = id; const c = comments().find(x => x.id === id); const f = c && Canvas.frameById(doc, c.frame); if (f && !inView(f)) fitTo([f]); renderPins(); renderThread(); }
+  function closeThread() { if (!thread && !commentDraft) return; thread = null; commentDraft = null; renderPins(); renderThread(); }
+  function pinPos(c) { const f = Canvas.frameById(doc, c.frame); if (!f || f.hidden) return null; return toScreen(f.x + c.x, f.y + c.y); }
+  function renderPins() {
+    const host = $('cvPins'); if (!host || !doc) return;
+    if (!pinsVisible && !thread && !commentDraft) { host.innerHTML = ''; return; }
+    const list = comments().filter(c => (showResolved || !c.resolved || c.id === thread) && (pinsVisible || c.id === thread)); lookupNames(list);
+    const parts = list.map((c, i) => { const p = pinPos(c); if (!p) return ''; const n = (c.replies || []).length; return `<button type="button" class="cv-pin${c.id === thread ? ' on' : ''}${c.resolved ? ' resolved' : ''}" data-pin="${esc(c.id)}" style="left:${p.x}px;top:${p.y}px" title="${esc(nameOf(c))}: ${esc(c.text.slice(0, 80))}${n ? ` · ${n} repl${n > 1 ? 'ies' : 'y'}` : ''}">${esc(initials(nameOf(c)))}</button>`; });
+    if (commentDraft) { const p = toScreen(commentDraft.f.x + commentDraft.x, commentDraft.f.y + commentDraft.y); parts.push(`<span class="cv-pin draft" style="left:${p.x}px;top:${p.y}px">+</span>`); }
+    host.innerHTML = parts.join('');
+  }
+  function renderThread() {
+    const el = $('cvThread'); if (!el) return;
+    const c = thread ? comments().find(x => x.id === thread) : null;
+    if (!c && !commentDraft) { el.hidden = true; el.innerHTML = ''; return; }
+    const me = who(); const canWrite = !(env.canComment && env.canComment() === false);
+    const msg = (m, root) => `<div class="msg"><div class="who"><b>${esc(nameOf(m))}</b><span>${esc(when(m.at))}</span>${m.by === me.id || !root ? `<button type="button" class="x" data-cdel="${esc(c.id)}" data-crep="${root ? '' : esc(m.id)}" title="Delete">✕</button>` : ''}</div><div class="txt">${esc(m.text)}</div></div>`;
+    el.innerHTML = c ? `<div class="th-head"><span class="hint">${esc(Canvas.frameById(doc, c.frame)?.name || 'Screen')}</span><span class="grow"></span>${canWrite ? `<button type="button" class="btn small ${c.resolved ? 'ghost' : ''}" data-cres="${esc(c.id)}" data-on="${c.resolved ? '0' : '1'}">${c.resolved ? 'Reopen' : '✓ Resolve'}</button>` : ''}<button type="button" class="btn ghost icon small" data-cclose aria-label="Close">✕</button></div>
+        ${msg(c, true)}${(c.replies || []).map(r => msg(r, false)).join('')}
+        ${canWrite ? `<textarea rows="2" placeholder="Reply… (⌘Enter sends)" data-creply="${esc(c.id)}"></textarea><div class="cv-row"><button type="button" class="btn small primary" data-csend="${esc(c.id)}">Reply</button></div>` : (env.claudeComposer ? `<div class="cv-row"><button type="button" class="btn small" data-cclaude="${esc(c.frame)}">Comment in claude.ai</button></div>` : '<p class="hint">Sign in with edit access to reply.</p>')}`
+      : `<div class="th-head"><b>New comment</b><span class="grow"></span><button type="button" class="btn ghost icon small" data-cclose aria-label="Close">✕</button></div>
+        ${canWrite ? `<textarea rows="3" placeholder="Say what should change, or ask a question… (⌘Enter posts)" data-cnew></textarea><div class="cv-row"><button type="button" class="btn small primary" data-cpost>Post</button><button type="button" class="btn small ghost" data-cclose>Cancel</button></div>` : (env.claudeComposer ? `<p class="hint">Comments here need edit access. You can comment through claude.ai instead.</p><div class="cv-row"><button type="button" class="btn small primary" data-cclaude="${esc(commentDraft.f.id)}">Comment in claude.ai</button></div>` : '<p class="hint">Comments need edit access to this canvas.</p>')}`;
+    el.hidden = false; positionThread();
+  }
+  function positionThread() {
+    const el = $('cvThread'); if (!el || el.hidden) return; const r = stage().getBoundingClientRect();
+    const c = thread ? comments().find(x => x.id === thread) : null; const p = c ? pinPos(c) : commentDraft ? toScreen(commentDraft.f.x + commentDraft.x, commentDraft.f.y + commentDraft.y) : null; if (!p) { el.hidden = true; return; }
+    const w = el.offsetWidth || 300, h = el.offsetHeight || 160; let x = p.x + 18, y = p.y - 12; if (x + w > r.width - 8) x = p.x - w - 18; if (y + h > r.height - 8) y = Math.max(8, r.height - h - 8); if (y < 8) y = 8; if (x < 8) x = 8;
+    el.style.left = x + 'px'; el.style.top = y + 'px';
+  }
+  function updateCommentsButton() { const b = $('cvComments'); if (!b) return; const open = comments().filter(c => !c.resolved).length; b.textContent = open ? `💬 ${open}` : '💬'; b.classList.toggle('on', !pinsVisible ? false : open > 0); b.title = open ? `${open} open comment${open > 1 ? 's' : ''} · C to add one` : 'Comments · C to add one'; }
+  function renderCommentsList() {
+    const el = $('cvCommentList'); if (!el) return; const list = comments().slice().sort((a, b) => (a.resolved - b.resolved) || (b.at - a.at));
+    el.innerHTML = `<div class="cv-row wrap"><label class="check"><input type="checkbox" data-cshow ${pinsVisible ? 'checked' : ''}> Show pins</label><label class="check"><input type="checkbox" data-cresolved ${showResolved ? 'checked' : ''}> Show resolved</label></div>` +
+      (list.length ? list.map(c => `<button type="button" class="cv-cmt${c.resolved ? ' resolved' : ''}" data-copen="${esc(c.id)}"><span class="cv-pin tiny">${esc(initials(nameOf(c)))}</span><span class="grow"><b>${esc(nameOf(c))}</b> <span class="dim">${esc(when(c.at))} · ${esc(Canvas.frameById(doc, c.frame)?.name || '')}</span><br>${esc(c.text.slice(0, 90))}${(c.replies || []).length ? ` <span class="dim">· ${c.replies.length} repl${c.replies.length > 1 ? 'ies' : 'y'}</span>` : ''}</span></button>`).join('') : '<p class="hint">No comments yet. Press <b>C</b> and click on a screen to leave one.</p>');
+  }
+  function bindComments() {
+    const th = $('cvThread'); if (!th) return;
+    th.addEventListener('pointerdown', e => e.stopPropagation()); th.addEventListener('dblclick', e => e.stopPropagation()); th.addEventListener('wheel', e => e.stopPropagation());
+    th.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Escape') { closeThread(); return; } if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { const ta = e.target; if (ta.hasAttribute('data-cnew')) postComment(ta.value); else if (ta.dataset.creply) replyTo(ta.dataset.creply, ta.value); } });
+    th.addEventListener('click', e => {
+      const t = e.target.closest('button'); if (!t) return;
+      if (t.hasAttribute('data-cclose')) { closeThread(); return; }
+      if (t.hasAttribute('data-cpost')) { postComment(th.querySelector('[data-cnew]').value); return; }
+      if (t.dataset.csend) { const ta = th.querySelector(`[data-creply="${CSS.escape(t.dataset.csend)}"]`); replyTo(t.dataset.csend, ta ? ta.value : ''); return; }
+      if (t.dataset.cres) { resolveThread(t.dataset.cres, t.dataset.on === '1'); return; }
+      if (t.dataset.cdel) { if (t.dataset.crep || confirm('Delete this comment and its replies?')) deleteComment(t.dataset.cdel, t.dataset.crep || null); return; }
+      if (t.dataset.cclaude && env.claudeComposer) { const el = $('world').querySelector(`.cv-frame[data-id="${CSS.escape(t.dataset.cclaude)}"]`); env.claudeComposer(el || stage()); closeThread(); return; }
+    });
+    $('cvPins').addEventListener('pointerdown', e => { const p = e.target.closest('[data-pin]'); if (p) { e.stopPropagation(); e.preventDefault(); openThread(p.dataset.pin); } });
+    const menu = $('cvCommentsMenu'); if (menu) { menu.addEventListener('toggle', () => { if (menu.open) renderCommentsList(); }); }
+    const list = $('cvCommentList'); if (list) {
+      list.addEventListener('change', e => { if (e.target.hasAttribute('data-cshow')) { pinsVisible = e.target.checked; renderPins(); updateCommentsButton(); } if (e.target.hasAttribute('data-cresolved')) { showResolved = e.target.checked; renderPins(); } });
+      list.addEventListener('click', e => { const b = e.target.closest('[data-copen]'); if (!b) return; if (menu) menu.removeAttribute('open'); const c = comments().find(x => x.id === b.dataset.copen); if (c) { const f = Canvas.frameById(doc, c.frame); if (f) { select(f.id, []); fitTo([f]); } openThread(c.id); } });
+    }
+    const km = $('shortcutsModal'); if (km) { km.addEventListener('click', e => { if (e.target === km || e.target.closest('[data-keys-close]')) km.hidden = true; }); }
+  }
+  // ---- Shortcuts sheet ----------------------------------------------------------------------------------------------
+  const MAC = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+  const keyLabel = s => MAC ? s : s.replace(/⌘/g, 'Ctrl+').replace(/⌥/g, 'Alt+').replace(/⇧/g, 'Shift+').replace(/⌃/g, 'Ctrl+').replace(/\+(?=\+|$| )/g, '').replace(/\+ /g, ' ');
+  const SHORTCUTS = [
+    ['Tools', [['V', 'Select'], ['H · hold Space', 'Hand (pan)'], ['F', 'Frame: click to place, drag to draw'], ['T', 'Text'], ['R', 'Rectangle'], ['O', 'Ellipse'], ['L', 'Line (drag; ⇧ for 45°)'], ['P', 'Pen: click for corners, drag for curves, click the first point to close'], ['I', 'Image'], ['C', 'Comment']]],
+    ['View', [['⇧1 · 0', 'Fit everything'], ['⇧2', 'Fit the selection'], ['⇧0 · ⌘0', '100%'], ['⌘+ · ⌘−', 'Zoom in and out'], ['N · ⇧N', 'Next and previous screen'], ['Space', 'Quick Look at the selected screen'], ['⌘\\', 'Hide and show the panels'], ['⇧G', 'Grid overlay'], ['⌘/ · ?', 'This sheet']]],
+    ['Select', [['⌘A', 'Everything in the screen (or every screen)'], ['Tab · ⇧Tab', 'Next and previous sibling'], ['Enter', 'Edit text · into a group · a box\'s children · a path\'s points'], ['⇧Enter', 'Select the parent'], ['Esc', 'Up a level'], ['⌘ click', 'Deepest layer'], ['⇧ click · drag', 'Add to the selection · marquee']]],
+    ['Edit', [['⌘D', 'Duplicate'], ['⌥ drag', 'Duplicate while dragging'], ['⌘C · ⌘X · ⌘V', 'Copy, cut, paste'], ['⌥⌘C · ⌥⌘V', 'Copy and paste style'], ['⌘R', 'Rename'], ['⇧⌘H', 'Hide and show'], ['⇧⌘L', 'Lock and unlock'], ['⌘G · ⇧⌘G', 'Group and ungroup'], ['⌥⌘G', 'Put in a box'], ['⇧A · ⌥⇧A', 'Auto layout on and off'], ['⌃⌘M', 'Use as mask'], ['⌥⌘K', 'Save to the library'], ['⌘Z · ⇧⌘Z', 'Undo and redo'], ['Delete', 'Delete']]],
+    ['Arrange', [['Arrows · ⇧ arrows', 'Nudge by 1px · by a grid unit'], ['⌘] · ⌘[', 'Forward and backward'], ['⌥⌘] · ⌥⌘[', 'To the front and to the back'], ['⌥A · ⌥D · ⌥W · ⌥S', 'Align left, right, top, bottom'], ['⌥H · ⌥V', 'Center horizontally and vertically'], ['⌃⌥H · ⌃⌥V', 'Distribute horizontally and vertically'], ['⇧H · ⇧V', 'Flip horizontally and vertically'], ['⇧R · ⌃⌥T', 'Tidy the selected screens'], ['1 … 9 · 0', 'Opacity 10% … 90% · 100% (two digits for 45%)']]],
+    ['Text', [['⌘B · ⌘I · ⌘U', 'Bold, italic, underline'], ['⇧⌘. · ⇧⌘,', 'Bigger and smaller'], ['⌥⌘L · ⌥⌘T · ⌥⌘R', 'Align left, center, right']]],
+    ['Share', [['⌘L', 'Copy link'], ['⇧⌘E', 'Export'], ['⌘K', 'Agent']]],
+  ];
+  function showShortcuts() {
+    const m = $('shortcutsModal'); if (!m) return;
+    m.querySelector('.keys-body').innerHTML = SHORTCUTS.map(([g, rows]) => `<section><h4>${esc(g)}</h4><table>${rows.map(([k, w]) => `<tr><td class="keys">${k.split(' · ').map(x => `<kbd>${esc(keyLabel(x))}</kbd>`).join(' <span class="dim">or</span> ')}</td><td>${esc(w)}</td></tr>`).join('')}</table></section>`).join('');
+    m.hidden = false;
+  }
+
   // ---- Toolbar ------------------------------------------------------------------------------------------------
   function bindToolbar() {
     $('cvTools').addEventListener('click', e => { const b = e.target.closest('[data-tool]'); if (b) setTool(b.dataset.tool); });
@@ -987,7 +1306,7 @@ const CanvasUI = (() => {
   }
 
   // ---- Layers panel ----------------------------------------------------------------------------------------------
-  function label(b) { if (b.label) return b.label; if (b.kind === 'box') { const m = b.auto && b.auto.mode; return m === 'vertical' ? 'Stack ↓' : m === 'horizontal' ? (b.auto.wrap ? 'Stack ↩' : 'Stack →') : 'Box'; } if (b.kind === 'text') return `${b.role || 'text'} · ${Canvas.sourceText(b).slice(0, 28)}`; if (b.kind === 'list') return `${b.role || 'list'} · ${(b.items || []).length} items`; if (b.kind === 'button') return `button · ${b.text}`; if (b.kind === 'image') return 'image'; if (b.kind === 'field') return b.container ? 'card' : 'rectangle'; if (b.kind === 'shape') return b.shape; if (b.kind === 'icon') return `icon · ${b.name}`; if (b.kind === 'vector') return 'vector'; return b.kind; }
+  function label(b) { if (b.label) return b.label; if (b.kind === 'box') { const m = b.auto && b.auto.mode; return m === 'vertical' ? 'Stack ↓' : m === 'horizontal' ? (b.auto.wrap ? 'Stack ↩' : 'Stack →') : 'Box'; } if (b.kind === 'text') return `${b.role || 'text'} · ${Canvas.sourceText(b).slice(0, 28)}`; if (b.pen) return b.pen.closed ? 'Shape' : 'Path'; if (b.kind === 'list') return `${b.role || 'list'} · ${(b.items || []).length} items`; if (b.kind === 'button') return `button · ${b.text}`; if (b.kind === 'image') return 'image'; if (b.kind === 'field') return b.container ? 'card' : 'rectangle'; if (b.kind === 'shape') return b.shape; if (b.kind === 'icon') return `icon · ${b.name}`; if (b.kind === 'vector') return 'vector'; return b.kind; }
   const KIND_GLYPH = { text: 'T', list: '≡', button: '▭', image: '▣', field: '■', shape: '●', icon: '✦', logo: 'L', scrim: '▒', rule: '—', line: '—', badge: '①', vector: '✎', box: '⬚' };
   // One frame's layers as a tree: boxes fold; a stack lists its children in flow order (first on top, like the
   // code), anything else front-most first. A search shows matching layers flat.
@@ -996,7 +1315,7 @@ const CanvasUI = (() => {
     const row = (b, depth) => {
       const isBox = b.kind === 'box'; const kids = isBox ? Auto.childrenOf(I, b.id) : []; const open = isBox && kids.length && !folded.has(b.id);
       const stack = isBox && Auto.on(I.S(b.id)); const flow = Auto.inFlow(I, b);
-      return `<div class="cv-layer-row block ${sel.frameId === f.id && sel.blockIds.includes(b.id) ? 'on' : ''} ${b.hidden ? 'hidden-layer' : ''} ${b.group ? 'grouped' : ''}" data-frame="${esc(f.id)}" data-block="${esc(b.id)}" style="padding-left:${6 + depth * 14}px">${isBox && kids.length ? `<button class="fold" data-fold="${esc(b.id)}" title="${open ? 'Collapse' : 'Expand'}">${open ? '▾' : '▸'}</button>` : '<span class="fold-sp"></span>'}<span class="glyph${stack ? ' stack' : ''}">${stack ? (I.S(b.id).mode === 'horizontal' ? '⇥' : '⤓') : KIND_GLYPH[b.kind] || '·'}</span><span class="nm">${esc(label(b))}</span>${b.absolute && I.par.get(b.id) !== undefined && Auto.on(I.S(I.par.get(b.id))) ? '<span class="tag" title="Absolute position">A</span>' : ''}${b.group ? '<span class="tag" title="In a group">G</span>' : ''}${b.locked ? '<span class="dim">🔒</span>' : ''}<button class="eye ${b.hidden ? 'off' : ''}" data-eye="${esc(b.id)}" title="Toggle visibility">${b.hidden ? '◌' : '◉'}</button></div>`;
+      return `<div class="cv-layer-row block ${sel.frameId === f.id && sel.blockIds.includes(b.id) ? 'on' : ''} ${b.hidden ? 'hidden-layer' : ''} ${b.group ? 'grouped' : ''}" data-frame="${esc(f.id)}" data-block="${esc(b.id)}" style="padding-left:${6 + depth * 14}px">${isBox && kids.length ? `<button class="fold" data-fold="${esc(b.id)}" title="${open ? 'Collapse' : 'Expand'}">${open ? '▾' : '▸'}</button>` : '<span class="fold-sp"></span>'}<span class="glyph${stack ? ' stack' : ''}">${b.mask ? '◗' : stack ? (I.S(b.id).mode === 'horizontal' ? '⇥' : '⤓') : KIND_GLYPH[b.kind] || '·'}</span><span class="nm">${esc(label(b))}</span>${b.mask ? '<span class="tag" title="Mask: clips the layers above it">M</span>' : ''}${b.absolute && I.par.get(b.id) !== undefined && Auto.on(I.S(I.par.get(b.id))) ? '<span class="tag" title="Absolute position">A</span>' : ''}${b.group ? '<span class="tag" title="In a group">G</span>' : ''}${b.locked ? '<span class="dim">🔒</span>' : ''}<button class="eye ${b.hidden ? 'off' : ''}" data-eye="${esc(b.id)}" title="Toggle visibility">${b.hidden ? '◌' : '◉'}</button></div>`;
     };
     if (q) { for (const b of f.layout.blocks.slice().reverse()) if (label(b).toLowerCase().includes(q)) rows.push(row(b, 0)); return rows; }
     const walk = (pid, depth) => {
@@ -1031,6 +1350,9 @@ const CanvasUI = (() => {
       else if (e.shiftKey || e.metaKey || e.ctrlKey) { const ids = selFrames().map(f => f.id); selectFrames(ids.includes(fid) ? ids.filter(i => i !== fid) : [...ids, fid]); }
       else select(fid, []);
     });
+    // pointing at a layer shows it on the canvas
+    $('cvLayers').addEventListener('mouseover', e => { const row = e.target.closest('.cv-layer-row'); if (!row) return; const f = Canvas.frameById(doc, row.closest('[data-frame]').dataset.frame); if (!f) return; const b = row.dataset.block ? Canvas.blockById(f, row.dataset.block) : null; if (hover && hover.frame === f && hover.block === b && hover.fromLayers) return; hover = { frame: f, block: b, fromLayers: true }; drawOverlay(); });
+    $('cvLayers').addEventListener('mouseleave', () => { if (hover && hover.fromLayers) { hover = null; drawOverlay(); } });
     $('cvLayers').addEventListener('dblclick', e => { const row = e.target.closest('.cv-layer-row.frame'); if (!row) return; const f = Canvas.frameById(doc, row.closest('[data-frame]').dataset.frame); if (f) fitTo([f]); });
     $('cvSearch').addEventListener('input', renderLayers);
   }
@@ -1146,7 +1468,8 @@ const CanvasUI = (() => {
     return `<div class="cv-section"><h3>Canvas</h3><label class="cv-f"><span>Name</span><input type="text" data-doc="name" value="${esc(doc.name)}"></label>
       <div class="cv-row wrap">${btn('new-frame', '＋ New frame')}${btn('paste', 'Paste', clipboard ? '' : 'disabled')}${btn('select-all', 'Select all screens', doc.frames.length ? '' : 'disabled')}${env.openImport ? btn('import', 'Import…') : ''}</div>
       <p class="hint">${doc.frames.length} frames. Click a screen's name to select it; shift-click or drag a box around screens to select several and change them together. Drag a block onto another frame to move it there; ⌥ drag copies. Double-click text to edit it in place.</p>
-      <details class="cv-keys"><summary>Shortcuts</summary><p class="hint">V select · H hand · F frame (drag to draw) · ⇧N new frame · T text · R rectangle · O ellipse · I image · Enter edit text, enter a group or select a box's children · Esc up a level · ⌘-click deepest layer · ⇧A auto layout · ⌥⇧A remove auto layout · ⌥⌘G frame selection · ⌘G group · ⇧⌘G ungroup or unwrap · ⌘C ⌘X ⌘V copy cut paste · ⌘D duplicate · ⌘A select all · ⇧R tidy screens · ⇧G grid · ⇧1 fit all · ⇧2 fit selection · ⌘Z undo · ⌘L copy link · [ ] reorder · hold ⇧ while dragging to skip snapping.</p></details>
+      <div class="cv-row">${btn('shortcuts', 'Keyboard shortcuts · ?')}</div>
+      <details class="cv-keys" hidden><summary>Shortcuts</summary><p class="hint">V select · H hand · F frame (drag to draw) · ⇧N new frame · T text · R rectangle · O ellipse · I image · Enter edit text, enter a group or select a box's children · Esc up a level · ⌘-click deepest layer · ⇧A auto layout · ⌥⇧A remove auto layout · ⌥⌘G frame selection · ⌘G group · ⇧⌘G ungroup or unwrap · ⌘C ⌘X ⌘V copy cut paste · ⌘D duplicate · ⌘A select all · ⇧R tidy screens · ⇧G grid · ⇧1 fit all · ⇧2 fit selection · ⌘Z undo · ⌘L copy link · [ ] reorder · hold ⇧ while dragging to skip snapping.</p></details>
     </div>${paletteEditor()}`;
   }
   function exportSection(n) {
@@ -1335,6 +1658,8 @@ const CanvasUI = (() => {
       <div class="cv-row wrap">${btn('back', flow ? '↑ Earlier' : '↓ Back', `title="${flow ? 'Earlier in the stack' : 'Send backward'} ([)"`)}${btn('front', flow ? '↓ Later' : '↑ Front', `title="${flow ? 'Later in the stack' : 'Bring forward'} (])"`)}${btn('copy', 'Copy', 'title="Copy (⌘C)"')}${btn('paste', 'Paste', `title="Paste (⌘V)" ${clipboard ? '' : 'disabled'}`)}${btn('dup', 'Duplicate', 'title="Duplicate (⌘D)"')}${btn('del', 'Delete', 'title="Delete (⌫)"')}${b.group ? btn('ungroup', 'Ungroup') : ''}${b.kind === 'box' ? `<span class="cv-adv">${btn('unwrap', 'Unwrap ⇧⌘G')}</span>` : ''}</div>
       <label class="cv-check"><input type="checkbox" data-b="locked" ${b.locked ? 'checked' : ''}> Lock</label>
       <label class="cv-check"><input type="checkbox" data-b="decorative" ${b.decorative ? 'checked' : ''}> Decorative (not content)</label>
+      ${!['text', 'list', 'button'].includes(b.kind) ? `<label class="cv-check" title="Its shape clips the layers painted above it (in its group or box) · ⌃⌘M"><input type="checkbox" data-b="mask" ${b.mask ? 'checked' : ''}> Use as mask</label>` : ''}
+      ${b.pen ? `<div class="cv-row">${btn('pen-edit', penEdit && penEdit.b === b ? 'Done editing points' : 'Edit points (Enter)')}${b.pen.closed ? '' : btn('pen-close', 'Close path')}</div>` : ''}
     </div>
     ${codeSection(f, b)}
     ${b.kind === 'text' ? `<div class="cv-section"><h3>Text</h3><textarea class="cv-text" data-p="text" rows="3" spellcheck="true">${esc(Canvas.sourceText(b))}</textarea><p class="hint">Or double-click the text on the canvas.</p>${b.overflow ? '<p class="hint" style="color:var(--danger)">Text is wider than its box. Widen the box or lower the size.</p>' : ''}</div>` : ''}
@@ -1511,7 +1836,7 @@ const CanvasUI = (() => {
       }
       if (t.dataset.al) { const tg = autoTarget(); if (!tg) return; if (!live) hist.push(doc); setAuto(tg.f, tg.box, t.dataset.al, t.type === 'checkbox' ? t.checked : t.value); rerenderFrame(tg.f); drawOverlay(); if (!live) renderProps(); persist(); updateUndo(); return; }
       if (t.dataset.cprop && bs.length === 1) { if (live) return; setCodeProp(f, bs[0], t.dataset.cprop, t.dataset.ctype === 'bool' ? t.checked : t.value); return; }
-      if (t.dataset.b && bs.length) { hist.push(doc); for (const b of bs) b[t.dataset.b] = t.checked; renderLayers(); drawOverlay(); persist(); updateUndo(); return; }
+      if (t.dataset.b && bs.length) { hist.push(doc); for (const b of bs) { if (t.dataset.b === 'mask' && !t.checked) delete b.mask; else b[t.dataset.b] = t.checked; } if (t.dataset.b === 'mask') rerenderFrame(f); renderLayers(); drawOverlay(); persist(); updateUndo(); return; }
       const k = t.dataset.p; if (!k) return;
       if (!live) hist.push(doc);
       if (!bs.length) { setFrameProp(f, k, val); rerenderFrame(f); drawOverlay(); if (!live) renderProps(); persist(); updateUndo(); return; }
@@ -1548,6 +1873,9 @@ const CanvasUI = (() => {
       const sw = e.target.closest('[data-sw]'); if (sw) { applySwatch(sw.dataset.for, sw.dataset.sw, sw.dataset.swName); return; }
       const pr = e.target.closest('[data-pair]'); if (pr) { const p = Brand.pairs(env.getKit())[+pr.dataset.pair]; if (p && fs.length) { mutate(() => fs.forEach(fr => { Canvas.recolor(fr, { bg: p.bg, fg: p.fgs[0], accent: p.accents[0], bgName: p.bgName, colors: env.getKit().colors.map(c => c.hex) }); fr.layout.palette.bgToken = p.bgName; }), { frames: fs.map(x => x.id) }); env.toast(`${fs.length > 1 ? fs.length + ' screens' : 'Screen'} on ${p.bgName}`); } return; }
       const palRm = e.target.closest('[data-pal="rm"]'); if (palRm) { const colors = env.getKit().colors.filter((_, i) => i !== +palRm.dataset.i); env.updateColors(colors); followTokens(); renderProps(); return; }
+      if (e.target.closest('[data-act="shortcuts"]')) { showShortcuts(); return; }
+      const pa = e.target.closest('[data-act="pen-edit"], [data-act="pen-close"]');
+      if (pa && f && bs.length === 1 && bs[0].pen) { if (pa.dataset.act === 'pen-close') { hist.push(doc); bs[0].pen.closed = true; Canvas.penFit(bs[0]); rerenderFrame(f); renderProps(); persist(); updateUndo(); } else if (penEdit && penEdit.b === bs[0]) { penEditEnd(); renderProps(); } else { penEditStart(f, bs[0]); renderProps(); } return; }
       const al = e.target.closest('[data-align]'); if (al && f) { hist.push(doc); Canvas.align(f, bs.length ? bs : [], al.dataset.align); rerenderFrame(f); drawOverlay(); liveProps(); persist(); updateUndo(); return; }
       const add = e.target.closest('[data-add]'); if (add && f) { hist.push(doc); const b = add.dataset.add === 'stack' ? { id: Canvas.uid(), kind: 'box', x: f.layout.grid.mx, y: f.layout.grid.my, w: 480, h: 240, fill: 'none', radius: 0, clip: false, decorative: true, hidden: false, locked: false, sizeW: 'fixed', sizeH: 'hug', auto: { v: 2, mode: 'vertical', wrap: false, gap: 16, gapAuto: false, counterGap: 16, counterGapAuto: false, pad: { t: 24, r: 24, b: 24, l: 24 }, main: 'start', cross: 'start' } } : Canvas.newBlock(add.dataset.add, f, env.getKit(), null); if (b) { f.layout.blocks.push(b); const sb = selBlocks(); const host = sb.length === 1 && sb[0].kind === 'box' ? sb[0] : null; if (host) { b.parent = host.id; if (Auto.on(Auto.settingsOf(f, host))) { Auto.moveInList(f, b, host.id, null); if ((b.kind === 'text' || b.kind === 'list') && Auto.settingsOf(f, host).mode === 'vertical') b.sizeW = 'fill'; } } else if (Auto.on(Auto.settingsOf(f, null))) Auto.moveInList(f, b, '', null); select(f.id, [b.id]); rerenderFrame(f); persist(); updateUndo(); if (b.kind === 'image') { const inp = $('cvProps').querySelector('[data-file="image"]'); if (inp) inp.click(); } } return; }
       const lv = e.target.closest('[data-logo-variant]'); if (lv && bs[0] && bs[0].kind === 'logo') { hist.push(doc); setLogoVariant(f, bs[0], lv.dataset.logoVariant); rerenderFrame(f); renderProps(); drawOverlay(); persist(); updateUndo(); return; }
@@ -1630,6 +1958,7 @@ const CanvasUI = (() => {
     markDirty: ids => { for (const id of ids || []) dirty.add(id); },
     flushBackup: () => { if (backupTimer) { clearTimeout(backupTimer); backupNow(); } },
     setUndoMerge: fn => { undoMerge = fn; },
+    commentsChanged, comments: () => comments().map(c => Canvas.clone(c)), openThread, toggleMask, showShortcuts,
     _history: () => hist,
   };
 })();

@@ -383,6 +383,13 @@ const Library = (() => {
   }
 
   // ---- Libraries window: on/off, create and edit (admins), the admin list (owner) ---------------------------------------
+  // ⌥⌘K: the save form for the selection, with the Library tab in front.
+  function startSave() {
+    const sel = env.canvas.selection(); if (!sel.blockIds.length) { env.toast('Select blocks on a screen to save them to the library'); return; }
+    const tab = document.querySelector('#cvLeftTabs [data-left="library"]'); if (tab && !tab.classList.contains('on')) tab.click();
+    naming = true; publishing = null; render();
+    const inp = el && el.querySelector('[data-lib="name"]'); if (inp) { const f = Canvas.frameById(env.canvas.doc, sel.frameId); const b = f && Canvas.blockById(f, sel.blockIds[0]); inp.value = b ? (b.label || (b.kind === 'box' ? 'Component' : b.role || b.kind)) : 'Component'; inp.focus(); inp.select(); }
+  }
   function openManager() { mgr = mgr || document.getElementById('libsModal'); if (!mgr) return; mgr.hidden = false; editing = null; confirmDel = null; renderManager(); loadNames(); }
   async function loadNames() { const ids = LibStore.admins; if (!ids.length) return; const ps = await LibStore.people(ids); for (const id of ids) names[id] = (ps[id] && ps[id].name) || names[id] || ''; renderManager(); }
   function renderManager() {
@@ -445,5 +452,5 @@ const Library = (() => {
     const nm = ids && ids.length === 1 ? (LibStore.libraries().find(l => l.id === ids[0]) || {}).name : 'libraries';
     if (await env.download(blob, `${String(nm || 'libraries').toLowerCase().replace(/[^a-z0-9]+/g, '-')}.json`)) env.toast(`Exported ${j.lgLibrary.items.length} items`);
   }
-  return { init, bind, bindManager, render, refresh, imagesChanged, openManager, all, sources, builtins, thumb, fromSelection, insert, specFor, codeSpecs, variantFor, importIcons, palette, settle, CATEGORIES };
+  return { init, bind, bindManager, render, refresh, imagesChanged, openManager, all, sources, builtins, thumb, fromSelection, insert, specFor, codeSpecs, variantFor, importIcons, startSave, palette, settle, CATEGORIES };
 })();

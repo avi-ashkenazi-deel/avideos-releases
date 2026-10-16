@@ -681,7 +681,7 @@
   $('imgProvider').addEventListener('change', () => { fillImageModels($('imgProvider').value, ''); saveImageGen(); });
   $('imgModel').addEventListener('change', saveImageGen); $('imgKey').addEventListener('change', saveImageGen);
   loadImageGen();
-  document.addEventListener('keydown', e => { if (e.key === 'Escape') for (const id of ['detail', 'compare', 'about', 'settings', 'importModal']) $(id).hidden = true; });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') for (const id of ['detail', 'compare', 'about', 'settings', 'importModal', 'shortcutsModal']) { const m = $(id); if (m) m.hidden = true; } });
   for (const id of ['detail', 'compare', 'about', 'settings']) $(id).addEventListener('click', e => { if (e.target === $(id)) $(id).hidden = true; });
   $('aboutBody').innerHTML = `
     <p>Most AI design tools pick a template or paint pixels. This engine does neither. It takes the rules a design system already has (a column grid, a pixel grid, safe space, approved color pairs, the logo's clear zone, a type scale) and lets chance move only inside them. The result is not one answer but a field of valid answers you can scan, compare, and choose from. The design decision stays with the designer; the engine removes the blank canvas and the manual iteration.</p>
@@ -1246,7 +1246,7 @@
     if (state.mode !== 'canvas') setMode('canvas');
     updateCanvasBadge();
     const s = res.stats; const skipped = Object.entries(s.skipped).map(([k, v]) => `${v} ${k.toLowerCase()}`).join(', ');
-    toast(`${how} (${importLayout() === 'auto' ? 'auto layout' : 'fixed positions'}): ${list.length > 1 || !list[0].loose ? `${list.length} frame${list.length > 1 ? 's' : ''}` : 'layers'}, ${s.blocks} layers${s.images ? `, ${s.images} images` : ''}${s.missingImages ? `, ${s.missingImages} images not included` : ''}${items.length > MAX ? `, first ${MAX} frames only` : ''}${skipped ? ` · skipped ${skipped}` : ''}`);
+    toast(`${how} (${importLayout() === 'auto' ? 'auto layout' : 'fixed positions'}): ${list.length > 1 || !list[0].loose ? `${list.length} frame${list.length > 1 ? 's' : ''}${added.compacted ? ', arranged in rows' : ''}` : 'layers'}, ${s.blocks} layers${s.images ? `, ${s.images} images` : ''}${s.missingImages ? `, ${s.missingImages} images not included` : ''}${items.length > MAX ? `, first ${MAX} frames only` : ''}${skipped ? ` · skipped ${skipped}` : ''}`);
     const frames = added.length ? added : CanvasUI.doc.frames.filter(f => sel.frameIds.includes(f.id));
     if (await ensureFonts(frames)) CanvasUI.mutate(() => { }, { history: false, frames: frames.map(f => f.id) });
   }
@@ -1327,7 +1327,10 @@
     placeFrames: items => { const out = CanvasUI.placeFrames(items); if (state.mode !== 'canvas') setMode('canvas'); updateCanvasBadge(); $('importModal').hidden = true; return out; },
     afterImport: async frames => { if (await ensureFonts(frames)) CanvasUI.mutate(() => { }, { history: false, frames: frames.map(f => f.id) }); },
   });
-  function openImport() { $('importModal').hidden = false; renderImportLayout(); renderSlidesHint(); if (typeof WebImport !== 'undefined') WebImport.renderSection($('captureSection')); }
+  function openImport(tab) { $('importModal').hidden = false; renderImportLayout(); renderSlidesHint(); if (typeof WebImport !== 'undefined') WebImport.renderSection($('captureSection')); if (tab) showImportTab(tab); }
+  function showImportTab(t) { LS.set('lg.importTab', t); for (const b of $('importTabs').querySelectorAll('[data-itab]')) b.classList.toggle('on', b.dataset.itab === t); for (const p of $('importModal').querySelectorAll('[data-itab-panel]')) p.hidden = p.dataset.itabPanel !== t; if (t === 'web') { const u = $('lgWebUrl'); if (u) u.focus(); } }
+  $('importTabs').addEventListener('click', e => { const b = e.target.closest('[data-itab]'); if (b) showImportTab(b.dataset.itab); });
+  showImportTab(LS.get('lg.importTab', 'figma'));
   $('cvImport').addEventListener('click', openImport);
   $('importClose').addEventListener('click', () => { $('importModal').hidden = true; });
   $('importModal').addEventListener('click', e => { if (e.target === $('importModal')) $('importModal').hidden = true; });
@@ -1392,6 +1395,10 @@
     libraryDrop: (id, at) => Library.insert(id, at),
     saveToGoogleSlides: frames => saveToGoogleSlides(frames),
     traceImage: (f, b) => Trace.run(f, b, { getAssets: () => state.assets, getKit: () => state.kit, addImageData: (url, name) => addImage(url, name), toast, canvas: CanvasUI }),
+    // comments: who is writing, names for ids, and whether this person may write here (claude.ai Viewers may not)
+    me: () => ({ id: Sync.me.id, name: Sync.me.name }), uid: () => LibStore.uid(), people: ids => LibStore.people(ids), canComment: () => LibStore.canWrite(),
+    claudeComposer: window.claude && typeof window.claude.use === 'function' ? el => { window.claude.use('comments').then(c => c && c.openComposer({ element: el })).catch(() => toast('Could not open the claude.ai comment box')); } : null,
+    saveToLibrary: () => Library.startSave(),
   });
   // ---- Library: approved components, logos, cards, devices, illustrations ------------------------------------------
   Library.init({ getKit: () => state.kit, getAssets: () => state.assets, toast, canvas: CanvasUI, download: (blob, name) => Render.download(blob, name),

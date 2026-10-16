@@ -311,7 +311,7 @@ const LibStore = (() => {
   async function searchPeople(q) { if (!backend || !backend.search) return []; try { return await backend.search(q); } catch { return []; } }
   return {
     init, start, libraries, items, isOn, setOn, role, createLibrary, updateLibrary, deleteLibrary, putItem, updateItem, deleteItem, setAdmins,
-    exportJSON, importJSON, people, searchPeople, assetInfo, iconSets, putIconSet, delIconSet, guide, guides, putGuide, notes, addNote, setNote, canSuggest, guideKey, GUIDES: ['design', 'layout', 'animation', 'illustration', 'photography', 'content', 'product'],
+    exportJSON, importJSON, people, searchPeople, assetInfo, uid: () => S.uid, canWrite: () => S.canWrite, iconSets, putIconSet, delIconSet, guide, guides, putGuide, notes, addNote, setNote, canSuggest, guideKey, GUIDES: ['design', 'layout', 'animation', 'illustration', 'photography', 'content', 'product'],
     refresh: () => backend && backend.refresh ? backend.refresh() : null,
     checkKey: k => backend && backend.checkKey ? backend.checkKey(k) : Promise.reject(new Error('No admin key here')),
     on: fn => { listeners.add(fn); return () => listeners.delete(fn); },

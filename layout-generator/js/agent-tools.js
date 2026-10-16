@@ -180,6 +180,10 @@ const AgentTools = (() => {
       const frames = s.frameIds.map(F);
       return { screens: frames.map(f => frameInfo(f, frames.length <= 4)), selected_blocks: s.blockIds };
     },
+    get_comments({ frame_id, include_resolved }) {
+      const list = (CanvasUI.comments ? CanvasUI.comments() : []).filter(c => (!frame_id || c.frame === frame_id) && (include_resolved || !c.resolved));
+      return { comments: list.slice(0, 200).map(c => { const f = Canvas.frameById(doc(), c.frame); return { id: c.id, frame_id: c.frame, screen: f ? f.name : null, x: c.x, y: c.y, by: c.byName || 'Someone', at: c.at ? new Date(c.at).toISOString() : null, text: c.text, resolved: !!c.resolved, replies: (c.replies || []).map(r => ({ by: r.byName || 'Someone', at: r.at ? new Date(r.at).toISOString() : null, text: r.text })) }; }), open: list.filter(c => !c.resolved).length };
+    },
     get_canvas() { return { name: doc().name, screens: doc().frames.map(f => frameInfo(f, false)) }; },
     get_frame({ frame_id, full }) { const f = F(frame_id); if (full) { const L = Canvas.clone(f.layout); delete L.signature; if (L.meta) delete L.meta.original; L.blocks = L.blocks.map(b => { delete b.lines; delete b.inkW; delete b.capacity; return b; }); return { id: f.id, name: f.name, layout: L }; } return frameInfo(f, true); },
     get_brand() {

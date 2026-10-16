@@ -374,6 +374,10 @@ const FigmaImport = (() => {
     // Top level: nodes that sit on a page (or have no parent in this data).
     const tops = nodes.filter(n => { if (n.type === 'DOCUMENT' || n.type === 'CANVAS') return false; const p = n.parentIndex && byId.get(idOf(n.parentIndex.guid)); return !p || p.type === 'CANVAS' || p.type === 'DOCUMENT'; });
     tops.sort((a, b) => (a.parentIndex && b.parentIndex && a.parentIndex.position < b.parentIndex.position ? -1 : 1));
+    // A section is a page-like holder: the frames inside it come in as screens of their own, at their place on the page.
+    const expandSections = (list, T0) => list.flatMap(n => { if (n.type !== 'SECTION' || n.visible === false) return T0 === I ? [n] : [{ ...n, transform: mul(T0, n.transform || I) }]; const T = mul(T0, n.transform || I); return expandSections(childrenOf(n), T); });
+    const expanded = expandSections(tops, I);
+    tops.length = 0; tops.push(...expanded);
     const pageOf = n => { let p = n; for (let k = 0; k < 50 && p; k++) { const q = p.parentIndex && byId.get(idOf(p.parentIndex.guid)); if (!q || q.type === 'CANVAS') return q ? q.name : ''; p = q; } return ''; };
     const frames = []; const loose = [];
     for (let n of tops) {
@@ -416,7 +420,7 @@ const FigmaImport = (() => {
         palette: { bg: F.bg, fg: fg ? fg.fill : '#000000', accent: (F.blocks.find(b => b.kind === 'field' && b.fill && b.fill !== F.bg && b.fill !== 'none') || { fill: fg ? fg.fill : '#000000' }).fill, bgName: 'Figma', ...(F.bgGradient ? { bgGradient: F.bgGradient } : {}) },
         type: { level: 2, headline: 48, body: 16, display: kit.fonts.display, body_font: kit.fonts.body }, brand: kit.name, blocks: F.blocks, meta: { source: 'figma', page: F.page || '' }, metrics: { whitespace: 0, density: 0, balance: 0 },
       };
-      return { name: F.name, x: F.x, y: F.y, layout, clip: F.clip, loose: !!F.loose, autoLayout: F.autoLayout || null };
+      return { name: F.name, x: F.x, y: F.y, layout, clip: F.clip, loose: !!F.loose, autoLayout: F.autoLayout || null, page: F.page || '' };
     });
   }
   return { readFile, readClipboardHTML, hasFigmaHTML, convert, toLayouts, _kiwi: { decodeSchema, compile, BB }, _pathOf: pathOf, _zip: { readZip, zipEntry }, readArchive };

@@ -32,6 +32,7 @@ const Sync = (() => {
     const out = new Map();
     out.set('meta', { name: doc.name || 'Untitled canvas' });
     if (!scope || scope.library) for (const it of doc.library || []) if (it && it.id) out.set('L~' + it.id, it);
+    if (!scope || scope.comments) for (const c of doc.comments || []) if (c && c.id) out.set('C~' + c.id, c);
     doc.frames.forEach((f, i) => {
       if (scope && scope.frames && !scope.frames.has(f.id)) return;
       const { blocks, meta, ...layoutRest } = f.layout; const { original, ...metaRest } = meta || {};
@@ -65,18 +66,19 @@ const Sync = (() => {
   function docFrom(map, base) {
     const doc = { ...(base || Canvas.create()), frames: [] };
     const meta = map.get('meta'); if (meta && !meta._del && meta.name) doc.name = meta.name;
-    doc.library = libraryFrom(map);
+    doc.library = libraryFrom(map); doc.comments = commentsFrom(map);
     const fids = [...map.entries()].filter(([k, r]) => k.startsWith('f~') && !r._del).sort((a, b) => (a[1].z ?? 0) - (b[1].z ?? 0) || a[0].localeCompare(b[0])).map(([k]) => k.slice(2));
     for (const fid of fids) { const f = frameFrom(map, fid); if (f) doc.frames.push(f); }
     return doc;
   }
   // Team library items, in the order they were made.
+  function commentsFrom(map) { return [...map.entries()].filter(([k, r]) => k.startsWith('C~') && !r._del).map(([, r]) => strip(r)).sort((a, b) => (a.at || 0) - (b.at || 0)); }
   function libraryFrom(map) { return [...map.entries()].filter(([k, r]) => k.startsWith('L~') && !r._del).map(([, r]) => strip(r)).sort((a, b) => (a.created || 0) - (b.created || 0)); }
   // After the local doc was rebuilt from records, remember its canonical JSON so we never echo it back.
   function markSynced(doc, keys) {
-    const frames = new Set(); let library = false;
-    for (const k of keys) { if (k.startsWith('L~')) library = true; else if (k !== 'meta') frames.add(k.split('~')[1]); }
-    const cur = toRecords(doc, { frames, library });
+    const frames = new Set(); let library = false, comments = false;
+    for (const k of keys) { if (k.startsWith('L~')) library = true; else if (k.startsWith('C~')) comments = true; else if (k !== 'meta') frames.add(k.split('~')[1]); }
+    const cur = toRecords(doc, { frames, library, comments });
     for (const k of keys) { if (cur.has(k)) synced.set(k, canon(cur.get(k))); else synced.delete(k); }
   }
 
@@ -91,7 +93,7 @@ const Sync = (() => {
     }
     if (deletions) for (const k of [...synced.keys()]) {
       if (cur.has(k) || k.startsWith('a~')) continue;
-      if (scope && (k === 'meta' || k.startsWith('L~') || !scope.has(k.split('~')[1]))) continue;
+      if (scope && (k === 'meta' || k.startsWith('L~') || k.startsWith('C~') || !scope.has(k.split('~')[1]))) continue;
       const rec = { _k: k, _del: 1, _v: now(), _by: me.id }; recs.set(k, rec); synced.delete(k); out.push(rec);
     }
     return out;
@@ -103,7 +105,7 @@ const Sync = (() => {
   function onChange(doc, opts = {}) {
     if (!adapter || applying) return;
     const order = orderOf(doc); const structural = order !== lastOrder; lastOrder = order;
-    const scope = !structural && Array.isArray(opts.frames) && opts.frames.length ? new Set(opts.frames) : null;
+    const scope = !structural && !opts.full && Array.isArray(opts.frames) && opts.frames.length ? new Set(opts.frames) : null;
     const out = diff(doc, scope); if (out.length) adapter.send(out, false);
     if (scope) { clearTimeout(reconcileTimer); reconcileTimer = setTimeout(() => { reconcileTimer = 0; if (!adapter || applying) return; const late = diff(ui.doc, null); if (late.length) adapter.send(late, false); }, 1500); }
     queueAssetShare(doc);
@@ -131,18 +133,20 @@ const Sync = (() => {
     inboxWait = Math.max(40, Math.min(400, Math.round(took * 4)));
   }
   function applyNow(list, opts = {}) {
-    const frames = new Set(); let structural = false, meta = false, lib = false; const assets = [];
+    const frames = new Set(); let structural = false, meta = false, lib = false, com = false; const assets = [];
     for (const rec of list) {
       if (!rec || typeof rec._k !== 'string' || typeof rec._v !== 'number') continue;
-      const k = rec._k; if (!/^(meta|[fbo]~[A-Za-z0-9_.:-]+(~[A-Za-z0-9_.:-]+)?|a~[A-Za-z0-9_.-]+|L~[A-Za-z0-9_.:-]+)$/.test(k)) continue;
+      const k = rec._k; if (!/^(meta|[fbo]~[A-Za-z0-9_.:-]+(~[A-Za-z0-9_.:-]+)?|a~[A-Za-z0-9_.-]+|[LC]~[A-Za-z0-9_.:-]+)$/.test(k)) continue;
       if (!newer(rec, recs.get(k))) continue;
       recs.set(k, rec);
       if (k === 'meta') meta = true;
       else if (k.startsWith('L~')) lib = true;
+      else if (k.startsWith('C~')) com = true;
       else if (k.startsWith('a~')) assets.push(rec);
       else { const fid = k.split('~')[1]; frames.add(fid); if (k.startsWith('f~')) structural = true; }
     }
     for (const a of assets) ensureAsset(a);
+    if (com) { applying = true; try { ui.doc.comments = commentsFrom(recs); markSynced(ui.doc, [...recs.keys()].filter(k => k.startsWith('C~'))); if (ui.commentsChanged) ui.commentsChanged(); } finally { applying = false; } }
     if (lib) { applying = true; try { ui.doc.library = libraryFrom(recs); markSynced(ui.doc, [...recs.keys()].filter(k => k.startsWith('L~'))); if (env.onLibrary) env.onLibrary(); } finally { applying = false; } }
     if (!frames.size && !meta) return;
     applying = true;

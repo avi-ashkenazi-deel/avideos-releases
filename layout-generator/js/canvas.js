@@ -487,6 +487,65 @@ const Canvas = (() => {
       f.x = snap(x, 8); f.y = snap(y, 8); x += f.layout.format.w + gap; rowH = Math.max(rowH, f.layout.format.h);
     });
   }
+  // Imported screens that sat far apart (a whole Figma page copied at once) are brought together: the reading
+  // order stays (rows by their old positions, left to right, then pages), the empty space between them goes.
+  // items: {x, y, w, h, page?}. Returns true when it moved them (nothing happens when they were already close).
+  function compact(items, opts = {}) {
+    if (items.length < 2) return false;
+    const area = items.reduce((t, i) => t + Math.max(1, i.w) * Math.max(1, i.h), 0);
+    const x0 = Math.min(...items.map(i => i.x)), y0 = Math.min(...items.map(i => i.y));
+    const bw = Math.max(...items.map(i => i.x + i.w)) - x0, bh = Math.max(...items.map(i => i.y + i.h)) - y0;
+    if (!opts.force && bw * bh < area * (opts.threshold || 4)) return false;
+    const sizes = items.map(i => Math.min(i.w, i.h)).sort((a, b) => a - b); const med = sizes[Math.floor(sizes.length / 2)] || 100;
+    const gap = Math.max(32, Math.min(160, Math.round(med * 0.3))); const maxW = Math.max(2600, ...items.map(i => i.w));
+    const pages = []; for (const it of items.slice().sort((a, b) => (a.y - b.y) || (a.x - b.x))) { const k = it.page || ''; let g = pages.find(p => p.key === k); if (!g) { g = { key: k, items: [] }; pages.push(g); } g.items.push(it); }
+    let y = y0;
+    for (const pg of pages) {
+      // rows: an item joins the row whose band it overlaps vertically
+      const rows = []; for (const it of pg.items) { const r = rows[rows.length - 1]; if (r && it.y < r.bottom) { r.items.push(it); r.bottom = Math.max(r.bottom, it.y + it.h); } else rows.push({ bottom: it.y + it.h, items: [it] }); }
+      for (const r of rows) {
+        r.items.sort((a, b) => a.x - b.x); let x = x0, rowH = 0;
+        for (const it of r.items) { if (x > x0 && x + it.w > x0 + maxW) { x = x0; y += rowH + gap; rowH = 0; } it.x = snap(x, 8); it.y = snap(y, 8); x += it.w + gap; rowH = Math.max(rowH, it.h); }
+        y += rowH + Math.round(gap * 1.5);
+      }
+      y += gap * 2;
+    }
+    return true;
+  }
+  // ---- Pen paths and masks ------------------------------------------------------------------------------------------------
+  // A pen vector keeps its anchors in block coordinates: pts [{x, y, i?: {x, y}, o?: {x, y}}] (handles in and out,
+  // absolute), closed. Its path (d) and box follow from them.
+  const r1 = v => Math.round(v * 10) / 10;
+  function penD(pen) {
+    const P = pen.pts || []; if (!P.length) return '';
+    const seg = (a, b) => (a.o || b.i) ? `C${r1((a.o || a).x)} ${r1((a.o || a).y)} ${r1((b.i || b).x)} ${r1((b.i || b).y)} ${r1(b.x)} ${r1(b.y)}` : `L${r1(b.x)} ${r1(b.y)}`;
+    let d = `M${r1(P[0].x)} ${r1(P[0].y)}`; for (let k = 1; k < P.length; k++) d += seg(P[k - 1], P[k]);
+    if (pen.closed && P.length > 2) d += seg(P[P.length - 1], P[0]) + 'Z';
+    return d;
+  }
+  // Fit the block to its anchors and handles (plus half the stroke) and keep the path in the block's own space.
+  function penFit(b) {
+    const P = b.pen && b.pen.pts || []; if (!P.length) return b;
+    const xs = [], ys = []; for (const p of P) { xs.push(p.x); ys.push(p.y); if (p.i) { xs.push(p.i.x); ys.push(p.i.y); } if (p.o) { xs.push(p.o.x); ys.push(p.o.y); } }
+    const pad = Math.max(1, ((b.stroke && b.stroke.width) || 0) / 2);
+    const x0 = Math.min(...xs) - pad, y0 = Math.min(...ys) - pad; const w = Math.max(1, Math.max(...xs) + pad - x0), h = Math.max(1, Math.max(...ys) + pad - y0);
+    if (x0 || y0) for (const p of P) { p.x = r1(p.x - x0); p.y = r1(p.y - y0); if (p.i) { p.i.x = r1(p.i.x - x0); p.i.y = r1(p.i.y - y0); } if (p.o) { p.o.x = r1(p.o.x - x0); p.o.y = r1(p.o.y - y0); } }
+    b.x = r1(b.x + x0); b.y = r1(b.y + y0); b.w = r1(w); b.h = r1(h); b.viewBox = [0, 0, b.w, b.h]; b.d = penD(b.pen); b.keepAspect = false;
+    return b;
+  }
+  // The outline a block gives when used as a mask: {kind: 'rect'|'ellipse'|'path', ...} in frame coordinates.
+  function maskShape(b) {
+    if (b.kind === 'shape' && (b.shape === 'ellipse' || b.shape === 'circle' || b.shape === 'blob')) { const r = b.shape === 'ellipse' ? null : Math.min(b.w, b.h) / 2; return { kind: 'ellipse', cx: b.x + b.w / 2, cy: b.y + b.h / 2, rx: r ?? b.w / 2, ry: r ?? b.h / 2 }; }
+    if (b.kind === 'vector' && b.d) { const vb = Array.isArray(b.viewBox) && b.viewBox.length === 4 ? b.viewBox : [0, 0, b.w, b.h]; return { kind: 'path', d: b.d, x: b.x, y: b.y, sx: vb[2] ? b.w / vb[2] : 1, sy: vb[3] ? b.h / vb[3] : 1, ox: vb[0], oy: vb[1] }; }
+    const r = b.kind === 'shape' && b.shape === 'pill' ? Math.min(b.w, b.h) / 2 : (b.radius || 0);
+    return { kind: 'rect', x: b.x, y: b.y, w: b.w, h: b.h, r };
+  }
+  // Which blocks a mask covers: the siblings painted after it (in its group when it has one), up to the next mask.
+  function maskedBy(blocks, mask) {
+    const out = []; const i = blocks.indexOf(mask); if (i < 0) return out;
+    for (let k = i + 1; k < blocks.length; k++) { const b = blocks[k]; if (b.mask) break; if (mask.group && b.group !== mask.group) continue; out.push(b); }
+    return out;
+  }
   function replaceText(frames, find, repl, opts = {}) {
     if (!find) return 0; let n = 0;
     const re = new RegExp(find.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), opts.caseSensitive ? 'g' : 'gi');
@@ -538,5 +597,5 @@ const Canvas = (() => {
     };
   }
 
-  return { create, addFrame, blankFrame, migrate, defaultAuto, frameById, blockById, refit, sourceText, newBlock, moveBlock, resizeBlock, reorder, duplicateBlock, removeBlocks, transferBlocks, pasteBlocks, customFormat, align, distribute, bounds, applyAutoLayout, isBackground, serialize, deserialize, toLink, fromHash, toHTML, toReact, codeTree, codeNodes, recolor, extractContent, scaleFrame, applyTokens, group, ungroup, groupMembers, tidy, replaceText, setFonts, pasteFrames, framesBounds, cssGradient, history, snap, uid, clone };
+  return { create, addFrame, blankFrame, migrate, defaultAuto, frameById, blockById, refit, sourceText, newBlock, moveBlock, resizeBlock, reorder, duplicateBlock, removeBlocks, transferBlocks, pasteBlocks, customFormat, align, distribute, bounds, applyAutoLayout, isBackground, serialize, deserialize, toLink, fromHash, toHTML, toReact, codeTree, codeNodes, recolor, extractContent, scaleFrame, applyTokens, group, ungroup, groupMembers, tidy, compact, penD, penFit, maskShape, maskedBy, replaceText, setFonts, pasteFrames, framesBounds, cssGradient, history, snap, uid, clone };
 })();
