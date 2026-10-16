@@ -16,7 +16,7 @@ const LibStore = (() => {
   const ID = /^[A-Za-z0-9_.:-]{1,64}$/;
   const MAX_ITEM = 240 * 1024;
   let env = null, backend = null, started = null;
-  const S = { mode: 'local', libs: new Map(), items: new Map(), guides: new Map(), notes: new Map(), canWrite: null, admins: [], uid: null, owner: false, canEdit: null, keyRequired: false, keyOk: false, ready: false, error: '' };
+  const S = { mode: 'local', libs: new Map(), items: new Map(), guides: new Map(), notes: new Map(), iconsets: new Map(), canWrite: null, admins: [], uid: null, owner: false, canEdit: null, keyRequired: false, keyOk: false, ready: false, error: '' };
   let prefs = LS.get('lg.libsOn', {}) || {};
   const listeners = new Set();
   const emit = () => { for (const fn of listeners) { try { fn(); } catch (e) { console.error(e); } } };
@@ -43,6 +43,33 @@ const LibStore = (() => {
   const str = (v, n) => typeof v === 'string' ? v.slice(0, n) : '';
   const cleanNote = (n, doc) => n && typeof n === 'object' && ID.test(String(n.id || '')) && GUIDE.test(String(n.guide || '')) ? { id: n.id, guide: n.guide, kind: n.kind === 'edit' ? 'edit' : 'comment', by: str(n.by, 80), byName: str(n.byName, 80), at: +n.at || 0, quote: str(n.quote, 8000), replacement: n.kind === 'edit' ? str(n.replacement, 8000) : '', text: str(n.text, 2000), status: NOTE_STATUS.test(n.status) ? n.status : 'open', reply: str(n.reply, 1000), doneBy: str(n.doneBy, 80), doneAt: +n.doneAt || 0, _doc: doc || n._doc || '' } : null;
   function setNotes(list) { S.notes.clear(); for (const n of list || []) { const c = cleanNote(n); if (c) S.notes.set(c.id, c); } emit(); }
+  // Icon sets (a design system's icons, imported once and shared): stored in parts under 200 KB, "<id>" then "<id>~2"…
+  const SETID = /^[a-z0-9_-]{1,24}$/;
+  function setIconSets(list) {
+    const merged = new Map();
+    for (const d of list || []) {
+      if (!d || typeof d !== 'object') continue; const id = String(d.set || d.id || '').split('~')[0]; if (!SETID.test(id) || !d.icons || typeof d.icons !== 'object') continue;
+      const cur = merged.get(id) || { id, name: '', viewBox: '0 0 24 24', icons: {}, meta: {}, source: '', updated: 0, by: '' };
+      Object.assign(cur.icons, d.icons); if (d.meta && typeof d.meta === 'object') Object.assign(cur.meta, d.meta);
+      if (!String(d.id || '').includes('~')) { cur.name = String(d.name || id).slice(0, 40); cur.viewBox = String(d.viewBox || '0 0 24 24'); cur.source = String(d.source || '').slice(0, 200); cur.updated = +d.updated || 0; cur.by = typeof d.by === 'string' ? d.by.slice(0, 80) : ''; cur.order = +d.order || 0; }
+      merged.set(id, cur);
+    }
+    for (const id of S.iconsets.keys()) if (!merged.has(id) && typeof Icons !== 'undefined') Icons.removeSet(id);
+    S.iconsets = merged; if (typeof Icons !== 'undefined') for (const st of merged.values()) Icons.addSet(st);
+    emit();
+  }
+  // A set as documents: the first holds the name and the first icons, the rest only icons.
+  function iconSetParts(st) {
+    const parts = []; let cur = null, size = 0;
+    for (const [k, v] of Object.entries(st.icons)) {
+      const n = JSON.stringify(v).length + k.length + JSON.stringify((st.meta || {})[k] || '').length + 8;
+      if (!cur || size + n > 190000) { cur = { id: parts.length ? `${st.id}~${parts.length + 1}` : st.id, set: st.id, icons: {}, meta: {} }; parts.push(cur); size = 0; }
+      cur.icons[k] = v; if (st.meta && st.meta[k]) cur.meta[k] = st.meta[k]; size += n;
+    }
+    if (!parts.length) parts.push({ id: st.id, set: st.id, icons: {}, meta: {} });
+    Object.assign(parts[0], { name: st.name, viewBox: st.viewBox, source: st.source || '', updated: Date.now(), by: S.uid || '', order: st.order || 0, parts: parts.length });
+    return parts;
+  }
   function setGuides(list) { S.guides.clear(); for (const g of list || []) { const c = cleanGuide(g); if (c) S.guides.set(c.id, c); } emit(); }
   function setAll({ libraries, items, admins }) {
     if (libraries) { S.libs.clear(); for (const l of libraries) { const c = cleanLib(l); if (c) S.libs.set(c.id, c); } }
@@ -90,6 +117,7 @@ const LibStore = (() => {
       if (!ready.items && snap.metadata && snap.metadata.fromCache && !snap.size) return;
       ready.items = true; S.items.clear(); upsert('item', list); done();
     }, e => { S.error = (e && e.code) || 'db'; emit(); });
+    db.collection('iconsets').onSnapshot(snap => { const list = []; S.iconParts = new Map(); for (const d of snap.docs) { const v = d.data(); if (v) { list.push({ ...v, id: d.id }); S.iconParts.set(d.id, String(v.set || d.id).split('~')[0]); } } setIconSets(list); }, () => { });
     db.collection('guides').onSnapshot(snap => { const list = []; for (const d of snap.docs) { const v = d.data(); if (v) list.push({ ...v, id: d.id }); } setGuides(list); }, () => { });
     // one document per person (guidenotes/<their id>): each writes only their own, admins write all to resolve
     db.collection('guidenotes').onSnapshot(snap => { const list = []; for (const d of snap.docs) { const v = d.data(); if (v && Array.isArray(v.notes)) for (const n of v.notes) list.push({ ...n, _doc: d.id }); } setNotes(list); }, () => { });
@@ -109,6 +137,8 @@ const LibStore = (() => {
       delItem: id => write(() => db.doc(`libitems/${id}`).delete()),
       setAdmins: ids => write(() => db.doc('config/admins').set({ ids })),
       putGuide: g => write(() => db.doc(`guides/${g.id}`).set(g)),
+      putIconSet: async st => { const parts = iconSetParts(st); const old = [...(S.iconParts || new Map()).entries()].filter(([, s]) => s === st.id).map(([k]) => k); await write(async () => { for (const p of parts) await db.doc(`iconsets/${p.id}`).set(p); for (const k of old) if (!parts.some(p => p.id === k)) await db.doc(`iconsets/${k}`).delete(); }); },
+      delIconSet: async id => write(async () => { for (const k of [...(S.iconParts || new Map()).entries()].filter(([, s]) => s === id).map(([k]) => k)) await db.doc(`iconsets/${k}`).delete(); }),
       putNote: n => { const doc = n._doc || S.uid; if (!doc) throw new Error('Sign in to claude.ai to suggest changes'); const mine = [...S.notes.values()].filter(x => x._doc === doc && x.id !== n.id).concat([{ ...n, _doc: doc }]).map(({ _doc, ...x }) => x).slice(-200); return db.doc(`guidenotes/${doc}`).set({ notes: mine }).catch(e => { throw denied(e) ? new Error('You can view these guidelines but not suggest changes. Ask the page owner for Contributor access, or use Comment.') : e; }); },
       uploadImage: assets ? async blob => { const r = await assets.upload(blob); return { url: r.url }; } : null,
       profiles: user && user.profiles ? ids => user.profiles(ids) : null,
@@ -122,7 +152,7 @@ const LibStore = (() => {
     if (!j || !j.lgLibraries) return null;
     S.keyRequired = !!j.keyRequired;
     const key = () => LS.get('lg.adminKey', '') || '';
-    const apply = j => { S.keyRequired = !!j.keyRequired; setAll({ libraries: j.libraries || [], items: j.items || [] }); if (j.guides) setGuides(j.guides); if (j.notes) setNotes(j.notes); };
+    const apply = j => { S.keyRequired = !!j.keyRequired; setAll({ libraries: j.libraries || [], items: j.items || [] }); if (j.guides) setGuides(j.guides); if (j.notes) setNotes(j.notes); if (j.iconsets) setIconSets(j.iconsets); };
     apply(j);
     async function op(body) {
       const r = await fetch('/api/libraries', { method: 'POST', headers: { 'content-type': 'application/json', 'x-lg-admin': key() }, body: JSON.stringify(body) });
@@ -140,13 +170,15 @@ const LibStore = (() => {
       putItem: item => op({ op: 'putItem', item }),
       delItem: id => op({ op: 'delItem', id }),
       putGuide: guide => op({ op: 'putGuide', guide }),
+      putIconSet: async st => { for (const part of iconSetParts(st)) await op({ op: 'putIconSet', part }); },
+      delIconSet: id => op({ op: 'delIconSet', id }),
       putNote: note => op({ op: 'putNote', note }),
       uploadImage: async (blob, name) => { const r = await fetch('/api/assets?room=library', { method: 'POST', headers: { 'content-type': blob.type || 'image/png', 'x-name': encodeURIComponent(name || '') }, body: blob }); if (!r.ok) throw new Error('Image upload failed (' + r.status + ')'); const o = await r.json(); return { url: o.url }; },
     };
   }
   function localBackend() {
     const KEY = 'lg.libs.v1';
-    const load = () => { const j = LS.get(KEY, null) || {}; setAll({ libraries: j.libraries || [], items: j.items || [] }); setGuides(LS.get('lg.guides.v1', []) || []); setNotes(LS.get('lg.guidenotes.v1', []) || []); };
+    const load = () => { const j = LS.get(KEY, null) || {}; setAll({ libraries: j.libraries || [], items: j.items || [] }); setGuides(LS.get('lg.guides.v1', []) || []); setNotes(LS.get('lg.guidenotes.v1', []) || []); setIconSets(LS.get('lg.iconsets.v1', []) || []); };
     const save = () => { if (!LS.set(KEY, { libraries: [...S.libs.values()], items: [...S.items.values()] })) throw new Error('This browser\'s storage is full. Export the libraries, remove some pictures, and try again.'); };
     load();
     window.addEventListener('storage', e => { if (e.key === KEY) load(); });
@@ -159,6 +191,8 @@ const LibStore = (() => {
       delItem: id => change(() => S.items.delete(id)),
       putNote: n => { S.notes.set(n.id, cleanNote(n)); LS.set('lg.guidenotes.v1', [...S.notes.values()]); emit(); },
       putGuide: g => { S.guides.set(g.id, g); if (!LS.set('lg.guides.v1', [...S.guides.values()])) throw new Error('This browser\'s storage is full.'); emit(); },
+      putIconSet: st => { const all = [...S.iconsets.values()].filter(x => x.id !== st.id).concat([{ ...st, updated: Date.now() }]); if (!LS.set('lg.iconsets.v1', all)) throw new Error('This browser\'s storage is full.'); setIconSets(all); },
+      delIconSet: id => { const all = [...S.iconsets.values()].filter(x => x.id !== id); LS.set('lg.iconsets.v1', all); setIconSets(all); },
       uploadImage: null, // pictures ride inside the item as data URLs
     };
   }
@@ -247,6 +281,14 @@ const LibStore = (() => {
     return { libraries: nl, items: ni };
   }
   // Brand guidelines: everyone reads them (Claude gets them in its prompts); admins write them.
+  const iconSets = () => [...S.iconsets.values()].sort((a, b) => (a.order || 0) - (b.order || 0) || a.name.localeCompare(b.name));
+  async function putIconSet(st) {
+    if (!backend) throw new Error('Still loading'); if (!role().admin) throw new Error('Only library admins can add shared icon sets');
+    if (!SETID.test(String(st.id || '')) || !st.icons || !Object.keys(st.icons).length) throw new Error('No icons to add');
+    await backend.putIconSet({ id: st.id, name: String(st.name || st.id).slice(0, 40), viewBox: st.viewBox || '0 0 24 24', icons: st.icons, meta: st.meta || {}, source: st.source || '', order: st.order || 0 });
+    if (backend.kind !== 'local') { const merged = new Map(S.iconsets); merged.set(st.id, { ...st, updated: Date.now() }); setIconSets([...merged.values()]); }
+  }
+  async function delIconSet(id) { if (!backend) throw new Error('Still loading'); if (!role().admin) throw new Error('Only library admins can remove shared icon sets'); await backend.delIconSet(id); if (backend.kind !== 'local') { const m = new Map(S.iconsets); m.delete(id); setIconSets([...m.values()]); } }
   const guide = id => (S.guides.get(id) || {}).text || '';
   const guides = () => Object.fromEntries([...S.guides.values()].map(g => [g.id, g]));
   async function putGuide(id, text) {
@@ -269,7 +311,7 @@ const LibStore = (() => {
   async function searchPeople(q) { if (!backend || !backend.search) return []; try { return await backend.search(q); } catch { return []; } }
   return {
     init, start, libraries, items, isOn, setOn, role, createLibrary, updateLibrary, deleteLibrary, putItem, updateItem, deleteItem, setAdmins,
-    exportJSON, importJSON, people, searchPeople, assetInfo, guide, guides, putGuide, notes, addNote, setNote, canSuggest, guideKey, GUIDES: ['design', 'layout', 'animation', 'illustration', 'photography', 'content', 'product'],
+    exportJSON, importJSON, people, searchPeople, assetInfo, iconSets, putIconSet, delIconSet, guide, guides, putGuide, notes, addNote, setNote, canSuggest, guideKey, GUIDES: ['design', 'layout', 'animation', 'illustration', 'photography', 'content', 'product'],
     refresh: () => backend && backend.refresh ? backend.refresh() : null,
     checkKey: k => backend && backend.checkKey ? backend.checkKey(k) : Promise.reject(new Error('No admin key here')),
     on: fn => { listeners.add(fn); return () => listeners.delete(fn); },

@@ -552,6 +552,8 @@ input[disabled] { opacity: .5; cursor: not-allowed; }
 .lib-cats button.on { background: var(--cta); color: var(--cta-ink); border-color: var(--cta); font-weight: 600; }
 .lib-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 /* icon picker (properties panel and the library's Icons) */
+.lib-sec-row { display: flex; align-items: center; gap: 4px; }
+.lib-sec-row .lib-sec-head { flex: 1; min-width: 0; }
 .cv-icons, .lib-icons { display: grid; grid-template-columns: repeat(auto-fill, minmax(34px, 1fr)); gap: 4px; margin-top: 8px; max-height: 260px; overflow: auto; }
 .lib-icons { max-height: none; }
 .cv-ico { display: grid; place-items: center; aspect-ratio: 1; border: 1px solid transparent; border-radius: 6px; background: var(--panel-2); color: var(--fg); cursor: pointer; padding: 6px; }
@@ -3131,22 +3133,62 @@ const Icons = (() => {
   // More sets (a design system's icons) register at run time: names are "<set>:<Name>", e.g. "ds:Search".
   const SETS = new Map();
   const SAFE = /<(script|foreignObject|iframe|image|use)\b|\son\w+\s*=|href\s*=|javascript:|url\(/i;
+  // An icon is its inner markup, or { inner, viewBox } when it differs from the set's; meta holds words to find it by.
+  const VB = /^-?[\d.]+(\s+-?[\d.]+){3}$/;
   function addSet(s) {
     if (!s || !/^[a-z0-9_-]{1,24}$/.test(String(s.id || '')) || !s.icons || typeof s.icons !== 'object') return 0;
-    const icons = {};
-    for (const [k, v] of Object.entries(s.icons)) if (/^[A-Za-z0-9_-]{1,60}$/.test(k) && typeof v === 'string' && v.length < 20000 && !SAFE.test(v)) icons[k] = v;
-    const vb = /^-?[\d.]+(\s+-?[\d.]+){3}$/.test(String(s.viewBox || '').trim()) ? String(s.viewBox).trim() : '0 0 24 24';
-    SETS.set(s.id, { id: s.id, name: String(s.name || s.id).slice(0, 40), viewBox: vb, icons });
+    const icons = {}; const meta = {};
+    for (const [k, v] of Object.entries(s.icons)) {
+      if (!/^[A-Za-z0-9_-]{1,60}$/.test(k)) continue;
+      const inner = typeof v === 'string' ? v : v && typeof v.inner === 'string' ? v.inner : null;
+      if (!inner || inner.length > 20000 || SAFE.test(inner)) continue;
+      icons[k] = v && typeof v === 'object' && VB.test(String(v.viewBox || '').trim()) ? { inner, viewBox: String(v.viewBox).trim() } : inner;
+      if (s.meta && typeof s.meta[k] === 'string') meta[k] = s.meta[k].slice(0, 120);
+    }
+    const vb = VB.test(String(s.viewBox || '').trim()) ? String(s.viewBox).trim() : '0 0 24 24';
+    SETS.set(s.id, { id: s.id, name: String(s.name || s.id).slice(0, 40), viewBox: vb, icons, meta, source: s.source || '' });
     return Object.keys(icons).length;
   }
+  function removeSet(id) { return SETS.delete(id); }
   function get(name) {
     const n = String(name || ''); if (SET[n]) return { inner: SET[n], viewBox: '0 0 256 256' };
-    const i = n.indexOf(':'); if (i > 0) { const st = SETS.get(n.slice(0, i)); const inner = st && st.icons[n.slice(i + 1)]; if (inner) return { inner, viewBox: st.viewBox }; }
+    const i = n.indexOf(':'); if (i > 0) { const st = SETS.get(n.slice(0, i)); const v = st && st.icons[n.slice(i + 1)]; if (v) return typeof v === 'string' ? { inner: v, viewBox: st.viewBox } : { inner: v.inner, viewBox: v.viewBox }; }
     return null;
   }
+  // ---- bringing icons in: SVG files, a { Name: svg } JSON, or an icon review app's feed ----------------------------
+  // The root <svg>'s paint (fill="none" stroke="currentColor" stroke-width="1.5"…) moves onto a group, so outline
+  // icons keep their strokes once only the inner markup is kept.
+  const PAINT = ['fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin', 'stroke-miterlimit', 'stroke-dasharray', 'fill-rule', 'clip-rule', 'opacity', 'fill-opacity', 'stroke-opacity', 'color'];
+  function fromSvg(text) {
+    let doc; try { doc = new DOMParser().parseFromString(String(text || ''), 'image/svg+xml'); } catch { return null; }
+    const svg = doc && doc.documentElement; if (!svg || svg.nodeName.toLowerCase() !== 'svg' || doc.querySelector('parsererror')) return null;
+    let vb = String(svg.getAttribute('viewBox') || '').trim().replace(/,/g, ' ').replace(/\s+/g, ' ');
+    if (!VB.test(vb)) { const w = parseFloat(svg.getAttribute('width')) || 24, h = parseFloat(svg.getAttribute('height')) || 24; vb = `0 0 ${w} ${h}`; }
+    let inner = [...svg.childNodes].map(n => n.nodeType === 1 ? new XMLSerializer().serializeToString(n) : '').join('').replace(/ xmlns="[^"]*"/g, '');
+    if (typeof Render !== 'undefined' && Render.sanitizeSvgInner) inner = Render.sanitizeSvgInner(inner);
+    inner = inner.replace(/ xmlns(:\w+)?="[^"]*"/g, '');
+    const attrs = PAINT.filter(a => svg.hasAttribute(a)).map(a => `${a}="${String(svg.getAttribute(a)).replace(/[^\w#.%\s(),-]/g, '')}"`);
+    if (attrs.length) inner = `<g ${attrs.join(' ')}>${inner}</g>`;
+    if (!inner || SAFE.test(inner)) return null;
+    return { inner, viewBox: vb };
+  }
+  const pascal = s => String(s || '').replace(/\.svg$/i, '').split(/[^A-Za-z0-9]+/).filter(Boolean).map(w => w[0].toUpperCase() + w.slice(1)).join('').slice(0, 60) || 'Icon';
+  // A feed of icons under review ({ icons: [{ name, category, status, submissions: [{ svg, isApproved }] }] }):
+  // each icon's approved design, else its leading one.
+  function fromFeed(j) {
+    const icons = {}, meta = {}; let n = 0, skipped = 0;
+    for (const row of (j && Array.isArray(j.icons) ? j.icons : []).slice(0, 3000)) {
+      const subs = Array.isArray(row && row.submissions) ? row.submissions : []; const pick = subs.find(s => s && s.isApproved) || subs[0];
+      const ic = pick && fromSvg(pick.svg); if (!ic) { skipped++; continue; }
+      let key = pascal(row.name || row.slug); while (icons[key]) key += '2';
+      icons[key] = ic; meta[key] = [row.category, row.status && String(row.status).toLowerCase().replace(/_/g, ' '), row.slug].filter(Boolean).join(' · '); n++;
+    }
+    return { icons, meta, count: n, skipped };
+  }
+  function fromJson(j) { const icons = {}; for (const [k, v] of Object.entries(j || {})) { const ic = typeof v === 'string' ? (/<svg/i.test(v) ? fromSvg(v) : { inner: v, viewBox: '0 0 24 24' }) : null; if (ic) icons[pascal(k)] = ic; } return { icons, meta: {}, count: Object.keys(icons).length, skipped: 0 }; }
   function has(name) { return !!get(name); }
   // Every set, the built-in one first (its names have no prefix).
-  function sets() { return [{ id: '', name: 'Basic', viewBox: '0 0 256 256', names: Object.keys(SET) }, ...[...SETS.values()].map(st => ({ id: st.id, name: st.name, viewBox: st.viewBox, names: Object.keys(st.icons) }))]; }
+  function sets() { return [{ id: '', name: 'Basic', viewBox: '0 0 256 256', names: Object.keys(SET) }, ...[...SETS.values()].sort((a, b) => (b.source ? 1 : 0) - (a.source ? 1 : 0)).map(st => ({ id: st.id, name: st.name, viewBox: st.viewBox, names: Object.keys(st.icons), meta: st.meta, source: st.source }))]; }
   // Search by words, camelCase split ("arrow back" finds ArrowBack); design-system sets first.
   function search(q, limit = 60, setId) {
     const words = String(q || '').toLowerCase().split(/[^a-z0-9]+/).filter(Boolean); const out = [];
@@ -3154,7 +3196,7 @@ const Icons = (() => {
     for (const st of all) {
       if (!st) continue;
       for (const nm of st.names) {
-        const hay = nm.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/[-_]/g, ' ').toLowerCase();
+        const hay = (nm.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/[-_]/g, ' ') + ' ' + (st.meta && st.meta[nm] || '')).toLowerCase();
         if (words.every(w => hay.includes(w))) out.push(st.id ? `${st.id}:${nm}` : nm);
         if (out.length >= limit) return out;
       }
@@ -3172,7 +3214,7 @@ const Icons = (() => {
   }
   // A private build can carry a design system's icons (window.__LG_PRIVATE.iconSets).
   if (typeof window !== 'undefined' && window.__LG_PRIVATE && Array.isArray(window.__LG_PRIVATE.iconSets)) for (const st of window.__LG_PRIVATE.iconSets) addSet(st);
-  return { SET, names: Object.keys(SET), has, get, sets, search, addSet, forText, svg };
+  return { SET, names: Object.keys(SET), has, get, sets, search, addSet, removeSet, fromSvg, fromFeed, fromJson, pascal, forText, svg };
 })();
 
 /* js/render.js */
@@ -9127,7 +9169,7 @@ const LibStore = (() => {
   const ID = /^[A-Za-z0-9_.:-]{1,64}$/;
   const MAX_ITEM = 240 * 1024;
   let env = null, backend = null, started = null;
-  const S = { mode: 'local', libs: new Map(), items: new Map(), guides: new Map(), notes: new Map(), canWrite: null, admins: [], uid: null, owner: false, canEdit: null, keyRequired: false, keyOk: false, ready: false, error: '' };
+  const S = { mode: 'local', libs: new Map(), items: new Map(), guides: new Map(), notes: new Map(), iconsets: new Map(), canWrite: null, admins: [], uid: null, owner: false, canEdit: null, keyRequired: false, keyOk: false, ready: false, error: '' };
   let prefs = LS.get('lg.libsOn', {}) || {};
   const listeners = new Set();
   const emit = () => { for (const fn of listeners) { try { fn(); } catch (e) { console.error(e); } } };
@@ -9154,6 +9196,33 @@ const LibStore = (() => {
   const str = (v, n) => typeof v === 'string' ? v.slice(0, n) : '';
   const cleanNote = (n, doc) => n && typeof n === 'object' && ID.test(String(n.id || '')) && GUIDE.test(String(n.guide || '')) ? { id: n.id, guide: n.guide, kind: n.kind === 'edit' ? 'edit' : 'comment', by: str(n.by, 80), byName: str(n.byName, 80), at: +n.at || 0, quote: str(n.quote, 8000), replacement: n.kind === 'edit' ? str(n.replacement, 8000) : '', text: str(n.text, 2000), status: NOTE_STATUS.test(n.status) ? n.status : 'open', reply: str(n.reply, 1000), doneBy: str(n.doneBy, 80), doneAt: +n.doneAt || 0, _doc: doc || n._doc || '' } : null;
   function setNotes(list) { S.notes.clear(); for (const n of list || []) { const c = cleanNote(n); if (c) S.notes.set(c.id, c); } emit(); }
+  // Icon sets (a design system's icons, imported once and shared): stored in parts under 200 KB, "<id>" then "<id>~2"…
+  const SETID = /^[a-z0-9_-]{1,24}$/;
+  function setIconSets(list) {
+    const merged = new Map();
+    for (const d of list || []) {
+      if (!d || typeof d !== 'object') continue; const id = String(d.set || d.id || '').split('~')[0]; if (!SETID.test(id) || !d.icons || typeof d.icons !== 'object') continue;
+      const cur = merged.get(id) || { id, name: '', viewBox: '0 0 24 24', icons: {}, meta: {}, source: '', updated: 0, by: '' };
+      Object.assign(cur.icons, d.icons); if (d.meta && typeof d.meta === 'object') Object.assign(cur.meta, d.meta);
+      if (!String(d.id || '').includes('~')) { cur.name = String(d.name || id).slice(0, 40); cur.viewBox = String(d.viewBox || '0 0 24 24'); cur.source = String(d.source || '').slice(0, 200); cur.updated = +d.updated || 0; cur.by = typeof d.by === 'string' ? d.by.slice(0, 80) : ''; cur.order = +d.order || 0; }
+      merged.set(id, cur);
+    }
+    for (const id of S.iconsets.keys()) if (!merged.has(id) && typeof Icons !== 'undefined') Icons.removeSet(id);
+    S.iconsets = merged; if (typeof Icons !== 'undefined') for (const st of merged.values()) Icons.addSet(st);
+    emit();
+  }
+  // A set as documents: the first holds the name and the first icons, the rest only icons.
+  function iconSetParts(st) {
+    const parts = []; let cur = null, size = 0;
+    for (const [k, v] of Object.entries(st.icons)) {
+      const n = JSON.stringify(v).length + k.length + JSON.stringify((st.meta || {})[k] || '').length + 8;
+      if (!cur || size + n > 190000) { cur = { id: parts.length ? `${st.id}~${parts.length + 1}` : st.id, set: st.id, icons: {}, meta: {} }; parts.push(cur); size = 0; }
+      cur.icons[k] = v; if (st.meta && st.meta[k]) cur.meta[k] = st.meta[k]; size += n;
+    }
+    if (!parts.length) parts.push({ id: st.id, set: st.id, icons: {}, meta: {} });
+    Object.assign(parts[0], { name: st.name, viewBox: st.viewBox, source: st.source || '', updated: Date.now(), by: S.uid || '', order: st.order || 0, parts: parts.length });
+    return parts;
+  }
   function setGuides(list) { S.guides.clear(); for (const g of list || []) { const c = cleanGuide(g); if (c) S.guides.set(c.id, c); } emit(); }
   function setAll({ libraries, items, admins }) {
     if (libraries) { S.libs.clear(); for (const l of libraries) { const c = cleanLib(l); if (c) S.libs.set(c.id, c); } }
@@ -9201,6 +9270,7 @@ const LibStore = (() => {
       if (!ready.items && snap.metadata && snap.metadata.fromCache && !snap.size) return;
       ready.items = true; S.items.clear(); upsert('item', list); done();
     }, e => { S.error = (e && e.code) || 'db'; emit(); });
+    db.collection('iconsets').onSnapshot(snap => { const list = []; S.iconParts = new Map(); for (const d of snap.docs) { const v = d.data(); if (v) { list.push({ ...v, id: d.id }); S.iconParts.set(d.id, String(v.set || d.id).split('~')[0]); } } setIconSets(list); }, () => { });
     db.collection('guides').onSnapshot(snap => { const list = []; for (const d of snap.docs) { const v = d.data(); if (v) list.push({ ...v, id: d.id }); } setGuides(list); }, () => { });
     // one document per person (guidenotes/<their id>): each writes only their own, admins write all to resolve
     db.collection('guidenotes').onSnapshot(snap => { const list = []; for (const d of snap.docs) { const v = d.data(); if (v && Array.isArray(v.notes)) for (const n of v.notes) list.push({ ...n, _doc: d.id }); } setNotes(list); }, () => { });
@@ -9220,6 +9290,8 @@ const LibStore = (() => {
       delItem: id => write(() => db.doc(`libitems/${id}`).delete()),
       setAdmins: ids => write(() => db.doc('config/admins').set({ ids })),
       putGuide: g => write(() => db.doc(`guides/${g.id}`).set(g)),
+      putIconSet: async st => { const parts = iconSetParts(st); const old = [...(S.iconParts || new Map()).entries()].filter(([, s]) => s === st.id).map(([k]) => k); await write(async () => { for (const p of parts) await db.doc(`iconsets/${p.id}`).set(p); for (const k of old) if (!parts.some(p => p.id === k)) await db.doc(`iconsets/${k}`).delete(); }); },
+      delIconSet: async id => write(async () => { for (const k of [...(S.iconParts || new Map()).entries()].filter(([, s]) => s === id).map(([k]) => k)) await db.doc(`iconsets/${k}`).delete(); }),
       putNote: n => { const doc = n._doc || S.uid; if (!doc) throw new Error('Sign in to claude.ai to suggest changes'); const mine = [...S.notes.values()].filter(x => x._doc === doc && x.id !== n.id).concat([{ ...n, _doc: doc }]).map(({ _doc, ...x }) => x).slice(-200); return db.doc(`guidenotes/${doc}`).set({ notes: mine }).catch(e => { throw denied(e) ? new Error('You can view these guidelines but not suggest changes. Ask the page owner for Contributor access, or use Comment.') : e; }); },
       uploadImage: assets ? async blob => { const r = await assets.upload(blob); return { url: r.url }; } : null,
       profiles: user && user.profiles ? ids => user.profiles(ids) : null,
@@ -9233,7 +9305,7 @@ const LibStore = (() => {
     if (!j || !j.lgLibraries) return null;
     S.keyRequired = !!j.keyRequired;
     const key = () => LS.get('lg.adminKey', '') || '';
-    const apply = j => { S.keyRequired = !!j.keyRequired; setAll({ libraries: j.libraries || [], items: j.items || [] }); if (j.guides) setGuides(j.guides); if (j.notes) setNotes(j.notes); };
+    const apply = j => { S.keyRequired = !!j.keyRequired; setAll({ libraries: j.libraries || [], items: j.items || [] }); if (j.guides) setGuides(j.guides); if (j.notes) setNotes(j.notes); if (j.iconsets) setIconSets(j.iconsets); };
     apply(j);
     async function op(body) {
       const r = await fetch('/api/libraries', { method: 'POST', headers: { 'content-type': 'application/json', 'x-lg-admin': key() }, body: JSON.stringify(body) });
@@ -9251,13 +9323,15 @@ const LibStore = (() => {
       putItem: item => op({ op: 'putItem', item }),
       delItem: id => op({ op: 'delItem', id }),
       putGuide: guide => op({ op: 'putGuide', guide }),
+      putIconSet: async st => { for (const part of iconSetParts(st)) await op({ op: 'putIconSet', part }); },
+      delIconSet: id => op({ op: 'delIconSet', id }),
       putNote: note => op({ op: 'putNote', note }),
       uploadImage: async (blob, name) => { const r = await fetch('/api/assets?room=library', { method: 'POST', headers: { 'content-type': blob.type || 'image/png', 'x-name': encodeURIComponent(name || '') }, body: blob }); if (!r.ok) throw new Error('Image upload failed (' + r.status + ')'); const o = await r.json(); return { url: o.url }; },
     };
   }
   function localBackend() {
     const KEY = 'lg.libs.v1';
-    const load = () => { const j = LS.get(KEY, null) || {}; setAll({ libraries: j.libraries || [], items: j.items || [] }); setGuides(LS.get('lg.guides.v1', []) || []); setNotes(LS.get('lg.guidenotes.v1', []) || []); };
+    const load = () => { const j = LS.get(KEY, null) || {}; setAll({ libraries: j.libraries || [], items: j.items || [] }); setGuides(LS.get('lg.guides.v1', []) || []); setNotes(LS.get('lg.guidenotes.v1', []) || []); setIconSets(LS.get('lg.iconsets.v1', []) || []); };
     const save = () => { if (!LS.set(KEY, { libraries: [...S.libs.values()], items: [...S.items.values()] })) throw new Error('This browser\'s storage is full. Export the libraries, remove some pictures, and try again.'); };
     load();
     window.addEventListener('storage', e => { if (e.key === KEY) load(); });
@@ -9270,6 +9344,8 @@ const LibStore = (() => {
       delItem: id => change(() => S.items.delete(id)),
       putNote: n => { S.notes.set(n.id, cleanNote(n)); LS.set('lg.guidenotes.v1', [...S.notes.values()]); emit(); },
       putGuide: g => { S.guides.set(g.id, g); if (!LS.set('lg.guides.v1', [...S.guides.values()])) throw new Error('This browser\'s storage is full.'); emit(); },
+      putIconSet: st => { const all = [...S.iconsets.values()].filter(x => x.id !== st.id).concat([{ ...st, updated: Date.now() }]); if (!LS.set('lg.iconsets.v1', all)) throw new Error('This browser\'s storage is full.'); setIconSets(all); },
+      delIconSet: id => { const all = [...S.iconsets.values()].filter(x => x.id !== id); LS.set('lg.iconsets.v1', all); setIconSets(all); },
       uploadImage: null, // pictures ride inside the item as data URLs
     };
   }
@@ -9358,6 +9434,14 @@ const LibStore = (() => {
     return { libraries: nl, items: ni };
   }
   // Brand guidelines: everyone reads them (Claude gets them in its prompts); admins write them.
+  const iconSets = () => [...S.iconsets.values()].sort((a, b) => (a.order || 0) - (b.order || 0) || a.name.localeCompare(b.name));
+  async function putIconSet(st) {
+    if (!backend) throw new Error('Still loading'); if (!role().admin) throw new Error('Only library admins can add shared icon sets');
+    if (!SETID.test(String(st.id || '')) || !st.icons || !Object.keys(st.icons).length) throw new Error('No icons to add');
+    await backend.putIconSet({ id: st.id, name: String(st.name || st.id).slice(0, 40), viewBox: st.viewBox || '0 0 24 24', icons: st.icons, meta: st.meta || {}, source: st.source || '', order: st.order || 0 });
+    if (backend.kind !== 'local') { const merged = new Map(S.iconsets); merged.set(st.id, { ...st, updated: Date.now() }); setIconSets([...merged.values()]); }
+  }
+  async function delIconSet(id) { if (!backend) throw new Error('Still loading'); if (!role().admin) throw new Error('Only library admins can remove shared icon sets'); await backend.delIconSet(id); if (backend.kind !== 'local') { const m = new Map(S.iconsets); m.delete(id); setIconSets([...m.values()]); } }
   const guide = id => (S.guides.get(id) || {}).text || '';
   const guides = () => Object.fromEntries([...S.guides.values()].map(g => [g.id, g]));
   async function putGuide(id, text) {
@@ -9380,7 +9464,7 @@ const LibStore = (() => {
   async function searchPeople(q) { if (!backend || !backend.search) return []; try { return await backend.search(q); } catch { return []; } }
   return {
     init, start, libraries, items, isOn, setOn, role, createLibrary, updateLibrary, deleteLibrary, putItem, updateItem, deleteItem, setAdmins,
-    exportJSON, importJSON, people, searchPeople, assetInfo, guide, guides, putGuide, notes, addNote, setNote, canSuggest, guideKey, GUIDES: ['design', 'layout', 'animation', 'illustration', 'photography', 'content', 'product'],
+    exportJSON, importJSON, people, searchPeople, assetInfo, iconSets, putIconSet, delIconSet, guide, guides, putGuide, notes, addNote, setNote, canSuggest, guideKey, GUIDES: ['design', 'layout', 'animation', 'illustration', 'photography', 'content', 'product'],
     refresh: () => backend && backend.refresh ? backend.refresh() : null,
     checkKey: k => backend && backend.checkKey ? backend.checkKey(k) : Promise.reject(new Error('No admin key here')),
     on: fn => { listeners.add(fn); return () => listeners.delete(fn); },
@@ -9688,11 +9772,35 @@ const Library = (() => {
     return { id: 'icon:' + name, name, category: 'icons', approved: true, w: s, h: s, blocks: [{ id: 'ic1', kind: 'icon', name, x: 0, y: 0, w: s, h: s, fill: palette(env.getKit()).ink, decorative: true, label: name.replace(/^[^:]*:/, '') }] };
   }
   const iconTile = n => { const g = Icons.get(n); return `<button type="button" class="cv-ico" draggable="true" data-item="icon:${esc(n)}" title="${esc(n)} · click to add, or drag onto a screen"><svg viewBox="${g.viewBox}" aria-hidden="true">${g.inner}</svg></button>`; };
+  // Bringing icons in: SVG files, a { name: svg } JSON, or a review app's feed; shared for admins, else this browser's own.
+  const MINE = 'lg.myIconsets';
+  function loadMine() { for (const st of LS.get(MINE, []) || []) Icons.addSet({ ...st, source: st.source || 'this browser' }); }
+  async function importIcons(files, name) {
+    const nm = String(name || '').trim().slice(0, 40) || 'Imported icons'; const id = nm.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 24) || 'imported';
+    const icons = {}, meta = {}; let skipped = 0, kinds = [];
+    for (const f of files) {
+      const text = await f.text();
+      if (/\.svg$/i.test(f.name) || /svg/.test(f.type)) { const ic = Icons.fromSvg(text); if (ic) icons[Icons.pascal(f.name)] = ic; else skipped++; kinds.push('svg'); continue; }
+      let j; try { j = JSON.parse(text); } catch { throw new Error(`${f.name} is not JSON or SVG`); }
+      const r = Array.isArray(j.icons) ? Icons.fromFeed(j) : Icons.fromJson(j.icons && typeof j.icons === 'object' ? j.icons : j);
+      Object.assign(icons, r.icons); Object.assign(meta, r.meta); skipped += r.skipped; kinds.push(Array.isArray(j.icons) ? 'feed' : 'json');
+    }
+    const n = Object.keys(icons).length; if (!n) throw new Error('No icons found in those files');
+    const st = { id, name: nm, viewBox: '0 0 24 24', icons, meta, source: kinds.includes('feed') ? 'review feed' : 'import' };
+    if (LibStore.role().admin) { await LibStore.putIconSet(st); env.toast(`${nm}: ${n} icons, shared with everyone${skipped ? ` (${skipped} skipped)` : ''}`); }
+    else { const mine = (LS.get(MINE, []) || []).filter(x => x.id !== id).concat([st]); LS.set(MINE, mine); Icons.addSet({ ...st, source: 'this browser' }); env.toast(`${nm}: ${n} icons, in this browser (admins share icon sets)${skipped ? ` · ${skipped} skipped` : ''}`); }
+    folded.delete('icons-' + id); render();
+  }
+  async function removeIconSet(id) {
+    if (LibStore.iconSets().some(s => s.id === id)) await LibStore.delIconSet(id); else { LS.set(MINE, (LS.get(MINE, []) || []).filter(x => x.id !== id)); Icons.removeSet(id); }
+    env.toast('Icon set removed'); render();
+  }
   function iconSections(q, max) {
+    const canDel = id => LibStore.iconSets().some(s => s.id === id) ? LibStore.role().admin : (LS.get(MINE, []) || []).some(s => s.id === id);
     return Icons.sets().slice().sort((a, b) => (a.id ? 0 : 1) - (b.id ? 0 : 1)).map(st => {
       const names = q ? Icons.search(q, 400, st.id) : st.names.map(n => st.id ? `${st.id}:${n}` : n); if (!names.length) return '';
       const sid = 'icons-' + (st.id || 'basic'); const fold = folded.has(sid) && !q; const lim = expanded.has(sid) || q ? Math.min(max, 400) : 60;
-      return `<section class="lib-sec"><button type="button" class="lib-sec-head" data-fold="${esc(sid)}" aria-expanded="${!fold}"><span class="lib-caret">${fold ? '▸' : '▾'}</span>${esc(st.name)} icons <span class="lib-count">${names.length}</span></button>
+      return `<section class="lib-sec"><div class="lib-sec-row"><button type="button" class="lib-sec-head" data-fold="${esc(sid)}" aria-expanded="${!fold}"><span class="lib-caret">${fold ? '▸' : '▾'}</span>${esc(st.name)}${/icons$/i.test(st.name) ? '' : ' icons'} <span class="lib-count">${names.length}</span>${st.source ? ` <span class="lib-tag">${esc(st.source === 'this browser' ? 'this browser' : 'imported')}</span>` : ''}</button>${st.id && canDel(st.id) ? `<button type="button" class="btn small ghost" data-iconset-del="${esc(st.id)}" title="Remove this icon set">✕</button>` : ''}</div>
         ${fold ? '' : `<div class="lib-icons">${names.slice(0, lim).map(iconTile).join('')}</div>${names.length > lim ? `<button type="button" class="btn small ghost lib-more" data-more="${esc(sid)}">Show ${q ? 'more' : 'all ' + names.length}</button>` : ''}`}</section>`;
     }).join('');
   }
@@ -9729,7 +9837,7 @@ const Library = (() => {
   }
 
   // ---- Panel ------------------------------------------------------------------------------------------------------------
-  function init(e) { env = e; LibStore.on(() => { refresh(); }); }
+  function init(e) { env = e; LibStore.on(() => { refresh(); }); loadMine(); }
   const isOpen = () => !!(el && !el.hidden && el.offsetParent !== null);
   let rq = 0; function refresh() { if (rq) return; rq = requestAnimationFrame(() => { rq = 0; if (isOpen()) render(); if (mgr && !mgr.hidden) renderManager(); }); }
   function imagesChanged() { imgEpoch++; refresh(); }
@@ -9748,7 +9856,8 @@ const Library = (() => {
     const on = srcs.filter(s => LibStore.isOn(s.id));
     const sel = env.canvas.selection(); const canSave = sel.blockIds.length > 0;
     const match = it => (cat === 'all' || it.category === cat) && (!query || `${it.name} ${it.category} ${it.code ? it.code.name + ' ' + (it.code.spec && it.code.spec.group || '') : ''}`.toLowerCase().includes(query));
-    const sections = cat === 'icons' ? iconSections(query, 400) : on.map(s => {
+    const iconImport = `<div class="lib-form"><span class="hint">Add icons: SVG files, a JSON of name → SVG, or an icon review feed (<code>{ icons: [{ name, submissions: [{ svg }] }] }</code>, approved or leading design). The same name replaces a set.</span><div class="cv-row"><input type="text" class="input grow" data-lib="iconset-name" placeholder="Set name, e.g. Product icons" maxlength="40"><label class="btn small file">＋ Import icons<input type="file" data-lib="icons-import" accept=".svg,image/svg+xml,.json,application/json" multiple hidden></label></div></div>`;
+    const sections = cat === 'icons' ? iconImport + iconSections(query, 400) : on.map(s => {
       const list = s.items.map(it => tag(s, it)).filter(match); if (!list.length && (query || cat !== 'all' || s.builtin)) return '';
       const fold = folded.has(s.id) && !query; const max = expanded.has(s.id) || query ? 400 : 24;
       return `<section class="lib-sec"><button type="button" class="lib-sec-head" data-fold="${esc(s.id)}" aria-expanded="${!fold}"><span class="lib-caret">${fold ? '▸' : '▾'}</span>${esc(s.name)} <span class="lib-count">${list.length}</span>${s.shared ? '' : s.builtin ? ' <span class="lib-tag">built in</span>' : ' <span class="lib-tag">local</span>'}</button>
@@ -9778,6 +9887,7 @@ const Library = (() => {
       const c = e.target.closest('[data-cat]'); if (c) { cat = c.dataset.cat; render(); return; }
       const fo = e.target.closest('[data-fold]'); if (fo) { const id = fo.dataset.fold; folded.has(id) ? folded.delete(id) : folded.add(id); LS.set('lg.libFolded', [...folded]); render(); return; }
       const mo = e.target.closest('[data-more]'); if (mo) { expanded.add(mo.dataset.more); render(); return; }
+      const idel = e.target.closest('[data-iconset-del]'); if (idel) { await guard(() => removeIconSet(idel.dataset.iconsetDel)); return; }
       const ap = e.target.closest('[data-approve]'); if (ap) { await guard(() => setApproved(ap.dataset.src, ap.dataset.approve)); return; }
       const rm = e.target.closest('[data-remove]'); if (rm) { await guard(() => removeItem(rm.dataset.src, rm.dataset.remove)); return; }
       const pb = e.target.closest('[data-publish]'); if (pb) { publishing = pb.dataset.publish; naming = false; render(); return; }
@@ -9793,10 +9903,11 @@ const Library = (() => {
       if (a === 'export') { exportLibrary(); return; }
       const it = e.target.closest('[data-item]'); if (it && !act) { insert(it.dataset.item); }
     });
-    el.addEventListener('keydown', e => { if (e.target.dataset.lib === 'name' || e.target.dataset.lib === 'bind') { e.stopPropagation(); if (e.key === 'Enter') submitSave(); else if (e.key === 'Escape') { naming = false; render(); } } });
+    el.addEventListener('keydown', e => { if (e.target.dataset.lib === 'iconset-name') { e.stopPropagation(); return; } if (e.target.dataset.lib === 'name' || e.target.dataset.lib === 'bind') { e.stopPropagation(); if (e.key === 'Enter') submitSave(); else if (e.key === 'Escape') { naming = false; render(); } } });
     el.addEventListener('change', async e => {
       const t = e.target;
       if (t.dataset.lib === 'dest') LS.set('lg.libDest', t.value);
+      if (t.dataset.lib === 'icons-import') { const files = [...t.files]; t.value = ''; const nm = (el.querySelector('[data-lib="iconset-name"]') || {}).value; if (files.length) await guard(() => importIcons(files, nm)); return; }
       if (t.dataset.lib === 'files') { for (const f of t.files) await guard(() => addFile(f)); t.value = ''; render(); }
       if (t.dataset.lib === 'import') { const f = t.files[0]; t.value = ''; if (f) await guard(async () => importFile(JSON.parse(await f.text()))); render(); }
     });
@@ -9970,7 +10081,7 @@ const Library = (() => {
     const nm = ids && ids.length === 1 ? (LibStore.libraries().find(l => l.id === ids[0]) || {}).name : 'libraries';
     if (await env.download(blob, `${String(nm || 'libraries').toLowerCase().replace(/[^a-z0-9]+/g, '-')}.json`)) env.toast(`Exported ${j.lgLibrary.items.length} items`);
   }
-  return { init, bind, bindManager, render, refresh, imagesChanged, openManager, all, sources, builtins, thumb, fromSelection, insert, specFor, codeSpecs, variantFor, palette, settle, CATEGORIES };
+  return { init, bind, bindManager, render, refresh, imagesChanged, openManager, all, sources, builtins, thumb, fromSelection, insert, specFor, codeSpecs, variantFor, importIcons, palette, settle, CATEGORIES };
 })();
 
 /* js/projects.js */

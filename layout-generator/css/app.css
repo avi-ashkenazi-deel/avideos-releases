@@ -543,6 +543,8 @@ input[disabled] { opacity: .5; cursor: not-allowed; }
 .lib-cats button.on { background: var(--cta); color: var(--cta-ink); border-color: var(--cta); font-weight: 600; }
 .lib-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 /* icon picker (properties panel and the library's Icons) */
+.lib-sec-row { display: flex; align-items: center; gap: 4px; }
+.lib-sec-row .lib-sec-head { flex: 1; min-width: 0; }
 .cv-icons, .lib-icons { display: grid; grid-template-columns: repeat(auto-fill, minmax(34px, 1fr)); gap: 4px; margin-top: 8px; max-height: 260px; overflow: auto; }
 .lib-icons { max-height: none; }
 .cv-ico { display: grid; place-items: center; aspect-ratio: 1; border: 1px solid transparent; border-radius: 6px; background: var(--panel-2); color: var(--fg); cursor: pointer; padding: 6px; }

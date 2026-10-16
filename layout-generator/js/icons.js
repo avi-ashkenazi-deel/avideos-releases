@@ -85,22 +85,62 @@ const Icons = (() => {
   // More sets (a design system's icons) register at run time: names are "<set>:<Name>", e.g. "ds:Search".
   const SETS = new Map();
   const SAFE = /<(script|foreignObject|iframe|image|use)\b|\son\w+\s*=|href\s*=|javascript:|url\(/i;
+  // An icon is its inner markup, or { inner, viewBox } when it differs from the set's; meta holds words to find it by.
+  const VB = /^-?[\d.]+(\s+-?[\d.]+){3}$/;
   function addSet(s) {
     if (!s || !/^[a-z0-9_-]{1,24}$/.test(String(s.id || '')) || !s.icons || typeof s.icons !== 'object') return 0;
-    const icons = {};
-    for (const [k, v] of Object.entries(s.icons)) if (/^[A-Za-z0-9_-]{1,60}$/.test(k) && typeof v === 'string' && v.length < 20000 && !SAFE.test(v)) icons[k] = v;
-    const vb = /^-?[\d.]+(\s+-?[\d.]+){3}$/.test(String(s.viewBox || '').trim()) ? String(s.viewBox).trim() : '0 0 24 24';
-    SETS.set(s.id, { id: s.id, name: String(s.name || s.id).slice(0, 40), viewBox: vb, icons });
+    const icons = {}; const meta = {};
+    for (const [k, v] of Object.entries(s.icons)) {
+      if (!/^[A-Za-z0-9_-]{1,60}$/.test(k)) continue;
+      const inner = typeof v === 'string' ? v : v && typeof v.inner === 'string' ? v.inner : null;
+      if (!inner || inner.length > 20000 || SAFE.test(inner)) continue;
+      icons[k] = v && typeof v === 'object' && VB.test(String(v.viewBox || '').trim()) ? { inner, viewBox: String(v.viewBox).trim() } : inner;
+      if (s.meta && typeof s.meta[k] === 'string') meta[k] = s.meta[k].slice(0, 120);
+    }
+    const vb = VB.test(String(s.viewBox || '').trim()) ? String(s.viewBox).trim() : '0 0 24 24';
+    SETS.set(s.id, { id: s.id, name: String(s.name || s.id).slice(0, 40), viewBox: vb, icons, meta, source: s.source || '' });
     return Object.keys(icons).length;
   }
+  function removeSet(id) { return SETS.delete(id); }
   function get(name) {
     const n = String(name || ''); if (SET[n]) return { inner: SET[n], viewBox: '0 0 256 256' };
-    const i = n.indexOf(':'); if (i > 0) { const st = SETS.get(n.slice(0, i)); const inner = st && st.icons[n.slice(i + 1)]; if (inner) return { inner, viewBox: st.viewBox }; }
+    const i = n.indexOf(':'); if (i > 0) { const st = SETS.get(n.slice(0, i)); const v = st && st.icons[n.slice(i + 1)]; if (v) return typeof v === 'string' ? { inner: v, viewBox: st.viewBox } : { inner: v.inner, viewBox: v.viewBox }; }
     return null;
   }
+  // ---- bringing icons in: SVG files, a { Name: svg } JSON, or an icon review app's feed ----------------------------
+  // The root <svg>'s paint (fill="none" stroke="currentColor" stroke-width="1.5"…) moves onto a group, so outline
+  // icons keep their strokes once only the inner markup is kept.
+  const PAINT = ['fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin', 'stroke-miterlimit', 'stroke-dasharray', 'fill-rule', 'clip-rule', 'opacity', 'fill-opacity', 'stroke-opacity', 'color'];
+  function fromSvg(text) {
+    let doc; try { doc = new DOMParser().parseFromString(String(text || ''), 'image/svg+xml'); } catch { return null; }
+    const svg = doc && doc.documentElement; if (!svg || svg.nodeName.toLowerCase() !== 'svg' || doc.querySelector('parsererror')) return null;
+    let vb = String(svg.getAttribute('viewBox') || '').trim().replace(/,/g, ' ').replace(/\s+/g, ' ');
+    if (!VB.test(vb)) { const w = parseFloat(svg.getAttribute('width')) || 24, h = parseFloat(svg.getAttribute('height')) || 24; vb = `0 0 ${w} ${h}`; }
+    let inner = [...svg.childNodes].map(n => n.nodeType === 1 ? new XMLSerializer().serializeToString(n) : '').join('').replace(/ xmlns="[^"]*"/g, '');
+    if (typeof Render !== 'undefined' && Render.sanitizeSvgInner) inner = Render.sanitizeSvgInner(inner);
+    inner = inner.replace(/ xmlns(:\w+)?="[^"]*"/g, '');
+    const attrs = PAINT.filter(a => svg.hasAttribute(a)).map(a => `${a}="${String(svg.getAttribute(a)).replace(/[^\w#.%\s(),-]/g, '')}"`);
+    if (attrs.length) inner = `<g ${attrs.join(' ')}>${inner}</g>`;
+    if (!inner || SAFE.test(inner)) return null;
+    return { inner, viewBox: vb };
+  }
+  const pascal = s => String(s || '').replace(/\.svg$/i, '').split(/[^A-Za-z0-9]+/).filter(Boolean).map(w => w[0].toUpperCase() + w.slice(1)).join('').slice(0, 60) || 'Icon';
+  // A feed of icons under review ({ icons: [{ name, category, status, submissions: [{ svg, isApproved }] }] }):
+  // each icon's approved design, else its leading one.
+  function fromFeed(j) {
+    const icons = {}, meta = {}; let n = 0, skipped = 0;
+    for (const row of (j && Array.isArray(j.icons) ? j.icons : []).slice(0, 3000)) {
+      const subs = Array.isArray(row && row.submissions) ? row.submissions : []; const pick = subs.find(s => s && s.isApproved) || subs[0];
+      const ic = pick && fromSvg(pick.svg); if (!ic) { skipped++; continue; }
+      let key = pascal(row.name || row.slug); while (icons[key]) key += '2';
+      icons[key] = ic; meta[key] = [row.category, row.status && String(row.status).toLowerCase().replace(/_/g, ' '), row.slug].filter(Boolean).join(' · '); n++;
+    }
+    return { icons, meta, count: n, skipped };
+  }
+  function fromJson(j) { const icons = {}; for (const [k, v] of Object.entries(j || {})) { const ic = typeof v === 'string' ? (/<svg/i.test(v) ? fromSvg(v) : { inner: v, viewBox: '0 0 24 24' }) : null; if (ic) icons[pascal(k)] = ic; } return { icons, meta: {}, count: Object.keys(icons).length, skipped: 0 }; }
   function has(name) { return !!get(name); }
   // Every set, the built-in one first (its names have no prefix).
-  function sets() { return [{ id: '', name: 'Basic', viewBox: '0 0 256 256', names: Object.keys(SET) }, ...[...SETS.values()].map(st => ({ id: st.id, name: st.name, viewBox: st.viewBox, names: Object.keys(st.icons) }))]; }
+  function sets() { return [{ id: '', name: 'Basic', viewBox: '0 0 256 256', names: Object.keys(SET) }, ...[...SETS.values()].sort((a, b) => (b.source ? 1 : 0) - (a.source ? 1 : 0)).map(st => ({ id: st.id, name: st.name, viewBox: st.viewBox, names: Object.keys(st.icons), meta: st.meta, source: st.source }))]; }
   // Search by words, camelCase split ("arrow back" finds ArrowBack); design-system sets first.
   function search(q, limit = 60, setId) {
     const words = String(q || '').toLowerCase().split(/[^a-z0-9]+/).filter(Boolean); const out = [];
@@ -108,7 +148,7 @@ const Icons = (() => {
     for (const st of all) {
       if (!st) continue;
       for (const nm of st.names) {
-        const hay = nm.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/[-_]/g, ' ').toLowerCase();
+        const hay = (nm.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/[-_]/g, ' ') + ' ' + (st.meta && st.meta[nm] || '')).toLowerCase();
         if (words.every(w => hay.includes(w))) out.push(st.id ? `${st.id}:${nm}` : nm);
         if (out.length >= limit) return out;
       }
@@ -126,5 +166,5 @@ const Icons = (() => {
   }
   // A private build can carry a design system's icons (window.__LG_PRIVATE.iconSets).
   if (typeof window !== 'undefined' && window.__LG_PRIVATE && Array.isArray(window.__LG_PRIVATE.iconSets)) for (const st of window.__LG_PRIVATE.iconSets) addSet(st);
-  return { SET, names: Object.keys(SET), has, get, sets, search, addSet, forText, svg };
+  return { SET, names: Object.keys(SET), has, get, sets, search, addSet, removeSet, fromSvg, fromFeed, fromJson, pascal, forText, svg };
 })();

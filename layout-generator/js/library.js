@@ -136,11 +136,35 @@ const Library = (() => {
     return { id: 'icon:' + name, name, category: 'icons', approved: true, w: s, h: s, blocks: [{ id: 'ic1', kind: 'icon', name, x: 0, y: 0, w: s, h: s, fill: palette(env.getKit()).ink, decorative: true, label: name.replace(/^[^:]*:/, '') }] };
   }
   const iconTile = n => { const g = Icons.get(n); return `<button type="button" class="cv-ico" draggable="true" data-item="icon:${esc(n)}" title="${esc(n)} · click to add, or drag onto a screen"><svg viewBox="${g.viewBox}" aria-hidden="true">${g.inner}</svg></button>`; };
+  // Bringing icons in: SVG files, a { name: svg } JSON, or a review app's feed; shared for admins, else this browser's own.
+  const MINE = 'lg.myIconsets';
+  function loadMine() { for (const st of LS.get(MINE, []) || []) Icons.addSet({ ...st, source: st.source || 'this browser' }); }
+  async function importIcons(files, name) {
+    const nm = String(name || '').trim().slice(0, 40) || 'Imported icons'; const id = nm.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 24) || 'imported';
+    const icons = {}, meta = {}; let skipped = 0, kinds = [];
+    for (const f of files) {
+      const text = await f.text();
+      if (/\.svg$/i.test(f.name) || /svg/.test(f.type)) { const ic = Icons.fromSvg(text); if (ic) icons[Icons.pascal(f.name)] = ic; else skipped++; kinds.push('svg'); continue; }
+      let j; try { j = JSON.parse(text); } catch { throw new Error(`${f.name} is not JSON or SVG`); }
+      const r = Array.isArray(j.icons) ? Icons.fromFeed(j) : Icons.fromJson(j.icons && typeof j.icons === 'object' ? j.icons : j);
+      Object.assign(icons, r.icons); Object.assign(meta, r.meta); skipped += r.skipped; kinds.push(Array.isArray(j.icons) ? 'feed' : 'json');
+    }
+    const n = Object.keys(icons).length; if (!n) throw new Error('No icons found in those files');
+    const st = { id, name: nm, viewBox: '0 0 24 24', icons, meta, source: kinds.includes('feed') ? 'review feed' : 'import' };
+    if (LibStore.role().admin) { await LibStore.putIconSet(st); env.toast(`${nm}: ${n} icons, shared with everyone${skipped ? ` (${skipped} skipped)` : ''}`); }
+    else { const mine = (LS.get(MINE, []) || []).filter(x => x.id !== id).concat([st]); LS.set(MINE, mine); Icons.addSet({ ...st, source: 'this browser' }); env.toast(`${nm}: ${n} icons, in this browser (admins share icon sets)${skipped ? ` · ${skipped} skipped` : ''}`); }
+    folded.delete('icons-' + id); render();
+  }
+  async function removeIconSet(id) {
+    if (LibStore.iconSets().some(s => s.id === id)) await LibStore.delIconSet(id); else { LS.set(MINE, (LS.get(MINE, []) || []).filter(x => x.id !== id)); Icons.removeSet(id); }
+    env.toast('Icon set removed'); render();
+  }
   function iconSections(q, max) {
+    const canDel = id => LibStore.iconSets().some(s => s.id === id) ? LibStore.role().admin : (LS.get(MINE, []) || []).some(s => s.id === id);
     return Icons.sets().slice().sort((a, b) => (a.id ? 0 : 1) - (b.id ? 0 : 1)).map(st => {
       const names = q ? Icons.search(q, 400, st.id) : st.names.map(n => st.id ? `${st.id}:${n}` : n); if (!names.length) return '';
       const sid = 'icons-' + (st.id || 'basic'); const fold = folded.has(sid) && !q; const lim = expanded.has(sid) || q ? Math.min(max, 400) : 60;
-      return `<section class="lib-sec"><button type="button" class="lib-sec-head" data-fold="${esc(sid)}" aria-expanded="${!fold}"><span class="lib-caret">${fold ? '▸' : '▾'}</span>${esc(st.name)} icons <span class="lib-count">${names.length}</span></button>
+      return `<section class="lib-sec"><div class="lib-sec-row"><button type="button" class="lib-sec-head" data-fold="${esc(sid)}" aria-expanded="${!fold}"><span class="lib-caret">${fold ? '▸' : '▾'}</span>${esc(st.name)}${/icons$/i.test(st.name) ? '' : ' icons'} <span class="lib-count">${names.length}</span>${st.source ? ` <span class="lib-tag">${esc(st.source === 'this browser' ? 'this browser' : 'imported')}</span>` : ''}</button>${st.id && canDel(st.id) ? `<button type="button" class="btn small ghost" data-iconset-del="${esc(st.id)}" title="Remove this icon set">✕</button>` : ''}</div>
         ${fold ? '' : `<div class="lib-icons">${names.slice(0, lim).map(iconTile).join('')}</div>${names.length > lim ? `<button type="button" class="btn small ghost lib-more" data-more="${esc(sid)}">Show ${q ? 'more' : 'all ' + names.length}</button>` : ''}`}</section>`;
     }).join('');
   }
@@ -177,7 +201,7 @@ const Library = (() => {
   }
 
   // ---- Panel ------------------------------------------------------------------------------------------------------------
-  function init(e) { env = e; LibStore.on(() => { refresh(); }); }
+  function init(e) { env = e; LibStore.on(() => { refresh(); }); loadMine(); }
   const isOpen = () => !!(el && !el.hidden && el.offsetParent !== null);
   let rq = 0; function refresh() { if (rq) return; rq = requestAnimationFrame(() => { rq = 0; if (isOpen()) render(); if (mgr && !mgr.hidden) renderManager(); }); }
   function imagesChanged() { imgEpoch++; refresh(); }
@@ -196,7 +220,8 @@ const Library = (() => {
     const on = srcs.filter(s => LibStore.isOn(s.id));
     const sel = env.canvas.selection(); const canSave = sel.blockIds.length > 0;
     const match = it => (cat === 'all' || it.category === cat) && (!query || `${it.name} ${it.category} ${it.code ? it.code.name + ' ' + (it.code.spec && it.code.spec.group || '') : ''}`.toLowerCase().includes(query));
-    const sections = cat === 'icons' ? iconSections(query, 400) : on.map(s => {
+    const iconImport = `<div class="lib-form"><span class="hint">Add icons: SVG files, a JSON of name → SVG, or an icon review feed (<code>{ icons: [{ name, submissions: [{ svg }] }] }</code>, approved or leading design). The same name replaces a set.</span><div class="cv-row"><input type="text" class="input grow" data-lib="iconset-name" placeholder="Set name, e.g. Product icons" maxlength="40"><label class="btn small file">＋ Import icons<input type="file" data-lib="icons-import" accept=".svg,image/svg+xml,.json,application/json" multiple hidden></label></div></div>`;
+    const sections = cat === 'icons' ? iconImport + iconSections(query, 400) : on.map(s => {
       const list = s.items.map(it => tag(s, it)).filter(match); if (!list.length && (query || cat !== 'all' || s.builtin)) return '';
       const fold = folded.has(s.id) && !query; const max = expanded.has(s.id) || query ? 400 : 24;
       return `<section class="lib-sec"><button type="button" class="lib-sec-head" data-fold="${esc(s.id)}" aria-expanded="${!fold}"><span class="lib-caret">${fold ? '▸' : '▾'}</span>${esc(s.name)} <span class="lib-count">${list.length}</span>${s.shared ? '' : s.builtin ? ' <span class="lib-tag">built in</span>' : ' <span class="lib-tag">local</span>'}</button>
@@ -226,6 +251,7 @@ const Library = (() => {
       const c = e.target.closest('[data-cat]'); if (c) { cat = c.dataset.cat; render(); return; }
       const fo = e.target.closest('[data-fold]'); if (fo) { const id = fo.dataset.fold; folded.has(id) ? folded.delete(id) : folded.add(id); LS.set('lg.libFolded', [...folded]); render(); return; }
       const mo = e.target.closest('[data-more]'); if (mo) { expanded.add(mo.dataset.more); render(); return; }
+      const idel = e.target.closest('[data-iconset-del]'); if (idel) { await guard(() => removeIconSet(idel.dataset.iconsetDel)); return; }
       const ap = e.target.closest('[data-approve]'); if (ap) { await guard(() => setApproved(ap.dataset.src, ap.dataset.approve)); return; }
       const rm = e.target.closest('[data-remove]'); if (rm) { await guard(() => removeItem(rm.dataset.src, rm.dataset.remove)); return; }
       const pb = e.target.closest('[data-publish]'); if (pb) { publishing = pb.dataset.publish; naming = false; render(); return; }
@@ -241,10 +267,11 @@ const Library = (() => {
       if (a === 'export') { exportLibrary(); return; }
       const it = e.target.closest('[data-item]'); if (it && !act) { insert(it.dataset.item); }
     });
-    el.addEventListener('keydown', e => { if (e.target.dataset.lib === 'name' || e.target.dataset.lib === 'bind') { e.stopPropagation(); if (e.key === 'Enter') submitSave(); else if (e.key === 'Escape') { naming = false; render(); } } });
+    el.addEventListener('keydown', e => { if (e.target.dataset.lib === 'iconset-name') { e.stopPropagation(); return; } if (e.target.dataset.lib === 'name' || e.target.dataset.lib === 'bind') { e.stopPropagation(); if (e.key === 'Enter') submitSave(); else if (e.key === 'Escape') { naming = false; render(); } } });
     el.addEventListener('change', async e => {
       const t = e.target;
       if (t.dataset.lib === 'dest') LS.set('lg.libDest', t.value);
+      if (t.dataset.lib === 'icons-import') { const files = [...t.files]; t.value = ''; const nm = (el.querySelector('[data-lib="iconset-name"]') || {}).value; if (files.length) await guard(() => importIcons(files, nm)); return; }
       if (t.dataset.lib === 'files') { for (const f of t.files) await guard(() => addFile(f)); t.value = ''; render(); }
       if (t.dataset.lib === 'import') { const f = t.files[0]; t.value = ''; if (f) await guard(async () => importFile(JSON.parse(await f.text()))); render(); }
     });
@@ -418,5 +445,5 @@ const Library = (() => {
     const nm = ids && ids.length === 1 ? (LibStore.libraries().find(l => l.id === ids[0]) || {}).name : 'libraries';
     if (await env.download(blob, `${String(nm || 'libraries').toLowerCase().replace(/[^a-z0-9]+/g, '-')}.json`)) env.toast(`Exported ${j.lgLibrary.items.length} items`);
   }
-  return { init, bind, bindManager, render, refresh, imagesChanged, openManager, all, sources, builtins, thumb, fromSelection, insert, specFor, codeSpecs, variantFor, palette, settle, CATEGORIES };
+  return { init, bind, bindManager, render, refresh, imagesChanged, openManager, all, sources, builtins, thumb, fromSelection, insert, specFor, codeSpecs, variantFor, importIcons, palette, settle, CATEGORIES };
 })();

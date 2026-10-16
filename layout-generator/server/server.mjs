@@ -179,23 +179,27 @@ async function joinRoom(conn, roomId) {
 // ---- Shared libraries --------------------------------------------------------------------------------------------------
 const LIB_ID = /^[A-Za-z0-9_.:-]{1,64}$/;
 let libs = null; let libSave = null;
+const ICONSET_PART = /^[a-z0-9_-]{1,24}(~\d{1,3})?$/;
 async function getLibs() {
   if (libs) return libs;
-  libs = { libraries: new Map(), items: new Map(), guides: new Map(), notes: new Map() };
-  try { const j = JSON.parse(await readFile(path.join(DATA, 'libraries.json'), 'utf8')); for (const l of j.libraries || []) if (l && LIB_ID.test(l.id)) libs.libraries.set(l.id, l); for (const it of j.items || []) if (it && LIB_ID.test(it.id)) libs.items.set(it.id, it); for (const g of j.guides || []) if (g && typeof g.id === 'string') libs.guides.set(g.id, g); for (const n of j.notes || []) if (n && typeof n.id === 'string') libs.notes.set(n.id, n); } catch { }
+  libs = { libraries: new Map(), items: new Map(), guides: new Map(), notes: new Map(), iconsets: new Map() };
+  try { const j = JSON.parse(await readFile(path.join(DATA, 'libraries.json'), 'utf8')); for (const l of j.libraries || []) if (l && LIB_ID.test(l.id)) libs.libraries.set(l.id, l); for (const it of j.items || []) if (it && LIB_ID.test(it.id)) libs.items.set(it.id, it); for (const g of j.guides || []) if (g && typeof g.id === 'string') libs.guides.set(g.id, g); for (const n of j.notes || []) if (n && typeof n.id === 'string') libs.notes.set(n.id, n); for (const p of j.iconsets || []) if (p && ICONSET_PART.test(String(p.id || ''))) libs.iconsets.set(p.id, p); } catch { }
   return libs;
 }
 function saveLibs() {
   clearTimeout(libSave);
   libSave = setTimeout(async () => {
-    try { await mkdir(DATA, { recursive: true }); const file = path.join(DATA, 'libraries.json'); await writeFile(file + '.tmp', JSON.stringify({ v: 1, saved: new Date().toISOString(), libraries: [...libs.libraries.values()], items: [...libs.items.values()], guides: [...libs.guides.values()], notes: [...libs.notes.values()] })); await rename(file + '.tmp', file); } catch (e) { log('library save failed', e.message); }
+    try { await mkdir(DATA, { recursive: true }); const file = path.join(DATA, 'libraries.json'); await writeFile(file + '.tmp', JSON.stringify({ v: 1, saved: new Date().toISOString(), libraries: [...libs.libraries.values()], items: [...libs.items.values()], guides: [...libs.guides.values()], notes: [...libs.notes.values()], iconsets: [...libs.iconsets.values()] })); await rename(file + '.tmp', file); } catch (e) { log('library save failed', e.message); }
   }, 300);
 }
-const libsBody = L => ({ lgLibraries: 1, keyRequired: !!ADMIN_KEY, libraries: [...L.libraries.values()], items: [...L.items.values()], guides: [...(L.guides || new Map()).values()], notes: [...(L.notes || new Map()).values()] });
+const libsBody = L => ({ lgLibraries: 1, keyRequired: !!ADMIN_KEY, libraries: [...L.libraries.values()], items: [...L.items.values()], guides: [...(L.guides || new Map()).values()], notes: [...(L.notes || new Map()).values()], iconsets: [...(L.iconsets || new Map()).values()] });
 function libOp(L, m) {
   if (m.op === 'check') return;
   if (m.op === 'putNote') { const n = m.note; if (!n || !LIB_ID.test(String(n.id || '')) || !/^(?:[a-z0-9_-]{1,40}\.)?(design|layout|animation|illustration|photography|content|product)$/.test(n.guide)) throw new Error('bad note'); L.notes.set(n.id, JSON.parse(JSON.stringify(n))); if (L.notes.size > 2000) L.notes.delete(L.notes.keys().next().value); return; }
   if (m.op === 'putGuide') { const g = m.guide; if (!g || !/^(?:[a-z0-9_-]{1,40}\.)?(design|layout|animation|illustration|photography|content|product)$/.test(g.id)) throw new Error('bad guide'); L.guides.set(g.id, { id: g.id, text: String(g.text || '').slice(0, 120000), updated: Date.now(), by: String(g.by || '').slice(0, 80) }); return; }
+  // icon sets arrive in parts ("<set>", "<set>~2"…); a part's icons are SVG markup the app sanitizes before drawing
+  if (m.op === 'putIconSet') { const p = m.part; if (!p || !ICONSET_PART.test(String(p.id || '')) || !p.icons || typeof p.icons !== 'object') throw new Error('bad icon set'); if (JSON.stringify(p).length > 1024 * 1024) throw new Error('icon set part over 1 MB'); if (!p.id.includes('~')) for (const k of [...L.iconsets.keys()]) if (k.startsWith(p.id + '~')) L.iconsets.delete(k); L.iconsets.set(p.id, JSON.parse(JSON.stringify(p))); return; }
+  if (m.op === 'delIconSet') { for (const k of [...L.iconsets.keys()]) if (k === m.id || k.startsWith(m.id + '~')) L.iconsets.delete(k); return; }
   if (m.op === 'putLib') { const l = m.lib; if (!l || !LIB_ID.test(l.id) || typeof l.name !== 'string') throw new Error('bad library'); L.libraries.set(l.id, { id: l.id, name: l.name.slice(0, 60), description: String(l.description || '').slice(0, 200), order: +l.order || 0, defaultOn: l.defaultOn !== false, updated: Date.now(), by: String(l.by || '').slice(0, 80) }); return; }
   if (m.op === 'delLib') { L.libraries.delete(m.id); for (const [k, it] of L.items) if (it.lib === m.id) L.items.delete(k); return; }
   if (m.op === 'putItem') { const it = m.item; if (!it || !LIB_ID.test(it.id) || !LIB_ID.test(it.lib) || !Array.isArray(it.blocks)) throw new Error('bad item'); if (!L.libraries.has(it.lib)) throw new Error('no such library'); if (JSON.stringify(it).length > 2 * 1024 * 1024) throw new Error('item over 2 MB'); L.items.set(it.id, it); return; }
