@@ -497,15 +497,19 @@ const Canvas = (() => {
     const bw = Math.max(...items.map(i => i.x + i.w)) - x0, bh = Math.max(...items.map(i => i.y + i.h)) - y0;
     if (!opts.force && bw * bh < area * (opts.threshold || 4)) return false;
     const sizes = items.map(i => Math.min(i.w, i.h)).sort((a, b) => a - b); const med = sizes[Math.floor(sizes.length / 2)] || 100;
-    const gap = Math.max(32, Math.min(160, Math.round(med * 0.3))); const maxW = Math.max(2600, ...items.map(i => i.w));
+    // rows wrap at a width that keeps the whole arrangement roughly square, so a big set is not a long strip
+    const gap = Math.max(32, Math.min(160, Math.round(med * 0.3))); const maxW = Math.max(opts.maxW || 2600, Math.round(Math.sqrt(area) * 1.4), ...items.map(i => i.w));
     const pages = []; for (const it of items.slice().sort((a, b) => (a.y - b.y) || (a.x - b.x))) { const k = it.page || ''; let g = pages.find(p => p.key === k); if (!g) { g = { key: k, items: [] }; pages.push(g); } g.items.push(it); }
     let y = y0;
     for (const pg of pages) {
       // rows: an item joins the row whose band it overlaps vertically
       const rows = []; for (const it of pg.items) { const r = rows[rows.length - 1]; if (r && it.y < r.bottom) { r.items.push(it); r.bottom = Math.max(r.bottom, it.y + it.h); } else rows.push({ bottom: it.y + it.h, items: [it] }); }
-      for (const r of rows) {
-        r.items.sort((a, b) => a.x - b.x); let x = x0, rowH = 0;
-        for (const it of r.items) { if (x > x0 && x + it.w > x0 + maxW) { x = x0; y += rowH + gap; rowH = 0; } it.x = snap(x, 8); it.y = snap(y, 8); x += it.w + gap; rowH = Math.max(rowH, it.h); }
+      for (const r of rows) r.items.sort((a, b) => a.x - b.x);
+      // opts.pack: the rows' order is kept but every row is filled to the width (a gathered canvas, not a strip)
+      const seqs = opts.pack ? [rows.flatMap(r => r.items)] : rows.map(r => r.items);
+      for (const items of seqs) {
+        let x = x0, rowH = 0;
+        for (const it of items) { if (x > x0 && x + it.w > x0 + maxW) { x = x0; y += rowH + gap; rowH = 0; } it.x = snap(x, 8); it.y = snap(y, 8); x += it.w + gap; rowH = Math.max(rowH, it.h); }
         y += rowH + Math.round(gap * 1.5);
       }
       y += gap * 2;
@@ -579,6 +583,31 @@ const Canvas = (() => {
     }
     return out;
   }
+  // Groups of screens that sit near each other (within `near` px of the group's box). The main group is where the
+  // work is when a stray screen or an import far away has stretched the canvas: biggest by area, with a bonus for
+  // holding the newest screen (the last one in the canvas).
+  function clusters(frames, near = 1600) {
+    const rest = frames.slice(); const out = [];
+    while (rest.length) {
+      const grp = [rest.shift()]; let b = framesBounds(grp); let grew = true;
+      while (grew) {
+        grew = false;
+        for (let i = rest.length - 1; i >= 0; i--) {
+          const f = rest[i];
+          if (f.x < b.x + b.w + near && f.x + f.layout.format.w > b.x - near && f.y < b.y + b.h + near && f.y + f.layout.format.h > b.y - near) { grp.push(f); rest.splice(i, 1); b = framesBounds(grp); grew = true; }
+        }
+      }
+      out.push(grp);
+    }
+    return out;
+  }
+  function mainCluster(frames) {
+    if (frames.length < 2) return frames.slice();
+    const cs = clusters(frames); const newest = frames[frames.length - 1];
+    const score = g => g.reduce((t, f) => t + f.layout.format.w * f.layout.format.h, 0) * Math.sqrt(g.length) * (g.includes(newest) ? 1.5 : 1);
+    let best = cs[0]; for (const g of cs) if (score(g) > score(best)) best = g;
+    return best;
+  }
   function framesBounds(frames) {
     const x0 = Math.min(...frames.map(f => f.x)), y0 = Math.min(...frames.map(f => f.y));
     const x1 = Math.max(...frames.map(f => f.x + f.layout.format.w)), y1 = Math.max(...frames.map(f => f.y + f.layout.format.h));
@@ -597,5 +626,5 @@ const Canvas = (() => {
     };
   }
 
-  return { create, addFrame, blankFrame, migrate, defaultAuto, frameById, blockById, refit, sourceText, newBlock, moveBlock, resizeBlock, reorder, duplicateBlock, removeBlocks, transferBlocks, pasteBlocks, customFormat, align, distribute, bounds, applyAutoLayout, isBackground, serialize, deserialize, toLink, fromHash, toHTML, toReact, codeTree, codeNodes, recolor, extractContent, scaleFrame, applyTokens, group, ungroup, groupMembers, tidy, compact, penD, penFit, maskShape, maskedBy, replaceText, setFonts, pasteFrames, framesBounds, cssGradient, history, snap, uid, clone };
+  return { create, addFrame, blankFrame, migrate, defaultAuto, frameById, blockById, refit, sourceText, newBlock, moveBlock, resizeBlock, reorder, duplicateBlock, removeBlocks, transferBlocks, pasteBlocks, customFormat, align, distribute, bounds, applyAutoLayout, isBackground, serialize, deserialize, toLink, fromHash, toHTML, toReact, codeTree, codeNodes, recolor, extractContent, scaleFrame, clusters, mainCluster, applyTokens, group, ungroup, groupMembers, tidy, compact, penD, penFit, maskShape, maskedBy, replaceText, setFonts, pasteFrames, framesBounds, cssGradient, history, snap, uid, clone };
 })();

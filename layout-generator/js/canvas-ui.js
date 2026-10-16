@@ -35,7 +35,7 @@ const CanvasUI = (() => {
     Canvas.fromHash(location.hash).then(d => { if (d) { doc = d; env.toast('Canvas loaded from link'); if (active) renderAll(); } }).catch(() => { });
   }
   function count() { return doc ? doc.frames.length : 0; }
-  function open() { active = true; renderAll(); if (doc.frames.length && !sel.frameId) fit(); }
+  function open() { active = true; renderAll(); if (doc.frames.length && !sel.frameId) fitSmart(); }
   function close() { endEdit(); active = false; }
   // The browser copy is written at most once a second (and on leaving): with many people editing, every incoming
   // change must not serialize the whole canvas. The change event names the screens that could have changed: the
@@ -86,7 +86,11 @@ const CanvasUI = (() => {
     renderLayers(); if (!propsFocused()) renderProps(); drawOverlay(); updateCount();
     persist({ silent: true });
   }
-  function replaceDoc(d, opts = {}) { hover = null; const view = doc && doc.view; doc = d; if (opts.keepView !== false && view) doc.view = view; validateSelection(); if (active) renderAll(); persist(opts); }
+  function replaceDoc(d, opts = {}) {
+    hover = null; const view = doc && doc.view; const wasEmpty = !doc || !doc.frames.length; doc = d; if (opts.keepView !== false && view) doc.view = view; validateSelection();
+    if (active) { renderAll(); if (wasEmpty && doc.frames.length && !doc.frames.some(inView)) fitSmart(); } // a shared canvas arriving after the view was set: show it
+    persist(opts);
+  }
   const propsFocused = () => { const a = document.activeElement; return !!(a && $('cvProps').contains(a) && a !== document.body); };
   function validateSelection() {
     sel.frameIds = sel.frameIds.filter(id => Canvas.frameById(doc, id));
@@ -145,12 +149,30 @@ const CanvasUI = (() => {
   function selBlocks() { const f = selFrame(); return f ? sel.blockIds.map(id => Canvas.blockById(f, id)).filter(Boolean) : []; }
 
   function fit() { if (!doc.frames.length) { doc.view = { x: 60, y: 60, zoom: 0.5 }; applyView(); return; } fitTo(doc.frames.filter(f => !f.hidden).length ? doc.frames.filter(f => !f.hidden) : doc.frames); }
+  // Below this zoom "everything" is a speck: screens were left far apart (a stray import, a screen dragged away).
+  const SPRAWL_ZOOM = 0.08; let sprawlSaid = false;
+  function sprawlHint() { if (sprawlSaid) return; sprawlSaid = true; env.toast('Screens are spread far apart. "Gather screens" (canvas panel) brings them together in rows.'); }
+  // Fit everything, unless that leaves a speck: then fit the main group of screens and say how to gather the rest.
+  function fitSmart() {
+    const vis = doc.frames.filter(f => !f.hidden); if (vis.length < 2) { fit(); return; }
+    const r = stage().getBoundingClientRect(); if (!r.width) return; const b = Canvas.framesBounds(vis);
+    const z = Math.min((r.width - 80) / b.w, (r.height - 120) / b.h);
+    if (z >= SPRAWL_ZOOM) { fitTo(vis); return; }
+    fitTo(Canvas.mainCluster(vis)); sprawlHint();
+  }
+  // Every screen into rows in reading order, for a canvas stretched by far-away screens. Undo puts them back.
+  function gatherAll() {
+    const fs = doc.frames.filter(f => !f.hidden); if (fs.length < 2) return;
+    hist.push(doc); const geo = fs.map(f => ({ f, x: f.x, y: f.y, w: FW(f), h: FH(f), page: '' }));
+    Canvas.compact(geo, { force: true, pack: true }); for (const g of geo) { g.f.x = g.x; g.f.y = g.y; }
+    emit('action', 'canvas.gather'); renderAll(); persist({ full: true }); updateUndo(); fit(); env.toast(`${fs.length} screens gathered into rows (⌘Z puts them back)`);
+  }
   function fitTo(frames) {
     const r = stage().getBoundingClientRect(); if (!r.width || !frames.length) return;
     const b = Canvas.framesBounds(frames);
     const zoom = Math.min(2, Math.max(0.03, Math.min((r.width - 80) / b.w, (r.height - 120) / b.h)));
     doc.view = { zoom, x: (r.width - b.w * zoom) / 2 - b.x * zoom, y: (r.height - b.h * zoom) / 2 - b.y * zoom + 10 };
-    applyView();
+    applyView(); if (zoom < SPRAWL_ZOOM && frames.length > 1) sprawlHint();
   }
   function zoomBy(factor, cx, cy) {
     const r = stage().getBoundingClientRect(); const px = cx != null ? cx - r.left : r.width / 2, py = cy != null ? cy - r.top : r.height / 2;
@@ -685,6 +707,20 @@ const CanvasUI = (() => {
     return nf;
   }
   // First spot to the right of (x, y) where a w×h frame overlaps nothing.
+  // The screens new work should sit next to: the selected ones, else those in view, else the main group.
+  function anchorFrames() {
+    const vis = doc.frames.filter(f => !f.hidden); if (!vis.length) return [];
+    const chosen = selFrames().filter(f => !f.hidden); if (chosen.length) return chosen;
+    const seen = active ? vis.filter(inView) : []; if (seen.length) return seen;
+    return Canvas.mainCluster(vis);
+  }
+  // Slide a group down until it overlaps no screen.
+  function freeBelow(x, y, w, h, gap = 160) {
+    const hits = fy => doc.frames.filter(f => !f.hidden && !(x + w + gap / 2 <= f.x || x >= f.x + FW(f) + gap / 2 || fy + h + gap / 2 <= f.y || fy >= f.y + FH(f) + gap / 2));
+    let guard = 0; let hs;
+    while ((hs = hits(y)).length && guard++ < 200) y = Math.max(...hs.map(f => f.y + FH(f))) + gap * 2;
+    return y;
+  }
   function freeSpot(x, y, w, h, gap = 160) {
     const hits = (fx, fy) => doc.frames.filter(f => !f.hidden && !(fx + w + gap / 2 <= f.x || fx >= f.x + FW(f) + gap / 2 || fy + h + gap / 2 <= f.y || fy >= f.y + FH(f) + gap / 2));
     let guard = 0; let hs;
@@ -712,8 +748,13 @@ const CanvasUI = (() => {
     let compacted = false;
     if (opts.compact !== false) { const geo = items.map(it => ({ it, x: it.x, y: it.y, w: it.layout.format.w, h: it.layout.format.h, page: it.page || '' })); compacted = Canvas.compact(geo); if (compacted) for (const g of geo) { g.it.x = g.x; g.it.y = g.y; } }
     const bx = Math.min(...items.map(i => i.x)), by = Math.min(...items.map(i => i.y));
-    const ox = doc.frames.length ? Math.min(...doc.frames.map(f => f.x)) : 0;
-    const oy = doc.frames.length ? Math.max(...doc.frames.map(f => f.y + FH(f))) + 320 : 0;
+    // under the screens in view (or the selected ones), not under the whole canvas: one stray screen far away must
+    // not push every new screen out of sight
+    const anchor = anchorFrames();
+    const ox = anchor.length ? Math.min(...anchor.map(f => f.x)) : 0;
+    let oy = anchor.length ? Math.max(...anchor.map(f => f.y + FH(f))) + 320 : 0;
+    const gw = Math.max(...items.map(i => i.x - bx + i.layout.format.w)), gh = Math.max(...items.map(i => i.y - by + i.layout.format.h));
+    oy = freeBelow(ox, oy, gw, gh);
     const added = items.map(it => { const f = Canvas.addFrame(doc, it.layout, { x: Canvas.snap(ox + (it.x - bx), 8), y: Canvas.snap(oy + (it.y - by), 8), name: it.name, autoLayout: it.autoLayout || undefined }); f.clip = it.clip !== false; return f; });
     selectFrames(added.map(f => f.id)); if (active) { renderAll(); fitTo(added); } persist(); updateUndo();
     added.compacted = compacted;
@@ -1466,8 +1507,8 @@ const CanvasUI = (() => {
   }
   function canvasProps() {
     return `<div class="cv-section"><h3>Canvas</h3><label class="cv-f"><span>Name</span><input type="text" data-doc="name" value="${esc(doc.name)}"></label>
-      <div class="cv-row wrap">${btn('new-frame', '＋ New frame')}${btn('paste', 'Paste', clipboard ? '' : 'disabled')}${btn('select-all', 'Select all screens', doc.frames.length ? '' : 'disabled')}${env.openImport ? btn('import', 'Import…') : ''}</div>
-      <p class="hint">${doc.frames.length} frames. Click a screen's name to select it; shift-click or drag a box around screens to select several and change them together. Drag a block onto another frame to move it there; ⌥ drag copies. Double-click text to edit it in place.</p>
+      <div class="cv-row wrap">${btn('new-frame', '＋ New frame')}${btn('paste', 'Paste', clipboard ? '' : 'disabled')}${btn('select-all', 'Select all screens', doc.frames.length ? '' : 'disabled')}${btn('gather', 'Gather screens', doc.frames.length > 1 ? '' : 'disabled')}${env.openImport ? btn('import', 'Import…') : ''}</div>
+      <p class="hint">${doc.frames.length} frames. Gather screens brings far-apart screens together in rows. Click a screen's name to select it; shift-click or drag a box around screens to select several and change them together. Drag a block onto another frame to move it there; ⌥ drag copies. Double-click text to edit it in place.</p>
       <div class="cv-row">${btn('shortcuts', 'Keyboard shortcuts · ?')}</div>
       <details class="cv-keys" hidden><summary>Shortcuts</summary><p class="hint">V select · H hand · F frame (drag to draw) · ⇧N new frame · T text · R rectangle · O ellipse · I image · Enter edit text, enter a group or select a box's children · Esc up a level · ⌘-click deepest layer · ⇧A auto layout · ⌥⇧A remove auto layout · ⌥⌘G frame selection · ⌘G group · ⇧⌘G ungroup or unwrap · ⌘C ⌘X ⌘V copy cut paste · ⌘D duplicate · ⌘A select all · ⇧R tidy screens · ⇧G grid · ⇧1 fit all · ⇧2 fit selection · ⌘Z undo · ⌘L copy link · [ ] reorder · hold ⇧ while dragging to skip snapping.</p></details>
     </div>${paletteEditor()}`;
@@ -1892,6 +1933,7 @@ const CanvasUI = (() => {
       if (a === 'reset-palette') { if (env.resetColors()) { followTokens(); renderProps(); env.toast('Palette reset to the preset'); } else env.toast('This kit has no preset to reset to'); return; }
       if (a === 'new-frame') { createFrame({ center: true }); return; }
       if (a === 'select-all') { selectFrames(doc.frames.filter(x => !x.hidden).map(x => x.id)); return; }
+      if (a === 'gather') { gatherAll(); return; }
       if (a === 'import') { env.openImport(); return; }
       if (a === 'copy') { copySelection(); renderProps(); return; }
       if (a === 'paste') { pasteClipboard(); return; }
@@ -1958,7 +2000,7 @@ const CanvasUI = (() => {
     markDirty: ids => { for (const id of ids || []) dirty.add(id); },
     flushBackup: () => { if (backupTimer) { clearTimeout(backupTimer); backupNow(); } },
     setUndoMerge: fn => { undoMerge = fn; },
-    commentsChanged, comments: () => comments().map(c => Canvas.clone(c)), openThread, toggleMask, showShortcuts,
+    commentsChanged, comments: () => comments().map(c => Canvas.clone(c)), openThread, toggleMask, showShortcuts, gatherAll, fitSmart,
     _history: () => hist,
   };
 })();

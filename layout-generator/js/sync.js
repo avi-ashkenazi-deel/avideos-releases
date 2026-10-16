@@ -166,8 +166,9 @@ const Sync = (() => {
   }
   // Load a whole shared canvas (first join): it replaces the local one; the local one is kept as a backup.
   function loadAll(list) {
-    clearTimeout(inboxTimer); inboxTimer = 0; inbox.length = 0;
-    for (const rec of list) if (rec && rec._k && newer(rec, recs.get(rec._k))) recs.set(rec._k, rec);
+    clearTimeout(inboxTimer); inboxTimer = 0;
+    // what arrived while the screens were loading (comments, library items, live edits) counts too: newest wins
+    for (const rec of inbox.splice(0).concat(list)) if (rec && rec._k && newer(rec, recs.get(rec._k))) recs.set(rec._k, rec);
     for (const r of recs.values()) if (r._k.startsWith('a~') && !r._del) ensureAsset(r);
     try { localStorage.setItem('lg.canvas.backup', Canvas.serialize(ui.doc)); } catch { }
     applying = true;
@@ -319,7 +320,7 @@ const Sync = (() => {
     let metaChain = Promise.resolve();
     function sendRecs(list, live) {
       if (!status.readOnly && db) {
-        const fids = new Set(); for (const r of list) { if (r._k === 'meta') metaChain = metaChain.then(() => db.doc(`${base}canvas/meta`).set({ rec: r })).catch(() => { }); else if (r._k.startsWith('a~')) db.doc(`${assetsAt}/${r.id}`).set({ rec: r }).catch(() => { }); else if (r._k.startsWith('L~')) db.doc(`library/${r._k.slice(2)}`).set({ rec: r }).catch(() => { }); else fids.add(r._k.split('~')[1]); }
+        const fids = new Set(); for (const r of list) { if (r._k === 'meta') metaChain = metaChain.then(() => db.doc(`${base}canvas/meta`).set({ rec: r })).catch(() => { }); else if (r._k.startsWith('a~')) db.doc(`${assetsAt}/${r.id}`).set({ rec: r }).catch(() => { }); else if (r._k.startsWith('L~')) db.doc(`library/${r._k.slice(2)}`).set({ rec: r }).catch(() => { }); else if (r._k.startsWith('C~')) db.doc(`${base}comments/${r._k.slice(2)}`).set({ rec: r }).catch(() => { }); else fids.add(r._k.split('~')[1]); }
         for (const fid of fids) schedule(fid);
       }
       if (room) { for (const r of list) pendingLive.set(r._k, r); if (!liveTimer) liveTimer = setTimeout(flushLive, 120); }
@@ -364,6 +365,8 @@ const Sync = (() => {
         applyRemote(changed);
       }, e => console.warn('db frames', e && e.code)));
       sub(db.doc(`${base}canvas/meta`).onSnapshot(s => { const d = s.data(); if (d && d.rec) applyRemote([d.rec]); }, () => { }));
+      // comments live beside the screens (one document each, tombstones kept so a deletion reaches everyone)
+      sub(db.collection(`${base}comments`).onSnapshot(s => { const list = []; for (const d of s.docs) { const v = d.data(); if (v && v.rec) list.push(v.rec); } if (list.length) applyRemote(list); }, () => { }));
       if (opts.solo) sub(db.collection(assetsAt).onSnapshot(s => { for (const d of s.docs) { const v = d.data(); if (v && v.rec) { if (newer(v.rec, recs.get(v.rec._k))) recs.set(v.rec._k, v.rec); ensureAsset(v.rec); } } }, () => { }));
       if (!globalSubs) {
         globalSubs = true;
