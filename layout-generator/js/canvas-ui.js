@@ -30,6 +30,8 @@ const CanvasUI = (() => {
   function init(e) {
     env = e;
     try { const saved = localStorage.getItem(e.backupKey ? e.backupKey() : 'lg.canvas'); doc = saved ? Canvas.deserialize(saved) : Canvas.create(); } catch { doc = Canvas.create(); }
+    // shared libraries changed (an admin updated a component): instances on this canvas follow
+    if (typeof LibStore !== 'undefined') LibStore.on(() => { try { syncInstances(); } catch (err) { console.warn('instances', err); } });
     hist = Canvas.history();
     bindStage(); bindToolbar(); bindKeys(); bindLayers(); bindProps(); bindComments();
     Canvas.fromHash(location.hash).then(d => { if (d) { doc = d; env.toast('Canvas loaded from link'); if (active) renderAll(); } }).catch(() => { });
@@ -53,7 +55,7 @@ const CanvasUI = (() => {
     for (const id of dirty) ids.add(id); dirty.clear();
     return [...ids];
   }
-  function persist(opts = {}) { backupSoon(); if (!opts.silent) emit('change', doc, { ...opts, frames: touchedFrames(opts) }); }
+  function persist(opts = {}) { backupSoon(); if (!opts.silent) { const frames = touchedFrames(opts); noteOverrides(frames.map(id => Canvas.frameById(doc, id)).filter(Boolean)); emit('change', doc, { ...opts, frames }); } }
   function updateUndo() { $('cvUndo').disabled = !hist.canUndo; $('cvRedo').disabled = !hist.canRedo; }
   // One undoable step for changes made from outside the editor (agent, sync, batch tools).
   function mutate(fn, opts = {}) {
@@ -230,6 +232,15 @@ const CanvasUI = (() => {
         const f = Canvas.frameById(doc, fid); if (!f || f.hidden) continue;
         if (s.frameIds.length === 1 && Array.isArray(s.blockIds) && s.blockIds.length) { for (const bid of s.blockIds.slice(0, 50)) { const b = Canvas.blockById(f, bid); if (b) parts.push(rect(f.x + b.x, f.y + b.y, b.w, b.h, `fill="none" stroke="${c}" stroke-width="1.5"`)); } }
         else parts.push(rect(f.x, f.y, FW(f), FH(f), `fill="none" stroke="${c}" stroke-width="2"`));
+      }
+    }
+    // empty slots: where a component goes (boxes marked as slots, nothing in them yet)
+    if (Z > 0.1) for (const fr of doc.frames) {
+      if (fr.hidden || !fr.layout.blocks.some(b => b.slot) || !inView(fr)) continue; const I = Auto.index(fr);
+      for (const b of fr.layout.blocks) {
+        if (!b.slot || b.hidden || b.kind !== 'box' || Auto.childrenOf(I, b.id).length) continue;
+        const q = toScreen(fr.x + b.x, fr.y + b.y);
+        parts.push(`<rect x="${q.x}" y="${q.y}" width="${Math.max(0, b.w * Z)}" height="${Math.max(0, b.h * Z)}" fill="var(--accent-faint)" stroke="var(--accent)" stroke-opacity=".5" stroke-dasharray="6 4" stroke-width="1"/><text x="${q.x + 8}" y="${q.y + 16}" fill="var(--accent)" fill-opacity=".85" font-size="11" font-family="var(--font-mono)">⊞ ${esc(b.slot.name || 'Slot')}</text>`);
       }
     }
     if (hover && hover.frame && !(drag && drag.type)) {
@@ -721,6 +732,107 @@ const CanvasUI = (() => {
     while ((hs = hits(y)).length && guard++ < 200) y = Math.max(...hs.map(f => f.y + FH(f))) + gap * 2;
     return y;
   }
+  // ---- Linked instances ----------------------------------------------------------------------------------------------
+  // Blocks inserted from a library item stay linked to it: the top block carries inst {of, rev, ov} and every block in it
+  // carries src, the item's block id. What people change inside is kept as sparse overrides (ov, by src), so when the
+  // item changes every instance rebuilds from the new definition and keeps its own words, colors and hidden parts.
+  const INST_SKIP = new Set(['id', 'parent', 'src', 'inst', 'x', 'y', 'lines', 'inkW', 'capacity', 'overflow', 'minSize', 'maxLines', 'genPrompt', 'genMeta', 'lx', 'ly', 'rx', 'ry', 'absolute']);
+  const itemRev = it => it.updated || it.created || 0;
+  const linkable = it => it && it.id && !/^icon:/.test(it.id) && Array.isArray(it.blocks);
+  function linkCopies(copies, idMap, tops, it) {
+    if (!linkable(it) || tops.length !== 1) return;
+    const byNew = new Map(copies.map(b => [b.id, b])); for (const [oldId, newId] of idMap) { const b = byNew.get(newId); if (b) b.src = oldId; }
+    tops[0].inst = { of: it.id, rev: itemRev(it), ov: {} };
+  }
+  function instanceRoots(f) { return f.layout.blocks.filter(b => b.inst && b.inst.of); }
+  function instanceOwner(f, b) { let cur = b; const seen = new Set(); while (cur && !seen.has(cur.id)) { if (cur.inst) return cur; seen.add(cur.id); cur = cur.parent ? Canvas.blockById(f, cur.parent) : null; } return null; }
+  function compIndex(it) { const by = new Map(it.blocks.map(b => [b.id, b])); const top = it.blocks.find(b => !b.parent || !by.has(b.parent)); return { by, top }; }
+  const sameJSON = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+  // What this instance changed compared with its item, per source block: props that differ (null: removed), hidden
+  // for blocks taken out, dx/dy for free children moved. Sizes placed by a stack or by hugging are not overrides.
+  function overridesOf(f, root, it) {
+    const { top } = compIndex(it); if (!top) return root.inst.ov || {};
+    const mine = Auto.withDescendants(f, [root]); const bySrc = new Map(); for (const b of mine) if (b.src) bySrc.set(b.src, b);
+    const I = Auto.index(f); const ov = {};
+    for (const c of it.blocks) {
+      const b = bySrc.get(c.id); if (!b) { ov[c.id] = { hidden: true }; continue; }
+      const flow = b !== root && Auto.inFlow(I, b); const o = {};
+      for (const k of new Set([...Object.keys(c), ...Object.keys(b)])) {
+        if (INST_SKIP.has(k)) continue;
+        if (k === 'w' && (flow || b.sizeW === 'hug')) continue; if (k === 'h' && (flow || b.sizeH === 'hug')) continue;
+        if (!sameJSON(c[k], b[k])) o[k] = b[k] === undefined ? null : Canvas.clone(b[k]);
+      }
+      if (b !== root && !flow) { const dx = Math.round((b.x - root.x) - (c.x - top.x)), dy = Math.round((b.y - root.y) - (c.y - top.y)); if (dx) o.dx = dx; if (dy) o.dy = dy; }
+      if (Object.keys(o).length) ov[c.id] = o;
+    }
+    return ov;
+  }
+  // Instances in these screens remember their overrides (on every change, before it is shared).
+  function noteOverrides(frames) {
+    if (typeof Library === 'undefined') return;
+    const cache = new Map(); const itemOf = id => { if (!cache.has(id)) cache.set(id, Library.find(id) || null); return cache.get(id); };
+    for (const f of frames) for (const root of instanceRoots(f)) { const it = itemOf(root.inst.of); if (!linkable(it) || itemRev(it) !== root.inst.rev) continue; const ov = overridesOf(f, root, it); if (!sameJSON(ov, root.inst.ov)) root.inst.ov = ov; }
+  }
+  // Rebuild one instance from its item: same place, its overrides applied, blocks people added inside kept. New blocks
+  // get ids derived from the instance and the source, so two people syncing at once agree.
+  function syncInstance(f, root, it) {
+    const { by, top } = compIndex(it); if (!top) return false;
+    const mine = Auto.withDescendants(f, [root]); const mineIds = new Set(mine.map(b => b.id)); const bySrc = new Map(); for (const b of mine) if (b.src) bySrc.set(b.src, b);
+    const ov = root.inst.ov || {}; const dx = root.x - top.x, dy = root.y - top.y;
+    const idOf = new Map(); for (const c of it.blocks) { const had = bySrc.get(c.id); let id = c.id === top.id ? root.id : had ? had.id : `${root.id}.${c.id}`; if (!had && c.id !== top.id && Canvas.blockById(f, id)) id = Canvas.uid(); idOf.set(c.id, id); }
+    const fresh = [];
+    for (const c of it.blocks) {
+      const nb = Canvas.clone(c); nb.id = idOf.get(c.id); nb.src = c.id; nb.x = c.x + dx; nb.y = c.y + dy;
+      if (c.id === top.id) { if (root.parent) nb.parent = root.parent; else delete nb.parent; if (root.absolute) nb.absolute = true; nb.inst = { ...root.inst, rev: itemRev(it) }; if (root.code && nb.code) nb.code = { ...nb.code, props: root.code.props || nb.code.props || {}, from: nb.code.from || root.code.from }; delete nb.rx; delete nb.ry; }
+      else nb.parent = idOf.get(c.parent) || root.id;
+      const o = ov[c.id]; if (o) for (const [k, v] of Object.entries(o)) { if (k === 'dx') nb.x += v; else if (k === 'dy') nb.y += v; else if (v === null) delete nb[k]; else nb[k] = Canvas.clone(v); }
+      if (nb.kind === 'text' || nb.kind === 'list') Canvas.refit(nb);
+      fresh.push(nb);
+    }
+    const freshIds = new Set(fresh.map(b => b.id));
+    const extra = mine.filter(b => b !== root && !(b.src && by.has(b.src))); for (const b of extra) if (!freshIds.has(b.parent)) b.parent = root.id;
+    const idx = f.layout.blocks.indexOf(root); const at = f.layout.blocks.slice(0, idx).filter(b => !mineIds.has(b.id)).length;
+    const keep = f.layout.blocks.filter(b => !mineIds.has(b.id)); keep.splice(at, 0, ...fresh, ...extra); f.layout.blocks = keep;
+    return true;
+  }
+  // Every instance of an item (or of every item) catches up with its library. Returns how many changed.
+  function syncInstances(itemId) {
+    if (!doc || typeof Library === 'undefined') return 0;
+    let n = 0; const touched = []; const cache = new Map(); const itemOf = id => { if (!cache.has(id)) cache.set(id, Library.find(id) || null); return cache.get(id); };
+    for (const f of doc.frames) {
+      let hit = false;
+      for (const root of instanceRoots(f)) { if (itemId && root.inst.of !== itemId) continue; const it = itemOf(root.inst.of); if (!linkable(it) || itemRev(it) === root.inst.rev) continue; if (syncInstance(f, root, it)) { n++; hit = true; } }
+      if (hit) { touched.push(f.id); if (active) rerenderFrame(f); }
+    }
+    if (n) { validateSelection(); if (active) { renderLayers(); renderProps(); drawOverlay(); } persist({ frames: touched }); }
+    return n;
+  }
+  function detachInstance(f, root) { hist.push(doc); for (const b of Auto.withDescendants(f, [root])) delete b.src; delete root.inst; renderProps(); renderLayers(); persist(); updateUndo(); env.toast('Detached: these blocks no longer follow the library'); }
+  function resetInstance(f, root) { const it = Library.find(root.inst.of); if (!linkable(it)) return; hist.push(doc); root.inst.ov = {}; root.inst.rev = -1; syncInstance(f, root, it); rerenderFrame(f); renderLayers(); renderProps(); drawOverlay(); persist(); updateUndo(); env.toast('Back to the library version'); }
+  async function updateComponent(f, root) {
+    emit('action', 'component.update'); const it = await Library.updateFromInstance(root.inst.of, f, root);
+    syncInstances(it.id); env.toast(`“${it.name}” updated: every instance follows`);
+  }
+  function instanceSection(f, b) {
+    const root = instanceOwner(f, b); if (!root || typeof Library === 'undefined') return '';
+    const it = Library.find(root.inst.of); const ok = linkable(it); const ov = root.inst.ov || {}; const n = Object.keys(ov).length; const stale = ok && itemRev(it) !== root.inst.rev;
+    const what = ok ? `From ${esc(it.libName || 'the library')}. ${n ? `${n} override${n > 1 ? 's' : ''} here (words, colors, hidden parts) survive updates to the component.` : 'Unchanged from the library: it follows every update.'}${stale ? ' The component changed since; it updates with the next change here.' : ''}` : 'Its component is gone or its library is off; the blocks stay as they are.';
+    return `<div class="cv-section"><h3>Instance <span class="cv-token">◇ ${esc(ok ? it.name : 'missing component')}</span></h3><p class="hint">${what}</p>
+      <div class="cv-row wrap">${b !== root ? btn('inst-select', 'Select the instance') : ''}${ok && n ? btn('inst-reset', 'Reset overrides', 'title="Back to the library version"') : ''}${ok && it.editable && n ? btn('inst-update', 'Update component', 'title="Make this the library version: every instance follows"') : ''}${btn('inst-detach', 'Detach', 'title="Keep the blocks, drop the link to the library"')}${ok ? btn('inst-show', 'Show in Library') : ''}</div></div>`;
+  }
+  // ---- Slots ---------------------------------------------------------------------------------------------------------------
+  // A box can be a slot: a place that names the components that fit (slot {name, accepts: [item ids]}). Empty slots
+  // show on the canvas; a selected slot puts what fits first in the Library; agents see slots in get_frame.
+  function slotsOf(f) { const I = Auto.index(f); return f.layout.blocks.filter(b => b.slot && b.kind === 'box').map(b => ({ id: b.id, name: b.slot.name || 'Slot', accepts: (b.slot.accepts || []).slice(0, 40), empty: !Auto.childrenOf(I, b.id).length })); }
+  function slotSection(f, b) {
+    if (b.kind !== 'box' || typeof Library === 'undefined') return '';
+    const s = b.slot; const items = Library.all(doc, env.getKit());
+    const acc = s ? (s.accepts || []).map(id => ({ id, it: items.find(x => x.id === id) || Library.find(id) })) : [];
+    return `<div class="cv-section cv-adv"><h3>Slot</h3><label class="cv-check" title="A place for a component: what fits shows first in the Library when the slot is selected; the agent sees it too"><input type="checkbox" data-b="slotOn" ${s ? 'checked' : ''}> A place for a component</label>
+      ${s ? `<label class="cv-f"><span>Name</span><input type="text" data-p="slot.name" value="${esc(s.name || '')}" placeholder="Content"></label>
+      <div class="cv-row wrap">${acc.map(a => `<span class="cv-token">${esc(a.it ? a.it.name : a.id)} <button type="button" class="x" data-slot-rm="${esc(a.id)}" title="Remove">✕</button></span>`).join('') || '<span class="hint">Anything fits here. Name the components that belong:</span>'}</div>
+      <div class="cv-row"><input type="text" class="input grow" data-slot-add list="slotItems" placeholder="Component name"><datalist id="slotItems">${items.slice(0, 400).map(it => `<option value="${esc(it.name)}">`).join('')}</datalist>${btn('slot-add', 'Add')}</div>` : ''}</div>`;
+  }
   function freeSpot(x, y, w, h, gap = 160) {
     const hits = (fx, fy) => doc.frames.filter(f => !f.hidden && !(fx + w + gap / 2 <= f.x || fx >= f.x + FW(f) + gap / 2 || fy + h + gap / 2 <= f.y || fy >= f.y + FH(f) + gap / 2));
     let guard = 0; let hs;
@@ -766,7 +878,9 @@ const CanvasUI = (() => {
     if (!blocks || !blocks.length) return null;
     emit('action', 'library.insert', opts.name);
     let f = null, into = null, lp = null;
-    if (opts.at) { f = frameAt(opts.at); if (f) lp = { x: opts.at.x - f.x, y: opts.at.y - f.y }; }
+    // into a named box (a slot) of a named screen
+    if (opts.frameId) { f = Canvas.frameById(doc, opts.frameId) || null; if (f && opts.into) { into = Canvas.blockById(f, opts.into) || null; if (into && into.kind !== 'box') into = null; } }
+    if (!f && opts.at) { f = frameAt(opts.at); if (f) lp = { x: opts.at.x - f.x, y: opts.at.y - f.y }; }
     // a whole screen (an app shell, a page) gets a frame of its own size unless it was dropped onto one
     if (!f && !opts.screen) { f = selFrames().length === 1 ? selFrame() : null; const bs = f ? selBlocks() : []; if (bs.length === 1 && bs[0].kind === 'box') into = bs[0]; }
     if (!f && !opts.screen) { const r = stage().getBoundingClientRect(); f = frameAt(toWorld(r.left + r.width / 2, r.top + r.height / 2)) || doc.frames[doc.frames.length - 1] || null; }
@@ -774,7 +888,7 @@ const CanvasUI = (() => {
     const bb = Canvas.bounds(tops);
     if (!f) { const pad = opts.screen ? 0 : 160; f = createFrame({ center: true, format: Canvas.customFormat(bb.w + pad, bb.h + pad), name: opts.name || 'Component', history: opts.history !== false }); opts = { ...opts, history: false }; }
     if (opts.history !== false) hist.push(doc);
-    Auto.remap(copies, null);
+    linkCopies(copies, Auto.remap(copies, null), tops, opts.item);
     if (lp && !into) into = Auto.containerAt(f, lp, []);
     let tx, ty;
     if (lp) { tx = lp.x - bb.w / 2; ty = lp.y - bb.h / 2; }
@@ -782,6 +896,8 @@ const CanvasUI = (() => {
     else { tx = (FW(f) - bb.w) / 2; ty = (FH(f) - bb.h) / 2; }
     tx = Math.round(tx); ty = Math.round(ty);
     for (const c of copies) { c.x += tx - bb.x; c.y += ty - bb.y; delete c.lx; delete c.ly; if (c.kind === 'text' || c.kind === 'list') Canvas.refit(c); }
+    // a kit with tokens: the copies' colors bind to the tokens they match, then follow the screen's theme
+    { const kitT = env.getKit(); if (opts.item && Brand.themesOf(kitT).length) { Canvas.tokenizeFrame(f, kitT, 'light', copies); if (f.theme && f.theme !== 'light') Canvas.applyFrameTokens({ theme: f.theme, layout: { blocks: copies, palette: {} } }, kitT); } }
     f.layout.blocks.push(...copies);
     if (into) for (const t of tops) { t.parent = into.id; if (Auto.on(Auto.settingsOf(f, into))) { const d = Auto.dropIndex(f, into, lp || { x: into.x + into.w, y: into.y + into.h }, tops); Auto.moveInList(f, t, into.id, d.before); } }
     else if (Auto.on(Auto.settingsOf(f, null))) for (const t of tops) { const d = Auto.dropIndex(f, null, lp || { x: FW(f), y: FH(f) }, tops); Auto.moveInList(f, t, '', d.before); }
@@ -1356,7 +1472,7 @@ const CanvasUI = (() => {
     const row = (b, depth) => {
       const isBox = b.kind === 'box'; const kids = isBox ? Auto.childrenOf(I, b.id) : []; const open = isBox && kids.length && !folded.has(b.id);
       const stack = isBox && Auto.on(I.S(b.id)); const flow = Auto.inFlow(I, b);
-      return `<div class="cv-layer-row block ${sel.frameId === f.id && sel.blockIds.includes(b.id) ? 'on' : ''} ${b.hidden ? 'hidden-layer' : ''} ${b.group ? 'grouped' : ''}" data-frame="${esc(f.id)}" data-block="${esc(b.id)}" style="padding-left:${6 + depth * 14}px">${isBox && kids.length ? `<button class="fold" data-fold="${esc(b.id)}" title="${open ? 'Collapse' : 'Expand'}">${open ? '▾' : '▸'}</button>` : '<span class="fold-sp"></span>'}<span class="glyph${stack ? ' stack' : ''}">${b.mask ? '◗' : stack ? (I.S(b.id).mode === 'horizontal' ? '⇥' : '⤓') : KIND_GLYPH[b.kind] || '·'}</span><span class="nm">${esc(label(b))}</span>${b.mask ? '<span class="tag" title="Mask: clips the layers above it">M</span>' : ''}${b.absolute && I.par.get(b.id) !== undefined && Auto.on(I.S(I.par.get(b.id))) ? '<span class="tag" title="Absolute position">A</span>' : ''}${b.group ? '<span class="tag" title="In a group">G</span>' : ''}${b.locked ? '<span class="dim">🔒</span>' : ''}<button class="eye ${b.hidden ? 'off' : ''}" data-eye="${esc(b.id)}" title="Toggle visibility">${b.hidden ? '◌' : '◉'}</button></div>`;
+      return `<div class="cv-layer-row block ${sel.frameId === f.id && sel.blockIds.includes(b.id) ? 'on' : ''} ${b.hidden ? 'hidden-layer' : ''} ${b.group ? 'grouped' : ''}" data-frame="${esc(f.id)}" data-block="${esc(b.id)}" style="padding-left:${6 + depth * 14}px">${isBox && kids.length ? `<button class="fold" data-fold="${esc(b.id)}" title="${open ? 'Collapse' : 'Expand'}">${open ? '▾' : '▸'}</button>` : '<span class="fold-sp"></span>'}<span class="glyph${stack ? ' stack' : ''}">${b.mask ? '◗' : stack ? (I.S(b.id).mode === 'horizontal' ? '⇥' : '⤓') : KIND_GLYPH[b.kind] || '·'}</span><span class="nm">${esc(label(b))}</span>${b.inst ? '<span class="tag inst" title="Instance of a library component">◇</span>' : ''}${b.mask ? '<span class="tag" title="Mask: clips the layers above it">M</span>' : ''}${b.absolute && I.par.get(b.id) !== undefined && Auto.on(I.S(I.par.get(b.id))) ? '<span class="tag" title="Absolute position">A</span>' : ''}${b.group ? '<span class="tag" title="In a group">G</span>' : ''}${b.locked ? '<span class="dim">🔒</span>' : ''}<button class="eye ${b.hidden ? 'off' : ''}" data-eye="${esc(b.id)}" title="Toggle visibility">${b.hidden ? '◌' : '◉'}</button></div>`;
     };
     if (q) { for (const b of f.layout.blocks.slice().reverse()) if (label(b).toLowerCase().includes(q)) rows.push(row(b, 0)); return rows; }
     const walk = (pid, depth) => {
@@ -1400,10 +1516,13 @@ const CanvasUI = (() => {
 
   // ---- Properties panel ------------------------------------------------------------------------------------------
   const num = (k, label, v, step = 1, extra = '') => `<label class="cv-f"><span>${label}</span><input type="number" data-p="${k}" value="${Math.round((Number(v) || 0) * 100) / 100}" step="${step}" ${extra}></label>`;
-  const swatches = (k, v, token) => `<div class="cv-swatches">${env.getKit().colors.map(c => `<button type="button" class="sw ${v && toHex(c.hex) === toHex(v) ? 'on' : ''}" data-sw="${toHex(c.hex)}" data-sw-name="${esc(c.name || '')}" data-for="${k}" title="${esc(c.name || '')} ${toHex(c.hex)}" style="background:${toHex(c.hex)}"></button>`).join('')}<button type="button" class="sw edit" data-act="edit-palette" title="Edit the brand palette">✎</button>${token ? `<span class="cv-token" title="Bound to the palette color ${esc(token)}: it follows palette edits">${esc(token)}</span>` : ''}</div>`;
+  const tokenSwatches = (k, v, token) => { const kit = env.getKit(); const th = Brand.themesOf(kit); if (!th.length) return ''; const f = selFrame(); const theme = (f && f.theme) || 'light'; return `<div class="cv-swatches cv-tokens" title="Design tokens: a color bound to one follows the screen's theme">${Object.keys(kit.tokens.light).map(n => { const h = toHex(Brand.tokenHex(kit, n, theme) || '#000000'); return `<button type="button" class="sw tok ${token === n || (!token && v && h === toHex(v)) ? 'on' : ''}" data-sw="${h}" data-sw-name="${esc(n)}" data-for="${k}" title="${esc(n)} ${h}" style="background:${h}"></button>`; }).join('')}</div>`; };
+  const swatches = (k, v, token) => `<div class="cv-swatches">${env.getKit().colors.map(c => `<button type="button" class="sw ${v && toHex(c.hex) === toHex(v) ? 'on' : ''}" data-sw="${toHex(c.hex)}" data-sw-name="${esc(c.name || '')}" data-for="${k}" title="${esc(c.name || '')} ${toHex(c.hex)}" style="background:${toHex(c.hex)}"></button>`).join('')}${tokenSwatches(k, v, token)}<button type="button" class="sw edit" data-act="edit-palette" title="Edit the brand palette">✎</button>${token ? `<span class="cv-token" title="Bound to the palette color ${esc(token)}: it follows palette edits">${esc(token)}</span>` : ''}</div>`;
   const color = (k, label, v, token) => `<label class="cv-f"><span>${label}</span><span class="cv-color"><input type="color" data-p="${k}" value="${toHex(v)}"><input type="text" data-p="${k}" value="${esc(v)}" class="hex"></span></label>${swatches(k, v, token)}`;
   const selectF = (k, label, v, opts) => `<label class="cv-f"><span>${label}</span><select data-p="${k}">${opts.map(o => `<option value="${esc(o[0])}" ${String(o[0]) === String(v) ? 'selected' : ''}>${esc(o[1])}</option>`).join('')}</select></label>`;
   const btn = (act, text, extra = '') => `<button type="button" class="btn small" data-act="${act}" ${extra}>${text}</button>`;
+  const themeName = t => t[0].toUpperCase() + t.slice(1);
+  const themeField = f => { const th = Brand.themesOf(env.getKit()); return th.length > 1 ? selectF('theme', 'Theme', f.theme || 'light', th.map(t => [t, themeName(t)])) : ''; };
   const ROLES = ['core', 'accent', 'background', 'neutral'];
   function paletteEditor() {
     const kit = env.getKit();
@@ -1530,6 +1649,7 @@ const CanvasUI = (() => {
       <div class="cv-row wrap">${btn('tidy-row', 'Tidy row')}${btn('tidy-grid', 'Tidy grid')}${btn('align-tops', 'Align tops')}${btn('align-lefts', 'Align lefts')}</div>
       <p class="hint">Everything below changes every selected screen at once; ⌘Z undoes it as one step.</p></div>
       <div class="cv-section"><h3>Palette</h3>${pairChips()}<p class="hint">Or set just the background:</p>${swatches('batch-bg', '')}</div>
+      ${Brand.themesOf(kit).length > 1 ? `<div class="cv-section"><h3>Theme</h3><div class="cv-row">${selectF('batch-theme', 'Theme', '', [['', '—'], ...Brand.themesOf(kit).map(t => [t, themeName(t)])])}${btn('batch-theme', 'Apply')}</div></div>` : ''}
       <div class="cv-section"><h3>Type</h3>${selectF('batch-display', 'Display', kit.fonts.display, fonts.map(n => [n, n]))}${selectF('batch-body', 'Body', kit.fonts.body, fonts.map(n => [n, n]))}<div class="cv-row">${btn('batch-fonts', 'Apply fonts')}</div></div>
       <div class="cv-section"><h3>Find and replace</h3><label class="cv-f"><span>Find</span><input type="text" data-fr="find" placeholder="payroll"></label><label class="cv-f"><span>Replace</span><input type="text" data-fr="repl" placeholder="Akai"></label><div class="cv-row">${btn('replace', 'Replace in all')}</div></div>
       <div class="cv-section"><h3>Resize</h3>${selectF('batch-format', 'Format', '', [['', 'Pick a format…']].concat(Grid.FORMATS.map(x => [x.id, `${x.name} ${x.w}×${x.h}`])))}<div class="cv-row">${btn('batch-resize', 'Resize screens')}</div><p class="hint">Generated layouts are laid out again for the new size; other frames scale.</p></div>
@@ -1606,6 +1726,7 @@ const CanvasUI = (() => {
       <label class="cv-f"><span>Name</span><input type="text" data-f="name" value="${esc(f.name)}"></label>
       <div class="cv-grid2">${num('x', 'X', f.x, 8)}${num('y', 'Y', f.y, 8)}${num('w', 'W', L.format.w, 8)}${num('h', 'H', L.format.h, 8)}</div>
       ${selectF('format', 'Format', L.format.id, Grid.FORMATS.map(x => [x.id, `${x.name} ${x.w}×${x.h}`]).concat([['custom', 'Custom']]))}
+      ${themeField(f)}
       <label class="cv-check"><input type="checkbox" data-f="clip" ${f.clip !== false ? 'checked' : ''}> Clip content</label>
       <label class="cv-check"><input type="checkbox" data-f="showGrid" ${f.showGrid ? 'checked' : ''}> Show grid (⇧G)</label>
       <label class="cv-check"><input type="checkbox" data-f="locked" ${f.locked ? 'checked' : ''}> Lock position</label>
@@ -1703,6 +1824,7 @@ const CanvasUI = (() => {
       ${b.pen ? `<div class="cv-row">${btn('pen-edit', penEdit && penEdit.b === b ? 'Done editing points' : 'Edit points (Enter)')}${b.pen.closed ? '' : btn('pen-close', 'Close path')}</div>` : ''}
     </div>
     ${codeSection(f, b)}
+    ${instanceSection(f, b)}
     ${b.kind === 'text' ? `<div class="cv-section"><h3>Text</h3><textarea class="cv-text" data-p="text" rows="3" spellcheck="true">${esc(Canvas.sourceText(b))}</textarea><p class="hint">Or double-click the text on the canvas.</p>${b.overflow ? '<p class="hint" style="color:var(--danger)">Text is wider than its box. Widen the box or lower the size.</p>' : ''}</div>` : ''}
     ${b.kind === 'list' ? `<div class="cv-section"><h3>Items</h3><textarea class="cv-text" data-p="items" rows="4" spellcheck="true">${esc((b.items || []).join('\n'))}</textarea>${selectF('marker', 'Marker', b.marker || 'bullet', [['bullet', 'Bullet'], ['number', 'Number'], ['none', 'None']])}</div>` : ''}
     ${b.kind === 'button' ? `<div class="cv-section"><h3>Label</h3><input type="text" class="cv-text" data-p="text" value="${esc(b.text)}">${color('color', 'Text color', b.color, b.colorToken)}</div>` : ''}
@@ -1722,7 +1844,7 @@ const CanvasUI = (() => {
     ${b.kind === 'logo' ? logoSection(f, b) : ''}
     ${b.kind === 'icon' ? iconSection(b) : ''}
     ${b.kind === 'shape' ? `<div class="cv-section"><h3>Shape</h3>${selectF('shape', 'Shape', b.shape, [['circle', 'Circle'], ['ellipse', 'Ellipse'], ['pill', 'Pill'], ['quarter', 'Quarter circle']])}</div>` : ''}
-    ${b.kind === 'box' ? autoSection(f, b) : ''}
+    ${b.kind === 'box' ? autoSection(f, b) + slotSection(f, b) : ''}
     ${sizingSection(f, b)}
     ${b.kind !== 'image' ? fillSection(b) : ''}
     ${strokeSection(b)}
@@ -1745,7 +1867,8 @@ const CanvasUI = (() => {
   // Replace a captured component with another captured variant of it: same place in its stack, same props and words.
   function swapVariant(f, root, it) {
     const old = Auto.withDescendants(f, [root]); const oldIds = new Set(old.map(b => b.id));
-    const copies = Canvas.clone(it.blocks); Auto.remap(copies, null); const top = copies.find(b => !b.parent); if (!top) return null;
+    const copies = Canvas.clone(it.blocks); const idMap = Auto.remap(copies, null); const top = copies.find(b => !b.parent); if (!top) return null;
+    linkCopies(copies, idMap, [top], it);
     const dx = root.x - top.x, dy = root.y - top.y; for (const c of copies) { c.x += dx; c.y += dy; }
     if (root.parent) top.parent = root.parent; if (root.absolute) top.absolute = true; if (root.label) top.label = root.label;
     top.code = { ...top.code, props: { ...(root.code.props || {}) }, from: it.id };
@@ -1767,6 +1890,7 @@ const CanvasUI = (() => {
     if (k === 'text') { b.text = v; Canvas.refit(b); }
     else if (k === 'items') { b.items = String(v).split('\n').map(x => x.trim()).filter(Boolean); Canvas.refit(b); }
     else if (k === 'label') { if (v) b.label = String(v).slice(0, 80); else delete b.label; }
+    else if (k === 'slot.name') { if (b.slot) b.slot.name = String(v).slice(0, 40); }
     else if (k === 'textStyle') { const st = (env.getKit().textStyles || []).find(x => x.id === v); if (!st || !b.font) return; b.font.family = Brand.fontCss(st.family); b.font.size = +st.size; b.font.weight = +st.weight; b.font.lineHeight = +st.lineHeight || 1.2; b.font.letterSpacing = +st.letterSpacing || 0; if (st.color && b.kind !== 'button') { b.fill = toHex(st.color); delete b.fillToken; } Canvas.refit(b); }
     else if (k === 'font.familyName') { b.font.family = Brand.fontCss(v); const ws = Brand.fontWeights(v); if (!ws.includes(b.font.weight)) b.font.weight = ws.reduce((p, c) => Math.abs(c - b.font.weight) < Math.abs(p - b.font.weight) ? c : p, ws[0]); Canvas.refit(b); }
     else if (k.startsWith('font.')) { const kk = k.slice(5); b.font[kk] = (kk === 'transform' || kk === 'style') ? v : +v; Canvas.refit(b); }
@@ -1789,8 +1913,18 @@ const CanvasUI = (() => {
     else if (k === 'hasFill') { if (v) b.fill = '#FFFFFF'; else { b.fill = 'none'; delete b.gradient; delete b.fillToken; } }
     else b[k] = v;
   }
+  // A screen's theme: its bound colors take the token values for it; plain colors that match the old theme bind first,
+  // so a captured screen that never heard of tokens still turns dark as a whole.
+  function setFrameTheme(f, theme, opts = {}) {
+    const kit = env.getKit(); const from = f.theme || 'light'; theme = theme || 'light'; if (theme === from) return false;
+    if (opts.history !== false) hist.push(doc);
+    Canvas.tokenizeFrame(f, kit, from); if (theme !== 'light') f.theme = theme; else delete f.theme;
+    Canvas.applyFrameTokens(f, kit); if (active) rerenderFrame(f);
+    if (opts.quiet) return true; renderProps(); persist({ frames: [f.id] }); updateUndo(); return true;
+  }
   function setFrameProp(f, k, v) {
     const P = f.layout.palette;
+    if (k === 'theme') { setFrameTheme(f, v, { history: false, quiet: true }); return; }
     if (k === 'x') f.x = +v; else if (k === 'y') f.y = +v;
     else if (k === 'w' || k === 'h') { f.layout.format = { ...f.layout.format, [k]: Math.max(64, +v), id: 'custom', name: 'Custom' }; regrid(f); }
     else if (k === 'format') { const fm = Grid.byId[v]; if (fm) { f.layout.format = { id: fm.id, name: fm.name, w: fm.w, h: fm.h }; regrid(f); } }
@@ -1877,6 +2011,7 @@ const CanvasUI = (() => {
       }
       if (t.dataset.al) { const tg = autoTarget(); if (!tg) return; if (!live) hist.push(doc); setAuto(tg.f, tg.box, t.dataset.al, t.type === 'checkbox' ? t.checked : t.value); rerenderFrame(tg.f); drawOverlay(); if (!live) renderProps(); persist(); updateUndo(); return; }
       if (t.dataset.cprop && bs.length === 1) { if (live) return; setCodeProp(f, bs[0], t.dataset.cprop, t.dataset.ctype === 'bool' ? t.checked : t.value); return; }
+      if (t.dataset.b === 'slotOn' && bs.length) { hist.push(doc); for (const b of bs) { if (b.kind !== 'box') continue; if (t.checked) b.slot = b.slot || { name: b.label || 'Content', accepts: [] }; else delete b.slot; } renderProps(); renderLayers(); drawOverlay(); persist(); updateUndo(); return; }
       if (t.dataset.b && bs.length) { hist.push(doc); for (const b of bs) { if (t.dataset.b === 'mask' && !t.checked) delete b.mask; else b[t.dataset.b] = t.checked; } if (t.dataset.b === 'mask') rerenderFrame(f); renderLayers(); drawOverlay(); persist(); updateUndo(); return; }
       const k = t.dataset.p; if (!k) return;
       if (!live) hist.push(doc);
@@ -1922,10 +2057,23 @@ const CanvasUI = (() => {
       const lv = e.target.closest('[data-logo-variant]'); if (lv && bs[0] && bs[0].kind === 'logo') { hist.push(doc); setLogoVariant(f, bs[0], lv.dataset.logoVariant); rerenderFrame(f); renderProps(); drawOverlay(); persist(); updateUndo(); return; }
       const dirB = e.target.closest('[data-al-dir]'); const cell = e.target.closest('[data-al-cell]');
       if (dirB || cell) { const tg = autoTarget(); if (!tg) return; hist.push(doc); setAuto(tg.f, tg.box, dirB ? 'dir' : 'cell', dirB ? dirB.dataset.alDir : cell.dataset.alCell); rerenderFrame(tg.f); renderProps(); drawOverlay(); persist(); updateUndo(); return; }
+      const srm = e.target.closest('[data-slot-rm]'); if (srm && f && bs[0] && bs[0].slot) { hist.push(doc); bs[0].slot.accepts = (bs[0].slot.accepts || []).filter(x => x !== srm.dataset.slotRm); renderProps(); persist(); updateUndo(); return; }
       const act = e.target.closest('[data-act]'); if (!act) return;
       const a = act.dataset.act;
       if (a === 'al-add') { addAutoLayout(); return; } if (a === 'al-remove') { removeAutoLayout(); return; }
       if (a === 'code-select' && f && bs[0]) { const root = CodeKit.ownerOf(f, bs[0]); if (root) select(f.id, [root.id]); return; }
+      if (a === 'slot-add' && f && bs[0] && bs[0].slot) {
+        const inp = el.querySelector('[data-slot-add]'); const q = String(inp && inp.value || '').trim().toLowerCase(); if (!q) return;
+        const items = Library.all(doc, env.getKit()); const it = items.find(x => x.id === q) || items.find(x => x.name.toLowerCase() === q) || items.find(x => x.name.toLowerCase().includes(q));
+        if (!it) { env.toast('No component by that name in a library that is on'); return; }
+        hist.push(doc); const list = bs[0].slot.accepts = bs[0].slot.accepts || []; if (!list.includes(it.id)) list.push(it.id); renderProps(); persist(); updateUndo(); return;
+      }
+      if (a.startsWith('inst-') && f && bs[0]) {
+        const root = instanceOwner(f, bs[0]); if (!root) return;
+        if (a === 'inst-select') select(f.id, [root.id]); else if (a === 'inst-reset') resetInstance(f, root); else if (a === 'inst-detach') detachInstance(f, root); else if (a === 'inst-show') Library.reveal(root.inst.of);
+        else if (a === 'inst-update') { act.disabled = true; act.textContent = 'Updating…'; try { await updateComponent(f, root); } catch (err) { env.toast(err.message || String(err)); } finally { act.disabled = false; act.textContent = 'Update component'; } }
+        return;
+      }
       if (a === 'frame-sel') { frameSelection(); return; } if (a === 'unwrap') { unwrapSelection(); return; }
       if (a === 'trace' && f && bs[0] && env.traceImage) { emit('action', 'trace'); act.disabled = true; act.textContent = 'Reading the image…'; try { await env.traceImage(f, bs[0]); } catch (err) { env.toast(err.message || String(err)); } finally { act.disabled = false; act.textContent = '✦ Rebuild as layers'; } return; }
       if (a === 'edit-palette') { select(null, []); const sec = el.querySelector('[data-palette]'); if (sec) { sec.open = true; sec.scrollIntoView({ block: 'start', behavior: 'smooth' }); } return; }
@@ -1942,6 +2090,7 @@ const CanvasUI = (() => {
       if (a.startsWith('exp-')) { act.disabled = true; emit('action', 'export.' + a.slice(4).replace(/\d$/, '')); try { await exportAction(a.slice(4)); } catch (err) { console.error(err); env.toast('Export failed: ' + err.message); } finally { act.disabled = false; } return; }
       if (a === 'variations') { emit('action', 'variations'); const n = +el.querySelector('[data-var="count"]').value; const mode = el.querySelector('[data-var="mode"]').value; act.disabled = true; act.textContent = '…'; try { await makeVariations(fs, n, mode); } finally { act.disabled = false; act.textContent = 'Make'; } return; }
       if (a.startsWith('look-')) { const look = a.slice(5); emit('action', 'look.' + look); const n = mutate(() => fs.filter(x => Looks.apply(x, look, env.getKit())).length, { frames: fs.map(x => x.id) }); renderProps(); env.toast(n ? `${n > 1 ? n + ' screens' : 'Screen'}: ${look}` : `Already ${look}`); return; }
+      if (a === 'batch-theme') { const th = el.querySelector('[data-p="batch-theme"]').value; if (!th) return; hist.push(doc); let n = 0; for (const x of fs) if (setFrameTheme(x, th, { history: false, quiet: true })) n++; renderFrames(); renderProps(); persist({ frames: fs.map(x => x.id) }); updateUndo(); env.toast(`${n} screen${n === 1 ? '' : 's'} on ${th}`); return; }
       if (a === 'tidy-row' || a === 'tidy-grid') { mutate(() => Canvas.tidy(fs, a === 'tidy-row' ? 'row' : 'grid')); return; }
       if (a === 'align-tops') { const y = Math.min(...fs.map(x => x.y)); mutate(() => fs.forEach(x => { x.y = y; })); return; }
       if (a === 'align-lefts') { const x = Math.min(...fs.map(v => v.x)); mutate(() => fs.forEach(v => { v.x = x; })); return; }
@@ -2001,6 +2150,8 @@ const CanvasUI = (() => {
     flushBackup: () => { if (backupTimer) { clearTimeout(backupTimer); backupNow(); } },
     setUndoMerge: fn => { undoMerge = fn; },
     commentsChanged, comments: () => comments().map(c => Canvas.clone(c)), openThread, toggleMask, showShortcuts, gatherAll, fitSmart,
+    setFrameTheme: (fid, theme, opts) => { const f = Canvas.frameById(doc, fid); return f ? setFrameTheme(f, theme, opts) : false; },
+    syncInstances, instanceOwner, slotsOf: fid => { const f = Canvas.frameById(doc, fid); return f ? slotsOf(f) : []; }, overridesOf: (fid, bid) => { const f = Canvas.frameById(doc, fid); const b = f && Canvas.blockById(f, bid); const root = b && instanceOwner(f, b); const it = root && Library.find(root.inst.of); return root && it ? overridesOf(f, root, it) : null; },
     _history: () => hist,
   };
 })();

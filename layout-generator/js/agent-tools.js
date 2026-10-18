@@ -13,6 +13,7 @@ const AgentTools = (() => {
     if (v == null || v === '') throw new Error('Missing color');
     const s = String(v).trim(); const c = kit().colors.find(x => String(x.name || '').toLowerCase() === s.toLowerCase());
     if (c) return { hex: Color.normalize(c.hex), name: c.name };
+    const K = kit(); const tk = Object.keys((K.tokens && K.tokens.light) || {}).find(x => x.toLowerCase() === s.toLowerCase()); if (tk) return { hex: Color.normalize(Brand.tokenHex(K, tk, 'light')), name: tk };
     try { return { hex: Color.normalize(s), name: null }; } catch { throw new Error(`"${s}" is not a hex color or a brand color name (${kit().colors.map(x => x.name).join(', ')})`); }
   }
   // One write = one undo step per run (the first write of a run snapshots the canvas).
@@ -23,7 +24,8 @@ const AgentTools = (() => {
 
   function blockInfo(b) {
     const o = { id: b.id, kind: b.kind };
-    if (b.role) o.role = b.role; if (b.label) o.label = b.label; if (b.group) o.group = b.group;
+    if (b.role) o.role = b.role; if (b.label) o.label = b.label; if (b.group) o.group = b.group; if (b.inst) o.instance_of = b.inst.of;
+    if (b.slot) o.slot = { name: b.slot.name || 'Slot', accepts: (b.slot.accepts || []).slice(0, 20) };
     Object.assign(o, { x: Math.round(b.x), y: Math.round(b.y), w: Math.round(b.w), h: Math.round(b.h) });
     if (b.kind === 'text') o.text = Canvas.sourceText(b).slice(0, MAX_TEXT);
     if (b.kind === 'button') o.text = String(b.text || '').slice(0, MAX_TEXT);
@@ -48,6 +50,7 @@ const AgentTools = (() => {
     const L = f.layout;
     const o = { id: f.id, name: f.name, x: Math.round(f.x), y: Math.round(f.y), w: L.format.w, h: L.format.h, format: L.format.id, background: L.palette.bgToken ? `${L.palette.bg} (${L.palette.bgToken})` : L.palette.bg, look: (L.meta && L.meta.look) || 'original', kind: L.archetypeLabel || L.archetype || 'frame' };
     if (withBlocks) o.blocks = L.blocks.map(blockInfo); else o.blocks = L.blocks.length;
+    const slots = CanvasUI.slotsOf(f.id); if (slots.length) o.slots = slots;
     return o;
   }
   // Props an agent can set on a block, in plain words.
@@ -157,22 +160,29 @@ const AgentTools = (() => {
       const it = items.find(i => i.id === component) || items.find(i => i.name.toLowerCase() === q) || items.find(i => i.code && i.code.name.toLowerCase() === q) || items.find(i => i.name.toLowerCase().includes(q));
       if (!it) throw new Error(`No component "${component}". Try list_components (libraries that are off are not searched).`);
       const box = box_id ? Bk(f, box_id) : null;
-      let blocks = it.blocks;
+      let blocks = it.blocks, linkItem = it;
       // a captured component (a real render): the variant that best fits the props, with the words swapped in
       if (it.capture && it.code && (props || text != null)) {
         const top0 = it.blocks.find(b => !b.parent) || {}; const want = { ...((top0.code && top0.code.props) || {}), ...(props && typeof props === 'object' ? props : {}) };
-        const v = (props && Library.variantFor(it.code, want)) || it; blocks = Canvas.clone(v.blocks);
+        const v = (props && Library.variantFor(it.code, want)) || it; blocks = Canvas.clone(v.blocks); linkItem = v;
         const top = blocks.find(b => !b.parent); if (top && top.code) { top.code = { ...top.code, props: want, from: v.id }; if (text != null && top.code.text) top.code.props[top.code.text] = String(text); }
         const t = text != null ? blocks.find(b => b.kind === 'text') : null; if (t) { t.text = String(text); Canvas.refit(t); }
       } else if (it.code && it.code.spec && (props || text != null)) {
         // a code component with props or text: draw its stand-in for them
         const spec = { name: it.code.name, pkg: it.code.pkg, ...it.code.spec }; const p = { ...CodeKit.defaultProps(spec), ...(props && typeof props === 'object' ? props : {}) };
-        blocks = Library.settle(CodeKit.standIn(spec, p, kit(), text != null ? [String(text)] : undefined)).blocks;
+        blocks = Library.settle(CodeKit.standIn(spec, p, kit(), text != null ? [String(text)] : undefined)).blocks; linkItem = null;
       }
       CanvasUI.select(f.id, box ? [box.id] : []);
-      const tops = CanvasUI.insertComponent(blocks, { name: it.name, history: firstWrite() });
+      const tops = CanvasUI.insertComponent(blocks, { name: it.name, history: firstWrite(), item: linkItem });
       note(`Added ${it.name}`);
       return { block_ids: (tops || []).map(b => b.id), component: it.name, ...(it.code ? { code: it.code.name } : {}) };
+    },
+    set_theme({ frame_ids, theme }) {
+      const frames = framesArg(frame_ids); const th = Brand.themesOf(kit()); const t = String(theme || 'light');
+      if (!th.includes(t)) throw new Error(th.length ? `theme must be one of ${th.join(', ')}` : 'This brand kit has no themes');
+      let n = 0; write(() => { for (const f of frames) if (CanvasUI.setFrameTheme(f.id, t, { history: false, quiet: true })) n++; }, frames.map(f => f.id));
+      CanvasUI.rerender(frames.map(f => f.id)); note(`${t} theme on ${frames.length} screen${frames.length === 1 ? '' : 's'}`);
+      return { frame_ids: frames.map(f => f.id), theme: t, changed: n };
     },
     get_selection() {
       const s = CanvasUI.selection();
@@ -188,7 +198,7 @@ const AgentTools = (() => {
     get_frame({ frame_id, full }) { const f = F(frame_id); if (full) { const L = Canvas.clone(f.layout); delete L.signature; if (L.meta) delete L.meta.original; L.blocks = L.blocks.map(b => { delete b.lines; delete b.inkW; delete b.capacity; return b; }); return { id: f.id, name: f.name, layout: L }; } return frameInfo(f, true); },
     get_brand() {
       const k = kit();
-      return { name: k.name, ...(Array.isArray(k.textStyles) && k.textStyles.length ? { textStyles: k.textStyles } : {}), colors: k.colors.map(c => ({ name: c.name, hex: Color.normalize(c.hex), role: c.role })), pairs: Brand.pairs(k).slice(0, 12).map(p => ({ background: p.bgName, bg: p.bg, text: p.fgs[0], accent: p.accents[0] })), fonts: { display: k.fonts.display, body: k.fonts.body, available: Brand.allFontNames() }, voice: k.note || 'Clear, confident, human. Sentence case. No exclamation marks.', copy: k.content };
+      return { name: k.name, ...(Array.isArray(k.textStyles) && k.textStyles.length ? { textStyles: k.textStyles } : {}), ...(Brand.themesOf(k).length ? { themes: Brand.themesOf(k), tokens: k.tokens.light } : {}), colors: k.colors.map(c => ({ name: c.name, hex: Color.normalize(c.hex), role: c.role })), pairs: Brand.pairs(k).slice(0, 12).map(p => ({ background: p.bgName, bg: p.bg, text: p.fgs[0], accent: p.accents[0] })), fonts: { display: k.fonts.display, body: k.fonts.body, available: Brand.allFontNames() }, voice: k.note || 'Clear, confident, human. Sentence case. No exclamation marks.', copy: k.content };
     },
     async get_screenshot({ frame_id, scale }) { const f = F(frame_id); const s = Math.max(0.25, Math.min(1, Number(scale) || 0.5)); const blob = await env.exportPNG(f.layout, s); return { image: await dataUrlOf(blob), frame_id: f.id, width: Math.round(f.layout.format.w * s), height: Math.round(f.layout.format.h * s) }; },
     get_code({ frame_id, format }) { const f = F(frame_id); const e = { assets: env.getAssets(), kit: kit() }; return format === 'html' ? Canvas.toHTML(f, e) : Canvas.toReact(f, e); },

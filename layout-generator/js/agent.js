@@ -25,19 +25,20 @@ Change the canvas with the tools; the person sees each change live and can undo 
   }
 
   // ---- context the model reads up front (saves a round) -----------------------------------------------------------
-  function context() {
-    const d = CanvasUI.doc; const sel = CanvasUI.selection(); const kit = env.getKit() || { name: '', colors: [], fonts: {} };
+  function context(forFrames) {
+    const d = CanvasUI.doc; const sel = forFrames ? { frameIds: forFrames, blockIds: [] } : CanvasUI.selection(); const kit = env.getKit() || { name: '', colors: [], fonts: {} };
     const lines = [`Canvas "${d.name}": ${d.frames.length} screen${d.frames.length === 1 ? '' : 's'}.`];
     if (Brand.voiceText(kit)) lines.push('When you write or change copy, follow these. ' + Brand.voiceText(kit));
     { const g = Brand.guidesText(['design', 'layout', 'animation', 'illustration', 'photography'], 3500, kit); if (g) lines.push('When you design, lay out, animate or pick pictures, follow the brand guidelines:\n' + g); }
     // product design: the design system's rules, its text styles, and how to build a screen from its parts
     { const g = Brand.guidesText(['product'], 6000, kit); if (g) lines.push('When you design product UI (app screens, flows, components), follow the product guidelines:\n' + g); }
     if (Array.isArray(kit.textStyles) && kit.textStyles.length) lines.push('Text styles (use these for product UI, never other sizes): ' + kit.textStyles.map(st => `${st.name} ${st.family} ${st.size}/${Math.round(st.size * (st.lineHeight || 1.2))} ${st.weight}${st.color ? ' ' + st.color : ''}`).join('; ') + '.');
+    { const th = Brand.themesOf(kit); if (th.length > 1) lines.push(`Themes: ${th.join(', ')} (set_theme per screen). Tokens, usable as colors in update_blocks fill/color (the block then follows the theme): ${Object.keys(kit.tokens.light).join(', ')}.`); }
     { const ds = Icons.sets().filter(st => st.id); if (ds.length) lines.push(`Icons: ${ds.map(st => `${st.name} (${st.names.length}, names like "${st.id}:${st.names[0]}")`).join(', ')} plus the basic set. Find names with search_icons; add with add_blocks kind icon.`); }
     lines.push('For an app screen, start from list_components (shared libraries such as a design system: real components, and Screens such as an app shell), insert_component into the screen, then change text and props; add only what the library lacks.');
     if (!sel.frameIds.length) lines.push('Nothing is selected; act on the whole canvas or ask which screen.');
     else {
-      lines.push(`Selected: ${sel.frameIds.length} screen${sel.frameIds.length === 1 ? '' : 's'}${sel.blockIds.length ? `, blocks ${sel.blockIds.join(', ')}` : ''}.`);
+      lines.push(forFrames ? `Your screens (change only these): ${sel.frameIds.length}.` : `Selected: ${sel.frameIds.length} screen${sel.frameIds.length === 1 ? '' : 's'}${sel.blockIds.length ? `, blocks ${sel.blockIds.join(', ')}` : ''}.`);
       for (const id of sel.frameIds.slice(0, 3)) {
         const f = Canvas.frameById(d, id); if (!f) continue; const L = f.layout;
         lines.push(`- screen ${f.id} "${f.name}" ${L.format.w}×${L.format.h}, background ${L.palette.bg}${L.palette.bgToken ? ' (' + L.palette.bgToken + ')' : ''}, look ${(L.meta && L.meta.look) || 'original'}`);
@@ -61,9 +62,9 @@ Change the canvas with the tools; the person sees each change live and can undo 
   function init(e) {
     env = e;
     $('agentClose').addEventListener('click', hide);
-    $('agentForm').addEventListener('submit', ev => { ev.preventDefault(); if (busy) stop(); else { const t = $('agentInput').value.trim(); if (t) { $('agentInput').value = ''; send(t); } } });
+    $('agentForm').addEventListener('submit', ev => { ev.preventDefault(); if (busy) stop(); else { const t = $('agentInput').value.trim(); if (t) { $('agentInput').value = ''; go(t); } } });
     $('agentInput').addEventListener('keydown', ev => { ev.stopPropagation(); if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); $('agentForm').requestSubmit(); } if (ev.key === 'Escape') hide(); });
-    $('agentSuggest').addEventListener('click', ev => { const b = ev.target.closest('[data-suggest]'); if (b) send(b.dataset.suggest); });
+    $('agentSuggest').addEventListener('click', ev => { const b = ev.target.closest('[data-suggest]'); if (b) { if (b.dataset.takes && $('agentTakes')) $('agentTakes').value = b.dataset.takes; go(b.dataset.suggest); } });
     $('agentFoot').addEventListener('click', async ev => { const c = ev.target.closest('[data-copy]'); if (c) { try { await navigator.clipboard.writeText(c.dataset.copy); env.toast('Copied'); } catch { } } const s = ev.target.closest('[data-settings]'); if (s) { ev.preventDefault(); env.openSettings(); } });
     $('cvAgent').addEventListener('click', () => ($('agentPanel').hidden ? show() : hide()));
     document.addEventListener('keydown', ev => { if ((ev.metaKey || ev.ctrlKey) && ev.key.toLowerCase() === 'k' && document.body.classList.contains('canvas-mode')) { ev.preventDefault(); $('agentPanel').hidden ? show() : hide(); } });
@@ -78,6 +79,8 @@ Change the canvas with the tools; the person sees each change live and can undo 
     })();
     renderFoot();
   }
+  // The form's choice: one run, or several takes side by side.
+  function go(text) { const sel = $('agentTakes'); const n = sel ? +sel.value || 1 : 1; return n > 1 ? sendTakes(text, n) : send(text); }
   function show() { $('agentPanel').hidden = false; $('cvAgent').classList.add('active'); renderContext(); renderFoot(); renderSuggest(); setTimeout(() => $('agentInput').focus(), 0); }
   function hide() { $('agentPanel').hidden = true; $('cvAgent').classList.remove('active'); }
   function renderContext() {
@@ -88,9 +91,9 @@ Change the canvas with the tools; the person sees each change live and can undo 
   function renderSuggest() {
     const n = CanvasUI.selection().frameIds.length; const kit = env.getKit(); if (!kit) return;
     const dark = (kit.colors.find(c => c.role === 'background' && Color.luminance(Color.normalize(c.hex)) < 0.1) || kit.colors.find(c => Color.luminance(Color.normalize(c.hex)) < 0.08) || { name: 'dark' }).name;
-    const list = n ? ['Make 3 variations of this', `Put these on ${dark}`, 'Shorten the headline, keep the meaning', 'Translate the copy to Spanish', 'Make the call to action stand out more', 'Turn these into a wireframe']
+    const list = n ? ['Make 3 variations of this', `Put these on ${dark}`, 'Shorten the headline, keep the meaning', 'Translate the copy to Spanish', 'Make the call to action stand out more', 'Turn these into a wireframe', { t: 'Three takes: bolder, calmer, more playful', takes: 3 }]
       : ['Create a square post announcing Akai', 'Tidy every screen into a grid', 'Make a story version of the first screen', 'Rebrand every screen'];
-    $('agentSuggest').innerHTML = $('agentLog').children.length ? '' : list.map(t => `<button type="button" class="chip" data-suggest="${esc(t)}">${esc(t)}</button>`).join('');
+    $('agentSuggest').innerHTML = $('agentLog').children.length ? '' : list.map(x => { const t = typeof x === 'string' ? x : x.t; return `<button type="button" class="chip" data-suggest="${esc(t)}"${typeof x === 'object' && x.takes ? ` data-takes="${x.takes}" title="${x.takes} agents work on copies at the same time"` : ''}>${esc(t)}</button>`; }).join('');
   }
   function renderFoot() {
     const m = mode(); const room = typeof Sync !== 'undefined' && Sync.status.mode === 'server' ? Sync.status.room : null;
@@ -114,6 +117,63 @@ Change the canvas with the tools; the person sees each change live and can undo 
   function stop() { stopped = true; if (ctl) ctl.abort(); }
 
   // ---- runs -----------------------------------------------------------------------------------------------------------
+  // Why a run failed, in the person's words.
+  function fail(box, e) {
+    const code = e && e.code; const msg = e && (e.message || String(e));
+    const copy = code === 'cancelled' ? 'Stopped.' : code === 'not_granted' ? 'Claude is not allowed for this page. You can allow it from the prompt that appears on the next request.' : code === 'rate_limited' ? 'Too many requests right now. Try again in a moment.' : code === 'refused' ? 'Claude declined this request. Try asking for it differently.' : code === 'tools_unavailable' ? 'This view cannot run canvas tools.' : (e && e.status === 401) ? 'The API key was not accepted. Check it in Settings.' : stopped ? 'Stopped.' : 'Something went wrong: ' + msg;
+    setText(box, (e && e.text ? e.text + '\n\n' : '') + copy);
+    if (code === 'not_granted' || code === 'sampling_disabled') { sample = null; renderFoot(); }
+  }
+  // One model run into one bubble, with the claude.ai sample capability or the API. opts.frames narrows the context to
+  // those screens and opts.take names the run (a side-by-side take); such runs leave no history for the next turn.
+  async function runOnce(box, text, opts = {}) {
+    const m = mode();
+    const pendingOf = name => STEP[name] ? step(box, STEP[name], true) : null;
+    const runTool = async (name, input) => {
+      if (stopped) throw new Error('Stopped by the person');
+      const p = pendingOf(name);
+      try { return await AgentTools.call(name, input); } finally { if (p) p.remove(); }
+    };
+    const T = opts.take;
+    const request = T ? `${text}\n\nThis is take ${T.n} of ${T.of}. The other takes are being made on their own copies of the same screens right now, by other designers with this same brief. Make yours clearly its own: another layout idea, emphasis or tone, still on brand. Change only your screens, listed above.` : text;
+    const prompt = `${context(opts.frames)}\n\nRequest: ${request}`;
+    if (m === 'sample') {
+      const tools = AgentTools.defs({ core: true }).slice(0, sampleTools).map(d => ({ name: d.name, description: d.description.slice(0, 1000), inputSchema: d.inputSchema, execute: async (input, c) => { if (c && c.signal && c.signal.aborted) throw new Error('Stopped'); return compact(await runTool(d.name, input)); } }));
+      const input = [{ role: 'user', content: SYSTEM }, ...(T ? [] : turns.slice(-8)), { role: 'user', content: prompt }];
+      const res = await sample(input, { tools, signal: ctl.signal, cache: false, onText: ({ text: t }) => setText(box, t) });
+      setText(box, res.text + (res.truncated ? '\n(Cut short.)' : ''));
+      if (!T) turns.push({ role: 'user', content: text }, { role: 'assistant', content: res.text.slice(-2000) });
+      return res.text;
+    }
+    const { Anthropic, betaTool } = await loadSdk();
+    const o = { apiKey: apiKey().trim(), dangerouslyAllowBrowser: true }; try { const base = JSON.parse(localStorage.getItem('lg.apiBase') || 'null'); if (base) o.baseURL = base; } catch { }
+    const client = new Anthropic(o);
+    const tools = AgentTools.defs().map(d => betaTool({
+      name: d.name, description: d.description, inputSchema: d.inputSchema,
+      run: async input => {
+        const out = await runTool(d.name, input);
+        if (out && typeof out.image === 'string') { const { image, ...rest } = out; return [{ type: 'image', source: { type: 'base64', media_type: 'image/png', data: image.split(',')[1] } }, { type: 'text', text: JSON.stringify(rest) }]; }
+        return typeof out === 'string' ? out : JSON.stringify(out);
+      },
+    }));
+    const messages = [...(T ? [] : apiTurns.slice(-8)), { role: 'user', content: prompt }];
+    const runner = client.beta.messages.toolRunner({
+      model: MODEL, max_tokens: 16000, system: SYSTEM, messages, tools, max_iterations: 16,
+      thinking: { type: 'adaptive' }, output_config: { effort: 'medium' },
+      betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default',
+    });
+    let last = null, said = '';
+    for await (const msg of runner) {
+      last = msg; if (stopped) break;
+      const t = msg.content.filter(b => b.type === 'text').map(b => b.text).join('\n').trim(); if (t) { said = t; setText(box, t); }
+      if (msg.stop_reason === 'refusal') break;
+    }
+    if (last && last.stop_reason === 'refusal') setText(box, 'Claude declined this request. Try asking for it differently.');
+    else if (stopped) setText(box, (said ? said + '\n' : '') + 'Stopped.');
+    else if (!said) setText(box, 'Done.');
+    if (!T) apiTurns.push({ role: 'user', content: text }, { role: 'assistant', content: (said || 'Done.').slice(-2000) });
+    return said;
+  }
   async function send(text) {
     if (busy) return; const m = mode();
     if (env && env.onRun) { try { env.onRun(text); } catch { } }
@@ -122,61 +182,48 @@ Change the canvas with the tools; the person sees each change live and can undo 
     if (!m) { setText(box, 'Add an Anthropic API key in Settings to use the agent here, or open the published page on claude.ai where it runs on your account.'); return; }
     setBusy(true); stopped = false; ctl = new AbortController();
     AgentTools.beginRun(s => step(box, s));
-    const pendingOf = name => STEP[name] ? step(box, STEP[name], true) : null;
-    const runTool = async (name, input) => {
-      if (stopped) throw new Error('Stopped by the person');
-      const p = pendingOf(name);
-      try { return await AgentTools.call(name, input); } finally { if (p) p.remove(); }
-    };
-    try {
-      if (m === 'sample') {
-        const tools = AgentTools.defs({ core: true }).slice(0, sampleTools).map(d => ({ name: d.name, description: d.description.slice(0, 1000), inputSchema: d.inputSchema, execute: async (input, c) => { if (c && c.signal && c.signal.aborted) throw new Error('Stopped'); return compact(await runTool(d.name, input)); } }));
-        const input = [{ role: 'user', content: SYSTEM }, ...turns.slice(-8), { role: 'user', content: `${context()}\n\nRequest: ${text}` }];
-        const res = await sample(input, { tools, signal: ctl.signal, cache: false, onText: ({ text: t }) => setText(box, t) });
-        setText(box, res.text + (res.truncated ? '\n(Cut short.)' : ''));
-        turns.push({ role: 'user', content: text }, { role: 'assistant', content: res.text.slice(-2000) });
-      } else {
-        const { Anthropic, betaTool } = await loadSdk();
-        const opts = { apiKey: apiKey().trim(), dangerouslyAllowBrowser: true }; try { const base = JSON.parse(localStorage.getItem('lg.apiBase') || 'null'); if (base) opts.baseURL = base; } catch { }
-        const client = new Anthropic(opts);
-        const tools = AgentTools.defs().map(d => betaTool({
-          name: d.name, description: d.description, inputSchema: d.inputSchema,
-          run: async input => {
-            const out = await runTool(d.name, input);
-            if (out && typeof out.image === 'string') { const { image, ...rest } = out; return [{ type: 'image', source: { type: 'base64', media_type: 'image/png', data: image.split(',')[1] } }, { type: 'text', text: JSON.stringify(rest) }]; }
-            return typeof out === 'string' ? out : JSON.stringify(out);
-          },
-        }));
-        const messages = [...apiTurns.slice(-8), { role: 'user', content: `${context()}\n\nRequest: ${text}` }];
-        const runner = client.beta.messages.toolRunner({
-          model: MODEL, max_tokens: 16000, system: SYSTEM, messages, tools, max_iterations: 16,
-          thinking: { type: 'adaptive' }, output_config: { effort: 'medium' },
-          betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default',
-        });
-        let last = null, said = '';
-        for await (const msg of runner) {
-          last = msg; if (stopped) break;
-          const t = msg.content.filter(b => b.type === 'text').map(b => b.text).join('\n').trim(); if (t) { said = t; setText(box, t); }
-          if (msg.stop_reason === 'refusal') break;
-        }
-        if (last && last.stop_reason === 'refusal') setText(box, 'Claude declined this request. Try asking for it differently.');
-        else if (stopped) setText(box, (said ? said + '\n' : '') + 'Stopped.');
-        else if (!said) setText(box, 'Done.');
-        apiTurns.push({ role: 'user', content: text }, { role: 'assistant', content: (said || 'Done.').slice(-2000) });
-      }
-    } catch (e) {
-      const code = e && e.code; const msg = e && (e.message || String(e));
-      const copy = code === 'cancelled' ? 'Stopped.' : code === 'not_granted' ? 'Claude is not allowed for this page. You can allow it from the prompt that appears on the next request.' : code === 'rate_limited' ? 'Too many requests right now. Try again in a moment.' : code === 'refused' ? 'Claude declined this request. Try asking for it differently.' : code === 'tools_unavailable' ? 'This view cannot run canvas tools.' : (e && e.status === 401) ? 'The API key was not accepted. Check it in Settings.' : stopped ? 'Stopped.' : 'Something went wrong: ' + msg;
-      setText(box, (e && e.text ? e.text + '\n\n' : '') + copy);
-      if (code === 'not_granted' || code === 'sampling_disabled') { sample = null; renderFoot(); }
-    } finally {
+    try { await runOnce(box, text); }
+    catch (e) { fail(box, e); }
+    finally {
       AgentTools.endRun(); setBusy(false); ctl = null;
       box.querySelectorAll('.step.pending').forEach(s => s.remove());
     }
   }
-  // ---- Vision: one image and a prompt in, parsed JSON out (screenshots and slides rebuilt as layers) -------------------
-  const parseJSON = t => { const m = String(t || '').replace(/^```(?:json)?\s*|\s*```\s*$/g, '').match(/\{[\s\S]*\}/); if (!m) throw new Error('Claude did not return layers'); return JSON.parse(m[0]); };
-  const blobToB64 = blob => new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(String(fr.result).split(',')[1]); fr.onerror = rej; fr.readAsDataURL(blob); });
+  // Side by side: the selected screens are copied n times in a row below, and n runs with the same brief work on
+  // the copies at the same time, each told which take it is. One undo step for all of it.
+  const LETTERS = 'ABCDEF';
+  async function sendTakes(text, n) {
+    if (busy) return; const m = mode(); n = Math.max(2, Math.min(4, Number(n) || 2));
+    const sel = CanvasUI.selection(); if (!sel.frameIds.length) { env.toast('Select the screen (or screens) to start from'); return; }
+    if (env && env.onRun) { try { env.onRun(text, { takes: n }); } catch { } }
+    if ($('agentPanel').hidden) show();
+    bubble('user', `${text}\n${n} takes, side by side`); const lead = bubble('assistant');
+    if (!m) { setText(lead, 'Add an Anthropic API key in Settings to use the agent here, or open the published page on claude.ai where it runs on your account.'); return; }
+    setBusy(true); stopped = false; ctl = new AbortController();
+    AgentTools.beginRun(s => step(lead, s));
+    const boxes = [];
+    try {
+      const d = CanvasUI.doc; const src = sel.frameIds.map(id => Canvas.frameById(d, id)).filter(Boolean);
+      const gx = Math.min(...src.map(f => f.x)), gy = Math.max(...src.map(f => f.y + f.layout.format.h)) + 240;
+      const dup = await AgentTools.call('duplicate_frames', { frame_ids: sel.frameIds, copies: n, x: gx, y: gy, name_prefix: ' ' });
+      const groups = []; for (let i = 0; i < n; i++) groups.push(dup.copies.slice(i * src.length, (i + 1) * src.length));
+      await AgentTools.call('update_frames', { updates: groups.flatMap((g, i) => g.map(c => ({ frame_id: c.id, name: `Take ${LETTERS[i]} · ${String(c.name).replace(/^ /, '')}` }))) });
+      setText(lead, `${n} takes on the way, each on its own copy…`);
+      const runs = groups.map((g, i) => {
+        const box = bubble('assistant'); boxes.push(box); const tag = document.createElement('div'); tag.className = 'take'; tag.textContent = `Take ${LETTERS[i]}`; box.prepend(tag);
+        return runOnce(box, text, { frames: g.map(c => c.id), take: { n: i + 1, of: n, letter: LETTERS[i] } }).catch(e => { fail(box, e); return null; });
+      });
+      const out = await Promise.all(runs);
+      const ids = groups.flat().map(c => c.id); CanvasUI.selectFrames(ids); CanvasUI.fitTo(ids);
+      const ok = out.filter(x => x != null).length;
+      setText(lead, ok === n ? `${n} takes, side by side below the original. Keep one, or ask for another round on it.` : `${ok} of ${n} takes finished.`);
+    } catch (e) { fail(lead, e); }
+    finally {
+      AgentTools.endRun(); setBusy(false); ctl = null;
+      for (const b of [lead, ...boxes]) b.querySelectorAll('.step.pending').forEach(s => s.remove());
+    }
+  }
+
   function canSee() { return !!sampleAny || !!apiKey().trim(); }
   async function vision(prompt, blob, opts = {}) {
     if (sampleAny) {
@@ -196,5 +243,5 @@ Change the canvas with the tools; the person sees each change live and can undo 
     if (msg.stop_reason === 'refusal') throw new Error('Claude declined to read this image');
     return parseJSON(msg.content.filter(c => c.type === 'text').map(c => c.text).join(''));
   }
-  return { init, show, hide, send, vision, canSee, get busy() { return busy; }, _mode: mode };
+  return { init, show, hide, send, sendTakes, vision, canSee, get busy() { return busy; }, _mode: mode };
 })();

@@ -1428,7 +1428,7 @@
 
   // ---- Multiplayer ------------------------------------------------------------------------------------------------
   Sync.init(CanvasUI, {
-    getAssets: () => state.assets, dataUrlToBlob, addAssetWithId, onLibrary: () => { if (libraryOpen()) Library.render(); },
+    getAssets: () => state.assets, dataUrlToBlob, addAssetWithId, onLibrary: () => { if (libraryOpen()) Library.render(); CanvasUI.syncInstances(); },
     knownAsset: id => LibStore.assetInfo(id), onLibs: () => LibStore.refresh(), onProjects: () => Projects.refresh(),
     userId: () => Projects.me, onDenied: (room, reason) => { if (PROJ.id === room) closeProject(reason || 'That project is not shared with you.'); else toast(reason || 'That project is not shared with you.'); },
     toolList: () => (typeof AgentTools !== 'undefined' ? AgentTools.defs() : []),

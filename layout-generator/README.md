@@ -203,6 +203,12 @@ A manifest gives props; a **capture** gives the real look. `node tools/storybook
 - **Screens.** Whole pages (an app shell with sidebar, tabs, a form flow, master–detail) go in the **Screens** category. Adding one makes a screen of its own size to design in.
 - **Agent.** `insert_component` with `props` picks the matching variant and `text` replaces its label.
 
+## Components: instances, slots, tokens and themes
+
+- **Instances.** A piece inserted from a library stays linked to it. Its panel says *Instance of …*; the Layers list marks it ◇. Edit it freely: words, colors, hidden parts are kept as overrides. When an admin changes the component (select any instance that looks right and press **Update component**), every instance on every canvas rebuilds from the new definition and keeps its own overrides. **Reset overrides** returns one to the library version; **Detach** keeps the blocks and drops the link; **Show in Library** finds the component. Duplicates and pastes are instances too.
+- **Slots.** A box can be a slot (Advanced → Slot): a place that names the components that belong in it. Empty slots show on the canvas as a dashed outline with their name. Select a slot and the Library opens with **Fits here** first; a click puts the component inside. The Deel UI Screens come with slots: the app shell's **Content**, the form flow's **Form**, the master-detail's **List** and **Detail**. Agents see slots in `get_frame` and fill them with `insert_component`.
+- **Tokens and themes.** A kit can carry design tokens (`kit.tokens = { light: { "primary.main": "#111111", … }, dark: { … } }`). Components inserted from such a kit bind their colors to the tokens they match; the color fields show the tokens as a second row of swatches. A screen's **Theme** (Frame panel; several screens at once under Theme) switches every bound color to that theme's value, and binds plain colors that match the old theme first, so a captured screen turns dark as a whole. Agents: `get_brand` lists themes and tokens, `set_theme` switches screens, and token names work as colors in `update_blocks`. The Deel product kit ships light values from Storybook and derived dark values until Deel UI's own dark theme is captured.
+
 ## Product design
 
 Dugma also lays out product screens with a design system:
@@ -300,6 +306,10 @@ curl http://127.0.0.1:8787/api/stats     # CPU, memory, message rates, event-loo
 - **In the published copy**, it runs on Claude through claude.ai (each viewer uses their own account and is asked once).
 - **Locally**, it calls the Claude API with the key from Settings.
 
+### Side by side
+
+Pick **2, 3 or 4 side by side** next to Send: the selected screens are copied in a row below, and that many agents work on the copies at the same time with the same brief, each told which take it is and asked to make its own clearly different. The takes are named A, B, C…; the whole round is one undo step. Keep one and ask for another round on it.
+
 ### Use the canvas from Claude Code, Cursor or other MCP clients
 
 The sync server exposes the canvas as an MCP server, the way Paper and Figma do. Tools run in the browser tab you have open, so you watch the changes happen.
@@ -371,6 +381,12 @@ python3 tools/pptx_to_kit.py path/to/deck.pptx --kit my-brand.json --priors prio
 ```
 
 Load the kit from the sidebar, review the color roles and fonts, upload the logo, and generate. See `docs/learnings.md` for where this came from.
+
+## The format, the schema and the CLI
+
+The canvas is one JSON document; [`docs/format.md`](docs/format.md) explains it and [`schema/canvas.schema.json`](schema/canvas.schema.json) (JSON Schema 2020-12) is the authoritative shape: screens, blocks by kind, auto layout, color bindings and themes, instances, slots, library items, comments, and how the shared copy is split into records. Unknown properties are allowed, so older files stay valid.
+
+`tools/dugma-cli.mjs` works against a self-hosted server: `rooms` lists the canvases, `get <room> [out.json]` folds a canvas's records back into a document, `frames <room>` lists its screens, `validate <file.json>` checks a file against the schema (a full check with `npm i ajv`, a shape check without), `mcp [room]` prints the `claude mcp add` line, `schema` prints the schema. Writes go through the MCP tools, never through raw records.
 
 ## Files
 

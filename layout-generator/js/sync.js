@@ -25,7 +25,7 @@ const Sync = (() => {
   const notify = () => listeners.forEach(fn => { try { fn(status, peers); } catch (e) { console.error(e); } });
 
   // ---- document <-> records ----------------------------------------------------------------------------------------
-  const FRAME_KEYS = ['id', 'name', 'x', 'y', 'autoLayout', 'clip', 'hidden', 'locked', 'showGrid'];
+  const FRAME_KEYS = ['id', 'name', 'x', 'y', 'autoLayout', 'clip', 'hidden', 'locked', 'showGrid', 'theme'];
   // Records for the whole canvas, or (scope = {frames: Set}) for some screens only: with many people editing, every
   // change must not cost a pass over every block. Library records come along only on a full pass or when asked.
   function toRecords(doc, scope = null) {

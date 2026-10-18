@@ -457,19 +457,34 @@ const Canvas = (() => {
     L.format = { id: format.id, name: format.name, w: format.w, h: format.h };
   }
   // Colors bound to a palette name follow the palette when it changes.
-  function applyTokens(doc, kit) {
-    const byName = new Map(kit.colors.map(c => [String(c.name || '').toLowerCase(), norm(c.hex)]));
-    let n = 0;
-    const res = t => t ? byName.get(String(t).toLowerCase()) : null;
-    for (const f of doc.frames) {
-      const pb = res(f.layout.palette.bgToken); if (pb && pb !== f.layout.palette.bg) { f.layout.palette.bg = pb; n++; } else if (f.layout.palette.bgToken && !byName.has(String(f.layout.palette.bgToken).toLowerCase())) delete f.layout.palette.bgToken;
-      for (const b of f.layout.blocks) {
-        for (const [tk, key] of [['fillToken', 'fill'], ['colorToken', 'color']]) {
-          if (!b[tk]) continue; const hx = res(b[tk]);
-          if (hx) { if (hx !== norm(b[key])) { b[key] = hx; n++; } } else delete b[tk];
-        }
+  // Bound colors follow the kit: a token's value for the screen's theme (light unless the screen says otherwise), or
+  // the palette color of that name. Bindings the kit no longer knows are dropped.
+  function applyTokens(doc, kit) { let n = 0; for (const f of doc.frames) n += applyFrameTokens(f, kit); return n; }
+  function applyFrameTokens(f, kit) {
+    const theme = f.theme || 'light'; let n = 0;
+    const res = t => { if (!t) return null; const h = typeof Brand !== 'undefined' ? Brand.tokenHex(kit, t, theme) : ((kit.colors || []).find(c => String(c.name || '').toLowerCase() === String(t).toLowerCase()) || {}).hex; return h ? norm(h) : null; };
+    const P = f.layout.palette;
+    const pb = res(P.bgToken); if (pb) { if (pb !== norm(P.bg)) { P.bg = pb; n++; } } else if (P.bgToken) delete P.bgToken;
+    for (const b of f.layout.blocks) {
+      for (const [tk, key] of [['fillToken', 'fill'], ['colorToken', 'color']]) {
+        if (!b[tk]) continue; const hx = res(b[tk]);
+        if (hx) { if (hx !== norm(b[key])) { b[key] = hx; n++; } } else delete b[tk];
       }
+      if (b.strokeToken) { const hx = res(b.strokeToken); if (hx && b.stroke) { if (hx !== norm(b.stroke.color)) { b.stroke.color = hx; n++; } } else delete b.strokeToken; }
     }
+    return n;
+  }
+  // Bind plain colors to the kit's tokens where they match a theme's values: what a captured component carries before
+  // it knows about tokens. Only the given blocks (default: the whole screen, plus its background).
+  function tokenizeFrame(f, kit, theme = 'light', blocks = f.layout.blocks) {
+    if (typeof Brand === 'undefined' || !Brand.themesOf(kit).length) return 0; let n = 0;
+    const bind = (o, key, tk, kind) => { if (o[tk] || !o[key] || o[key] === 'none' || (key === 'fill' && o.gradient)) return; const t = Brand.tokenFor(kit, norm(o[key]), theme, kind); if (t) { o[tk] = t; n++; } };
+    for (const b of blocks) {
+      const kind = b.kind === 'text' || b.kind === 'list' ? 'text' : 'box';
+      bind(b, 'fill', 'fillToken', kind); if (b.kind === 'button') bind(b, 'color', 'colorToken', 'text');
+      if (b.stroke && b.stroke.color && !b.strokeToken) { const t = Brand.tokenFor(kit, norm(b.stroke.color), theme, 'box'); if (t) { b.strokeToken = t; n++; } }
+    }
+    if (blocks === f.layout.blocks && !f.layout.palette.bgToken) { const t = Brand.tokenFor(kit, norm(f.layout.palette.bg), theme, 'box'); if (t) { f.layout.palette.bgToken = t; n++; } }
     return n;
   }
   function group(frame, blocks) { const g = 'g' + uid(); for (const b of blocks) b.group = g; return g; }
@@ -626,5 +641,5 @@ const Canvas = (() => {
     };
   }
 
-  return { create, addFrame, blankFrame, migrate, defaultAuto, frameById, blockById, refit, sourceText, newBlock, moveBlock, resizeBlock, reorder, duplicateBlock, removeBlocks, transferBlocks, pasteBlocks, customFormat, align, distribute, bounds, applyAutoLayout, isBackground, serialize, deserialize, toLink, fromHash, toHTML, toReact, codeTree, codeNodes, recolor, extractContent, scaleFrame, clusters, mainCluster, applyTokens, group, ungroup, groupMembers, tidy, compact, penD, penFit, maskShape, maskedBy, replaceText, setFonts, pasteFrames, framesBounds, cssGradient, history, snap, uid, clone };
+  return { create, addFrame, blankFrame, migrate, defaultAuto, frameById, blockById, refit, sourceText, newBlock, moveBlock, resizeBlock, reorder, duplicateBlock, removeBlocks, transferBlocks, pasteBlocks, customFormat, align, distribute, bounds, applyAutoLayout, isBackground, serialize, deserialize, toLink, fromHash, toHTML, toReact, codeTree, codeNodes, recolor, extractContent, scaleFrame, clusters, mainCluster, applyFrameTokens, tokenizeFrame, applyTokens, group, ungroup, groupMembers, tidy, compact, penD, penFit, maskShape, maskedBy, replaceText, setFonts, pasteFrames, framesBounds, cssGradient, history, snap, uid, clone };
 })();

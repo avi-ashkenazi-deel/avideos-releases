@@ -1,0 +1,174 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/avi-ashkenazi-deel/avideos-releases/layout-generator/schema/canvas.schema.json",
+  "title": "Dugma canvas",
+  "description": "A Dugma canvas document: screens (frames) made of blocks, plus the canvas's own library and comments. This is what Save JSON writes, Load reads, and what the agent tools and the MCP server pass around. Unknown properties are allowed everywhere: the format grows, and older files stay valid.",
+  "type": "object",
+  "required": ["frames"],
+  "properties": {
+    "v": { "type": "integer", "description": "Document version (1)." },
+    "id": { "$ref": "#/$defs/id" },
+    "name": { "type": "string" },
+    "created": { "type": "number", "description": "Unix ms." },
+    "view": { "type": "object", "description": "The viewport: zoom and the world offset in screen px.", "properties": { "x": { "type": "number" }, "y": { "type": "number" }, "zoom": { "type": "number", "exclusiveMinimum": 0 } } },
+    "grid": { "type": "object", "properties": { "unit": { "type": "number" }, "snap": { "type": "boolean" } } },
+    "frames": { "type": "array", "items": { "$ref": "#/$defs/frame" } },
+    "library": { "type": "array", "description": "This canvas's own library items.", "items": { "$ref": "#/$defs/libraryItem" } },
+    "comments": { "type": "array", "items": { "$ref": "#/$defs/comment" } }
+  },
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,80}$", "description": "Ids are short strings; unique among frames, and among the blocks of one frame." },
+    "color": { "type": "string", "description": "A CSS color, usually #RRGGBB; 'none' means no fill." },
+    "token": { "type": "string", "description": "The name a color is bound to: a brand palette color (e.g. 'Acai') or a kit token (e.g. 'primary.main'). The bound color takes the token's value for the screen's theme." },
+
+    "frame": {
+      "type": "object",
+      "description": "A screen on the canvas. Its content is one layout spec.",
+      "required": ["id", "x", "y", "layout"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "name": { "type": "string" },
+        "x": { "type": "number" }, "y": { "type": "number" },
+        "layout": { "$ref": "#/$defs/layout" },
+        "autoLayout": { "$ref": "#/$defs/auto", "description": "Auto layout of the screen itself (its top-level blocks)." },
+        "clip": { "type": "boolean", "description": "Clip content to the screen (default true)." },
+        "hidden": { "type": "boolean" }, "locked": { "type": "boolean" }, "showGrid": { "type": "boolean" },
+        "theme": { "type": "string", "description": "The kit theme this screen is on ('dark'); absent means light. Colors bound to tokens hold that theme's values." }
+      }
+    },
+
+    "layout": {
+      "type": "object",
+      "description": "A layout spec: format, grid, palette, type and the blocks. Generated layouts also carry archetype and metrics.",
+      "required": ["format", "blocks"],
+      "properties": {
+        "id": { "type": "string" },
+        "seed": { "type": "number" },
+        "archetype": { "type": "string", "description": "What made it: a generated archetype id, 'figma', 'web', 'import', 'blank'…" },
+        "archetypeLabel": { "type": "string" },
+        "brand": { "type": "string" },
+        "format": { "type": "object", "required": ["w", "h"], "properties": { "id": { "type": "string", "description": "square, story, linkedin, x, slide, portrait, poster, banner, phone formats, or 'custom'." }, "name": { "type": "string" }, "w": { "type": "number", "minimum": 1 }, "h": { "type": "number", "minimum": 1 }, "cols": { "type": "integer" } } },
+        "grid": { "type": "object", "properties": { "unit": { "type": "number" }, "gutter": { "type": "number" }, "cols": { "type": "integer" }, "rows": { "type": "integer" }, "cw": { "type": "number" }, "rh": { "type": "number" }, "mx": { "type": "number" }, "my": { "type": "number" }, "safe": { "type": "object", "properties": { "top": { "type": "number" }, "right": { "type": "number" }, "bottom": { "type": "number" }, "left": { "type": "number" } } } } },
+        "palette": { "type": "object", "properties": { "bg": { "$ref": "#/$defs/color" }, "fg": { "$ref": "#/$defs/color" }, "accent": { "$ref": "#/$defs/color" }, "bgName": { "type": "string" }, "bgToken": { "$ref": "#/$defs/token" }, "bgGradient": { "$ref": "#/$defs/gradient" } } },
+        "type": { "type": "object", "description": "Type scale: headline and body sizes, display and body font names.", "properties": { "level": { "type": "number" }, "headline": { "type": "number" }, "body": { "type": "number" }, "display": { "type": "string" }, "body_font": { "type": "string" } } },
+        "blocks": { "type": "array", "items": { "$ref": "#/$defs/block" } },
+        "meta": { "type": "object", "properties": { "source": { "type": "string" }, "page": { "type": "string" }, "look": { "type": "string", "enum": ["original", "wireframe", "rebrand"] }, "original": { "description": "The layout before a look was applied; looks are lossless." } } },
+        "metrics": { "type": "object", "properties": { "whitespace": { "type": "number" }, "density": { "type": "number" }, "balance": { "type": "number" } } },
+        "motion": { "type": "object", "description": "Animation: builds per click and per-block animations." }
+      }
+    },
+
+    "block": {
+      "type": "object",
+      "description": "One layer. Positions are px from the screen's top left; a child of a box keeps screen-space x and y and names its parent by id. A child placed by an auto layout stack (and a hug- or fill-sized box) may leave x, y, w or h out: the layout computes them, and the shared copy stores only intent. kind decides the rest of the props.",
+      "required": ["id", "kind"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "kind": { "type": "string", "enum": ["box", "text", "list", "button", "image", "field", "shape", "ellipse", "line", "rule", "icon", "logo", "lockup", "appicon", "badge", "scrim", "vector", "path", "svg"], "description": "box: a container (plain or an auto layout stack). text/list/button: words. image: a picture from the assets. field: a rectangle. shape: circle, ellipse, pill or quarter. line: a straight line (w, h is its vector). icon: a named icon. logo/lockup/appicon: the brand's marks. vector/path: SVG paths. scrim: a gradient wash. badge: a numbered dot." },
+        "x": { "type": "number" }, "y": { "type": "number" }, "w": { "type": "number" }, "h": { "type": "number" },
+        "parent": { "$ref": "#/$defs/id", "description": "The box this block sits in." },
+        "label": { "type": "string", "description": "The name shown in Layers." },
+        "role": { "type": "string", "description": "Content role for generated layouts: headline, body, eyebrow, cta, stat, quote…" },
+        "group": { "type": "string", "description": "Group id; grouped blocks select together." },
+        "hidden": { "type": "boolean" }, "locked": { "type": "boolean" },
+        "decorative": { "type": "boolean", "description": "Not content: skipped by text tools and exports' accessibility." },
+        "opacity": { "type": "number", "minimum": 0, "maximum": 1 },
+        "rotation": { "type": "number", "description": "Degrees." },
+        "flipX": { "type": "boolean" }, "flipY": { "type": "boolean" },
+        "fill": { "$ref": "#/$defs/color" }, "fillToken": { "$ref": "#/$defs/token" }, "fillAlpha": { "type": "number" },
+        "gradient": { "$ref": "#/$defs/gradient" },
+        "stroke": { "type": "object", "properties": { "width": { "type": "number" }, "color": { "$ref": "#/$defs/color" }, "dash": { "type": "boolean" } } }, "strokeToken": { "$ref": "#/$defs/token" },
+        "shadow": { "type": "object", "properties": { "on": { "type": "boolean" }, "x": { "type": "number" }, "y": { "type": "number" }, "blur": { "type": "number" }, "color": { "$ref": "#/$defs/color" }, "alpha": { "type": "number" } } },
+        "radius": { "type": "number" },
+        "mask": { "type": "boolean", "description": "Its shape clips the layers painted above it in its group or box." },
+        "absolute": { "type": "boolean", "description": "Out of its stack's flow." },
+        "sizeW": { "type": "string", "enum": ["fixed", "hug", "fill"] }, "sizeH": { "type": "string", "enum": ["fixed", "hug", "fill"] },
+        "minW": { "type": "number" }, "maxW": { "type": "number" }, "minH": { "type": "number" }, "maxH": { "type": "number" },
+        "auto": { "$ref": "#/$defs/auto", "description": "Boxes: auto layout of the children." },
+        "clip": { "type": "boolean", "description": "Boxes: clip children." },
+        "slot": { "type": "object", "description": "Boxes: a place for a component. What fits shows first in the Library when the slot is selected; agents see it in get_frame.", "properties": { "name": { "type": "string" }, "accepts": { "type": "array", "items": { "type": "string" }, "description": "Library item ids that belong here; empty means anything." } } },
+        "inst": { "type": "object", "description": "The top block of a component instance: linked to a library item. The instance rebuilds from the item when it changes, keeping its overrides.", "required": ["of"], "properties": { "of": { "type": "string", "description": "Library item id." }, "rev": { "type": "number", "description": "The item revision (its updated time) this instance last matched." }, "ov": { "type": "object", "description": "Overrides by source block id: props that differ (null removes one), {hidden: true} for a block taken out, dx/dy for a moved free child.", "additionalProperties": { "type": "object" } } } },
+        "src": { "type": "string", "description": "Inside an instance: the id of the block in the library item this one came from." },
+        "code": { "type": "object", "description": "A code component binding: {pkg, name, props, text, from (library item of the variant), standIn}.", "properties": { "pkg": { "type": "string" }, "name": { "type": "string" }, "props": { "type": "object" }, "text": { "type": "string" }, "from": { "type": "string" }, "standIn": { "type": "boolean" } } },
+        "text": { "type": "string", "description": "text and button: the words. Newlines break lines." },
+        "items": { "type": "array", "items": { "type": "string" }, "description": "list: one item per entry." },
+        "marker": { "type": "string", "enum": ["bullet", "number", "none"] },
+        "font": { "type": "object", "properties": { "family": { "type": "string", "description": "CSS font-family." }, "size": { "type": "number" }, "weight": { "type": "number" }, "lineHeight": { "type": "number", "description": "Multiple of the size." }, "letterSpacing": { "type": "number", "description": "em." }, "transform": { "type": "string", "enum": ["none", "upper", "lower"] }, "style": { "type": "string", "enum": ["normal", "italic"] } } },
+        "align": { "type": "string", "enum": ["left", "center", "right"] },
+        "color": { "$ref": "#/$defs/color", "description": "button: label color." }, "colorToken": { "$ref": "#/$defs/token" },
+        "asset": { "type": ["string", "null"], "description": "image: asset id (shared images are a_ + 16 hex)." },
+        "fit": { "type": "string", "enum": ["cover", "contain"] },
+        "focal": { "type": "string", "description": "image: crop focus, SVG preserveAspectRatio style (xMidYMid…)." },
+        "placeholder": { "type": "string" },
+        "shape": { "type": "string", "enum": ["circle", "ellipse", "pill", "quarter"] },
+        "width": { "type": "number", "description": "line: stroke width." }, "dash": { "type": "boolean" },
+        "name": { "type": "string", "description": "icon: icon name ('check-circle', or '<set>:<Name>' from an imported set)." },
+        "variant": { "type": "string", "description": "logo: wordmark, symbol, appicon, lockup, or an uploaded variant id." },
+        "product": { "type": "string", "description": "lockup: the product name." },
+        "d": { "type": "string", "description": "vector/path: SVG path data in viewBox units." },
+        "viewBox": { "type": "array", "items": { "type": "number" }, "minItems": 4, "maxItems": 4 },
+        "keepAspect": { "type": "boolean" },
+        "svg": { "type": "string", "description": "svg/vector: inner SVG markup (sanitized on render)." },
+        "fillRule": { "type": "string", "enum": ["nonzero", "evenodd"] },
+        "pen": { "type": "object", "description": "A pen path: anchors in block coordinates with optional in/out handles.", "properties": { "pts": { "type": "array", "items": { "type": "object", "required": ["x", "y"], "properties": { "x": { "type": "number" }, "y": { "type": "number" }, "i": { "$ref": "#/$defs/pt" }, "o": { "$ref": "#/$defs/pt" } } } }, "closed": { "type": "boolean" } } },
+        "alpha": { "type": "number", "description": "field: fill alpha; scrim: strength." },
+        "diagram": { "type": "object", "description": "field: a diagram spec {type, nodes}." },
+        "diagramStyle": { "type": "object" },
+        "spot": { "type": "string" },
+        "lines": { "type": "array", "description": "text: derived line breaks (recomputed; not authored)." },
+        "inkW": { "type": "number", "description": "Derived." }, "capacity": { "type": "object", "description": "Derived." }, "overflow": { "type": "boolean", "description": "Derived." }
+      }
+    },
+
+    "pt": { "type": "object", "required": ["x", "y"], "properties": { "x": { "type": "number" }, "y": { "type": "number" } } },
+
+    "gradient": { "type": "object", "required": ["stops"], "properties": { "type": { "type": "string", "enum": ["linear", "radial"] }, "angle": { "type": "number" }, "stops": { "type": "array", "items": { "oneOf": [ { "$ref": "#/$defs/color" }, { "type": "object", "properties": { "p": { "type": "number" }, "c": { "$ref": "#/$defs/color" }, "a": { "type": "number" } } } ] } } } },
+
+    "auto": {
+      "type": "object",
+      "description": "Auto layout, like Figma's: a stack's direction, gaps, padding and alignment. v is the settings version (2).",
+      "properties": {
+        "v": { "type": "integer" },
+        "mode": { "type": "string", "enum": ["none", "vertical", "horizontal", "wrap"] },
+        "gap": { "type": "number" }, "gapAuto": { "type": "boolean", "description": "Space between." },
+        "counterGap": { "type": "number" }, "counterGapAuto": { "type": "boolean" },
+        "pad": { "oneOf": [ { "type": "number" }, { "type": "object", "properties": { "t": { "type": "number" }, "r": { "type": "number" }, "b": { "type": "number" }, "l": { "type": "number" } } } ] },
+        "main": { "type": "string", "enum": ["start", "center", "end"] },
+        "cross": { "type": "string", "enum": ["start", "center", "end", "baseline"] },
+        "wrap": { "type": "boolean" }, "clip": { "type": "boolean" }
+      }
+    },
+
+    "libraryItem": {
+      "type": "object",
+      "description": "A library item: blocks laid out from 0,0, with the item's size. Shared libraries hold the same shape in the libitems collection.",
+      "required": ["id", "name", "blocks"],
+      "properties": {
+        "id": { "type": "string" }, "name": { "type": "string" },
+        "category": { "type": "string", "description": "components, cards, logos, devices, illustrations, code, screens…" },
+        "approved": { "type": "boolean" },
+        "created": { "type": "number" }, "updated": { "type": "number", "description": "Instances compare this with their inst.rev." },
+        "v": { "type": "integer" }, "w": { "type": "number" }, "h": { "type": "number" },
+        "blocks": { "type": "array", "items": { "$ref": "#/$defs/block" } },
+        "assets": { "type": "object", "description": "Pictures the blocks use, by asset id: {url | dataUrl, name, w, h}." },
+        "code": { "type": "object", "description": "A code component this item stands for: {pkg, name, spec}." },
+        "capture": { "type": "boolean", "description": "A real render captured from Storybook or a page." },
+        "lib": { "type": "string", "description": "Shared libraries: the library id." }
+      }
+    },
+
+    "comment": {
+      "type": "object",
+      "description": "A comment pinned to a screen.",
+      "required": ["id", "frame", "x", "y", "text"],
+      "properties": {
+        "id": { "type": "string" }, "frame": { "$ref": "#/$defs/id" },
+        "x": { "type": "number" }, "y": { "type": "number" },
+        "by": { "type": "string", "description": "Opaque person id." }, "byName": { "type": "string" },
+        "at": { "type": "number" }, "text": { "type": "string" },
+        "resolved": { "type": "boolean" }, "resolvedAt": { "type": "number" },
+        "replies": { "type": "array", "items": { "type": "object", "required": ["id", "text"], "properties": { "id": { "type": "string" }, "by": { "type": "string" }, "byName": { "type": "string" }, "at": { "type": "number" }, "text": { "type": "string" } } } }
+      }
+    }
+  }
+}

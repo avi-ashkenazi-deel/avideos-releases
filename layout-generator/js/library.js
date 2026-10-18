@@ -221,12 +221,23 @@ const Library = (() => {
     const sel = env.canvas.selection(); const canSave = sel.blockIds.length > 0;
     const match = it => (cat === 'all' || it.category === cat) && (!query || `${it.name} ${it.category} ${it.code ? it.code.name + ' ' + (it.code.spec && it.code.spec.group || '') : ''}`.toLowerCase().includes(query));
     const iconImport = `<div class="lib-form"><span class="hint">Add icons: SVG files, a JSON of name → SVG, or an icon review feed (<code>{ icons: [{ name, submissions: [{ svg }] }] }</code>, approved or leading design). The same name replaces a set.</span><div class="cv-row"><input type="text" class="input grow" data-lib="iconset-name" placeholder="Set name, e.g. Product icons" maxlength="40"><label class="btn small file">＋ Import icons<input type="file" data-lib="icons-import" accept=".svg,image/svg+xml,.json,application/json" multiple hidden></label></div></div>`;
-    const sections = cat === 'icons' ? iconImport + iconSections(query, 400) : on.map(s => {
+    // a selected slot (or the slot the selected block sits in) puts what fits first
+    let fits = '';
+    if (sel.frameId && sel.blockIds.length === 1 && cat === 'all' && !query) {
+      const fr = Canvas.frameById(doc, sel.frameId); const b = fr && Canvas.blockById(fr, sel.blockIds[0]);
+      const slot = b && (b.slot && b.kind === 'box' ? b : (b.parent && (p => p && p.slot ? p : null)(Canvas.blockById(fr, b.parent))));
+      if (slot) {
+        const list = (slot.slot.accepts || []).map(id => find(id)).filter(Boolean);
+        fits = `<section class="lib-sec lib-fits"><div class="lib-sec-head" role="heading"><span class="lib-caret">⊞</span>Fits here · ${esc(slot.slot.name || 'Slot')} <span class="lib-count">${list.length}</span></div>
+          ${list.length ? `<div class="lib-grid">${list.map(it => itemCard(it, kit).replace('<div class="lib-item"', `<div class="lib-item" data-into="${esc(slot.id)}" data-frame="${esc(fr.id)}"`)).join('')}</div>` : '<p class="hint" style="padding:6px 8px">This slot takes anything. Name what belongs in it under Slot in the panel.</p>'}</section>`;
+      }
+    }
+    const sections = fits + (cat === 'icons' ? iconImport + iconSections(query, 400) : on.map(s => {
       const list = s.items.map(it => tag(s, it)).filter(match); if (!list.length && (query || cat !== 'all' || s.builtin)) return '';
       const fold = folded.has(s.id) && !query; const max = expanded.has(s.id) || query ? 400 : 24;
       return `<section class="lib-sec"><button type="button" class="lib-sec-head" data-fold="${esc(s.id)}" aria-expanded="${!fold}"><span class="lib-caret">${fold ? '▸' : '▾'}</span>${esc(s.name)} <span class="lib-count">${list.length}</span>${s.shared ? '' : s.builtin ? ' <span class="lib-tag">built in</span>' : ' <span class="lib-tag">local</span>'}</button>
         ${fold ? '' : `<div class="lib-grid">${list.slice(0, max).map(it => itemCard(it, kit)).join('') || '<p class="hint" style="padding:6px 8px">Nothing here yet.</p>'}</div>${list.length > max ? `<button type="button" class="btn small ghost lib-more" data-more="${esc(s.id)}">Show all ${list.length}</button>` : ''}`}</section>`;
-    }).join('') + (cat === 'all' && query ? iconSections(query, 48) : '');
+    }).join('') + (cat === 'all' && query ? iconSections(query, 48) : ''));
     const dests = [{ id: 'canvas', name: 'This canvas' }, ...(role.admin ? LibStore.libraries().map(l => ({ id: l.id, name: l.name })) : [])];
     const lastDest = LS.get('lg.libDest', 'canvas'); const dest = dests.some(d => d.id === lastDest) ? lastDest : 'canvas';
     const destSel = (attr, cur, list) => `<select class="input cv-mini" data-lib="${attr}" aria-label="Save to">${list.map(d => `<option value="${esc(d.id)}" ${d.id === cur ? 'selected' : ''}>${esc(d.name)}</option>`).join('')}</select>`;
@@ -265,7 +276,7 @@ const Library = (() => {
       if (a === 'man-cancel') { pendingManifest = null; render(); return; }
       if (a === 'man-ok') { const lib = el.querySelector('[data-lib="man-dest"]').value; const m = pendingManifest; pendingManifest = null; render(); await guard(() => addManifest(m, lib)); return; }
       if (a === 'export') { exportLibrary(); return; }
-      const it = e.target.closest('[data-item]'); if (it && !act) { insert(it.dataset.item); }
+      const it = e.target.closest('[data-item]'); if (it && !act) { insert(it.dataset.item, undefined, it.dataset.into ? { into: it.dataset.into, frameId: it.dataset.frame } : {}); }
     });
     el.addEventListener('keydown', e => { if (e.target.dataset.lib === 'iconset-name') { e.stopPropagation(); return; } if (e.target.dataset.lib === 'name' || e.target.dataset.lib === 'bind') { e.stopPropagation(); if (e.key === 'Enter') submitSave(); else if (e.key === 'Escape') { naming = false; render(); } } });
     el.addEventListener('change', async e => {
@@ -279,9 +290,9 @@ const Library = (() => {
   }
   async function guard(fn) { try { return await fn(); } catch (err) { env.toast(err && err.message ? err.message : String(err)); render(); return null; } }
   // Insert into the selected screen (or box), else the screen in view; at a point when dropped.
-  function insert(itemId, at) {
+  function insert(itemId, at, opts = {}) {
     const it = find(itemId); if (!it) return;
-    const out = env.canvas.insertComponent(it.blocks, { at, name: it.name, screen: it.category === 'screens' });
+    const out = env.canvas.insertComponent(it.blocks, { at, name: it.name, screen: it.category === 'screens' && !opts.into, item: it, frameId: opts.frameId, into: opts.into });
     if (out) env.toast(`${it.name} added${it.approved ? '' : ' (not yet approved)'}`);
   }
   async function submitSave() {
@@ -384,6 +395,33 @@ const Library = (() => {
 
   // ---- Libraries window: on/off, create and edit (admins), the admin list (owner) ---------------------------------------
   // ⌥⌘K: the save form for the selection, with the Library tab in front.
+  // An instance becomes the new definition of its item (admins for shared libraries; anyone for This canvas). Block ids
+  // follow the item's where they match, so every other instance keeps its overrides.
+  async function updateFromInstance(itemId, frame, root) {
+    const it = find(itemId); if (!it || !Array.isArray(it.blocks)) throw new Error('That component is not in a library that is on');
+    if (!it.team && !it.editable) throw new Error('Only admins change shared components');
+    const mine = Canvas.clone(Auto.withDescendants(frame, [root])); const used = new Set();
+    const idFor = b => { let x = b.src && !used.has(b.src) ? b.src : b.id; if (used.has(x)) x = Canvas.uid(); used.add(x); return x; };
+    const map = new Map(mine.map(b => [b.id, idFor(b)]));
+    for (const b of mine) {
+      const isTop = b.id === root.id; b.id = map.get(b.id);
+      if (!isTop && b.parent && map.has(b.parent)) b.parent = map.get(b.parent); else delete b.parent;
+      delete b.src; delete b.inst; delete b.rx; delete b.ry;
+      if (isTop) { delete b.absolute; if (b.sizeW === 'fill') b.sizeW = 'fixed'; if (b.sizeH === 'fill') b.sizeH = 'fixed'; }
+    }
+    const s = settle(mine); const patch = { blocks: s.blocks, w: s.w, h: s.h, updated: Date.now() };
+    if (it.team) env.canvas.mutate(d => { const x = (d.library || []).find(i => i.id === it.id); if (x) Object.assign(x, patch); }, { history: true });
+    else await LibStore.updateItem(it.id, patch);
+    if (env.track) env.track('library.update', it.name);
+    render(); return find(itemId) || it;
+  }
+  // Show one item in the panel: its library's tab, the search set to its name, the card flashed.
+  function reveal(itemId) {
+    const it = find(itemId); if (!it) return;
+    const tab = document.querySelector('#cvLeftTabs [data-left="library"]'); if (tab && !tab.classList.contains('on')) tab.click();
+    cat = 'all'; const q = document.getElementById('cvSearch'); if (q) q.value = it.name; render(undefined, it.name);
+    const card = el && el.querySelector(`[data-item="${CSS.escape(it.id)}"]`); if (card) { card.scrollIntoView({ block: 'center' }); card.classList.add('flash'); setTimeout(() => card.classList.remove('flash'), 1600); }
+  }
   function startSave() {
     const sel = env.canvas.selection(); if (!sel.blockIds.length) { env.toast('Select blocks on a screen to save them to the library'); return; }
     const tab = document.querySelector('#cvLeftTabs [data-left="library"]'); if (tab && !tab.classList.contains('on')) tab.click();
@@ -452,5 +490,5 @@ const Library = (() => {
     const nm = ids && ids.length === 1 ? (LibStore.libraries().find(l => l.id === ids[0]) || {}).name : 'libraries';
     if (await env.download(blob, `${String(nm || 'libraries').toLowerCase().replace(/[^a-z0-9]+/g, '-')}.json`)) env.toast(`Exported ${j.lgLibrary.items.length} items`);
   }
-  return { init, bind, bindManager, render, refresh, imagesChanged, openManager, all, sources, builtins, thumb, fromSelection, insert, specFor, codeSpecs, variantFor, importIcons, startSave, palette, settle, CATEGORIES };
+  return { init, bind, bindManager, render, refresh, imagesChanged, openManager, all, sources, builtins, thumb, fromSelection, insert, find, updateFromInstance, reveal, specFor, codeSpecs, variantFor, importIcons, startSave, palette, settle, CATEGORIES };
 })();

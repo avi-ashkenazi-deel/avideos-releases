@@ -191,6 +191,24 @@ const Brand = (() => {
   const fontsReady = () => Promise.all(privateFonts);
 
   // Approved color pairs for a kit: backgrounds with readable foregrounds and accents.
+  // ---- Design tokens and themes ------------------------------------------------------------------------------------
+  // A product kit can carry tokens: kit.tokens = { light: { 'primary.main': '#111111', ... }, dark: { ... } }. A block
+  // bound to a token (fillToken, colorToken, strokeToken) takes the value for its screen's theme; a palette color name
+  // binds the same way.
+  function themesOf(kit) { const T = kit && kit.tokens; return T && typeof T === 'object' ? Object.keys(T).filter(t => T[t] && typeof T[t] === 'object') : []; }
+  function tokenHex(kit, name, theme = 'light') {
+    if (!name) return null; const T = kit && kit.tokens; const k = String(name).toLowerCase();
+    if (T) for (const th of [theme, 'light']) { const S = T[th]; if (!S) continue; if (S[name]) return S[name]; const m = Object.keys(S).find(x => x.toLowerCase() === k); if (m) return S[m]; }
+    const c = ((kit && kit.colors) || []).find(x => String(x.name || '').toLowerCase() === k); return c ? c.hex : null;
+  }
+  // The token a plain color came from, for a kind of block: text takes the text tokens first, boxes the surfaces.
+  const TOKEN_PREF = { text: ['text.primary', 'text.secondary', 'text.tertiary', 'primary.contrast'], box: ['primary.main', 'background.paper', 'background.default', 'neutral.light'] };
+  function tokenFor(kit, hex, theme = 'light', kind = 'box') {
+    const T = kit && kit.tokens && (kit.tokens[theme] || kit.tokens.light); if (!T || !hex) return null;
+    const h = String(hex).trim().toUpperCase();
+    for (const n of [...(TOKEN_PREF[kind] || []), ...Object.keys(T)]) if (T[n] && String(T[n]).toUpperCase() === h) return n;
+    return null;
+  }
   function pairs(kit) {
     const colors = kit.colors.map(c => ({ ...c, hex: Color.normalize(c.hex) }));
     const bgs = colors.filter(c => c.role === 'core' || c.role === 'background');
@@ -316,5 +334,5 @@ const Brand = (() => {
     if (typeof LibStore === 'undefined' || !LibStore.guide) return ''; const k = kitGuideId(kit || currentKit);
     return ids.map(id => { const t = String(LibStore.guide(LibStore.guideKey(k, id)) || '').trim(); return t ? `${(kit || currentKit || {}).name || 'Brand'} guidelines, ${id}.md (follow them):\n${t.length > max ? t.slice(0, max) + '\n…' : t}` : ''; }).filter(Boolean).join('\n\n');
   }
-  return { fontsReady, useKit, kitGuideId, voiceText, guidesText, FONTS, customFonts, fontCss, fontWeights, allFontNames, PRESETS, fromPreset, pairs, parseSvg, logoInner, logoColorFor, logosOf, logoVariant, logoAspectOf, makeDemoImage, serialize, clone };
+  return { fontsReady, useKit, kitGuideId, voiceText, guidesText, FONTS, customFonts, fontCss, fontWeights, allFontNames, PRESETS, fromPreset, pairs, themesOf, tokenHex, tokenFor, parseSvg, logoInner, logoColorFor, logosOf, logoVariant, logoAspectOf, makeDemoImage, serialize, clone };
 })();
