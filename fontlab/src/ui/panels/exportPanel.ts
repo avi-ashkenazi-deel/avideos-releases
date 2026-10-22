@@ -3,6 +3,7 @@ import { store } from '../state';
 import { downloadBlob, downloadProject, readProjectFile, saveLocal, slug } from '../../project/storage';
 import { newProject } from '../../core/glyph';
 import { scheduleBuild } from '../buildClient';
+import { exportMoreButtons } from './exportMore';
 
 export function headerBar(): HTMLElement {
   const name = h('input', { type: 'text', class: 'fontname', value: store.project.name, placeholder: 'Font name' });
@@ -18,7 +19,7 @@ export function headerBar(): HTMLElement {
     if (!store.otf) { toast('Nothing built yet — draw or generate some glyphs'); return; }
     downloadBlob(store.otf.slice(0), `${slug(store.project.name)}.otf`, 'font/otf');
   }, 'primary');
-  const extra = h('span', { class: 'export-extra' });
+  const extra = h('span', { class: 'export-extra' }, ...exportMoreButtons());
   const bar = h('header', { class: 'topbar' },
     h('div', { class: 'brand' }, h('span', { class: 'logo' }, 'Ff'), h('span', {}, 'FontLab'), h('small', {}, 'funky font maker')),
     name,
@@ -35,6 +36,3 @@ export function headerBar(): HTMLElement {
   store.subscribe((ev) => { if (ev === 'project' || ev === 'glyph' || ev === 'dna' || ev === 'built') { if (t) clearTimeout(t); t = window.setTimeout(() => saveLocal(store.project), 800); } });
   return bar;
 }
-
-/** Hook for Phase 4 buttons (variable font, specimens). */
-export function exportExtraSlot(): HTMLElement | null { return document.querySelector('.export-extra'); }
