@@ -15,7 +15,7 @@ export function mountApp(root: HTMLElement): void {
     headerBar(),
     h('main', { class: 'layout' },
       seedsPanel(),
-      gridPanel((ch) => { store.selected = ch; if (!store.project.glyphs[ch]) store.emit('select'); store.emit('select'); }),
+      gridPanel((ch) => { store.selected = ch; store.emit('select'); }),
       h('div', { class: 'right' }, dnaPanel(), previewPanel()),
     ),
   );

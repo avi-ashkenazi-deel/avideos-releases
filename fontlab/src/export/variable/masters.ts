@@ -29,9 +29,9 @@ export const AXIS_DEFS: Record<VarAxisTag, { name: string; min: number; max: num
   BNCE: { name: 'Bounce', min: 0, max: 100, dna: 'bounce', toUser: (a) => 100 * a, toAmount: (u) => u / 100 },
 };
 
-const FAN = 3;          // arc points per join side (fixed → compatible)
-const CAP_PTS = 6;      // points per round cap
-const SKELETON_SPACING = 14;
+const FAN = 2;          // arc points per join side (fixed → compatible)
+const CAP_PTS = 5;      // points per round cap
+const SKELETON_SPACING = 18;
 
 interface StrokeStruct { pts: StrokePoint[]; cap: Glyph['strokes'] extends (infer S)[] | undefined ? (S extends { cap: infer C } ? C : never) : never }
 interface GlyphStruct { glyph: Glyph; strokes: StrokeStruct[]; rings: Vec[][] /* outline kind: densified base rings */; normals: Vec[][] }

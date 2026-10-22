@@ -2,6 +2,7 @@ import { h } from '../dom';
 import { store } from '../state';
 import { CHARSET } from '../../core/glyph';
 import { renderThumb } from '../render';
+import { hasInk } from './seeds';
 
 const SOURCE_COLOR: Record<string, string> = { drawn: '#ffd166', traced: '#06d6a0', imported: '#8ecae6', generated: '#e0e0e0' };
 
@@ -22,7 +23,7 @@ export function gridPanel(onSelect: (ch: string) => void): HTMLElement {
       const g = store.project.glyphs[ch];
       const b = store.built[ch];
       c.root.classList.toggle('selected', ch === store.selected);
-      c.root.classList.toggle('empty', !g);
+      c.root.classList.toggle('empty', !hasInk(g));
       c.badge.textContent = g ? (g.locked ? '🔒' : g.source === 'generated' ? '✦' : g.source === 'drawn' ? '✎' : g.source === 'traced' ? '📷' : '⬇') : '';
       c.badge.title = g ? g.source + (g.locked ? ' (locked)' : '') : 'empty';
       renderThumb(c.canvas, b?.contours ?? [], store.project.metrics, b?.advance ?? g?.advance ?? 500, g ? SOURCE_COLOR[g.source] : '#444');

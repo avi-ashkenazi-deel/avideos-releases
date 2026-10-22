@@ -57,7 +57,9 @@ def _build_master(spec, master, ps_suffix):
     fb = FontBuilder(spec["upm"], isTTF=True)
     order = spec["glyphOrder"]
     fb.setupGlyphOrder(order)
-    fb.setupCharacterMap({int(v): k for k, v in spec["unicodes"].items()})
+    cmap = {int(v): k for k, v in spec["unicodes"].items()}
+    cmap.setdefault(32, "space")
+    fb.setupCharacterMap(cmap)
     glyphs = {}
     advances = {}
     for name in order:
@@ -94,7 +96,9 @@ def _build_master(spec, master, ps_suffix):
 def build_variable(payload):
     spec = json.loads(payload) if isinstance(payload, str) else payload
     doc = DesignSpaceDocument()
+    tag_to_name = {}
     for ax in spec["axes"]:
+        tag_to_name[ax["tag"]] = ax["name"]
         a = AxisDescriptor()
         a.tag = ax["tag"]; a.name = ax["name"]
         a.minimum = ax["min"]; a.default = ax["default"]; a.maximum = ax["max"]
@@ -102,10 +106,11 @@ def build_variable(payload):
     for i, m in enumerate(spec["masters"]):
         s = SourceDescriptor()
         s.font = _build_master(spec, m, "M%d" % i)
-        s.location = dict(m["location"])
+        # designspace locations are keyed by axis NAME, not tag
+        s.location = {tag_to_name[t]: v for t, v in m["location"].items()}
         s.name = "master%d" % i
         doc.addSource(s)
-    vf, _model, _masters = varLib.build(doc, optimize=False)
+    vf, _model, _masters = varLib.build(doc, optimize=True)
     # name the axes nicely in the fvar via STAT-less approach: fvar already carries axis names from designspace
     buf = io.BytesIO()
     vf.save(buf)

@@ -14,9 +14,28 @@ function blankGlyph(ch: string): Glyph {
   return { char: ch, unicode: ch.codePointAt(0)!, advance: upper ? 620 : 520, source: 'drawn', kind: 'stroke', strokes: [] };
 }
 
+const SIDEBEARING = 60;
+
+/** Slide the ink so it starts at a fixed left sidebearing and fit the advance to it (typewriter-style). */
+export function normalizeSidebearings(g: Glyph): void {
+  if (g.kind !== 'stroke' || !g.strokes?.length) return;
+  const pts = g.strokes.flatMap((st) => st.points);
+  if (!pts.length) return;
+  const minX = Math.min(...pts.map((p) => p.x - p.w));
+  const maxX = Math.max(...pts.map((p) => p.x + p.w));
+  const dx = SIDEBEARING - minX;
+  if (Math.abs(dx) > 0.5) for (const st of g.strokes) for (const p of st.points) p.x = Math.round((p.x + dx) * 10) / 10;
+  g.advance = Math.round(maxX - minX + 2 * SIDEBEARING);
+}
+
 /** Which seeds does the generator get? Everything the user made by hand or imported. */
+export function hasInk(g: Glyph | undefined | null): boolean {
+  if (!g) return false;
+  return g.kind === 'stroke' ? (g.strokes?.some((s) => s.points.length > 0) ?? false) : (g.contours?.some((c) => c.points.length >= 3) ?? false);
+}
+
 function collectSeeds(): Glyph[] {
-  return Object.values(store.project.glyphs).filter((g) => g.source !== 'generated');
+  return Object.values(store.project.glyphs).filter((g) => g.source !== 'generated' && hasInk(g));
 }
 
 export function refreshStatsFromSeeds(): void {
@@ -28,6 +47,8 @@ export function refreshStatsFromSeeds(): void {
 }
 
 export function runGenerate(): void {
+  // inkless leftovers (e.g. a cleared glyph) must not block generation
+  for (const [ch, g] of Object.entries(store.project.glyphs)) if (!hasInk(g) && !g.locked) delete store.project.glyphs[ch];
   refreshStatsFromSeeds();
   const seedNumber = store.project.dna.seed;
   const generated = generateGlyphs({ seeds: store.project.seeds, stats: store.project.stats, mutation: store.project.mutation, glyphs: store.project.glyphs }, seedNumber);
@@ -46,7 +67,6 @@ export function seedsPanel(): HTMLElement {
 
   const select = (ch: string) => {
     store.selected = ch;
-    if (!store.project.glyphs[ch]) store.project.glyphs[ch] = blankGlyph(ch);
     store.emit('select');
     syncEditor();
   };
@@ -54,9 +74,9 @@ export function seedsPanel(): HTMLElement {
     const ch = store.selected;
     const g = store.project.glyphs[ch] ?? null;
     dc.metrics = store.project.metrics;
-    dc.setGlyph(g, store.built[ch]?.contours ?? []);
+    dc.setGlyph(g ?? blankGlyph(ch), store.built[ch]?.contours ?? []);
     for (const b of strip.children) b.classList.toggle('selected', (b as HTMLElement).dataset.ch === ch);
-    title.replaceChildren('Draw ', h('span', { class: 'big' }, ch), ' ', h('small', {}, g ? `${g.source}${g.locked ? ' · locked' : ''} · ${g.kind === 'stroke' ? (g.strokes?.length ?? 0) + ' strokes' : (g.contours?.length ?? 0) + ' contours'}` : ''));
+    title.replaceChildren('Draw ', h('span', { class: 'big' }, ch), ' ', h('small', {}, g ? `${g.source}${g.locked ? ' · locked' : ''} · ${g.kind === 'stroke' ? (g.strokes?.length ?? 0) + ' strokes' : (g.contours?.length ?? 0) + ' contours'}` : 'empty · draw to create'));
     info.textContent = g?.source === 'generated' ? 'Generated from your seeds. Draw over it to replace it, or re-roll for a different take.' : g?.kind === 'outline' ? 'Outline glyph (imported/traced). Drawing adds strokes on top.' : 'Draw with mouse, pen or finger. Pressure and speed change the width.';
   };
 
@@ -70,9 +90,7 @@ export function seedsPanel(): HTMLElement {
       if (g.kind === 'outline') { g.kind = 'stroke'; g.strokes = g.strokes ?? []; g.contours = undefined; }
       g.strokes!.push(s);
       g.source = g.source === 'generated' ? 'drawn' : g.source;
-      // auto-advance: ink right edge + sidebearing
-      const maxX = Math.max(...g.strokes!.flatMap((st) => st.points.map((pt) => pt.x + pt.w)));
-      g.advance = Math.max(g.advance, Math.round(maxX + 60));
+      normalizeSidebearings(g);
     }, 'glyph');
     scheduleBuild(40);
   };
@@ -93,7 +111,7 @@ export function seedsPanel(): HTMLElement {
     scheduleBuild(0);
   });
   const clear = button('Clear', () => {
-    store.update((p) => { p.glyphs[store.selected] = blankGlyph(store.selected); }, 'glyph');
+    store.update((p) => { delete p.glyphs[store.selected]; }, 'glyph');
     scheduleBuild(0);
   });
   const lock = button('🔒 Lock', () => {
@@ -111,7 +129,7 @@ export function seedsPanel(): HTMLElement {
 
   const mutationRow = slider('Mutation', { min: 0, max: 1, step: 0.05, value: store.project.mutation, onInput: (v) => (store.project.mutation = v) });
   const genBtn = button('✦ Generate the rest of the alphabet', () => {
-    if (collectSeeds().filter((g) => (g.strokes?.length ?? 0) + (g.contours?.length ?? 0) > 0).length === 0) { toast('Draw a few letters first (try o, n, a, e, H, s)'); }
+    if (collectSeeds().length === 0) toast('No seeds yet — generating a default alphabet. Draw a few letters (o, n, a, e, H, s) for your own style.');
     runGenerate();
   }, 'primary big');
 
