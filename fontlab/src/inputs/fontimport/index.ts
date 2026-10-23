@@ -11,7 +11,7 @@ export interface ImportedFont {
 }
 
 /** Parse a TTF/OTF ArrayBuffer and extract CHARSET glyphs as outline glyphs at 1000 upm. */
-export function importFont(buf: ArrayBuffer, chars = CHARSET): ImportedFont {
+export function importFont(buf: ArrayBuffer, chars: string | string[] = CHARSET): ImportedFont {
   const font = parse(buf);
   const upm: number = font.unitsPerEm || 1000;
   const k = 1000 / upm;

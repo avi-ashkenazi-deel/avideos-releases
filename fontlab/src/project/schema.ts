@@ -12,6 +12,8 @@ export function parseProject(raw: unknown): FontProject {
   p.dna = { ...DEFAULT_DNA, ...(r.dna ?? {}) };
   p.mutation = typeof r.mutation === 'number' ? r.mutation : 0.3;
   p.previewText = typeof r.previewText === 'string' ? r.previewText : p.previewText;
+  p.blocks = Array.isArray(r.blocks) ? ['latin', ...r.blocks.filter((b: unknown) => typeof b === 'string' && b !== 'latin')] : ['latin'];
+  p.customChars = typeof r.customChars === 'string' ? r.customChars : '';
   p.seeds = Array.isArray(r.seeds) ? r.seeds.filter(isGlyph) : [];
   p.glyphs = {};
   if (r.glyphs && typeof r.glyphs === 'object') {

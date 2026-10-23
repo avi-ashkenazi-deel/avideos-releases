@@ -53,7 +53,7 @@ details.brush summary { cursor: pointer; color: var(--muted); }
 .cell .badge { position: absolute; top: 2px; right: 4px; font-size: 10px; }
 
 .preview-input { width: 100%; resize: vertical; }
-.preview-out { margin-top: 8px; padding: 14px; background: #fff; color: #111; border-radius: 10px; min-height: 120px; line-height: 1.15; word-break: break-word; overflow-wrap: anywhere; }
+.preview-out { unicode-bidi: plaintext; white-space: pre-wrap; margin-top: 8px; padding: 14px; background: #fff; color: #111; border-radius: 10px; min-height: 120px; line-height: 1.15; word-break: break-word; overflow-wrap: anywhere; }
 .status { color: var(--muted); font-size: 12px; margin-top: 6px; min-height: 1.2em; }
 
 .modal { border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); color: var(--text); max-width: 760px; width: 92vw; padding: 16px; }
@@ -75,3 +75,16 @@ details.brush summary { cursor: pointer; color: var(--muted); }
   .layout { grid-template-columns: 1fr; padding: 10px 16px; }
   .fontname { min-width: 0; flex: 1; }
 }
+
+.charset { background: var(--panel-2); border-radius: 10px; padding: 8px 10px; margin: 6px 0 8px; }
+.charset summary { cursor: pointer; color: var(--muted); }
+.charset .blocks { display: flex; flex-wrap: wrap; gap: 6px 12px; margin: 6px 0; }
+.charset label { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; }
+.charset label small { color: var(--muted); }
+.charset .custom { display: flex; gap: 6px; align-items: center; margin-top: 6px; flex-wrap: wrap; }
+.charset .custom input { flex: 1; min-width: 160px; }
+.chipx { display: inline-flex; align-items: center; gap: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 1px 6px 1px 9px; font-size: 14px; }
+.chipx button { padding: 0 5px; border: 0; background: transparent; color: var(--muted); font-size: 12px; }
+.strip-group, .grid-group { grid-column: 1 / -1; width: 100%; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; margin: 6px 0 2px; }
+.charstrip .strip-group:first-child, .grid .grid-group:first-child { margin-top: 0; }
+.chbtn.rtl, .cell.rtl .ch { direction: rtl; }

@@ -9,6 +9,7 @@ import { affineShear, bboxStrokes, clamp } from '../core/geometry';
 import { recipes, type RecipeCtx } from '../core/recipes';
 import { mutateStrokes } from './mutate';
 import { borrowStrokes } from './borrow';
+import { deriveGlyph, dependsOn, type BaseLookup } from './derive';
 
 export interface GenerateInput {
   seeds: Glyph[];
@@ -73,10 +74,16 @@ export function buildGlyph(
   seedNumber: number,
   seeds: ReadonlyMap<string, Glyph> = new Map(),
   paramOverrides?: Record<string, number>,
+  baseLookup?: BaseLookup,
 ): Glyph {
   const rng = glyphRng(seedNumber >>> 0, char);
   const params = { ...chooseParams(rng, mutation), ...(paramOverrides ?? {}) };
   const unicode = char.codePointAt(0) ?? 0;
+
+  if (baseLookup && dependsOn(char)) {
+    const derived = deriveGlyph(char, baseLookup, { stats, rng, mutation: clamp(fin(mutation) ? mutation : 0, 0, 1) }, seedNumber);
+    if (derived) return derived;
+  }
 
   const borrowed = borrowStrokes(char, seeds, stats);
   if (borrowed) {
@@ -105,20 +112,42 @@ export function buildGlyph(
 
 /**
  * Generate the working glyph set. Seeds and locked glyphs are kept verbatim;
- * everything else is (re)generated from recipes with `glyphRng(seedNumber, char)`.
+ * derived characters (accents, aliases, small caps) are built from the
+ * project's own base glyphs; everything else comes from recipes with
+ * `glyphRng(seedNumber, char)`.
  */
-export function generateGlyphs(project: GenerateInput, seedNumber: number, chars: string = CHARSET): Record<string, Glyph> {
+export function generateGlyphs(project: GenerateInput, seedNumber: number, chars: string | string[] = CHARSET): Record<string, Glyph> {
   const seeds = seedMap(project.seeds);
   const existing = project.glyphs ?? {};
-  const out: Record<string, Glyph> = {};
-  for (const ch of [...chars]) {
+  const memo = new Map<string, Glyph>();
+  const resolve = (ch: string, stack: string[]): Glyph => {
+    const hit = memo.get(ch);
+    if (hit) return hit;
     const cur = existing[ch];
-    if (cur && cur.locked) { out[ch] = cur; continue; }
-    const seed = seeds.get(ch);
-    if (seed) { out[ch] = seed; continue; }
-    out[ch] = buildGlyph(ch, project.stats, project.mutation, seedNumber, seeds);
-  }
+    let g: Glyph;
+    if (cur && cur.locked) g = cur;
+    else if (seeds.get(ch)) g = seeds.get(ch)!;
+    else g = buildGlyph(ch, project.stats, project.mutation, seedNumber, seeds, undefined, (b) => (stack.includes(b) || stack.length > 8 ? undefined : resolve(b, [...stack, ch])));
+    memo.set(ch, g);
+    return g;
+  };
+  const out: Record<string, Glyph> = {};
+  for (const ch of typeof chars === 'string' ? [...chars] : chars) out[ch] = resolve(ch, []);
   return out;
+}
+
+/** Base lookup for one-off builds: prefer what the project already has, else build transiently. */
+function projectLookup(project: GenerateInput, seedNumber: number): BaseLookup {
+  const seeds = seedMap(project.seeds);
+  const memo = new Map<string, Glyph>();
+  const look = (b: string, depth: number): Glyph | undefined => {
+    const hit = memo.get(b);
+    if (hit) return hit;
+    const g = project.glyphs?.[b] ?? (depth < 6 ? buildGlyph(b, project.stats, project.mutation, seedNumber, seeds, undefined, (bb) => look(bb, depth + 1)) : undefined);
+    if (g) memo.set(b, g);
+    return g;
+  };
+  return (b) => look(b, 0);
 }
 
 /**
@@ -131,5 +160,15 @@ export function regenerateOne(char: string, project: GenerateInput, newSeed: num
   const seeds = seedMap(project.seeds);
   const seed = seeds.get(char);
   if (seed) return seed;
-  return buildGlyph(char, project.stats, project.mutation, newSeed, seeds, paramOverrides);
+  return buildGlyph(char, project.stats, project.mutation, newSeed, seeds, paramOverrides, projectLookup(project, newSeed));
+}
+
+/** Characters in `chars` whose derivation chain includes `base`. */
+export function dependentsOf(base: string, chars: string[]): string[] {
+  const out: string[] = [];
+  for (const ch of chars) {
+    let cur: string | null = ch;
+    for (let i = 0; i < 8 && (cur = dependsOn(cur)); i++) if (cur === base) { out.push(ch); break; }
+  }
+  return out;
 }

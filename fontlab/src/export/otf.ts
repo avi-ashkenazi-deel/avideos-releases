@@ -34,9 +34,23 @@ function contoursToPath(contours: Contour[], tol: number): any {
 }
 const r = (v: number) => Math.round(v * 10) / 10;
 
+/** Adobe Glyph List names for ASCII punctuation / symbols so font editors show familiar names. */
+const AGL: Record<string, string> = {
+  ' ': 'space', '!': 'exclam', '"': 'quotedbl', '#': 'numbersign', '$': 'dollar', '%': 'percent', '&': 'ampersand', "'": 'quotesingle',
+  '(': 'parenleft', ')': 'parenright', '*': 'asterisk', '+': 'plus', ',': 'comma', '-': 'hyphen', '.': 'period', '/': 'slash',
+  ':': 'colon', ';': 'semicolon', '<': 'less', '=': 'equal', '>': 'greater', '?': 'question', '@': 'at', '[': 'bracketleft',
+  '\\': 'backslash', ']': 'bracketright', '^': 'asciicircum', '_': 'underscore', '`': 'grave', '{': 'braceleft', '|': 'bar',
+  '}': 'braceright', '~': 'asciitilde', '¡': 'exclamdown', '¢': 'cent', '£': 'sterling', '¥': 'yen', '§': 'section', '©': 'copyright',
+  '«': 'guillemotleft', '¬': 'logicalnot', '®': 'registered', '°': 'degree', '±': 'plusminus', '¶': 'paragraph', '·': 'periodcentered',
+  '»': 'guillemotright', '¿': 'questiondown', '×': 'multiply', '÷': 'divide', '–': 'endash', '—': 'emdash', '‘': 'quoteleft',
+  '’': 'quoteright', '“': 'quotedblleft', '”': 'quotedblright', '†': 'dagger', '‡': 'daggerdbl', '•': 'bullet', '…': 'ellipsis',
+  '€': 'Euro', '™': 'trademark', 'µ': 'mu',
+};
+
 export function glyphName(char: string, unicode: number): string {
-  if (/^[A-Za-z]$/.test(char)) return char === char.toUpperCase() ? char : char;
+  if (/^[A-Za-z]$/.test(char)) return char;
   if (/^[0-9]$/.test(char)) return ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'][+char];
+  if (AGL[char]) return AGL[char];
   return 'uni' + unicode.toString(16).toUpperCase().padStart(4, '0');
 }
 

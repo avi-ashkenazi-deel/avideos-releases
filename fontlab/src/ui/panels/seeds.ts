@@ -3,8 +3,10 @@ import { store } from '../state';
 import { scheduleBuild } from '../buildClient';
 import { DrawCanvas } from '../../inputs/draw/canvas';
 import type { Glyph, Stroke, CapStyle } from '../../core/glyph';
-import { CHARSET, DEFAULT_STATS } from '../../core/glyph';
-import { generateGlyphs, regenerateOne } from '../../generate/compose';
+import { DEFAULT_STATS } from '../../core/glyph';
+import { projectCharset, groupCharset, BLOCK_BY_ID } from '../../core/charsets';
+import { charsetPanel } from './charset';
+import { generateGlyphs, regenerateOne, dependentsOf } from '../../generate/compose';
 import { measureStats } from '../../generate/stats';
 import { importFont } from '../../inputs/fontimport';
 import { openImageDialog } from './imageDialog';
@@ -46,13 +48,34 @@ export function refreshStatsFromSeeds(): void {
   store.project.metrics = { ...store.project.metrics, xHeight: Math.round(s.xHeight), capHeight: Math.round(s.capHeight), ascender: Math.max(Math.round(s.ascender) + 40, Math.round(s.capHeight) + 60), descender: Math.min(Math.round(s.descender) - 20, -120) };
 }
 
+/** Accents / aliases / small caps built from `base` follow it when it changes. */
+export function recomposeDependents(base: string): void {
+  const deps = dependentsOf(base, projectCharset(store.project));
+  if (!deps.length) return;
+  const input = { seeds: store.project.seeds, stats: store.project.stats, mutation: store.project.mutation, glyphs: store.project.glyphs };
+  store.update((p) => {
+    for (const ch of deps) {
+      const cur = p.glyphs[ch];
+      if (cur && (cur.locked || (cur.source !== 'generated' && hasInk(cur)))) continue;
+      p.glyphs[ch] = regenerateOne(ch, input, cur?.recipe?.seed ?? p.dna.seed);
+    }
+  }, 'glyph');
+}
+
 export function runGenerate(): void {
   // inkless leftovers (e.g. a cleared glyph) must not block generation
   for (const [ch, g] of Object.entries(store.project.glyphs)) if (!hasInk(g) && !g.locked) delete store.project.glyphs[ch];
   refreshStatsFromSeeds();
   const seedNumber = store.project.dna.seed;
-  const generated = generateGlyphs({ seeds: store.project.seeds, stats: store.project.stats, mutation: store.project.mutation, glyphs: store.project.glyphs }, seedNumber);
-  store.update((p) => { p.glyphs = { ...p.glyphs, ...generated }; }, 'project');
+  const chars = projectCharset(store.project);
+  const generated = generateGlyphs({ seeds: store.project.seeds, stats: store.project.stats, mutation: store.project.mutation, glyphs: store.project.glyphs }, seedNumber, chars);
+  store.update((p) => {
+    const keep: Record<string, Glyph> = {};
+    for (const ch of chars) keep[ch] = generated[ch] ?? p.glyphs[ch];
+    // keep hand-made glyphs outside the current charset so switching blocks off is non-destructive
+    for (const [ch, g] of Object.entries(p.glyphs)) if (!keep[ch] && g.source !== 'generated') keep[ch] = g;
+    p.glyphs = keep;
+  }, 'project');
   scheduleBuild(0);
   toast(`Generated ${Object.values(generated).filter((g) => g.source === 'generated').length} glyphs from ${store.project.seeds.length} seeds`);
 }
@@ -80,7 +103,14 @@ export function seedsPanel(): HTMLElement {
     info.textContent = g?.source === 'generated' ? 'Generated from your seeds. Draw over it to replace it, or re-roll for a different take.' : g?.kind === 'outline' ? 'Outline glyph (imported/traced). Drawing adds strokes on top.' : 'Draw with mouse, pen or finger. Pressure and speed change the width.';
   };
 
-  for (const ch of CHARSET) strip.append(h('button', { type: 'button', class: 'chbtn', 'data-ch': ch, onClick: () => select(ch) }, ch));
+  const renderStrip = () => {
+    strip.replaceChildren();
+    for (const [block, chars] of groupCharset(projectCharset(store.project))) {
+      strip.append(h('div', { class: 'strip-group' }, BLOCK_BY_ID[block]?.name ?? 'Custom'));
+      for (const ch of chars) strip.append(h('button', { type: 'button', class: 'chbtn' + (BLOCK_BY_ID[block]?.rtl ? ' rtl' : ''), 'data-ch': ch, onClick: () => select(ch) }, ch));
+    }
+  };
+  renderStrip();
 
   dc.onStroke = (s: Stroke) => {
     const ch = store.selected;
@@ -92,6 +122,7 @@ export function seedsPanel(): HTMLElement {
       g.source = g.source === 'generated' ? 'drawn' : g.source;
       normalizeSidebearings(g);
     }, 'glyph');
+    recomposeDependents(ch);
     scheduleBuild(40);
   };
 
@@ -108,10 +139,12 @@ export function seedsPanel(): HTMLElement {
 
   const undo = button('↶ Undo', () => {
     store.update((p) => { const g = p.glyphs[store.selected]; if (g?.kind === 'stroke') g.strokes?.pop(); }, 'glyph');
+    recomposeDependents(store.selected);
     scheduleBuild(0);
   });
   const clear = button('Clear', () => {
     store.update((p) => { delete p.glyphs[store.selected]; }, 'glyph');
+    recomposeDependents(store.selected);
     scheduleBuild(0);
   });
   const lock = button('🔒 Lock', () => {
@@ -123,6 +156,7 @@ export function seedsPanel(): HTMLElement {
     if (!g || g.source !== 'generated') { toast('Re-roll works on generated glyphs'); return; }
     const ng = regenerateOne(ch, { seeds: store.project.seeds, stats: store.project.stats, mutation: store.project.mutation, glyphs: store.project.glyphs }, Math.floor(Math.random() * 1e9));
     if (ng) store.update((p) => { p.glyphs[ch] = ng; }, 'glyph');
+    recomposeDependents(ch);
     scheduleBuild(0);
   });
   const advRow = slider('Advance', { min: 100, max: 1400, step: 1, value: 520, onInput: (v) => { store.update((p) => { const g = p.glyphs[store.selected]; if (g) g.advance = v; }, 'glyph'); scheduleBuild(80); }, format: (v) => v.toFixed(0) });
@@ -135,7 +169,7 @@ export function seedsPanel(): HTMLElement {
 
   const fontFile = fileInput('.ttf,.otf,.woff', async (f) => {
     try {
-      const imp = importFont(await f.arrayBuffer());
+      const imp = importFont(await f.arrayBuffer(), projectCharset(store.project));
       store.update((p) => {
         for (const g of imp.glyphs) p.glyphs[g.char] = g;
         p.metrics = { ...p.metrics, ...imp.metrics, upm: 1000 };
@@ -148,8 +182,9 @@ export function seedsPanel(): HTMLElement {
   });
   const imgFile = fileInput('image/*', (f) => openImageDialog(f, () => { refreshStatsFromSeeds(); scheduleBuild(0); }));
 
+  const csPanel = charsetPanel(() => { renderStrip(); syncEditor(); scheduleBuild(0); });
   const panel = h('section', { class: 'panel seeds' },
-    title, strip, canvasEl, info,
+    title, csPanel, strip, canvasEl, info,
     h('div', { class: 'row' }, undo, clear, lock, reroll),
     h('details', { class: 'brush', open: true }, h('summary', {}, 'Brush'),
       widthRow, pressureRow, velRow, smoothRow,
@@ -163,6 +198,7 @@ export function seedsPanel(): HTMLElement {
   );
 
   store.subscribe((ev) => {
+    if (ev === 'project:loaded' || ev === 'charset') renderStrip();
     if (ev === 'built' || ev === 'glyph' || ev === 'select' || ev === 'project' || ev === 'project:loaded') {
       syncEditor();
       const g = store.project.glyphs[store.selected];

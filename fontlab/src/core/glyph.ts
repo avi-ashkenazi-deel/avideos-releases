@@ -102,6 +102,10 @@ export interface FontProject {
   /** 0..1 randomness when generating */
   mutation: number;
   previewText: string;
+  /** enabled character blocks (see core/charsets.ts); 'latin' is implicit */
+  blocks: string[];
+  /** extra hand-drawn characters, any script */
+  customChars: string;
 }
 
 export const DEFAULT_METRICS: FontMetrics = {
@@ -148,6 +152,8 @@ export function newProject(name = 'Untitled Funk'): FontProject {
     dna: { ...DEFAULT_DNA },
     mutation: 0.3,
     previewText: 'The quick brown fox jumps over the lazy dog 0123456789',
+    blocks: ['latin'],
+    customChars: '',
   };
 }
 

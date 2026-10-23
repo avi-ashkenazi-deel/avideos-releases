@@ -14,10 +14,11 @@ function getWorker(): Worker {
     if (msg.id !== nextId - 1) return; // stale
     store.busy = false;
     if (msg.type === 'error') { store.status = 'Build error: ' + msg.message; store.emit('status'); return; }
-    store.built = msg.glyphs as any;
+    store.built = msg.partial ? { ...store.built, ...(msg.glyphs as any) } : (msg.glyphs as any);
     store.lastBuildMs = msg.ms;
     store.otf = msg.otf;
-    store.status = `built ${Object.keys(msg.glyphs).length} glyphs in ${msg.ms.toFixed(0)} ms`;
+    store.busy = !!msg.partial;
+    store.status = msg.partial ? `preview ready (${Object.keys(msg.glyphs).length} glyphs, ${msg.ms.toFixed(0)} ms) — building the rest…` : `built ${Object.keys(msg.glyphs).length} glyphs in ${msg.ms.toFixed(0)} ms`;
     store.emit('built');
     if (msg.otf) await installPreviewFont(msg.otf.slice(0));
     store.emit('font');
@@ -33,6 +34,7 @@ export function scheduleBuild(delay = 120): void {
     timer = null;
     store.busy = true; store.emit('status');
     const id = nextId++;
-    getWorker().postMessage({ id, type: 'build', project: store.project, otf: true });
+    const priority = [...new Set([...store.project.previewText.replace(/\s/g, ''), store.selected])];
+    getWorker().postMessage({ id, type: 'build', project: store.project, otf: true, priority });
   }, delay);
 }
