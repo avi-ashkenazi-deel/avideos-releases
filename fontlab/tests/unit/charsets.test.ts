@@ -49,6 +49,19 @@ describe('charsets', () => {
   });
 });
 
+describe('coverage', () => {
+  it('every character of every block generates ink with default stats', () => {
+    const all = BLOCKS.flatMap((b) => [...b.chars]);
+    const out = generateGlyphs({ seeds: [], stats: { ...DEFAULT_STATS }, mutation: 0.3, glyphs: {} }, 11, all);
+    const empty = all.filter((ch) => !out[ch]?.strokes?.some((s) => s.points.length));
+    expect(empty).toEqual([]);
+    for (const ch of all) {
+      const cs = glyphToContours(out[ch]);
+      expect(cs.reduce((a, c) => a + signedArea(c.points), 0), ch).toBeGreaterThan(0);
+    }
+  });
+});
+
 describe('derivation', () => {
   const ctx = { stats: { ...DEFAULT_STATS }, rng: makeRng(3), mutation: 0.2 };
   it('decomposes accented letters and reports dependencies', () => {
