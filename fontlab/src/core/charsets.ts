@@ -19,7 +19,7 @@ const range = (a: string, b: string) => { let s = ''; for (let c = a.codePointAt
 
 /** Latin-1 letters + Latin Extended-A, minus odd ligature/compat forms. */
 const ACCENTS = (range('À', 'ö') + range('ø', 'ÿ') + range('Ā', 'ž'))
-  .replace(/[×÷ĲĳĿŀŉſĸ]/g, '');
+  .replace(/[×÷ĲĳĿŀŉſĸŊŋ]/g, '');
 
 export const BLOCKS: Block[] = [
   { id: 'latin', name: 'Latin', chars: CHARSET, sample: 'The quick brown fox jumps over the lazy dog 0123456789', always: true },
