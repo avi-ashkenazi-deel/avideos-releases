@@ -8,12 +8,14 @@ import { lower } from './lower';
 import { digits } from './digits';
 import { latinExtra } from './latinExtra';
 import { cyrillic } from './cyrillic';
+import { punct } from './punct';
+import { symbols } from './symbols';
 
 export type { Recipe, RecipeCtx, RecipeResult, Frame } from './common';
 export { frame, finish, param, rec } from './common';
-export { upper, lower, digits, latinExtra, cyrillic };
+export { upper, lower, digits, latinExtra, cyrillic, punct, symbols };
 
-export const recipes: Record<string, Recipe> = { ...upper, ...lower, ...digits, ...latinExtra, ...cyrillic };
+export const recipes: Record<string, Recipe> = { ...upper, ...lower, ...digits, ...latinExtra, ...cyrillic, ...punct, ...symbols };
 
 export function getRecipe(char: string): Recipe | undefined {
   return recipes[char];
