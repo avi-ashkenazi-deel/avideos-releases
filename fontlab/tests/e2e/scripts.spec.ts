@@ -3,6 +3,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 
 async function drawStroke(page: Page, pts: [number, number][]) {
+  await page.locator('canvas.editor').scrollIntoViewIfNeeded();
   const box = (await page.locator('canvas.editor').boundingBox())!;
   const [x0, y0] = pts[0];
   await page.mouse.move(box.x + box.width * x0, box.y + box.height * y0);
@@ -56,7 +57,8 @@ test('custom characters can be added, drawn and exported', async ({ page }) => {
   await expect(page.locator('.chbtn[data-ch="★"]')).toBeVisible();
   await page.locator('.chbtn[data-ch="★"]').click();
   await drawStroke(page, [[0.3, 0.7], [0.45, 0.3], [0.6, 0.7], [0.25, 0.45], [0.65, 0.45], [0.3, 0.7]]);
-  await expect.poll(() => page.locator('.status').textContent(), { timeout: 20000 }).toMatch(/built/);
+  await expect(page.locator('.cell[data-char="★"]')).not.toHaveClass(/empty/);
+  await expect.poll(() => page.locator('.status').textContent(), { timeout: 20000 }).toMatch(/built 1 glyphs/);
   const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: /Download \.otf/ }).click()]);
   const file = path.join(test.info().outputDir, 'star.otf');
   await download.saveAs(file);

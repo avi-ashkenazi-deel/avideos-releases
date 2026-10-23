@@ -4,6 +4,7 @@ import * as path from 'node:path';
 
 async function drawStroke(page: Page, pts: [number, number][]) {
   const canvas = page.locator('canvas.editor');
+  await canvas.scrollIntoViewIfNeeded();
   const box = (await canvas.boundingBox())!;
   const [x0, y0] = pts[0];
   await page.mouse.move(box.x + box.width * x0, box.y + box.height * y0);

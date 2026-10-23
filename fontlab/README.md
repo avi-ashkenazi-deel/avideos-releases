@@ -37,7 +37,15 @@ deploys `dist/` on every push to the branch.
    Glitch, Bounce, Jitter. Every op is seeded, so the same seed always gives the
    same font. Presets: Chonky, Melted, Rusty, Glitchy, Ransom, Nervous,
    Everything. **Mutate!** nudges all sliders at once.
-4. **Export.** `Download .otf` (static, CFF outlines), `SVG specimen`
+4. **Pick your scripts.** The **Character set** panel switches blocks on:
+   Latin (always), Punctuation, Symbols, Latin accents (Zürich, façade,
+   Łódź…), Cyrillic and Hebrew. Accented letters are composed from *your*
+   base letter plus a mark; Cyrillic look-alikes (А В Е К М Н О Р С Т Х …)
+   are clones of your Latin glyphs and lowercase Cyrillic is small-capped from
+   the uppercase, so one drawn `o` flows into ö, ő, ø, о and more. The
+   "Add any characters" box accepts anything else (★, kana, Arabic…) for you
+   to draw by hand. Right-to-left lines render correctly in the preview.
+5. **Export.** `Download .otf` (static, CFF outlines), `SVG specimen`
    (animated wiggle), `Animate…` (GIF / WebM sweeping one DNA axis), and
    `Variable font…` (a real OpenType variable `.ttf` with `wght`, `slnt` and
    custom `WOBL`, `MELT`, `BNCE` axes you can drive from CSS
@@ -49,7 +57,8 @@ deploys `dist/` on every push to the branch.
 ```
 seeds (draw | trace | import)
   → generate/stats.ts      measure StyleStats
-  → generate/compose.ts    recipes × stats × seeded mutation → 62 stroke glyphs
+  → generate/compose.ts    recipes × stats × seeded mutation → stroke glyphs
+  → generate/derive.ts     accents (base + mark), Ø/Ł/Đ additions, Cyrillic aliases, small caps
   → dna/ (skeleton stage)  weight · slant · wobble · bounce · jitter
   → outline/strokeExpand   centreline + widths → one ribbon polygon per stroke
   → outline/union          polygon-clipping, nonzero rule → clean contours
@@ -71,7 +80,7 @@ seeds (draw | trace | import)
 ## Layout
 
 ```
-src/core        data model, geometry, seeded PRNG + simplex noise, recipes
+src/core        data model, geometry, seeded PRNG + simplex noise, charsets, recipes (latin, punct, symbols, marks, cyrillic, hebrew)
 src/inputs      draw (pointer canvas), image (threshold → thin → strokes / potrace), fontimport
 src/generate    stats, primitives, compose, mutate, borrow
 src/dna         the nine Style DNA operators + boolean helpers
