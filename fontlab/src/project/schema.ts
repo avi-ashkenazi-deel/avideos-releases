@@ -1,5 +1,7 @@
 import type { FontProject, Glyph } from '../core/glyph';
-import { newProject, DEFAULT_DNA, DEFAULT_STATS, DEFAULT_METRICS } from '../core/glyph';
+import { newProject, DEFAULT_STATS, DEFAULT_METRICS } from '../core/glyph';
+import { migrateDna, newStack } from '../fx/stack';
+import { FX, defaultParams } from '../fx/registry';
 
 /** Validate + normalise an untrusted JSON object into a FontProject. Throws on garbage. */
 export function parseProject(raw: unknown): FontProject {
@@ -9,7 +11,7 @@ export function parseProject(raw: unknown): FontProject {
   const p = newProject(typeof r.name === 'string' ? r.name : 'Untitled Funk');
   p.metrics = { ...DEFAULT_METRICS, ...(r.metrics ?? {}), upm: 1000 };
   p.stats = { ...DEFAULT_STATS, ...(r.stats ?? {}) };
-  p.dna = { ...DEFAULT_DNA, ...(r.dna ?? {}) };
+  p.fx = parseStack(r.fx) ?? migrateDna(r.dna);
   p.mutation = typeof r.mutation === 'number' ? r.mutation : 0.3;
   p.previewText = typeof r.previewText === 'string' ? r.previewText : p.previewText;
   p.blocks = Array.isArray(r.blocks) ? ['latin', ...r.blocks.filter((b: unknown) => typeof b === 'string' && b !== 'latin')] : ['latin'];
@@ -33,4 +35,25 @@ export function isGlyph(g: unknown): g is Glyph {
 
 export function serializeProject(p: FontProject): string {
   return JSON.stringify(p);
+}
+
+function parseStack(raw: unknown) {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Record<string, any>;
+  const s = newStack(typeof r.seed === 'number' ? r.seed : 1);
+  s.time = typeof r.time === 'number' ? r.time : 0;
+  if (Array.isArray(r.groups) && r.groups.length) {
+    s.groups = r.groups.map((g: any, gi: number) => ({
+      id: typeof g?.id === 'string' ? g.id : `g${gi}`,
+      enabled: g?.enabled !== false,
+      op: ['union', 'subtract', 'intersect', 'xor'].includes(g?.op) ? g.op : 'union',
+      layers: (Array.isArray(g?.layers) ? g.layers : []).filter((l: any) => l && typeof l.type === 'string' && FX[l.type]).map((l: any, li: number) => ({
+        id: typeof l.id === 'string' ? l.id : `g${gi}l${li}`,
+        type: l.type,
+        enabled: l.enabled !== false,
+        params: { ...defaultParams(l.type), ...Object.fromEntries(Object.entries(l.params ?? {}).filter(([, v]) => typeof v === 'number' && Number.isFinite(v))) },
+      })),
+    }));
+  }
+  return s;
 }

@@ -7,8 +7,14 @@ import { encodeGif } from '../../export/specimen/gif';
 import { recordWebm } from '../../export/specimen/webm';
 import { buildVarPayload, AXIS_DEFS, type VarAxisTag } from '../../export/variable/masters';
 import { buildVariableFont } from '../../export/variable';
+import { typeTesterHtml } from '../../export/specimen/html';
+import { BLOCKS } from '../../core/charsets';
 import { buildAll } from '../../pipeline/build';
 import type { FontProject } from '../../core/glyph';
+import { ensureLayer } from '../../fx/stack';
+import { FX } from '../../fx/registry';
+
+let lastVariable: { bytes: Uint8Array; axes: { tag: string; name: string; min: number; default: number; max: number }[] } | null = null;
 
 const lookup = (): GlyphLookup => (ch) => { const b = store.built[ch]; return b && b.contours.length ? { advance: b.advance, contours: b.contours } : undefined; };
 
@@ -17,6 +23,14 @@ export function exportMoreButtons(): HTMLElement[] {
     button('SVG specimen', () => {
       const svg = specimenSvg({ text: store.project.previewText, metrics: store.project.metrics, lookup: lookup(), animate: true });
       downloadBlob(svg, `${slug(store.project.name)}-specimen.svg`, 'image/svg+xml');
+    }),
+    button('🧪 Type tester', () => {
+      if (!store.otf) { toast('Nothing built yet'); return; }
+      const enabled = new Set([...store.project.blocks, 'latin']);
+      const samples = BLOCKS.filter((b) => enabled.has(b.id)).map((b) => ({ title: b.name, text: b.sample, rtl: !!b.rtl }));
+      samples.unshift({ title: 'Preview', text: store.project.previewText, rtl: false });
+      const html = typeTesterHtml({ name: store.project.name, otf: new Uint8Array(store.otf.slice(0)), variable: lastVariable ?? undefined, samples, metrics: store.project.metrics });
+      downloadBlob(html, `${slug(store.project.name)}-type-tester.html`, 'text/html');
     }),
     button('🎞 Animate…', openAnimateDialog),
     button('🧬 Variable font…', openVariableDialog),
@@ -27,7 +41,7 @@ export function exportMoreButtons(): HTMLElement[] {
 function openAnimateDialog() {
   const dlg = h('dialog', { class: 'modal' });
   const text = h('input', { type: 'text', value: store.project.previewText.split('\n')[0].slice(0, 24) || 'Funky', class: 'labels' });
-  const axisSel = h('select', {}, ...['wobble', 'melt', 'weight', 'glitch', 'erode', 'bounce', 'jitter', 'inflate', 'seed'].map((a) => h('option', { value: a }, a)));
+  const axisSel = h('select', {}, h('option', { value: 'time' }, 'time (living drift, seamless)'), h('option', { value: 'seed' }, 'seed'), ...['wobble', 'melt', 'weight', 'glitch', 'erode', 'bounce', 'jitter', 'inflate', 'blob', 'inkNoise', 'morph', 'pixel'].map((a) => h('option', { value: a }, FX[a]?.def.label ?? a)));
   let frames = 18;
   const framesRow = slider('Frames', { min: 6, max: 48, step: 1, value: frames, onInput: (v) => (frames = v), format: (v) => String(v) });
   const canvas = h('canvas', { width: 960, height: 360, style: { width: '100%', background: '#fff', borderRadius: '8px' } });
@@ -40,9 +54,13 @@ function openAnimateDialog() {
       const p: FontProject = JSON.parse(JSON.stringify(store.project));
       const ax = axisSel.value;
       const wave = 0.5 - 0.5 * Math.cos(t * Math.PI * 2); // 0→1→0, loops cleanly
-      if (ax === 'seed') p.dna.seed = store.project.dna.seed + i;
-      else if (ax === 'weight') p.dna.weight = -1 + 2 * wave;
-      else (p.dna as any)[ax] = wave;
+      if (ax === 'seed') p.fx.seed = store.project.fx.seed + i;
+      else if (ax === 'time') p.fx.time = store.project.fx.time + wave * 1.2; // palindromic sweep → seamless loop
+      else {
+        const layer = ensureLayer(p.fx, ax);
+        const def = FX[ax].def.params[0];
+        layer.params[def.key] = def.min < 0 ? def.min + (def.max - def.min) * wave : def.min + (def.max - def.min) * wave;
+      }
       const res = buildAll(p, { otf: false, chars });
       const c = document.createElement('canvas'); c.width = canvas.width; c.height = canvas.height;
       drawFrame(c.getContext('2d')!, text.value, (ch) => { const b = res.glyphs[ch]; return b && b.contours.length ? b : undefined; }, p.metrics);
@@ -104,6 +122,7 @@ function openVariableDialog() {
       status.textContent = `${payload.masters.length} masters, ${payload.glyphOrder.length} glyphs. Loading Python…`;
       const bytes = await buildVariableFont(payload, (s) => (status.textContent = s));
       const copy = new Uint8Array(bytes);
+      lastVariable = { bytes: copy, axes: payload.axes };
       downloadBlob(copy, `${slug(store.project.name)}-VF.ttf`, 'font/ttf');
       const face = new FontFace('FunkyVarPreview', copy.buffer as ArrayBuffer);
       await face.load(); document.fonts.add(face);

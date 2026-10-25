@@ -54,7 +54,8 @@ test('DNA sliders visibly change the glyphs', async ({ page }) => {
   await drawStroke(page, [[0.25, 0.48], [0.55, 0.48]]);
   await expect.poll(() => page.locator('.status').textContent()).toMatch(/built/);
   const before = await page.locator('.cell[data-char="H"] canvas').screenshot();
-  const melt = page.locator('.dna .slider', { hasText: 'Melt' }).locator('input');
+  await page.locator('.effects .addsel').first().selectOption('melt');
+  const melt = page.locator('.fxlayer[data-type="melt"] .slider input');
   await melt.fill('0.9');
   await melt.dispatchEvent('input');
   await page.waitForTimeout(800);

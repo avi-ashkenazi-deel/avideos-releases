@@ -9,6 +9,7 @@ import { charsetPanel } from './charset';
 import { generateGlyphs, regenerateOne, dependentsOf } from '../../generate/compose';
 import { measureStats } from '../../generate/stats';
 import { importFont } from '../../inputs/fontimport';
+import { outlineToStrokes, outlinesToStrokes } from '../../inputs/fontimport/toStrokes';
 import { openImageDialog } from './imageDialog';
 
 function blankGlyph(ch: string): Glyph {
@@ -57,7 +58,7 @@ export function recomposeDependents(base: string): void {
     for (const ch of deps) {
       const cur = p.glyphs[ch];
       if (cur && (cur.locked || (cur.source !== 'generated' && hasInk(cur)))) continue;
-      p.glyphs[ch] = regenerateOne(ch, input, cur?.recipe?.seed ?? p.dna.seed);
+      p.glyphs[ch] = regenerateOne(ch, input, cur?.recipe?.seed ?? p.fx.seed);
     }
   }, 'glyph');
 }
@@ -66,7 +67,7 @@ export function runGenerate(): void {
   // inkless leftovers (e.g. a cleared glyph) must not block generation
   for (const [ch, g] of Object.entries(store.project.glyphs)) if (!hasInk(g) && !g.locked) delete store.project.glyphs[ch];
   refreshStatsFromSeeds();
-  const seedNumber = store.project.dna.seed;
+  const seedNumber = store.project.fx.seed;
   const chars = projectCharset(store.project);
   const generated = generateGlyphs({ seeds: store.project.seeds, stats: store.project.stats, mutation: store.project.mutation, glyphs: store.project.glyphs }, seedNumber, chars);
   store.update((p) => {
@@ -150,6 +151,15 @@ export function seedsPanel(): HTMLElement {
   const lock = button('🔒 Lock', () => {
     store.update((p) => { const g = p.glyphs[store.selected]; if (g) g.locked = !g.locked; }, 'glyph');
   });
+  const toStrokesBtn = button('〰 To strokes', () => {
+    const ch = store.selected;
+    const g = store.project.glyphs[ch];
+    if (!g || g.kind !== 'outline') { toast('Only outline glyphs (imported / traced as outline) can be converted'); return; }
+    store.update((p) => { p.glyphs[ch] = outlineToStrokes(g); }, 'glyph');
+    recomposeDependents(ch);
+    scheduleBuild(0);
+  }, '');
+  toStrokesBtn.title = 'Convert this outline glyph into centreline strokes';
   const reroll = button('🎲 Re-roll', () => {
     const ch = store.selected;
     const g = store.project.glyphs[ch];
@@ -167,9 +177,15 @@ export function seedsPanel(): HTMLElement {
     runGenerate();
   }, 'primary big');
 
+  const convertOnImport = h('input', { type: 'checkbox', checked: true, title: 'Turn outlines into centreline strokes so Weight, terminals and variable axes work on the imported font' });
   const fontFile = fileInput('.ttf,.otf,.woff', async (f) => {
     try {
       const imp = importFont(await f.arrayBuffer(), projectCharset(store.project));
+      if (convertOnImport.checked) {
+        toast(`Converting ${imp.glyphs.length} glyphs to strokes…`);
+        await new Promise((r) => setTimeout(r, 30));
+        imp.glyphs = outlinesToStrokes(imp.glyphs);
+      }
       store.update((p) => {
         for (const g of imp.glyphs) p.glyphs[g.char] = g;
         p.metrics = { ...p.metrics, ...imp.metrics, upm: 1000 };
@@ -185,7 +201,7 @@ export function seedsPanel(): HTMLElement {
   const csPanel = charsetPanel(() => { renderStrip(); syncEditor(); scheduleBuild(0); });
   const panel = h('section', { class: 'panel seeds' },
     title, csPanel, strip, canvasEl, info,
-    h('div', { class: 'row' }, undo, clear, lock, reroll),
+    h('div', { class: 'row' }, undo, clear, lock, reroll, toStrokesBtn),
     h('details', { class: 'brush', open: true }, h('summary', {}, 'Brush'),
       widthRow, pressureRow, velRow, smoothRow,
       h('div', { class: 'row' }, h('label', {}, 'Cap ', capSel), h('label', {}, mirror, ' Mirror'), ),
@@ -194,6 +210,14 @@ export function seedsPanel(): HTMLElement {
     h('div', { class: 'row sources' },
       button('📷 Trace a photo of handwriting', () => imgFile.click()),
       button('⬇ Remix an existing font', () => fontFile.click()),
+      h('label', { class: 'toggle', title: convertOnImport.title }, convertOnImport, ' as strokes'),
+      button('〰 All outlines → strokes', () => {
+        const n = Object.values(store.project.glyphs).filter((g) => g.kind === 'outline').length;
+        if (!n) { toast('No outline glyphs to convert'); return; }
+        store.update((p) => { for (const [ch, g] of Object.entries(p.glyphs)) if (g.kind === 'outline') p.glyphs[ch] = outlineToStrokes(g); }, 'project');
+        refreshStatsFromSeeds(); scheduleBuild(0);
+        toast(`Converted ${n} glyphs to strokes`);
+      }),
       fontFile, imgFile),
   );
 

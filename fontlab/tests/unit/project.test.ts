@@ -7,7 +7,7 @@ describe('project schema', () => {
   it('round-trips', () => {
     const p = newProject('Zig');
     p.glyphs['a'] = { char: 'a', unicode: 97, advance: 500, source: 'drawn', kind: 'stroke', strokes: [{ id: 's1', cap: 'round', points: [{ x: 0, y: 0, w: 30 }] }] };
-    p.dna.wobble = 0.4;
+    p.fx.groups[0].layers.push({ id: 'w1', type: 'wobble', enabled: true, params: { amount: 0.4 } });
     const q = parseProject(JSON.parse(serializeProject(p)));
     expect(q).toEqual(p);
   });

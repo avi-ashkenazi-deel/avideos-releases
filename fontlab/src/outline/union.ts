@@ -41,10 +41,11 @@ export function unionRings(rings: Ring[]): Contour[] {
  * parent) so holes survive the union regardless of winding convention, and
  * overlapping outers at the same depth merge correctly.
  */
-export function unionContours(contours: Contour[]): Contour[] {
+/** Group contours into polygon-clipping polygons by nesting depth (even = outer with its odd-depth holes). */
+export function toPolygons(contours: Contour[]): [number, number][][][] {
   const cs = contours.filter((c) => c.points.length >= 3);
-  if (cs.length === 0) return [];
   const n = cs.length;
+  if (n === 0) return [];
   const depth = new Array<number>(n).fill(0);
   const parent = new Array<number>(n).fill(-1);
   const areas = cs.map((c) => Math.abs(signedArea(c.points)));
@@ -64,8 +65,33 @@ export function unionContours(contours: Contour[]): Contour[] {
     for (let j = 0; j < n; j++) if (parent[j] === i && depth[j] === depth[i] + 1) rings.push(cs[j].points.map((p) => [p[0], p[1]] as [number, number]));
     polys.push(rings);
   }
+  return polys;
+}
+
+/**
+ * Union existing contours (imported / traced / post-DNA) into clean contours.
+ * Holes survive regardless of winding convention; overlapping outers merge.
+ */
+export function unionContours(contours: Contour[]): Contour[] {
+  const polys = toPolygons(contours);
   if (polys.length === 0) return [];
   return fromMulti(pc.union(...(polys as [any, ...any[]])));
+}
+
+export type BooleanOp = 'union' | 'subtract' | 'intersect' | 'xor';
+
+/** Generic boolean between two contour sets. */
+export function booleanContours(a: Contour[], b: Contour[], op: BooleanOp): Contour[] {
+  const pa = toPolygons(a), pb = toPolygons(b);
+  if (op === 'union') { const all = [...pa, ...pb]; return all.length ? fromMulti(pc.union(...(all as [any, ...any[]]))) : []; }
+  if (!pa.length) return op === 'xor' ? (pb.length ? fromMulti(pc.union(...(pb as [any, ...any[]]))) : []) : [];
+  if (!pb.length) return op === 'intersect' ? [] : fromMulti(pc.union(...(pa as [any, ...any[]])));
+  const A = pa as any, B = pb as any;
+  switch (op) {
+    case 'subtract': return fromMulti(pc.difference(A, B));
+    case 'intersect': return fromMulti(pc.intersection(A, B));
+    case 'xor': return fromMulti(pc.xor(A, B));
+  }
 }
 
 /** a point guaranteed to be just inside the ring near its first vertex */

@@ -1,5 +1,5 @@
 import type { FontProject, Contour, Glyph } from '../core/glyph';
-import { applyDna, isIdentityDna, advanceAfterDna } from '../dna';
+import { applyStack, isIdentityStack, advanceAfterStack } from '../fx/stack';
 import { glyphToContours } from '../outline';
 import { buildFont, fontToArrayBuffer, type OutlineGlyph } from '../export/otf';
 import { hashString } from '../core/prng';
@@ -11,7 +11,7 @@ const cache = new Map<string, BuiltGlyph>();
 const MAX_CACHE = 2000;
 
 function keyFor(g: Glyph, p: FontProject): string {
-  return hashString(JSON.stringify(g)) + ':' + hashString(JSON.stringify(p.dna) + JSON.stringify(p.metrics));
+  return hashString(JSON.stringify(g)) + ':' + hashString(JSON.stringify(p.fx) + JSON.stringify(p.metrics));
 }
 
 export function buildGlyph(g: Glyph, p: FontProject): BuiltGlyph {
@@ -20,8 +20,8 @@ export function buildGlyph(g: Glyph, p: FontProject): BuiltGlyph {
   if (hit) return hit;
   let contours: Contour[];
   let advance = g.advance;
-  if (isIdentityDna(p.dna)) contours = glyphToContours(g);
-  else { contours = applyDna(g, p.dna, p.metrics); advance = advanceAfterDna(g, p.dna); }
+  if (isIdentityStack(p.fx)) contours = glyphToContours(g);
+  else { contours = applyStack(g, p.fx, p.metrics); advance = advanceAfterStack(g, p.fx); }
   const built: BuiltGlyph = { char: g.char, unicode: g.unicode, advance, contours };
   if (cache.size > MAX_CACHE) cache.clear();
   cache.set(k, built);

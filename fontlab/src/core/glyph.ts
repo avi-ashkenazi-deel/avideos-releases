@@ -2,6 +2,8 @@
  * Core data model. All coordinates are font units: 1000 units per em,
  * baseline at y = 0, y grows UPWARD (OpenType convention). UI code converts.
  */
+import type { FxStack } from '../fx/types';
+
 export type Vec = [number, number];
 
 export interface StrokePoint {
@@ -98,7 +100,8 @@ export interface FontProject {
   /** full working set keyed by char; includes seeds + generated */
   glyphs: Record<string, Glyph>;
   stats: StyleStats;
-  dna: DnaParams;
+  /** effect stack (see fx/types.ts) */
+  fx: FxStack;
   /** 0..1 randomness when generating */
   mutation: number;
   previewText: string;
@@ -149,7 +152,7 @@ export function newProject(name = 'Untitled Funk'): FontProject {
     seeds: [],
     glyphs: {},
     stats: { ...DEFAULT_STATS },
-    dna: { ...DEFAULT_DNA },
+    fx: { seed: 1, time: 0, groups: [{ id: 'g0', enabled: true, op: 'union', layers: [] }] },
     mutation: 0.3,
     previewText: 'The quick brown fox jumps over the lazy dog 0123456789',
     blocks: ['latin'],

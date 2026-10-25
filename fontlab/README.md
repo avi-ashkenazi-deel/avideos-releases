@@ -33,10 +33,21 @@ deploys `dist/` on every push to the branch.
    and builds the missing letters from parametric recipes. Letters related to a
    seed are borrowed from it (`n → h m u`, `b → d p q`). **Mutation** adds
    randomness; **Re-roll** redraws one glyph; **Lock** protects a glyph.
-3. **Bend it with Style DNA.** Weight, Slant, Wobble, Melt, Inflate, Rust,
-   Glitch, Bounce, Jitter. Every op is seeded, so the same seed always gives the
-   same font. Presets: Chonky, Melted, Rusty, Glitchy, Ransom, Nervous,
-   Everything. **Mutate!** nudges all sliders at once.
+3. **Stack effects.** The Effects panel is an ordered stack, inspired by
+   [LivingPath](https://github.com/ivangrozny/LivingPath). Three kinds of
+   effect: *Strokes* (Weight, Slant, Wobble, Bounce, Jitter), *Shape* (Inflate,
+   Melt, Glitch, Rust, Hollow/Inline, Low poly, Stipple with gravity) and
+   *Texture* (Blob, Round corners, Pixelate, Crunch, Ink noise, Dilate/erode,
+   Reaction-diffusion). Drag or ▲▼ to reorder; add a second group to start
+   again from the original glyph and **add, cut, keep or xor** it against the
+   result (the Halo preset is "inflated minus original"). Every effect is
+   seeded per layer, so the same seed always gives the same font. **Mutate!**
+   nudges every slider. Presets: Chonky, Melted, Rusty, Glitchy, Ransom,
+   Nervous, Hollow, Inline, Blob, Pixel, Crunch, Ink, Crystal, Coral, Stipple,
+   Gravity, Halo, Everything.
+   **Living** mode in the preview drifts the noise-based effects over time so
+   the font is always moving; the GIF/WebM dialog can sweep the same time axis
+   for a seamless loop.
 4. **Pick your scripts.** The **Character set** panel switches blocks on:
    Latin (always), Punctuation, Symbols, Latin accents (Zürich, façade,
    Łódź…), Cyrillic and Hebrew. Accented letters are composed from *your*
@@ -45,7 +56,14 @@ deploys `dist/` on every push to the branch.
    the uppercase, so one drawn `o` flows into ö, ő, ø, о and more. The
    "Add any characters" box accepts anything else (★, kana, Arabic…) for you
    to draw by hand. Right-to-left lines render correctly in the preview.
-5. **Export.** `Download .otf` (static, CFF outlines), `SVG specimen`
+   **Remix an existing font** converts its outlines to centreline strokes by
+   default (thinning + distance transform), so Weight, terminals and the
+   variable axes work on any font you import; there is also a per-glyph
+   "To strokes" button and an "All outlines → strokes" action.
+5. **Export.** `Download .otf` (static, CFF outlines), `Type tester` (a
+   self-contained HTML page with the font embedded, editable samples per
+   script, waterfall, glyph grid and axis sliders when a variable font was
+   built), `SVG specimen`
    (animated wiggle), `Animate…` (GIF / WebM sweeping one DNA axis), and
    `Variable font…` (a real OpenType variable `.ttf` with `wght`, `slnt` and
    custom `WOBL`, `MELT`, `BNCE` axes you can drive from CSS
@@ -59,10 +77,13 @@ seeds (draw | trace | import)
   → generate/stats.ts      measure StyleStats
   → generate/compose.ts    recipes × stats × seeded mutation → stroke glyphs
   → generate/derive.ts     accents (base + mark), Ø/Ł/Đ additions, Cyrillic aliases, small caps
-  → dna/ (skeleton stage)  weight · slant · wobble · bounce · jitter
+  → fx/stack.ts            effect groups in order; each layer runs on the
+                           skeleton while it can, then on contours; raster
+                           layers share one bitmap round trip
+                           (fx/raster: rasterize → ops → marching squares)
   → outline/strokeExpand   centreline + widths → one ribbon polygon per stroke
   → outline/union          polygon-clipping, nonzero rule → clean contours
-  → dna/ (outline stage)   inflate · melt · glitch · rust
+                           + booleanContours for add / cut / keep / xor groups
   → outline/fitCurves      corner-aware cubic Bézier fitting
   → export/otf.ts          opentype.js → ArrayBuffer → FontFace live preview
 ```
@@ -83,7 +104,8 @@ seeds (draw | trace | import)
 src/core        data model, geometry, seeded PRNG + simplex noise, charsets, recipes (latin, punct, symbols, marks, cyrillic, hebrew)
 src/inputs      draw (pointer canvas), image (threshold → thin → strokes / potrace), fontimport
 src/generate    stats, primitives, compose, mutate, borrow
-src/dna         the nine Style DNA operators + boolean helpers
+src/fx          effect stack (types, registry, stack, presets), ops (hollow, lowpoly, stipple), raster (bitmap, trace, ops, reaction-diffusion)
+src/dna         the original nine operators + boolean/offset helpers (used by fx)
 src/outline     strokeExpand, union, fitCurves
 src/export      otf, variable (masters + Pyodide bridge + build_var.py), specimen (svg/gif/webm)
 src/pipeline    buildAll (used by the worker and by specimen rendering)

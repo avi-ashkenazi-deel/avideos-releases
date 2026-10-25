@@ -1,0 +1,40 @@
+import type { FxStack } from './types';
+import { newStack, newLayer, newGroup } from './stack';
+
+type Build = (seed: number) => FxStack;
+
+const one = (...layers: [string, Record<string, number>?][]): Build => (seed) => {
+  const s = newStack(seed);
+  s.groups[0].layers = layers.map(([t, p]) => newLayer(t, p));
+  return s;
+};
+
+export const PRESETS: Record<string, Build> = {
+  Clean: (seed) => newStack(seed),
+  Chonky: one(['weight', { amount: 0.8 }], ['inflate', { amount: 0.35 }]),
+  Melted: one(['weight', { amount: 0.3 }], ['wobble', { amount: 0.15 }], ['melt', { amount: 0.75 }]),
+  Rusty: one(['weight', { amount: 0.25 }], ['wobble', { amount: 0.2 }], ['erode', { amount: 0.6 }]),
+  Glitchy: one(['slant', { amount: 0.2 }], ['glitch', { amount: 0.7 }]),
+  Ransom: one(['weight', { amount: 0.2 }], ['jitter', { amount: 0.6 }], ['bounce', { amount: 0.7 }]),
+  Nervous: one(['wobble', { amount: 0.8 }], ['jitter', { amount: 0.25 }]),
+  Hollow: one(['weight', { amount: 0.5 }], ['hollow', { inset: 22 }]),
+  Inline: one(['weight', { amount: 0.9 }], ['hollow', { inset: 18, inline: 16 }]),
+  Blob: one(['blob', { blur: 10, threshold: 120 }]),
+  Pixel: one(['pixel', { size: 12 }]),
+  Crunch: one(['crunch', { resolution: 9, sharpen: 3 }]),
+  Ink: one(['weight', { amount: 0.3 }], ['inkNoise', { softness: 8, noiseSize: 16, amount: 0.7 }]),
+  Crystal: one(['weight', { amount: 0.2 }], ['lowpoly', { tolerance: 34 }]),
+  Coral: one(['weight', { amount: 0.6 }], ['reactionDiffusion', {}]),
+  Stipple: one(['weight', { amount: 0.4 }], ['stipple', { spacing: 34, dotSize: 11, gravity: 0 }]),
+  Gravity: one(['weight', { amount: 0.5 }], ['stipple', { spacing: 30, dotSize: 10, gravity: 1 }]),
+  /** two groups: fat version minus the original = a thick outline ring */
+  Halo: (seed) => {
+    const s = newStack(seed);
+    s.groups[0].layers = [newLayer('inflate', { amount: 0.6 })];
+    const g = newGroup('subtract');
+    g.layers = [newLayer('weight', { amount: 0.1 })];
+    s.groups.push(g);
+    return s;
+  },
+  Everything: one(['weight', { amount: 0.4 }], ['slant', { amount: 0.3 }], ['wobble', { amount: 0.4 }], ['jitter', { amount: 0.3 }], ['bounce', { amount: 0.4 }], ['inflate', { amount: 0.2 }], ['melt', { amount: 0.3 }], ['glitch', { amount: 0.3 }], ['erode', { amount: 0.3 }]),
+};

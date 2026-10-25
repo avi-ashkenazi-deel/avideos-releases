@@ -18,6 +18,7 @@ import { densifyClosed, ringNormals } from '../../dna/util';
 import { WOBBLE_FREQ, WOBBLE_AMP } from '../../dna/wobble';
 import { jitterSample } from '../../dna/jitter';
 import type { VarAxisSpec, VarMaster, VarPayload } from './index';
+import { stackToDna } from '../../fx/stack';
 
 export type VarAxisTag = 'wght' | 'slnt' | 'WOBL' | 'MELT' | 'BNCE';
 
@@ -179,7 +180,7 @@ export function planMasters(dna: DnaParams, tags: VarAxisTag[]): MasterPlan {
 }
 
 export function buildVarPayload(project: FontProject, tags: VarAxisTag[]): VarPayload {
-  const plan = planMasters(project.dna, tags);
+  const plan = planMasters(stackToDna(project.fx), tags);
   const glyphs = Object.values(project.glyphs).filter((g) => (g.kind === 'stroke' ? (g.strokes?.length ?? 0) : (g.contours?.length ?? 0)) > 0);
   const structs = glyphs.map(structureOf);
   const names = glyphs.map((g) => glyphName(g.char, g.unicode));

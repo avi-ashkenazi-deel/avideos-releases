@@ -3,7 +3,7 @@ import { loadLocal } from '../project/storage';
 import { headerBar } from './panels/exportPanel';
 import { seedsPanel } from './panels/seeds';
 import { gridPanel } from './panels/grid';
-import { dnaPanel } from './panels/dna';
+import { effectsPanel } from './panels/effects';
 import { previewPanel } from './panels/preview';
 import { scheduleBuild } from './buildClient';
 import { h } from './dom';
@@ -16,7 +16,7 @@ export function mountApp(root: HTMLElement): void {
     h('main', { class: 'layout' },
       seedsPanel(),
       gridPanel((ch) => { store.selected = ch; store.emit('select'); }),
-      h('div', { class: 'right' }, dnaPanel(), previewPanel()),
+      h('div', { class: 'right' }, effectsPanel(), previewPanel()),
     ),
   );
   store.emit('project:loaded');

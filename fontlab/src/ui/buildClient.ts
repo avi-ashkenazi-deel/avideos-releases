@@ -17,24 +17,24 @@ function getWorker(): Worker {
     store.built = msg.partial ? { ...store.built, ...(msg.glyphs as any) } : (msg.glyphs as any);
     store.lastBuildMs = msg.ms;
     store.otf = msg.otf;
-    store.busy = !!msg.partial;
-    store.status = msg.partial ? `preview ready (${Object.keys(msg.glyphs).length} glyphs, ${msg.ms.toFixed(0)} ms) — building the rest…` : `built ${Object.keys(msg.glyphs).length} glyphs in ${msg.ms.toFixed(0)} ms`;
+    store.busy = !!msg.partial && !msg.final;
+    store.status = msg.partial && msg.final ? `preview ${Object.keys(msg.glyphs).length} glyphs in ${msg.ms.toFixed(0)} ms` : msg.partial ? `preview ready (${Object.keys(msg.glyphs).length} glyphs, ${msg.ms.toFixed(0)} ms) — building the rest…` : `built ${Object.keys(msg.glyphs).length} glyphs in ${msg.ms.toFixed(0)} ms`;
     store.emit('built');
     if (msg.otf) await installPreviewFont(msg.otf.slice(0));
-    store.emit('font');
+    store.emit(msg.partial && msg.final ? 'font:preview' : 'font');
   };
   worker.onerror = (e) => { store.busy = false; store.status = 'Worker crashed: ' + e.message; store.emit('status'); };
   return worker;
 }
 
 /** Debounced rebuild of every glyph + the preview OTF. */
-export function scheduleBuild(delay = 120): void {
+export function scheduleBuild(delay = 120, opts: { previewOnly?: boolean } = {}): void {
   if (timer) clearTimeout(timer);
   timer = window.setTimeout(() => {
     timer = null;
     store.busy = true; store.emit('status');
     const id = nextId++;
     const priority = [...new Set([...store.project.previewText.replace(/\s/g, ''), store.selected])];
-    getWorker().postMessage({ id, type: 'build', project: store.project, otf: true, priority });
+    getWorker().postMessage({ id, type: 'build', project: store.project, otf: true, priority, onlyPriority: !!opts.previewOnly });
   }, delay);
 }

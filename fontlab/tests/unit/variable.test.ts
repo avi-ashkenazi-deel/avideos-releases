@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { buildVarPayload, planMasters } from '../../src/export/variable/masters';
-import { newProject } from '../../src/core/glyph';
+import { newProject, DEFAULT_DNA } from '../../src/core/glyph';
 import type { Glyph } from '../../src/core/glyph';
 import { signedArea } from '../../src/core/geometry';
 
@@ -19,7 +19,7 @@ function project() {
 
 describe('variable masters', () => {
   it('plans a star designspace around the current DNA', () => {
-    const plan = planMasters({ ...newProject().dna, weight: 0.25 }, ['wght', 'WOBL']);
+    const plan = planMasters({ ...DEFAULT_DNA, weight: 0.25 }, ['wght', 'WOBL']);
     expect(plan.axes.map((a) => a.tag)).toEqual(['wght', 'WOBL']);
     expect(plan.axes[0].default).toBe(600);
     expect(plan.locations).toHaveLength(4); // default, wght min, wght max, WOBL max
