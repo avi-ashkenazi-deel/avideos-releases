@@ -157,7 +157,7 @@ export class DrawCanvas {
     // finished ink
     drawContours(ctx, this.contours, view, 'rgba(255,255,255,.92)');
     // centrelines of stroke glyphs (subtle)
-    if (this.glyph.kind === 'stroke' && this.glyph.strokes) {
+    if (this.glyph.strokes) {
       ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.lineWidth = 1;
       for (const s of this.glyph.strokes) {
         ctx.beginPath();

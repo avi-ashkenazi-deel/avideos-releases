@@ -1,6 +1,7 @@
 import type { FontProject } from '../core/glyph';
 import { newProject } from '../core/glyph';
 import type { BuiltGlyph } from '../pipeline/build';
+import { history } from './history';
 
 type Listener = (ev: string) => void;
 
@@ -19,9 +20,12 @@ export class Store {
   private listeners = new Set<Listener>();
 
   subscribe(l: Listener): () => void { this.listeners.add(l); return () => this.listeners.delete(l); }
-  emit(ev: string): void { for (const l of this.listeners) l(ev); }
-  /** mutate project and notify; `ev` is a hint for which panels need to refresh */
-  update(fn: (p: FontProject) => void, ev = 'project'): void { fn(this.project); this.emit(ev); }
+  emit(ev: string): void { if (ev === 'project:loaded') history.clear(); for (const l of this.listeners) l(ev); }
+  /** mutate project and notify; `ev` is a hint for which panels need to refresh. Letter changes are recorded for Undo. */
+  update(fn: (p: FontProject) => void, ev = 'project'): void {
+    if (ev === 'glyph' || ev === 'project') history.record(this.project, ev);
+    fn(this.project); this.emit(ev);
+  }
 }
 
 export const store = new Store();

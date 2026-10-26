@@ -1,4 +1,4 @@
-import { h } from '../dom';
+import { h, toast } from '../dom';
 import { icon } from '../icons';
 import { store } from '../state';
 import { projectCharset, groupCharset, BLOCK_BY_ID } from '../../core/charsets';
@@ -19,7 +19,7 @@ export function gridPanel(onSelect: (ch: string) => void): HTMLElement {
     const canvas = h('canvas', { class: 'thumb' });
     const badge = h('span', { class: 'badge' });
     const del = h('span', { class: 'celldel', title: `Remove “${ch}” (it can be regenerated)`, role: 'button', tabindex: 0 }, icon('x', 12));
-    del.addEventListener('click', (e) => { e.stopPropagation(); store.update((p) => { delete p.glyphs[ch]; }, 'glyph'); scheduleBuild(0); });
+    del.addEventListener('click', (e) => { e.stopPropagation(); store.update((p) => { delete p.glyphs[ch]; }, 'glyph'); scheduleBuild(0); toast(`“${ch}” removed. Undo brings it back.`); });
     const root = h('button', { type: 'button', class: 'cell' + (rtl ? ' rtl' : ''), 'data-char': ch, onClick: () => onSelect(ch), title: `Edit “${ch}”` }, canvas, h('span', { class: 'ch' }, ch), badge, del);
     c = { root, canvas, badge };
     cells.set(ch, c);

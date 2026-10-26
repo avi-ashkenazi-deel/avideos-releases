@@ -3,7 +3,10 @@ import { bboxContours, bboxStrokes, dist, signedArea, type BBox } from '../core/
 
 export function glyphBBox(g: Glyph): BBox {
   if (g.kind === 'stroke') return bboxStrokes(g.strokes ?? []);
-  return bboxContours(g.contours ?? []);
+  const b = bboxContours(g.contours ?? []);
+  if (!g.strokes?.length) return b;
+  const s = bboxStrokes(g.strokes);
+  return { minX: Math.min(b.minX, s.minX), minY: Math.min(b.minY, s.minY), maxX: Math.max(b.maxX, s.maxX), maxY: Math.max(b.maxY, s.maxY) };
 }
 
 /** Apply a point map to every coordinate of a glyph (strokes keep w/p). */

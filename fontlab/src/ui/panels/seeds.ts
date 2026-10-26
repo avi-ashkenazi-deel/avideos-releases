@@ -4,6 +4,7 @@ import { store } from '../state';
 import { scheduleBuild } from '../buildClient';
 import { DrawCanvas } from '../../inputs/draw/canvas';
 import { PointEditor } from '../../inputs/draw/editor';
+import { history } from '../history';
 import type { Glyph, Stroke, CapStyle } from '../../core/glyph';
 import { DEFAULT_STATS } from '../../core/glyph';
 import { projectCharset, groupCharset, BLOCK_BY_ID } from '../../core/charsets';
@@ -23,7 +24,7 @@ const SIDEBEARING = 60;
 
 export function hasInk(g: Glyph | undefined | null): boolean {
   if (!g) return false;
-  return g.kind === 'stroke' ? (g.strokes?.some((s) => s.points.length > 0) ?? false) : (g.contours?.some((c) => c.points.length >= 3) ?? false);
+  return (g.strokes?.some((s) => s.points.length > 0) ?? false) || (g.contours?.some((c) => c.points.length >= 3) ?? false);
 }
 
 /** Slide the ink so it starts at a fixed left sidebearing and fit the advance to it (typewriter-style). */
@@ -116,7 +117,8 @@ export function seedsPanel(): HTMLElement {
     }
     for (const b of strip.children) b.classList.toggle('selected', (b as HTMLElement).dataset.ch === ch);
     const src = g ? ({ drawn: 'drawn by hand', traced: 'traced from a photo', imported: 'from a font file', generated: 'generated' } as const)[g.source] : 'empty';
-    const parts = g ? (g.kind === 'stroke' ? `${g.strokes?.length ?? 0} strokes` : `${g.contours?.length ?? 0} contours`) : 'draw to create';
+    const ns = g?.strokes?.length ?? 0, nc = g?.contours?.length ?? 0;
+    const parts = !g ? 'draw to create' : g.kind === 'stroke' ? `${ns} strokes` : `${nc} contours${ns ? ` + ${ns} stroke${ns === 1 ? '' : 's'}` : ''}`;
     title.replaceChildren(h('span', { class: 'big' }, ch), h('small', {}, `${src}${g?.locked ? ' · locked' : ''} · ${parts}`));
     info.textContent = editMode
       ? 'Edit points: drag nodes and handles. Double-click a segment to add a point, Delete removes, Alt+drag a node changes its width, Ctrl/Cmd+Z undoes.'
@@ -136,8 +138,8 @@ export function seedsPanel(): HTMLElement {
     store.update((p) => {
       let g = p.glyphs[ch];
       if (!g || g.source === 'generated') { g = blankGlyph(ch); p.glyphs[ch] = g; }
-      if (g.kind === 'outline') { g.kind = 'stroke'; g.strokes = g.strokes ?? []; g.contours = undefined; g.curves = undefined; }
-      g.strokes!.push(s);
+      g.strokes = g.strokes ?? []; // outline letters keep their outline: the stroke is added on top
+      g.strokes.push(s);
       g.source = g.source === 'generated' ? 'drawn' : g.source;
       normalizeSidebearings(g);
     }, 'glyph');
@@ -157,12 +159,24 @@ export function seedsPanel(): HTMLElement {
   mirror.addEventListener('change', () => (brush.mirror = mirror.checked));
   const advRow = slider('Advance', { min: 100, max: 1400, step: 1, value: 520, onInput: (v) => { store.update((p) => { const g = p.glyphs[store.selected]; if (g) g.advance = v; }, 'glyph'); scheduleBuild(80); }, format: (v) => v.toFixed(0) });
 
-  const undoBtn = iconButton('undo', 'Undo', () => {
-    if (editMode) { editor.undo(); return; }
-    store.update((p) => { const g = p.glyphs[store.selected]; if (g?.kind === 'stroke') g.strokes?.pop(); }, 'glyph');
-    recomposeDependents(store.selected); scheduleBuild(0);
-  }, { title: 'Undo the last stroke (or point edit)', testid: 'btn-undo' });
-  const redoBtn = iconButton('redo', 'Redo', () => { if (editMode) editor.redo(); }, { iconOnly: true, title: 'Redo (edit points)' });
+  const undoProject = () => {
+    if (!history.undo(store.project)) { toast('Nothing to undo'); return; }
+    store.emit('glyph'); scheduleBuild(0);
+  };
+  const redoProject = () => {
+    if (!history.redo(store.project)) { toast('Nothing to redo'); return; }
+    store.emit('glyph'); scheduleBuild(0);
+  };
+  const undoBtn = iconButton('undo', 'Undo', () => { if (editMode) editor.undo(); else undoProject(); }, { title: 'Undo the last change to the font: stroke, delete, generate, import… (Ctrl/Cmd+Z)', testid: 'btn-undo' });
+  const redoBtn = iconButton('redo', 'Redo', () => { if (editMode) editor.redo(); else redoProject(); }, { iconOnly: true, title: 'Redo (Shift+Ctrl/Cmd+Z)', testid: 'btn-redo' });
+  window.addEventListener('keydown', (e) => {
+    if (editor.enabled) return; // the point editor has its own history while open
+    const t = e.target as HTMLElement | null;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+    const mod = e.ctrlKey || e.metaKey;
+    if (mod && (e.key === 'z' || e.key === 'Z')) { e.preventDefault(); if (e.shiftKey) redoProject(); else undoProject(); }
+    else if (mod && (e.key === 'y' || e.key === 'Y')) { e.preventDefault(); redoProject(); }
+  });
   const clear = iconButton('trash', 'Clear', () => { store.update((p) => { delete p.glyphs[store.selected]; }, 'glyph'); recomposeDependents(store.selected); scheduleBuild(0); }, { title: 'Remove this letter (it can be regenerated)' });
   const lock = iconButton('lock', 'Lock', () => { store.update((p) => { const g = p.glyphs[store.selected]; if (g) g.locked = !g.locked; }, 'glyph'); }, { title: 'Locked letters are never regenerated' });
   const reroll = iconButton('dice', 'Re-roll', () => {
@@ -180,7 +194,7 @@ export function seedsPanel(): HTMLElement {
   }, { title: 'Convert this outline letter into centreline strokes' });
   const editBtn = iconButton('nodes', 'Edit points', () => { editMode = !editMode; applyMode(); }, { title: 'Move, add and delete points and curve handles', testid: 'btn-edit-points' });
   const nodeWidth = slider('Point width', { min: 2, max: 200, step: 1, value: 40, onInput: (v) => editor.setSelectedWidth(v), format: (v) => v.toFixed(0) });
-  const editTools = h('div', { class: 'row edittools' }, redoBtn, nodeWidth, h('small', { class: 'muted' }, 'Alt+drag a node also changes width'));
+  const editTools = h('div', { class: 'row edittools' }, nodeWidth, h('small', { class: 'muted' }, 'Alt+drag a node also changes width'));
   const applyMode = () => {
     const g = store.project.glyphs[store.selected];
     if (editMode && !(g && hasInk(g))) { editMode = false; toast('Nothing to edit yet. Draw or import this letter first.'); }
@@ -238,7 +252,7 @@ export function seedsPanel(): HTMLElement {
   // ---------- draw tab body
   const drawTab = h('div', { class: 'tab-body draw' },
     strip, title, canvasEl, info,
-    h('div', { class: 'row' }, undoBtn, clear, lock, reroll, toStrokesBtn, editBtn),
+    h('div', { class: 'row' }, undoBtn, redoBtn, clear, lock, reroll, toStrokesBtn, editBtn),
     editTools,
     h('details', { class: 'brush' }, h('summary', {}, 'Brush'), widthRow, pressureRow, velRow, smoothRow,
       h('div', { class: 'row' }, h('label', {}, 'Cap ', capSel), h('label', {}, mirror, ' Mirror')), advRow),

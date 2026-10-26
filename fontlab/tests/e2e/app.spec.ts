@@ -126,3 +126,32 @@ test('edit points: drag a node of a drawn letter and undo it', async ({ page }) 
   await page.locator('[data-testid=btn-undo]').click();
   await expect.poll(after).toBe(before);
 });
+
+test('drawing on an imported letter adds to it; deleting a tile is undoable', async ({ page }) => {
+  await pickFile(page, 'font', path.resolve('tests/fixtures/sample.woff2'));
+  await expect(page.locator('.cell[data-char="A"] .badge')).toHaveAttribute('data-source', 'imported', { timeout: 60000 });
+  // draw across the imported A: it keeps its contours and gains a stroke
+  await page.locator('[data-testid=tab-draw]').click();
+  await page.locator('.chbtn[data-ch="A"]').click();
+  await expect(page.locator('.drawtitle')).toContainText('contours');
+  const beforeTitle = await page.locator('.drawtitle small').innerText();
+  const nContours = Number(/(\d+) contours/.exec(beforeTitle)![1]);
+  await drawStroke(page, [[0.1, 0.5], [0.9, 0.5]]);
+  await expect(page.locator('.drawtitle')).toContainText(`${nContours} contours + 1 stroke`);
+  await expect(page.locator('.cell[data-char="A"] .badge')).toHaveAttribute('data-source', 'imported');
+  // undo the stroke with the keyboard
+  await page.mouse.click(5, 500); // blur any input
+  await page.keyboard.press('Control+z');
+  await expect(page.locator('.drawtitle')).toContainText(`${nContours} contours`);
+  await expect(page.locator('.drawtitle')).not.toContainText('stroke');
+  // delete a letter from the grid, then Undo brings it back
+  const cell = page.locator('.cell[data-char="B"]');
+  await cell.hover();
+  await cell.locator('.celldel').click();
+  await expect(cell).toHaveClass(/empty/);
+  await page.locator('[data-testid=btn-undo]').click();
+  await expect(cell).not.toHaveClass(/empty/);
+  await expect(cell.locator('.badge')).toHaveAttribute('data-source', 'imported');
+  await page.locator('[data-testid=btn-redo]').click();
+  await expect(cell).toHaveClass(/empty/);
+});

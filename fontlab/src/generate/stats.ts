@@ -61,9 +61,17 @@ function measureGlyph(g: Glyph): Measured | null {
       const pts = c.points.filter((p): p is Vec => Array.isArray(p) && fin(p[0]) && fin(p[1]));
       if (pts.length >= 3) rings.push(pts);
     }
-    if (!rings.length) return null;
-    const bbox = bboxContours(rings.map((points) => ({ points })));
-    return { char: g.char, bbox, advance, strokes: [], outlineRings: rings, caps: [] };
+    // strokes drawn on top of an outline letter
+    const strokes: StrokePoint[][] = [];
+    for (const s of g.strokes ?? []) {
+      if (!s || !Array.isArray(s.points)) continue;
+      const pts = s.points.filter((p) => p && fin(p.x) && fin(p.y) && fin(p.w) && p.w >= 0);
+      if (pts.length) strokes.push(pts);
+    }
+    if (!rings.length && !strokes.length) return null;
+    const bc = bboxContours(rings.map((points) => ({ points })));
+    const bbox = strokes.length ? (() => { const bs = bboxStrokes(strokes.map((points) => ({ id: '', cap: 'round' as const, points }))); return rings.length ? { minX: Math.min(bc.minX, bs.minX), minY: Math.min(bc.minY, bs.minY), maxX: Math.max(bc.maxX, bs.maxX), maxY: Math.max(bc.maxY, bs.maxY) } : bs; })() : bc;
+    return { char: g.char, bbox, advance, strokes, outlineRings: rings, caps: [] };
   }
   return null;
 }

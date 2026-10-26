@@ -46,13 +46,19 @@ tabs: **Draw**, **Photo or video**, **Font file**.
    tile). **Font file** imports `.ttf`, `.otf`, `.woff` or `.woff2` and keeps
    the exact outlines by default; tick "convert to strokes" when you want
    Weight, terminals and the variable axes on it.
+   Drawing on a letter that already exists (imported, traced or generated)
+   **adds** the stroke on top of it; the imported outline stays. **Undo /
+   Redo** (Ctrl/Cmd+Z, Shift+Ctrl/Cmd+Z) cover every change to the font:
+   strokes, deleting a tile, Clear, Re-roll, Generate, imports.
 2. **Edit points.** The **Edit points** button under the canvas turns any
    letter (drawn, traced, imported or generated) into nodes and handles like a
    font editor: drag nodes or handles, drag on empty space to marquee-select,
    double-click a segment to add a point, Delete removes, arrows nudge
    (Shift for 10), Alt+drag a node changes its stroke width (or use the Point
-   width slider), Ctrl/Cmd+Z and Shift+Ctrl/Cmd+Z undo and redo. Imported
-   outlines keep their real curves.
+   width slider), Ctrl/Cmd+Z and Shift+Ctrl/Cmd+Z undo and redo (the editor
+   keeps its own history while it is open). Imported outlines keep their real
+   curves; strokes drawn on top of an outline are not editable as points
+   until you press **To strokes**.
 3. **Generate the rest of the alphabet.** FontLab measures your seeds (stroke
    width, x-height, cap height, slant, overshoot, spacing, terminals, wobble)
    and builds the missing letters from parametric recipes. Letters related to a

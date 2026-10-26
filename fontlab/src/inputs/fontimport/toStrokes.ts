@@ -130,7 +130,7 @@ export function outlineToStrokes(glyph: Glyph, opts: ToStrokesOptions = {}): Gly
   });
   if (!strokes.length) return glyph;
 
-  const out: Glyph = { ...glyph, kind: 'stroke', strokes };
+  const out: Glyph = { ...glyph, kind: 'stroke', strokes: [...(glyph.strokes ?? []), ...strokes] };
   delete out.contours;
   return out;
 }
