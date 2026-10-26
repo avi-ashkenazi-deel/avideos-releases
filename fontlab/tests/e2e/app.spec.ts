@@ -155,3 +155,30 @@ test('drawing on an imported letter adds to it; deleting a tile is undoable', as
   await page.locator('[data-testid=btn-redo]').click();
   await expect(cell).toHaveClass(/empty/);
 });
+
+test('grid: Delete key, shift-select and the right-click menu remove letters (undoable)', async ({ page }) => {
+  await pickFile(page, 'font', path.resolve('tests/fixtures/sample.woff2'));
+  await expect(page.locator('.cell[data-char="A"] .badge')).toHaveAttribute('data-source', 'imported', { timeout: 60000 });
+  const cell = (ch: string) => page.locator(`.cell[data-char="${ch}"]`);
+  // single: click + Delete
+  await cell('a').click();
+  await page.keyboard.press('Delete');
+  await expect(cell('a')).toHaveClass(/empty/);
+  await page.keyboard.press('Control+z');
+  await expect(cell('a')).not.toHaveClass(/empty/);
+  // range: shift-click b..e, Delete, one Undo restores all
+  await cell('b').click();
+  await cell('e').click({ modifiers: ['Shift'] });
+  await expect(cell('c')).toHaveClass(/multi/);
+  await page.keyboard.press('Delete');
+  for (const ch of 'bcde') await expect(cell(ch)).toHaveClass(/empty/);
+  await expect(cell('f')).not.toHaveClass(/empty/);
+  await page.keyboard.press('Control+z');
+  for (const ch of 'bcde') await expect(cell(ch)).not.toHaveClass(/empty/);
+  // right-click: remove all lowercase
+  await cell('g').click({ button: 'right' });
+  await page.locator('[data-testid=ctx-remove-lower]').click();
+  for (const ch of 'agz') await expect(cell(ch)).toHaveClass(/empty/);
+  await expect(cell('A')).not.toHaveClass(/empty/);
+  await expect(cell('5')).not.toHaveClass(/empty/);
+});

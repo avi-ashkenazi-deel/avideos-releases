@@ -186,3 +186,5 @@ details.plain summary { color: var(--muted); font-size: 12px; cursor: pointer; m
 .librow { display: grid; grid-template-columns: 1fr auto auto auto auto; gap: 8px; align-items: center; padding: 8px 10px; background: var(--panel-2); border-radius: 8px; }
 .librow.current { outline: 2px solid var(--accent); }
 .librow small { color: var(--muted); }
+.menu-list.ctxmenu { position: fixed; display: block; right: auto; top: 0; left: 0; min-width: 220px; }
+.cell.multi { outline: 2px dashed var(--accent-2); }

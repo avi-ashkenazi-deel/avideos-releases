@@ -76,3 +76,26 @@ export function menu(label: string, items: MenuItem[], opts: { icon?: IconName; 
 export function help(text: string): HTMLElement {
   return h('span', { class: 'help', title: text, 'aria-label': text, tabindex: 0 }, icon('info', 13));
 }
+
+/** Floating context menu at a screen position (right-click). Closes on click, Escape, scroll or outside click. */
+export function contextMenu(x: number, y: number, items: MenuItem[]): void {
+  document.querySelector('.ctxmenu')?.remove();
+  const list = h('div', { class: 'menu-list ctxmenu', role: 'menu', style: { left: `${x}px`, top: `${y}px` } });
+  const close = () => { list.remove(); document.removeEventListener('pointerdown', onDoc, true); document.removeEventListener('keydown', onKey, true); window.removeEventListener('scroll', close, true); };
+  const onDoc = (e: PointerEvent) => { if (!list.contains(e.target as Node)) close(); };
+  const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') close(); };
+  for (const it of items) {
+    if (it.separatorBefore) list.append(h('div', { class: 'menu-sep' }));
+    const b = h('button', { type: 'button', class: 'menu-item' + (it.danger ? ' danger' : ''), role: 'menuitem', title: it.hint, onClick: () => { close(); it.onClick(); } }, ...(it.icon ? [icon(it.icon)] : []), h('span', {}, it.label));
+    if (it.testid) b.dataset.testid = it.testid;
+    list.append(b);
+  }
+  document.body.append(list);
+  // keep it on screen
+  const r = list.getBoundingClientRect();
+  if (r.right > innerWidth) list.style.left = `${Math.max(4, innerWidth - r.width - 4)}px`;
+  if (r.bottom > innerHeight) list.style.top = `${Math.max(4, innerHeight - r.height - 4)}px`;
+  document.addEventListener('pointerdown', onDoc, true);
+  document.addEventListener('keydown', onKey, true);
+  window.addEventListener('scroll', close, true);
+}

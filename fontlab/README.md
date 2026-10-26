@@ -49,7 +49,11 @@ tabs: **Draw**, **Photo or video**, **Font file**.
    Drawing on a letter that already exists (imported, traced or generated)
    **adds** the stroke on top of it; the imported outline stays. **Undo /
    Redo** (Ctrl/Cmd+Z, Shift+Ctrl/Cmd+Z) cover every change to the font:
-   strokes, deleting a tile, Clear, Re-roll, Generate, imports.
+   strokes, deleting a tile, Clear, Re-roll, Generate, imports. In the
+   **Letters** grid, click a tile and press Delete to remove it, Shift-click
+   or Cmd/Ctrl-click to select several, and right-click a tile for Lock,
+   Re-roll and "Remove all lowercase / uppercase / digits / block" (handy
+   when an imported all-caps font fills the lowercase tiles with capitals).
 2. **Edit points.** The **Edit points** button under the canvas turns any
    letter (drawn, traced, imported or generated) into nodes and handles like a
    font editor: drag nodes or handles, drag on empty space to marquee-select,
