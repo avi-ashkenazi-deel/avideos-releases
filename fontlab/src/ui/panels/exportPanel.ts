@@ -30,7 +30,7 @@ export function headerBar(): HTMLElement {
       otfBtn, extra,
     ),
   );
-  store.subscribe((ev) => { if (ev === 'project:loaded') name.value = store.project.name; });
+  store.subscribe((ev) => { if ((ev === 'project:loaded' || ev === 'project') && name.value !== store.project.name && document.activeElement !== name) name.value = store.project.name; });
   // autosave
   let t: number | null = null;
   store.subscribe((ev) => { if (ev === 'project' || ev === 'glyph' || ev === 'dna' || ev === 'built') { if (t) clearTimeout(t); t = window.setTimeout(() => saveLocal(store.project), 800); } });

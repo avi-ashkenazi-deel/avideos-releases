@@ -17,3 +17,4 @@ declare module 'wawoff2/compress.js' {
   const compress: (buf: Uint8Array) => Promise<Uint8Array>;
   export default compress;
 }
+declare module 'wawoff2/build/decompress_binding.js?raw' { const src: string; export default src; }

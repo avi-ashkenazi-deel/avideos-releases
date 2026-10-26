@@ -12,12 +12,49 @@ export interface ImportedFont {
 
 const tag = (buf: ArrayBuffer) => String.fromCharCode(...new Uint8Array(buf, 0, 4));
 
-/** WOFF2 → TTF/OTF bytes via the woff2 WebAssembly decoder (lazy-loaded, ~1 MB). */
+/** WOFF2 → TTF/OTF bytes via Google's woff2 decoder compiled to WebAssembly (lazy, ~1 MB). */
 export async function decompressWoff2(buf: ArrayBuffer): Promise<ArrayBuffer> {
+  if (typeof Worker !== 'undefined' && typeof document !== 'undefined') return decompressInWorker(buf);
+  // Node (tests): the package's own wrapper works there
   const mod: any = await import('wawoff2/decompress.js');
   const decompress = mod.default ?? mod;
   const out: Uint8Array = await decompress(new Uint8Array(buf));
   return out.buffer.slice(out.byteOffset, out.byteOffset + out.byteLength) as ArrayBuffer;
+}
+
+let woff2WorkerUrl: string | null = null;
+
+async function decompressInWorker(buf: ArrayBuffer): Promise<ArrayBuffer> {
+  if (!woff2WorkerUrl) {
+    const { default: src } = await import('./woff2Binding');
+    const wrapper = `var module = { exports: {} }; var exports = module.exports;
+self.Module = { onRuntimeInitialized: function () { self.postMessage({ ready: true }); } };
+${src}
+self.onmessage = function (e) {
+  try {
+    var out = Module.decompress(new Uint8Array(e.data));
+    if (!out) { self.postMessage({ error: 'not a valid WOFF2 file' }); return; }
+    var copy = new Uint8Array(out);
+    self.postMessage({ result: copy.buffer }, [copy.buffer]);
+  } catch (err) { self.postMessage({ error: String(err && err.message || err) }); }
+};`;
+    woff2WorkerUrl = URL.createObjectURL(new Blob([wrapper], { type: 'text/javascript' }));
+  }
+  const worker = new Worker(woff2WorkerUrl);
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const t = setTimeout(() => reject(new Error('woff2 decoder did not start')), 30000);
+      worker.onmessage = (e) => { if (e.data?.ready) { clearTimeout(t); resolve(); } };
+      worker.onerror = (e) => { clearTimeout(t); reject(new Error(e.message || 'woff2 decoder failed to load')); };
+    });
+    return await new Promise<ArrayBuffer>((resolve, reject) => {
+      worker.onmessage = (e) => { if (e.data?.error) reject(new Error(e.data.error)); else resolve(e.data.result as ArrayBuffer); };
+      worker.onerror = (e) => reject(new Error(e.message || 'woff2 decode failed'));
+      worker.postMessage(buf.slice(0), [buf.slice(0)] as any);
+    });
+  } finally {
+    worker.terminate();
+  }
 }
 
 /** Any font file (ttf, otf, woff, woff2) → importFont. */
