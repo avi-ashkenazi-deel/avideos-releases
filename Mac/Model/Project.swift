@@ -5,6 +5,8 @@ import CoreGraphics
 /// Runtime (source states, animation clocks, selection) lives in
 /// `SceneRuntime` / `StudioController` and is never persisted here.
 struct Project: Codable, Hashable, Sendable, Identifiable {
+    var overlayTemplates: [OverlayTemplate]?
+    var liveCommentTemplate: OverlayTemplate?
     var schemaVersion: Int
     var id: UUID
     var name: String

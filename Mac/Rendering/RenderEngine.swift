@@ -37,7 +37,7 @@ final class RenderEngine {
     private(set) var droppedFrames: Int = 0
     private(set) var renderedFrames: Int = 0
 
-    init?() {
+    convenience init?() {
         guard let device = MTLCreateSystemDefaultDevice() else { return nil }
         self.init(device: device)
     }

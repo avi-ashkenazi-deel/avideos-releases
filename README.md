@@ -38,6 +38,9 @@ Two products share this repository and one XcodeGen `project.yml`:
 | Studio UI | `Mac/UI/` |
 | Unit tests (EDL, drift fit, ring buffer, alignment, Codable/manifest) | `Tests/StreamitTests/` |
 
+Start testing recording, AI editing, guests and cloud storage with the focused
+[first test session](docs/FIRST_TEST_SESSION.md).
+
 Testing: `docs/FEATURE_CHECKLIST.md` is the full 476-item feature inventory
 (with prerequisites per item and known gaps); `TESTING.md` has the shorter
 per-phase exit demos.

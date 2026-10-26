@@ -49,14 +49,14 @@ extension StudioController {
         var items: [RenderItem] = []
         if let exiting = exitingCommentCard {
             items += CommentCard.items(for: exiting.comment,
-                                       style: comments.style,
+                                       style: project.liveCommentTemplate?.commentStyle ?? comments.style,
                                        canvas: canvas,
                                        orientation: orientation,
                                        animation: .exiting(startSeconds: exiting.startSeconds))
         }
         if let card = commentCard {
             items += CommentCard.items(for: card,
-                                       style: comments.style,
+                                       style: project.liveCommentTemplate?.commentStyle ?? comments.style,
                                        canvas: canvas,
                                        orientation: orientation,
                                        animation: commentCardAnimation)

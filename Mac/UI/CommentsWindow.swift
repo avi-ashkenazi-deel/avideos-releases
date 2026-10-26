@@ -15,6 +15,7 @@ struct CommentsWindow: View {
     @State private var platformFilter: StreamPlatform?
     @State private var search = ""
     @State private var showsOptions = false
+    @State private var showsTemplates = false
 
     private var store: CommentsStore { studio.comments }
 
@@ -39,6 +40,7 @@ struct CommentsWindow: View {
         .frame(minWidth: 720, minHeight: 520)
         .toolbar {
             ToolbarItemGroup(placement: .automatic) {
+                Button("Show Templates") { showsTemplates = true }
                 SourceStatusRow(store: store)
                 Button {
                     store.toggleDemo()
@@ -57,6 +59,7 @@ struct CommentsWindow: View {
                 }
             }
         }
+        .sheet(isPresented: $showsTemplates) { OverlayTemplatesView().environment(studio) }
         .navigationTitle("Comments")
     }
 

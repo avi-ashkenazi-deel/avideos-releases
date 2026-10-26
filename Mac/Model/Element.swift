@@ -5,6 +5,9 @@ import CoreGraphics
 /// page, or an inset live source (camera / guest / screen picture-in-picture).
 struct Element: Codable, Hashable, Sendable, Identifiable {
     var id: UUID
+    var overlayInstanceID: UUID?
+    var overlayTemplate: OverlayTemplate?
+    var overlayField: String?
     var name: String
     var kind: ElementKind
     var transform: ElementTransform

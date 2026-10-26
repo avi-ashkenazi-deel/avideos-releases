@@ -421,11 +421,14 @@ private struct OverlayRow: View {
 /// The add-element row, shared by the overlays palette and the inspector.
 struct AddElementButtons: View {
     @Environment(StudioController.self) private var studio
+    @State private var showsTemplates = false
     @State private var askingForQRURL = false
     @State private var qrURLText = "https://"
 
     var body: some View {
         HStack {
+            Button { showsTemplates = true } label: { Image(systemName: "square.stack.3d.up") }
+                .help("Show Templates — editable phone and comment designs")
             Button { studio.addTextElement() } label: { Image(systemName: "textformat") }
                 .help("New Text Overlay")
             Button { studio.addTextBoxElement() } label: { Image(systemName: "character.textbox") }
@@ -451,6 +454,7 @@ struct AddElementButtons: View {
             .help("New Camera Overlay")
         }
         .buttonStyle(.borderless)
+        .sheet(isPresented: $showsTemplates) { OverlayTemplatesView().environment(studio) }
         .alert("QR Code Overlay", isPresented: $askingForQRURL) {
             TextField("https://…", text: $qrURLText)
             Button("Add") { studio.addQRCodeElement(urlString: qrURLText) }

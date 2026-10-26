@@ -34,6 +34,8 @@ struct CommentCardStyle: Codable, Hashable, Sendable {
         }
     }
 
+    var fontName: String?
+    var cornerRadius: Double?
     var position: Position = .lowerLeft
     /// Message point size at the 1080p reference (the name is ~70% of it).
     var fontSize: Double = 40

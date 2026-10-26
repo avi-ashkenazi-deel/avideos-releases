@@ -546,8 +546,27 @@ struct SettingsView: View {
 private struct GeneralSettingsView: View {
     @Environment(StudioController.self) private var studio
     @State private var workerURLText = ""
+    @State private var hostKey = ""
+    @State private var hostKeySaved = false
+    @State private var hostKeyError: String?
     @State private var claudeKey = ""
     @State private var claudeKeySaved = false
+
+    private func saveHostKey() {
+        let value = hostKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        do {
+            if value.isEmpty {
+                try KeychainStore().delete()
+            } else {
+                try KeychainStore().writeString(value)
+            }
+            hostKeySaved = !value.isEmpty
+            hostKeyError = nil
+        } catch {
+            hostKeySaved = false
+            hostKeyError = error.localizedDescription
+        }
+    }
 
     private func saveClaudeKey() {
         ClaudeAPIClient.storeAPIKey(claudeKey)
@@ -571,7 +590,20 @@ private struct GeneralSettingsView: View {
                             .help("URL saved — the Interview palette can start sessions")
                     }
                 }
-                Text("The Cloudflare Worker that hosts guest sessions and recording uploads — see infra/worker/README.md.")
+                HStack {
+                    SecureField("Worker host key", text: $hostKey)
+                        .onChange(of: hostKey) { _, _ in saveHostKey() }
+                        .onSubmit { saveHostKey() }
+                    if hostKeySaved {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                            .help("Host key saved in the Keychain; server connection not yet verified")
+                    }
+                }
+                if let hostKeyError {
+                    Text(hostKeyError).font(.caption).foregroundStyle(.red)
+                }
+                Text("Use the same HOST_KEY configured on your Worker. Stored in the Keychain. The Cloudflare Worker hosts guest sessions and recording uploads — see infra/worker/README.md.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -625,6 +657,14 @@ private struct GeneralSettingsView: View {
         .frame(width: 520)
         .onAppear {
             workerURLText = studio.workerBaseURL?.absoluteString ?? ""
+            do {
+                hostKey = try KeychainStore().readString()
+                hostKeySaved = !hostKey.isEmpty
+            } catch KeychainStore.KeychainError.notFound {
+                hostKeySaved = false
+            } catch {
+                hostKeyError = error.localizedDescription
+            }
             claudeKey = ClaudeAPIClient.storedAPIKey() ?? ""
             claudeKeySaved = !claudeKey.isEmpty
         }
