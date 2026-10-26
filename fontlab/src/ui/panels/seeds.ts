@@ -8,7 +8,7 @@ import { projectCharset, groupCharset, BLOCK_BY_ID } from '../../core/charsets';
 import { charsetPanel } from './charset';
 import { generateGlyphs, regenerateOne, dependentsOf } from '../../generate/compose';
 import { measureStats } from '../../generate/stats';
-import { importFont } from '../../inputs/fontimport';
+import { importFontFile } from '../../inputs/fontimport';
 import { outlineToStrokes, outlinesToStrokes } from '../../inputs/fontimport/toStrokes';
 import { openImageDialog } from './imageDialog';
 
@@ -178,9 +178,9 @@ export function seedsPanel(): HTMLElement {
   }, 'primary big');
 
   const convertOnImport = h('input', { type: 'checkbox', checked: true, title: 'Turn outlines into centreline strokes so Weight, terminals and variable axes work on the imported font' });
-  const fontFile = fileInput('.ttf,.otf,.woff', async (f) => {
+  const fontFile = fileInput('.ttf,.otf,.woff,.woff2', async (f) => {
     try {
-      const imp = importFont(await f.arrayBuffer(), projectCharset(store.project));
+      const imp = await importFontFile(await f.arrayBuffer(), projectCharset(store.project));
       if (convertOnImport.checked) {
         toast(`Converting ${imp.glyphs.length} glyphs to strokes…`);
         await new Promise((r) => setTimeout(r, 30));

@@ -41,12 +41,15 @@ describe('sheet: splitMask', () => {
     for (let i = 1; i < 5; i++) expect(boxes[i].x0).toBeGreaterThan(boxes[i - 1].x1);
     expect(boxes[5].y0).toBeGreaterThan(boxes[0].y1);
   });
-  it('pitch-cuts a wide run with no clean gap', () => {
-    const W = 300, H = 60, m = blank(W, H);
-    fill(m, W, 10, 10, 289, 49);               // one wide bar 280×40: 7× its height
-    for (let i = 1; i < 7; i++) fill(m, W, 10 + i * 40, 10, 10 + i * 40, 49); // same ink: no valley at all
-    const boxes = splitMask(m, W, H);
-    expect(boxes.length).toBeGreaterThanOrEqual(4); // recursion limited, but it must cut
+  it('never cuts through a solid stroke, but does cut glued letters at a shallow valley', () => {
+    const W = 300, H = 60, solid = blank(W, H);
+    fill(solid, W, 10, 10, 289, 49);                      // one solid 280×40 bar (like a very wide M)
+    expect(splitMask(solid, W, H).length).toBe(1);
+    const glued = blank(W, H);
+    for (let i = 0; i < 4; i++) fill(glued, W, 10 + i * 70, 10, 10 + i * 70 + 54, 49); // four 55-wide letters…
+    fill(glued, W, 10, 46, 10 + 3 * 70 + 54, 49);                                           // …glued by 4-px feet along the baseline
+    const boxes = splitMask(glued, W, H);
+    expect(boxes.length).toBe(4);
   });
 });
 

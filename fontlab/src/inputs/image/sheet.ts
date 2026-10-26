@@ -108,16 +108,19 @@ export function splitMask(mask: Uint8Array, W: number, H: number): PixelBox[] {
     const refined: [number, number][] = [];
     const cut = (a: number, b: number, depth: number) => {
       const wdt = b - a + 1;
-      if (wdt <= bandH * 1.6 || depth > 3) { refined.push([a, b]); return; }
+      const wide = wdt > bandH * 1.6 || (wdt > pitch * 1.6 && wdt > bandH * 1.1);
+      if (!wide || depth > 3) { refined.push([a, b]); return; }
       const k = Math.max(2, Math.round(wdt / pitch));
+      let pieceMax = 0; for (let x = a; x <= b; x++) pieceMax = Math.max(pieceMax, cp[x]);
       let bestX = -1, bestV = Infinity;
       for (let i = 1; i < k; i++) {
         const target = a + (wdt * i) / k;
-        const lo = Math.max(a + 2, Math.floor(target - wdt * 0.1)), hi = Math.min(b - 2, Math.ceil(target + wdt * 0.1));
+        const lo = Math.max(a + 2, Math.floor(target - wdt * 0.12)), hi = Math.min(b - 2, Math.ceil(target + wdt * 0.12));
         for (let x = lo; x <= hi; x++) if (cp[x] < bestV) { bestV = cp[x]; bestX = x; }
         if (bestX >= 0) break; // cut at the weakest column of the first slot, then recurse
       }
-      if (bestX < 0) { refined.push([a, b]); return; }
+      // only cut through a real valley (glued feet / serifs), never through a solid stroke (W, M)
+      if (bestX < 0 || bestV > pieceMax * 0.35) { refined.push([a, b]); return; }
       cut(a, bestX - 1, depth + 1); cut(bestX + 1, b, depth + 1);
     };
     for (const [a, b] of pieces) cut(a, b, 0);
@@ -165,10 +168,13 @@ export function segmentSheet(binIn: Uint8Array, w: number, h: number, opts: Shee
     const heights = seg.cells.map((c) => boxH(c.bbox)).sort((a, b) => a - b);
     const bodyH = median(heights.slice(0, Math.max(1, Math.ceil(heights.length * 0.7)))) || heights[0];
     const single = seg.cells.length === 1;
+    // per-line median cell width: a cell much wider than its neighbours is probably two letters
+    const lineMedW = seg.lines.map((L) => median(L.cells.map((i) => boxW(seg.cells[i].bbox))));
     const next: Component[] = [];
     for (const cell of seg.cells) {
       const bw = boxW(cell.bbox), bh = boxH(cell.bbox);
-      const oversized = single ? bw * bh > 0.4 * imgArea || bw > bh * 1.8 : bh > bodyH * 2.2 || bw > bodyH * 1.7;
+      const medW = lineMedW[cell.lineIndex] || bodyH;
+      const oversized = single ? bw * bh > 0.4 * imgArea || bw > bh * 1.8 : bh > bodyH * 2.2 || bw > bodyH * 1.7 || (seg.lines[cell.lineIndex].cells.length >= 4 && bw > medW * 1.6);
       if (!oversized) { next.push(...cell.components); continue; }
       const cm = compositeMask(cell.components, cell.bbox, 0);
       const boxes = splitMask(cm.mask, cm.width, cm.height);

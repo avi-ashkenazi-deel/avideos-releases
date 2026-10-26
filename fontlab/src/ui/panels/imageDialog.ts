@@ -1,6 +1,8 @@
 import { h, button, toast, slider } from '../dom';
 import { store } from '../state';
 import { traceImage, labelCellsDetailed, fileToImageData, type TraceResult } from '../../inputs/image';
+import { glyphToContours } from '../../outline';
+import { bboxContours } from '../../core/geometry';
 
 type ImageLike = { width: number; height: number; data: Uint8ClampedArray };
 
@@ -22,6 +24,7 @@ export function openImageDialog(file: File, onDone: () => void): void {
   let cleanupOverride: number | null = null;
   let typed = '';
   const skipped = new Set<number>();
+  const overrides = new Map<number, string>();
   let image: ImageLike | null = null;
 
   const run = async () => {
@@ -34,7 +37,7 @@ export function openImageDialog(file: File, onDone: () => void): void {
       let chosen: 'strokes' | 'outline' = wanted === 'auto' ? 'outline' : wanted;
       if (wanted === 'auto' && !res.heavy) { res = await traceImage(image, { mode: 'strokes', ...base }); chosen = 'strokes'; }
       if (!invertTouched) { invert.checked = res.inverted; }
-      skipped.clear();
+      skipped.clear(); overrides.clear();
       render(res, chosen, wanted === 'auto');
     } catch (e) { body.replaceChildren(h('p', { class: 'err' }, 'Trace failed: ' + (e as Error).message), button('Close', () => dlg.close())); }
   };
@@ -42,55 +45,63 @@ export function openImageDialog(file: File, onDone: () => void): void {
   const render = (res: TraceResult, chosen: 'strokes' | 'outline', auto: boolean) => {
     const cells = res.cells;
     const thumbs = h('div', { class: 'cells' });
-    const labelEls = new Map<number, HTMLElement>();
+    const labelEls = new Map<number, HTMLInputElement>();
     const wraps = new Map<number, HTMLElement>();
     for (const c of cells) {
-      const cv = h('canvas', { width: c.thumbnail.width, height: c.thumbnail.height, class: 'cellthumb' });
-      const ctx = cv.getContext('2d')!;
-      const id = ctx.createImageData(c.thumbnail.width, c.thumbnail.height);
-      for (let i = 0; i < c.thumbnail.mask.length; i++) { const v = c.thumbnail.mask[i] ? 255 : 0; id.data[i * 4] = v; id.data[i * 4 + 1] = v; id.data[i * 4 + 2] = v; id.data[i * 4 + 3] = 255; }
-      ctx.putImageData(id, 0, 0);
-      const lab = h('span', { class: 'celllabel' }, '·');
-      const wrap = h('div', { class: 'cellwrap', title: 'click to skip / unskip this cell', 'data-cell': c.cellIndex }, cv, lab);
-      wrap.addEventListener('click', () => { skipped.has(c.cellIndex) ? skipped.delete(c.cellIndex) : skipped.add(c.cellIndex); refresh(); });
+      const cv = h('canvas', { class: 'cellthumb' });
+      drawVectorThumb(cv, c.glyph);
+      const lab = h('input', { type: 'text', class: 'celllabel', maxlength: 2, title: 'the letter this tile becomes — type to change it', 'aria-label': 'letter for this tile' });
+      lab.addEventListener('click', (e) => e.stopPropagation());
+      lab.addEventListener('input', () => {
+        const v = [...lab.value].filter((ch) => !/\s/u.test(ch)).slice(-1)[0];
+        if (v) { overrides.set(c.cellIndex, v); skipped.delete(c.cellIndex); } else overrides.delete(c.cellIndex);
+        refresh(false);
+      });
+      const x = button('×', (e) => { e.stopPropagation(); skipped.has(c.cellIndex) ? skipped.delete(c.cellIndex) : skipped.add(c.cellIndex); overrides.delete(c.cellIndex); refresh(); }, 'icon cellx');
+      x.title = 'drop this tile (click again to restore)';
+      const wrap = h('div', { class: 'cellwrap', title: 'click the picture to drop / restore this tile; type under it to set its letter', 'data-cell': c.cellIndex }, x, cv, lab);
+      wrap.addEventListener('click', () => { skipped.has(c.cellIndex) ? skipped.delete(c.cellIndex) : skipped.add(c.cellIndex); overrides.delete(c.cellIndex); refresh(); });
       labelEls.set(c.cellIndex, lab); wraps.set(c.cellIndex, wrap);
       thumbs.append(wrap);
     }
     const text = h('input', { type: 'text', class: 'labels', placeholder: 'Type the letters in reading order, e.g. abcdefg', autocomplete: 'off', spellcheck: false, value: typed });
     const summary = h('div', { class: 'status' });
     const add = button('Add as seeds', () => {
-      const lab = labelCellsDetailed(cells, text.value, skipped);
+      const lab = labelCellsDetailed(cells, text.value, skipped, overrides);
       if (!lab.glyphs.length) { toast('Type the letters first'); return; }
       store.update((p) => { for (const g of lab.glyphs) p.glyphs[g.char] = g; }, 'project');
       dlg.close();
       onDone();
       toast(`Added ${lab.glyphs.length} traced seeds${chosen === 'outline' ? ' (outline). Use “To strokes” for Weight / variable axes.' : ''}`);
     }, 'primary');
-    const refresh = () => {
+    const refresh = (updateInputs = true) => {
       typed = text.value;
-      const lab = labelCellsDetailed(cells.map((c) => ({ ...c, glyph: { ...c.glyph } })), text.value, skipped);
+      const lab = labelCellsDetailed(cells.map((c) => ({ ...c, glyph: { ...c.glyph } })), text.value, skipped, overrides);
       const sorted = cells.slice().sort((a, b) => a.cellIndex - b.cellIndex);
       sorted.forEach((c, i) => {
         const el = labelEls.get(c.cellIndex)!, wrap = wraps.get(c.cellIndex)!;
         const isSkip = skipped.has(c.cellIndex);
-        el.textContent = isSkip ? 'skip' : (lab.assigned[i] ?? '?');
+        if (updateInputs || document.activeElement !== el) el.value = isSkip ? '' : (lab.assigned[i] ?? '');
+        el.placeholder = isSkip ? '×' : '?';
+        el.disabled = isSkip;
         wrap.classList.toggle('skipped', isSkip);
+        wrap.classList.toggle('manual', overrides.has(c.cellIndex));
         wrap.classList.toggle('unlabelled', !isSkip && lab.assigned[i] == null);
       });
       const n = lab.glyphs.length;
       const usable = cells.length - skipped.size;
       if (lab.extra > 0) {
-        summary.textContent = `${lab.extra} more letter${lab.extra === 1 ? '' : 's'} typed than cells (${usable} cells). Remove letters, or re-trace with a lower cleanup / different threshold so more letters are found.`;
+        summary.textContent = `${lab.extra} more letter${lab.extra === 1 ? '' : 's'} typed than tiles (${usable} tiles). Remove letters, or re-trace with a lower cleanup / different threshold so more letters are found.`;
         summary.classList.add('err'); add.disabled = true; add.textContent = 'Add as seeds';
       } else if (lab.missing > 0) {
-        summary.textContent = `${n} of ${usable} cells labelled; ${lab.missing} cell${lab.missing === 1 ? '' : 's'} will be ignored (or click a stray cell to skip it).`;
+        summary.textContent = `${n} of ${usable} tiles labelled; ${lab.missing} tile${lab.missing === 1 ? '' : 's'} will be ignored (click a stray tile to drop it, or type a letter under it).`;
         summary.classList.remove('err'); add.disabled = n === 0; add.textContent = `Add ${n} of ${usable}`;
       } else {
-        summary.textContent = n ? `All ${n} cells labelled.` : 'Type the letters in reading order.';
+        summary.textContent = n ? `All ${n} tiles labelled.` : 'Type the letters in reading order, or type under each tile.';
         summary.classList.remove('err'); add.disabled = n === 0; add.textContent = 'Add as seeds';
       }
     };
-    text.addEventListener('input', refresh);
+    text.addEventListener('input', () => refresh(true));
     const thr = slider('Threshold', { min: 0, max: 255, step: 1, value: thresholdOverride ?? res.threshold, onInput: (v) => { thresholdOverride = v; }, format: (v) => v.toFixed(0) });
     thr.querySelector('input')!.addEventListener('change', run);
     const cleanup = slider('Cleanup', { min: 0, max: 3, step: 1, value: cleanupOverride ?? res.info.cleanupPx, onInput: (v) => { cleanupOverride = v; }, format: (v) => v.toFixed(0) + 'px' });
@@ -147,4 +158,22 @@ function pickVideoFrame(file: File, body: HTMLElement): Promise<ImageLike> {
     }, 'primary');
     body.replaceChildren(h('p', {}, 'Pick the frame to trace:'), video, h('div', { class: 'row' }, time, label), h('div', { class: 'row' }, use));
   });
+}
+
+/** Draw a traced glyph's real outline (not the pixel mask) into a small canvas. */
+function drawVectorThumb(cv: HTMLCanvasElement, glyph: TraceResult['cells'][number]['glyph']): void {
+  const cs = glyphToContours(glyph);
+  const H = 64, dpr = window.devicePixelRatio || 1;
+  const bb = cs.length ? bboxContours(cs) : { minX: 0, minY: 0, maxX: 500, maxY: 700 };
+  const span = Math.max(bb.maxY - bb.minY, 1);
+  const s = (H - 8) / span;
+  const W = Math.max(24, Math.ceil((bb.maxX - bb.minX) * s) + 8);
+  cv.width = W * dpr; cv.height = H * dpr; cv.style.width = W + 'px'; cv.style.height = H + 'px';
+  const ctx = cv.getContext('2d')!;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = '#fff';
+  ctx.beginPath();
+  for (const c of cs) { c.points.forEach((p, i) => { const x = 4 + (p[0] - bb.minX) * s, y = H - 4 - (p[1] - bb.minY) * s; i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }); ctx.closePath(); }
+  ctx.fill('nonzero');
 }

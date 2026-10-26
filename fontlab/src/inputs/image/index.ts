@@ -83,14 +83,27 @@ const MIN_HALF_W = 6;
 const MAX_HALF_W = 120;
 
 export async function traceImage(img: ImageLike, opts: TraceOptions): Promise<TraceResult> {
-  const { width: w, height: h } = img;
+  let { width: w, height: h } = img;
   const targetCap = opts.targetCapHeight ?? 700;
-  const gray = toGray(img);
+  let gray = toGray(img);
   const threshold = opts.threshold ?? otsuThreshold(gray);
   const inverted = opts.invert === undefined || opts.invert === 'auto' ? detectLightOnDark(gray, w, h, threshold) : opts.invert;
   let bin = binarize(gray, threshold, inverted);
   bin = despeckle(bin, w, h, opts.minComponentPx ?? 12);
-  const { seg, info } = segmentSheet(bin, w, h, { cleanupPx: opts.cleanupPx ?? 'auto', split: opts.split !== false });
+  let { seg, info } = segmentSheet(bin, w, h, { cleanupPx: opts.cleanupPx ?? 'auto', split: opts.split !== false });
+  // small letters (video frames, phone photos of a page): trace at 2–3× so edges come out smooth and corners crisp
+  let up = 1;
+  if (seg.cells.length) {
+    const capNow = seg.estimates.capHeight || Math.max(...seg.cells.map((c) => boxH(c.bbox)));
+    up = Math.min(3, Math.max(1, Math.ceil(240 / Math.max(1, capNow))));
+    if (up > 1 && w * up * h * up <= 16e6) {
+      const big = upscaleGray(gray, w, h, up);
+      gray = big.gray; w = big.w; h = big.h;
+      bin = despeckle(binarize(gray, threshold, inverted), w, h, (opts.minComponentPx ?? 12) * up * up);
+      ({ seg, info } = segmentSheet(bin, w, h, { cleanupPx: opts.cleanupPx === undefined || opts.cleanupPx === 'auto' ? 'auto' : opts.cleanupPx * up, split: opts.split !== false }));
+      info = { ...info, cleanupPx: Math.round(info.cleanupPx / up) };
+    } else up = 1;
+  }
   if (seg.cells.length === 0) return { cells: [], lines: 0, estimates: { capHeight: 0, xHeight: 0 }, scale: 1, threshold, info, inverted, heavy: false, strokeRatio: 0 };
   // heaviness: thickest stroke (2 × max inscribed radius) relative to the letter height,
   // median over cells. Handwriting ≈ 0.05–0.12, bold display faces ≈ 0.18+.
@@ -135,20 +148,35 @@ export async function traceImage(img: ImageLike, opts: TraceOptions): Promise<Tr
       lineIndex: cell.lineIndex,
       glyph,
       thumbnail: thumbnailOf(cell),
-      bbox: { ...cell.bbox },
+      bbox: { x0: Math.round(cell.bbox.x0 / up), y0: Math.round(cell.bbox.y0 / up), x1: Math.round(cell.bbox.x1 / up), y1: Math.round(cell.bbox.y1 / up) },
     });
   }
   return {
     cells,
     lines: seg.lines.length,
     estimates: { capHeight: capPx * scale, xHeight: seg.estimates.xHeight * scale },
-    scale,
+    scale: scale * up, // font units per SOURCE pixel
     threshold,
     info,
     inverted,
     heavy,
     strokeRatio,
   };
+}
+
+/** Bilinear upscale of a grayscale image by an integer factor. */
+export function upscaleGray(gray: Float32Array, w: number, h: number, f: number): { gray: Float32Array; w: number; h: number } {
+  const W = w * f, H = h * f;
+  const out = new Float32Array(W * H);
+  for (let y = 0; y < H; y++) {
+    const sy = Math.min(h - 1, Math.max(0, (y + 0.5) / f - 0.5)), y0 = Math.floor(sy), y1 = Math.min(h - 1, y0 + 1), ty = sy - y0;
+    for (let x = 0; x < W; x++) {
+      const sx = Math.min(w - 1, Math.max(0, (x + 0.5) / f - 0.5)), x0 = Math.floor(sx), x1 = Math.min(w - 1, x0 + 1), tx = sx - x0;
+      const a = gray[y0 * w + x0], b = gray[y0 * w + x1], c = gray[y1 * w + x0], d = gray[y1 * w + x1];
+      out[y * W + x] = (a * (1 - tx) + b * tx) * (1 - ty) + (c * (1 - tx) + d * tx) * ty;
+    }
+  }
+  return { gray: out, w: W, h: H };
 }
 
 /**
@@ -211,7 +239,8 @@ function strokeGlyph(cm: { width: number; height: number; mask: Uint8Array }, to
 
 async function outlineGlyph(cm: { width: number; height: number; mask: Uint8Array }, toFont: (x: number, y: number) => Vec): Promise<Glyph> {
   const rgba = maskToRgba(cm.mask, cm.width, cm.height);
-  const raw = await traceOutline(rgba, { turdsize: 2 });
+  // alphamax < 1 keeps geometric corners crisp; curves still get optimised
+  const raw = await traceOutline(rgba, { turdsize: 2, alphamax: 0.6, opttolerance: 0.2 });
   const mapped: Contour[] = raw.map((c) => ({ points: c.points.map(([x, y]) => toFont(x, y)) }));
   // the y flip reverses winding; union normalises outer = CCW, holes = CW
   const contours = cleanContours(unionContours(mapped), 40, 0.6);
@@ -244,15 +273,17 @@ export interface Labelling {
  * Assign characters to traced cells in reading order, skipping whitespace in
  * `text` and any cell index in `skipped`. Reports the mismatch either way.
  */
-export function labelCellsDetailed(cells: TracedCell[], text: string, skipped: ReadonlySet<number> = new Set()): Labelling {
+export function labelCellsDetailed(cells: TracedCell[], text: string, skipped: ReadonlySet<number> = new Set(), overrides: ReadonlyMap<number, string> = new Map()): Labelling {
   const chars = Array.from(text).filter((c) => !/\s/u.test(c));
   const sorted = cells.slice().sort((a, b) => a.cellIndex - b.cellIndex);
   const glyphs: Glyph[] = [];
   const assigned: (string | null)[] = [];
   let ci = 0;
   for (const cell of sorted) {
-    if (skipped.has(cell.cellIndex) || ci >= chars.length) { assigned.push(null); continue; }
-    const ch = chars[ci++];
+    if (skipped.has(cell.cellIndex)) { assigned.push(null); continue; }
+    const over = overrides.get(cell.cellIndex);
+    if (!over && ci >= chars.length) { assigned.push(null); continue; }
+    const ch = over ?? chars[ci++];
     const g = cell.glyph;
     g.char = ch;
     g.unicode = ch.codePointAt(0) ?? 0;
@@ -260,13 +291,13 @@ export function labelCellsDetailed(cells: TracedCell[], text: string, skipped: R
     glyphs.push(g);
     assigned.push(ch);
   }
-  const usable = sorted.filter((c) => !skipped.has(c.cellIndex)).length;
+  const usable = sorted.filter((c) => !skipped.has(c.cellIndex) && !overrides.has(c.cellIndex)).length;
   return { glyphs, assigned, missing: Math.max(0, usable - chars.length), extra: Math.max(0, chars.length - usable) };
 }
 
 /** Back-compat: just the labelled glyphs. */
-export function labelCells(cells: TracedCell[], text: string, skipped?: ReadonlySet<number>): Glyph[] {
-  return labelCellsDetailed(cells, text, skipped).glyphs;
+export function labelCells(cells: TracedCell[], text: string, skipped?: ReadonlySet<number>, overrides?: ReadonlyMap<number, string>): Glyph[] {
+  return labelCellsDetailed(cells, text, skipped, overrides).glyphs;
 }
 
 /** Browser only: decode an image Blob/File into an RGBA buffer. */

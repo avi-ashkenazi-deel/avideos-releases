@@ -10,8 +10,25 @@ export interface ImportedFont {
   familyName: string;
 }
 
-/** Parse a TTF/OTF ArrayBuffer and extract CHARSET glyphs as outline glyphs at 1000 upm. */
+const tag = (buf: ArrayBuffer) => String.fromCharCode(...new Uint8Array(buf, 0, 4));
+
+/** WOFF2 → TTF/OTF bytes via the woff2 WebAssembly decoder (lazy-loaded, ~1 MB). */
+export async function decompressWoff2(buf: ArrayBuffer): Promise<ArrayBuffer> {
+  const mod: any = await import('wawoff2/decompress.js');
+  const decompress = mod.default ?? mod;
+  const out: Uint8Array = await decompress(new Uint8Array(buf));
+  return out.buffer.slice(out.byteOffset, out.byteOffset + out.byteLength) as ArrayBuffer;
+}
+
+/** Any font file (ttf, otf, woff, woff2) → importFont. */
+export async function importFontFile(buf: ArrayBuffer, chars: string | string[] = CHARSET): Promise<ImportedFont> {
+  if (tag(buf) === 'wOF2') buf = await decompressWoff2(buf);
+  return importFont(buf, chars);
+}
+
+/** Parse a TTF/OTF/WOFF ArrayBuffer and extract glyphs as outline glyphs at 1000 upm. */
 export function importFont(buf: ArrayBuffer, chars: string | string[] = CHARSET): ImportedFont {
+  if (tag(buf) === 'wOF2') throw new Error('WOFF2 needs importFontFile (async decoder)');
   const font = parse(buf);
   const upm: number = font.unitsPerEm || 1000;
   const k = 1000 / upm;
@@ -38,7 +55,9 @@ export function importFont(buf: ArrayBuffer, chars: string | string[] = CHARSET)
   };
   if (os2.sxHeight) metrics.xHeight = Math.round(os2.sxHeight * k);
   if (os2.sCapHeight) metrics.capHeight = Math.round(os2.sCapHeight * k);
-  const family = font.names?.fontFamily?.en ?? font.names?.fullName?.en ?? 'Imported';
+  const names = font.names?.unicode ?? font.names?.windows ?? font.names?.macintosh ?? font.names ?? {};
+  const pick = (rec: any) => (rec && typeof rec === 'object' ? (rec.en ?? Object.values(rec)[0]) : undefined);
+  const family = pick(names.fontFamily) ?? pick(names.fullName) ?? pick(font.names?.fontFamily) ?? 'Imported';
   return { glyphs, metrics, familyName: family };
 }
 

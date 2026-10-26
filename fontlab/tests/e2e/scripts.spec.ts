@@ -79,17 +79,26 @@ test('dense specimen sheet: frame removed, letters split, labels previewed, mism
   await expect(page.locator('.modal p').first()).toContainText('32 letter cells on 4 lines');
   const labels = page.locator('.modal .labels');
   await labels.fill('abcdefghijklmnopqrstuvwxyz0123');
-  await expect(page.locator('.modal .cellwrap').first().locator('.celllabel')).toHaveText('a');
+  await expect(page.locator('.modal .cellwrap').first().locator('.celllabel')).toHaveValue('a');
   await expect(page.getByRole('button', { name: 'Add 30 of 32' })).toBeEnabled();
   await labels.fill('abcdefghijklmnopqrstuvwxyz01234567');
   await expect(page.getByRole('button', { name: 'Add as seeds' })).toBeDisabled();
-  await expect(page.locator('.modal .status')).toContainText('2 more letters typed than cells');
+  await expect(page.locator('.modal .status')).toContainText('2 more letters typed than tiles');
   // skip the first cell → labels shift
   await labels.fill('abcdefghijklmnopqrstuvwxyz01234');
   await page.locator('.modal .cellwrap').first().click();
   await expect(page.locator('.modal .cellwrap').first()).toHaveClass(/skipped/);
-  await expect(page.locator('.modal .cellwrap').nth(1).locator('.celllabel')).toHaveText('a');
+  await expect(page.locator('.modal .cellwrap').nth(1).locator('.celllabel')).toHaveValue('a');
   await page.getByRole('button', { name: 'Add as seeds' }).click();
   await expect(page.locator('.cell[data-char="a"] .badge')).toHaveText('📷');
   await expect(page.locator('.cell[data-char="4"] .badge')).toHaveText('📷');
+});
+
+test('remix a .woff2 font (decoded in the browser)', async ({ page }) => {
+  const chooser = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: /Remix an existing font/ }).click();
+  await (await chooser).setFiles(path.resolve('tests/fixtures/sample.woff2'));
+  await expect(page.locator('.cell[data-char="A"] .badge')).toHaveText('⬇', { timeout: 60000 });
+  await expect(page.locator('.cell[data-char="z"] .badge')).toHaveText('⬇');
+  await expect(page.locator('.fontname')).toHaveValue(/Sample Funk/);
 });

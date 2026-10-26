@@ -27,7 +27,11 @@ deploys `dist/` on every push to the branch.
 1. **Seed it.** Pick a letter in the strip and draw it. Pressure and speed change
    the stroke width; the brush panel has width, smoothing, cap style and a mirror
    mode. Good seeds: `o n a e s H` — round, arch, bowl, cross-stroke, S-curve,
-   straight. Or click **Trace a photo of handwriting** / **Remix an existing font**.
+   straight. Or click **Trace a photo / video frame** (handwriting, a type
+   specimen, a frame from an mp4: light-on-dark is detected, frames and halos
+   are removed, glued letters are split, bold faces are traced as exact
+   outlines; type the letters in order or under each tile) or
+   **Remix an existing font**.
 2. **Generate the rest of the alphabet.** FontLab measures your seeds (stroke
    width, x-height, cap height, slant, overshoot, spacing, terminals, wobble)
    and builds the missing letters from parametric recipes. Letters related to a
@@ -56,7 +60,7 @@ deploys `dist/` on every push to the branch.
    the uppercase, so one drawn `o` flows into ö, ő, ø, о and more. The
    "Add any characters" box accepts anything else (★, kana, Arabic…) for you
    to draw by hand. Right-to-left lines render correctly in the preview.
-   **Remix an existing font** converts its outlines to centreline strokes by
+   **Remix an existing font** (.ttf, .otf, .woff, .woff2) converts its outlines to centreline strokes by
    default (thinning + distance transform), so Weight, terminals and the
    variable axes work on any font you import; there is also a per-glyph
    "To strokes" button and an "All outlines → strokes" action.

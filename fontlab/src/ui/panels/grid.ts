@@ -3,6 +3,7 @@ import { store } from '../state';
 import { projectCharset, groupCharset, BLOCK_BY_ID } from '../../core/charsets';
 import { renderThumb } from '../render';
 import { hasInk } from './seeds';
+import { scheduleBuild } from '../buildClient';
 
 const SOURCE_COLOR: Record<string, string> = { drawn: '#ffd166', traced: '#06d6a0', imported: '#8ecae6', generated: '#e0e0e0' };
 
@@ -16,7 +17,9 @@ export function gridPanel(onSelect: (ch: string) => void): HTMLElement {
     if (c) return c;
     const canvas = h('canvas', { class: 'thumb' });
     const badge = h('span', { class: 'badge' });
-    const root = h('button', { type: 'button', class: 'cell' + (rtl ? ' rtl' : ''), 'data-char': ch, onClick: () => onSelect(ch), title: `Edit “${ch}”` }, canvas, h('span', { class: 'ch' }, ch), badge);
+    const del = h('span', { class: 'celldel', title: `Remove “${ch}” (it can be regenerated)`, role: 'button', tabindex: 0 }, '×');
+    del.addEventListener('click', (e) => { e.stopPropagation(); store.update((p) => { delete p.glyphs[ch]; }, 'glyph'); scheduleBuild(0); });
+    const root = h('button', { type: 'button', class: 'cell' + (rtl ? ' rtl' : ''), 'data-char': ch, onClick: () => onSelect(ch), title: `Edit “${ch}”` }, canvas, h('span', { class: 'ch' }, ch), badge, del);
     c = { root, canvas, badge };
     cells.set(ch, c);
     return c;
