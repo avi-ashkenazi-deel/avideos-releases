@@ -74,6 +74,9 @@ export function segmentGlyphCells(components: Component[], _imgW: number, _imgH:
       if (hov < Math.max(1, minW * 0.4)) continue;
       const vgap = Math.max(A.y0, B.y0) - Math.min(A.y1, B.y1) - 1; // negative when overlapping
       if (vgap > vGapMax) continue;
+      // stacked but not overlapping: only join when one part is small (dot, accent, bar of = or :),
+      // never two full-size letters from consecutive rows
+      if (vgap >= 0 && Math.min(boxH(A), boxH(B)) > bodyH * 0.5) continue;
       // when boxes overlap vertically but are both "big", require real horizontal containment
       // so neighbouring cursive letters with grazing bboxes do not fuse
       const bothBig = boxH(A) > bodyH * 0.5 && boxH(B) > bodyH * 0.5;
@@ -99,25 +102,34 @@ export function segmentGlyphCells(components: Component[], _imgW: number, _imgH:
     cells.push({ bbox, components: comps, lineIndex: 0, order: 0 });
   }
 
-  // cluster into lines by vertical overlap
+  // cluster into lines: a cell joins the line whose robust band (median top/bottom
+  // of its members) contains the cell's centre, so one tall cell (Q tail, accent)
+  // cannot swallow the next row
   const byY = cells.map((_, i) => i).sort((a, b) => (cells[a].bbox.y0 + cells[a].bbox.y1) - (cells[b].bbox.y0 + cells[b].bbox.y1));
-  const lines: { top: number; bottom: number; cells: number[] }[] = [];
+  const lines: { top: number; bottom: number; cells: number[]; tops: number[]; bottoms: number[] }[] = [];
   for (const ci of byY) {
     const b = cells[ci].bbox;
+    const cy = (b.y0 + b.y1) / 2;
     const ch = boxH(b);
-    let best = -1, bestOv = 0;
+    let best = -1, bestD = Infinity;
     for (let li = 0; li < lines.length; li++) {
       const L = lines[li];
+      const lh = L.bottom - L.top + 1;
+      const lcy = (L.top + L.bottom) / 2;
+      const inside = cy >= L.top - lh * 0.15 && cy <= L.bottom + lh * 0.15;
       const ov = overlap1D(b.y0, b.y1, L.top, L.bottom);
-      const need = 0.4 * Math.min(ch, L.bottom - L.top + 1);
-      if (ov >= need && ov > bestOv) { best = li; bestOv = ov; }
+      const d = Math.abs(cy - lcy);
+      if ((inside || ov >= 0.6 * Math.min(ch, lh)) && d < bestD) { best = li; bestD = d; }
     }
-    if (best < 0) lines.push({ top: b.y0, bottom: b.y1, cells: [ci] });
+    if (best < 0) lines.push({ top: b.y0, bottom: b.y1, cells: [ci], tops: [b.y0], bottoms: [b.y1] });
     else {
       const L = lines[best];
-      L.top = Math.min(L.top, b.y0); L.bottom = Math.max(L.bottom, b.y1); L.cells.push(ci);
+      L.cells.push(ci); L.tops.push(b.y0); L.bottoms.push(b.y1);
+      L.top = median(L.tops); L.bottom = median(L.bottoms);
     }
   }
+  // final extents = full union (for metrics), order by band
+  for (const L of lines) { L.top = Math.min(...L.tops); L.bottom = Math.max(...L.bottoms); }
   lines.sort((a, b) => a.top - b.top);
 
   const infos: LineInfo[] = [];

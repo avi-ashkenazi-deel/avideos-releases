@@ -69,3 +69,27 @@ test('custom characters can be added, drawn and exported', async ({ page }) => {
   expect(g.index).toBeGreaterThan(0);
   expect(g.name).toBe('uni2605');
 });
+
+test('dense specimen sheet: frame removed, letters split, labels previewed, mismatch blocked', async ({ page }) => {
+  const fixture = path.resolve('tests/fixtures/sheet.png');
+  const chooser = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: /Trace a photo/ }).click();
+  await (await chooser).setFiles(fixture);
+  await expect(page.locator('.modal .cellwrap')).toHaveCount(32, { timeout: 60000 });
+  await expect(page.locator('.modal p').first()).toContainText('32 letter cells on 4 lines');
+  const labels = page.locator('.modal .labels');
+  await labels.fill('abcdefghijklmnopqrstuvwxyz0123');
+  await expect(page.locator('.modal .cellwrap').first().locator('.celllabel')).toHaveText('a');
+  await expect(page.getByRole('button', { name: 'Add 30 of 32' })).toBeEnabled();
+  await labels.fill('abcdefghijklmnopqrstuvwxyz01234567');
+  await expect(page.getByRole('button', { name: 'Add as seeds' })).toBeDisabled();
+  await expect(page.locator('.modal .status')).toContainText('2 more letters typed than cells');
+  // skip the first cell → labels shift
+  await labels.fill('abcdefghijklmnopqrstuvwxyz01234');
+  await page.locator('.modal .cellwrap').first().click();
+  await expect(page.locator('.modal .cellwrap').first()).toHaveClass(/skipped/);
+  await expect(page.locator('.modal .cellwrap').nth(1).locator('.celllabel')).toHaveText('a');
+  await page.getByRole('button', { name: 'Add as seeds' }).click();
+  await expect(page.locator('.cell[data-char="a"] .badge')).toHaveText('📷');
+  await expect(page.locator('.cell[data-char="4"] .badge')).toHaveText('📷');
+});

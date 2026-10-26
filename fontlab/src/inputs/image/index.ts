@@ -15,10 +15,11 @@ import { bboxContours, bboxStrokes, clamp, simplifyRDP, smoothResample } from '.
 import { cleanContours } from '../../outline/fitCurves';
 import { unionContours } from '../../outline/union';
 import {
-  binarize, boxH, compositeMask, connectedComponents, despeckle, maskToRgba, otsuThreshold, toGray,
+  binarize, boxH, compositeMask, despeckle, maskToRgba, otsuThreshold, toGray,
   type ImageLike,
 } from './raster';
-import { segmentGlyphCells, type Cell } from './segment';
+import { type Cell } from './segment';
+import { segmentSheet, type SheetInfo } from './sheet';
 import { distanceTransform, sampleField, skeletonToPolylines, zhangSuen } from './thin';
 import { traceOutline } from './potrace';
 
@@ -26,6 +27,8 @@ export type { ImageLike, Component, PixelBox } from './raster';
 export type { Cell, LineInfo, Segmentation } from './segment';
 export { toGray, otsuThreshold, binarize, despeckle, connectedComponents } from './raster';
 export { segmentGlyphCells } from './segment';
+export { segmentSheet, splitMask, removeFrame, opening } from './sheet';
+export type { SheetInfo, SheetOptions } from './sheet';
 export { zhangSuen, skeletonToPolylines, distanceTransform } from './thin';
 export { traceOutline, parsePotraceSvg, parsePathD } from './potrace';
 
@@ -39,6 +42,10 @@ export interface TraceOptions {
   minComponentPx?: number;
   /** font units the estimated cap height maps to (default 700) */
   targetCapHeight?: number;
+  /** opening radius for halo / mesh removal; 'auto' (default) picks 0–2 px */
+  cleanupPx?: number | 'auto';
+  /** split blobs that contain several letters (default true) */
+  split?: boolean;
 }
 
 export interface TracedCell {
@@ -59,6 +66,7 @@ export interface TraceResult {
   /** image px -> font units factor used */
   scale: number;
   threshold: number;
+  info: SheetInfo;
 }
 
 const SIDEBEARING = 60;
@@ -72,9 +80,8 @@ export async function traceImage(img: ImageLike, opts: TraceOptions): Promise<Tr
   const threshold = opts.threshold ?? otsuThreshold(gray);
   let bin = binarize(gray, threshold, opts.invert ?? false);
   bin = despeckle(bin, w, h, opts.minComponentPx ?? 12);
-  const comps = connectedComponents(bin, w, h);
-  const seg = segmentGlyphCells(comps, w, h);
-  if (seg.cells.length === 0) return { cells: [], lines: 0, estimates: { capHeight: 0, xHeight: 0 }, scale: 1, threshold };
+  const { seg, info } = segmentSheet(bin, w, h, { cleanupPx: opts.cleanupPx ?? 'auto', split: opts.split !== false });
+  if (seg.cells.length === 0) return { cells: [], lines: 0, estimates: { capHeight: 0, xHeight: 0 }, scale: 1, threshold, info };
 
   let capPx = seg.estimates.capHeight;
   if (!(capPx > 0)) capPx = Math.max(...seg.cells.map((c) => boxH(c.bbox)));
@@ -111,6 +118,7 @@ export async function traceImage(img: ImageLike, opts: TraceOptions): Promise<Tr
     estimates: { capHeight: capPx * scale, xHeight: seg.estimates.xHeight * scale },
     scale,
     threshold,
+    info,
   };
 }
 
@@ -160,22 +168,43 @@ function inkWidth(g: Glyph): number {
   return 0;
 }
 
+export interface Labelling {
+  glyphs: Glyph[];
+  /** per cell (by cellIndex order): the char it receives, or null */
+  assigned: (string | null)[];
+  /** cells left without a letter */
+  missing: number;
+  /** typed letters with no cell */
+  extra: number;
+}
+
 /**
  * Assign characters to traced cells in reading order, skipping whitespace in
- * `text`. Returns the labelled glyphs (cells beyond the text stay unlabelled).
+ * `text` and any cell index in `skipped`. Reports the mismatch either way.
  */
-export function labelCells(cells: TracedCell[], text: string): Glyph[] {
+export function labelCellsDetailed(cells: TracedCell[], text: string, skipped: ReadonlySet<number> = new Set()): Labelling {
   const chars = Array.from(text).filter((c) => !/\s/u.test(c));
   const sorted = cells.slice().sort((a, b) => a.cellIndex - b.cellIndex);
-  const out: Glyph[] = [];
-  for (let i = 0; i < sorted.length && i < chars.length; i++) {
-    const g = sorted[i].glyph;
-    g.char = chars[i];
-    g.unicode = chars[i].codePointAt(0) ?? 0;
+  const glyphs: Glyph[] = [];
+  const assigned: (string | null)[] = [];
+  let ci = 0;
+  for (const cell of sorted) {
+    if (skipped.has(cell.cellIndex) || ci >= chars.length) { assigned.push(null); continue; }
+    const ch = chars[ci++];
+    const g = cell.glyph;
+    g.char = ch;
+    g.unicode = ch.codePointAt(0) ?? 0;
     g.advance = Math.round(inkWidth(g) + 2 * SIDEBEARING);
-    out.push(g);
+    glyphs.push(g);
+    assigned.push(ch);
   }
-  return out;
+  const usable = sorted.filter((c) => !skipped.has(c.cellIndex)).length;
+  return { glyphs, assigned, missing: Math.max(0, usable - chars.length), extra: Math.max(0, chars.length - usable) };
+}
+
+/** Back-compat: just the labelled glyphs. */
+export function labelCells(cells: TracedCell[], text: string, skipped?: ReadonlySet<number>): Glyph[] {
+  return labelCellsDetailed(cells, text, skipped).glyphs;
 }
 
 /** Browser only: decode an image Blob/File into an RGBA buffer. */
