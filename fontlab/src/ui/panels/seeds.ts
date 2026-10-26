@@ -196,7 +196,7 @@ export function seedsPanel(): HTMLElement {
       toast(`Imported ${imp.glyphs.length} glyphs from ${imp.familyName}`);
     } catch (e) { toast('Could not read that font: ' + (e as Error).message); }
   });
-  const imgFile = fileInput('image/*', (f) => openImageDialog(f, () => { refreshStatsFromSeeds(); scheduleBuild(0); }));
+  const imgFile = fileInput('image/*,video/*', (f) => openImageDialog(f, () => { refreshStatsFromSeeds(); scheduleBuild(0); }));
 
   const csPanel = charsetPanel(() => { renderStrip(); syncEditor(); scheduleBuild(0); });
   const panel = h('section', { class: 'panel seeds' },
@@ -208,7 +208,7 @@ export function seedsPanel(): HTMLElement {
       advRow),
     h('div', { class: 'gen' }, mutationRow, genBtn),
     h('div', { class: 'row sources' },
-      button('📷 Trace a photo of handwriting', () => imgFile.click()),
+      button('📷 Trace a photo / video frame', () => imgFile.click()),
       button('⬇ Remix an existing font', () => fontFile.click()),
       h('label', { class: 'toggle', title: convertOnImport.title }, convertOnImport, ' as strokes'),
       button('〰 All outlines → strokes', () => {

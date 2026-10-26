@@ -7,13 +7,14 @@ import { writeFileSync } from 'node:fs';
 
 const W = 1000, H = 560, ROWS = 4, COLS = 8;
 const out = process.argv[2] ?? 'tests/fixtures/sheet.png';
+const dark = process.argv.includes('--dark'); // light letters on black, no frame/mesh (video-frame style)
 const ink = new Uint8Array(W * H); // 1 = dark
 
 const rect = (x0, y0, x1, y1) => { for (let y = Math.max(0, y0); y <= Math.min(H - 1, y1); y++) for (let x = Math.max(0, x0); x <= Math.min(W - 1, x1); x++) ink[y * W + x] = 1; };
 const hollow = (x0, y0, x1, y1, t) => { rect(x0, y0, x1, y0 + t - 1); rect(x0, y1 - t + 1, x1, y1); rect(x0, y0, x0 + t - 1, y1); rect(x1 - t + 1, y0, x1, y1); };
 
 // frame
-hollow(0, 0, W - 1, H - 1, 6);
+if (!dark) hollow(0, 0, W - 1, H - 1, 6);
 
 // grid of cells
 const marginX = 40, marginY = 40, cellW = (W - 2 * marginX) / COLS, cellH = (H - 2 * marginY) / ROWS;
@@ -24,7 +25,7 @@ for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++, k++) {
   const x0 = Math.round(marginX + c * cellW), y0 = Math.round(marginY + r * cellH);
   const x1 = Math.round(marginX + (c + 1) * cellW) - 1, y1 = Math.round(marginY + (r + 1) * cellH) - 1;
   // 1-px halo mesh around every cell, touching the neighbours and the frame
-  hollow(x0, y0, x1, y1, 1);
+  if (!dark) hollow(x0, y0, x1, y1, 1);
   // letter body inside, leaving ≥ 10 px of paper to the halo
   const lx0 = x0 + 14, ly0 = y0 + 14, lx1 = x1 - 14, ly1 = y1 - 14;
   const cx = (lx0 + lx1) >> 1;
@@ -40,8 +41,8 @@ for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++, k++) {
   }
 }
 
-const rgba = new Uint8Array(W * H * 4).fill(255);
-for (let i = 0; i < W * H; i++) if (ink[i]) { rgba[i * 4] = rgba[i * 4 + 1] = rgba[i * 4 + 2] = 15; }
+const rgba = new Uint8Array(W * H * 4).fill(dark ? 10 : 255);
+for (let i = 0; i < W * H; i++) { if (ink[i]) { const v = dark ? 245 : 15; rgba[i * 4] = rgba[i * 4 + 1] = rgba[i * 4 + 2] = v; } rgba[i * 4 + 3] = 255; }
 
 // --- PNG encoder ---
 const crcTable = new Int32Array(256);

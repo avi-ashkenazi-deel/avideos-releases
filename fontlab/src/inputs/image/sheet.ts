@@ -153,11 +153,8 @@ export function segmentSheet(binIn: Uint8Array, w: number, h: number, opts: Shee
   const giant = comps.some((c) => boxW(c.bbox) * boxH(c.bbox) > 0.4 * imgArea);
   let cleanupPx = 0;
   if (opts.cleanupPx === 'auto' || opts.cleanupPx === undefined) {
-    if (giant) cleanupPx = h >= 600 ? 2 : 1;
-    else {
-      const bodyH = median(comps.map((c) => boxH(c.bbox)).filter((v) => v > 2));
-      cleanupPx = h < 300 ? 0 : Math.max(0, Math.min(2, Math.round(bodyH * 0.02)));
-    }
+    // only clean when letters are glued into one blob (halo mesh); clean scans keep their sharp corners
+    cleanupPx = giant ? (h >= 600 ? 2 : 1) : 0;
   } else cleanupPx = Math.max(0, Math.min(3, Math.round(opts.cleanupPx)));
   if (cleanupPx > 0) { bin = opening(bin, w, h, cleanupPx); comps = connectedComponents(bin, w, h); }
   if (comps.length === 0) return { seg: { cells: [], lines: [], estimates: { capHeight: 0, xHeight: 0 } }, info: { framesRemoved, splits: 0, cleanupPx }, bin };

@@ -2,39 +2,44 @@ import { h, button, toast, slider } from '../dom';
 import { store } from '../state';
 import { traceImage, labelCellsDetailed, fileToImageData, type TraceResult } from '../../inputs/image';
 
-/** Modal: trace an uploaded photo, let the user label the cells in reading order, add as seeds. */
+type ImageLike = { width: number; height: number; data: Uint8ClampedArray };
+
+/** Modal: trace an uploaded photo (or a video frame), label the cells in reading order, add as seeds. */
 export function openImageDialog(file: File, onDone: () => void): void {
   const dlg = h('dialog', { class: 'modal' });
-  const body = h('div', { class: 'modal-body' }, h('p', {}, 'Tracing… (thresholding, cleaning, splitting, fitting strokes)'));
+  const body = h('div', { class: 'modal-body' }, h('p', {}, 'Loading…'));
   dlg.append(h('h2', {}, '📷 Handwriting → seeds'), body);
   document.body.append(dlg);
   dlg.showModal();
   dlg.addEventListener('close', () => dlg.remove());
 
-  const mode = h('select', {}, h('option', { value: 'strokes' }, 'strokes (centreline, effect-friendly)'), h('option', { value: 'outline' }, 'outline (exact shapes)'));
+  const mode = h('select', {}, h('option', { value: 'auto' }, 'auto (outline for heavy letters)'), h('option', { value: 'strokes' }, 'strokes (centreline, effect-friendly)'), h('option', { value: 'outline' }, 'outline (exact shapes)'));
   const invert = h('input', { type: 'checkbox' });
+  const invertAuto = h('span', { class: 'muted' }, ' (auto)');
+  let invertTouched = false;
   const split = h('input', { type: 'checkbox', checked: true });
   let thresholdOverride: number | null = null;
   let cleanupOverride: number | null = null;
-  let imgPromise: Promise<{ width: number; height: number; data: Uint8ClampedArray }> | null = null;
   let typed = '';
   const skipped = new Set<number>();
+  let image: ImageLike | null = null;
 
   const run = async () => {
-    body.replaceChildren(h('p', {}, 'Tracing…'));
+    if (!image) return;
+    body.replaceChildren(h('p', {}, 'Tracing… (thresholding, cleaning, splitting, fitting)'));
     try {
-      imgPromise ??= fileToImageData(file);
-      const img = await imgPromise;
-      const res = await traceImage(img, {
-        mode: mode.value as 'strokes' | 'outline', invert: invert.checked,
-        threshold: thresholdOverride ?? undefined, cleanupPx: cleanupOverride ?? 'auto', split: split.checked,
-      });
+      const wanted = mode.value as 'auto' | 'strokes' | 'outline';
+      const base = { invert: invertTouched ? invert.checked : ('auto' as const), threshold: thresholdOverride ?? undefined, cleanupPx: cleanupOverride ?? ('auto' as const), split: split.checked };
+      let res = await traceImage(image, { mode: wanted === 'auto' ? 'outline' : wanted, ...base });
+      let chosen: 'strokes' | 'outline' = wanted === 'auto' ? 'outline' : wanted;
+      if (wanted === 'auto' && !res.heavy) { res = await traceImage(image, { mode: 'strokes', ...base }); chosen = 'strokes'; }
+      if (!invertTouched) { invert.checked = res.inverted; }
       skipped.clear();
-      render(res);
+      render(res, chosen, wanted === 'auto');
     } catch (e) { body.replaceChildren(h('p', { class: 'err' }, 'Trace failed: ' + (e as Error).message), button('Close', () => dlg.close())); }
   };
 
-  const render = (res: TraceResult) => {
+  const render = (res: TraceResult, chosen: 'strokes' | 'outline', auto: boolean) => {
     const cells = res.cells;
     const thumbs = h('div', { class: 'cells' });
     const labelEls = new Map<number, HTMLElement>();
@@ -59,7 +64,7 @@ export function openImageDialog(file: File, onDone: () => void): void {
       store.update((p) => { for (const g of lab.glyphs) p.glyphs[g.char] = g; }, 'project');
       dlg.close();
       onDone();
-      toast(`Added ${lab.glyphs.length} traced seeds`);
+      toast(`Added ${lab.glyphs.length} traced seeds${chosen === 'outline' ? ' (outline). Use “To strokes” for Weight / variable axes.' : ''}`);
     }, 'primary');
     const refresh = () => {
       typed = text.value;
@@ -91,21 +96,55 @@ export function openImageDialog(file: File, onDone: () => void): void {
     const cleanup = slider('Cleanup', { min: 0, max: 3, step: 1, value: cleanupOverride ?? res.info.cleanupPx, onInput: (v) => { cleanupOverride = v; }, format: (v) => v.toFixed(0) + 'px' });
     cleanup.querySelector('input')!.addEventListener('change', run);
     const infoBits: string[] = [];
+    if (res.inverted) infoBits.push('light ink on dark');
     if (res.info.framesRemoved) infoBits.push(`removed ${res.info.framesRemoved} frame${res.info.framesRemoved === 1 ? '' : 's'}`);
     if (res.info.splits) infoBits.push(`split ${res.info.splits} block${res.info.splits === 1 ? '' : 's'} into letters`);
-    infoBits.push(`cleanup ${res.info.cleanupPx} px`, `threshold ${res.threshold}`);
+    infoBits.push(`cleanup ${res.info.cleanupPx} px`, `threshold ${res.threshold}`, `mode ${chosen}${auto ? ' (auto)' : ''}`);
+    invertAuto.textContent = invertTouched ? '' : ' (auto)';
     body.replaceChildren(
       h('p', {}, `Found ${cells.length} letter cell${cells.length === 1 ? '' : 's'} on ${res.lines} line${res.lines === 1 ? '' : 's'}. `, h('small', { class: 'muted' }, infoBits.join(' · '))),
+      ...(auto && res.heavy ? [h('p', { class: 'muted' }, 'Heavy letters: traced as exact outlines so nothing goes wavy. After adding, “To strokes” converts them if you want Weight or variable axes.')] : []),
       ...(cells.length <= 1 ? [h('p', { class: 'err' }, 'Only one cell: the letters are probably touching or the image has a frame. Try a higher Cleanup, a different Threshold, or an image with gaps between letters.')] : []),
       thumbs, text, summary,
-      h('div', { class: 'row' }, h('label', {}, 'Mode ', mode), h('label', {}, invert, ' Light ink on dark'), h('label', {}, split, ' Split merged letters'), thr, cleanup),
+      h('div', { class: 'row' }, h('label', {}, 'Mode ', mode), h('label', {}, invert, ' Light ink on dark', invertAuto), h('label', {}, split, ' Split merged letters'), thr, cleanup),
       h('div', { class: 'row' }, button('Re-trace', run), add, button('Cancel', () => dlg.close())),
     );
     refresh();
     text.focus();
   };
   mode.addEventListener('change', run);
-  invert.addEventListener('change', run);
+  invert.addEventListener('change', () => { invertTouched = true; run(); });
   split.addEventListener('change', run);
-  run();
+
+  const start = async () => {
+    try {
+      if (file.type.startsWith('video/')) image = await pickVideoFrame(file, body);
+      else image = await fileToImageData(file);
+      await run();
+    } catch (e) { body.replaceChildren(h('p', { class: 'err' }, 'Could not read that file: ' + (e as Error).message), button('Close', () => dlg.close())); }
+  };
+  start();
+}
+
+/** Scrub a video and pick one frame as the image to trace. */
+function pickVideoFrame(file: File, body: HTMLElement): Promise<ImageLike> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const video = h('video', { src: url, muted: true, playsInline: true, preload: 'auto', style: { maxWidth: '100%', maxHeight: '40vh', background: '#000', borderRadius: '8px', display: 'block' } });
+    const time = h('input', { type: 'range', min: 0, max: 1, step: 0.01, value: 0, style: { width: '100%' } });
+    const label = h('span', { class: 'muted' }, '0.00 s');
+    time.addEventListener('input', () => { video.currentTime = parseFloat(time.value); label.textContent = `${parseFloat(time.value).toFixed(2)} s`; });
+    video.addEventListener('loadedmetadata', () => { time.max = String(video.duration || 1); video.currentTime = Math.min(0.5, (video.duration || 1) / 2); });
+    video.addEventListener('error', () => reject(new Error('the browser could not decode this video')));
+    const use = button('Use this frame', () => {
+      const c = document.createElement('canvas');
+      c.width = video.videoWidth; c.height = video.videoHeight;
+      const ctx = c.getContext('2d')!;
+      ctx.drawImage(video, 0, 0);
+      const id = ctx.getImageData(0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      resolve({ width: c.width, height: c.height, data: id.data });
+    }, 'primary');
+    body.replaceChildren(h('p', {}, 'Pick the frame to trace:'), video, h('div', { class: 'row' }, time, label), h('div', { class: 'row' }, use));
+  });
 }

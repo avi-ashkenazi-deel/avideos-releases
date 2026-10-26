@@ -84,3 +84,38 @@ describe('sheet: end to end on the dense specimen fixture', () => {
     expect(skip.assigned[0]).toBeNull(); expect(skip.assigned[1]).toBe('x');
   });
 });
+
+describe('light-on-dark and heavy letters', () => {
+  const dark = decodePng(fs.readFileSync('tests/fixtures/sheet-dark.png'));
+  it('auto-detects white letters on black and finds all 32 cells without cleanup', async () => {
+    const res = await traceImage(dark, { mode: 'outline' });
+    expect(res.inverted).toBe(true);
+    expect(res.info.cleanupPx).toBe(0);
+    expect(res.cells.length).toBe(32);
+    expect(res.lines).toBe(4);
+    for (const c of res.cells) expect(c.glyph.contours!.length).toBeGreaterThan(0);
+  });
+  it('explicit invert:false on the dark sheet gives the old garbage (so auto matters)', async () => {
+    const res = await traceImage(dark, { mode: 'outline', invert: false });
+    expect(res.inverted).toBe(false);
+    expect(res.cells.length).not.toBe(32);
+  });
+  it('flags heavy letters; the thin handwriting fixture is not heavy', async () => {
+    const heavy = await traceImage(dark, { mode: 'outline' });
+    expect(heavy.heavy).toBe(true);
+    const hw = decodePng(fs.readFileSync('tests/fixtures/handwriting.png'));
+    const light = await traceImage(hw, { mode: 'outline' });
+    expect(light.heavy).toBe(false);
+    expect(light.inverted).toBe(false);
+  });
+  it('strokes mode goes through the outline skeletoniser: flat caps stay flat (stem spans the full height)', async () => {
+    const res = await traceImage(dark, { mode: 'strokes' });
+    const stem = res.cells[0].glyph; // first shape is a plain stem
+    expect(stem.kind).toBe('stroke');
+    const ys = stem.strokes!.flatMap((s) => s.points.map((p) => p.y));
+    const outline = (await traceImage(dark, { mode: 'outline' })).cells[0].glyph;
+    const oys = outline.contours!.flatMap((c) => c.points.map((p) => p[1]));
+    expect(Math.max(...ys)).toBeGreaterThan(Math.max(...oys) - 30);
+    expect(Math.min(...ys)).toBeLessThan(Math.min(...oys) + 30);
+  });
+});

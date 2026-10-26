@@ -15,11 +15,12 @@ import { bboxContours, bboxStrokes, clamp, simplifyRDP, smoothResample } from '.
 import { cleanContours } from '../../outline/fitCurves';
 import { unionContours } from '../../outline/union';
 import {
-  binarize, boxH, compositeMask, despeckle, maskToRgba, otsuThreshold, toGray,
+  binarize, boxH, boxW, compositeMask, despeckle, maskToRgba, otsuThreshold, toGray,
   type ImageLike,
 } from './raster';
 import { type Cell } from './segment';
 import { segmentSheet, type SheetInfo } from './sheet';
+import { outlineToStrokes } from '../fontimport/toStrokes';
 import { distanceTransform, sampleField, skeletonToPolylines, zhangSuen } from './thin';
 import { traceOutline } from './potrace';
 
@@ -36,8 +37,8 @@ export interface TraceOptions {
   mode: 'strokes' | 'outline';
   /** 0..255; default: Otsu */
   threshold?: number;
-  /** light ink on dark paper */
-  invert?: boolean;
+  /** light ink on dark paper; 'auto' (default) detects it from the image */
+  invert?: boolean | 'auto';
   /** components smaller than this many pixels are dropped as noise (default 12) */
   minComponentPx?: number;
   /** font units the estimated cap height maps to (default 700) */
@@ -67,6 +68,10 @@ export interface TraceResult {
   scale: number;
   threshold: number;
   info: SheetInfo;
+  /** whether the image was treated as light ink on dark */
+  inverted: boolean;
+  /** bold display letters (high ink fill): outline mode keeps them exact */
+  heavy: boolean;
 }
 
 const SIDEBEARING = 60;
@@ -78,10 +83,15 @@ export async function traceImage(img: ImageLike, opts: TraceOptions): Promise<Tr
   const targetCap = opts.targetCapHeight ?? 700;
   const gray = toGray(img);
   const threshold = opts.threshold ?? otsuThreshold(gray);
-  let bin = binarize(gray, threshold, opts.invert ?? false);
+  const inverted = opts.invert === undefined || opts.invert === 'auto' ? detectLightOnDark(gray, w, h, threshold) : opts.invert;
+  let bin = binarize(gray, threshold, inverted);
   bin = despeckle(bin, w, h, opts.minComponentPx ?? 12);
   const { seg, info } = segmentSheet(bin, w, h, { cleanupPx: opts.cleanupPx ?? 'auto', split: opts.split !== false });
-  if (seg.cells.length === 0) return { cells: [], lines: 0, estimates: { capHeight: 0, xHeight: 0 }, scale: 1, threshold, info };
+  if (seg.cells.length === 0) return { cells: [], lines: 0, estimates: { capHeight: 0, xHeight: 0 }, scale: 1, threshold, info, inverted, heavy: false };
+  // heaviness: ink fill of the cells' boxes (handwriting ≈ 0.1–0.3, bold display faces ≈ 0.45+)
+  let inkPx = 0, boxPx = 0;
+  for (const c of seg.cells) { for (const k of c.components) inkPx += k.pixels; boxPx += boxW(c.bbox) * boxH(c.bbox); }
+  const heavy = boxPx > 0 && inkPx / boxPx > 0.42;
 
   let capPx = seg.estimates.capHeight;
   if (!(capPx > 0)) capPx = Math.max(...seg.cells.map((c) => boxH(c.bbox)));
@@ -99,7 +109,11 @@ export async function traceImage(img: ImageLike, opts: TraceOptions): Promise<Tr
     ];
     let glyph: Glyph;
     if (opts.mode === 'strokes') {
-      glyph = strokeGlyph(cm, toFont, scale);
+      // exact outline first, then the font-import skeletoniser (spur pruning, end extension, cap detection)
+      const outline = await outlineGlyph(cm, toFont);
+      glyph = outline.contours?.length ? outlineToStrokes(outline) : strokeGlyph(cm, toFont, scale);
+      if (glyph.kind !== 'stroke' || !glyph.strokes?.length) glyph = strokeGlyph(cm, toFont, scale);
+      glyph.source = 'traced';
     } else {
       glyph = await outlineGlyph(cm, toFont);
     }
@@ -119,7 +133,23 @@ export async function traceImage(img: ImageLike, opts: TraceOptions): Promise<Tr
     scale,
     threshold,
     info,
+    inverted,
+    heavy,
   };
+}
+
+/** Light ink on dark paper? Decide from the image border (paper) and the overall ink fraction. */
+export function detectLightOnDark(gray: Float32Array, w: number, h: number, threshold: number): boolean {
+  // sample a band a few percent in from the edge (a page frame sits on the very edge)
+  let borderDark = 0, borderN = 0;
+  const step = Math.max(1, Math.floor(Math.max(w, h) / 400));
+  const inset = Math.min(Math.floor(Math.min(w, h) * 0.04) + 1, Math.floor(Math.min(w, h) / 2) - 1);
+  for (let x = inset; x < w - inset; x += step) { borderN += 2; if (gray[inset * w + x] < threshold) borderDark++; if (gray[(h - 1 - inset) * w + x] < threshold) borderDark++; }
+  for (let y = inset; y < h - inset; y += step) { borderN += 2; if (gray[y * w + inset] < threshold) borderDark++; if (gray[y * w + w - 1 - inset] < threshold) borderDark++; }
+  let dark = 0;
+  for (let i = 0; i < gray.length; i += 7) if (gray[i] < threshold) dark++;
+  const darkFrac = dark / Math.ceil(gray.length / 7);
+  return borderDark / Math.max(1, borderN) > 0.6 || darkFrac > 0.55;
 }
 
 function thumbnailOf(cell: Cell): TracedCell['thumbnail'] {
