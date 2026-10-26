@@ -92,7 +92,7 @@ test('import a font as strokes, then HTML type tester downloads', async ({ page 
   await page.locator('.chbtn[data-ch="H"]').click();
   await expect(page.locator('.seeds h2')).toContainText('strokes');
   await builtStatus(page);
-  const [html] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: /Type tester/ }).click()]);
+  const [html] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: /Tester \.html/ }).click()]);
   const text = fs.readFileSync(await html.path() as string, 'utf8');
   expect(text).toContain('@font-face');
   expect(text).toContain('font/otf;base64,');
