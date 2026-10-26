@@ -119,3 +119,18 @@ describe('light-on-dark and heavy letters', () => {
     expect(Math.min(...ys)).toBeLessThan(Math.min(...oys) + 30);
   });
 });
+
+describe('tightly cropped dark frame (no paper margin)', () => {
+  const tight = decodePng(fs.readFileSync('tests/fixtures/sheet-dark-tight.png'));
+  it('still detects light-on-dark and finds all cells as crisp outlines', async () => {
+    const res = await traceImage(tight, { mode: 'outline' });
+    expect(res.inverted).toBe(true);
+    expect(res.heavy).toBe(true);
+    expect(res.cells.length).toBe(32);
+    expect(res.lines).toBe(4);
+  });
+  it('a thin dark frame or mesh on white never triggers inversion', async () => {
+    const light = decodePng(fs.readFileSync('tests/fixtures/sheet.png'));
+    expect((await traceImage(light, { mode: 'outline' })).inverted).toBe(false);
+  });
+});

@@ -8,6 +8,7 @@ import { writeFileSync } from 'node:fs';
 const W = 1000, H = 560, ROWS = 4, COLS = 8;
 const out = process.argv[2] ?? 'tests/fixtures/sheet.png';
 const dark = process.argv.includes('--dark'); // light letters on black, no frame/mesh (video-frame style)
+const tight = process.argv.includes('--tight'); // almost no margin: a cropped video frame
 const ink = new Uint8Array(W * H); // 1 = dark
 
 const rect = (x0, y0, x1, y1) => { for (let y = Math.max(0, y0); y <= Math.min(H - 1, y1); y++) for (let x = Math.max(0, x0); x <= Math.min(W - 1, x1); x++) ink[y * W + x] = 1; };
@@ -17,8 +18,8 @@ const hollow = (x0, y0, x1, y1, t) => { rect(x0, y0, x1, y0 + t - 1); rect(x0, y
 if (!dark) hollow(0, 0, W - 1, H - 1, 6);
 
 // grid of cells
-const marginX = 40, marginY = 40, cellW = (W - 2 * marginX) / COLS, cellH = (H - 2 * marginY) / ROWS;
-const SW = 14; // stroke width of the letters
+const marginX = tight ? 6 : 40, marginY = tight ? 6 : 40, cellW = (W - 2 * marginX) / COLS, cellH = (H - 2 * marginY) / ROWS;
+const SW = dark ? 26 : 14; // stroke width of the letters (dark variants imitate a bold display face)
 const shapes = ['stem', 'box', 'bar', 'L', 'T', 'H', 'ring', 'U'];
 let k = 0;
 for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++, k++) {

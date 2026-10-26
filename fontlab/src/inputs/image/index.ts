@@ -15,7 +15,7 @@ import { bboxContours, bboxStrokes, clamp, simplifyRDP, smoothResample } from '.
 import { cleanContours } from '../../outline/fitCurves';
 import { unionContours } from '../../outline/union';
 import {
-  binarize, boxH, boxW, compositeMask, despeckle, maskToRgba, otsuThreshold, toGray,
+  binarize, boxH, boxW, compositeMask, connectedComponents, despeckle, maskToRgba, otsuThreshold, toGray,
   type ImageLike,
 } from './raster';
 import { type Cell } from './segment';
@@ -70,11 +70,15 @@ export interface TraceResult {
   info: SheetInfo;
   /** whether the image was treated as light ink on dark */
   inverted: boolean;
-  /** bold display letters (high ink fill): outline mode keeps them exact */
+  /** bold display letters: outline mode keeps them exact */
   heavy: boolean;
+  /** median (thickest stroke / letter height); handwriting ≈ 0.05–0.15, bold display ≈ 0.2+ */
+  strokeRatio: number;
 }
 
 const SIDEBEARING = 60;
+/** above this (thickest stroke / letter height) letters count as a bold display face */
+export const HEAVY_RATIO = 0.2;
 const MIN_HALF_W = 6;
 const MAX_HALF_W = 120;
 
@@ -87,11 +91,19 @@ export async function traceImage(img: ImageLike, opts: TraceOptions): Promise<Tr
   let bin = binarize(gray, threshold, inverted);
   bin = despeckle(bin, w, h, opts.minComponentPx ?? 12);
   const { seg, info } = segmentSheet(bin, w, h, { cleanupPx: opts.cleanupPx ?? 'auto', split: opts.split !== false });
-  if (seg.cells.length === 0) return { cells: [], lines: 0, estimates: { capHeight: 0, xHeight: 0 }, scale: 1, threshold, info, inverted, heavy: false };
-  // heaviness: ink fill of the cells' boxes (handwriting ≈ 0.1–0.3, bold display faces ≈ 0.45+)
-  let inkPx = 0, boxPx = 0;
-  for (const c of seg.cells) { for (const k of c.components) inkPx += k.pixels; boxPx += boxW(c.bbox) * boxH(c.bbox); }
-  const heavy = boxPx > 0 && inkPx / boxPx > 0.42;
+  if (seg.cells.length === 0) return { cells: [], lines: 0, estimates: { capHeight: 0, xHeight: 0 }, scale: 1, threshold, info, inverted, heavy: false, strokeRatio: 0 };
+  // heaviness: thickest stroke (2 × max inscribed radius) relative to the letter height,
+  // median over cells. Handwriting ≈ 0.05–0.12, bold display faces ≈ 0.18+.
+  const ratios: number[] = [];
+  for (const c of seg.cells) {
+    const cm = compositeMask(c.components, c.bbox, 1);
+    const dt = distanceTransform(cm.mask, cm.width, cm.height);
+    let mx = 0; for (let i = 0; i < dt.length; i++) if (dt[i] > mx) mx = dt[i];
+    ratios.push((2 * mx) / Math.max(1, boxH(c.bbox)));
+  }
+  ratios.sort((a, b) => a - b);
+  const strokeRatio = ratios.length ? ratios[ratios.length >> 1] : 0;
+  const heavy = strokeRatio > HEAVY_RATIO;
 
   let capPx = seg.estimates.capHeight;
   if (!(capPx > 0)) capPx = Math.max(...seg.cells.map((c) => boxH(c.bbox)));
@@ -135,23 +147,43 @@ export async function traceImage(img: ImageLike, opts: TraceOptions): Promise<Tr
     info,
     inverted,
     heavy,
+    strokeRatio,
   };
 }
 
-/** Light ink on dark paper? Decide from the image border (paper) and the overall ink fraction. */
+/**
+ * Light ink on dark paper? Three signals, any one wins:
+ *  - the corner patches are dark (paper shows in the corners even on tight crops),
+ *  - most of the image is dark,
+ *  - the largest dark component is a solid slab covering most of the image
+ *    (white letters punched out of a black background), as opposed to a thin
+ *    frame or halo mesh (large bbox, tiny fill) which must NOT invert.
+ */
 export function detectLightOnDark(gray: Float32Array, w: number, h: number, threshold: number): boolean {
-  // sample a band a few percent in from the edge (a page frame sits on the very edge)
-  let borderDark = 0, borderN = 0;
-  const step = Math.max(1, Math.floor(Math.max(w, h) / 400));
-  const inset = Math.min(Math.floor(Math.min(w, h) * 0.04) + 1, Math.floor(Math.min(w, h) / 2) - 1);
-  for (let x = inset; x < w - inset; x += step) { borderN += 2; if (gray[inset * w + x] < threshold) borderDark++; if (gray[(h - 1 - inset) * w + x] < threshold) borderDark++; }
-  for (let y = inset; y < h - inset; y += step) { borderN += 2; if (gray[y * w + inset] < threshold) borderDark++; if (gray[y * w + w - 1 - inset] < threshold) borderDark++; }
+  const patch = Math.max(2, Math.floor(Math.min(w, h) * 0.03));
+  let darkCorners = 0;
+  for (const [cx, cy] of [[0, 0], [w - patch, 0], [0, h - patch], [w - patch, h - patch]] as [number, number][]) {
+    let d = 0;
+    for (let y = cy; y < cy + patch; y++) for (let x = cx; x < cx + patch; x++) if (gray[y * w + x] < threshold) d++;
+    if (d / (patch * patch) > 0.7) darkCorners++;
+  }
+  if (darkCorners >= 3) return true;
   let dark = 0;
   for (let i = 0; i < gray.length; i += 7) if (gray[i] < threshold) dark++;
-  const darkFrac = dark / Math.ceil(gray.length / 7);
-  return borderDark / Math.max(1, borderN) > 0.6 || darkFrac > 0.55;
+  if (dark / Math.ceil(gray.length / 7) > 0.55) return true;
+  // slab test on a downsampled mask (cheap even for big photos)
+  const f = Math.max(1, Math.ceil(Math.max(w, h) / 300));
+  const sw = Math.floor(w / f), sh = Math.floor(h / f);
+  const small = new Uint8Array(sw * sh);
+  for (let y = 0; y < sh; y++) for (let x = 0; x < sw; x++) small[y * sw + x] = gray[(y * f) * w + x * f] < threshold ? 1 : 0;
+  let best = 0;
+  for (const c of connectedComponents(small, sw, sh)) {
+    const area = boxW(c.bbox) * boxH(c.bbox);
+    const fill = c.pixels / Math.max(1, area);
+    if (area > 0.45 * sw * sh && fill > 0.5) best = Math.max(best, fill);
+  }
+  return best > 0;
 }
-
 function thumbnailOf(cell: Cell): TracedCell['thumbnail'] {
   const cm = compositeMask(cell.components, cell.bbox, 0);
   return { width: cm.width, height: cm.height, mask: cm.mask };
