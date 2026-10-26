@@ -10,7 +10,7 @@ type ImageLike = { width: number; height: number; data: Uint8ClampedArray };
 export function openImageDialog(file: File, onDone: () => void): void {
   const dlg = h('dialog', { class: 'modal' });
   const body = h('div', { class: 'modal-body' }, h('p', {}, 'Loading…'));
-  dlg.append(h('h2', {}, '📷 Handwriting → seeds'), body);
+  dlg.append(h('h2', {}, 'Photo to letters'), body);
   document.body.append(dlg);
   dlg.showModal();
   dlg.addEventListener('close', () => dlg.remove());

@@ -35,6 +35,11 @@ export class DrawCanvas {
   metrics: FontMetrics;
   brush: BrushSettings = { ...DEFAULT_BRUSH };
   onStroke: (s: Stroke) => void = () => {};
+  /** 'draw' = freehand strokes; 'edit' = pointer events belong to the point editor */
+  mode: 'draw' | 'edit' = 'draw';
+  /** extra overlay drawn after the glyph (the point editor's nodes) */
+  overlay: ((ctx: CanvasRenderingContext2D, view: View) => void) | null = null;
+  getView(): View { return this.view; }
 
   constructor(canvas: HTMLCanvasElement, metrics: FontMetrics) {
     this.canvas = canvas;
@@ -79,7 +84,7 @@ export class DrawCanvas {
   }
 
   private onDown = (e: PointerEvent) => {
-    if (!this.glyph) return;
+    if (!this.glyph || this.mode !== 'draw') return;
     this.canvas.setPointerCapture(e.pointerId);
     const [x, y] = this.toFont(e);
     this.live = { pts: [{ x, y, w: this.widthFor(e, 0), p: e.pressure }], lastT: e.timeStamp, lastX: x, lastY: y };
@@ -161,6 +166,7 @@ export class DrawCanvas {
       }
     }
     if (this.live) drawStrokeRaw(ctx, { id: 'live', points: this.live.pts, cap: this.brush.cap }, view, 'rgba(255,230,0,.9)');
+    if (this.overlay) this.overlay(ctx, view);
   }
 }
 

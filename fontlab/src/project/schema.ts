@@ -8,7 +8,7 @@ export function parseProject(raw: unknown): FontProject {
   if (!raw || typeof raw !== 'object') throw new Error('Not a project file');
   const r = raw as Record<string, any>;
   if (r.version !== 1) throw new Error(`Unsupported project version ${r.version}`);
-  const p = newProject(typeof r.name === 'string' ? r.name : 'Untitled Funk');
+  const p = newProject(typeof r.name === 'string' ? r.name : 'Untitled');
   p.metrics = { ...DEFAULT_METRICS, ...(r.metrics ?? {}), upm: 1000 };
   p.stats = { ...DEFAULT_STATS, ...(r.stats ?? {}) };
   p.fx = parseStack(r.fx) ?? migrateDna(r.dna);

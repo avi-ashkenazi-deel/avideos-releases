@@ -1,8 +1,7 @@
-import { h, slider } from '../dom';
+import { h, slider, help, iconButton } from '../dom';
 import { store } from '../state';
 import { PREVIEW_FAMILY } from '../preview';
 import { samplePreview } from '../../core/charsets';
-import { button } from '../dom';
 import { scheduleBuild } from '../buildClient';
 
 export function previewPanel(): HTMLElement {
@@ -11,15 +10,21 @@ export function previewPanel(): HTMLElement {
   out.addEventListener('input', () => { store.project.previewText = out.textContent ?? ''; if (text.value !== store.project.previewText) text.value = store.project.previewText; });
   text.addEventListener('input', () => { store.project.previewText = text.value; out.textContent = text.value; });
   const size = slider('Size', { min: 16, max: 220, step: 1, value: 64, onInput: (v) => { out.style.fontSize = v + 'px'; }, format: (v) => v + 'px' });
-  const sample = button('Sample text for my scripts', () => { text.value = samplePreview(store.project); store.project.previewText = text.value; out.textContent = text.value; });
+  const sample = iconButton('text', 'Insert sample text', () => { text.value = samplePreview(store.project); store.project.previewText = text.value; out.textContent = text.value; }, { title: 'A pangram for every script you have switched on' });
   // Living mode: drift `time` and rebuild only the preview text while on
   let living = false, waiting = false, frames = 0, t0 = 0;
-  const livingBtn = button('🌊 Living: off', () => {
+  const DRIFT_OPS = new Set(['wobble', 'melt', 'inkNoise', 'reactionDiffusion']);
+  const hasDrift = () => store.project.fx.groups.some((g) => g.enabled && g.layers.some((l) => l.enabled && DRIFT_OPS.has(l.type)));
+  const livingBtn = iconButton('wave', 'Drift', () => {
+    if (!living && !hasDrift()) { return; }
     living = !living;
-    livingBtn.textContent = living ? '🌊 Living: on' : '🌊 Living: off';
     livingBtn.classList.toggle('primary', living);
+    livingBtn.setAttribute('aria-pressed', String(living));
     if (living) { frames = 0; t0 = performance.now(); tick(); } else scheduleBuild(0);
-  });
+  }, { title: 'Animate the noise-based effects (Wobble, Melt, Ink noise, Reaction-diffusion) so the letters keep moving' });
+  const syncDrift = () => { const ok = hasDrift(); livingBtn.disabled = !ok && !living; livingBtn.title = ok ? 'Animate the noise-based effects so the letters keep moving' : 'Add Wobble, Melt, Ink noise or Reaction-diffusion to enable drift'; };
+  store.subscribe((ev) => { if (ev === 'fx' || ev === 'project:loaded') syncDrift(); });
+  syncDrift();
   const tick = () => {
     if (!living || waiting) return;
     waiting = true;
@@ -40,7 +45,7 @@ export function previewPanel(): HTMLElement {
     if (ev === 'project:loaded' || ev === 'preview:text') { text.value = store.project.previewText; if (document.activeElement !== out) out.textContent = text.value; }
   });
   return h('section', { class: 'panel preview' },
-    h('h2', {}, 'Preview ', h('small', {}, 'a real font, rendered by your browser')),
-    text, h('div', { class: 'row' }, size, sample, livingBtn), out, status,
+    h('h2', {}, 'Preview', help('A real font built from your letters, rendered by the browser. Click the text to edit it.')),
+    out, h('div', { class: 'row' }, size, sample, livingBtn), h('details', { class: 'plain', 'data-testid': 'preview-plain' }, h('summary', {}, 'Edit as plain text'), text), status,
   );
 }

@@ -142,3 +142,47 @@ button.icon { padding: 0 6px; font-size: 11px; line-height: 20px; }
 .wline { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2; margin: 4px 0; }
 .wline .px { font: 10px system-ui, sans-serif; color: #999; display: inline-block; width: 28px; }
 .tcontrols .slider { grid-template-columns: 60px 110px 56px; margin: 0; }
+
+/* ---- redesign: header, menus, tabs, icons */
+.icon { vertical-align: -3px; flex: none; }
+.ib { display: inline-flex; align-items: center; gap: 6px; }
+.ib.icon-only { padding: 6px; }
+.ib.icon-only span { display: none; }
+.topbar { gap: 10px; }
+.namewrap { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
+.fontname { font-size: 16px; font-weight: 600; min-width: 220px; max-width: 420px; }
+.dirty { width: 8px; height: 8px; border-radius: 50%; background: transparent; }
+.dirty.on { background: var(--accent); box-shadow: 0 0 0 3px rgba(255,209,102,.2); }
+.menu { position: relative; }
+.menu-list { position: absolute; right: 0; top: calc(100% + 6px); min-width: 240px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 6px; display: none; z-index: 30; box-shadow: 0 12px 32px rgba(0,0,0,.45); }
+.menu.open .menu-list { display: block; }
+.menu-item { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; background: transparent; border: 0; padding: 8px 10px; border-radius: 6px; }
+.menu-item:hover { background: var(--panel-2); border: 0; }
+.menu-item.danger { color: var(--danger); }
+.menu-sep { height: 1px; background: var(--line); margin: 6px 2px; }
+.help { display: inline-flex; color: var(--muted); margin-left: 6px; cursor: help; }
+h2 .help { margin-left: 4px; }
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 10px; }
+.tab { display: inline-flex; align-items: center; gap: 6px; background: transparent; border: 0; border-bottom: 2px solid transparent; border-radius: 0; padding: 8px 10px; color: var(--muted); }
+.tab.active { color: var(--text); border-bottom-color: var(--accent); }
+.tab-body p { color: var(--muted); font-size: 13px; margin: 4px 0 10px; }
+.drawtitle { display: flex; align-items: baseline; gap: 10px; margin: 4px 0; }
+.drawtitle small { color: var(--muted); }
+canvas.editor.editing { cursor: default; outline: 2px solid var(--accent-2); }
+.edittools { background: var(--panel-2); border-radius: 8px; padding: 6px 8px; }
+.edittools .slider { grid-template-columns: 80px 1fr 40px; flex: 1; margin: 0; }
+.legend { display: inline-flex; align-items: center; gap: 3px; }
+.cell .badge svg { color: var(--muted); }
+.cell[data-source="generated"] .badge svg { color: #bbb; }
+.cell[data-source="drawn"] .badge svg { color: var(--accent); }
+.cell[data-source="traced"] .badge svg { color: var(--accent-2); }
+.cell[data-source="imported"] .badge svg { color: #8ecae6; }
+.effects #preset { min-width: 180px; }
+.fxgroup:not(.adv) { border: 0; padding: 0; background: transparent; }
+.fxgroup:not(.adv) .fxhead { display: none; }
+.advrow { color: var(--muted); font-size: 12px; }
+details.plain summary { color: var(--muted); font-size: 12px; cursor: pointer; margin-top: 6px; }
+.libtable { display: flex; flex-direction: column; gap: 4px; max-height: 50vh; overflow: auto; }
+.librow { display: grid; grid-template-columns: 1fr auto auto auto auto; gap: 8px; align-items: center; padding: 8px 10px; background: var(--panel-2); border-radius: 8px; }
+.librow.current { outline: 2px solid var(--accent); }
+.librow small { color: var(--muted); }

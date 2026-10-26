@@ -20,7 +20,7 @@ export function charsetPanel(onChange: () => void): HTMLElement {
     boxes.set(b.id, cb);
     blocks.append(h('label', { title: b.sample }, cb, b.name, h('small', {}, `(${[...b.chars].length})`)));
   }
-  const input = h('input', { type: 'text', placeholder: 'Add any characters: ★ ☺ ñ 日本 عربى …', autocomplete: 'off', spellcheck: false });
+  const input = h('input', { type: 'text', placeholder: 'Add any characters, e.g. ★ ñ 日本 عربى', autocomplete: 'off', spellcheck: false });
   const chips = h('div', { class: 'custom-chips', style: { display: 'contents' } });
   const renderChips = () => {
     chips.replaceChildren(...[...store.project.customChars].map((ch) => h('span', { class: 'chipx' }, ch, button('×', () => {
@@ -35,7 +35,7 @@ export function charsetPanel(onChange: () => void): HTMLElement {
     store.update((p) => { p.customChars += fresh.join(''); }, 'charset');
     input.value = '';
     renderChips(); onChange();
-    toast(`Added ${fresh.length} character${fresh.length === 1 ? '' : 's'} — select one in the strip and draw it`);
+    toast(`Added ${fresh.length} character${fresh.length === 1 ? '' : 's'}. Select one in the strip and draw it.`);
   };
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } });
   renderChips();

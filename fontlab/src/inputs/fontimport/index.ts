@@ -3,6 +3,7 @@ import type { Glyph, Contour, Vec, FontMetrics } from '../../core/glyph';
 import { CHARSET } from '../../core/glyph';
 import { flattenCubic } from '../../outline/fitCurves';
 import { cleanContours } from '../../outline/fitCurves';
+import { curvesFromPathCommands } from '../draw/curves';
 
 export interface ImportedFont {
   glyphs: Glyph[];
@@ -83,6 +84,7 @@ export function importFont(buf: ArrayBuffer, chars: string | string[] = CHARSET)
       source: 'imported',
       kind: 'outline',
       contours,
+      curves: curvesFromPathCommands(path.commands, k, true),
     });
   }
   const os2 = font.tables?.os2 ?? {};

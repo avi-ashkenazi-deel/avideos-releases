@@ -13,6 +13,20 @@ async function drawStroke(page: Page, pts: [number, number][]) {
 }
 const waitBuilt = (page: Page, n: number) => expect.poll(() => page.locator('.status').textContent(), { timeout: 60000 }).toMatch(new RegExp(`built ${n} glyphs`));
 
+
+async function exportOtf(page: Page) {
+  await page.locator('[data-testid=menu-export]').click();
+  const [download] = await Promise.all([page.waitForEvent('download'), page.locator('[data-testid=menu-otf]').click()]);
+  return download;
+}
+async function pickFile(page: Page, tab: 'photo' | 'font', file: string) {
+  await page.locator(`[data-testid=tab-${tab}]`).click();
+  const chooser = page.waitForEvent('filechooser');
+  await page.locator(`[data-testid=btn-${tab}]`).click();
+  await (await chooser).setFiles(file);
+}
+const preset = (page: Page, name: string) => page.locator('#preset').selectOption(name);
+
 test.beforeEach(async ({ page }) => {
   await page.goto('/');
   await page.evaluate(() => localStorage.clear());
@@ -29,12 +43,12 @@ test('Cyrillic + Hebrew blocks generate and render in the preview', async ({ pag
   const expected = 62 + 64 + 12 + 27; // latin + А..я + ЁёЄєІіЇїҐґЈј + hebrew
   await expect(page.locator('.cell:not(.empty)')).toHaveCount(expected, { timeout: 60000 });
   await waitBuilt(page, expected);
-  await page.getByRole('button', { name: /Sample text/ }).click();
+  await page.getByRole('button', { name: /sample text/i }).click();
   await expect(page.locator('.preview-input')).toHaveValue(/Съешь/);
   await expect(page.locator('.preview-input')).toHaveValue(/דג/);
   await expect.poll(() => page.evaluate(() => document.fonts.check('12px FunkyPreview', 'Жש')), { timeout: 20000 }).toBe(true);
   // the Cyrillic о is a clone of the drawn o
-  await expect(page.locator('.cell[data-char="о"] .badge')).toHaveText('✦');
+  await expect(page.locator('.cell[data-char="о"] .badge')).toHaveAttribute('data-source', 'generated');
 });
 
 test('accented letters follow the drawn base letter', async ({ page }) => {
@@ -59,7 +73,7 @@ test('custom characters can be added, drawn and exported', async ({ page }) => {
   await drawStroke(page, [[0.3, 0.7], [0.45, 0.3], [0.6, 0.7], [0.25, 0.45], [0.65, 0.45], [0.3, 0.7]]);
   await expect(page.locator('.cell[data-char="★"]')).not.toHaveClass(/empty/);
   await expect.poll(() => page.locator('.status').textContent(), { timeout: 20000 }).toMatch(/built 1 glyphs/);
-  const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: /Download \.otf/ }).click()]);
+  const download = await exportOtf(page);
   const file = path.join(test.info().outputDir, 'star.otf');
   await download.saveAs(file);
   const ot = await import('opentype.js');
@@ -71,10 +85,7 @@ test('custom characters can be added, drawn and exported', async ({ page }) => {
 });
 
 test('dense specimen sheet: frame removed, letters split, labels previewed, mismatch blocked', async ({ page }) => {
-  const fixture = path.resolve('tests/fixtures/sheet.png');
-  const chooser = page.waitForEvent('filechooser');
-  await page.getByRole('button', { name: /Trace a photo/ }).click();
-  await (await chooser).setFiles(fixture);
+  await pickFile(page, 'photo', path.resolve('tests/fixtures/sheet.png'));
   await expect(page.locator('.modal .cellwrap')).toHaveCount(32, { timeout: 60000 });
   await expect(page.locator('.modal p').first()).toContainText('32 letter cells on 4 lines');
   const labels = page.locator('.modal .labels');
@@ -90,15 +101,13 @@ test('dense specimen sheet: frame removed, letters split, labels previewed, mism
   await expect(page.locator('.modal .cellwrap').first()).toHaveClass(/skipped/);
   await expect(page.locator('.modal .cellwrap').nth(1).locator('.celllabel')).toHaveValue('a');
   await page.getByRole('button', { name: 'Add as seeds' }).click();
-  await expect(page.locator('.cell[data-char="a"] .badge')).toHaveText('📷');
-  await expect(page.locator('.cell[data-char="4"] .badge')).toHaveText('📷');
+  await expect(page.locator('.cell[data-char="a"] .badge')).toHaveAttribute('data-source', 'traced');
+  await expect(page.locator('.cell[data-char="4"] .badge')).toHaveAttribute('data-source', 'traced');
 });
 
 test('remix a .woff2 font (decoded in the browser)', async ({ page }) => {
-  const chooser = page.waitForEvent('filechooser');
-  await page.getByRole('button', { name: /Remix an existing font/ }).click();
-  await (await chooser).setFiles(path.resolve('tests/fixtures/sample.woff2'));
-  await expect(page.locator('.cell[data-char="A"] .badge')).toHaveText('⬇', { timeout: 60000 });
-  await expect(page.locator('.cell[data-char="z"] .badge')).toHaveText('⬇');
+  await pickFile(page, 'font', path.resolve('tests/fixtures/sample.woff2'));
+  await expect(page.locator('.cell[data-char="A"] .badge')).toHaveAttribute('data-source', 'imported', { timeout: 60000 });
+  await expect(page.locator('.cell[data-char="z"] .badge')).toHaveAttribute('data-source', 'imported');
   await expect(page.locator('.fontname')).toHaveValue(/Sample Funk/);
 });

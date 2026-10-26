@@ -1,4 +1,5 @@
 import { h } from '../dom';
+import { icon } from '../icons';
 import { store } from '../state';
 import { projectCharset, groupCharset, BLOCK_BY_ID } from '../../core/charsets';
 import { renderThumb } from '../render';
@@ -17,7 +18,7 @@ export function gridPanel(onSelect: (ch: string) => void): HTMLElement {
     if (c) return c;
     const canvas = h('canvas', { class: 'thumb' });
     const badge = h('span', { class: 'badge' });
-    const del = h('span', { class: 'celldel', title: `Remove “${ch}” (it can be regenerated)`, role: 'button', tabindex: 0 }, '×');
+    const del = h('span', { class: 'celldel', title: `Remove “${ch}” (it can be regenerated)`, role: 'button', tabindex: 0 }, icon('x', 12));
     del.addEventListener('click', (e) => { e.stopPropagation(); store.update((p) => { delete p.glyphs[ch]; }, 'glyph'); scheduleBuild(0); });
     const root = h('button', { type: 'button', class: 'cell' + (rtl ? ' rtl' : ''), 'data-char': ch, onClick: () => onSelect(ch), title: `Edit “${ch}”` }, canvas, h('span', { class: 'ch' }, ch), badge, del);
     c = { root, canvas, badge };
@@ -41,12 +42,15 @@ export function gridPanel(onSelect: (ch: string) => void): HTMLElement {
       const b = store.built[ch];
       c.root.classList.toggle('selected', ch === store.selected);
       c.root.classList.toggle('empty', !hasInk(g));
-      c.badge.textContent = g ? (g.locked ? '🔒' : g.source === 'generated' ? '✦' : g.source === 'drawn' ? '✎' : g.source === 'traced' ? '📷' : '⬇') : '';
-      c.badge.title = g ? g.source + (g.locked ? ' (locked)' : '') : 'empty';
+      const srcIcon = g ? (g.locked ? 'lock' : g.source === 'generated' ? 'sparkle' : g.source === 'drawn' ? 'pen' : g.source === 'traced' ? 'image' : 'upload') : null;
+      c.badge.replaceChildren(...(srcIcon ? [icon(srcIcon as any, 11)] : []));
+      c.badge.dataset.source = g ? (g.locked ? 'locked' : g.source) : '';
+      c.badge.title = g ? ({ drawn: 'drawn by hand', traced: 'traced from a photo', imported: 'from a font file', generated: 'generated' } as const)[g.source] + (g.locked ? ' (locked)' : '') : 'empty';
+      c.root.dataset.source = g ? g.source : '';
       renderThumb(c.canvas, b?.contours ?? [], store.project.metrics, b?.advance ?? g?.advance ?? 500, g ? SOURCE_COLOR[g.source] : '#444');
     }
   };
   store.subscribe((ev) => { if (ev === 'charset' || ev === 'project:loaded') layout(); if (ev === 'built' || ev === 'select' || ev === 'project' || ev === 'project:loaded' || ev === 'glyph' || ev === 'charset') refresh(); });
   requestAnimationFrame(refresh);
-  return h('section', { class: 'panel gridpanel' }, h('h2', {}, 'Glyphs ', h('small', {}, '✎ drawn · 📷 traced · ⬇ imported · ✦ generated · 🔒 locked')), grid);
+  return h('section', { class: 'panel gridpanel' }, h('h2', {}, 'Letters ', h('small', { class: 'legend' }, icon('pen', 11), ' drawn ', icon('image', 11), ' traced ', icon('upload', 11), ' from font ', icon('sparkle', 11), ' generated ', icon('lock', 11), ' locked')), grid);
 }

@@ -41,14 +41,14 @@ export function openTypeTester(): void {
     slider('Size', { min: 12, max: 220, step: 1, value: size, onInput: (v) => { size = v; applyStyle(); }, format: (v) => v.toFixed(0) + 'px' }),
     slider('Line', { min: 0.8, max: 2.2, step: 0.01, value: lh, onInput: (v) => { lh = v; applyStyle(); } }),
     slider('Spacing', { min: -0.1, max: 0.5, step: 0.005, value: ls, onInput: (v) => { ls = v; applyStyle(); }, format: (v) => v.toFixed(3) + 'em' }),
-    button('☾ Dark', () => { dark = !dark; applyStyle(); }),
+    button('Dark / light', () => { dark = !dark; applyStyle(); }),
   );
   if (vf) {
     const varBtn = button('Variable: off', () => { useVar = !useVar; varBtn.textContent = useVar ? 'Variable: on' : 'Variable: off'; varBtn.classList.toggle('primary', useVar); applyStyle(); });
     controls.append(varBtn, ...vf.map((a) => slider(a.tag, { min: a.min, max: a.max, step: (a.max - a.min) / 200, value: a.default, onInput: (v) => { axisValues[a.tag] = v; useVar = true; varBtn.textContent = 'Variable: on'; varBtn.classList.add('primary'); applyStyle(); }, format: (v) => v.toFixed(0) })));
   }
   dlg.append(
-    h('div', { class: 'row' }, h('h2', {}, '🧪 Type tester ', h('small', {}, 'everything here is editable · uses the live font')), h('span', { class: 'spacer' }), button('Close', () => dlg.close())),
+    h('div', { class: 'row' }, h('h2', {}, 'Type tester ', h('small', {}, 'everything here is editable; it uses the live font')), h('span', { class: 'spacer' }), button('Close', () => dlg.close())),
     controls, sheet, waterfall,
   );
   applyStyle();

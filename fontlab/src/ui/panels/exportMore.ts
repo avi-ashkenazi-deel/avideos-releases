@@ -19,25 +19,32 @@ let lastVariable: { bytes: Uint8Array; axes: { tag: string; name: string; min: n
 
 const lookup = (): GlyphLookup => (ch) => { const b = store.built[ch]; return b && b.contours.length ? { advance: b.advance, contours: b.contours } : undefined; };
 
-export function exportMoreButtons(): HTMLElement[] {
-  return [
-    button('SVG specimen', () => {
-      const svg = specimenSvg({ text: store.project.previewText, metrics: store.project.metrics, lookup: lookup(), animate: true });
-      downloadBlob(svg, `${slug(store.project.name)}-specimen.svg`, 'image/svg+xml');
-    }),
-    button('🧪 Type tester', () => { if (!store.otf) { toast('Nothing built yet'); return; } openTypeTester(); }, 'tester-btn'),
-    button('⬇ Tester .html', () => {
-      if (!store.otf) { toast('Nothing built yet'); return; }
-      const enabled = new Set([...store.project.blocks, 'latin']);
-      const samples = BLOCKS.filter((b) => enabled.has(b.id)).map((b) => ({ title: b.name, text: b.sample, rtl: !!b.rtl }));
-      samples.unshift({ title: 'Preview', text: store.project.previewText, rtl: false });
-      const html = typeTesterHtml({ name: store.project.name, otf: new Uint8Array(store.otf.slice(0)), variable: lastVariable ?? undefined, samples, metrics: store.project.metrics });
-      downloadBlob(html, `${slug(store.project.name)}-type-tester.html`, 'text/html');
-    }),
-    button('🎞 Animate…', openAnimateDialog),
-    button('🧬 Variable font…', openVariableDialog),
-  ];
+export function downloadOtf(): void {
+  if (!store.otf) { toast('Nothing built yet. Draw or import some letters first.'); return; }
+  downloadBlob(store.otf.slice(0), `${slug(store.project.name)}.otf`, 'font/otf');
 }
+
+export function downloadSvgSpecimen(): void {
+  if (!store.otf) { toast('Nothing built yet.'); return; }
+  const svg = specimenSvg({ text: store.project.previewText, metrics: store.project.metrics, lookup: lookup(), animate: true });
+  downloadBlob(svg, `${slug(store.project.name)}-specimen.svg`, 'image/svg+xml');
+}
+
+export function downloadTesterHtml(): void {
+  if (!store.otf) { toast('Nothing built yet.'); return; }
+  const enabled = new Set([...store.project.blocks, 'latin']);
+  const samples = BLOCKS.filter((b) => enabled.has(b.id)).map((b) => ({ title: b.name, text: b.sample, rtl: !!b.rtl }));
+  samples.unshift({ title: 'Preview', text: store.project.previewText, rtl: false });
+  const html = typeTesterHtml({ name: store.project.name, otf: new Uint8Array(store.otf.slice(0)), variable: lastVariable ?? undefined, samples, metrics: store.project.metrics });
+  downloadBlob(html, `${slug(store.project.name)}-type-tester.html`, 'text/html');
+}
+
+export function openTester(): void {
+  if (!store.otf) { toast('Nothing built yet.'); return; }
+  openTypeTester();
+}
+
+export { openAnimateDialog, openVariableDialog };
 
 /** Frames = a sweep through DNA space (seed + axis) rendered to canvas, encoded as GIF or WebM. */
 function openAnimateDialog() {
@@ -71,7 +78,7 @@ function openAnimateDialog() {
     }
     return out;
   };
-  const gifBtn = button('⬇ GIF', async () => {
+  const gifBtn = button('Download GIF', async () => {
     status.textContent = 'Rendering frames…';
     await new Promise((r) => setTimeout(r, 20));
     try {
@@ -82,7 +89,7 @@ function openAnimateDialog() {
       status.textContent = `GIF ready (${(blob.size / 1024).toFixed(0)} KB)`;
     } catch (e) { status.textContent = 'GIF failed: ' + (e as Error).message; }
   }, 'primary');
-  const webmBtn = button('⬇ WebM', async () => {
+  const webmBtn = button('Download WebM', async () => {
     status.textContent = 'Rendering frames…';
     await new Promise((r) => setTimeout(r, 20));
     try {
@@ -94,7 +101,7 @@ function openAnimateDialog() {
       status.textContent = `WebM ready (${(blob.size / 1024).toFixed(0)} KB)`;
     } catch (e) { status.textContent = 'WebM failed: ' + (e as Error).message; }
   });
-  dlg.append(h('h2', {}, '🎞 Animated specimen'),
+  dlg.append(h('h2', {}, 'Animated specimen'),
     h('p', {}, 'Sweeps one DNA axis back and forth across the frames, so the loop is seamless.'),
     h('div', { class: 'row' }, h('label', {}, 'Text ', text)), h('div', { class: 'row' }, h('label', {}, 'Sweep ', axisSel), framesRow),
     canvas, status,
@@ -134,7 +141,7 @@ function openVariableDialog() {
       const kf0 = payload.axes.map((a) => `'${a.tag}' ${a.min}`).join(', '), kf1 = payload.axes.map((a) => `'${a.tag}' ${a.max}`).join(', ');
       demo.animate([{ fontVariationSettings: kf0 }, { fontVariationSettings: kf1 }, { fontVariationSettings: kf0 }], { duration: 3000, iterations: Infinity });
       status.textContent = `Variable font ready (${(bytes.length / 1024).toFixed(0)} KB) — axes: ${payload.axes.map((a) => a.tag).join(', ')}. Downloaded.`;
-      const svgBtn = button('⬇ Animated SVG with this font', () => {
+      const svgBtn = button('Download animated SVG with this font', () => {
         const svg = specimenSvg({ text: store.project.previewText, metrics: store.project.metrics, lookup: lookup(), variableFont: { bytes: copy, axes: payload.axes } });
         downloadBlob(svg, `${slug(store.project.name)}-variable-specimen.svg`, 'image/svg+xml');
       });
@@ -142,7 +149,7 @@ function openVariableDialog() {
     } catch (e) { status.textContent = 'Failed: ' + (e as Error).message; console.error(e); }
     build.disabled = false;
   }, 'primary');
-  dlg.append(h('h2', {}, '🧬 Variable font export'),
+  dlg.append(h('h2', {}, 'Variable font'),
     h('p', {}, 'Builds a real OpenType variable font with the axes you pick (custom axes like WOBL work in CSS via font-variation-settings). Rust, Glitch and Inflate change point counts, so they are baked in as static only.'),
     list, h('div', { class: 'row' }, build, button('Close', () => dlg.close())), status, demo);
   document.body.append(dlg); dlg.showModal(); dlg.addEventListener('close', () => dlg.remove());

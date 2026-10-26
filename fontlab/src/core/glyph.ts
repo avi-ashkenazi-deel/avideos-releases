@@ -28,6 +28,16 @@ export interface Contour {
   points: Vec[];
 }
 
+/**
+ * Editable curve contour: closed loop of cubic Béziers [p0, c1, c2, p3].
+ * segments[i][3] === segments[i+1][0] and the last segment ends at `start`.
+ * A straight segment has c1 = p0 and c2 = p3 (collinear controls also count).
+ */
+export interface CurveContour {
+  start: Vec;
+  segments: [Vec, Vec, Vec, Vec][];
+}
+
 export type GlyphSource = 'drawn' | 'traced' | 'imported' | 'generated';
 
 export interface RecipeInstance {
@@ -48,6 +58,12 @@ export interface Glyph {
   kind: 'stroke' | 'outline';
   strokes?: Stroke[];
   contours?: Contour[];
+  /**
+   * Outline glyphs only: editable source of truth when present; `contours`
+   * is then its flattening (see inputs/draw/curves.ts flattenCurves).
+   * Whoever edits `curves` must re-flatten `contours`.
+   */
+  curves?: CurveContour[];
   recipe?: RecipeInstance;
   /** user-edited: generator must not overwrite */
   locked?: boolean;
@@ -144,7 +160,7 @@ export const DEFAULT_DNA: DnaParams = {
 export const CHARSET: string =
   'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
 
-export function newProject(name = 'Untitled Funk'): FontProject {
+export function newProject(name = 'Untitled'): FontProject {
   return {
     version: 1,
     name,

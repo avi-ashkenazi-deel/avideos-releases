@@ -1,4 +1,5 @@
-import { h, slider, button, toast } from '../dom';
+import { h, slider, toast, iconButton, help } from '../dom';
+import { icon } from '../icons';
 import { store } from '../state';
 import { scheduleBuild } from '../buildClient';
 import { FX, FX_ORDER } from '../../fx/registry';
@@ -7,44 +8,26 @@ import { PRESETS } from '../../fx/presets';
 import type { FxGroup, FxLayer, GroupOp } from '../../fx/types';
 
 const OPS: { op: GroupOp; label: string; hint: string }[] = [
-  { op: 'union', label: '∪ add', hint: 'merge with the result so far' },
-  { op: 'subtract', label: '− cut', hint: 'cut this group out of the result so far' },
-  { op: 'intersect', label: '∩ keep', hint: 'keep only where both overlap' },
-  { op: 'xor', label: '⊕ xor', hint: 'keep where exactly one is inked' },
+  { op: 'union', label: 'add to', hint: 'merge this layer set with the result so far' },
+  { op: 'subtract', label: 'cut from', hint: 'cut this layer set out of the result so far' },
+  { op: 'intersect', label: 'keep only', hint: 'keep only where both overlap' },
+  { op: 'xor', label: 'xor with', hint: 'keep where exactly one is inked' },
 ];
 const STAGE_LABEL = { skeleton: 'Strokes', outline: 'Shape', raster: 'Texture' } as const;
 
-/**
- * Effects panel: ordered groups of effect layers. Group 0 is the base; later
- * groups start from the original glyph and combine with a boolean op.
- */
+/** Effects: preset dropdown + an ordered list of effects; mask groups behind Advanced. */
 export function effectsPanel(): HTMLElement {
   const list = h('div', { class: 'fxgroups' });
   const changed = (delay = 60) => { store.emit('fx'); scheduleBuild(delay); };
   let dragging: { gi: number; li: number } | null = null;
+  let advanced = store.project.fx.groups.length > 1;
 
   const render = () => {
     const fx = store.project.fx;
+    if (fx.groups.length > 1) advanced = true;
+    advToggle.checked = advanced;
     list.replaceChildren(...fx.groups.map((g, gi) => groupCard(g, gi)));
-  };
-
-  const groupCard = (g: FxGroup, gi: number): HTMLElement => {
-    const fx = store.project.fx;
-    const enable = h('input', { type: 'checkbox', checked: g.enabled, title: 'enable group' });
-    enable.addEventListener('change', () => { g.enabled = enable.checked; changed(0); });
-    const opSel = h('select', { class: 'opsel', title: 'how this group combines with the result so far' }, ...OPS.map((o) => h('option', { value: o.op, selected: o.op === g.op, title: o.hint }, o.label)));
-    opSel.addEventListener('change', () => { g.op = opSel.value as GroupOp; changed(0); });
-    const addSel = h('select', { class: 'addsel' }, h('option', { value: '' }, '+ Effect…'),
-      ...(['skeleton', 'outline', 'raster'] as const).map((st) => h('optgroup', { label: STAGE_LABEL[st] }, ...FX_ORDER.filter((t) => FX[t].def.stage === st).map((t) => h('option', { value: t, title: FX[t].def.hint }, FX[t].def.label + (FX[t].def.slow ? ' (slow)' : '') + (FX[t].def.crisp ? ' ✦' : ''))))));
-    addSel.addEventListener('change', () => { if (!addSel.value) return; g.layers.push(newLayer(addSel.value)); addSel.value = ''; render(); changed(0); });
-    const del = gi === 0 ? null : button('×', () => { fx.groups.splice(gi, 1); render(); changed(0); }, 'icon');
-    const head = h('div', { class: 'fxhead' }, enable, h('strong', {}, gi === 0 ? 'Base' : `Group ${gi + 1}`), gi === 0 ? h('small', {}, 'applied in order') : opSel, h('span', { class: 'spacer' }), addSel, del);
-    const rows = h('div', { class: 'fxlayers' }, ...g.layers.map((l, li) => layerRow(g, gi, l, li)));
-    if (!g.layers.length) rows.append(h('div', { class: 'fxempty' }, gi === 0 ? 'No effects yet — add one, or pick a preset.' : 'Empty group = the original glyph.'));
-    const card = h('div', { class: 'fxgroup' + (g.enabled ? '' : ' off'), 'data-gi': gi }, head, rows);
-    card.addEventListener('dragover', (e) => { e.preventDefault(); });
-    card.addEventListener('drop', (e) => { e.preventDefault(); if (!dragging) return; moveLayer(dragging, { gi, li: g.layers.length }); });
-    return card;
+    addGroupBtn.style.display = advanced ? '' : 'none';
   };
 
   const moveLayer = (from: { gi: number; li: number }, to: { gi: number; li: number }) => {
@@ -58,14 +41,43 @@ export function effectsPanel(): HTMLElement {
     render(); changed(0);
   };
 
+  const addSelect = (g: FxGroup) => {
+    const sel = h('select', { class: 'addsel', 'aria-label': 'Add effect' }, h('option', { value: '' }, 'Add effect…'),
+      ...(['skeleton', 'outline', 'raster'] as const).map((st) => h('optgroup', { label: STAGE_LABEL[st] }, ...FX_ORDER.filter((t) => FX[t].def.stage === st).map((t) => h('option', { value: t, title: FX[t].def.hint }, FX[t].def.label + (FX[t].def.crisp ? ' (crisp)' : '') + (FX[t].def.slow ? ' (slow)' : ''))))));
+    sel.addEventListener('change', () => { if (!sel.value) return; g.layers.push(newLayer(sel.value)); sel.value = ''; render(); changed(0); });
+    return sel;
+  };
+
+  const groupCard = (g: FxGroup, gi: number): HTMLElement => {
+    const fx = store.project.fx;
+    const rows = h('div', { class: 'fxlayers' }, ...g.layers.map((l, li) => layerRow(g, gi, l, li)));
+    if (!g.layers.length) rows.append(h('div', { class: 'fxempty' }, gi === 0 ? 'No effects yet. Pick a preset above or add one below.' : 'Empty: this set is the original letter.'));
+    const head = h('div', { class: 'fxhead' });
+    if (advanced) {
+      const enable = h('input', { type: 'checkbox', checked: g.enabled, title: 'enable this set' });
+      enable.addEventListener('change', () => { g.enabled = enable.checked; changed(0); });
+      head.append(enable, h('strong', {}, gi === 0 ? 'Base' : `Set ${gi + 1}`));
+      if (gi > 0) {
+        const opSel = h('select', { class: 'opsel', 'aria-label': 'how this set combines' }, ...OPS.map((o) => h('option', { value: o.op, selected: o.op === g.op, title: o.hint }, o.label)));
+        opSel.addEventListener('change', () => { g.op = opSel.value as GroupOp; changed(0); });
+        head.append(opSel, h('small', { class: 'muted' }, 'the result so far'), help('A set starts again from the original letter, runs its own effects, then combines with everything above it. Example: Inflate in the base, an empty set that “cuts from” = a hollow halo.'));
+        head.append(h('span', { class: 'spacer' }), iconButton('x', 'Remove set', () => { fx.groups.splice(gi, 1); render(); changed(0); }, { iconOnly: true }));
+      } else head.append(h('span', { class: 'spacer' }));
+    }
+    const card = h('div', { class: 'fxgroup' + (g.enabled ? '' : ' off') + (advanced ? ' adv' : ''), 'data-gi': gi }, head, rows, h('div', { class: 'row' }, addSelect(g)));
+    card.addEventListener('dragover', (e) => e.preventDefault());
+    card.addEventListener('drop', (e) => { e.preventDefault(); if (dragging) moveLayer(dragging, { gi, li: g.layers.length }); });
+    return card;
+  };
+
   const layerRow = (g: FxGroup, gi: number, l: FxLayer, li: number): HTMLElement => {
     const impl = FX[l.type];
     const enable = h('input', { type: 'checkbox', checked: l.enabled, title: 'enable' });
     enable.addEventListener('change', () => { l.enabled = enable.checked; row.classList.toggle('off', !l.enabled); changed(0); });
-    const up = button('▲', () => { if (li > 0) moveLayer({ gi, li }, { gi, li: li - 1 }); }, 'icon');
-    const down = button('▼', () => { if (li < g.layers.length - 1) moveLayer({ gi, li }, { gi, li: li + 2 }); }, 'icon');
-    const del = button('×', () => { g.layers.splice(li, 1); render(); changed(0); }, 'icon');
-    const handle = h('span', { class: 'handle', draggable: true, title: 'drag to reorder' }, '⋮⋮');
+    const up = iconButton('up', 'Move up', () => { if (li > 0) moveLayer({ gi, li }, { gi, li: li - 1 }); }, { iconOnly: true, cls: 'icon' });
+    const down = iconButton('down', 'Move down', () => { if (li < g.layers.length - 1) moveLayer({ gi, li }, { gi, li: li + 2 }); }, { iconOnly: true, cls: 'icon' });
+    const del = iconButton('x', 'Remove effect', () => { g.layers.splice(li, 1); render(); changed(0); }, { iconOnly: true, cls: 'icon' });
+    const handle = h('span', { class: 'handle', draggable: true, title: 'drag to reorder' }, icon('grip', 14));
     handle.addEventListener('dragstart', (e) => { dragging = { gi, li }; (e as DragEvent).dataTransfer?.setData('text/plain', l.id); });
     const params = h('div', { class: 'fxparams' }, ...impl.def.params.map((p) => {
       const isToggle = p.step >= 1 && p.max - p.min <= 1 && p.min === 0;
@@ -74,12 +86,16 @@ export function effectsPanel(): HTMLElement {
         cb.addEventListener('change', () => { l.params[p.key] = cb.checked ? 1 : 0; changed(0); });
         return h('label', { class: 'toggle' }, cb, ' ', p.label);
       }
-      const row = slider(p.label, { min: p.min, max: p.max, step: p.step, value: l.params[p.key] ?? p.default, onInput: (v) => { l.params[p.key] = v; changed(impl.def.slow ? 250 : 60); }, format: (v) => (p.step < 0.01 ? v.toFixed(3) : p.step < 1 ? v.toFixed(2) : v.toFixed(0)) });
-      if (p.hint) row.title = p.hint;
-      return row;
+      const r = slider(p.label, { min: p.min, max: p.max, step: p.step, value: l.params[p.key] ?? p.default, onInput: (v) => { l.params[p.key] = v; changed(impl.def.slow ? 250 : 60); }, format: (v) => (p.step < 0.01 ? v.toFixed(3) : p.step < 1 ? v.toFixed(2) : v.toFixed(0)) });
+      if (p.hint) r.title = p.hint;
+      return r;
     }));
     const row = h('div', { class: 'fxlayer' + (l.enabled ? '' : ' off') + ' stage-' + impl.def.stage, 'data-type': l.type, 'data-layer': l.id },
-      h('div', { class: 'fxrow' }, handle, enable, h('span', { class: 'fxname', title: impl.def.hint }, impl.def.label), h('span', { class: 'stage' }, STAGE_LABEL[impl.def.stage]), impl.def.slow ? h('span', { class: 'tag' }, 'slow') : null, impl.def.crisp ? h('span', { class: 'tag crisp', title: 'keeps corners sharp' }, 'crisp') : null, impl.def.variable ? h('span', { class: 'tag var', title: 'can be a variable-font axis' }, 'VF') : null, h('span', { class: 'spacer' }), up, down, del),
+      h('div', { class: 'fxrow' }, handle, enable, h('span', { class: 'fxname', title: impl.def.hint }, impl.def.label), h('span', { class: 'stage' }, STAGE_LABEL[impl.def.stage]),
+        impl.def.crisp ? h('span', { class: 'tag crisp', title: 'keeps corners sharp' }, 'crisp') : null,
+        impl.def.slow ? h('span', { class: 'tag' }, 'slow') : null,
+        impl.def.variable ? h('span', { class: 'tag var', title: 'can be a variable-font axis' }, 'VF') : null,
+        h('span', { class: 'spacer' }), up, down, del),
       params);
     row.addEventListener('dragover', (e) => { e.preventDefault(); e.stopPropagation(); row.classList.add('over'); });
     row.addEventListener('dragleave', () => row.classList.remove('over'));
@@ -87,28 +103,31 @@ export function effectsPanel(): HTMLElement {
     return row;
   };
 
-  const seedInput = h('input', { type: 'number', value: store.project.fx.seed, min: 0, step: 1, class: 'seed' });
-  seedInput.addEventListener('change', () => { store.project.fx.seed = parseInt(seedInput.value) || 0; changed(0); });
-  const presets = h('div', { class: 'chips' }, ...Object.entries(PRESETS).map(([name, build]) => button(name, () => {
-    store.project.fx = build(store.project.fx.seed);
-    render(); changed(0);
-  }, 'chip')));
+  // preset dropdown
+  const presetSel = h('select', { id: 'preset', 'aria-label': 'Preset' }, h('option', { value: '' }, 'Preset…'), ...Object.keys(PRESETS).map((n) => h('option', { value: n }, n)));
+  presetSel.addEventListener('change', () => { if (!presetSel.value) return; store.project.fx = PRESETS[presetSel.value](store.project.fx.seed); render(); changed(0); });
+  store.subscribe((ev) => { if (ev === 'fx') presetSel.value = ''; });
 
+  const seedInput = h('input', { type: 'number', value: store.project.fx.seed, min: 0, step: 1, class: 'seed', 'aria-label': 'Seed' });
+  seedInput.addEventListener('change', () => { store.project.fx.seed = parseInt(seedInput.value) || 0; changed(0); });
   const bypass = h('input', { type: 'checkbox', checked: store.bypassFx, id: 'bypassfx' });
   bypass.addEventListener('change', () => { store.bypassFx = bypass.checked; store.emit('fx'); scheduleBuild(0); });
   store.subscribe((ev) => { if (ev === 'bypass') bypass.checked = store.bypassFx; });
+  const advToggle = h('input', { type: 'checkbox', checked: advanced, id: 'fxadv' });
+  advToggle.addEventListener('change', () => { advanced = advToggle.checked; if (!advanced && store.project.fx.groups.length > 1) { if (!confirm('Turning Advanced off removes the extra sets. Continue?')) { advToggle.checked = true; return; } store.project.fx.groups = store.project.fx.groups.slice(0, 1); changed(0); } render(); });
+  const addGroupBtn = iconButton('layers', 'Add a set', () => { store.project.fx.groups.push(newGroup('subtract')); render(); changed(0); toast('New set: starts from the original letter and is cut from the result. Change “cut from” to combine differently.'); }, { testid: 'btn-add-group' });
+
   const panel = h('section', { class: 'panel effects' },
-    h('h2', {}, 'Effects ', h('small', {}, 'stack them, reorder them, cut groups out of each other')),
-    h('label', { class: 'bypass', for: 'bypassfx', title: 'Preview and export the glyphs exactly as drawn / imported, ignoring every effect' }, bypass, ' Show original (effects off)', h('small', { class: 'muted' }, ' · ✦ = keeps corners sharp')),
-    presets,
+    h('h2', {}, 'Effects', help('Effects run top to bottom on every letter. Reorder by dragging. Crisp effects keep corners sharp; textures go through a bitmap.')),
+    h('div', { class: 'row' }, presetSel, h('label', { class: 'toggle', for: 'bypassfx' }, bypass, ' Show original', help('Preview and export the letters exactly as drawn or imported, ignoring every effect. Turns on by itself after a font import.'))),
     list,
     h('div', { class: 'row' },
-      button('+ Group', () => { store.project.fx.groups.push(newGroup('subtract')); render(); changed(0); toast('New group: starts from the original glyph and is cut from the result. Change “− cut” to combine differently.'); }),
       h('label', {}, 'Seed ', seedInput),
-      button('🎲 Shuffle seed', () => { const s = Math.floor(Math.random() * 1e6); seedInput.value = String(s); store.project.fx.seed = s; changed(0); }),
-      button('Mutate!', () => { mutateStack(store.project.fx); render(); changed(0); }, 'primary'),
-      button('Reset', () => { store.project.fx = newStack(store.project.fx.seed); render(); changed(0); }),
+      iconButton('shuffle', 'Shuffle seed', () => { const s = Math.floor(Math.random() * 1e6); seedInput.value = String(s); store.project.fx.seed = s; changed(0); }, { title: 'Random effects get a new roll; same seed = same result' }),
+      iconButton('dice', 'Mutate', () => { mutateStack(store.project.fx); render(); changed(0); }, { cls: 'primary', title: 'Nudge every slider a little' }),
+      iconButton('reset', 'Clear effects', () => { store.project.fx = newStack(store.project.fx.seed); render(); changed(0); }),
     ),
+    h('div', { class: 'row advrow' }, h('label', { class: 'toggle', for: 'fxadv' }, advToggle, ' Advanced: sets', help('Sets let one stack of effects be cut from, added to, or intersected with another. Most looks do not need them.')), addGroupBtn),
   );
   store.subscribe((ev) => { if (ev === 'project:loaded' || ev === 'fx:external') { seedInput.value = String(store.project.fx.seed); render(); } });
   render();

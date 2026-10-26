@@ -5,8 +5,9 @@ font), let FontLab grow the rest of the alphabet in the same style, bend the
 whole typeface with **Style DNA** sliders, and download a real `.otf`, a
 variable `.ttf` with custom axes, or an animated specimen.
 
-Everything runs in the browser. No server, no accounts; projects autosave to
-your browser and can be saved as `.json`.
+Everything runs in the browser. No server, no accounts. Fonts live in an
+in-browser **Fonts** list (Font menu): every change autosaves into the open
+font, **Reset** offers to save first, and any font can be exported as `.json`.
 
 ## Run it
 
@@ -24,40 +25,52 @@ deploys `dist/` on every push to the branch.
 
 ## How to use it
 
-1. **Seed it.** Pick a letter in the strip and draw it. Pressure and speed change
-   the stroke width; the brush panel has width, smoothing, cap style and a mirror
-   mode. Good seeds: `o n a e s H` — round, arch, bowl, cross-stroke, S-curve,
-   straight. Or click **Trace a photo / video frame** (handwriting, a type
-   specimen, a frame from an mp4: light-on-dark is detected, frames and halos
-   are removed, glued letters are split, bold faces are traced as exact
-   outlines; type the letters in order or under each tile) or
-   **Remix an existing font**.
-2. **Generate the rest of the alphabet.** FontLab measures your seeds (stroke
+The header is just the font's name (a dot marks unsaved changes), a **Test**
+button, an **Export** menu and a **Font** menu (Save, Save as new, Fonts…,
+Export / Import JSON, Reset). The left column is **Add letters** with three
+tabs: **Draw**, **Photo or video**, **Font file**.
+
+1. **Seed it.** In the Draw tab pick a letter in the strip and draw it.
+   Pressure and speed change the stroke width; the brush details have width,
+   smoothing, cap style and a mirror mode. Good seeds: `o n a e s H` — round,
+   arch, bowl, cross-stroke, S-curve, straight. **Photo or video** traces
+   handwriting, a type specimen or a frame from an mp4 (light-on-dark is
+   detected, frames and halos are removed, glued letters are split, bold faces
+   are traced as exact outlines; type the letters in order or under each
+   tile). **Font file** imports `.ttf`, `.otf`, `.woff` or `.woff2` and keeps
+   the exact outlines by default; tick "convert to strokes" when you want
+   Weight, terminals and the variable axes on it.
+2. **Edit points.** The **Edit points** button under the canvas turns any
+   letter (drawn, traced, imported or generated) into nodes and handles like a
+   font editor: drag nodes or handles, drag on empty space to marquee-select,
+   double-click a segment to add a point, Delete removes, arrows nudge
+   (Shift for 10), Alt+drag a node changes its stroke width (or use the Point
+   width slider), Ctrl/Cmd+Z and Shift+Ctrl/Cmd+Z undo and redo. Imported
+   outlines keep their real curves.
+3. **Generate the rest of the alphabet.** FontLab measures your seeds (stroke
    width, x-height, cap height, slant, overshoot, spacing, terminals, wobble)
    and builds the missing letters from parametric recipes. Letters related to a
    seed are borrowed from it (`n → h m u`, `b → d p q`). **Mutation** adds
    randomness; **Re-roll** redraws one glyph; **Lock** protects a glyph.
-3. **Stack effects.** The Effects panel is an ordered stack, inspired by
-   [LivingPath](https://github.com/ivangrozny/LivingPath). Three kinds of
-   effect: *Strokes* (Weight, Slant, Wobble, Bounce, Jitter), *Shape* (Inflate,
-   Melt, Glitch, Rust, Hollow/Inline, Low poly, Stipple with gravity) and
-   *Texture* (Blob, Round corners, Pixelate, Crunch, Ink noise, Dilate/erode,
-   Reaction-diffusion). Drag or ▲▼ to reorder; add a second group to start
-   again from the original glyph and **add, cut, keep or xor** it against the
-   result (the Halo preset is "inflated minus original"). Every effect is
-   seeded per layer, so the same seed always gives the same font. **Mutate!**
-   nudges every slider. Presets: Chonky, Melted, Rusty, Glitchy, Ransom,
-   Nervous, Hollow, Inline, Blob, Pixel, Crunch, Ink, Crystal, Coral, Stipple,
-   Gravity, Halo, Everything.
-   ✦ **Crisp** effects keep corners sharp for subtle changes to imported
-   fonts: Weight (crisp, mitred), Stretch, Tracking, x-height, Chamfer
-   (or a seeded Fracture), Round corners (vector), Ink traps, Stencil.
+4. **Stack effects.** Pick a **Preset** from the dropdown (Chonky, Melted,
+   Rusty, Glitchy, Ransom, Nervous, Hollow, Inline, Blob, Pixel, Crunch, Ink,
+   Crystal, Coral, Stipple, Gravity, Halo, Everything, plus the crisp ones:
+   Crisp bold, Condensed, Extended, Chiselled, Fractured, Softened, Ink traps,
+   Stencil cut, Tall x) or add effects one by one. The stack is ordered and
+   inspired by [LivingPath](https://github.com/ivangrozny/LivingPath): *Strokes*
+   (Weight, Slant, Wobble, Bounce, Jitter), *Shape* (Inflate, Melt, Glitch,
+   Rust, Hollow/Inline, Low poly, Stipple with gravity), *Texture* (Blob, Round
+   corners, Pixelate, Crunch, Ink noise, Dilate/erode, Reaction-diffusion) and
+   **Crisp** effects that keep corners sharp for subtle changes to imported
+   fonts (Weight (crisp), Stretch, Tracking, x-height, Chamfer / Fracture,
+   Round corners (vector), Ink traps, Stencil). Every effect is seeded, so the
+   same seed always gives the same font; **Mutate** nudges every slider.
    **Show original** turns every effect off for preview and export; it
    switches on by itself after a font import so you see the font as it is.
-   **Living** mode in the preview drifts the noise-based effects over time so
-   the font is always moving; the GIF/WebM dialog can sweep the same time axis
-   for a seamless loop.
-4. **Pick your scripts.** The **Character set** panel switches blocks on:
+   **Advanced: sets** reveals effect sets: a second set starts again from the
+   original glyph and is added to, cut from, intersected or xor'd with the
+   result (the Halo preset is "inflated minus original").
+5. **Pick your scripts.** The **Character set** panel switches blocks on:
    Latin (always), Punctuation, Symbols, Latin accents (Zürich, façade,
    Łódź…), Cyrillic and Hebrew. Accented letters are composed from *your*
    base letter plus a mark; Cyrillic look-alikes (А В Е К М Н О Р С Т Х …)
@@ -65,23 +78,19 @@ deploys `dist/` on every push to the branch.
    the uppercase, so one drawn `o` flows into ö, ő, ø, о and more. The
    "Add any characters" box accepts anything else (★, kana, Arabic…) for you
    to draw by hand. Right-to-left lines render correctly in the preview.
-   **Remix an existing font** (.ttf, .otf, .woff, .woff2) keeps the exact
-   outlines by default; tick "convert to strokes" (thinning + distance
-   transform) when you want Weight, terminals and the variable axes on it.
-   There is also a per-glyph "To strokes" button and an "All outlines →
-   strokes" action.
-5. **Test and export.** The preview is editable in place, and **Type tester**
-   opens a full type-testing sheet in the app (samples per script, size,
-   line height, spacing, dark mode, waterfall, axis sliders).
-   `Download .otf` (static, CFF outlines), `Tester .html` (a
-   self-contained HTML page with the font embedded, editable samples per
-   script, waterfall, glyph grid and axis sliders when a variable font was
-   built), `SVG specimen`
-   (animated wiggle), `Animate…` (GIF / WebM sweeping one DNA axis), and
-   `Variable font…` (a real OpenType variable `.ttf` with `wght`, `slnt` and
-   custom `WOBL`, `MELT`, `BNCE` axes you can drive from CSS
-   `font-variation-settings`). Rust, Glitch and Inflate change point counts,
-   so they are static-only.
+6. **Preview, test and export.** The preview is editable in place; **Insert
+   sample text** drops a pangram for every script you switched on; **Drift**
+   slowly animates the noise-based effects (Wobble, Melt, Ink noise,
+   Reaction-diffusion) so the font keeps moving, and the Animate dialog can
+   sweep the same time axis for a seamless loop. **Test** opens the in-app
+   type tester (samples per script, size, line height, spacing, dark mode,
+   waterfall, axis sliders). The **Export** menu has `Download .otf` (static,
+   CFF outlines), `Variable font…` (a real OpenType variable `.ttf` with
+   `wght`, `slnt` and custom `WOBL`, `MELT`, `BNCE` axes you can drive from CSS
+   `font-variation-settings`; Rust, Glitch and Inflate change point counts,
+   so they are static-only), `Animate…` (GIF / WebM sweeping one axis),
+   `SVG specimen` (an animated poster of your font) and `Tester .html` (a
+   self-contained HTML type tester with the font embedded).
 
 ## How it works
 
@@ -115,13 +124,14 @@ seeds (draw | trace | import)
 
 ```
 src/core        data model, geometry, seeded PRNG + simplex noise, charsets, recipes (latin, punct, symbols, marks, cyrillic, hebrew)
-src/inputs      draw (pointer canvas), image (threshold → thin → strokes / potrace), fontimport
+src/inputs      draw (pointer canvas, point editor + curves), image (threshold → thin → strokes / potrace), fontimport
 src/generate    stats, primitives, compose, mutate, borrow
 src/fx          effect stack (types, registry, stack, presets), ops (hollow, lowpoly, stipple), raster (bitmap, trace, ops, reaction-diffusion)
 src/dna         the original nine operators + boolean/offset helpers (used by fx)
 src/outline     strokeExpand, union, fitCurves
 src/export      otf, variable (masters + Pyodide bridge + build_var.py), specimen (svg/gif/webm)
 src/pipeline    buildAll (used by the worker and by specimen rendering)
-src/ui          panels, store, preview FontFace, worker client
+src/ui          panels (header menus, add-letters tabs, grid, effects, preview, tester, library), icons, store, preview FontFace, worker client
+src/project     schema, json storage, in-browser Fonts library (IndexedDB)
 tests/unit      vitest; tests/e2e Playwright
 ```

@@ -2,6 +2,10 @@ import { test, expect, type Page } from '@playwright/test';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
+async function openPlain(page: Page) {
+  await page.locator('[data-testid=preview-plain]').evaluate((d) => { (d as HTMLDetailsElement).open = true; });
+}
+
 async function drawStroke(page: Page, pts: [number, number][]) {
   const canvas = page.locator('canvas.editor');
   await canvas.scrollIntoViewIfNeeded();
@@ -22,6 +26,20 @@ async function seedH(page: Page) {
   await builtStatus(page);
 }
 
+
+async function exportOtf(page: Page) {
+  await page.locator('[data-testid=menu-export]').click();
+  const [download] = await Promise.all([page.waitForEvent('download'), page.locator('[data-testid=menu-otf]').click()]);
+  return download;
+}
+async function pickFile(page: Page, tab: 'photo' | 'font', file: string) {
+  await page.locator(`[data-testid=tab-${tab}]`).click();
+  const chooser = page.waitForEvent('filechooser');
+  await page.locator(`[data-testid=btn-${tab}]`).click();
+  await (await chooser).setFiles(file);
+}
+const preset = (page: Page, name: string) => page.locator('#preset').selectOption(name);
+
 test.beforeEach(async ({ page }) => {
   await page.goto('/');
   await page.evaluate(() => localStorage.clear());
@@ -31,20 +49,20 @@ test.beforeEach(async ({ page }) => {
 test('presets and a subtract group change the glyph; layers reorder', async ({ page }) => {
   await seedH(page);
   const plain = await thumb(page, 'H');
-  await page.getByRole('button', { name: 'Hollow', exact: true }).click();
+  await preset(page, 'Hollow');
   await expect(page.locator('.fxlayer[data-type="hollow"]')).toBeVisible();
   await expect.poll(async () => Buffer.compare(plain, await thumb(page, 'H')), { timeout: 20000 }).not.toBe(0);
   const hollow = await thumb(page, 'H');
   // reorder: move hollow above weight → different result
-  await page.locator('.fxlayer[data-type="hollow"] button', { hasText: '▲' }).click();
+  await page.locator('.fxlayer[data-type="hollow"]').getByRole('button', { name: 'Move up' }).click();
   await expect(page.locator('.fxlayer').first()).toHaveAttribute('data-type', 'hollow');
   await expect.poll(async () => Buffer.compare(hollow, await thumb(page, 'H')), { timeout: 20000 }).not.toBe(0);
   // Halo preset = two groups with subtract
-  await page.getByRole('button', { name: 'Halo', exact: true }).click();
+  await preset(page, 'Halo');
   await expect(page.locator('.fxgroup')).toHaveCount(2);
   await expect(page.locator('.fxgroup').nth(1).locator('.opsel')).toHaveValue('subtract');
   await builtStatus(page);
-  const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: /Download \.otf/ }).click()]);
+  const download = await exportOtf(page);
   const buf = fs.readFileSync(await download.path() as string);
   expect(buf.subarray(0, 4).toString('latin1')).toBe('OTTO');
 });
@@ -52,9 +70,9 @@ test('presets and a subtract group change the glyph; layers reorder', async ({ p
 test('texture effects run: pixel preset and reaction-diffusion finish', async ({ page }) => {
   await seedH(page);
   const plain = await thumb(page, 'H');
-  await page.getByRole('button', { name: 'Pixel', exact: true }).click();
+  await preset(page, 'Pixel');
   await expect.poll(async () => Buffer.compare(plain, await thumb(page, 'H')), { timeout: 30000 }).not.toBe(0);
-  await page.getByRole('button', { name: 'Coral', exact: true }).click();
+  await preset(page, 'Coral');
   await expect(page.locator('.fxlayer[data-type="reactionDiffusion"]')).toBeVisible();
   await builtStatus(page);
   await expect(page.locator('.cell[data-char="H"]')).not.toHaveClass(/empty/);
@@ -62,64 +80,66 @@ test('texture effects run: pixel preset and reaction-diffusion finish', async ({
 
 test('living mode drifts the preview and stops', async ({ page }) => {
   await seedH(page);
+  await openPlain(page);
   await page.locator('.preview-input').fill('HHHH');
-  await page.getByRole('button', { name: 'Ink', exact: true }).click();
+  await preset(page, 'Ink');
   await builtStatus(page);
-  await page.getByRole('button', { name: /Living: off/ }).click();
-  await expect(page.getByRole('button', { name: /Living: on/ })).toBeVisible();
+  await page.getByRole('button', { name: 'Drift' }).click();
+  await expect(page.getByRole('button', { name: 'Drift' })).toHaveAttribute('aria-pressed', 'true');
   await expect.poll(() => page.locator('.status').textContent(), { timeout: 20000 }).toMatch(/living · [\d.]+ fps/);
   const before = await page.locator('.preview-out').screenshot();
   await expect.poll(async () => Buffer.compare(before, await page.locator('.preview-out').screenshot()), { timeout: 15000 }).not.toBe(0);
-  await page.getByRole('button', { name: /Living: on/ }).click();
-  await expect(page.getByRole('button', { name: /Living: off/ })).toBeVisible();
+  await page.getByRole('button', { name: 'Drift' }).click();
+  await expect(page.getByRole('button', { name: 'Drift' })).toHaveAttribute('aria-pressed', 'false');
   await builtStatus(page);
 });
 
 test('import a font as strokes, then HTML type tester downloads', async ({ page }) => {
   // make a font with the app itself first
   await seedH(page);
-  const [otf] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: /Download \.otf/ }).click()]);
+  const otf = await exportOtf(page);
   const otfPath = path.join(test.info().outputDir, 'seed.otf');
   await otf.saveAs(otfPath);
-  await page.getByRole('button', { name: 'New' }).click().catch(() => {});
-  page.on('dialog', (d) => d.accept());
-  await page.getByRole('button', { name: 'New' }).click();
-  await page.locator('.sources .toggle input').check(); // convert to strokes (opt-in)
+  page.on('dialog', (d) => d.dismiss()); // "save before reset?" → discard
+  await page.locator('[data-testid=menu-font]').click();
+  await page.locator('[data-testid=menu-reset]').click();
+  await page.locator('[data-testid=tab-font]').click();
+  await page.locator('[data-testid=chk-strokes]').check(); // convert to strokes (opt-in)
   const chooser = page.waitForEvent('filechooser');
-  await page.getByRole('button', { name: /Remix an existing font/ }).click();
+  await page.locator('[data-testid=btn-font]').click();
   await (await chooser).setFiles(otfPath);
-  await expect(page.locator('.cell[data-char="H"] .badge')).toHaveText('⬇', { timeout: 30000 });
+  await expect(page.locator('.cell[data-char="H"] .badge')).toHaveAttribute('data-source', 'imported', { timeout: 30000 });
+  await page.locator('[data-testid=tab-draw]').click();
   await page.locator('.chbtn[data-ch="H"]').click();
-  await expect(page.locator('.seeds h2')).toContainText('strokes');
+  await expect(page.locator('.drawtitle')).toContainText('strokes');
   await builtStatus(page);
-  const [html] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: /Tester \.html/ }).click()]);
+  await page.locator('[data-testid=menu-export]').click();
+  const [html] = await Promise.all([page.waitForEvent('download'), page.locator('[data-testid=menu-html]').click()]);
   const text = fs.readFileSync(await html.path() as string, 'utf8');
   expect(text).toContain('@font-face');
   expect(text).toContain('font/otf;base64,');
 });
 
 test('import shows the original; crisp preset keeps corners; in-app type tester edits live', async ({ page }) => {
-  await page.getByRole('button', { name: 'Chonky', exact: true }).click();
-  const chooser = page.waitForEvent('filechooser');
-  await page.getByRole('button', { name: /Remix an existing font/ }).click();
-  await (await chooser).setFiles(path.resolve('tests/fixtures/sample.woff2'));
-  await expect(page.locator('.cell[data-char="H"] .badge')).toHaveText('⬇', { timeout: 60000 });
+  await preset(page, 'Chonky');
+  await pickFile(page, 'font', path.resolve('tests/fixtures/sample.woff2'));
+  await expect(page.locator('.cell[data-char="H"] .badge')).toHaveAttribute('data-source', 'imported', { timeout: 60000 });
   await expect(page.locator('#bypassfx')).toBeChecked();
   await builtStatus(page);
   const original = await thumb(page, 'H');
   await page.locator('#bypassfx').uncheck();
   await expect.poll(async () => Buffer.compare(original, await thumb(page, 'H')), { timeout: 30000 }).not.toBe(0);
-  await page.getByRole('button', { name: 'Chiselled', exact: true }).click();
+  await preset(page, 'Chiselled');
   await expect(page.locator('.fxlayer[data-type="chamfer"] .tag.crisp')).toBeVisible();
   await builtStatus(page);
   // in-app tester
-  await page.getByRole('button', { name: '🧪 Type tester' }).click();
+  await page.locator('[data-testid=btn-test]').click();
   const free = page.locator('.modal.tester .tblock').first();
   await free.click();
   await page.keyboard.press('Control+A');
   await page.keyboard.type('HaHa');
   await expect(page.locator('.modal.tester .wline').first()).toContainText('HaHa');
-  await page.getByRole('button', { name: '☾ Dark' }).click();
+  await page.getByRole('button', { name: 'Dark / light' }).click();
   await expect(page.locator('.modal.tester')).toHaveClass(/dark/);
   await page.getByRole('button', { name: 'Close' }).click();
   await expect(page.locator('.preview-out')).toHaveText('HaHa');
