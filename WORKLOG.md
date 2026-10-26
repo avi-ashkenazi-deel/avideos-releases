@@ -61,6 +61,22 @@ full-screen-this-camera layout cues at the playhead, replacing a cue within
 fades, and offset recovery from synthetic envelopes (`EditorAudioTests`).
 F-488…F-499.
 
+Thirty-first pass — **Overlay templates from the OpenAI (Codex) session,
+merged**. Avi's Mac couldn't push (HTTP 403), so the work arrived as a patch
+and was applied as his commit on top of build 30, unchanged: portable
+phone/comment overlay designs (`OverlayTemplate`, Optional fields on
+`Element` and `Project` so old shows load), the Show Templates sheet with
+content-only fields, grouped Show/Hide, duplicate, design copies with a new
+typeface, JSON export/import that never carries instance text; a chosen
+comment design restyling the live comment card (`CommentCardStyle.fontName`
+/ `cornerRadius`); a Worker host-key field in Settings → General; the
+`RenderEngine.init?()` → `convenience` compile fix; `outputs/` ignored (the
+1.2 GB of motion renders stay local); `design.md`, OVERLAY_TEMPLATES.md and
+FIRST_TEST_SESSION.md. Follow-ups here: the Comments window preview now
+uses the same style as air (template when set) including its typeface and
+corner radius, Card Options says when a template overrides it, and
+FIRST_TEST_SESSION no longer says there is no direct streaming. F-557…F-560.
+
 Thirtieth pass — **Go live: multistream, horizontal + vertical at once,
 and live comments the host features by hand**. Direct from the Mac, no
 relay. The picture is encoded once per (shape, quality) with VideoToolbox

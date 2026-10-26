@@ -55,7 +55,7 @@ struct CommentsWindow: View {
                     Label("Card Options", systemImage: "slider.horizontal.3")
                 }
                 .popover(isPresented: $showsOptions, arrowEdge: .bottom) {
-                    CommentOptionsView(store: store)
+                    CommentOptionsView(store: store, templateName: studio.project.liveCommentTemplate?.name)
                 }
             }
         }
@@ -359,6 +359,12 @@ private struct FeaturePanel: View {
     let store: CommentsStore
     let selected: LiveComment?
 
+    /// What actually goes on air: the show's comment template when one is
+    /// chosen (Show Templates), otherwise the Card Options style.
+    private var airStyle: CommentCardStyle {
+        studio.project.liveCommentTemplate?.commentStyle ?? store.style
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Preview")
@@ -366,12 +372,12 @@ private struct FeaturePanel: View {
             if let selected {
                 HStack(alignment: .bottom, spacing: 10) {
                     CommentCardPreview(comment: selected,
-                                       style: store.style,
+                                       style: airStyle,
                                        canvas: studio.project.canvasSize,
                                        orientation: .horizontal)
                         .frame(height: 120)
                     CommentCardPreview(comment: selected,
-                                       style: store.style,
+                                       style: airStyle,
                                        canvas: studio.project.resolvedVerticalCanvasSize,
                                        orientation: .vertical)
                         .frame(height: 120)
@@ -417,6 +423,15 @@ struct CommentCardPreview: View {
     let canvas: CGSize
     let orientation: StreamOrientation
 
+    /// The template's typeface when it has one (and it's installed), else
+    /// the system font the renderer also falls back to.
+    private func cardFont(size: CGFloat) -> Font {
+        if let name = style.fontName, !name.isEmpty, NSFont(name: name, size: size) != nil {
+            return .custom(name, size: size)
+        }
+        return .system(size: size, weight: .semibold)
+    }
+
     var body: some View {
         let layout = CommentCard.layout(for: comment, style: style, canvas: canvas, orientation: orientation)
         let aspect = canvas.height > 0 ? canvas.width / canvas.height : 16.0 / 9.0
@@ -434,13 +449,13 @@ struct CommentCardPreview: View {
                     .font(.system(size: size.height * 0.4))
                     .foregroundStyle(.white.opacity(0.08))
                     .frame(width: size.width, height: size.height)
-                RoundedRectangle(cornerRadius: 0.012 * size.width)
+                RoundedRectangle(cornerRadius: (style.cornerRadius ?? 0.012) * size.width)
                     .fill(style.boxColor.swiftUIColor)
                     .frame(width: layout.box.size.width * size.width,
                            height: layout.box.size.height * size.height)
                     .position(x: layout.box.center.x * size.width, y: layout.box.center.y * size.height)
                 Text(CommentCard.nameLine(for: comment))
-                    .font(.system(size: max(messagePt * 0.72, 3), weight: .semibold))
+                    .font(cardFont(size: max(messagePt * 0.72, 3)))
                     .foregroundStyle(nameColor)
                     .lineLimit(1)
                     .frame(width: layout.name.size.width * size.width,
@@ -448,7 +463,7 @@ struct CommentCardPreview: View {
                            alignment: .leading)
                     .position(x: layout.name.center.x * size.width, y: layout.name.center.y * size.height)
                 Text(layout.messageText)
-                    .font(.system(size: max(messagePt, 3), weight: .semibold))
+                    .font(cardFont(size: max(messagePt, 3)))
                     .foregroundStyle(style.textColor.swiftUIColor)
                     .frame(width: layout.message.size.width * size.width,
                            height: layout.message.size.height * size.height,
@@ -471,9 +486,16 @@ struct CommentCardPreview: View {
 
 private struct CommentOptionsView: View {
     @Bindable var store: CommentsStore
+    /// The show's comment template, when one overrides these styles.
+    var templateName: String?
 
     var body: some View {
         Form {
+            if let templateName {
+                Text("On air, comments use the show template “\(templateName)”. Change it in Show Templates.")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+            }
             Picker("Auto-hide", selection: $store.autoHideSeconds) {
                 Text("Off").tag(0.0)
                 Text("8 seconds").tag(8.0)

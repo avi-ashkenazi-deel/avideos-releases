@@ -12,9 +12,11 @@ uploads/downloads. HearIt is a separate iOS product in the same repository.
 
 Important boundaries found in the source:
 
-- Live output currently uses the virtual camera and microphone. No direct
-  RTMP broadcaster or stream-key settings were found. Putting a guest “On Air”
-  adds them to the program; it does not start a public broadcast.
+- Build 30 adds direct streaming: Go Live (⇧⌘L) sends the program over
+  RTMP(S) to YouTube, LinkedIn, X, Twitch, Instagram and TikTok at once, set
+  up in Settings → Streaming (see DEV_SETUP.md, "Live streaming"). The virtual
+  camera and microphone remain an alternative route. Putting a guest “On Air”
+  adds them to the program; it does not start a public broadcast by itself.
 - Guest media chunks upload to R2. Host camera/microphone recordings and the
   composite program remain local; full-project cloud backup is not implemented.
 - The app-only development build excludes the virtual camera and audio driver.
@@ -103,6 +105,11 @@ Pass: independently downloaded, playable guest media, complete track metadata,
 and successful interrupted-upload recovery. Preserve originals until checked.
 
 ## 4. Test the real live destination
+
+Direct route (build 30 and later): add a YouTube destination with a private
+stream key in Settings → Streaming and press Go Live. Full checks: F-542…F-556
+in FEATURE_CHECKLIST.md. The virtual-device route below still works for tools
+that take a camera rather than a stream key.
 
 First destination: **YouTube**, using a private rehearsal. YouTube's Webcam
 mode accepts a selected camera and microphone, so the intended initial route

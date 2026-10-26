@@ -205,6 +205,12 @@ Full detail in docs/FEATURE_CHECKLIST.md, F-542…F-556.
 - [ ] Connect the YouTube account; a linked YouTube destination goes live with no key and creates its own broadcast.
 - [ ] Comments window (⌥⌘C): YouTube + Twitch comments in one feed; nothing goes on air until Feature on Air; card shows on H and V; Esc hides. Demo Chat works offline.
 
+## Overlay templates
+Full detail in docs/FEATURE_CHECKLIST.md, F-557…F-560.
+- [ ] Add an incoming-call and a comment template, type into the fields, Show/Hide: artwork unchanged, layers move together.
+- [ ] Export a design, import it back: separate copy, no instance text inside the file.
+- [ ] "Use design for live comments", then Demo Chat → Feature: on-air card and preview use the template.
+
 ## Teleprompter
 - [ ] Toggle prompter (⇧⌘T): floats above everything, scrolls at set WPM, mirrors, click-through works.
 - [ ] Share your screen in Zoom: the prompter is NOT visible in the share, and never in the program.

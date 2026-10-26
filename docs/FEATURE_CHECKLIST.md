@@ -1,6 +1,6 @@
 # streamit — full feature checklist
 
-All 556 user-facing features, each with a stable ID so you can report
+All 560 user-facing features, each with a stable ID so you can report
 back precisely ("F-42 fails"). Ordered so you can work top to bottom: each
 section only depends on the ones above it.
 
@@ -339,6 +339,13 @@ Needs real stream keys. Use private/unlisted streams. See `docs/DEV_SETUP.md` �
 - [ ] **F-554** YouTube account: Settings → Streaming → paste the OAuth client ID → Connect → Google sign-in → the channel name shows. A YouTube destination with "Create the broadcast with my YouTube account" goes live with no key: a new broadcast appears in YouTube Studio with the title and privacy chosen, starts by itself, and ends when you stop. The row offers an "open broadcast" link.
 - [ ] **F-555** Studio → Show Comments (⌥⌘C) while live on YouTube and Twitch: comments from both appear in one feed with platform badge, name, time; Twitch names in their chat colors; MOD/HOST/Super Chat tags. Scrolling up holds the feed still and shows "N new"; filter chips and search narrow it; LinkedIn/X/Instagram/TikTok chips are grey with the reason on hover. Nothing appears on the stream by itself.
 - [ ] **F-556** Select a comment: the preview shows the card exactly as it will appear on H and V. Feature on Air (or ↩) shows it on both canvases with a rise-in; featuring another replaces it; Hide (or Esc) removes it; the comment gets a "shown" tick. Star comments into the Shortlist, drag to reorder, feature from there. Card Options: auto-hide (off by default), hide on scene change (on by default), position, size, colors. Demo Chat rehearses all of this without going live.
+
+### Overlay templates
+
+- [ ] **F-557** Overlays add bar → stacked-squares icon (or Comments → Show Templates): pick "Violet / Incoming call" or "Acid / Audience comment" → Add to scene adds hidden layers; the fields edit the words and the artwork never changes.
+- [ ] **F-558** Show / Hide in the templates sheet animates every layer of the instance together; Duplicate makes an independent copy with the same words.
+- [ ] **F-559** Export selected design… writes a small .json with no caller or comment text; Import design… adds it as a separate design with a new identity; a missing typeface is called out before Show.
+- [ ] **F-560** On a comment design, "Use design for live comments": the featured comment card on air (H and V) and the Comments preview both switch to that design; "Use standard comment style" switches back.
 
 ## N. Remote guests
 
