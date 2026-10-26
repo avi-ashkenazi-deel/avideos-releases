@@ -17,6 +17,7 @@ import { erode } from '../dna/erode';
 import { offsetContours } from '../dna/offset';
 import { OUTLINE_OPS } from './ops';
 import { RASTER_OPS } from './raster';
+import { CRISP_OPS } from './ops/crisp';
 
 const amount = (p: Record<string, number>, d = 0.5) => (Number.isFinite(p.amount) ? p.amount : d);
 
@@ -76,6 +77,50 @@ export const FX: Record<string, FxImpl> = {
   erode: {
     def: { type: 'erode', label: 'Rust', stage: 'outline', params: [A('Amount', 0, 1, 0.5)], hint: 'Eaten by time' },
     outline: (c, p, ctx) => erode(c, amount(p), ctx),
+  },
+  crispWeight: {
+    def: { type: 'crispWeight', label: 'Weight (crisp)', stage: 'outline', params: [A('Amount', -1, 1, 0.3, 'thin ↔ bold, corners stay sharp')], hint: 'Bold or thin with mitred corners — for imported fonts that must stay sharp', crisp: true },
+    outline: (c, p, ctx) => CRISP_OPS.crispWeight(c, p, ctx),
+  },
+  stretch: {
+    def: { type: 'stretch', label: 'Stretch', stage: 'outline', params: [
+      { key: 'width', label: 'Width', min: 0.4, max: 2.2, step: 0.01, default: 1.15 },
+      { key: 'height', label: 'Height', min: 0.4, max: 2.2, step: 0.01, default: 1 }], hint: 'Condensed, extended, tall or squat', crisp: true },
+    outline: (c, p, ctx) => CRISP_OPS.stretch(c, p, ctx),
+  },
+  tracking: {
+    def: { type: 'tracking', label: 'Tracking', stage: 'outline', params: [{ key: 'amount', label: 'Units', min: -150, max: 400, step: 1, default: 40 }], hint: 'Letter-spacing baked into the font', crisp: true },
+    outline: (c, p, ctx) => CRISP_OPS.tracking(c, p, ctx),
+  },
+  xHeight: {
+    def: { type: 'xHeight', label: 'x-height', stage: 'outline', params: [{ key: 'scale', label: 'Lowercase scale', min: 0.6, max: 1.6, step: 0.01, default: 1.15 }], hint: 'Scale only the lowercase letters', crisp: true },
+    outline: (c, p, ctx) => CRISP_OPS.xHeight(c, p, ctx),
+  },
+  chamfer: {
+    def: { type: 'chamfer', label: 'Chamfer', stage: 'outline', params: [
+      { key: 'size', label: 'Size', min: 2, max: 120, step: 1, default: 24 },
+      { key: 'chance', label: 'Chance', min: 0, max: 1, step: 0.01, default: 1, hint: 'below 1: only some corners, seeded (fracture)' },
+      { key: 'convexOnly', label: 'Outer corners only', min: 0, max: 1, step: 1, default: 1 }], hint: 'Bevelled corners, or a seeded fracture of some of them', crisp: true },
+    outline: (c, p, ctx) => CRISP_OPS.chamfer(c, p, ctx),
+  },
+  roundVec: {
+    def: { type: 'roundVec', label: 'Round corners (vector)', stage: 'outline', params: [{ key: 'radius', label: 'Radius', min: 2, max: 120, step: 1, default: 20 }], hint: 'Exact rounded corners, edges untouched', crisp: true },
+    outline: (c, p, ctx) => CRISP_OPS.roundVec(c, p, ctx),
+  },
+  inkTrap: {
+    def: { type: 'inkTrap', label: 'Ink traps', stage: 'outline', params: [
+      { key: 'depth', label: 'Depth', min: 2, max: 80, step: 1, default: 18 },
+      { key: 'width', label: 'Width', min: 2, max: 120, step: 1, default: 22 }], hint: 'Notches where strokes meet', crisp: true },
+    outline: (c, p, ctx) => CRISP_OPS.inkTrap(c, p, ctx),
+  },
+  stencil: {
+    def: { type: 'stencil', label: 'Stencil', stage: 'outline', params: [
+      { key: 'gap', label: 'Gap', min: 2, max: 60, step: 1, default: 14 },
+      { key: 'spacing', label: 'Spacing', min: 40, max: 600, step: 1, default: 180 },
+      { key: 'angle', label: 'Angle', min: -90, max: 90, step: 1, default: 0 },
+      { key: 'phase', label: 'Offset', min: 0, max: 1, step: 0.01, default: 0.35 },
+      { key: 'jitter', label: 'Jitter', min: 0, max: 1, step: 0.01, default: 0 }], hint: 'Stencil bridges cut across the letters', crisp: true },
+    outline: (c, p, ctx) => CRISP_OPS.stencil(c, p, ctx),
   },
   hollow: {
     def: { type: 'hollow', label: 'Hollow', stage: 'outline', params: [

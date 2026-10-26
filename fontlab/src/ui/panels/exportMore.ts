@@ -8,6 +8,7 @@ import { recordWebm } from '../../export/specimen/webm';
 import { buildVarPayload, AXIS_DEFS, type VarAxisTag } from '../../export/variable/masters';
 import { buildVariableFont } from '../../export/variable';
 import { typeTesterHtml } from '../../export/specimen/html';
+import { openTypeTester } from './tester';
 import { BLOCKS } from '../../core/charsets';
 import { buildAll } from '../../pipeline/build';
 import type { FontProject } from '../../core/glyph';
@@ -24,7 +25,8 @@ export function exportMoreButtons(): HTMLElement[] {
       const svg = specimenSvg({ text: store.project.previewText, metrics: store.project.metrics, lookup: lookup(), animate: true });
       downloadBlob(svg, `${slug(store.project.name)}-specimen.svg`, 'image/svg+xml');
     }),
-    button('🧪 Type tester', () => {
+    button('🧪 Type tester', () => { if (!store.otf) { toast('Nothing built yet'); return; } openTypeTester(); }, 'tester-btn'),
+    button('⬇ Tester .html', () => {
       if (!store.otf) { toast('Nothing built yet'); return; }
       const enabled = new Set([...store.project.blocks, 'latin']);
       const samples = BLOCKS.filter((b) => enabled.has(b.id)).map((b) => ({ title: b.name, text: b.sample, rtl: !!b.rtl }));
@@ -123,6 +125,7 @@ function openVariableDialog() {
       const bytes = await buildVariableFont(payload, (s) => (status.textContent = s));
       const copy = new Uint8Array(bytes);
       lastVariable = { bytes: copy, axes: payload.axes };
+      store.variableAxes = payload.axes;
       downloadBlob(copy, `${slug(store.project.name)}-VF.ttf`, 'font/ttf');
       const face = new FontFace('FunkyVarPreview', copy.buffer as ArrayBuffer);
       await face.load(); document.fonts.add(face);

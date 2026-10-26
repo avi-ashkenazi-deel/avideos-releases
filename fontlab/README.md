@@ -49,6 +49,11 @@ deploys `dist/` on every push to the branch.
    nudges every slider. Presets: Chonky, Melted, Rusty, Glitchy, Ransom,
    Nervous, Hollow, Inline, Blob, Pixel, Crunch, Ink, Crystal, Coral, Stipple,
    Gravity, Halo, Everything.
+   ✦ **Crisp** effects keep corners sharp for subtle changes to imported
+   fonts: Weight (crisp, mitred), Stretch, Tracking, x-height, Chamfer
+   (or a seeded Fracture), Round corners (vector), Ink traps, Stencil.
+   **Show original** turns every effect off for preview and export; it
+   switches on by itself after a font import so you see the font as it is.
    **Living** mode in the preview drifts the noise-based effects over time so
    the font is always moving; the GIF/WebM dialog can sweep the same time axis
    for a seamless loop.
@@ -60,11 +65,15 @@ deploys `dist/` on every push to the branch.
    the uppercase, so one drawn `o` flows into ö, ő, ø, о and more. The
    "Add any characters" box accepts anything else (★, kana, Arabic…) for you
    to draw by hand. Right-to-left lines render correctly in the preview.
-   **Remix an existing font** (.ttf, .otf, .woff, .woff2) converts its outlines to centreline strokes by
-   default (thinning + distance transform), so Weight, terminals and the
-   variable axes work on any font you import; there is also a per-glyph
-   "To strokes" button and an "All outlines → strokes" action.
-5. **Export.** `Download .otf` (static, CFF outlines), `Type tester` (a
+   **Remix an existing font** (.ttf, .otf, .woff, .woff2) keeps the exact
+   outlines by default; tick "convert to strokes" (thinning + distance
+   transform) when you want Weight, terminals and the variable axes on it.
+   There is also a per-glyph "To strokes" button and an "All outlines →
+   strokes" action.
+5. **Test and export.** The preview is editable in place, and **Type tester**
+   opens a full type-testing sheet in the app (samples per script, size,
+   line height, spacing, dark mode, waterfall, axis sliders).
+   `Download .otf` (static, CFF outlines), `Tester .html` (a
    self-contained HTML page with the font embedded, editable samples per
    script, waterfall, glyph grid and axis sliders when a variable font was
    built), `SVG specimen`

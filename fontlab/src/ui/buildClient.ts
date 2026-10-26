@@ -35,6 +35,7 @@ export function scheduleBuild(delay = 120, opts: { previewOnly?: boolean } = {})
     store.busy = true; store.emit('status');
     const id = nextId++;
     const priority = [...new Set([...store.project.previewText.replace(/\s/g, ''), store.selected])];
-    getWorker().postMessage({ id, type: 'build', project: store.project, otf: true, priority, onlyPriority: !!opts.previewOnly });
+    const project = store.bypassFx ? { ...store.project, fx: { ...store.project.fx, groups: [] } } : store.project;
+    getWorker().postMessage({ id, type: 'build', project, otf: true, priority, onlyPriority: !!opts.previewOnly });
   }, delay);
 }

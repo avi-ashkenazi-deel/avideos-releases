@@ -36,5 +36,14 @@ export const PRESETS: Record<string, Build> = {
     s.groups.push(g);
     return s;
   },
+  'Crisp bold': one(['crispWeight', { amount: 0.6 }]),
+  Condensed: one(['stretch', { width: 0.8, height: 1 }], ['tracking', { amount: 10 }]),
+  Extended: one(['stretch', { width: 1.3, height: 1 }], ['tracking', { amount: 30 }]),
+  Chiselled: one(['chamfer', { size: 22, chance: 1 }]),
+  Fractured: one(['chamfer', { size: 30, chance: 0.35, convexOnly: 0 }]),
+  Softened: one(['roundVec', { radius: 18 }]),
+  'Ink traps': one(['inkTrap', { depth: 20, width: 24 }]),
+  'Stencil cut': one(['stencil', { gap: 14, spacing: 200, angle: 0, phase: 0.4 }]),
+  'Tall x': one(['xHeight', { scale: 1.2 }]),
   Everything: one(['weight', { amount: 0.4 }], ['slant', { amount: 0.3 }], ['wobble', { amount: 0.4 }], ['jitter', { amount: 0.3 }], ['bounce', { amount: 0.4 }], ['inflate', { amount: 0.2 }], ['melt', { amount: 0.3 }], ['glitch', { amount: 0.3 }], ['erode', { amount: 0.3 }]),
 };

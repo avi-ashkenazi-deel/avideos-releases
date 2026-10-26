@@ -10,6 +10,10 @@ export class Store {
   built: Record<string, BuiltGlyph> = {};
   otf: ArrayBuffer | null = null;
   busy = false;
+  /** preview/export without effects (auto-on after a font import) */
+  bypassFx = false;
+  /** axes of the variable font built this session (FontFace 'FunkyVarPreview'), if any */
+  variableAxes: { tag: string; name: string; min: number; default: number; max: number }[] | null = null;
   lastBuildMs = 0;
   status = '';
   private listeners = new Set<Listener>();

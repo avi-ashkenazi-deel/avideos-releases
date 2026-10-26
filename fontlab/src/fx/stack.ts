@@ -88,7 +88,10 @@ export function advanceAfterStack(glyph: Glyph, stack: FxStack): number {
     if (!l.enabled) continue;
     const a = l.params.amount ?? 0;
     if (l.type === 'weight') adv += Math.max(0, a) * 60;
+    if (l.type === 'crispWeight') adv += Math.max(0, a) * 50;
     if (l.type === 'inflate') adv += a * 80;
+    if (l.type === 'tracking') adv += a;
+    if (l.type === 'stretch') adv = 60 + (adv - 60) * (l.params.width ?? 1);
     if (l.type === 'jitter') adv *= jitterSample(glyphRng(stack.seed, glyph.char, l.id), a).sx;
   }
   return Math.max(1, Math.round(adv));

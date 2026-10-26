@@ -35,7 +35,7 @@ export function effectsPanel(): HTMLElement {
     const opSel = h('select', { class: 'opsel', title: 'how this group combines with the result so far' }, ...OPS.map((o) => h('option', { value: o.op, selected: o.op === g.op, title: o.hint }, o.label)));
     opSel.addEventListener('change', () => { g.op = opSel.value as GroupOp; changed(0); });
     const addSel = h('select', { class: 'addsel' }, h('option', { value: '' }, '+ Effect…'),
-      ...(['skeleton', 'outline', 'raster'] as const).map((st) => h('optgroup', { label: STAGE_LABEL[st] }, ...FX_ORDER.filter((t) => FX[t].def.stage === st).map((t) => h('option', { value: t, title: FX[t].def.hint }, FX[t].def.label + (FX[t].def.slow ? ' (slow)' : ''))))));
+      ...(['skeleton', 'outline', 'raster'] as const).map((st) => h('optgroup', { label: STAGE_LABEL[st] }, ...FX_ORDER.filter((t) => FX[t].def.stage === st).map((t) => h('option', { value: t, title: FX[t].def.hint }, FX[t].def.label + (FX[t].def.slow ? ' (slow)' : '') + (FX[t].def.crisp ? ' ✦' : ''))))));
     addSel.addEventListener('change', () => { if (!addSel.value) return; g.layers.push(newLayer(addSel.value)); addSel.value = ''; render(); changed(0); });
     const del = gi === 0 ? null : button('×', () => { fx.groups.splice(gi, 1); render(); changed(0); }, 'icon');
     const head = h('div', { class: 'fxhead' }, enable, h('strong', {}, gi === 0 ? 'Base' : `Group ${gi + 1}`), gi === 0 ? h('small', {}, 'applied in order') : opSel, h('span', { class: 'spacer' }), addSel, del);
@@ -79,7 +79,7 @@ export function effectsPanel(): HTMLElement {
       return row;
     }));
     const row = h('div', { class: 'fxlayer' + (l.enabled ? '' : ' off') + ' stage-' + impl.def.stage, 'data-type': l.type, 'data-layer': l.id },
-      h('div', { class: 'fxrow' }, handle, enable, h('span', { class: 'fxname', title: impl.def.hint }, impl.def.label), h('span', { class: 'stage' }, STAGE_LABEL[impl.def.stage]), impl.def.slow ? h('span', { class: 'tag' }, 'slow') : null, impl.def.variable ? h('span', { class: 'tag var', title: 'can be a variable-font axis' }, 'VF') : null, h('span', { class: 'spacer' }), up, down, del),
+      h('div', { class: 'fxrow' }, handle, enable, h('span', { class: 'fxname', title: impl.def.hint }, impl.def.label), h('span', { class: 'stage' }, STAGE_LABEL[impl.def.stage]), impl.def.slow ? h('span', { class: 'tag' }, 'slow') : null, impl.def.crisp ? h('span', { class: 'tag crisp', title: 'keeps corners sharp' }, 'crisp') : null, impl.def.variable ? h('span', { class: 'tag var', title: 'can be a variable-font axis' }, 'VF') : null, h('span', { class: 'spacer' }), up, down, del),
       params);
     row.addEventListener('dragover', (e) => { e.preventDefault(); e.stopPropagation(); row.classList.add('over'); });
     row.addEventListener('dragleave', () => row.classList.remove('over'));
@@ -94,8 +94,12 @@ export function effectsPanel(): HTMLElement {
     render(); changed(0);
   }, 'chip')));
 
+  const bypass = h('input', { type: 'checkbox', checked: store.bypassFx, id: 'bypassfx' });
+  bypass.addEventListener('change', () => { store.bypassFx = bypass.checked; store.emit('fx'); scheduleBuild(0); });
+  store.subscribe((ev) => { if (ev === 'bypass') bypass.checked = store.bypassFx; });
   const panel = h('section', { class: 'panel effects' },
     h('h2', {}, 'Effects ', h('small', {}, 'stack them, reorder them, cut groups out of each other')),
+    h('label', { class: 'bypass', for: 'bypassfx', title: 'Preview and export the glyphs exactly as drawn / imported, ignoring every effect' }, bypass, ' Show original (effects off)', h('small', { class: 'muted' }, ' · ✦ = keeps corners sharp')),
     presets,
     list,
     h('div', { class: 'row' },

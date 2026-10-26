@@ -29,6 +29,8 @@ export interface FxDef {
   variable?: boolean;
   /** heavy op: UI shows a "slow" tag */
   slow?: boolean;
+  /** keeps corners sharp: safe for subtle changes to imported fonts */
+  crisp?: boolean;
 }
 
 export interface FxLayer {

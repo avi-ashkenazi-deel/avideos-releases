@@ -177,7 +177,7 @@ export function seedsPanel(): HTMLElement {
     runGenerate();
   }, 'primary big');
 
-  const convertOnImport = h('input', { type: 'checkbox', checked: true, title: 'Turn outlines into centreline strokes so Weight, terminals and variable axes work on the imported font' });
+  const convertOnImport = h('input', { type: 'checkbox', checked: false, title: 'Turn outlines into centreline strokes so Weight, terminals and variable axes work (loses the exact original shapes). Off = keep the font exactly as it is; use ✦ crisp effects on it.' });
   const fontFile = fileInput('.ttf,.otf,.woff,.woff2', async (f) => {
     try {
       const imp = await importFontFile(await f.arrayBuffer(), projectCharset(store.project));
@@ -192,8 +192,10 @@ export function seedsPanel(): HTMLElement {
         if (!p.name || p.name === 'Untitled Funk') p.name = imp.familyName + ' Funk';
       }, 'project');
       refreshStatsFromSeeds();
+      const hadFx = store.project.fx.groups.some((g) => g.enabled && g.layers.some((l) => l.enabled));
+      if (hadFx) { store.bypassFx = true; store.emit('bypass'); }
       scheduleBuild(0);
-      toast(`Imported ${imp.glyphs.length} glyphs from ${imp.familyName}`);
+      toast(`Imported ${imp.glyphs.length} glyphs from ${imp.familyName}${hadFx ? ' — showing the original; untick “Show original” in Effects when ready' : ''}`);
     } catch (e) { toast('Could not read that font: ' + (e as Error).message); }
   });
   const imgFile = fileInput('image/*,video/*', (f) => openImageDialog(f, () => { refreshStatsFromSeeds(); scheduleBuild(0); }));
@@ -210,7 +212,7 @@ export function seedsPanel(): HTMLElement {
     h('div', { class: 'row sources' },
       button('📷 Trace a photo / video frame', () => imgFile.click()),
       button('⬇ Remix an existing font', () => fontFile.click()),
-      h('label', { class: 'toggle', title: convertOnImport.title }, convertOnImport, ' as strokes'),
+      h('label', { class: 'toggle', title: convertOnImport.title }, convertOnImport, ' convert to strokes'),
       button('〰 All outlines → strokes', () => {
         const n = Object.values(store.project.glyphs).filter((g) => g.kind === 'outline').length;
         if (!n) { toast('No outline glyphs to convert'); return; }

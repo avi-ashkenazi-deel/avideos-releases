@@ -84,6 +84,7 @@ test('import a font as strokes, then HTML type tester downloads', async ({ page 
   await page.getByRole('button', { name: 'New' }).click().catch(() => {});
   page.on('dialog', (d) => d.accept());
   await page.getByRole('button', { name: 'New' }).click();
+  await page.locator('.sources .toggle input').check(); // convert to strokes (opt-in)
   const chooser = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: /Remix an existing font/ }).click();
   await (await chooser).setFiles(otfPath);
@@ -95,4 +96,32 @@ test('import a font as strokes, then HTML type tester downloads', async ({ page 
   const text = fs.readFileSync(await html.path() as string, 'utf8');
   expect(text).toContain('@font-face');
   expect(text).toContain('font/otf;base64,');
+});
+
+test('import shows the original; crisp preset keeps corners; in-app type tester edits live', async ({ page }) => {
+  await page.getByRole('button', { name: 'Chonky', exact: true }).click();
+  const chooser = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: /Remix an existing font/ }).click();
+  await (await chooser).setFiles(path.resolve('tests/fixtures/sample.woff2'));
+  await expect(page.locator('.cell[data-char="H"] .badge')).toHaveText('⬇', { timeout: 60000 });
+  await expect(page.locator('#bypassfx')).toBeChecked();
+  await builtStatus(page);
+  const original = await thumb(page, 'H');
+  await page.locator('#bypassfx').uncheck();
+  await expect.poll(async () => Buffer.compare(original, await thumb(page, 'H')), { timeout: 30000 }).not.toBe(0);
+  await page.getByRole('button', { name: 'Chiselled', exact: true }).click();
+  await expect(page.locator('.fxlayer[data-type="chamfer"] .tag.crisp')).toBeVisible();
+  await builtStatus(page);
+  // in-app tester
+  await page.getByRole('button', { name: '🧪 Type tester' }).click();
+  const free = page.locator('.modal.tester .tblock').first();
+  await free.click();
+  await page.keyboard.press('Control+A');
+  await page.keyboard.type('HaHa');
+  await expect(page.locator('.modal.tester .wline').first()).toContainText('HaHa');
+  await page.getByRole('button', { name: '☾ Dark' }).click();
+  await expect(page.locator('.modal.tester')).toHaveClass(/dark/);
+  await page.getByRole('button', { name: 'Close' }).click();
+  await expect(page.locator('.preview-out')).toHaveText('HaHa');
+  await expect(page.locator('.preview-input')).toHaveValue('HaHa');
 });
