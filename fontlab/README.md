@@ -11,17 +11,23 @@ font, **Reset** offers to save first, and any font can be exported as `.json`.
 
 ## Run it
 
-```bash
-cd fontlab
-npm install
-npm run dev        # http://localhost:5173
-npm test           # unit tests (vitest)
-npm run test:e2e   # browser tests (Playwright, Chromium)
-npm run build      # static site in dist/
+**Easiest (macOS):** double-click `fontlab/FontLab.command` in Finder. It pulls
+the latest version, installs anything new and opens the app in your browser.
+Leave that window open while you use FontLab; close it to stop. Run it again
+whenever you want to update: nothing else to type.
+
+Or from a terminal, in the `fontlab` folder:
+
+```
+npm start        # pull + install + open the app (same as the .command file)
+npm run dev      # just start it, no update
+npm run build    # static site in dist/
+npm test         # unit tests
+npm run test:e2e # Playwright
 ```
 
-A GitHub Pages workflow (`.github/workflows/fontlab-pages.yml`) builds and
-deploys `dist/` on every push to the branch.
+If the browser says the page is offline, the server window was closed. Run
+`FontLab.command` (or `npm start`) again and reload.
 
 ## How to use it
 

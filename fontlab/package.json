@@ -4,11 +4,12 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --port 5173",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "start": "git pull --no-rebase && npm install --no-audit --no-fund && vite --open --port 5173"
   },
   "dependencies": {
     "alea": "^1.0.1",
