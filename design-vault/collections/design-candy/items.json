@@ -4827,5 +4827,2512 @@
     "artist": "",
     "query": "#design-candy",
     "batch": "2026-10-31-candy-history-media"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-01-transitions-dev.png",
+    "title": "transitions.dev/",
+    "year": 2026,
+    "tags": [
+      "virginia",
+      "site",
+      "slack-candy",
+      "motion",
+      "desktop",
+      "white"
+    ],
+    "page_url": "https://transitions.dev/",
+    "source_url": "https://transitions.dev/",
+    "license": "unknown (personal reference)",
+    "artist": "transitions.dev",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-02-transitions-dev-library-html.png",
+    "title": "transitions.dev/library.html",
+    "year": 2026,
+    "tags": [
+      "sasha",
+      "site",
+      "slack-candy",
+      "motion",
+      "desktop",
+      "white"
+    ],
+    "page_url": "https://transitions.dev/library.html",
+    "source_url": "https://transitions.dev/library.html",
+    "license": "unknown (personal reference)",
+    "artist": "transitions.dev",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-03-bencho-dev.png",
+    "title": "bencho.dev/",
+    "year": 2026,
+    "tags": [
+      "jasmina",
+      "site",
+      "slack-candy",
+      "motion",
+      "desktop",
+      "white"
+    ],
+    "page_url": "https://bencho.dev/",
+    "source_url": "https://bencho.dev/",
+    "license": "unknown (personal reference)",
+    "artist": "bencho.dev",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-04-prompt-motion-com.jpg",
+    "title": "prompt-motion.com/",
+    "year": 2026,
+    "tags": [
+      "sasha",
+      "site",
+      "slack-candy",
+      "motion",
+      "desktop",
+      "gray",
+      "white"
+    ],
+    "page_url": "https://prompt-motion.com/",
+    "source_url": "https://prompt-motion.com/",
+    "license": "unknown (personal reference)",
+    "artist": "prompt-motion.com",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-05-paperlab-nawwara-studio-editor.png",
+    "title": "paperlab.nawwara.studio/editor/",
+    "year": 2026,
+    "tags": [
+      "z",
+      "site",
+      "slack-candy",
+      "3d",
+      "desktop",
+      "black"
+    ],
+    "page_url": "https://paperlab.nawwara.studio/editor/",
+    "source_url": "https://paperlab.nawwara.studio/editor/",
+    "license": "unknown (personal reference)",
+    "artist": "paperlab.nawwara.studio",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-06-tympanus-net-codrops-2026-10-18-real-fol.jpg",
+    "title": "tympanus.net/codrops/2026/10/18/real-folds-real-fire/",
+    "year": 2026,
+    "tags": [
+      "z",
+      "site",
+      "slack-candy",
+      "3d",
+      "desktop",
+      "gray",
+      "white"
+    ],
+    "page_url": "https://tympanus.net/codrops/2026/10/18/real-folds-real-fire/",
+    "source_url": "https://tympanus.net/codrops/2026/10/18/real-folds-real-fire/",
+    "license": "unknown (personal reference)",
+    "artist": "tympanus.net",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-07-harmony-ai.jpg",
+    "title": "harmony.ai/",
+    "year": 2026,
+    "tags": [
+      "shahi",
+      "site",
+      "slack-candy",
+      "identity",
+      "desktop",
+      "white",
+      "pink"
+    ],
+    "page_url": "https://harmony.ai/",
+    "source_url": "https://harmony.ai/",
+    "license": "unknown (personal reference)",
+    "artist": "harmony.ai",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-08-www-glideapps-com.jpg",
+    "title": "www.glideapps.com/",
+    "year": 2026,
+    "tags": [
+      "jasmina",
+      "site",
+      "slack-candy",
+      "landing",
+      "desktop",
+      "white"
+    ],
+    "page_url": "https://www.glideapps.com/",
+    "source_url": "https://www.glideapps.com/",
+    "license": "unknown (personal reference)",
+    "artist": "www.glideapps.com",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-09-tympanus-net-codrops-2026-10-12-chasing.jpg",
+    "title": "tympanus.net/codrops/2026/10/12/chasing-the-moment/",
+    "year": 2026,
+    "tags": [
+      "z",
+      "site",
+      "slack-candy",
+      "shaders",
+      "desktop",
+      "white",
+      "gray"
+    ],
+    "page_url": "https://tympanus.net/codrops/2026/10/12/chasing-the-moment/",
+    "source_url": "https://tympanus.net/codrops/2026/10/12/chasing-the-moment/",
+    "license": "unknown (personal reference)",
+    "artist": "tympanus.net",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-10-contralabs-com-creative-intelligence-rep.jpg",
+    "title": "contralabs.com/creative-intelligence-report-2026",
+    "year": 2026,
+    "tags": [
+      "belen",
+      "site",
+      "slack-candy",
+      "editorial",
+      "desktop",
+      "white",
+      "gray",
+      "green"
+    ],
+    "page_url": "https://contralabs.com/creative-intelligence-report-2026",
+    "source_url": "https://contralabs.com/creative-intelligence-report-2026",
+    "license": "unknown (personal reference)",
+    "artist": "contralabs.com",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-11-readingmaps-com.png",
+    "title": "readingmaps.com/",
+    "year": 2026,
+    "tags": [
+      "z",
+      "site",
+      "slack-candy",
+      "maps",
+      "desktop",
+      "white",
+      "blue"
+    ],
+    "page_url": "https://readingmaps.com/",
+    "source_url": "https://readingmaps.com/",
+    "license": "unknown (personal reference)",
+    "artist": "readingmaps.com",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-12-www-loopearplugs-com-products-experience.jpg",
+    "title": "www.loopearplugs.com/products/experience",
+    "year": 2026,
+    "tags": [
+      "jasmina",
+      "site",
+      "slack-candy",
+      "product",
+      "desktop",
+      "white"
+    ],
+    "page_url": "https://www.loopearplugs.com/products/experience",
+    "source_url": "https://www.loopearplugs.com/products/experience",
+    "license": "unknown (personal reference)",
+    "artist": "www.loopearplugs.com",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-13-www-tomjohn-design.png",
+    "title": "www.tomjohn.design/",
+    "year": 2026,
+    "tags": [
+      "jasmina",
+      "site",
+      "slack-candy",
+      "portfolio",
+      "desktop",
+      "gray",
+      "white"
+    ],
+    "page_url": "https://www.tomjohn.design/",
+    "source_url": "https://www.tomjohn.design/",
+    "license": "unknown (personal reference)",
+    "artist": "www.tomjohn.design",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-14-animos-app.jpg",
+    "title": "animos.app/",
+    "year": 2026,
+    "tags": [
+      "pilar",
+      "site",
+      "slack-candy",
+      "motion",
+      "desktop",
+      "black"
+    ],
+    "page_url": "https://animos.app/",
+    "source_url": "https://animos.app/",
+    "license": "unknown (personal reference)",
+    "artist": "animos.app",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-15-pear-no.jpg",
+    "title": "pear.no/",
+    "year": 2026,
+    "tags": [
+      "pantelis",
+      "site",
+      "slack-candy",
+      "landing",
+      "desktop",
+      "black",
+      "blue"
+    ],
+    "page_url": "https://pear.no/",
+    "source_url": "https://pear.no/",
+    "license": "unknown (personal reference)",
+    "artist": "pear.no",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-16-www-mosbyfiles-com.png",
+    "title": "www.mosbyfiles.com/",
+    "year": 2026,
+    "tags": [
+      "virginia",
+      "site",
+      "slack-candy",
+      "editorial",
+      "desktop",
+      "red",
+      "black"
+    ],
+    "page_url": "https://www.mosbyfiles.com/",
+    "source_url": "https://www.mosbyfiles.com/",
+    "license": "unknown (personal reference)",
+    "artist": "www.mosbyfiles.com",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-17-www-apple-com-newsroom-2026-09-apple-ope.jpg",
+    "title": "www.apple.com/newsroom/2026/09/apple-opens-apple-music-hall-a-state-of-the-art-live-music-venue-in-london/",
+    "year": 2026,
+    "tags": [
+      "avi",
+      "site",
+      "slack-candy",
+      "architecture",
+      "desktop",
+      "white",
+      "orange"
+    ],
+    "page_url": "https://www.apple.com/newsroom/2026/09/apple-opens-apple-music-hall-a-state-of-the-art-live-music-venue-in-london/",
+    "source_url": "https://www.apple.com/newsroom/2026/09/apple-opens-apple-music-hall-a-state-of-the-art-live-music-venue-in-london/",
+    "license": "unknown (personal reference)",
+    "artist": "www.apple.com",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-18-builtbydesigners-com.png",
+    "title": "builtbydesigners.com/",
+    "year": 2026,
+    "tags": [
+      "virginia",
+      "site",
+      "slack-candy",
+      "archive",
+      "desktop",
+      "white"
+    ],
+    "page_url": "https://builtbydesigners.com/",
+    "source_url": "https://builtbydesigners.com/",
+    "license": "unknown (personal reference)",
+    "artist": "builtbydesigners.com",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-19-typesafe-ai.jpg",
+    "title": "typesafe.ai/",
+    "year": 2026,
+    "tags": [
+      "erica",
+      "site",
+      "slack-candy",
+      "editorial",
+      "desktop",
+      "red"
+    ],
+    "page_url": "https://typesafe.ai/",
+    "source_url": "https://typesafe.ai/",
+    "license": "unknown (personal reference)",
+    "artist": "typesafe.ai",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-20-opusfived-dev.png",
+    "title": "opusfived.dev/",
+    "year": 2026,
+    "tags": [
+      "sefik",
+      "site",
+      "slack-candy",
+      "fun",
+      "desktop",
+      "white"
+    ],
+    "page_url": "https://opusfived.dev/",
+    "source_url": "https://opusfived.dev/",
+    "license": "unknown (personal reference)",
+    "artist": "opusfived.dev",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-21-libraries-dev.png",
+    "title": "libraries.dev/",
+    "year": 2026,
+    "tags": [
+      "belen",
+      "site",
+      "slack-candy",
+      "archive",
+      "desktop",
+      "black"
+    ],
+    "page_url": "https://libraries.dev/",
+    "source_url": "https://libraries.dev/",
+    "license": "unknown (personal reference)",
+    "artist": "libraries.dev",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-22-www-heyclicky-com.jpg",
+    "title": "www.heyclicky.com/",
+    "year": 2026,
+    "tags": [
+      "sasha",
+      "site",
+      "slack-candy",
+      "onboarding",
+      "desktop",
+      "white"
+    ],
+    "page_url": "https://www.heyclicky.com/",
+    "source_url": "https://www.heyclicky.com/",
+    "license": "unknown (personal reference)",
+    "artist": "www.heyclicky.com",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-23-lersent001-github-io-orb.png",
+    "title": "lersent001.github.io/orb/",
+    "year": 2026,
+    "tags": [
+      "jamie",
+      "site",
+      "slack-candy",
+      "shaders",
+      "desktop",
+      "black"
+    ],
+    "page_url": "https://lersent001.github.io/orb/",
+    "source_url": "https://lersent001.github.io/orb/",
+    "license": "unknown (personal reference)",
+    "artist": "lersent001.github.io",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-24-www-shapeof-ai.jpg",
+    "title": "www.shapeof.ai/",
+    "year": 2026,
+    "tags": [
+      "jamie",
+      "site",
+      "slack-candy",
+      "ai-ui",
+      "desktop",
+      "white"
+    ],
+    "page_url": "https://www.shapeof.ai/",
+    "source_url": "https://www.shapeof.ai/",
+    "license": "unknown (personal reference)",
+    "artist": "www.shapeof.ai",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-25-ramp-design.png",
+    "title": "ramp.design/",
+    "year": 2026,
+    "tags": [
+      "sayalee",
+      "site",
+      "slack-candy",
+      "fintech",
+      "desktop",
+      "white"
+    ],
+    "page_url": "https://ramp.design/",
+    "source_url": "https://ramp.design/",
+    "license": "unknown (personal reference)",
+    "artist": "ramp.design",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-26-trybendy-app.png",
+    "title": "trybendy.app/",
+    "year": 2026,
+    "tags": [
+      "jamie",
+      "site",
+      "slack-candy",
+      "fun",
+      "desktop",
+      "white"
+    ],
+    "page_url": "https://trybendy.app/",
+    "source_url": "https://trybendy.app/",
+    "license": "unknown (personal reference)",
+    "artist": "trybendy.app",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-27-www-deck-gallery.png",
+    "title": "www.deck.gallery/",
+    "year": 2026,
+    "tags": [
+      "jasmina",
+      "site",
+      "slack-candy",
+      "decks",
+      "desktop",
+      "white"
+    ],
+    "page_url": "https://www.deck.gallery/",
+    "source_url": "https://www.deck.gallery/",
+    "license": "unknown (personal reference)",
+    "artist": "www.deck.gallery",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-28-www-deck-gallery-mash-brand-guidelines-2.png",
+    "title": "www.deck.gallery/mash-brand-guidelines-2023/",
+    "year": 2026,
+    "tags": [
+      "sasha",
+      "site",
+      "slack-candy",
+      "decks",
+      "desktop",
+      "white"
+    ],
+    "page_url": "https://www.deck.gallery/mash-brand-guidelines-2023/",
+    "source_url": "https://www.deck.gallery/mash-brand-guidelines-2023/",
+    "license": "unknown (personal reference)",
+    "artist": "www.deck.gallery",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-29-www-deck-gallery-monzo-brand-style-guide.png",
+    "title": "www.deck.gallery/monzo-brand-style-guide-deck/",
+    "year": 2026,
+    "tags": [
+      "sasha",
+      "site",
+      "slack-candy",
+      "decks",
+      "desktop",
+      "white"
+    ],
+    "page_url": "https://www.deck.gallery/monzo-brand-style-guide-deck/",
+    "source_url": "https://www.deck.gallery/monzo-brand-style-guide-deck/",
+    "license": "unknown (personal reference)",
+    "artist": "www.deck.gallery",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-30-www-deck-gallery-pleo-brand-guidelines.png",
+    "title": "www.deck.gallery/pleo-brand-guidelines/",
+    "year": 2026,
+    "tags": [
+      "sasha",
+      "site",
+      "slack-candy",
+      "decks",
+      "desktop",
+      "white"
+    ],
+    "page_url": "https://www.deck.gallery/pleo-brand-guidelines/",
+    "source_url": "https://www.deck.gallery/pleo-brand-guidelines/",
+    "license": "unknown (personal reference)",
+    "artist": "www.deck.gallery",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-31-www-deck-gallery-klarna-visual-identity.png",
+    "title": "www.deck.gallery/klarna-visual-identity-2019/",
+    "year": 2026,
+    "tags": [
+      "sasha",
+      "site",
+      "slack-candy",
+      "decks",
+      "desktop",
+      "white"
+    ],
+    "page_url": "https://www.deck.gallery/klarna-visual-identity-2019/",
+    "source_url": "https://www.deck.gallery/klarna-visual-identity-2019/",
+    "license": "unknown (personal reference)",
+    "artist": "www.deck.gallery",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-32-shop-withwaymo-com-product-worlds-little.png",
+    "title": "shop.withwaymo.com/product/worlds-littlest-i-pace-model-car-waymwfna100199",
+    "year": 2026,
+    "tags": [
+      "avi",
+      "site",
+      "slack-candy",
+      "product",
+      "desktop",
+      "white"
+    ],
+    "page_url": "https://shop.withwaymo.com/product/worlds-littlest-i-pace-model-car-waymwfna100199",
+    "source_url": "https://shop.withwaymo.com/product/worlds-littlest-i-pace-model-car-waymwfna100199",
+    "license": "unknown (personal reference)",
+    "artist": "shop.withwaymo.com",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-33-gusto-com-company-news-gusto-brand-refre.jpg",
+    "title": "gusto.com/company-news/gusto-brand-refresh-2026",
+    "year": 2026,
+    "tags": [
+      "avi",
+      "site",
+      "slack-candy",
+      "identity",
+      "desktop",
+      "white"
+    ],
+    "page_url": "https://gusto.com/company-news/gusto-brand-refresh-2026",
+    "source_url": "https://gusto.com/company-news/gusto-brand-refresh-2026",
+    "license": "unknown (personal reference)",
+    "artist": "gusto.com",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-34-www-normaltools-com.png",
+    "title": "www.normaltools.com/",
+    "year": 2026,
+    "tags": [
+      "belen",
+      "site",
+      "slack-candy",
+      "fun",
+      "desktop",
+      "white"
+    ],
+    "page_url": "https://www.normaltools.com/",
+    "source_url": "https://www.normaltools.com/",
+    "license": "unknown (personal reference)",
+    "artist": "www.normaltools.com",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-35-on-design.png",
+    "title": "on.design/",
+    "year": 2026,
+    "tags": [
+      "steven",
+      "site",
+      "slack-candy",
+      "tools",
+      "desktop",
+      "white",
+      "gray"
+    ],
+    "page_url": "https://on.design/",
+    "source_url": "https://on.design/",
+    "license": "unknown (personal reference)",
+    "artist": "on.design",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-36-www-beautifului-dev.png",
+    "title": "www.beautifului.dev/",
+    "year": 2026,
+    "tags": [
+      "belen",
+      "site",
+      "slack-candy",
+      "components",
+      "desktop",
+      "black"
+    ],
+    "page_url": "https://www.beautifului.dev/",
+    "source_url": "https://www.beautifului.dev/",
+    "license": "unknown (personal reference)",
+    "artist": "www.beautifului.dev",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-37-styles-refero-design.png",
+    "title": "styles.refero.design/",
+    "year": 2026,
+    "tags": [
+      "marijana",
+      "site",
+      "slack-candy",
+      "archive",
+      "desktop",
+      "white"
+    ],
+    "page_url": "https://styles.refero.design/?q=playful+design",
+    "source_url": "https://styles.refero.design/?q=playful+design",
+    "license": "unknown (personal reference)",
+    "artist": "styles.refero.design",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-38-catalog-design.png",
+    "title": "catalog.design/",
+    "year": 2026,
+    "tags": [
+      "avi",
+      "site",
+      "slack-candy",
+      "archive",
+      "desktop",
+      "black"
+    ],
+    "page_url": "https://catalog.design/",
+    "source_url": "https://catalog.design/",
+    "license": "unknown (personal reference)",
+    "artist": "catalog.design",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-39-calendly-com.jpg",
+    "title": "calendly.com/",
+    "year": 2026,
+    "tags": [
+      "jamie",
+      "site",
+      "slack-candy",
+      "landing",
+      "desktop",
+      "white",
+      "blue"
+    ],
+    "page_url": "https://calendly.com/",
+    "source_url": "https://calendly.com/",
+    "license": "unknown (personal reference)",
+    "artist": "calendly.com",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-40-www-beeps-studio.png",
+    "title": "www.beeps.studio/",
+    "year": 2026,
+    "tags": [
+      "fabrizia",
+      "site",
+      "slack-candy",
+      "studio",
+      "desktop",
+      "white"
+    ],
+    "page_url": "https://www.beeps.studio/",
+    "source_url": "https://www.beeps.studio/",
+    "license": "unknown (personal reference)",
+    "artist": "www.beeps.studio",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-41-collectui-com.png",
+    "title": "collectui.com/",
+    "year": 2026,
+    "tags": [
+      "fabrizia",
+      "site",
+      "slack-candy",
+      "archive",
+      "desktop",
+      "white"
+    ],
+    "page_url": "https://collectui.com/",
+    "source_url": "https://collectui.com/",
+    "license": "unknown (personal reference)",
+    "artist": "collectui.com",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-42-www-hfg-ulm-de-en.png",
+    "title": "www.hfg-ulm.de/en/",
+    "year": 2026,
+    "tags": [
+      "erica",
+      "site",
+      "slack-candy",
+      "archive",
+      "desktop",
+      "white",
+      "blue"
+    ],
+    "page_url": "https://www.hfg-ulm.de/en/",
+    "source_url": "https://www.hfg-ulm.de/en/",
+    "license": "unknown (personal reference)",
+    "artist": "www.hfg-ulm.de",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-43-monday-com.jpg",
+    "title": "monday.com/",
+    "year": 2026,
+    "tags": [
+      "avi",
+      "site",
+      "slack-candy",
+      "landing",
+      "desktop",
+      "white"
+    ],
+    "page_url": "https://monday.com/",
+    "source_url": "https://monday.com/",
+    "license": "unknown (personal reference)",
+    "artist": "monday.com",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-44-emilkowal-ski-ui-train-your-judgement.png",
+    "title": "emilkowal.ski/ui/train-your-judgement",
+    "year": 2026,
+    "tags": [
+      "avi",
+      "site",
+      "slack-candy",
+      "fun",
+      "desktop",
+      "white"
+    ],
+    "page_url": "https://emilkowal.ski/ui/train-your-judgement",
+    "source_url": "https://emilkowal.ski/ui/train-your-judgement",
+    "license": "unknown (personal reference)",
+    "artist": "emilkowal.ski",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-45-www-yoyoyo-ai.jpg",
+    "title": "www.yoyoyo.ai/",
+    "year": 2026,
+    "tags": [
+      "iougo",
+      "site",
+      "slack-candy",
+      "landing",
+      "desktop",
+      "white"
+    ],
+    "page_url": "https://www.yoyoyo.ai/",
+    "source_url": "https://www.yoyoyo.ai/",
+    "license": "unknown (personal reference)",
+    "artist": "www.yoyoyo.ai",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-46-oryzo-ai.jpg",
+    "title": "oryzo.ai/",
+    "year": 2026,
+    "tags": [
+      "sergio",
+      "site",
+      "slack-candy",
+      "3d",
+      "desktop",
+      "black"
+    ],
+    "page_url": "https://oryzo.ai/",
+    "source_url": "https://oryzo.ai/",
+    "license": "unknown (personal reference)",
+    "artist": "oryzo.ai",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-47-www-visiteamazonia-com-br-en-project.jpg",
+    "title": "www.visiteamazonia.com.br/en/project/",
+    "year": 2026,
+    "tags": [
+      "fabrizia",
+      "site",
+      "slack-candy",
+      "3d",
+      "desktop",
+      "yellow",
+      "orange"
+    ],
+    "page_url": "https://www.visiteamazonia.com.br/en/project/",
+    "source_url": "https://www.visiteamazonia.com.br/en/project/",
+    "license": "unknown (personal reference)",
+    "artist": "www.visiteamazonia.com.br",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-49-www-metalab-com-work-robinhood.jpg",
+    "title": "www.metalab.com/work/robinhood",
+    "year": 2026,
+    "tags": [
+      "sasha",
+      "site",
+      "slack-candy",
+      "fintech",
+      "desktop",
+      "black"
+    ],
+    "page_url": "https://www.metalab.com/work/robinhood",
+    "source_url": "https://www.metalab.com/work/robinhood",
+    "license": "unknown (personal reference)",
+    "artist": "www.metalab.com",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-50-shopify-design.jpg",
+    "title": "shopify.design/",
+    "year": 2026,
+    "tags": [
+      "avi",
+      "site",
+      "slack-candy",
+      "studio",
+      "desktop",
+      "white"
+    ],
+    "page_url": "https://shopify.design/",
+    "source_url": "https://shopify.design/",
+    "license": "unknown (personal reference)",
+    "artist": "shopify.design",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-51-moises-ai-newsroom-company-milestones-mo.png",
+    "title": "moises.ai/newsroom/company-milestones/moises-design-hub/",
+    "year": 2026,
+    "tags": [
+      "iougo",
+      "site",
+      "slack-candy",
+      "studio",
+      "desktop",
+      "black"
+    ],
+    "page_url": "https://moises.ai/newsroom/company-milestones/moises-design-hub/",
+    "source_url": "https://moises.ai/newsroom/company-milestones/moises-design-hub/",
+    "license": "unknown (personal reference)",
+    "artist": "moises.ai",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-52-www-offmenu-design.png",
+    "title": "www.offmenu.design/",
+    "year": 2026,
+    "tags": [
+      "sasha",
+      "site",
+      "slack-candy",
+      "components",
+      "desktop",
+      "white"
+    ],
+    "page_url": "https://www.offmenu.design/",
+    "source_url": "https://www.offmenu.design/",
+    "license": "unknown (personal reference)",
+    "artist": "www.offmenu.design",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-53-lilagents-xyz.png",
+    "title": "lilagents.xyz/",
+    "year": 2026,
+    "tags": [
+      "belen",
+      "site",
+      "slack-candy",
+      "ai-ui",
+      "desktop",
+      "white"
+    ],
+    "page_url": "https://lilagents.xyz/",
+    "source_url": "https://lilagents.xyz/",
+    "license": "unknown (personal reference)",
+    "artist": "lilagents.xyz",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-54-jasonmclaren-me.png",
+    "title": "jasonmclaren.me/",
+    "year": 2026,
+    "tags": [
+      "iougo",
+      "site",
+      "slack-candy",
+      "portfolio",
+      "desktop",
+      "white"
+    ],
+    "page_url": "https://jasonmclaren.me/",
+    "source_url": "https://jasonmclaren.me/",
+    "license": "unknown (personal reference)",
+    "artist": "jasonmclaren.me",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-55-www-designcalendar-io.jpg",
+    "title": "www.designcalendar.io/",
+    "year": 2026,
+    "tags": [
+      "semi",
+      "site",
+      "slack-candy",
+      "tools",
+      "desktop",
+      "gray",
+      "white"
+    ],
+    "page_url": "https://www.designcalendar.io/",
+    "source_url": "https://www.designcalendar.io/",
+    "license": "unknown (personal reference)",
+    "artist": "www.designcalendar.io",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-56-www-captionwithintention-org.jpg",
+    "title": "www.captionwithintention.org/",
+    "year": 2026,
+    "tags": [
+      "fabrizia",
+      "site",
+      "slack-candy",
+      "accessibility",
+      "desktop",
+      "black"
+    ],
+    "page_url": "https://www.captionwithintention.org/",
+    "source_url": "https://www.captionwithintention.org/",
+    "license": "unknown (personal reference)",
+    "artist": "www.captionwithintention.org",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-57-buck-co-work-oscar-ai-agent.jpg",
+    "title": "buck.co/work/oscar-ai-agent",
+    "year": 2026,
+    "tags": [
+      "iougo",
+      "site",
+      "slack-candy",
+      "ai-ui",
+      "desktop",
+      "white"
+    ],
+    "page_url": "https://buck.co/work/oscar-ai-agent",
+    "source_url": "https://buck.co/work/oscar-ai-agent",
+    "license": "unknown (personal reference)",
+    "artist": "buck.co",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-58-linear-app-now-behind-the-latest-design.jpg",
+    "title": "linear.app/now/behind-the-latest-design-refresh",
+    "year": 2026,
+    "tags": [
+      "iougo",
+      "site",
+      "slack-candy",
+      "editorial",
+      "desktop",
+      "black"
+    ],
+    "page_url": "https://linear.app/now/behind-the-latest-design-refresh",
+    "source_url": "https://linear.app/now/behind-the-latest-design-refresh",
+    "license": "unknown (personal reference)",
+    "artist": "linear.app",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-59-nikitavasilevskiy-com-about-me.png",
+    "title": "nikitavasilevskiy.com/about-me",
+    "year": 2026,
+    "tags": [
+      "sasha",
+      "site",
+      "slack-candy",
+      "portfolio",
+      "desktop",
+      "white"
+    ],
+    "page_url": "https://nikitavasilevskiy.com/about-me",
+    "source_url": "https://nikitavasilevskiy.com/about-me",
+    "license": "unknown (personal reference)",
+    "artist": "nikitavasilevskiy.com",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-60-clickup-com-brain-agents.jpg",
+    "title": "clickup.com/brain/agents",
+    "year": 2026,
+    "tags": [
+      "sasha",
+      "site",
+      "slack-candy",
+      "ai-ui",
+      "desktop",
+      "white",
+      "black"
+    ],
+    "page_url": "https://clickup.com/brain/agents",
+    "source_url": "https://clickup.com/brain/agents",
+    "license": "unknown (personal reference)",
+    "artist": "clickup.com",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-61-shop-robinhood-com.png",
+    "title": "shop.robinhood.com/",
+    "year": 2026,
+    "tags": [
+      "lucas",
+      "site",
+      "slack-candy",
+      "fintech",
+      "desktop",
+      "black",
+      "blue"
+    ],
+    "page_url": "https://shop.robinhood.com/",
+    "source_url": "https://shop.robinhood.com/",
+    "license": "unknown (personal reference)",
+    "artist": "shop.robinhood.com",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-62-haptics-lochie-me.png",
+    "title": "haptics.lochie.me/",
+    "year": 2026,
+    "tags": [
+      "gav",
+      "site",
+      "slack-candy",
+      "motion",
+      "desktop",
+      "white"
+    ],
+    "page_url": "https://haptics.lochie.me/",
+    "source_url": "https://haptics.lochie.me/",
+    "license": "unknown (personal reference)",
+    "artist": "haptics.lochie.me",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-63-rozina-deel-design-vercel-app-eye-icon-a.png",
+    "title": "rozina-deel-design.vercel.app/eye-icon-animation",
+    "year": 2026,
+    "tags": [
+      "rozina",
+      "site",
+      "slack-candy",
+      "motion",
+      "desktop",
+      "white"
+    ],
+    "page_url": "https://rozina-deel-design.vercel.app/eye-icon-animation",
+    "source_url": "https://rozina-deel-design.vercel.app/eye-icon-animation",
+    "license": "unknown (personal reference)",
+    "artist": "rozina-deel-design.vercel.app",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-64-www-hyperagent-com.png",
+    "title": "www.hyperagent.com/",
+    "year": 2026,
+    "tags": [
+      "avi",
+      "site",
+      "slack-candy",
+      "ai-ui",
+      "desktop",
+      "white"
+    ],
+    "page_url": "https://www.hyperagent.com/",
+    "source_url": "https://www.hyperagent.com/",
+    "license": "unknown (personal reference)",
+    "artist": "www.hyperagent.com",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-65-www-perplexity-ai-products-computer.jpg",
+    "title": "www.perplexity.ai/products/computer",
+    "year": 2026,
+    "tags": [
+      "fabrizia",
+      "site",
+      "slack-candy",
+      "ai-ui",
+      "desktop",
+      "white"
+    ],
+    "page_url": "https://www.perplexity.ai/products/computer",
+    "source_url": "https://www.perplexity.ai/products/computer",
+    "license": "unknown (personal reference)",
+    "artist": "www.perplexity.ai",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-66-contra-com-project-rate-hiring-calculato.png",
+    "title": "contra.com/project-rate-hiring-calculator/",
+    "year": 2026,
+    "tags": [
+      "lucas",
+      "site",
+      "slack-candy",
+      "tools",
+      "desktop",
+      "black"
+    ],
+    "page_url": "https://contra.com/project-rate-hiring-calculator/",
+    "source_url": "https://contra.com/project-rate-hiring-calculator/",
+    "license": "unknown (personal reference)",
+    "artist": "contra.com",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-67-www-flit-design.png",
+    "title": "www.flit.design/",
+    "year": 2026,
+    "tags": [
+      "jasmina",
+      "site",
+      "slack-candy",
+      "tools",
+      "desktop",
+      "white"
+    ],
+    "page_url": "https://www.flit.design/",
+    "source_url": "https://www.flit.design/",
+    "license": "unknown (personal reference)",
+    "artist": "www.flit.design",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-68-keyviz-org.png",
+    "title": "keyviz.org/",
+    "year": 2026,
+    "tags": [
+      "virginia",
+      "site",
+      "slack-candy",
+      "tools",
+      "desktop",
+      "white"
+    ],
+    "page_url": "https://keyviz.org/",
+    "source_url": "https://keyviz.org/",
+    "license": "unknown (personal reference)",
+    "artist": "keyviz.org",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-69-enzo-fyi.png",
+    "title": "enzo.fyi/",
+    "year": 2026,
+    "tags": [
+      "avi",
+      "site",
+      "slack-candy",
+      "portfolio",
+      "desktop",
+      "black"
+    ],
+    "page_url": "https://enzo.fyi/",
+    "source_url": "https://enzo.fyi/",
+    "license": "unknown (personal reference)",
+    "artist": "enzo.fyi",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-70-linear-app.jpg",
+    "title": "linear.app/",
+    "year": 2026,
+    "tags": [
+      "avi",
+      "site",
+      "slack-candy",
+      "landing",
+      "desktop",
+      "black"
+    ],
+    "page_url": "https://linear.app/",
+    "source_url": "https://linear.app/",
+    "license": "unknown (personal reference)",
+    "artist": "linear.app",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-71-www-magomaev-me-macos9.png",
+    "title": "www.magomaev.me/macos9/",
+    "year": 2026,
+    "tags": [
+      "sasha",
+      "site",
+      "slack-candy",
+      "retro",
+      "desktop",
+      "blue"
+    ],
+    "page_url": "https://www.magomaev.me/macos9/",
+    "source_url": "https://www.magomaev.me/macos9/",
+    "license": "unknown (personal reference)",
+    "artist": "www.magomaev.me",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-72-www-magomaev-me-win98.png",
+    "title": "www.magomaev.me/win98/",
+    "year": 2026,
+    "tags": [
+      "sasha",
+      "site",
+      "slack-candy",
+      "retro",
+      "desktop",
+      "cyan"
+    ],
+    "page_url": "https://www.magomaev.me/win98/",
+    "source_url": "https://www.magomaev.me/win98/",
+    "license": "unknown (personal reference)",
+    "artist": "www.magomaev.me",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-73-curater-org.png",
+    "title": "curater.org/",
+    "year": 2026,
+    "tags": [
+      "iougo",
+      "site",
+      "slack-candy",
+      "archive",
+      "desktop",
+      "white"
+    ],
+    "page_url": "https://curater.org/",
+    "source_url": "https://curater.org/",
+    "license": "unknown (personal reference)",
+    "artist": "curater.org",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-74-www-isidor-ai.png",
+    "title": "www.isidor.ai/",
+    "year": 2026,
+    "tags": [
+      "virginia",
+      "site",
+      "slack-candy",
+      "ai-ui",
+      "desktop",
+      "black",
+      "blue"
+    ],
+    "page_url": "https://www.isidor.ai/",
+    "source_url": "https://www.isidor.ai/",
+    "license": "unknown (personal reference)",
+    "artist": "www.isidor.ai",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-75-layers-to-explore.jpg",
+    "title": "layers.to/explore",
+    "year": 2026,
+    "tags": [
+      "laura",
+      "site",
+      "slack-candy",
+      "archive",
+      "desktop",
+      "white",
+      "gray"
+    ],
+    "page_url": "https://layers.to/explore",
+    "source_url": "https://layers.to/explore",
+    "license": "unknown (personal reference)",
+    "artist": "layers.to",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-76-minimal-gallery.jpg",
+    "title": "minimal.gallery/",
+    "year": 2026,
+    "tags": [
+      "virginia",
+      "site",
+      "slack-candy",
+      "archive",
+      "desktop",
+      "black"
+    ],
+    "page_url": "https://minimal.gallery/",
+    "source_url": "https://minimal.gallery/",
+    "license": "unknown (personal reference)",
+    "artist": "minimal.gallery",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-77-essential-com.png",
+    "title": "essential.com/",
+    "year": 2026,
+    "tags": [
+      "erica",
+      "site",
+      "slack-candy",
+      "landing",
+      "desktop",
+      "white"
+    ],
+    "page_url": "https://essential.com/",
+    "source_url": "https://essential.com/",
+    "license": "unknown (personal reference)",
+    "artist": "essential.com",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-78-moody-mjarosz-com.jpg",
+    "title": "moody.mjarosz.com/",
+    "year": 2026,
+    "tags": [
+      "virginia",
+      "site",
+      "slack-candy",
+      "tools",
+      "desktop",
+      "white",
+      "blue"
+    ],
+    "page_url": "https://moody.mjarosz.com/",
+    "source_url": "https://moody.mjarosz.com/",
+    "license": "unknown (personal reference)",
+    "artist": "moody.mjarosz.com",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-79-www-designisfunny-co.jpg",
+    "title": "www.designisfunny.co/",
+    "year": 2026,
+    "tags": [
+      "sasha",
+      "site",
+      "slack-candy",
+      "fun",
+      "desktop",
+      "white",
+      "gray"
+    ],
+    "page_url": "https://www.designisfunny.co/",
+    "source_url": "https://www.designisfunny.co/",
+    "license": "unknown (personal reference)",
+    "artist": "www.designisfunny.co",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-80-abduzeedo-com-soccer-brand-identity-sc-g.jpg",
+    "title": "abduzeedo.com/soccer-brand-identity-sc-gjoa-modernizes-brooklyn-roots",
+    "year": 2026,
+    "tags": [
+      "belen",
+      "site",
+      "slack-candy",
+      "identity",
+      "desktop",
+      "blue"
+    ],
+    "page_url": "https://abduzeedo.com/soccer-brand-identity-sc-gjoa-modernizes-brooklyn-roots",
+    "source_url": "https://abduzeedo.com/soccer-brand-identity-sc-gjoa-modernizes-brooklyn-roots",
+    "license": "unknown (personal reference)",
+    "artist": "abduzeedo.com",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-81-app-superdesign-dev-library.png",
+    "title": "app.superdesign.dev/library",
+    "year": 2026,
+    "tags": [
+      "carlos",
+      "site",
+      "slack-candy",
+      "ai-ui",
+      "desktop",
+      "gray",
+      "white"
+    ],
+    "page_url": "https://app.superdesign.dev/library",
+    "source_url": "https://app.superdesign.dev/library",
+    "license": "unknown (personal reference)",
+    "artist": "app.superdesign.dev",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-82-mutoco-ch-de-projects-eid-swiyu.jpg",
+    "title": "mutoco.ch/de/projects/eid-swiyu",
+    "year": 2026,
+    "tags": [
+      "fabrizia",
+      "site",
+      "slack-candy",
+      "identity",
+      "desktop",
+      "blue"
+    ],
+    "page_url": "https://mutoco.ch/de/projects/eid-swiyu",
+    "source_url": "https://mutoco.ch/de/projects/eid-swiyu",
+    "license": "unknown (personal reference)",
+    "artist": "mutoco.ch",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-83-www-archiviograficaitaliana-com.jpg",
+    "title": "www.archiviograficaitaliana.com/",
+    "year": 2026,
+    "tags": [
+      "virginia",
+      "site",
+      "slack-candy",
+      "archive",
+      "desktop",
+      "white"
+    ],
+    "page_url": "https://www.archiviograficaitaliana.com/",
+    "source_url": "https://www.archiviograficaitaliana.com/",
+    "license": "unknown (personal reference)",
+    "artist": "www.archiviograficaitaliana.com",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-84-variant-ai.png",
+    "title": "variant.ai/",
+    "year": 2026,
+    "tags": [
+      "carlos",
+      "site",
+      "slack-candy",
+      "ai-ui",
+      "desktop",
+      "black"
+    ],
+    "page_url": "https://variant.ai/",
+    "source_url": "https://variant.ai/",
+    "license": "unknown (personal reference)",
+    "artist": "variant.ai",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-85-elevenlabs-io.jpg",
+    "title": "elevenlabs.io/",
+    "year": 2026,
+    "tags": [
+      "erica",
+      "site",
+      "slack-candy",
+      "ai-ui",
+      "desktop",
+      "white"
+    ],
+    "page_url": "https://elevenlabs.io/",
+    "source_url": "https://elevenlabs.io/",
+    "license": "unknown (personal reference)",
+    "artist": "elevenlabs.io",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-86-www-alexanderbyrne-com.jpg",
+    "title": "www.alexanderbyrne.com/",
+    "year": 2026,
+    "tags": [
+      "sasha",
+      "site",
+      "slack-candy",
+      "portfolio",
+      "desktop",
+      "white"
+    ],
+    "page_url": "https://www.alexanderbyrne.com/",
+    "source_url": "https://www.alexanderbyrne.com/",
+    "license": "unknown (personal reference)",
+    "artist": "www.alexanderbyrne.com",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-87-www-joindex-com.jpg",
+    "title": "www.joindex.com/",
+    "year": 2026,
+    "tags": [
+      "iougo",
+      "site",
+      "slack-candy",
+      "landing",
+      "desktop",
+      "white"
+    ],
+    "page_url": "https://www.joindex.com/",
+    "source_url": "https://www.joindex.com/",
+    "license": "unknown (personal reference)",
+    "artist": "www.joindex.com",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-88-messenger-abeto-co.png",
+    "title": "messenger.abeto.co/",
+    "year": 2026,
+    "tags": [
+      "jorge",
+      "site",
+      "slack-candy",
+      "3d",
+      "desktop",
+      "cyan"
+    ],
+    "page_url": "https://messenger.abeto.co/",
+    "source_url": "https://messenger.abeto.co/",
+    "license": "unknown (personal reference)",
+    "artist": "messenger.abeto.co",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-89-design-google-library-gemini-ai-visual-d.jpg",
+    "title": "design.google/library/gemini-ai-visual-design",
+    "year": 2026,
+    "tags": [
+      "jorge",
+      "site",
+      "slack-candy",
+      "ai-ui",
+      "desktop",
+      "black"
+    ],
+    "page_url": "https://design.google/library/gemini-ai-visual-design",
+    "source_url": "https://design.google/library/gemini-ai-visual-design",
+    "license": "unknown (personal reference)",
+    "artist": "design.google",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-90-www-apple-com-newsroom-2026-01-introduci.jpg",
+    "title": "www.apple.com/newsroom/2026/01/introducing-apple-creator-studio-an-inspiring-collection-of-creative-apps/",
+    "year": 2026,
+    "tags": [
+      "thais",
+      "site",
+      "slack-candy",
+      "product",
+      "desktop",
+      "black"
+    ],
+    "page_url": "https://www.apple.com/newsroom/2026/01/introducing-apple-creator-studio-an-inspiring-collection-of-creative-apps/",
+    "source_url": "https://www.apple.com/newsroom/2026/01/introducing-apple-creator-studio-an-inspiring-collection-of-creative-apps/",
+    "license": "unknown (personal reference)",
+    "artist": "www.apple.com",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-91-medvedev-xyz-brickit.jpg",
+    "title": "medvedev.xyz/brickit",
+    "year": 2026,
+    "tags": [
+      "sasha",
+      "site",
+      "slack-candy",
+      "case-study",
+      "desktop",
+      "gray",
+      "orange"
+    ],
+    "page_url": "https://medvedev.xyz/brickit",
+    "source_url": "https://medvedev.xyz/brickit",
+    "license": "unknown (personal reference)",
+    "artist": "medvedev.xyz",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-92-dribbble-com-shots-26903079-fintech-app.jpg",
+    "title": "dribbble.com/shots/26903079-Fintech-App-Web-Design-Portal",
+    "year": 2026,
+    "tags": [
+      "sasha",
+      "site",
+      "slack-candy",
+      "fintech",
+      "desktop",
+      "white",
+      "gray"
+    ],
+    "page_url": "https://dribbble.com/shots/26903079-Fintech-App-Web-Design-Portal",
+    "source_url": "https://dribbble.com/shots/26903079-Fintech-App-Web-Design-Portal",
+    "license": "unknown (personal reference)",
+    "artist": "dribbble.com",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-93-poetry-camera.jpg",
+    "title": "poetry.camera/",
+    "year": 2026,
+    "tags": [
+      "fabrizia",
+      "site",
+      "slack-candy",
+      "product",
+      "desktop",
+      "white"
+    ],
+    "page_url": "https://poetry.camera/",
+    "source_url": "https://poetry.camera/",
+    "license": "unknown (personal reference)",
+    "artist": "poetry.camera",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-94-varchive-ai.png",
+    "title": "varchive.ai/",
+    "year": 2026,
+    "tags": [
+      "avi",
+      "site",
+      "slack-candy",
+      "archive",
+      "desktop",
+      "white"
+    ],
+    "page_url": "https://varchive.ai/",
+    "source_url": "https://varchive.ai/",
+    "license": "unknown (personal reference)",
+    "artist": "varchive.ai",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-95-labs-google-disco.png",
+    "title": "labs.google/disco",
+    "year": 2026,
+    "tags": [
+      "carlos",
+      "site",
+      "slack-candy",
+      "ai-ui",
+      "desktop",
+      "white"
+    ],
+    "page_url": "https://labs.google/disco",
+    "source_url": "https://labs.google/disco",
+    "license": "unknown (personal reference)",
+    "artist": "labs.google",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-96-www-shopify-com-editions-winter2026.jpg",
+    "title": "www.shopify.com/editions/winter2026",
+    "year": 2026,
+    "tags": [
+      "avi",
+      "site",
+      "slack-candy",
+      "editions",
+      "desktop",
+      "black",
+      "gray"
+    ],
+    "page_url": "https://www.shopify.com/editions/winter2026",
+    "source_url": "https://www.shopify.com/editions/winter2026",
+    "license": "unknown (personal reference)",
+    "artist": "www.shopify.com",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-97-feyder-co-projects-chromatic.png",
+    "title": "feyder.co/projects/chromatic/",
+    "year": 2026,
+    "tags": [
+      "virginia",
+      "site",
+      "slack-candy",
+      "color",
+      "desktop",
+      "white",
+      "orange"
+    ],
+    "page_url": "https://feyder.co/projects/chromatic/",
+    "source_url": "https://feyder.co/projects/chromatic/",
+    "license": "unknown (personal reference)",
+    "artist": "feyder.co",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-98-bfcm-stripe-com-2024.jpg",
+    "title": "bfcm.stripe.com/2024",
+    "year": 2026,
+    "tags": [
+      "kate",
+      "site",
+      "slack-candy",
+      "dataviz",
+      "desktop",
+      "gray"
+    ],
+    "page_url": "https://bfcm.stripe.com/2024",
+    "source_url": "https://bfcm.stripe.com/2024",
+    "license": "unknown (personal reference)",
+    "artist": "bfcm.stripe.com",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-99-bfcm-stripe-com.png",
+    "title": "bfcm.stripe.com/",
+    "year": 2026,
+    "tags": [
+      "kate",
+      "site",
+      "slack-candy",
+      "dataviz",
+      "desktop",
+      "white"
+    ],
+    "page_url": "https://bfcm.stripe.com/",
+    "source_url": "https://bfcm.stripe.com/",
+    "license": "unknown (personal reference)",
+    "artist": "bfcm.stripe.com",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-100-www-sandervandijk-tv-strava.png",
+    "title": "www.sandervandijk.tv/strava",
+    "year": 2026,
+    "tags": [
+      "eduardo",
+      "site",
+      "slack-candy",
+      "motion",
+      "desktop",
+      "white"
+    ],
+    "page_url": "https://www.sandervandijk.tv/strava",
+    "source_url": "https://www.sandervandijk.tv/strava",
+    "license": "unknown (personal reference)",
+    "artist": "www.sandervandijk.tv",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-101-qonto-com-en-blog-trend-news-qonto-news.jpg",
+    "title": "qonto.com/en/blog/trend-news/qonto-news/lucas-beaufort-x-qonto-from-canvas-to-cards",
+    "year": 2026,
+    "tags": [
+      "sasha",
+      "site",
+      "slack-candy",
+      "cards",
+      "desktop",
+      "white"
+    ],
+    "page_url": "https://qonto.com/en/blog/trend-news/qonto-news/lucas-beaufort-x-qonto-from-canvas-to-cards",
+    "source_url": "https://qonto.com/en/blog/trend-news/qonto-news/lucas-beaufort-x-qonto-from-canvas-to-cards",
+    "license": "unknown (personal reference)",
+    "artist": "qonto.com",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-102-type-01-com.jpg",
+    "title": "type-01.com/",
+    "year": 2026,
+    "tags": [
+      "jasmina",
+      "site",
+      "slack-candy",
+      "editorial",
+      "desktop",
+      "white",
+      "gray"
+    ],
+    "page_url": "https://type-01.com/",
+    "source_url": "https://type-01.com/",
+    "license": "unknown (personal reference)",
+    "artist": "type-01.com",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-103-operaneon-com.jpg",
+    "title": "operaneon.com/",
+    "year": 2026,
+    "tags": [
+      "sergio",
+      "site",
+      "slack-candy",
+      "3d",
+      "desktop",
+      "gray"
+    ],
+    "page_url": "http://operaneon.com/",
+    "source_url": "http://operaneon.com/",
+    "license": "unknown (personal reference)",
+    "artist": "operaneon.com",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-104-www-mushroomcoloratlas-com.jpg",
+    "title": "www.mushroomcoloratlas.com/",
+    "year": 2026,
+    "tags": [
+      "virginia",
+      "site",
+      "slack-candy",
+      "color",
+      "desktop",
+      "orange"
+    ],
+    "page_url": "https://www.mushroomcoloratlas.com/",
+    "source_url": "https://www.mushroomcoloratlas.com/",
+    "license": "unknown (personal reference)",
+    "artist": "www.mushroomcoloratlas.com",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-105-design-cash-app.png",
+    "title": "design.cash.app/",
+    "year": 2026,
+    "tags": [
+      "sasha",
+      "site",
+      "slack-candy",
+      "fintech",
+      "desktop",
+      "black"
+    ],
+    "page_url": "https://design.cash.app/",
+    "source_url": "https://design.cash.app/",
+    "license": "unknown (personal reference)",
+    "artist": "design.cash.app",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-106-buck-co-work-cash-app-visual-identity.jpg",
+    "title": "buck.co/work/cash-app-visual-identity",
+    "year": 2026,
+    "tags": [
+      "sasha",
+      "site",
+      "slack-candy",
+      "identity",
+      "desktop",
+      "white",
+      "gray",
+      "green"
+    ],
+    "page_url": "https://buck.co/work/cash-app-visual-identity",
+    "source_url": "https://buck.co/work/cash-app-visual-identity",
+    "license": "unknown (personal reference)",
+    "artist": "buck.co",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-107-www-aiverse-design-browse-hero-ai-autoco.png",
+    "title": "www.aiverse.design/browse/hero-ai-autocomplete",
+    "year": 2026,
+    "tags": [
+      "pamela",
+      "site",
+      "slack-candy",
+      "ai-ui",
+      "desktop",
+      "white",
+      "red"
+    ],
+    "page_url": "https://www.aiverse.design/browse/hero-ai-autocomplete",
+    "source_url": "https://www.aiverse.design/browse/hero-ai-autocomplete",
+    "license": "unknown (personal reference)",
+    "artist": "www.aiverse.design",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-108-cash-app-new.png",
+    "title": "cash.app/new",
+    "year": 2026,
+    "tags": [
+      "sasha",
+      "site",
+      "slack-candy",
+      "fintech",
+      "desktop",
+      "white"
+    ],
+    "page_url": "https://cash.app/new",
+    "source_url": "https://cash.app/new",
+    "license": "unknown (personal reference)",
+    "artist": "cash.app",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-109-motion-dev-examples.png",
+    "title": "motion.dev/examples",
+    "year": 2026,
+    "tags": [
+      "jamie",
+      "site",
+      "slack-candy",
+      "motion",
+      "desktop",
+      "black"
+    ],
+    "page_url": "https://motion.dev/examples",
+    "source_url": "https://motion.dev/examples",
+    "license": "unknown (personal reference)",
+    "artist": "motion.dev",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-110-patterncraft-fun.jpg",
+    "title": "patterncraft.fun/",
+    "year": 2026,
+    "tags": [
+      "jamie",
+      "site",
+      "slack-candy",
+      "components",
+      "desktop",
+      "white",
+      "gray"
+    ],
+    "page_url": "https://patterncraft.fun/",
+    "source_url": "https://patterncraft.fun/",
+    "license": "unknown (personal reference)",
+    "artist": "patterncraft.fun",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-111-v3-heroui-com-docs-components-card.png",
+    "title": "v3.heroui.com/docs/components/card",
+    "year": 2026,
+    "tags": [
+      "sasha",
+      "site",
+      "slack-candy",
+      "components",
+      "desktop",
+      "white"
+    ],
+    "page_url": "https://v3.heroui.com/docs/components/card",
+    "source_url": "https://v3.heroui.com/docs/components/card",
+    "license": "unknown (personal reference)",
+    "artist": "v3.heroui.com",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-112-www-brands-mx-project-864-mutt.jpg",
+    "title": "www.brands.mx/project/864-mutt",
+    "year": 2026,
+    "tags": [
+      "sasha",
+      "site",
+      "slack-candy",
+      "identity",
+      "desktop",
+      "white"
+    ],
+    "page_url": "https://www.brands.mx/project/864-mutt",
+    "source_url": "https://www.brands.mx/project/864-mutt",
+    "license": "unknown (personal reference)",
+    "artist": "www.brands.mx",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-113-daylightcomputer-com.jpg",
+    "title": "daylightcomputer.com/",
+    "year": 2026,
+    "tags": [
+      "sasha",
+      "site",
+      "slack-candy",
+      "product",
+      "desktop",
+      "white"
+    ],
+    "page_url": "https://daylightcomputer.com/",
+    "source_url": "https://daylightcomputer.com/",
+    "license": "unknown (personal reference)",
+    "artist": "daylightcomputer.com",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-114-www-1x-tech.jpg",
+    "title": "www.1x.tech/",
+    "year": 2026,
+    "tags": [
+      "sasha",
+      "site",
+      "slack-candy",
+      "product",
+      "desktop",
+      "blue",
+      "white"
+    ],
+    "page_url": "https://www.1x.tech/",
+    "source_url": "https://www.1x.tech/",
+    "license": "unknown (personal reference)",
+    "artist": "www.1x.tech",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-115-shuttle-zip-about.png",
+    "title": "shuttle.zip/about",
+    "year": 2026,
+    "tags": [
+      "sasha",
+      "site",
+      "slack-candy",
+      "product",
+      "desktop",
+      "white"
+    ],
+    "page_url": "https://shuttle.zip/about",
+    "source_url": "https://shuttle.zip/about",
+    "license": "unknown (personal reference)",
+    "artist": "shuttle.zip",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-118-www-cosmos-so-public-work.png",
+    "title": "www.cosmos.so/public-work",
+    "year": 2026,
+    "tags": [
+      "virginia",
+      "site",
+      "slack-candy",
+      "archive",
+      "desktop",
+      "white",
+      "gray"
+    ],
+    "page_url": "https://www.cosmos.so/public-work",
+    "source_url": "https://www.cosmos.so/public-work",
+    "license": "unknown (personal reference)",
+    "artist": "www.cosmos.so",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-120-verveagency-com-work-ecommpay.jpg",
+    "title": "verveagency.com/work/ecommpay",
+    "year": 2026,
+    "tags": [
+      "sasha",
+      "site",
+      "slack-candy",
+      "fintech",
+      "desktop",
+      "white"
+    ],
+    "page_url": "https://verveagency.com/work/ecommpay",
+    "source_url": "https://verveagency.com/work/ecommpay",
+    "license": "unknown (personal reference)",
+    "artist": "verveagency.com",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-121-verveagency-com-work-send-app.jpg",
+    "title": "verveagency.com/work/send-app",
+    "year": 2026,
+    "tags": [
+      "sasha",
+      "site",
+      "slack-candy",
+      "fintech",
+      "desktop",
+      "white"
+    ],
+    "page_url": "https://verveagency.com/work/send-app",
+    "source_url": "https://verveagency.com/work/send-app",
+    "license": "unknown (personal reference)",
+    "artist": "verveagency.com",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-122-react-email.jpg",
+    "title": "react.email/",
+    "year": 2026,
+    "tags": [
+      "jamie",
+      "site",
+      "slack-candy",
+      "components",
+      "desktop",
+      "black"
+    ],
+    "page_url": "https://react.email/",
+    "source_url": "https://react.email/",
+    "license": "unknown (personal reference)",
+    "artist": "react.email",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-123-www-iconwerk-com.jpg",
+    "title": "www.iconwerk.com/",
+    "year": 2026,
+    "tags": [
+      "sergio",
+      "site",
+      "slack-candy",
+      "icons",
+      "desktop",
+      "white"
+    ],
+    "page_url": "https://www.iconwerk.com/",
+    "source_url": "https://www.iconwerk.com/",
+    "license": "unknown (personal reference)",
+    "artist": "www.iconwerk.com",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-124-wabi-ai.jpg",
+    "title": "wabi.ai/",
+    "year": 2026,
+    "tags": [
+      "avi",
+      "site",
+      "slack-candy",
+      "ai-ui",
+      "desktop",
+      "white"
+    ],
+    "page_url": "https://wabi.ai/",
+    "source_url": "https://wabi.ai/",
+    "license": "unknown (personal reference)",
+    "artist": "wabi.ai",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-125-www-wearecollins-com-work-robinhood.png",
+    "title": "www.wearecollins.com/work/robinhood/",
+    "year": 2026,
+    "tags": [
+      "sasha",
+      "site",
+      "slack-candy",
+      "fintech",
+      "desktop",
+      "white"
+    ],
+    "page_url": "https://www.wearecollins.com/work/robinhood/",
+    "source_url": "https://www.wearecollins.com/work/robinhood/",
+    "license": "unknown (personal reference)",
+    "artist": "www.wearecollins.com",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-126-oem-care.jpg",
+    "title": "oem.care/",
+    "year": 2026,
+    "tags": [
+      "alex",
+      "site",
+      "slack-candy",
+      "ecommerce",
+      "desktop",
+      "white"
+    ],
+    "page_url": "https://oem.care/",
+    "source_url": "https://oem.care/",
+    "license": "unknown (personal reference)",
+    "artist": "oem.care",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-127-intmagic-com-project-maison-margiela.jpg",
+    "title": "intmagic.com/project/maison-margiela",
+    "year": 2026,
+    "tags": [
+      "alex",
+      "site",
+      "slack-candy",
+      "ecommerce",
+      "desktop",
+      "gray",
+      "white"
+    ],
+    "page_url": "https://intmagic.com/project/maison-margiela",
+    "source_url": "https://intmagic.com/project/maison-margiela",
+    "license": "unknown (personal reference)",
+    "artist": "intmagic.com",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-128-family-co.jpg",
+    "title": "family.co/",
+    "year": 2026,
+    "tags": [
+      "mariana",
+      "site",
+      "slack-candy",
+      "fintech",
+      "desktop",
+      "white"
+    ],
+    "page_url": "https://family.co/",
+    "source_url": "https://family.co/",
+    "license": "unknown (personal reference)",
+    "artist": "family.co",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-129-clerk-com.png",
+    "title": "clerk.com/",
+    "year": 2026,
+    "tags": [
+      "jamie",
+      "site",
+      "slack-candy",
+      "landing",
+      "desktop",
+      "white",
+      "black"
+    ],
+    "page_url": "https://clerk.com/",
+    "source_url": "https://clerk.com/",
+    "license": "unknown (personal reference)",
+    "artist": "clerk.com",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-130-paper-design.jpg",
+    "title": "paper.design/",
+    "year": 2026,
+    "tags": [
+      "alex",
+      "site",
+      "slack-candy",
+      "tools",
+      "desktop",
+      "white"
+    ],
+    "page_url": "https://paper.design/",
+    "source_url": "https://paper.design/",
+    "license": "unknown (personal reference)",
+    "artist": "paper.design",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-131-fey-com.png",
+    "title": "fey.com/",
+    "year": 2026,
+    "tags": [
+      "avi",
+      "site",
+      "slack-candy",
+      "fintech",
+      "desktop",
+      "white"
+    ],
+    "page_url": "https://fey.com/",
+    "source_url": "https://fey.com/",
+    "license": "unknown (personal reference)",
+    "artist": "fey.com",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-132-60fps-design.jpg",
+    "title": "60fps.design/",
+    "year": 2026,
+    "tags": [
+      "sasha",
+      "site",
+      "slack-candy",
+      "motion",
+      "desktop",
+      "white"
+    ],
+    "page_url": "https://60fps.design/",
+    "source_url": "https://60fps.design/",
+    "license": "unknown (personal reference)",
+    "artist": "60fps.design",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-133-apps-apple-com-app-id6443932656.png",
+    "title": "apps.apple.com/app/id6443932656",
+    "year": 2026,
+    "tags": [
+      "sasha",
+      "site",
+      "slack-candy",
+      "fintech",
+      "desktop",
+      "white"
+    ],
+    "page_url": "https://apps.apple.com/app/id6443932656",
+    "source_url": "https://apps.apple.com/app/id6443932656",
+    "license": "unknown (personal reference)",
+    "artist": "apps.apple.com",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
+  },
+  {
+    "file": "2026-10-31-candy-history-sites-134-apps-apple-com-gb-app-bump-hang-with-fri.jpg",
+    "title": "apps.apple.com/gb/app/bump-hang-with-friends-irl/id6471519217",
+    "year": 2026,
+    "tags": [
+      "avi",
+      "site",
+      "slack-candy",
+      "product",
+      "desktop",
+      "white",
+      "blue"
+    ],
+    "page_url": "https://apps.apple.com/gb/app/bump-hang-with-friends-irl/id6471519217",
+    "source_url": "https://apps.apple.com/gb/app/bump-hang-with-friends-irl/id6471519217",
+    "license": "unknown (personal reference)",
+    "artist": "apps.apple.com",
+    "query": "screenshot 1440px",
+    "batch": "2026-10-31-candy-history-sites"
   }
 ]
