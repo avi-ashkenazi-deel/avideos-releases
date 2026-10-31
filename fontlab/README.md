@@ -9,6 +9,15 @@ Everything runs in the browser. No server, no accounts. Fonts live in an
 in-browser **Fonts** list (Font menu): every change autosaves into the open
 font, **Reset** offers to save first, and any font can be exported as `.json`.
 
+## Live site
+
+Every push deploys `fontlab/` to GitHub Pages at
+<https://avi-ashkenazi-deel.github.io/avideos-releases/> via
+`.github/workflows/fontlab-pages.yml` (unit tests must pass first). One-time
+setup in the GitHub repo: **Settings → Pages → Source: GitHub Actions**; if a
+run reports that the branch may not deploy, add it under **Settings →
+Environments → github-pages → Deployment branches**.
+
 ## Run it
 
 **Easiest (macOS):** double-click `fontlab/FontLab.command` in Finder. It pulls
