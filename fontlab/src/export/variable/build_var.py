@@ -115,3 +115,47 @@ def build_variable(payload):
     buf = io.BytesIO()
     vf.save(buf)
     return buf.getvalue()
+
+
+def build_static_ttf(otf_bytes):
+    """Convert a CFF OpenType font (bytes) to a TrueType font: cubic → quadratic
+    with cu2qu, glyf/loca/maxp 1.0, CFF dropped. Returns the .ttf bytes."""
+    from fontTools.ttLib import TTFont, newTable
+    from fontTools.pens.cu2quPen import Cu2QuPen
+    from fontTools.pens.ttGlyphPen import TTGlyphPen
+
+    font = TTFont(io.BytesIO(bytes(otf_bytes)))
+    glyph_set = font.getGlyphSet()
+    glyf = newTable("glyf")
+    glyf.glyphOrder = font.getGlyphOrder()
+    glyf.glyphs = {}
+    for name in glyf.glyphOrder:
+        tt_pen = TTGlyphPen(glyph_set)
+        pen = Cu2QuPen(tt_pen, max_err=1.0, reverse_direction=True)
+        glyph_set[name].draw(pen)
+        glyf.glyphs[name] = tt_pen.glyph()
+    font["glyf"] = glyf
+    font["loca"] = newTable("loca")
+    maxp = newTable("maxp")
+    maxp.tableVersion = 0x00010000
+    maxp.maxZones = 1
+    maxp.maxTwilightPoints = 0
+    maxp.maxStorage = 0
+    maxp.maxFunctionDefs = 0
+    maxp.maxInstructionDefs = 0
+    maxp.maxStackElements = 0
+    maxp.maxSizeOfInstructions = 0
+    maxp.maxComponentElements = 0
+    font["maxp"] = maxp
+    post = font["post"]
+    post.formatType = 2.0
+    post.extraNames = []
+    post.mapping = {}
+    for tag in ("CFF ", "VORG"):
+        if tag in font:
+            del font[tag]
+    font.sfntVersion = "\x00\x01\x00\x00"
+    font.recalcBBoxes = True
+    out = io.BytesIO()
+    font.save(out)
+    return out.getvalue()

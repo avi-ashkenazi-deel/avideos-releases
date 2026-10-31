@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { applyStack, migrateDna, stackToDna, newStack, newLayer, newGroup, isIdentityStack, advanceAfterStack, ensureLayer, mutateStack } from '../../src/fx/stack';
+import { applyStack, migrateDna, stackToDna, newStack, newLayer, newGroup, isIdentityStack, advanceAfterStack, ensureLayer, mutateStack, randomStack } from '../../src/fx/stack';
 import { FX, FX_DEFS, defaultParams } from '../../src/fx/registry';
 import { PRESETS } from '../../src/fx/presets';
 import { applyDna } from '../../src/dna';
@@ -96,6 +96,24 @@ describe('effect stack', () => {
     const q = parseProject(fresh);
     expect(q.fx.groups[0].layers.map((l) => l.type)).toEqual(['hollow']);
     expect(q.fx.groups[0].layers[0].params).toEqual({ inset: 30, inline: 0 });
+  });
+  it('randomStack: 2-4 non-slow layers, params in range and on step, deterministic for a given rng', () => {
+    let k = 0; const rand = () => ((k++ * 7919) % 1000) / 1000;
+    for (let i = 0; i < 12; i++) {
+      const s = randomStack(i, undefined, Math.random, { glyph: n, metrics: DEFAULT_METRICS });
+      const layers = s.groups[0].layers;
+      expect(layers.length).toBeGreaterThanOrEqual(2); expect(layers.length).toBeLessThanOrEqual(4);
+      expect(new Set(layers.map((l) => l.type)).size).toBe(layers.length);
+      for (const l of layers) {
+        expect(FX[l.type].def.slow).toBeFalsy();
+        for (const p of FX[l.type].def.params) { const v = l.params[p.key]; expect(v).toBeGreaterThanOrEqual(p.min); expect(v).toBeLessThanOrEqual(p.max); expect(Math.abs(v / p.step - Math.round(v / p.step))).toBeLessThan(1e-6); }
+      }
+      // the whole stack still renders
+      const out = applyStack(n, s, DEFAULT_METRICS);
+      expect(out.length).toBeGreaterThan(0);
+    }
+    k = 0; const a = randomStack(1, 3, rand); k = 0; const b = randomStack(1, 3, rand);
+    expect(a.groups[0].layers.map((l) => [l.type, l.params])).toEqual(b.groups[0].layers.map((l) => [l.type, l.params]));
   });
   it('ensureLayer and mutateStack keep params in range', () => {
     const s = newStack(1);

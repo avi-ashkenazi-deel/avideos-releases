@@ -176,6 +176,18 @@ export function seedsPanel(): HTMLElement {
     const mod = e.ctrlKey || e.metaKey;
     if (mod && (e.key === 'z' || e.key === 'Z')) { e.preventDefault(); if (e.shiftKey) redoProject(); else undoProject(); }
     else if (mod && (e.key === 'y' || e.key === 'Y')) { e.preventDefault(); redoProject(); }
+    else if (!mod && !e.altKey && !e.defaultPrevented && (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === '[' || e.key === ']')) {
+      if (document.querySelector('dialog[open]')) return;
+      const chars = projectCharset(store.project);
+      const i = chars.indexOf(store.selected);
+      const dir = e.key === 'ArrowLeft' || e.key === '[' ? -1 : 1;
+      const next = chars[(i < 0 ? 0 : (i + dir + chars.length) % chars.length)];
+      if (!next) return;
+      e.preventDefault();
+      showTab('draw');
+      select(next);
+      strip.querySelector<HTMLElement>(`.chbtn[data-ch="${CSS.escape(next)}"]`)?.scrollIntoView({ block: 'nearest' });
+    }
   });
   const clear = iconButton('trash', 'Clear', () => { store.update((p) => { delete p.glyphs[store.selected]; }, 'glyph'); recomposeDependents(store.selected); scheduleBuild(0); }, { title: 'Remove this letter (it can be regenerated)' });
   const lock = iconButton('lock', 'Lock', () => { store.update((p) => { const g = p.glyphs[store.selected]; if (g) g.locked = !g.locked; }, 'glyph'); }, { title: 'Locked letters are never regenerated' });

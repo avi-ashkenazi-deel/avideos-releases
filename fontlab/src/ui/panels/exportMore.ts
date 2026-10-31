@@ -6,7 +6,8 @@ import { drawFrame } from '../../export/specimen/frames';
 import { encodeGif } from '../../export/specimen/gif';
 import { recordWebm } from '../../export/specimen/webm';
 import { buildVarPayload, AXIS_DEFS, type VarAxisTag } from '../../export/variable/masters';
-import { buildVariableFont } from '../../export/variable';
+import { buildVariableFont, buildStaticTtf } from '../../export/variable';
+import { contoursToPathD } from '../../export/specimen/svg';
 import { typeTesterHtml } from '../../export/specimen/html';
 import { openTypeTester } from './tester';
 import { BLOCKS } from '../../core/charsets';
@@ -22,6 +23,54 @@ const lookup = (): GlyphLookup => (ch) => { const b = store.built[ch]; return b 
 export function downloadOtf(): void {
   if (!store.otf) { toast('Nothing built yet. Draw or import some letters first.'); return; }
   downloadBlob(store.otf.slice(0), `${slug(store.project.name)}.otf`, 'font/otf');
+}
+
+let ttfBusy = false;
+export async function downloadTtf(): Promise<void> {
+  if (!store.otf) { toast('Nothing built yet. Draw or import some letters first.'); return; }
+  if (ttfBusy) { toast('Still converting…'); return; }
+  ttfBusy = true;
+  try {
+    const bytes = await buildStaticTtf(store.otf.slice(0), (s) => toast(s, 4000));
+    downloadBlob(new Uint8Array(bytes).buffer as ArrayBuffer, `${slug(store.project.name)}.ttf`, 'font/ttf');
+    toast('TrueType font downloaded.');
+  } catch (e) {
+    toast('TrueType export failed: ' + ((e as Error)?.message ?? String(e)).slice(0, 120) + '. The converter needs internet the first time.', 6000);
+  } finally { ttfBusy = false; }
+}
+
+/** One SVG for a single glyph (viewBox = advance × (ascender − descender), baseline at y=0 flipped). */
+export function glyphSvg(ch: string): string | null {
+  const b = store.built[ch];
+  if (!b || !b.contours.length) return null;
+  const m = store.project.metrics;
+  const d = contoursToPathD(b.contours);
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 ${-m.ascender} ${b.advance} ${m.ascender - m.descender}" width="${b.advance}" height="${m.ascender - m.descender}"><path id="glyph-${esc(ch)}" data-char="${esc(ch)}" d="${d}" fill="#000"/></svg>`;
+}
+export function downloadGlyphSvg(ch: string): void {
+  const svg = glyphSvg(ch);
+  if (!svg) { toast(`“${ch}” has nothing to export yet.`); return; }
+  downloadBlob(svg, `${slug(store.project.name)}-${glyphFileName(ch)}.svg`, 'image/svg+xml');
+}
+const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+const glyphFileName = (ch: string) => (/^[A-Za-z0-9]$/.test(ch) ? (ch === ch.toUpperCase() && ch !== ch.toLowerCase() ? ch + '_cap' : ch) : 'u' + ch.codePointAt(0)!.toString(16).toUpperCase().padStart(4, '0'));
+
+/** Every inked glyph as its own <g id="glyph-X"> laid out on a grid: pull letters apart in Illustrator / Figma. */
+export function downloadSvgGlyphs(): void {
+  if (!store.otf) { toast('Nothing built yet.'); return; }
+  const m = store.project.metrics;
+  const chars = Object.keys(store.built).filter((ch) => store.built[ch].contours.length);
+  if (!chars.length) { toast('Nothing built yet.'); return; }
+  const cellW = Math.max(...chars.map((ch) => store.built[ch].advance), 400) + 100, cellH = m.ascender - m.descender + 120;
+  const cols = Math.ceil(Math.sqrt(chars.length * 1.6));
+  const rows = Math.ceil(chars.length / cols);
+  const groups = chars.map((ch, i) => {
+    const b = store.built[ch];
+    const x = (i % cols) * cellW + 50, y = Math.floor(i / cols) * cellH + m.ascender + 60;
+    return `  <g id="glyph-${esc(ch)}" data-char="${esc(ch)}" data-advance="${b.advance}" transform="translate(${x} ${y})"><path d="${contoursToPathD(b.contours)}"/></g>`;
+  });
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${cols * cellW} ${rows * cellH}" width="${cols * cellW}" height="${rows * cellH}" fill="#000">\n<title>${esc(store.project.name)} glyphs</title>\n${groups.join('\n')}\n</svg>`;
+  downloadBlob(svg, `${slug(store.project.name)}-glyphs.svg`, 'image/svg+xml');
 }
 
 export function downloadSvgSpecimen(): void {

@@ -42,7 +42,7 @@ const preset = (page: Page, name: string) => page.locator('#preset').selectOptio
 
 test.beforeEach(async ({ page }) => {
   await page.goto('/');
-  await page.evaluate(() => localStorage.clear());
+  await page.evaluate(() => { localStorage.clear(); localStorage.setItem('fontlab:welcomed', '1'); });
   await page.reload();
 });
 
@@ -144,4 +144,25 @@ test('import shows the original; crisp preset keeps corners; in-app type tester 
   await page.getByRole('button', { name: 'Close' }).click();
   await expect(page.locator('.preview-out')).toHaveText('HaHa');
   await expect(page.locator('.preview-input')).toHaveValue('HaHa');
+});
+
+test('Randomize fills the stack, Back restores it, SVG glyphs export one group per letter', async ({ page }) => {
+  await seedH(page);
+  await expect(page.locator('.fxlayer')).toHaveCount(0);
+  await page.locator('[data-testid=btn-randomize]').click();
+  const n = await page.locator('.fxlayer').count();
+  expect(n).toBeGreaterThanOrEqual(2); expect(n).toBeLessThanOrEqual(4);
+  await builtStatus(page);
+  const download = await exportOtf(page);
+  expect(fs.statSync(await download.path() as string).size).toBeGreaterThan(500);
+  await page.locator('[data-testid=btn-fx-back]').click();
+  await expect(page.locator('.fxlayer')).toHaveCount(0);
+  await preset(page, 'Echoes');
+  await expect(page.locator('.fxlayer[data-type="echo"]')).toBeVisible();
+  await builtStatus(page);
+  await page.locator('[data-testid=menu-export]').click();
+  const [svg] = await Promise.all([page.waitForEvent('download'), page.locator('[data-testid=menu-svg-glyphs]').click()]);
+  const text = fs.readFileSync(await svg.path() as string, 'utf8');
+  expect(text).toContain('id="glyph-H"');
+  expect(text).toContain('<g ');
 });

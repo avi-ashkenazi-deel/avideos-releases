@@ -29,7 +29,7 @@ const preset = (page: Page, name: string) => page.locator('#preset').selectOptio
 
 test.beforeEach(async ({ page }) => {
   await page.goto('/');
-  await page.evaluate(() => localStorage.clear());
+  await page.evaluate(() => { localStorage.clear(); localStorage.setItem('fontlab:welcomed', '1'); });
   await page.reload();
 });
 

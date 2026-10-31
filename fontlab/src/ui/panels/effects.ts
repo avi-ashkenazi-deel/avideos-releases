@@ -3,7 +3,8 @@ import { icon } from '../icons';
 import { store } from '../state';
 import { scheduleBuild } from '../buildClient';
 import { FX, FX_ORDER } from '../../fx/registry';
-import { newGroup, newLayer, mutateStack, newStack } from '../../fx/stack';
+import { newGroup, newLayer, mutateStack, newStack, randomStack } from '../../fx/stack';
+import type { FxStack } from '../../fx/types';
 import { PRESETS } from '../../fx/presets';
 import type { FxGroup, FxLayer, GroupOp } from '../../fx/types';
 
@@ -13,7 +14,16 @@ const OPS: { op: GroupOp; label: string; hint: string }[] = [
   { op: 'intersect', label: 'keep only', hint: 'keep only where both overlap' },
   { op: 'xor', label: 'xor with', hint: 'keep where exactly one is inked' },
 ];
-const STAGE_LABEL = { skeleton: 'Strokes', outline: 'Shape', raster: 'Texture' } as const;
+const STAGE_LABEL: Record<string, string> = { skeleton: 'strokes', outline: 'shape', raster: 'texture', warp: 'warp', wreck: 'destroyer' };
+/** Menu categories: a playful name, then the plain one. */
+const CATS: { id: string; label: string; match: (t: string) => boolean }[] = [
+  { id: 'skeleton', label: 'Limber up · strokes', match: (t) => FX[t].def.stage === 'skeleton' },
+  { id: 'crisp', label: 'Clean cuts · sharp edits', match: (t) => FX[t].def.stage === 'outline' && !!FX[t].def.crisp && !FX[t].def.category },
+  { id: 'warp', label: 'Bend it · warps', match: (t) => FX[t].def.category === 'warp' },
+  { id: 'shape', label: 'Mess it up · shape', match: (t) => FX[t].def.stage === 'outline' && !FX[t].def.crisp && !FX[t].def.category },
+  { id: 'wreck', label: 'Wreck it · destroyers', match: (t) => FX[t].def.category === 'wreck' },
+  { id: 'raster', label: 'Grind it · texture', match: (t) => FX[t].def.stage === 'raster' },
+];
 
 /** Effects: preset dropdown + an ordered list of effects; mask groups behind Advanced. */
 export function effectsPanel(): HTMLElement {
@@ -43,7 +53,7 @@ export function effectsPanel(): HTMLElement {
 
   const addSelect = (g: FxGroup) => {
     const sel = h('select', { class: 'addsel', 'aria-label': 'Add effect' }, h('option', { value: '' }, 'Add effect…'),
-      ...(['skeleton', 'outline', 'raster'] as const).map((st) => h('optgroup', { label: STAGE_LABEL[st] }, ...FX_ORDER.filter((t) => FX[t].def.stage === st).map((t) => h('option', { value: t, title: FX[t].def.hint }, FX[t].def.label + (FX[t].def.crisp ? ' (crisp)' : '') + (FX[t].def.slow ? ' (slow)' : ''))))));
+      ...CATS.map((c) => h('optgroup', { label: c.label }, ...FX_ORDER.filter(c.match).map((t) => h('option', { value: t, title: FX[t].def.hint }, FX[t].def.label + (FX[t].def.slow ? ' (slow)' : ''))))).filter((og) => og.childElementCount > 0));
     sel.addEventListener('change', () => { if (!sel.value) return; g.layers.push(newLayer(sel.value)); sel.value = ''; render(); changed(0); });
     return sel;
   };
@@ -91,7 +101,7 @@ export function effectsPanel(): HTMLElement {
       return r;
     }));
     const row = h('div', { class: 'fxlayer' + (l.enabled ? '' : ' off') + ' stage-' + impl.def.stage, 'data-type': l.type, 'data-layer': l.id },
-      h('div', { class: 'fxrow' }, handle, enable, h('span', { class: 'fxname', title: impl.def.hint }, impl.def.label), h('span', { class: 'stage' }, STAGE_LABEL[impl.def.stage]),
+      h('div', { class: 'fxrow' }, handle, enable, h('span', { class: 'fxname', title: impl.def.hint }, impl.def.label), h('span', { class: 'stage' }, STAGE_LABEL[impl.def.category ?? impl.def.stage]),
         impl.def.crisp ? h('span', { class: 'tag crisp', title: 'keeps corners sharp' }, 'crisp') : null,
         impl.def.slow ? h('span', { class: 'tag' }, 'slow') : null,
         impl.def.variable ? h('span', { class: 'tag var', title: 'can be a variable-font axis' }, 'VF') : null,
@@ -115,6 +125,18 @@ export function effectsPanel(): HTMLElement {
   store.subscribe((ev) => { if (ev === 'bypass') bypass.checked = store.bypassFx; });
   const advToggle = h('input', { type: 'checkbox', checked: advanced, id: 'fxadv' });
   advToggle.addEventListener('change', () => { advanced = advToggle.checked; if (!advanced && store.project.fx.groups.length > 1) { if (!confirm('Turning Advanced off removes the extra sets. Continue?')) { advToggle.checked = true; return; } store.project.fx.groups = store.project.fx.groups.slice(0, 1); changed(0); } render(); });
+  let lastStack: FxStack | null = null;
+  const backBtn = iconButton('undo', 'Back', () => { if (!lastStack) return; store.project.fx = lastStack; lastStack = null; backBtn.style.display = 'none'; seedInput.value = String(store.project.fx.seed); render(); changed(0); }, { iconOnly: true, title: 'Back to the effects you had before Randomize', testid: 'btn-fx-back' });
+  backBtn.style.display = 'none';
+  const randomBtn = iconButton('sparkle', 'Randomize', () => {
+    lastStack = store.project.fx;
+    const s = Math.floor(Math.random() * 1e6);
+    const probeGlyph = store.project.glyphs[store.selected] ?? Object.values(store.project.glyphs)[0];
+    store.project.fx = randomStack(s, undefined, Math.random, probeGlyph ? { glyph: probeGlyph, metrics: store.project.metrics } : undefined);
+    seedInput.value = String(s);
+    backBtn.style.display = '';
+    render(); changed(0);
+  }, { title: 'Throw the dice: 2 to 4 random effects with random settings. Back undoes it.', testid: 'btn-randomize' });
   const addGroupBtn = iconButton('layers', 'Add a set', () => { store.project.fx.groups.push(newGroup('subtract')); render(); changed(0); toast('New set: starts from the original letter and is cut from the result. Change “cut from” to combine differently.'); }, { testid: 'btn-add-group' });
 
   const panel = h('section', { class: 'panel effects' },
@@ -125,6 +147,7 @@ export function effectsPanel(): HTMLElement {
       h('label', {}, 'Seed ', seedInput),
       iconButton('shuffle', 'Shuffle seed', () => { const s = Math.floor(Math.random() * 1e6); seedInput.value = String(s); store.project.fx.seed = s; changed(0); }, { title: 'Random effects get a new roll; same seed = same result' }),
       iconButton('dice', 'Mutate', () => { mutateStack(store.project.fx); render(); changed(0); }, { cls: 'primary', title: 'Nudge every slider a little' }),
+      randomBtn, backBtn,
       iconButton('reset', 'Clear effects', () => { store.project.fx = newStack(store.project.fx.seed); render(); changed(0); }),
     ),
     h('div', { class: 'row advrow' }, h('label', { class: 'toggle', for: 'fxadv' }, advToggle, ' Advanced: sets', help('Sets let one stack of effects be cut from, added to, or intersected with another. Most looks do not need them.')), addGroupBtn),

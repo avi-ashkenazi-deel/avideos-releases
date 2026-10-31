@@ -5,7 +5,8 @@ import { glyphToContours } from '../outline';
 import { cleanContours } from '../outline/fitCurves';
 import { booleanContours } from '../outline/union';
 import { jitterSample } from '../dna/jitter';
-import { FX, defaultParams } from './registry';
+import { FX, FX_ORDER, defaultParams } from './registry';
+import { inkArea } from '../dna/util';
 import { runRaster } from './raster';
 import type { FxCtx, FxGroup, FxLayer, FxStack, GroupOp } from './types';
 
@@ -92,6 +93,8 @@ export function advanceAfterStack(glyph: Glyph, stack: FxStack): number {
     if (l.type === 'inflate') adv += a * 80;
     if (l.type === 'tracking') adv += a;
     if (l.type === 'stretch') adv = 60 + (adv - 60) * (l.params.width ?? 1);
+    if (l.type === 'echo') adv += Math.abs(l.params.dx ?? 0) * (l.params.copies ?? 1);
+    if (l.type === 'slice') adv += Math.abs(l.params.shift ?? 0);
     if (l.type === 'jitter') adv *= jitterSample(glyphRng(stack.seed, glyph.char, l.id), a).sx;
   }
   return Math.max(1, Math.round(adv));
@@ -142,4 +145,37 @@ export function mutateStack(stack: FxStack, strength = 0.25): void {
       l.params[p.key] = Math.round(v / p.step) * p.step;
     }
   }
+}
+
+/**
+ * 2..4 random layers with random params (Randomize button). Slow ops are skipped and
+ * values stay inside the middle 70 % of each range, so extremes rarely wipe the letter.
+ * With `probe`, stacks that leave less than 15 % of the probe glyph's ink are re-rolled (up to 8 times).
+ */
+export function randomStack(seed: number, count?: number, rand: () => number = Math.random, probe?: { glyph: Glyph; metrics: FontMetrics }): FxStack {
+  for (let attempt = 0; ; attempt++) {
+    const stack = randomStackOnce(seed, count, rand);
+    if (!probe || attempt >= 8) return stack;
+    const before = inkArea(glyphToContours(probe.glyph));
+    const after = inkArea(applyStack(probe.glyph, stack, probe.metrics));
+    if (before <= 0 || after > before * 0.15) return stack;
+  }
+}
+function randomStackOnce(seed: number, count: number | undefined, rand: () => number): FxStack {
+  const stack = newStack(seed);
+  const pool = FX_ORDER.filter((t) => !FX[t].def.slow);
+  const n = count ?? 2 + Math.floor(rand() * 3);
+  const picked = new Set<string>();
+  while (picked.size < Math.min(n, pool.length)) picked.add(pool[Math.floor(rand() * pool.length)]);
+  for (const type of picked) {
+    const l = newLayer(type);
+    for (const p of FX[type].def.params) {
+      if (p.step >= 1 && p.max - p.min <= 1) { l.params[p.key] = rand() < 0.5 ? p.min : p.max; continue; }
+      const span = p.max - p.min;
+      const v = p.min + span * 0.15 + rand() * span * 0.7;
+      l.params[p.key] = Math.min(p.max, Math.max(p.min, Math.round(v / p.step) * p.step));
+    }
+    stack.groups[0].layers.push(l);
+  }
+  return stack;
 }

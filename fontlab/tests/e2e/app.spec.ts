@@ -33,7 +33,7 @@ const preset = (page: Page, name: string) => page.locator('#preset').selectOptio
 
 test.beforeEach(async ({ page }) => {
   await page.goto('/');
-  await page.evaluate(() => localStorage.clear());
+  await page.evaluate(() => { localStorage.clear(); localStorage.setItem('fontlab:welcomed', '1'); });
   await page.reload();
 });
 
@@ -181,4 +181,26 @@ test('grid: Delete key, shift-select and the right-click menu remove letters (un
   for (const ch of 'agz') await expect(cell(ch)).toHaveClass(/empty/);
   await expect(cell('A')).not.toHaveClass(/empty/);
   await expect(cell('5')).not.toHaveClass(/empty/);
+});
+
+test('arrow keys move between letters; the intro shows once on a fresh profile', async ({ page }) => {
+  await page.locator('.chbtn[data-ch="b"]').click();
+  await page.mouse.click(5, 500);
+  await page.keyboard.press('ArrowRight');
+  await expect(page.locator('.chbtn.selected')).toHaveAttribute('data-ch', 'c');
+  await page.keyboard.press('ArrowLeft');
+  await page.keyboard.press('ArrowLeft');
+  await expect(page.locator('.chbtn.selected')).toHaveAttribute('data-ch', 'a');
+  // fresh profile → intro overlay, click closes it and it stays closed after reload
+  await page.evaluate(() => localStorage.removeItem('fontlab:welcomed'));
+  await page.reload();
+  await expect(page.locator('[data-testid=welcome]')).toBeVisible();
+  await expect(page.locator('[data-testid=welcome]')).toContainText('Add letters');
+  await page.locator('[data-testid=welcome]').click();
+  await expect(page.locator('[data-testid=welcome]')).toHaveCount(0);
+  await page.reload();
+  await page.waitForTimeout(800);
+  await expect(page.locator('[data-testid=welcome]')).toHaveCount(0);
+  await page.locator('[data-testid=btn-intro]').click();
+  await expect(page.locator('[data-testid=welcome]')).toBeVisible();
 });

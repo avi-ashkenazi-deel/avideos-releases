@@ -18,6 +18,18 @@ import { offsetContours } from '../dna/offset';
 import { OUTLINE_OPS } from './ops';
 import { RASTER_OPS } from './raster';
 import { CRISP_OPS } from './ops/crisp';
+import { WRECK_OPS, WRECK_DEFS } from './ops/wreck';
+import { WARP_OPS, WARP_DEFS } from './ops/warp';
+
+/** Build registry entries from a {defs, ops} pair (warp / wreck modules). */
+function fromModule(defs: Record<string, { label: string; hint: string; params: FxDef['params'] }>, ops: Record<string, OutlineOp>, extra: Partial<FxDef>): Record<string, FxImpl> {
+  const out: Record<string, FxImpl> = {};
+  for (const type of Object.keys(defs)) {
+    const d = defs[type];
+    out[type] = { def: { type, label: d.label, hint: d.hint, params: d.params, stage: 'outline', ...extra }, outline: ops[type] };
+  }
+  return out;
+}
 
 const amount = (p: Record<string, number>, d = 0.5) => (Number.isFinite(p.amount) ? p.amount : d);
 
@@ -191,6 +203,8 @@ export const FX: Record<string, FxImpl> = {
       { key: 'invert', label: 'Invert', min: 0, max: 1, step: 1, default: 0 }], hint: 'Coral, stripes and spots that grow along the letter', slow: true },
     raster: (b, p, ctx) => RASTER_OPS.reactionDiffusion(b, p, ctx),
   },
+  ...fromModule(WARP_DEFS, WARP_OPS, { category: 'warp', crisp: true }),
+  ...fromModule(WRECK_DEFS, WRECK_OPS, { category: 'wreck' }),
 };
 
 export const FX_ORDER = Object.keys(FX);

@@ -2,8 +2,9 @@ import { h, toast, menu, iconButton, fileInput } from '../dom';
 import { store } from '../state';
 import { downloadProject, readProjectFile, saveLocal } from '../../project/storage';
 import { newProject } from '../../core/glyph';
+import { showWelcome } from './welcome';
 import { scheduleBuild } from '../buildClient';
-import { downloadOtf, downloadSvgSpecimen, downloadTesterHtml, openTester, openAnimateDialog, openVariableDialog } from './exportMore';
+import { downloadOtf, downloadSvgSpecimen, downloadTesterHtml, openTester, openAnimateDialog, openVariableDialog, downloadTtf, downloadSvgGlyphs } from './exportMore';
 import { openLibrary, saveCurrent } from './libraryDialog';
 import { fingerprint, getCurrentId, setCurrentId, loadFont } from '../../project/library';
 
@@ -58,15 +59,18 @@ export function headerBar(): HTMLElement {
 
   const exportMenu = menu('Export', [
     { label: 'Font file (.otf)', icon: 'download', onClick: downloadOtf, hint: 'Install it anywhere', testid: 'menu-otf' },
+    { label: 'TrueType font (.ttf)', icon: 'download', onClick: () => void downloadTtf(), hint: 'For apps that reject CFF fonts. The first use downloads a 12 MB converter.', testid: 'menu-ttf' },
     { label: 'Variable font…', icon: 'sliders', onClick: openVariableDialog, hint: 'Real axes you can animate in CSS', testid: 'menu-variable' },
     { label: 'Animation (GIF / video)…', icon: 'film', onClick: openAnimateDialog, testid: 'menu-animate' },
-    { label: 'SVG specimen', icon: 'image', onClick: downloadSvgSpecimen, hint: 'A poster of your text as vector shapes', separatorBefore: true, testid: 'menu-svg' },
+    { label: 'SVG glyphs (one group per letter)', icon: 'image', onClick: downloadSvgGlyphs, hint: 'Every letter as a separate vector group, for Illustrator or Figma', separatorBefore: true, testid: 'menu-svg-glyphs' },
+    { label: 'SVG specimen', icon: 'image', onClick: downloadSvgSpecimen, hint: 'A poster of your text as vector shapes', testid: 'menu-svg' },
     { label: 'Type tester web page (.html)', icon: 'code', onClick: downloadTesterHtml, hint: 'Standalone page with the font embedded', testid: 'menu-html' },
   ], { icon: 'download', testid: 'menu-export' });
 
   const bar = h('header', { class: 'topbar' },
     h('div', { class: 'namewrap' }, name, dirtyDot),
     h('div', { class: 'actions' },
+      iconButton('info', 'Intro', () => showWelcome(true), { iconOnly: true, title: 'Show the four-step intro again', testid: 'btn-intro' }),
       iconButton('flask', 'Test', openTester, { title: 'Type with your font, waterfall, dark mode', testid: 'btn-test' }),
       exportMenu, fontMenu, importJson),
   );

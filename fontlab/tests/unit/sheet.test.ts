@@ -120,7 +120,7 @@ describe('light-on-dark and heavy letters', () => {
     const oys = outline.contours!.flatMap((c) => c.points.map((p) => p[1]));
     expect(Math.max(...ys)).toBeGreaterThan(Math.max(...oys) - 30);
     expect(Math.min(...ys)).toBeLessThan(Math.min(...oys) + 30);
-  });
+  }, 20000); // two full traces of the sheet: slow on small CI machines
 });
 
 describe('tightly cropped dark frame (no paper margin)', () => {

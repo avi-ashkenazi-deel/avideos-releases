@@ -36,6 +36,16 @@ export const PRESETS: Record<string, Build> = {
     s.groups.push(g);
     return s;
   },
+  Twisted: one(['twist', { degrees: 40 }]),
+  Keystone: one(['perspective', { amount: 0.6 }]),
+  Windswept: one(['wind', { amount: 0.5, gust: 0.4 }]),
+  Rippled: one(['ripple', { amount: 24, waves: 2.5 }]),
+  'Swiss cheese': one(['crispWeight', { amount: 0.4 }], ['holes', { amount: 0.6, size: 46 }]),
+  Echoes: one(['echo', { copies: 3, dx: 22, dy: -14 }]),
+  Shredded: one(['slice', { strips: 8, shift: 36 }]),
+  Spiky: one(['spikes', { amount: 0.45, length: 70 }]),
+  Griddled: one(['gridSnap', { cell: 36 }]),
+  Crushed: one(['crush', { amount: 0.6 }]),
   'Crisp bold': one(['crispWeight', { amount: 0.6 }]),
   Condensed: one(['stretch', { width: 0.8, height: 1 }], ['tracking', { amount: 10 }]),
   Extended: one(['stretch', { width: 1.3, height: 1 }], ['tracking', { amount: 30 }]),

@@ -68,19 +68,33 @@ tabs: **Draw**, **Photo or video**, **Font file**.
    and builds the missing letters from parametric recipes. Letters related to a
    seed are borrowed from it (`n → h m u`, `b → d p q`). **Mutation** adds
    randomness; **Re-roll** redraws one glyph; **Lock** protects a glyph.
-4. **Stack effects.** Pick a **Preset** from the dropdown (Chonky, Melted,
-   Rusty, Glitchy, Ransom, Nervous, Hollow, Inline, Blob, Pixel, Crunch, Ink,
-   Crystal, Coral, Stipple, Gravity, Halo, Everything, plus the crisp ones:
-   Crisp bold, Condensed, Extended, Chiselled, Fractured, Softened, Ink traps,
-   Stencil cut, Tall x) or add effects one by one. The stack is ordered and
-   inspired by [LivingPath](https://github.com/ivangrozny/LivingPath): *Strokes*
-   (Weight, Slant, Wobble, Bounce, Jitter), *Shape* (Inflate, Melt, Glitch,
-   Rust, Hollow/Inline, Low poly, Stipple with gravity), *Texture* (Blob, Round
-   corners, Pixelate, Crunch, Ink noise, Dilate/erode, Reaction-diffusion) and
-   **Crisp** effects that keep corners sharp for subtle changes to imported
-   fonts (Weight (crisp), Stretch, Tracking, x-height, Chamfer / Fracture,
-   Round corners (vector), Ink traps, Stencil). Every effect is seeded, so the
-   same seed always gives the same font; **Mutate** nudges every slider.
+4. **Stack effects.** Pick a **Preset** from the dropdown or add effects one
+   by one from the menu, which is grouped with a playful name first and the
+   plain one after it:
+   - **Limber up · strokes**: Weight, Slant, Wobble, Bounce, Jitter.
+   - **Clean cuts · sharp edits** (keep corners sharp; made for imported
+     fonts): Weight (crisp), Stretch, Tracking, x-height, Chamfer / Fracture,
+     Round corners (vector), Ink traps, Stencil.
+   - **Bend it · warps** (sharp, deterministic deformers, inspired by
+     [Typoclast](https://typoclast.com/)): Rotate, Flip, Perspective, Twist,
+     Pinch, Pull, Wave, Ripple, Bulge, Refraction, Wind, Curl.
+   - **Mess it up · shape**: Inflate, Melt, Glitch, Rust, Hollow/Inline,
+     Low poly, Stipple with gravity.
+   - **Wreck it · destroyers**: Echo (offset copies), Slice (shifted
+     strips), Holes (swiss cheese), Spikes, Grid snap, Crush.
+   - **Grind it · texture** (through a bitmap): Blob, Round corners, Pixelate,
+     Crunch, Ink noise, Dilate/erode, Reaction-diffusion.
+
+   Presets: Chonky, Melted, Rusty, Glitchy, Ransom, Nervous, Hollow, Inline,
+   Blob, Pixel, Crunch, Ink, Crystal, Coral, Stipple, Gravity, Halo,
+   Everything, Twisted, Keystone, Windswept, Rippled, Swiss cheese, Echoes,
+   Shredded, Spiky, Griddled, Crushed, Crisp bold, Condensed, Extended,
+   Chiselled, Fractured, Softened, Ink traps, Stencil cut, Tall x. The stack
+   is ordered and inspired by
+   [LivingPath](https://github.com/ivangrozny/LivingPath). Every effect is
+   seeded, so the same seed always gives the same font; **Mutate** nudges
+   every slider; **Randomize** throws the dice (2 to 4 random effects, random
+   settings; **Back** returns to what you had).
    **Show original** turns every effect off for preview and export; it
    switches on by itself after a font import so you see the font as it is.
    **Advanced: sets** reveals effect sets: a second set starts again from the
@@ -104,9 +118,16 @@ tabs: **Draw**, **Photo or video**, **Font file**.
    CFF outlines), `Variable font…` (a real OpenType variable `.ttf` with
    `wght`, `slnt` and custom `WOBL`, `MELT`, `BNCE` axes you can drive from CSS
    `font-variation-settings`; Rust, Glitch and Inflate change point counts,
-   so they are static-only), `Animate…` (GIF / WebM sweeping one axis),
-   `SVG specimen` (an animated poster of your font) and `Tester .html` (a
+   so they are static-only), `TrueType font (.ttf)` (the same font with
+   quadratic outlines for apps that reject CFF; the converter is downloaded
+   on first use), `Animate…` (GIF / WebM sweeping one axis), `SVG glyphs`
+   (every letter as its own vector group, for Illustrator or Figma; a
+   single letter is available from the grid's right-click menu), `SVG
+   specimen` (an animated poster of your font) and `Tester .html` (a
    self-contained HTML type tester with the font embedded).
+   The first time FontLab opens with an empty font it shows a four-step
+   intro; the info button in the header brings it back. Left and right
+   arrow keys move between letters.
 
 ## How it works
 

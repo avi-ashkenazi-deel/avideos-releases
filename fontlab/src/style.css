@@ -188,3 +188,17 @@ details.plain summary { color: var(--muted); font-size: 12px; cursor: pointer; m
 .librow small { color: var(--muted); }
 .menu-list.ctxmenu { position: fixed; display: block; right: auto; top: 0; left: 0; min-width: 220px; }
 .cell.multi { outline: 2px dashed var(--accent-2); }
+
+/* first-run overlay */
+.welcome { position: fixed; inset: 0; z-index: 80; background: rgba(10,10,12,.92); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; cursor: pointer; animation: fadein .25s; }
+@keyframes fadein { from { opacity: 0 } to { opacity: 1 } }
+.welcome-inner { max-width: 980px; width: 92vw; padding: 24px; }
+.welcome-head h1 { font-size: 44px; margin: 0; letter-spacing: -0.02em; }
+.welcome-head p { color: var(--muted); margin: 6px 0 22px; font-size: 16px; }
+.welcome-steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; }
+.wstep { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; display: flex; flex-direction: column; gap: 8px; }
+.wstep .wnum { color: var(--accent); font-weight: 700; font-size: 12px; letter-spacing: .1em; }
+.wstep h3 { margin: 0; font-size: 16px; }
+.wstep p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.45; }
+.welcome-foot { color: var(--muted); font-size: 12px; margin: 22px 0 6px; }
+.welcome-tap { color: var(--accent); font-weight: 600; margin: 0; }

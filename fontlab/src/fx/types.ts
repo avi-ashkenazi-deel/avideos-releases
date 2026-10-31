@@ -31,6 +31,8 @@ export interface FxDef {
   slow?: boolean;
   /** keeps corners sharp: safe for subtle changes to imported fonts */
   crisp?: boolean;
+  /** menu grouping for outline ops that are not plain shape edits */
+  category?: 'warp' | 'wreck';
 }
 
 export interface FxLayer {

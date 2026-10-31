@@ -48,3 +48,20 @@ export async function buildVariableFont(payload: VarPayload, onStatus?: (s: stri
     fn.destroy?.();
   }
 }
+
+/** Convert the built CFF .otf to a TrueType .ttf (quadratic outlines) with fontTools. */
+export async function buildStaticTtf(otf: ArrayBuffer, onStatus?: (s: string) => void): Promise<Uint8Array> {
+  const py = await getPyodide(onStatus);
+  onStatus?.('Converting to TrueType…');
+  const fn = py.globals.get('build_static_ttf');
+  const input = py.toPy(new Uint8Array(otf));
+  try {
+    const result = fn(input);
+    const bytes: Uint8Array = result.toJs();
+    result.destroy?.();
+    return bytes;
+  } finally {
+    input.destroy?.();
+    fn.destroy?.();
+  }
+}

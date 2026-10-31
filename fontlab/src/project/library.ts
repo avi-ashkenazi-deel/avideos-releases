@@ -182,10 +182,10 @@ function ls(): Storage | null {
   } catch { return null; }
 }
 
-function flag(key: string): boolean {
+export function flag(key: string): boolean {
   try { return ls()?.getItem(key) === '1'; } catch { return false; }
 }
-function setFlag(key: string): void {
+export function setFlag(key: string): void {
   try { ls()?.setItem(key, '1'); } catch { /* ignore */ }
 }
 
