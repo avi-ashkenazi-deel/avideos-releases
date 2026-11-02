@@ -312,3 +312,7 @@ label.field > span { display: block; font-size: 12px; color: var(--fg-1); margin
 .msg .bubble, .msg .tools { max-width: 100%; }
 
 .tl .ruler .beat { position: absolute; bottom: 0; height: 6px; border-left: 1px solid var(--accent-2); opacity: .8; }
+
+.card .thumb .card-del { position: absolute; right: 8px; bottom: 8px; opacity: 0; background: rgba(0,0,0,.55); color: #fff; }
+.card:hover .thumb .card-del { opacity: 1; }
+.card .thumb .card-del:hover { color: var(--danger); }

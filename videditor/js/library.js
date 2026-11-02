@@ -1,5 +1,5 @@
 import { api } from './api.js';
-import { h, btn, svg, modal, toast, relTime, fmtTime, debounce } from './ui.js';
+import { h, btn, svg, modal, toast, relTime, fmtTime, debounce, confirmDeleteProject } from './ui.js';
 
 export async function renderLibrary(root, { navigate }) {
   root.replaceChildren(h('div.library', h('div.empty', 'Loading…')));
@@ -16,7 +16,8 @@ export async function renderLibrary(root, { navigate }) {
 function projectCard(p, navigate) {
   const v = p.latest;
   return h('div.card', { on: { click: () => navigate(p.versions.length ? `#/p/${p.id}` : `#/studio/${p.id}`) } },
-    h('div.thumb', { style: v?.posterUrl ? { backgroundImage: `url(${v.posterUrl})` } : {} }, v ? null : svg('film'), v ? h('span.pill.ver', v.label) : null, p.stats.open ? h('span.pill.open.open', `${p.stats.open} open`) : null),
+    h('div.thumb', { style: v?.posterUrl ? { backgroundImage: `url(${v.posterUrl})` } : {} }, v ? null : svg('film'), v ? h('span.pill.ver', v.label) : null, p.stats.open ? h('span.pill.open.open', `${p.stats.open} open`) : null,
+      btn('', { icon: 'trash', cls: 'icon sm ghost card-del', title: 'Delete project', onClick: async (e) => { e.stopPropagation(); if (await confirmDeleteProject(api, p)) renderLibrary(document.querySelector('.library').parentElement, { navigate }); } })),
     h('div.body',
       h('div.name', p.name, p.dir ? h('span.hf', { title: p.dir }, svg('spark'), 'Studio') : null),
       h('div.meta', v ? h('span', `${p.versions.length} version${p.versions.length > 1 ? 's' : ''}`) : h('span', p.dir ? 'Not rendered yet' : 'No render yet'), v?.duration ? h('span', fmtTime(v.duration)) : null, h('span', `${p.stats.total} note${p.stats.total === 1 ? '' : 's'}`), p.dir ? h('a', { href: `#/studio/${p.id}`, on: { click: (e) => e.stopPropagation() } }, 'Open Studio') : null),

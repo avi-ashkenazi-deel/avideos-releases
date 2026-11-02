@@ -36,8 +36,9 @@ const ALLOWED = 'Read,Edit,Write,MultiEdit,Glob,Grep,LS,WebFetch,Bash(ls:*),Bash
  * runClaude({ dir, prompt, system, sessionId, onEvent }) → { sessionId, result, cost }
  * onEvent receives { type: 'text'|'tool'|'tool_result'|'status'|'done'|'error', ... }
  */
-export function runClaude({ dir, prompt, system, sessionId, model, onEvent }) {
-  return new Promise((resolve) => {
+export function runClaude({ dir, prompt, system, sessionId, model, onEvent, idleMs = 4 * 60 * 1000, maxMs = 25 * 60 * 1000 }) {
+  let killer = null;
+  const promise = new Promise((resolve) => {
     const bin = process.env.VIDEDITOR_CLAUDE_BIN || 'claude';
     const args = ['-p', prompt, '--output-format', 'stream-json', '--verbose', '--permission-mode', 'acceptEdits', '--allowedTools', ALLOWED, '--append-system-prompt', system];
     if (sessionId) args.push('--resume', sessionId);
@@ -48,6 +49,11 @@ export function runClaude({ dir, prompt, system, sessionId, model, onEvent }) {
     catch (e) { onEvent?.({ type: 'error', message: e.message }); return resolve({ error: e.message }); }
     const out = { sessionId: sessionId || null, result: '', cost: null, error: null };
     let buf = ''; let stderr = ''; let rawOut = '';
+    // Watchdog: a run that prints nothing for idleMs, or runs longer than maxMs, is stopped so the chat never hangs.
+    let idleTimer = null; const armIdle = () => { clearTimeout(idleTimer); idleTimer = setTimeout(() => { out.error = `Claude Code produced no output for ${Math.round(idleMs / 60000)} minutes and was stopped. Run diagnostics to see what it does on this computer.`; child.kill('SIGTERM'); setTimeout(() => child.kill('SIGKILL'), 5000).unref(); }, idleMs); };
+    const maxTimer = setTimeout(() => { out.error = `Claude Code ran for more than ${Math.round(maxMs / 60000)} minutes and was stopped.`; child.kill('SIGTERM'); }, maxMs);
+    armIdle();
+    killer = (reason) => { out.error = reason || 'Stopped by you.'; child.kill('SIGTERM'); setTimeout(() => { try { child.kill('SIGKILL'); } catch {} }, 5000).unref(); };
     const handle = (msg) => {
       if (msg.type === 'system' && msg.subtype === 'init') { out.sessionId = msg.session_id; onEvent?.({ type: 'status', message: `Claude Code ${msg.model || ''} started`, sessionId: msg.session_id }); }
       else if (msg.type === 'assistant') {
@@ -62,12 +68,14 @@ export function runClaude({ dir, prompt, system, sessionId, model, onEvent }) {
         if (msg.is_error) out.error = msg.result || msg.subtype || 'error';
       }
     };
-    child.stdout.on('data', (d) => { buf += d.toString(); let i; while ((i = buf.indexOf('\n')) >= 0) { const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1); if (!line) continue; try { handle(JSON.parse(line)); } catch { rawOut += line + '\n'; if (rawOut.length > 4000) rawOut = rawOut.slice(-4000); } } });
+    child.stdout.on('data', (d) => { armIdle(); buf += d.toString(); let i; while ((i = buf.indexOf('\n')) >= 0) { const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1); if (!line) continue; try { handle(JSON.parse(line)); } catch { rawOut += line + '\n'; if (rawOut.length > 4000) rawOut = rawOut.slice(-4000); } } });
     child.stderr.on('data', (d) => { stderr += d.toString(); if (stderr.length > 4000) stderr = stderr.slice(-4000); });
     child.on('error', (e) => { const msg = e.code === 'ENOENT' ? `Claude Code was not found (looked for "${bin}"). Install it: npm install -g @anthropic-ai/claude-code, or set VIDEDITOR_CLAUDE_BIN.` : e.message; onEvent?.({ type: 'error', message: msg }); resolve({ ...out, error: msg }); });
     child.on('close', (code) => {
+      clearTimeout(idleTimer); clearTimeout(maxTimer);
       if (buf.trim()) { try { handle(JSON.parse(buf.trim())); } catch { rawOut += buf; } }
-      if (code !== 0 && !out.error) {
+      if (code === null && !out.error) out.error = `Claude Code was terminated (${arguments[1] || 'signal'}).`;
+      if (code !== 0 && code !== null && !out.error) {
         const detail = [stderr.trim(), rawOut.trim()].filter(Boolean).join('\n');
         out.error = `Claude Code exited with code ${code}${detail ? ':\n' + detail.split('\n').slice(-12).join('\n') : ' and printed nothing. Try running this in a terminal inside the project folder to see why:\n' + bin + ' -p "hello" --output-format stream-json --verbose'}`;
       }
@@ -76,9 +84,9 @@ export function runClaude({ dir, prompt, system, sessionId, model, onEvent }) {
       onEvent?.({ type: 'done', result: out.result, cost: out.cost, sessionId: out.sessionId });
       resolve(out);
     });
-    out.kill = () => child.kill('SIGTERM');
-    return out;
   });
+  promise.kill = (reason) => killer?.(reason);
+  return promise;
 }
 
 function describeTool(b, dir) {

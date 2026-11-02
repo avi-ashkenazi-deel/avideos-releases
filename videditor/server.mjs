@@ -227,7 +227,18 @@ async function api(req, res, url) {
       if (('assetsDir' in b || 'dir' in b) && out.dir) { watchAssets(out); startAnalyze(out); }
       return send(res, 200, projectView(out));
     }
-    if (req.method === 'DELETE') { for (const v of store.versions(prj.id)) { try { fs.unlinkSync(v.filePath); } catch {} } store.removeProject(prj.id); return send(res, 200, { ok: true }); }
+    if (req.method === 'DELETE') {
+      for (const w of watchers.get(prj.id) || []) w.close(); watchers.delete(prj.id);
+      try { agents.get(prj.id)?.kill?.('Project deleted.'); } catch {}
+      for (const v of store.versions(prj.id)) { try { fs.unlinkSync(v.filePath); } catch {} try { if (v.posterUrl) fs.unlinkSync(path.join(DATA, v.posterUrl.replace(/^\/media\//, ''))); } catch {} }
+      for (const f of store.feedback({ projectId: prj.id })) for (const u of [...(f.frames || []).map((x) => x.url), f.audioUrl, ...(f.refs || [])].filter(Boolean)) { try { fs.unlinkSync(path.join(DATA, u.replace(/^\/media\//, ''))); } catch {} }
+      // The composition folder is removed only when asked and only when it lives in Videditor's own projects folder.
+      let folderDeleted = false;
+      const own = prj.dir && path.resolve(prj.dir).startsWith(path.join(ROOT, 'projects') + path.sep);
+      if (q.deleteFolder === '1' && own) { try { fs.rmSync(prj.dir, { recursive: true, force: true }); folderDeleted = true; } catch {} }
+      store.removeProject(prj.id);
+      return send(res, 200, { ok: true, folderDeleted, ownFolder: !!own });
+    }
   }
   if ((x = m(/^\/api\/projects\/([^/]+)\/versions$/)) && req.method === 'POST') {
     const prj = store.project(x[1]); if (!prj) return err(res, 404, 'Project not found');
@@ -342,12 +353,14 @@ async function api(req, res, url) {
     };
     (async () => {
       const resumeId = b.fresh ? null : prj.agentSessionId || null;
-      let out = await runClaude({ dir: prj.dir, prompt: message, system, sessionId: resumeId, onEvent });
-      if (out.error && resumeId) {
+      let run = runClaude({ dir: prj.dir, prompt: message, system, sessionId: resumeId, onEvent }); handle.kill = run.kill;
+      let out = await run;
+      if (out.error && resumeId && !handle.cancelled) {
         // The stored conversation could not be resumed (or died): start a fresh one instead of failing forever.
         job.push({ type: 'status', message: 'Previous conversation could not be resumed; starting a fresh one' });
         entry.text = ''; entry.tools = [];
-        out = await runClaude({ dir: prj.dir, prompt: message, system, sessionId: null, onEvent });
+        run = runClaude({ dir: prj.dir, prompt: message, system, sessionId: null, onEvent }); handle.kill = run.kill;
+        out = await run;
       }
       const p = store.project(prj.id);
       if (p) {
@@ -364,6 +377,11 @@ async function api(req, res, url) {
       job.finish(!out.error, { result: out.result, cost: out.cost });
     })().catch((e) => { agents.delete(prj.id); job.push({ type: 'error', message: e.message }); job.finish(false); });
     return send(res, 202, { jobId: job.id });
+  }
+  if ((x = m(/^\/api\/projects\/([^/]+)\/agent\/cancel$/)) && req.method === 'POST') {
+    const hnd = agents.get(x[1]); if (!hnd) return send(res, 200, { ok: false, running: false });
+    hnd.cancelled = true; try { hnd.kill?.('Stopped by you.'); } catch {}
+    return send(res, 200, { ok: true });
   }
   if ((x = m(/^\/api\/projects\/([^/]+)\/agent\/reset$/)) && req.method === 'POST') { const prj = store.project(x[1]); if (!prj) return err(res, 404, 'Project not found'); store.updateProject(prj.id, { agentSessionId: null, chat: [] }); return send(res, 200, { ok: true }); }
   if ((x = m(/^\/api\/jobs\/([^/]+)\/events$/))) {

@@ -2,7 +2,7 @@
 // middle, timeline below, layers/files on the right. The preview is the real
 // composition running in an iframe with the seekable runtime.
 import { api } from './api.js';
-import { h, btn, svg, modal, toast, fmtTime, relTime, avatar, getAuthor, ensureAuthor, copyText } from './ui.js';
+import { h, btn, svg, modal, toast, fmtTime, relTime, avatar, getAuthor, ensureAuthor, copyText, confirmDeleteProject } from './ui.js';
 import { Stage } from './stage.js';
 
 export async function renderStudio(root, { projectId, prompt, navigate, topbar }) {
@@ -179,8 +179,10 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
   const ta = h('textarea.text', { placeholder: 'Tell the agent what to make or change… (⌘/Ctrl+Enter to send)' });
   const ctx = h('span.ctx.hidden');
   const sendBtn = btn('Send', { cls: 'primary sm', icon: 'spark', onClick: send });
+  const stopBtn = btn('Stop', { cls: 'sm danger hidden', icon: 'stop', title: 'Stop the agent', onClick: async () => { try { await api.agentCancel(project.id); toast('Stopping…'); } catch (e) { toast(e.message, 'err'); } } });
   const stopHint = h('span.hint.hidden', 'Working… this can take a minute.');
-  const compose = h('div.compose', ctx, ta, h('div.row', btn('', { icon: 'more', cls: 'ghost icon sm', title: 'New conversation (forget context)', onClick: async () => { if (await modal('Start a new conversation?', h('p.muted', 'The agent forgets this chat. The composition files are kept.'), { actions: [{ label: 'New conversation', cls: 'primary', value: true }] })) { await api.agentReset(project.id); project.chat = []; renderChat([]); } } }), stopHint, h('span.spacer'), sendBtn));
+  const setBusy = (on) => { sendBtn.disabled = on; stopHint.classList.toggle('hidden', !on); stopBtn.classList.toggle('hidden', !on); };
+  const compose = h('div.compose', ctx, ta, h('div.row', stopBtn, btn('', { icon: 'more', cls: 'ghost icon sm', title: 'New conversation (forget context)', onClick: async () => { if (await modal('Start a new conversation?', h('p.muted', 'The agent forgets this chat. The composition files are kept.'), { actions: [{ label: 'New conversation', cls: 'primary', value: true }] })) { await api.agentReset(project.id); project.chat = []; renderChat([]); } } }), stopHint, h('span.spacer'), sendBtn));
   const chat = h('div.chat', msgs, compose);
   ta.addEventListener('keydown', (e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') send(); e.stopPropagation(); });
   function ctxChip(id) { ctx.classList.remove('hidden'); ctx.replaceChildren('About ', h('code', `#${id}`), btn('', { icon: 'close', cls: 'ghost icon sm', title: 'Clear', onClick: () => { ctx.classList.add('hidden'); ctx._id = null; } })); ctx._id = id; }
@@ -203,7 +205,8 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
     return close;
   }
   async function send() {
-    const text = ta.value.trim(); if (!text || agentJob) return;
+    const text = ta.value.trim(); if (!text) return;
+    if (agentJob) return toast('The agent is still working on the previous message. Press Stop to interrupt it.', 'err');
     if (!caps.claude) { toast('Claude Code was not found on this computer', 'err'); return msgs.append(h('div.msg.agent', h('div.bubble.err', 'Claude Code is not installed or not on PATH. Install it with: npm install -g @anthropic-ai/claude-code  then restart the Videditor server.'))); }
     const author = await ensureAuthor();
     const message = ctx._id ? `About the clip #${ctx._id}: ${text}` : text;
@@ -211,7 +214,7 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
     project.chat = project.chat || []; project.chat.push({ role: 'user', text: message, at: new Date().toISOString(), author });
     const live = { role: 'agent', text: '', tools: [], at: new Date().toISOString(), live: true, status: 'starting Claude Code' };
     renderChat([...project.chat, live]);
-    sendBtn.disabled = true; stopHint.classList.remove('hidden');
+    setBusy(true);
     try {
       const { jobId } = await api.agent(project.id, message, { author });
       agentJob = jobId;
@@ -226,13 +229,13 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
         redraw();
       };
       es.addEventListener('done', async (e) => {
-        es.close(); agentJob = null; sendBtn.disabled = false; stopHint.classList.add('hidden');
+        es.close(); agentJob = null; setBusy(false);
         const d = JSON.parse(e.data); live.live = false; if (!live.text && d.result) live.text = d.result;
         project = await api.project(project.id); renderChat(project.chat || [...project.chat, live]);
         await reloadComp(); toast(d.ok ? 'Agent finished' : 'Agent stopped with an error', d.ok ? 'ok' : 'err');
       });
-      es.onerror = () => { es.close(); agentJob = null; sendBtn.disabled = false; stopHint.classList.add('hidden'); live.live = false; redraw(); };
-    } catch (e) { agentJob = null; sendBtn.disabled = false; stopHint.classList.add('hidden'); live.live = false; live.error = e.message; renderChat([...project.chat, live]); }
+      es.onerror = () => { es.close(); agentJob = null; setBusy(false); live.live = false; redraw(); };
+    } catch (e) { agentJob = null; setBusy(false); live.live = false; live.error = e.message; renderChat([...project.chat, live]); }
   }
 
   // ---------- render
@@ -272,6 +275,7 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
     h('span.spacer'),
     project.versions.length ? btn('Review', { icon: 'chat', title: 'Review the latest render', onClick: () => navigate(`#/p/${project.id}`) }) : null,
     btn('Copy folder path', { icon: 'copy', cls: 'ghost', title: project.dir, onClick: async () => { await copyText(project.dir); toast('Copied', 'ok'); } }),
+    btn('', { icon: 'trash', cls: 'ghost icon', title: 'Delete project', onClick: async () => { if (await confirmDeleteProject(api, project)) navigate('#/'); } }),
   ]);
   root._cleanupExtra = () => clearInterval(assetsPoll);
   root.replaceChildren(h('div.studio', chat, h('div.center', stageWrap, transport, tl), side));
@@ -283,7 +287,15 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
   if (!stage.info) overlayMsg.textContent = 'The composition did not load. Check index.html in Files.';
   // Resume a running agent job (page reload mid-run) or start with a prompt from the URL.
   const chatState = await api.chat(project.id).catch(() => null);
-  if (chatState?.running) { agentJob = chatState.running; sendBtn.disabled = true; stopHint.classList.remove('hidden'); const es = new EventSource(`/api/jobs/${chatState.running}/events`); es.addEventListener('done', async () => { es.close(); agentJob = null; sendBtn.disabled = false; stopHint.classList.add('hidden'); project = await api.project(project.id); renderChat(project.chat); reloadComp(); }); }
+  if (chatState?.running) {
+    agentJob = chatState.running; setBusy(true);
+    const live = { role: 'agent', text: '', tools: [], at: new Date().toISOString(), live: true, status: 'still working on your earlier message (press Stop to interrupt)' };
+    renderChat([...(project.chat || []), live]);
+    const es = new EventSource(`/api/jobs/${chatState.running}/events`);
+    es.onmessage = (e) => { const ev = JSON.parse(e.data); if (ev.type === 'text') live.text += (live.text ? '\n\n' : '') + ev.text; if (ev.type === 'tool') live.tools.push({ name: ev.name, detail: ev.detail }); if (ev.type === 'status') live.status = ev.message; if (ev.type === 'error') live.error = ev.message; renderChat([...(project.chat || []), live]); };
+    const finish = async () => { es.close(); agentJob = null; setBusy(false); project = await api.project(project.id); renderChat(project.chat || []); reloadComp(); };
+    es.addEventListener('done', finish); es.onerror = finish;
+  }
   if (prompt && !chatState?.running) { ta.value = prompt; history.replaceState(null, '', `#/studio/${project.id}`); setTimeout(send, 400); }
   root._cleanup = () => { document.removeEventListener('keydown', key); stage.destroy(); root._cleanupExtra?.(); };
 }

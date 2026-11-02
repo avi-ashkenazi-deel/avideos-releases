@@ -79,3 +79,16 @@ export async function ensureAuthor() {
 export const copyText = async (text) => { try { await navigator.clipboard.writeText(text); return true; } catch { const ta = h('textarea', { value: text, style: { position: 'fixed', opacity: 0 } }); document.body.append(ta); ta.select(); const ok = document.execCommand('copy'); ta.remove(); return ok; } };
 export const fileToDataUrl = (file) => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(file); });
 export const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
+
+/** Shared confirm dialog for deleting a project. Returns true when deleted. */
+export async function confirmDeleteProject(api, p) {
+  const own = p.dir && /\/videditor\/projects\//.test(p.dir);
+  const cb = h('input', { type: 'checkbox', checked: !!own });
+  const r = await modal(`Delete “${p.name}”?`, h('div',
+    h('p.muted', `${p.versions?.length || 0} version(s) and all notes are removed. This cannot be undone.`),
+    p.dir ? h('label', { style: { display: own ? 'flex' : 'none', gap: '8px', alignItems: 'center', marginTop: '8px' } }, cb, h('span', 'Also delete the composition folder ', h('code.mono.small', p.dir))) : null,
+    p.dir && !own ? h('p.small.muted', { style: { marginTop: '8px' } }, `The composition folder ${p.dir} is yours and is left untouched.`) : null,
+  ), { actions: [{ label: 'Delete', cls: 'danger', value: true }] });
+  if (!r) return false;
+  try { await api.deleteProject(p.id, own && cb.checked); toast('Project deleted', 'ok'); return true; } catch (e) { toast(e.message, 'err'); return false; }
+}

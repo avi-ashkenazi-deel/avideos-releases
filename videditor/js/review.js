@@ -1,5 +1,5 @@
 import { api } from './api.js';
-import { h, btn, svg, modal, toast, fmtTime, relTime, avatar, getAuthor, ensureAuthor, copyText, fileToDataUrl } from './ui.js';
+import { h, btn, svg, modal, toast, fmtTime, relTime, avatar, getAuthor, ensureAuthor, copyText, fileToDataUrl, confirmDeleteProject } from './ui.js';
 import { Player } from './player.js';
 import { DrawLayer, COLORS, drawStroke } from './draw.js';
 import { VoiceRecorder, highlightPointing } from './voice.js';
@@ -303,7 +303,7 @@ export async function renderReview(root, { projectId, versionId, navigate, topba
     project.versions.length > 1 ? btn('Compare', { icon: 'compare', onClick: () => navigate(`#/p/${project.id}/compare?a=${project.versions[Math.max(0, project.versions.findIndex((v) => v.id === version.id) - 1)].id}&b=${version.id}`) }) : null,
     btn('Copy link', { icon: 'link', onClick: async () => { await copyText(location.href); toast('Link copied', 'ok'); } }),
     btn('Copy prompt', { icon: 'copy', cls: 'primary', title: 'Brief for your agent with all open feedback', onClick: copyPrompt }),
-    btn('', { icon: 'more', cls: 'ghost icon', title: 'More', onClick: async () => { const r = await modal('Project', h('div', h('p.muted', 'Delete this project and all its versions and notes?')), { actions: [{ label: 'Delete project', cls: 'danger', value: 'delete' }] }); if (r === 'delete') { await api.deleteProject(project.id); navigate('#/'); } } }),
+    btn('', { icon: 'trash', cls: 'ghost icon', title: 'Delete project', onClick: async () => { if (await confirmDeleteProject(api, project)) navigate('#/'); } }),
   ]);
 
   async function copyPrompt() {
