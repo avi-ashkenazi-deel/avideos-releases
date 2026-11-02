@@ -88,6 +88,21 @@ const Render = (() => {
   }
   // First baseline of a line box at top: the face's content box (ascent + descent) sits centred in the line height.
   function baseline(top, f, size, lh) { const m = Text.metrics(f); return top + (lh - (m.asc + m.desc) * size) / 2 + m.asc * size; }
+  // A picture in its box: the crop it shows (Canvas.cropRect) drawn through a nested svg whose viewBox is that crop,
+  // so the box can be resized or the picture moved inside it without stretching; adjustments ride as an SVG filter.
+  function pictureEl(b, a, href, ctx, clip) {
+    const r = Canvas.cropRect(b, a); let filter = '';
+    if (Canvas.adjustActive(b)) {
+      const adj = Canvas.adjustOf(b); const id = ctx.id('adj'); const slope = adj.brightness * adj.contrast, icpt = 0.5 * adj.brightness * (1 - adj.contrast);
+      const sat = Math.max(0, adj.saturation * (1 - Math.min(1, Math.max(0, adj.grayscale))));
+      ctx.defs.push(`<filter id="${id}" x="-10%" y="-10%" width="120%" height="120%" color-interpolation-filters="sRGB"><feColorMatrix type="saturate" values="${n(sat)}"/>${adj.hue ? `<feColorMatrix type="hueRotate" values="${n(adj.hue)}"/>` : ''}<feComponentTransfer><feFuncR type="linear" slope="${n(slope)}" intercept="${n(icpt)}"/><feFuncG type="linear" slope="${n(slope)}" intercept="${n(icpt)}"/><feFuncB type="linear" slope="${n(slope)}" intercept="${n(icpt)}"/></feComponentTransfer>${adj.blur ? `<feGaussianBlur stdDeviation="${n(adj.blur)}" edgeMode="duplicate"/>` : ''}</filter>`);
+      filter = ` filter="url(#${id})"`;
+    }
+    const aw = a.w > 0 ? a.w : 1, ah = a.h > 0 ? a.h : 1;
+    if (r.contain) return `<image x="${n(b.x)}" y="${n(b.y)}" width="${n(b.w)}" height="${n(b.h)}" href="${esc(href)}" preserveAspectRatio="${FOCAL.has(b.focal) ? b.focal : 'xMidYMid'} meet"${clip}${filter}/>`;
+    if (!b.crop) return `<image x="${n(b.x)}" y="${n(b.y)}" width="${n(b.w)}" height="${n(b.h)}" href="${esc(href)}" preserveAspectRatio="${FOCAL.has(b.focal) ? b.focal : 'xMidYMid'} slice"${clip}${filter}/>`;
+    return `<svg x="${n(b.x)}" y="${n(b.y)}" width="${n(b.w)}" height="${n(b.h)}" viewBox="${n(r.x)} ${n(r.y)} ${n(r.w)} ${n(r.h)}" preserveAspectRatio="none" overflow="hidden"${clip}><image x="0" y="0" width="${n(aw)}" height="${n(ah)}" href="${esc(href)}" preserveAspectRatio="none"${filter}/></svg>`;
+  }
   function textEl(b, ctx) {
     const f = b.font || {};
     const anchor = b.align === 'center' ? 'middle' : b.align === 'right' ? 'end' : 'start';
@@ -171,13 +186,15 @@ const Render = (() => {
     const blockEl = b => {
       let el = '';
       if (b.kind === 'field') el = `<rect ${rectGeom(b)} fill="${paint(b, ctx)}"${b.alpha != null && b.alpha < 1 ? ` fill-opacity="${n(clamp01(b.alpha))}"` : ''}${strokeAttr(b)}/>`;
-      else if (b.kind === 'image') {
-        const a = assets.images.find(i => i.id === b.asset);
-        const href = a ? (opts.forExport ? a.dataUrl : a.url) : '';
+      else if (b.kind === 'image' || b.kind === 'video') {
+        const a = b.kind === 'video' ? (assets.videos || []).find(i => i.id === b.asset) : assets.images.find(i => i.id === b.asset);
+        const href = !a ? '' : b.kind === 'video' ? (a.poster || '') : (opts.forExport ? a.dataUrl : a.url);
         let clip = '';
         if (b.radius) { const id = ctx.id('c'); ctx.defs.push(`<clipPath id="${id}"><rect x="${n(b.x)}" y="${n(b.y)}" width="${n(b.w)}" height="${n(b.h)}" rx="${n(b.radius)}"/></clipPath>`); clip = ` clip-path="url(#${id})"`; }
-        if (!a) el = `<rect x="${n(b.x)}" y="${n(b.y)}" width="${n(b.w)}" height="${n(b.h)}" rx="${n(b.radius || 0)}" fill="${col(b.placeholder, '#C9C8D1')}"/>`;
-        else el = `<image x="${n(b.x)}" y="${n(b.y)}" width="${n(b.w)}" height="${n(b.h)}" href="${esc(href)}" preserveAspectRatio="${FOCAL.has(b.focal) ? b.focal : 'xMidYMid'} ${b.fit === 'contain' ? 'meet' : 'slice'}"${clip}/>`;
+        if (!a || !href) el = `<rect x="${n(b.x)}" y="${n(b.y)}" width="${n(b.w)}" height="${n(b.h)}" rx="${n(b.radius || 0)}" fill="${col(b.placeholder, b.kind === 'video' ? '#1F1F24' : '#C9C8D1')}"/>`;
+        else el = pictureEl(b, a, href, ctx, clip);
+        // a video on the canvas shows its poster with a play mark; exports keep the poster alone
+        if (b.kind === 'video' && !opts.forExport && Math.min(b.w, b.h) >= 24) { const r = Math.min(22, Math.min(b.w, b.h) * 0.18); const cx = b.x + b.w / 2, cy = b.y + b.h / 2; el += `<g class="lg-play" pointer-events="none"><circle cx="${n(cx)}" cy="${n(cy)}" r="${n(r)}" fill="rgba(17,17,16,0.55)"/><path d="M${n(cx - r * 0.3)} ${n(cy - r * 0.45)} L${n(cx + r * 0.5)} ${n(cy)} L${n(cx - r * 0.3)} ${n(cy + r * 0.45)} Z" fill="#FFFFFF"/></g>`; }
         if (b.stroke && Number(b.stroke.width) > 0) el += `<rect ${rectGeom(b)} fill="none"${strokeAttr(b)}/>`;
       } else if (b.kind === 'scrim') {
         const id = ctx.id('g');

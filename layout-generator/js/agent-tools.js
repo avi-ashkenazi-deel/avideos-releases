@@ -35,7 +35,8 @@ const AgentTools = (() => {
     if (b.font) { o.font = { family: String(b.font.family).split(',')[0].replace(/["']/g, ''), size: b.font.size, weight: b.font.weight, line_height: b.font.lineHeight || 1.2 }; if (b.font.letterSpacing) o.font.letter_spacing = b.font.letterSpacing; if (b.font.transform && b.font.transform !== 'none') o.font.case = b.font.transform; }
     if (b.radius) o.radius = b.radius; if (b.kind === 'field' && b.alpha === 0) o.fill = 'none';
     if (b.align && b.align !== 'left') o.align = b.align;
-    if (b.kind === 'image') o.image = b.asset ? 'set' : 'empty';
+    if (b.kind === 'image') { o.image = b.asset ? 'set' : 'empty'; if (b.crop) o.crop_zoom = Canvas.cropZoom(b, (env.getAssets().images || []).find(a => a.id === b.asset)); if (Canvas.adjustActive(b)) o.adjust = Canvas.adjustOf(b); }
+    if (b.kind === 'video') { const v = (env.getAssets().videos || []).find(a => a.id === b.asset); o.video = v ? { duration: Math.round((v.duration || 0) * 10) / 10, poster_at: v.posterTime || 0 } : 'empty'; }
     if (b.kind === 'icon') o.icon = b.name;
     if (b.code) o.code = { component: b.code.name, from: b.code.pkg, props: b.code.props || {} };
     if (b.overflow) o.overflow = true; if (b.hidden) o.hidden = true; if (b.locked) o.locked = true;
@@ -280,6 +281,17 @@ const AgentTools = (() => {
       const asset = await env.addImageData(out.dataUrl, `generated · ${out.provider}`);
       write(() => { b.asset = asset.id; b.genPrompt = String(prompt); b.genMeta = { provider: out.provider, model: out.model, ms: out.ms }; }, [f.id]);
       note('Generated an image'); return { ok: true, model: out.model };
+    },
+    async edit_image({ frame_id, block_id, prompt, preset }) {
+      const f = F(frame_id); const b = Bk(f, block_id); if (b.kind !== 'image') throw new Error('That block is not an image');
+      const a = (env.getAssets().images || []).find(x => x.id === b.asset); if (!a || !a.dataUrl) throw new Error('That image block has no picture to edit');
+      if (!ImageGen.ready()) throw new Error('No image model is set up. The person can pick Gemini or OpenAI and add a key in Settings.');
+      const P = preset ? ImageGen.EDIT_PRESETS.find(x => x[0] === preset) : null; if (preset && !P) throw new Error(`Unknown preset. Use one of ${ImageGen.EDIT_PRESETS.map(x => x[0]).join(', ')}`);
+      const text = P ? (P[0] === 'swap' ? P[2] + String(prompt || '') : P[2] + (prompt ? ' ' + prompt : '')) : String(prompt || '');
+      const out = await ImageGen.edit({ dataUrl: a.dataUrl, prompt: text, transparent: !!(P && P[3]) });
+      const asset = await env.addImageData(out.dataUrl, `${a.name || 'image'} · edited`);
+      write(() => { b.asset = asset.id; delete b.crop; b.editPrompt = text.slice(0, 500); b.genMeta = { provider: out.provider, model: out.model, ms: out.ms }; }, [f.id]);
+      note('Edited an image'); return { ok: true, model: out.model };
     },
     write_layout({ frame_id, layout }) {
       const f = F(frame_id); const L = layout && typeof layout === 'object' ? Canvas.clone(layout) : null;

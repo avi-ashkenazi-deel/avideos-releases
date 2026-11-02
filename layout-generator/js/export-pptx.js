@@ -15,6 +15,12 @@ const ExportPptx = (() => {
     });
     return loading;
   }
+  // The crop a block shows, with its adjustments, as one picture at the block's aspect (PowerPoint has no filters).
+  function bakePicture(a, b) {
+    return new Promise((res, rej) => {
+      const img = new Image(); img.onload = () => { try { const r = Canvas.cropRect(b, { w: img.naturalWidth, h: img.naturalHeight }); const scale = Math.min(1, 2400 / Math.max(r.w, r.h)); const c = document.createElement('canvas'); c.width = Math.max(2, Math.round(r.w * scale)); c.height = Math.max(2, Math.round(r.h * scale)); const g = c.getContext('2d'); const css = Canvas.adjustCss(b); if (css) g.filter = css; if (r.contain) { g.drawImage(img, 0, 0, c.width, c.height); } else g.drawImage(img, r.x, r.y, r.w, r.h, 0, 0, c.width, c.height); res(c.toDataURL('image/png')); } catch (e) { rej(e); } }; img.onerror = () => rej(new Error('image')); img.src = a.dataUrl;
+    });
+  }
   const inch = v => Math.round(v / PX_PER_IN * 1000) / 1000;
   const pt = px => Math.round(px * 0.75 * 10) / 10;
   const hex = c => { const h = String(c || '#000000').replace('#', '').toUpperCase(); return h.length === 3 ? h.split('').map(x => x + x).join('') : h.slice(0, 6); };
@@ -36,7 +42,7 @@ const ExportPptx = (() => {
     const { kit } = opts;
     let cur = null;
     const named = o => mv && cur != null ? { ...o, objectName: `mv${mv.slide}_${cur}_${mv.seq++}` } : o;
-    const slide = mv ? { addText: (t, o) => slide0.addText(t, named(o)), addShape: (k, o) => slide0.addShape(k, named(o)), addImage: o => slide0.addImage(named(o)), set background(v) { slide0.background = v; } } : slide0;
+    const slide = mv ? { addText: (t, o) => slide0.addText(t, named(o)), addShape: (k, o) => slide0.addShape(k, named(o)), addImage: o => slide0.addImage(named(o)), addMedia: o => slide0.addMedia(named(o)), set background(v) { slide0.background = v; } } : slide0;
     const W = layout.format.w, H = layout.format.h;
     slide.background = { color: hex(layout.palette.bg) };
     // Paint order (a box, then what is inside it); a hidden box hides its contents. Positions are already absolute.
@@ -74,7 +80,12 @@ const ExportPptx = (() => {
         else { o.rectRadius = inch(Math.min(b.w, b.h) / 2); slide.addShape(pptx.ShapeType.roundRect, o); }
       } else if (b.kind === 'image') {
         const a = opts.assets.images.find(i => i.id === b.asset);
-        if (a) slide.addImage({ data: stripData(a.dataUrl), ...box, sizing: { type: 'cover', w: box.w, h: box.h } });
+        if (a && (b.crop || Canvas.adjustActive(b))) { const baked = await bakePicture(a, b).catch(() => null); if (baked) slide.addImage({ data: stripData(baked), ...box }); else slide.addImage({ data: stripData(a.dataUrl), ...box, sizing: { type: 'cover', w: box.w, h: box.h } }); }
+        else if (a) slide.addImage({ data: stripData(a.dataUrl), ...box, sizing: { type: 'cover', w: box.w, h: box.h } });
+      } else if (b.kind === 'video') {
+        const a = (opts.assets.videos || []).find(i => i.id === b.asset);
+        if (a && a.dataUrl && slide.addMedia) { try { slide.addMedia({ type: 'video', data: a.dataUrl, ...box }); } catch { if (a.poster) slide.addImage({ data: stripData(a.poster), ...box, sizing: { type: 'cover', w: box.w, h: box.h } }); } }
+        else if (a && a.poster) slide.addImage({ data: stripData(a.poster), ...box, sizing: { type: 'cover', w: box.w, h: box.h } });
       } else if (b.kind === 'text') {
         const f = b.font;
         // bold figures inside a line stay bold: the text goes in as runs

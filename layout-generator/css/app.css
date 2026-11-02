@@ -819,3 +819,12 @@ input[disabled] { opacity: .5; cursor: not-allowed; }
 .guide-note .acts { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 .guide-note .acts input { flex: 1 1 160px; }
 .guide-tabs .count { display: inline-block; min-width: 16px; padding: 0 4px; margin-left: 5px; border-radius: 999px; background: var(--accent); color: #fff; font-size: 10px; line-height: 15px; text-align: center; }
+
+/* pictures: a clip playing in place, and the sliders of Crop and Adjust */
+.cv-video { position: absolute; z-index: 5; background: #000; object-fit: cover; box-shadow: 0 0 0 1.5px var(--accent); cursor: pointer; }
+.cv-f.cv-range { display: grid; grid-template-columns: 76px 1fr 44px; align-items: center; gap: 8px; }
+.cv-f.cv-range input[type=range] { width: 100%; min-width: 0; accent-color: var(--accent); }
+.cv-f.cv-range b { font-weight: 500; font-size: 11px; color: var(--fg-3); text-align: right; font-variant-numeric: tabular-nums; }
+.cv-ta[data-aiprompt] { width: 100%; resize: vertical; }
+.cv-ta { width: 100%; background: var(--bg); border: 1px solid var(--line-2); border-radius: 4px; color: var(--fg); font: inherit; font-size: 12px; padding: 6px 8px; margin: 6px 0; }
+.cv-f.cv-range input[type=range] { border: 0; background: transparent; padding: 0; height: 22px; }

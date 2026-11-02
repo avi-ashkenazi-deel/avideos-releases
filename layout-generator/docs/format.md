@@ -37,7 +37,8 @@ Every block has `id` and `kind`, and its box `x`, `y`, `w`, `h` in px from the s
 | `text` | words | `text`, `font` {family, size, weight, lineHeight, letterSpacing, transform, style}, `align`, `role` |
 | `list` | items | `items`, `marker`, `font` |
 | `button` | a button with a label | `text`, `color` (label), `fill`, `radius`, `font` |
-| `image` | a picture | `asset` (id in the assets store), `fit`, `focal`, `placeholder` |
+| `image` | a picture | `asset` (id in the assets store), `fit`, `focal`, `crop` (the part shown: fractions `x, y, w, h` of the source, at the block's aspect), `adjust` (`brightness`, `contrast`, `saturation` as factors, `blur` px, `grayscale` 0–1, `hue` °), `placeholder` |
+| `video` | a clip, shown by its poster frame | `asset` (a video asset: url, poster, duration), `fit`, `focal`, `adjust`, `loop`, `muted` |
 | `field` | a rectangle | `fill`, `alpha`, `radius`, `stroke`; a `diagram` spec draws a diagram in it |
 | `shape` | circle, ellipse, pill, quarter | `shape` |
 | `line` | a straight line from (x, y) along (w, h) | `width`, `dash` |

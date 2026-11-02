@@ -32,6 +32,15 @@ const ImageGen = (() => {
         const img = parts.find(p => p.inlineData); if (!img) throw new Error((parts.find(p => p.text) || {}).text || 'No image in the response');
         return { dataUrl: b64ToDataUrl(img.inlineData.data, img.inlineData.mimeType || 'image/png') };
       },
+      // a change to a picture that exists: the picture and the instruction go in together
+      async edit({ prompt, apiKey, model, dataUrl }) {
+        const base = 'https://generativelanguage.googleapis.com/v1beta/models/'; const m = model && model.startsWith('gemini') ? model : 'gemini-2.5-flash-image';
+        const [, mime, b64] = /^data:([^;]+);base64,(.*)$/.exec(dataUrl) || [null, 'image/png', ''];
+        const data = await post(`${base}${m}:generateContent`, { 'x-goog-api-key': apiKey }, { contents: [{ parts: [{ inlineData: { mimeType: mime, data: b64 } }, { text: prompt }] }], generationConfig: { responseModalities: ['IMAGE'] } });
+        const parts = (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) || [];
+        const img = parts.find(p => p.inlineData); if (!img) throw new Error((parts.find(p => p.text) || {}).text || 'No image in the response');
+        return { dataUrl: b64ToDataUrl(img.inlineData.data, img.inlineData.mimeType || 'image/png'), model: m };
+      },
     },
     openai: {
       id: 'openai', name: 'OpenAI', keyHint: 'sk-…', keyUrl: 'https://platform.openai.com/api-keys',
@@ -44,8 +53,23 @@ const ImageGen = (() => {
         const d = data.data && data.data[0]; if (!d || !d.b64_json) throw new Error('No image in the response');
         return { dataUrl: b64ToDataUrl(d.b64_json, 'image/png') };
       },
+      async edit({ prompt, apiKey, model, dataUrl, transparent }) {
+        const m = model && model !== 'dall-e-3' ? model : 'gpt-image-1'; // DALL·E 3 cannot edit
+        const fd = new FormData(); const blob = await (await fetch(dataUrl)).blob(); fd.append('image', blob, 'image.png'); fd.append('prompt', prompt); fd.append('model', m); fd.append('n', '1'); fd.append('size', 'auto'); if (transparent) fd.append('background', 'transparent');
+        let res; try { res = await fetch('https://api.openai.com/v1/images/edits', { method: 'POST', headers: { authorization: `Bearer ${apiKey}` }, body: fd }); } catch (err) { throw new Error(blocked(err) ? 'This page cannot reach the image provider from here (scripts are sandboxed). Run Dugma from your own host or locally to generate.' : err.message); }
+        const data = await res.json().catch(() => ({})); if (!res.ok) throw new Error((data.error && data.error.message) || `${res.status} from the provider`);
+        const d = data.data && data.data[0]; if (!d || !d.b64_json) throw new Error('No image in the response');
+        return { dataUrl: b64ToDataUrl(d.b64_json, 'image/png'), model: m };
+      },
     },
   };
+  // Ready-made edits; a picture with its background removed comes back as a PNG with transparency.
+  const EDIT_PRESETS = [
+    ['remove-bg', 'Remove background', 'Remove the background completely and return the subject alone on a fully transparent background. Keep the subject exactly as it is: same framing, colors, edges and details.', true],
+    ['extend', 'Extend the picture', 'Extend this picture outward on every side, continuing the scene naturally with the same lighting, perspective, style and grain. Keep everything that is already in the picture unchanged.', false],
+    ['clean', 'Clean up', 'Remove text, logos, watermarks, clutter and distracting objects from this picture. Fill what they covered naturally. Keep the main subject and the composition unchanged.', false],
+    ['swap', 'Swap the subject', 'Replace the main subject of this picture with: ', false],
+  ];
 
   const settings = {
     get() { try { return { provider: '', model: '', apiKey: '', ...(JSON.parse(localStorage.getItem(LS_KEY) || '{}')) }; } catch { return { provider: '', model: '', apiKey: '' }; } },
@@ -83,5 +107,15 @@ const ImageGen = (() => {
     return { ...out, provider, model, aspect, ms: Math.round(performance.now() - t0) };
   }
 
-  return { PROVIDERS, settings, ready, aspectOf, promptFor, generate };
+  async function edit({ dataUrl, prompt, transparent = false, provider, model, apiKey } = {}) {
+    const s = settings.get(); provider = provider || s.provider; model = model || s.model; apiKey = apiKey || s.apiKey;
+    const P = PROVIDERS[provider]; if (!P) throw new Error('Pick an image provider in Settings');
+    if (!apiKey) throw new Error(`Add your ${P.name} API key in Settings`);
+    if (!dataUrl || !/^data:image\//.test(dataUrl)) throw new Error('This picture has no pixels to edit here');
+    if (!prompt || !prompt.trim()) throw new Error('Say what should change');
+    const t0 = performance.now();
+    const out = await P.edit({ prompt: prompt.trim(), apiKey, model, dataUrl, transparent });
+    return { ...out, provider, model: out.model || model, ms: Math.round(performance.now() - t0) };
+  }
+  return { PROVIDERS, EDIT_PRESETS, settings, ready, aspectOf, promptFor, generate, edit };
 })();

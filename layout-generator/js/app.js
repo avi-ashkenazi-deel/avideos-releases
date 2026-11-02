@@ -2,7 +2,7 @@
 (() => {
   const $ = id => document.getElementById(id);
   const state = {
-    kit: null, assets: { images: [] }, layouts: [], favs: new Set(), picks: new Set(),
+    kit: null, assets: { images: [], videos: [] }, layouts: [], favs: new Set(), picks: new Set(),
     formats: ['square'], showGrid: false, lastPrompt: null, intent: Prompt.DEFAULT(), seedBase: 1, detail: null, busy: false,
     mode: 'single', outline: null, outlineEdited: false, deck: null, deckFormat: 'slide', copyVariant: 0, copyDraft: null,
   };
@@ -191,6 +191,42 @@
     const asset = { id: forcedId || 'img' + (imgSeq++), name, url: URL.createObjectURL(blob), dataUrl, w: im.naturalWidth, h: im.naturalHeight, lum: Color.luminanceMap(im), placeholder, palette: Color.extractPalette(im) };
     state.assets.images.push(asset); renderImages();
     return asset;
+  }
+  // ---- Videos: a clip is an asset with a poster frame; the canvas shows the poster and plays the clip in place -------
+  let vidSeq = 1;
+  const VIDEO_INLINE_MAX = 12 * 1024 * 1024; // clips up to this size keep a data URL too, for exports and sharing
+  function videoMeta(url) {
+    return new Promise((res, rej) => { const v = document.createElement('video'); v.preload = 'metadata'; v.muted = true; v.playsInline = true; v.onloadedmetadata = () => res({ el: v, w: v.videoWidth, h: v.videoHeight, duration: v.duration }); v.onerror = () => rej(new Error('Could not read this video')); v.src = url; });
+  }
+  // One frame of a clip as a picture, at most 1280px wide.
+  function posterAt(v, t) {
+    return new Promise((res, rej) => {
+      const done = () => { try { const s = Math.min(1, 1280 / (v.videoWidth || 1280)); const c = document.createElement('canvas'); c.width = Math.max(2, Math.round((v.videoWidth || 640) * s)); c.height = Math.max(2, Math.round((v.videoHeight || 360) * s)); c.getContext('2d').drawImage(v, 0, 0, c.width, c.height); res(c.toDataURL('image/jpeg', 0.86)); } catch (e) { rej(e); } };
+      const target = Math.min(Math.max(0, t), Math.max(0, (v.duration || 1) - 0.05));
+      if (Math.abs(v.currentTime - target) < 0.02 && v.readyState >= 2) { done(); return; }
+      v.onseeked = () => { v.onseeked = null; requestAnimationFrame(done); }; v.onerror = () => rej(new Error('seek')); v.currentTime = target;
+    });
+  }
+  async function addVideo(file, name) {
+    const blob = file; const url = URL.createObjectURL(blob);
+    const m = await videoMeta(url); const posterTime = Math.min(0.5, (m.duration || 1) / 2);
+    const poster = await posterAt(m.el, posterTime);
+    const dataUrl = blob.size <= VIDEO_INLINE_MAX ? await readAsDataURL(blob) : null;
+    const asset = { id: 'vid' + (vidSeq++), kind: 'video', name: name || file.name || 'video', url, blob, dataUrl, poster, posterTime, w: m.w, h: m.h, duration: m.duration, type: blob.type || 'video/mp4', el: m.el };
+    state.assets.videos.push(asset);
+    return asset;
+  }
+  // A clip shared by someone else: the room's record gives its url and poster; the frames are fetched when it plays.
+  async function addVideoAsset(rec) {
+    if (!rec || !rec.id || state.assets.videos.some(a => a.id === rec.id)) return null;
+    const asset = { id: rec.id, kind: 'video', name: rec.name || 'shared video', url: rec.url, blob: null, dataUrl: null, poster: rec.poster || '', posterTime: rec.posterTime || 0, w: rec.w || 0, h: rec.h || 0, duration: rec.duration || 0, type: rec.type || 'video/mp4', el: null };
+    state.assets.videos.push(asset);
+    return asset;
+  }
+  // Move a clip's poster to another moment.
+  async function setVideoPoster(asset, t) {
+    if (!asset.el) { const m = await videoMeta(asset.url); asset.el = m.el; if (!asset.w) { asset.w = m.w; asset.h = m.h; asset.duration = m.duration; } }
+    asset.poster = await posterAt(asset.el, t); asset.posterTime = t; return asset.poster;
   }
   function renderImages() {
     const ex = state.assets.images.some(a => a.placeholder); const none = !state.assets.images.length;
@@ -1325,6 +1361,8 @@
     }
     if (typeof WebImport !== 'undefined' && WebImport.handlePaste(e)) return true;
     const plain = dt.getData('text/plain'); if (plain && GSlides.isLink(plain) && plain.length < 500) { e.preventDefault(); importSlidesLink(plain.trim()); return true; }
+    const vids = [...(dt.files || [])].filter(f => /^video\//.test(f.type));
+    if (vids.length) { e.preventDefault(); (async () => { for (const f of vids) { try { await CanvasUI.placeVideo(await addVideo(f, f.name), f.name); } catch (err) { toast(err.message); } } })(); return true; }
     const files = [...(dt.files || [])].filter(f => /^image\//.test(f.type));
     if (files.length) { e.preventDefault(); (async () => { for (const f of files) { const a = await addImage(await readAsDataURL(f), f.name || 'pasted image'); const sel = CanvasUI.selection(); if (sel.frameIds.length === 1) { const fr = Canvas.frameById(CanvasUI.doc, sel.frameIds[0]); const s = Math.min(1, fr.layout.format.w * 0.6 / a.w, fr.layout.format.h * 0.6 / a.h); CanvasUI.insertBlocks(fr.id, [{ id: 'x', kind: 'image', x: 0, y: 0, w: Math.round(a.w * s), h: Math.round(a.h * s), asset: a.id, focal: 'xMidYMid', radius: 0, decorative: false, path: 'image_pasted' }]); } else { CanvasUI.screenFromImage(a, (f.name || 'Pasted image').replace(/\.[^.]+$/, ''), null); } } })(); return true; }
     return false;
@@ -1386,6 +1424,7 @@
     openImport: () => openImport(),
     openAgent: () => Agent.show(),
     addImageData: (dataUrl, name) => addImage(dataUrl, name),
+    addVideo: (file, name) => addVideo(file, name), setVideoPoster: (asset, t) => setVideoPoster(asset, t),
     updateColors: colors => { state.kit.colors = colors.map(c => ({ name: c.name || c.hex, hex: Color.normalize(c.hex), role: c.role || 'accent' })); renderColors(); persistKit(); },
     resetColors: () => { const preset = Brand.PRESETS[state.kit.presetId]; if (!preset) return false; state.kit.colors = preset.colors.map(c => ({ ...c })); renderColors(); persistKit(); return true; },
     openSettings: () => { $('settings').hidden = false; renderGuides(); $('imgProvider').focus(); },
@@ -1435,7 +1474,7 @@
 
   // ---- Multiplayer ------------------------------------------------------------------------------------------------
   Sync.init(CanvasUI, {
-    getAssets: () => state.assets, dataUrlToBlob, addAssetWithId, onLibrary: () => { if (libraryOpen()) Library.render(); CanvasUI.syncInstances(); },
+    getAssets: () => state.assets, dataUrlToBlob, addAssetWithId, addVideoAsset, onLibrary: () => { if (libraryOpen()) Library.render(); CanvasUI.syncInstances(); },
     knownAsset: id => LibStore.assetInfo(id), onLibs: () => LibStore.refresh(), onProjects: () => Projects.refresh(),
     userId: () => Projects.me, onDenied: (room, reason) => { if (PROJ.id === room) closeProject(reason || 'That project is not shared with you.'); else toast(reason || 'That project is not shared with you.'); },
     toolList: () => (typeof AgentTools !== 'undefined' ? AgentTools.defs() : []),

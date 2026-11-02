@@ -196,6 +196,14 @@ const Sync = (() => {
     const assets = env.getAssets().images; const renames = new Map();
     const used = new Set(); for (const f of doc.frames) for (const b of f.layout.blocks) if (b.kind === 'image' && b.asset) used.add(b.asset);
     for (const it of doc.library || []) for (const b of it.blocks || []) if (b.kind === 'image' && b.asset) used.add(b.asset);
+    // clips: the file goes up once, the record carries a small poster so others see the frame before the clip loads
+    if (adapter.uploadAsset) for (const f of doc.frames) for (const b of f.layout.blocks) {
+      if (b.kind !== 'video' || !b.asset || recs.get('a~' + b.asset)) continue; const v = (env.getAssets().videos || []).find(x => x.id === b.asset); if (!v || !v.blob) continue;
+      const up = await adapter.uploadAsset(v.blob, v.name).catch(e => { console.warn('upload failed', e); return null; }); if (!up) continue;
+      const poster = await smallPoster(v.poster).catch(() => '');
+      const rec = { _k: 'a~' + b.asset, _v: now(), _by: me.id, id: b.asset, kind: 'video', url: up.url, name: String(v.name || '').slice(0, 80), w: v.w, h: v.h, duration: v.duration, type: v.type, poster, posterTime: v.posterTime || 0 };
+      recs.set(rec._k, rec); synced.set(rec._k, 'asset'); adapter.send([rec], false);
+    }
     for (const id of used) {
       if (/^a_[0-9a-f]{16}$/.test(id)) { const r = recs.get('a~' + id); if (r) continue; }
       // a shared library picture already has a home: point to it instead of uploading a copy
@@ -218,9 +226,20 @@ const Sync = (() => {
     for (const [from, to] of renames) { const a = assets.find(x => x.id === from); if (a && !assets.some(x => x.id === to)) assets.push({ ...a, id: to }); }
     ui.mutate(d => { for (const f of d.frames) for (const b of f.layout.blocks) if (b.kind === 'image' && renames.has(b.asset)) b.asset = renames.get(b.asset); for (const it of d.library || []) for (const b of it.blocks || []) if (b.kind === 'image' && renames.has(b.asset)) b.asset = renames.get(b.asset); }, { history: false });
   }
+  // A poster small enough for a record (about 480px wide, JPEG).
+  function smallPoster(dataUrl) {
+    return new Promise((res, rej) => { if (!dataUrl) return res(''); const img = new Image(); img.onload = () => { const s = Math.min(1, 480 / (img.naturalWidth || 480)); const c = document.createElement('canvas'); c.width = Math.max(2, Math.round(img.naturalWidth * s)); c.height = Math.max(2, Math.round(img.naturalHeight * s)); c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); res(c.toDataURL('image/jpeg', 0.72)); }; img.onerror = () => rej(new Error('poster')); img.src = dataUrl; });
+  }
   const loadingAssets = new Set();
   async function ensureAsset(rec) {
     if (!rec || rec._del || !rec.id || !rec.url) return;
+    if (rec.kind === 'video') {
+      if (!env.addVideoAsset || (env.getAssets().videos || []).some(a => a.id === rec.id)) return;
+      const url = adapter && adapter.assetUrl ? adapter.assetUrl(rec.url) : rec.url;
+      await env.addVideoAsset({ ...rec, url });
+      const fids = ui.doc.frames.filter(f => f.layout.blocks.some(b => b.asset === rec.id)).map(f => f.id); if (fids.length) ui.rerender(fids);
+      return;
+    }
     if (env.getAssets().images.some(a => a.id === rec.id) || loadingAssets.has(rec.id)) return;
     loadingAssets.add(rec.id);
     try {

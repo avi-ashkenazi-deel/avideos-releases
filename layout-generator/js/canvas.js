@@ -86,6 +86,7 @@ const Canvas = (() => {
     if (kind === 'ellipse') return { id: uid(), kind: 'shape', shape: 'ellipse', x, y, w: 20 * u, h: 20 * u, fill: pal.accent, decorative: true };
     if (kind === 'button') return { id: uid(), kind: 'button', role: 'cta', path: 'cta_' + uid(), text: 'Learn more', x, y, w: Math.round(body * 9), h: Math.round(body * 2.7), font: { family: Brand.fontCss(kit.fonts.body), weight: 600, size: body, lineHeight: 1.2 }, fill: pal.accent, color: Color.contrast(pal.accent, '#FFFFFF') >= Color.contrast(pal.accent, '#000000') ? '#FFFFFF' : '#000000', radius: Math.round(body * 1.35), decorative: false };
     if (kind === 'image') return { id: uid(), kind: 'image', x, y, w: 40 * u, h: 30 * u, asset: null, focal: 'xMidYMid', radius: 0, decorative: false, path: 'image_' + uid() };
+    if (kind === 'video') return { id: uid(), kind: 'video', x, y, w: 48 * u, h: 27 * u, asset: null, focal: 'xMidYMid', radius: 0, decorative: false, path: 'video_' + uid() };
     if (kind === 'icon') return { id: uid(), kind: 'icon', name: 'sparkle', x, y, w: 8 * u, h: 8 * u, fill: pal.accent, decorative: true };
     if (kind === 'logo') return { id: uid(), kind: 'logo', x, y, w: Math.round(5 * u * Engine.logoAspect(kit, Engine.typeSet(kit, Grid.compute(Grid.byId[L.format.id] || Grid.FORMATS[0], kit.grid), 2))), h: 5 * u, fill: Brand.logoColorFor(kit, pal.bg)[0], decorative: true };
     return null;
@@ -181,14 +182,47 @@ const Canvas = (() => {
 
   // ---- Auto layout: see autolayout.js. Full-bleed images and fields count as backgrounds (absolute when a screen's
   // auto layout is switched on). ---------------------------------------------------------------------------------------
-  function isBackground(frame, b) { const W = frame.layout.format.w, H = frame.layout.format.h; return (b.kind === 'image' || b.kind === 'field' || b.kind === 'scrim') && b.w >= W * 0.95 && b.h >= H * 0.95 && b.x <= 0 && b.y <= 0; }
+  // ---- Pictures: the crop shown and the adjustments on it --------------------------------------------------------
+  // The part of a picture a block shows, in source pixels. Without a crop it is the cover crop at the focal point
+  // (what the renderer drew all along); with one, crop {x, y, w, h} is a fraction of the source, kept at the block's
+  // aspect so nothing stretches. Works for images and for a video's poster alike.
+  const FOCAL_AX = { xMin: 0, xMid: 0.5, xMax: 1, YMin: 0, YMid: 0.5, YMax: 1 };
+  function cropRect(b, a) {
+    const aw = a && a.w > 0 ? a.w : 1, ah = a && a.h > 0 ? a.h : 1; const bw = Math.max(1, b.w), bh = Math.max(1, b.h);
+    const ratio = bw / bh;
+    let w, h, x, y;
+    if (b.crop && Number.isFinite(b.crop.w) && b.crop.w > 0) {
+      w = Math.min(aw, Math.max(aw * 0.02, b.crop.w * aw)); h = w / ratio;
+      if (h > ah) { h = ah; w = h * ratio; }
+      const ch = Number(b.crop.h) > 0 ? b.crop.h : (b.crop.w * aw / ratio) / ah; const cx = ((Number(b.crop.x) || 0) + b.crop.w / 2) * aw, cy = ((Number(b.crop.y) || 0) + ch / 2) * ah;
+      x = cx - w / 2; y = cy - h / 2;
+    } else if (b.fit === 'contain') { return { x: 0, y: 0, w: aw, h: ah, contain: true }; }
+    else {
+      const f = /^(xMin|xMid|xMax)(YMin|YMid|YMax)$/.exec(b.focal || 'xMidYMid') || ['', 'xMid', 'YMid'];
+      if (aw / ah > ratio) { h = ah; w = ah * ratio; x = (aw - w) * FOCAL_AX[f[1]]; y = 0; } else { w = aw; h = aw / ratio; x = 0; y = (ah - h) * FOCAL_AX[f[2]]; }
+    }
+    x = Math.min(Math.max(0, x), aw - w); y = Math.min(Math.max(0, y), ah - h);
+    return { x, y, w, h };
+  }
+  // The crop as the block stores it (fractions of the source) from a rect in source pixels.
+  function cropFrom(rect, a) { const aw = a && a.w > 0 ? a.w : 1, ah = a && a.h > 0 ? a.h : 1; const r4 = v => Math.round(v * 10000) / 10000; return { x: r4(rect.x / aw), y: r4(rect.y / ah), w: r4(rect.w / aw), h: r4(rect.h / ah) }; }
+  // Zoom of the crop: 1 shows as much of the picture as a cover crop does, 2 shows half of it (twice as close).
+  function cropZoom(b, a) { if (!b.crop || !(b.crop.w > 0)) return 1; const cover = cropRect({ ...b, crop: null, fit: 'cover' }, a); const cur = cropRect(b, a); return Math.round(cover.w / Math.max(1e-6, cur.w) * 100) / 100; }
+  function setCropZoom(b, a, zoom) { const cur = cropRect(b, a); const cover = cropRect({ ...b, crop: null, fit: 'cover' }, a); const z = Math.min(8, Math.max(1, Number(zoom) || 1)); const w = cover.w / z, h = cover.h / z; const cx = cur.x + cur.w / 2, cy = cur.y + cur.h / 2; b.crop = cropFrom({ x: cx - w / 2, y: cy - h / 2, w, h }, a); b.crop = cropFrom(cropRect(b, a), a); if (z <= 1.001 && Math.abs(b.crop.x - cropFrom(cover, a).x) < 0.001 && Math.abs(b.crop.y - cropFrom(cover, a).y) < 0.001) delete b.crop; }
+  // Adjustments on a picture: 1 is neutral for brightness, contrast and saturation; 0 for blur (px), grayscale and hue (°).
+  const ADJUST_DEFAULT = { brightness: 1, contrast: 1, saturation: 1, blur: 0, grayscale: 0, hue: 0 };
+  function adjustOf(b) { return { ...ADJUST_DEFAULT, ...(b && b.adjust && typeof b.adjust === 'object' ? b.adjust : {}) }; }
+  function adjustActive(b) { const a = adjustOf(b); return Object.keys(ADJUST_DEFAULT).some(k => Math.abs(a[k] - ADJUST_DEFAULT[k]) > 1e-3); }
+  // The same adjustments as a CSS filter string (for baked exports and the video player on the canvas).
+  function adjustCss(b) { if (!adjustActive(b)) return ''; const a = adjustOf(b); return `brightness(${a.brightness}) contrast(${a.contrast}) saturate(${a.saturation})${a.grayscale ? ` grayscale(${a.grayscale})` : ''}${a.hue ? ` hue-rotate(${a.hue}deg)` : ''}${a.blur ? ` blur(${a.blur}px)` : ''}`; }
+  function isBackground(frame, b) { const W = frame.layout.format.w, H = frame.layout.format.h; return (b.kind === 'image' || b.kind === 'video' || b.kind === 'field' || b.kind === 'scrim') && b.w >= W * 0.95 && b.h >= H * 0.95 && b.x <= 0 && b.y <= 0; }
   function applyAutoLayout(frame) { return Auto.layout(frame); }
 
   // ---- Serialization, links, code -----------------------------------------------------------
   function serialize(doc, opts = {}) {
     if (!opts.stripAssets) return JSON.stringify(doc);
     const d = clone(doc);
-    for (const f of d.frames) for (const b of f.layout.blocks) if (b.kind === 'image') b.assetMissing = true;
+    for (const f of d.frames) for (const b of f.layout.blocks) if (b.kind === 'image' || b.kind === 'video') b.assetMissing = true;
     return JSON.stringify(d);
   }
   function deserialize(json) { const d = typeof json === 'string' ? JSON.parse(json) : json; if (!d || !Array.isArray(d.frames)) throw new Error('not a canvas file'); for (const f of d.frames) { for (const b of f.layout.blocks) if (!b.id) b.id = uid(); migrate(f); } return d; }
@@ -641,5 +675,5 @@ const Canvas = (() => {
     };
   }
 
-  return { create, addFrame, blankFrame, migrate, defaultAuto, frameById, blockById, refit, sourceText, newBlock, moveBlock, resizeBlock, reorder, duplicateBlock, removeBlocks, transferBlocks, pasteBlocks, customFormat, align, distribute, bounds, applyAutoLayout, isBackground, serialize, deserialize, toLink, fromHash, toHTML, toReact, codeTree, codeNodes, recolor, extractContent, scaleFrame, clusters, mainCluster, applyFrameTokens, tokenizeFrame, applyTokens, group, ungroup, groupMembers, tidy, compact, penD, penFit, maskShape, maskedBy, replaceText, setFonts, pasteFrames, framesBounds, cssGradient, history, snap, uid, clone };
+  return { create, addFrame, blankFrame, migrate, defaultAuto, frameById, blockById, refit, sourceText, newBlock, moveBlock, resizeBlock, reorder, duplicateBlock, removeBlocks, transferBlocks, pasteBlocks, customFormat, align, distribute, bounds, applyAutoLayout, isBackground, serialize, deserialize, toLink, fromHash, toHTML, toReact, codeTree, codeNodes, recolor, extractContent, scaleFrame, clusters, mainCluster, applyFrameTokens, tokenizeFrame, applyTokens, group, ungroup, groupMembers, tidy, compact, penD, penFit, maskShape, maskedBy, replaceText, setFonts, pasteFrames, framesBounds, cssGradient, cropRect, cropFrom, cropZoom, setCropZoom, adjustOf, adjustActive, adjustCss, ADJUST_DEFAULT, history, snap, uid, clone };
 })();

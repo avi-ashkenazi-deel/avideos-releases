@@ -189,7 +189,7 @@ const CanvasUI = (() => {
     stage().style.backgroundSize = `${24 * v.zoom}px ${24 * v.zoom}px`; stage().style.backgroundPosition = `${v.x}px ${v.y}px`;
     const fs = Math.max(11, 12 / v.zoom) + 'px', off = Math.max(16, 18 / v.zoom);
     $('world').querySelectorAll('.cv-frame-label').forEach(lb => { lb.style.fontSize = fs; const f = Canvas.frameById(doc, lb.dataset.label); if (f) lb.style.top = (f.y - off) + 'px'; });
-    positionEditor(); drawOverlay();
+    positionEditor(); positionPlayer(); drawOverlay();
   }
 
   // ---- Rendering ----------------------------------------------------------------------------------------
@@ -211,6 +211,7 @@ const CanvasUI = (() => {
     const lb = $('world').querySelector(`.cv-frame-label[data-label="${CSS.escape(f.id)}"]`); if (lb) { lb.style.left = f.x + 'px'; lb.style.top = (f.y - Math.max(16, 18 / doc.view.zoom)) + 'px'; }
   }
   function rerenderFrame(f) {
+    if (player && player.frameId === f.id) positionPlayer();
     const el = $('world').querySelector(`.cv-frame[data-id="${CSS.escape(f.id)}"]`); if (!el) return renderFrames();
     const svg = el.querySelector('svg'); if (svg) svg.outerHTML = frameSVG(f); else el.insertAdjacentHTML('beforeend', frameSVG(f));
     el.style.left = f.x + 'px'; el.style.top = f.y + 'px'; el.style.width = FW(f) + 'px'; el.style.height = FH(f) + 'px'; el.style.display = f.hidden ? 'none' : ''; el.style.overflow = f.clip === false ? 'visible' : '';
@@ -294,6 +295,8 @@ const CanvasUI = (() => {
     }
     parts.push(penOverlay());
     if (drag && drag.type === 'line') { const a = toScreen(drag.start.x, drag.start.y), b = toScreen(drag.cur.x, drag.cur.y); parts.push(`<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="var(--accent)" stroke-width="2" stroke-linecap="round"/>`); }
+    if (cropping) { const t = cropTarget(); if (t) { const r = Canvas.cropRect(t.b, t.a); const scale = t.b.w / Math.max(1e-6, r.w); const q = toScreen(t.f.x + t.b.x - r.x * scale, t.f.y + t.b.y - r.y * scale); const bq = toScreen(t.f.x + t.b.x, t.f.y + t.b.y);
+      parts.push(`<image href="${esc(t.a.url || t.a.dataUrl || '')}" x="${q.x}" y="${q.y}" width="${t.a.w * scale * Z}" height="${t.a.h * scale * Z}" opacity="0.38" preserveAspectRatio="none" pointer-events="none"/><rect x="${q.x}" y="${q.y}" width="${t.a.w * scale * Z}" height="${t.a.h * scale * Z}" fill="none" stroke="var(--accent)" stroke-dasharray="4 4" stroke-width="1"/><rect x="${bq.x}" y="${bq.y}" width="${t.b.w * Z}" height="${t.b.h * Z}" fill="none" stroke="var(--accent)" stroke-width="2"/>`); } }
     ov.innerHTML = parts.join('');
     renderPins();
   }
@@ -415,13 +418,59 @@ const CanvasUI = (() => {
     st.addEventListener('pointerdown', onDown); st.addEventListener('pointermove', onMove); st.addEventListener('pointerup', onUp); st.addEventListener('pointercancel', onUp);
     st.addEventListener('pointerleave', () => { emit('pointer', null); });
     st.addEventListener('dblclick', onDblClick);
-    st.addEventListener('wheel', e => { if (e.target.closest && e.target.closest('.cv-editor')) return; e.preventDefault(); if (e.ctrlKey || e.metaKey) zoomBy(Math.exp(-e.deltaY * 0.0015), e.clientX, e.clientY); else { doc.view.x -= e.deltaX; doc.view.y -= e.deltaY; applyView(); } }, { passive: false });
+    st.addEventListener('wheel', e => { if (e.target.closest && e.target.closest('.cv-editor')) return; e.preventDefault(); if (cropping && !e.ctrlKey && !e.metaKey) { cropZoomBy(Math.exp(-e.deltaY * 0.002)); return; } if (e.ctrlKey || e.metaKey) zoomBy(Math.exp(-e.deltaY * 0.0015), e.clientX, e.clientY); else { doc.view.x -= e.deltaX; doc.view.y -= e.deltaY; applyView(); } }, { passive: false });
     st.addEventListener('contextmenu', e => e.preventDefault());
     new ResizeObserver(() => active && drawOverlay()).observe(st);
     st.addEventListener('dragover', e => { const types = e.dataTransfer ? [...e.dataTransfer.types] : []; if (types.includes('Files') || types.includes('application/x-lg-library')) { e.preventDefault(); st.classList.add('drop'); } });
     st.addEventListener('dragleave', () => st.classList.remove('drop'));
-    st.addEventListener('drop', async e => { st.classList.remove('drop'); const libId = e.dataTransfer && e.dataTransfer.getData('application/x-lg-library'); if (libId && env.libraryDrop) { e.preventDefault(); env.libraryDrop(libId, toWorld(e.clientX, e.clientY)); return; } const files = e.dataTransfer && [...e.dataTransfer.files]; if (!files || !files.length) return; e.preventDefault(); lastPointer = toWorld(e.clientX, e.clientY); for (const file of files) { try { if (env.importFile && await env.importFile(file)) continue; if (/^image\//.test(file.type)) await dropImage(file); else env.toast(`Can't open ${file.name}`); } catch (err) { env.toast(err.message); } } });
+    st.addEventListener('drop', async e => { st.classList.remove('drop'); const libId = e.dataTransfer && e.dataTransfer.getData('application/x-lg-library'); if (libId && env.libraryDrop) { e.preventDefault(); env.libraryDrop(libId, toWorld(e.clientX, e.clientY)); return; } const files = e.dataTransfer && [...e.dataTransfer.files]; if (!files || !files.length) return; e.preventDefault(); lastPointer = toWorld(e.clientX, e.clientY); for (const file of files) { try { if (env.importFile && await env.importFile(file)) continue; if (/^image\//.test(file.type)) await dropImage(file); else if (/^video\//.test(file.type) && env.addVideo) await dropVideo(file); else env.toast(`Can't open ${file.name}`); } catch (err) { env.toast(err.message); } } });
   }
+  // ---- Pictures: crop mode (move the picture inside its frame) and video playback on the canvas ------------------
+  let cropping = null; // { frameId, blockId }
+  let player = null;   // { frameId, blockId, el }
+  const imageAssetOf = b => (env.getAssets().images || []).find(a => a.id === b.asset) || null;
+  const videoAssetOf = b => (env.getAssets().videos || []).find(a => a.id === b.asset) || null;
+  function cropStart(f, b) {
+    const a = b && b.kind === 'image' && imageAssetOf(b); if (!a) return false;
+    if (cropping) cropEnd(); if (editing) endEdit();
+    hist.push(doc); updateUndo();
+    if (!b.crop) b.crop = Canvas.cropFrom(Canvas.cropRect(b, a), a);
+    cropping = { frameId: f.id, blockId: b.id }; select(f.id, [b.id], { keepGroupFocus: true });
+    stage().style.cursor = 'move'; drawOverlay(); renderProps();
+    env.toast('Drag the picture to move it inside its frame, scroll to zoom. Enter or Esc when done.'); return true;
+  }
+  function cropEnd() { if (!cropping) return; cropping = null; stage().style.cursor = 'default'; drawOverlay(); renderProps(); persist(); updateUndo(); }
+  function cropTarget() { if (!cropping) return null; const f = Canvas.frameById(doc, cropping.frameId); const b = f && Canvas.blockById(f, cropping.blockId); const a = b && imageAssetOf(b); if (!f || !b || !a) { cropping = null; return null; } return { f, b, a }; }
+  function cropZoomBy(factor) { const t = cropTarget(); if (!t) return; Canvas.setCropZoom(t.b, t.a, Canvas.cropZoom(t.b, t.a) * factor); if (!t.b.crop) t.b.crop = Canvas.cropFrom(Canvas.cropRect(t.b, t.a), t.a); rerenderFrame(t.f); drawOverlay(); }
+  function togglePlay(f, b) { if (player && player.blockId === b.id) { stopPlay(); return; } startPlay(f, b); }
+  function startPlay(f, b) {
+    const a = b && b.kind === 'video' && videoAssetOf(b); if (!a || !a.url) { env.toast('This video has no clip to play here'); return; }
+    stopPlay();
+    const v = document.createElement('video'); v.className = 'cv-video'; v.src = a.url; v.muted = b.muted !== false; v.loop = b.loop !== false; v.playsInline = true; v.preload = 'auto';
+    v.style.objectFit = b.fit === 'contain' ? 'contain' : 'cover';
+    v.addEventListener('pointerdown', e => e.stopPropagation()); v.addEventListener('dblclick', e => e.stopPropagation());
+    v.addEventListener('click', () => { if (v.paused) v.play().catch(() => { }); else v.pause(); });
+    v.addEventListener('ended', () => { if (!v.loop) stopPlay(); });
+    stage().appendChild(v); player = { frameId: f.id, blockId: b.id, el: v }; positionPlayer(); v.play().catch(() => { v.muted = true; v.play().catch(() => { }); }); renderProps();
+  }
+  function positionPlayer() {
+    if (!player) return; const f = Canvas.frameById(doc, player.frameId); const b = f && Canvas.blockById(f, player.blockId); if (!b || b.hidden || f.hidden) { stopPlay(); return; }
+    const Z = doc.view.zoom; const p = toScreen(f.x + b.x, f.y + b.y);
+    Object.assign(player.el.style, { left: p.x + 'px', top: p.y + 'px', width: Math.max(1, b.w * Z) + 'px', height: Math.max(1, b.h * Z) + 'px', borderRadius: (b.radius || 0) * Z + 'px', filter: Canvas.adjustCss(b) || 'none', opacity: String(b.opacity ?? 1) });
+  }
+  function stopPlay() { if (!player) return; const el = player.el; player = null; try { el.pause(); } catch { } el.remove(); renderProps(); }
+  // A clip becomes a video block: inside the screen under the pointer (or the selected screen), else a screen of its own.
+  function placeVideo(asset, name, at) {
+    let p = at || lastPointer; const selF = selFrame();
+    if (!at && selF) p = { x: selF.x + FW(selF) / 2, y: selF.y + FH(selF) / 2 };
+    if (!p) { const r = stage().getBoundingClientRect(); p = toWorld(r.left + r.width / 2, r.top + r.height / 2); }
+    const w = asset.w || 1280, h = asset.h || 720; const f = frameAt(p) || (!at && selF) || null; const label = (name || asset.name || 'video').replace(/\.[^.]+$/, '');
+    if (f) { hist.push(doc); const sc = Math.min(1, (FW(f) * 0.6) / w, (FH(f) * 0.6) / h); const b = { id: Canvas.uid(), kind: 'video', x: Math.round(p.x - f.x - w * sc / 2), y: Math.round(p.y - f.y - h * sc / 2), w: Math.round(w * sc), h: Math.round(h * sc), asset: asset.id, focal: 'xMidYMid', radius: 0, decorative: false, path: 'video_' + Canvas.uid(), label }; f.layout.blocks.push(b); select(f.id, [b.id]); rerenderFrame(f); renderLayers(); persist(); updateUndo(); return b; }
+    const fmt = Canvas.customFormat(w, h); const nf = createFrame({ x: p.x - fmt.w / 2, y: p.y - fmt.h / 2, format: fmt, name: label });
+    mutate(() => { nf.layout.blocks.push({ id: Canvas.uid(), kind: 'video', x: 0, y: 0, w: fmt.w, h: fmt.h, asset: asset.id, focal: 'xMidYMid', radius: 0, decorative: false, path: 'video_1', label }); nf.layout.meta = { ...(nf.layout.meta || {}), source: 'video' }; }, { history: false, frames: [nf.id] });
+    return nf;
+  }
+  async function dropVideo(file) { const asset = await env.addVideo(file, file.name); placeVideo(asset, file.name, lastPointer || { x: 0, y: 0 }); }
   function onDblClick(e) {
     if (e.target.closest && e.target.closest('.cv-editor')) return;
     if (tool === 'pen' && penDraft) { penFinish(); return; }
@@ -430,7 +479,9 @@ const CanvasUI = (() => {
     const lf = labelAt(p); if (lf) { select(lf.id, []); const inp = $('cvProps').querySelector('[data-f="name"]'); if (inp) { inp.focus(); inp.select(); } return; }
     const f = frameAt(p); if (!f) return;
     const chain = hitChain(f, p); const b = pickLevel(f, chain, e);
-    if (b && b.kind === 'box') { const i = chain.indexOf(b); const inner = chain[i + 1]; if (inner) { select(f.id, [inner.id]); if (inner.kind === 'text' || inner.kind === 'list' || inner.kind === 'button') startEdit(f, inner); return; } }
+    if (b && b.kind === 'box') { const i = chain.indexOf(b); const inner = chain[i + 1]; if (inner) { select(f.id, [inner.id]); if (inner.kind === 'text' || inner.kind === 'list' || inner.kind === 'button') startEdit(f, inner); else if (inner.kind === 'image' && !inner.locked) cropStart(f, inner); else if (inner.kind === 'video') togglePlay(f, inner); return; } }
+    if (b && b.kind === 'image' && !b.locked) { if (cropStart(f, b)) return; }
+    if (b && b.kind === 'video') { select(f.id, [b.id]); togglePlay(f, b); return; }
     if (b && b.group && groupFocus !== b.group) { groupFocus = b.group; select(f.id, [b.id], { keepGroupFocus: true }); return; }
     if (b && b.kind === 'vector' && b.pen) { select(f.id, [b.id]); penEditStart(f, b); return; }
     if (b && (b.kind === 'text' || b.kind === 'list' || b.kind === 'button')) { startEdit(f, b); return; }
@@ -439,6 +490,11 @@ const CanvasUI = (() => {
   function onDown(e) {
     if (e.target.closest && e.target.closest('.cv-editor')) return;
     if (editing) endEdit();
+    if (cropping) {
+      const t = cropTarget(); const p0 = toWorld(e.clientX, e.clientY);
+      if (t && e.button === 0 && p0.x >= t.f.x + t.b.x && p0.x <= t.f.x + t.b.x + t.b.w && p0.y >= t.f.y + t.b.y && p0.y <= t.f.y + t.b.y + t.b.h) { drag = { type: 'crop', f: t.f, b: t.b, a: t.a, start: p0, orig: Canvas.cropRect(t.b, t.a) }; stage().setPointerCapture(e.pointerId); return; }
+      cropEnd();
+    }
     if (spaceDown) spacePanned = true;
     if (e.button === 1 || tool === 'hand' || spaceDown || e.button === 2) { drag = { type: 'pan', sx: e.clientX, sy: e.clientY, vx: doc.view.x, vy: doc.view.y }; stage().setPointerCapture(e.pointerId); stage().style.cursor = 'grabbing'; return; }
     const p = toWorld(e.clientX, e.clientY);
@@ -550,6 +606,11 @@ const CanvasUI = (() => {
     if (drag.type === 'pan') { doc.view.x = drag.vx + (e.clientX - drag.sx); doc.view.y = drag.vy + (e.clientY - drag.sy); applyView(); return; }
     if (drag.type === 'marquee') { drag.cur = p; drawOverlay(); return; }
     if (drag.type === 'line') { drag.cur = e.shiftKey ? constrain(drag.start, p) : p; drawOverlay(); return; }
+    if (drag.type === 'crop') {
+      const r = drag.orig; const scale = drag.b.w / Math.max(1e-6, r.w);
+      drag.b.crop = Canvas.cropFrom({ x: r.x - (p.x - drag.start.x) / scale, y: r.y - (p.y - drag.start.y) / scale, w: r.w, h: r.h }, drag.a);
+      drag.b.crop = Canvas.cropFrom(Canvas.cropRect(drag.b, drag.a), drag.a); rerenderFrame(drag.f); drawOverlay(); return;
+    }
     if (drag.type === 'pen-point' || drag.type === 'pen-anchor' || drag.type === 'pen-handle') {
       const { st, idx } = drag; const { f, b } = st; const P = b.pen.pts; const a = P[idx]; if (!a) return;
       if (!drag.moved && Math.hypot(p.x - drag.start.x, p.y - drag.start.y) * doc.view.zoom < 3) return;
@@ -597,6 +658,7 @@ const CanvasUI = (() => {
     const d = drag; drag = null; stage().style.cursor = tool === 'hand' ? 'grab' : 'default';
     const hadGuides = guides.length; guides = [];
     if (d.type === 'pan') { persist({ silent: true }); return; }
+    if (d.type === 'crop') { stage().style.cursor = 'move'; persist(); updateUndo(); renderProps(); return; }
     if (d.type === 'line') { lineFinish(d); return; }
     if (d.type === 'pen-point') { drag = null; drawOverlay(); return; }
     if (d.type === 'pen-anchor' || d.type === 'pen-handle') { if (d.moved) { persist(); updateUndo(); renderProps(); } drawOverlay(); return; }
@@ -925,6 +987,8 @@ const CanvasUI = (() => {
   }
   function select(frameId, blockIds, opts = {}) {
     if (editing && !opts.keepEditing) endEdit();
+    if (player && !(blockIds || []).includes(player.blockId)) stopPlay();
+    if (cropping && !(blockIds || []).includes(cropping.blockId)) { cropping = null; stage().style.cursor = 'default'; }
     const f = Canvas.frameById(doc, frameId);
     if (!opts.keepGroupFocus) groupFocus = null;
     if (groupFocus && f && !(blockIds || []).some(id => { const b = Canvas.blockById(f, id); return b && b.group === groupFocus; })) groupFocus = null;
@@ -998,6 +1062,7 @@ const CanvasUI = (() => {
     // ⌘/Ctrl + and − zoom the canvas instead of the browser page, ⌘/Ctrl 0 goes to 100%; they work while typing in a
     // panel or editing text too (⌘/Ctrl 1-9 stay the browser's tab keys).
     document.addEventListener('keydown', e => {
+      if (cropping && (e.key === 'Escape' || e.key === 'Enter') && !(e.target && /^(input|textarea|select)$/i.test(e.target.tagName || ''))) { e.preventDefault(); e.stopImmediatePropagation(); cropEnd(); return; }
       if (!active || !(e.metaKey || e.ctrlKey) || e.altKey) return;
       if (e.target.closest && e.target.closest('.modal:not([hidden])')) return;
       const c = e.code, k = e.key;
@@ -1241,7 +1306,7 @@ const CanvasUI = (() => {
     const f = selFrame(); const bs = selBlocks(); if (!styleClip || !f || !bs.length) { env.toast(styleClip ? 'Select blocks to paste the style onto' : 'Copy a style first (⌥⌘C)'); return; }
     hist.push(doc);
     for (const b of bs) {
-      const pic = b.kind === 'image' || b.kind === 'logo' || b.kind === 'icon';
+      const pic = b.kind === 'image' || b.kind === 'video' || b.kind === 'logo' || b.kind === 'icon';
       for (const [k, v] of Object.entries(styleClip)) {
         if (k === 'font') { if (b.font) b.font = { ...b.font, ...v }; continue; }
         if (k === 'color' && b.kind !== 'button') continue; if (pic && (k === 'fill' || k === 'gradient' || k === 'fillAlpha' || k === 'alpha')) continue;
@@ -1464,7 +1529,7 @@ const CanvasUI = (() => {
 
   // ---- Layers panel ----------------------------------------------------------------------------------------------
   function label(b) { if (b.label) return b.label; if (b.kind === 'box') { const m = b.auto && b.auto.mode; return m === 'vertical' ? 'Stack ↓' : m === 'horizontal' ? (b.auto.wrap ? 'Stack ↩' : 'Stack →') : 'Box'; } if (b.kind === 'text') return `${b.role || 'text'} · ${Canvas.sourceText(b).slice(0, 28)}`; if (b.pen) return b.pen.closed ? 'Shape' : 'Path'; if (b.kind === 'list') return `${b.role || 'list'} · ${(b.items || []).length} items`; if (b.kind === 'button') return `button · ${b.text}`; if (b.kind === 'image') return 'image'; if (b.kind === 'field') return b.container ? 'card' : 'rectangle'; if (b.kind === 'shape') return b.shape; if (b.kind === 'icon') return `icon · ${b.name}`; if (b.kind === 'vector') return 'vector'; return b.kind; }
-  const KIND_GLYPH = { text: 'T', list: '≡', button: '▭', image: '▣', field: '■', shape: '●', icon: '✦', logo: 'L', scrim: '▒', rule: '—', line: '—', badge: '①', vector: '✎', box: '⬚' };
+  const KIND_GLYPH = { text: 'T', list: '≡', button: '▭', image: '▣', video: '▶', field: '■', shape: '●', icon: '✦', logo: 'L', scrim: '▒', rule: '—', line: '—', badge: '①', vector: '✎', box: '⬚' };
   // One frame's layers as a tree: boxes fold; a stack lists its children in flow order (first on top, like the
   // code), anything else front-most first. A search shows matching layers flat.
   function layerRows(f, q) {
@@ -1776,13 +1841,33 @@ const CanvasUI = (() => {
       ${b.kind !== 'icon' && b.kind !== 'logo' ? selectF('fillType', 'Type', type, [['solid', 'Solid'], ['linear', 'Linear gradient'], ['radial', 'Radial gradient']]) : ''}
       ${type === 'solid' ? color('fill', 'Color', b.fill || '#000000', b.fillToken) : `${color('grad.0', 'Start', g.stops[0].c)}${color('grad.1', 'End', g.stops[g.stops.length - 1].c)}${type === 'linear' ? num('grad.angle', 'Angle', g.angle || 0, 15) : ''}`}
       ${b.kind === 'box' ? '<label class="cv-check"><input type="checkbox" data-p="hasFill" checked> Fill</label>' : ''}
-      ${(b.kind === 'field' || b.kind === 'button' || b.kind === 'image' || b.kind === 'box') ? num('radius', 'Radius', b.radius || 0, 4) : ''}${b.kind === 'field' ? num('alpha', 'Fill alpha', b.alpha ?? 1, 0.05, 'min="0" max="1"') : ''}
+      ${(b.kind === 'field' || b.kind === 'button' || b.kind === 'image' || b.kind === 'video' || b.kind === 'box') ? num('radius', 'Radius', b.radius || 0, 4) : ''}${b.kind === 'field' ? num('alpha', 'Fill alpha', b.alpha ?? 1, 0.05, 'min="0" max="1"') : ''}
     </div>`;
   }
   function strokeSection(b) {
-    if (!['field', 'shape', 'vector', 'image', 'button', 'box'].includes(b.kind)) return '';
+    if (!['field', 'shape', 'vector', 'image', 'video', 'button', 'box'].includes(b.kind)) return '';
     const s = b.stroke || {};
     return `<div class="cv-section"><h3>Stroke</h3><div class="cv-grid2">${num('stroke.width', 'W', s.width || 0, 1, 'min="0"')}</div>${color('stroke.color', 'Color', s.color || '#000000')}</div>`;
+  }
+  const range = (attr, k, label, v, min, max, step, show) => `<label class="cv-f cv-range"><span>${label}</span><input type="range" data-${attr}="${k}" min="${min}" max="${max}" step="${step}" value="${v}"><b>${show}</b></label>`;
+  function imageSection(f, b) {
+    const a = imageAssetOf(b); const zoom = a ? Canvas.cropZoom(b, a) : 1; const adj = Canvas.adjustOf(b); const cropOn = cropping && cropping.blockId === b.id;
+    const fitRow = !b.crop ? `${selectF('fit', 'Fit', b.fit || 'cover', [['cover', 'Fill (crop)'], ['contain', 'Fit (letterbox)']])}${b.fit !== 'contain' ? selectF('focal', 'Crop focus', b.focal || 'xMidYMid', [['xMinYMin', 'Top left'], ['xMidYMin', 'Top'], ['xMaxYMin', 'Top right'], ['xMinYMid', 'Left'], ['xMidYMid', 'Center'], ['xMaxYMid', 'Right'], ['xMinYMax', 'Bottom left'], ['xMidYMax', 'Bottom'], ['xMaxYMax', 'Bottom right']]) : ''}` : '';
+    const crop = a ? `<div class="cv-section"><h3>Crop</h3>${range('crop', 'zoom', 'Zoom', zoom, 1, 6, 0.01, zoom.toFixed(2) + '×')}<div class="cv-row">${btn('crop-edit', cropOn ? 'Done' : 'Move picture')}${b.crop ? btn('crop-reset', 'Reset') : ''}</div><p class="hint">${cropOn ? 'Drag the picture to move it inside its frame; scroll to zoom. Enter or Esc when done.' : 'Double-click the picture to move it inside its frame.'}</p></div>` : '';
+    const adjust = a ? `<div class="cv-section"><h3>Adjust</h3>${range('adj', 'brightness', 'Brightness', adj.brightness, 0.2, 2, 0.01, Math.round(adj.brightness * 100) + '%')}${range('adj', 'contrast', 'Contrast', adj.contrast, 0.2, 2, 0.01, Math.round(adj.contrast * 100) + '%')}${range('adj', 'saturation', 'Saturation', adj.saturation, 0, 2, 0.01, Math.round(adj.saturation * 100) + '%')}${range('adj', 'hue', 'Hue', adj.hue, -180, 180, 1, Math.round(adj.hue) + '°')}${range('adj', 'grayscale', 'Grayscale', adj.grayscale, 0, 1, 0.01, Math.round(adj.grayscale * 100) + '%')}${range('adj', 'blur', 'Blur', adj.blur, 0, 24, 0.5, adj.blur + 'px')}${Canvas.adjustActive(b) ? `<div class="cv-row">${btn('adj-reset', 'Reset adjustments')}</div>` : ''}</div>` : '';
+    const ai = a && a.dataUrl && typeof ImageGen !== 'undefined' ? `<div class="cv-section"><h3>Edit with AI</h3>${ImageGen.ready() ? `<div class="cv-row wrap">${ImageGen.EDIT_PRESETS.map(pz => `<button type="button" class="btn small" data-aipreset="${pz[0]}">${esc(pz[1])}</button>`).join('')}</div><textarea class="cv-ta" data-aiprompt rows="2" placeholder="Or describe the change: make it dusk, add a laptop on the desk, warmer light…">${esc(b.editPrompt && !ImageGen.EDIT_PRESETS.some(pz => b.editPrompt.startsWith(pz[2].slice(0, 30))) ? b.editPrompt : '')}</textarea><div class="cv-row">${btn('ai-edit', '✦ Edit picture')}</div><p class="hint">The result replaces the picture; undo brings the old one back.</p>` : `<p class="hint">Pick an image model (Gemini or OpenAI) and add a key to edit pictures: remove backgrounds, extend, clean up or swap the subject.</p><div class="cv-row">${btn('ai-settings', 'Open Settings')}</div>`}</div>` : '';
+    return `<div class="cv-section"><h3>Image</h3>${fitRow}<label class="btn small file">Replace image<input type="file" accept="image/*" data-file="image" hidden></label>${selectF('asset', 'Asset', b.asset || '', env.getAssets().images.map(x => [x.id, x.name]).concat([['', 'None']]))}</div>${crop}${adjust}${ai}`;
+  }
+  function videoSection(f, b) {
+    const a = videoAssetOf(b); const playing = player && player.blockId === b.id; const dur = a && a.duration > 0 && Number.isFinite(a.duration) ? a.duration : 0; const t = a ? (a.posterTime || 0) : 0;
+    const mmss = v => `${Math.floor(v / 60)}:${String(Math.floor(v % 60)).padStart(2, '0')}.${String(Math.floor((v % 1) * 10))}`;
+    return `<div class="cv-section"><h3>Video</h3>${a ? `<p class="hint">${esc(a.name || 'video')} · ${a.w || '?'}×${a.h || '?'}${dur ? ` · ${mmss(dur)}` : ''}${a.dataUrl ? '' : ' · poster only in exports'}</p>` : '<p class="hint">No clip yet. Drop or paste a video, or choose a file.</p>'}
+      <div class="cv-row">${btn('video-play', playing ? '■ Stop' : '▶ Play on canvas')}<label class="btn small file">${a ? 'Replace video' : 'Choose video'}<input type="file" accept="video/*" data-file="video" hidden></label></div>
+      ${a && dur ? range('vposter', 'time', 'Poster frame', Math.min(t, dur), 0, Math.max(0.05, dur - 0.05), 0.05, mmss(t)) : ''}
+      ${selectF('fit', 'Fit', b.fit || 'cover', [['cover', 'Fill (crop)'], ['contain', 'Fit (letterbox)']])}
+      <label class="cv-check"><input type="checkbox" data-p="loop" ${b.loop !== false ? 'checked' : ''}> Loop</label>
+      <label class="cv-check"><input type="checkbox" data-p="muted" ${b.muted !== false ? 'checked' : ''}> Muted</label>
+      <p class="hint">Double-click the video to play it in place. Pictures and PDFs show the poster frame; PowerPoint gets the clip itself when it is at hand.</p></div>`;
   }
   function effectsSection(b) {
     const s = b.shadow || {};
@@ -1838,7 +1923,8 @@ const CanvasUI = (() => {
       ${b.kind === 'text' ? selectF('font.style', 'Style', b.font.style || 'normal', [['normal', 'Normal'], ['italic', 'Italic']]) : ''}
       ${btn('fit-text', 'Fit size to box')}
     </div>` : ''}
-    ${b.kind === 'image' ? `<div class="cv-section"><h3>Image</h3>${selectF('focal', 'Crop focus', b.focal || 'xMidYMid', [['xMinYMin', 'Top left'], ['xMidYMin', 'Top'], ['xMaxYMin', 'Top right'], ['xMinYMid', 'Left'], ['xMidYMid', 'Center'], ['xMaxYMid', 'Right'], ['xMinYMax', 'Bottom left'], ['xMidYMax', 'Bottom'], ['xMaxYMax', 'Bottom right']])}${selectF('fit', 'Fit', b.fit || 'cover', [['cover', 'Fill (crop)'], ['contain', 'Fit (letterbox)']])}<label class="btn small file">Replace image<input type="file" accept="image/*" data-file="image" hidden></label>${selectF('asset', 'Asset', b.asset || '', env.getAssets().images.map(a => [a.id, a.name]).concat([['', 'None']]))}</div>` : ''}
+    ${b.kind === 'image' ? imageSection(f, b) : ''}
+    ${b.kind === 'video' ? videoSection(f, b) : ''}
     ${b.kind === 'image' && env.traceImage ? `<div class="cv-section"><h3>Rebuild as layers</h3><p class="hint">Claude reads this image (an app screen, a slide, a mockup) and rebuilds it next to it as editable text, shapes and image crops.</p><div class="cv-row">${btn('trace', '✦ Rebuild as layers')}</div></div>` : ''}
     ${b.kind === 'image' ? genSection(f, b) : ''}
     ${b.kind === 'logo' ? logoSection(f, b) : ''}
@@ -1846,7 +1932,7 @@ const CanvasUI = (() => {
     ${b.kind === 'shape' ? `<div class="cv-section"><h3>Shape</h3>${selectF('shape', 'Shape', b.shape, [['circle', 'Circle'], ['ellipse', 'Ellipse'], ['pill', 'Pill'], ['quarter', 'Quarter circle']])}</div>` : ''}
     ${b.kind === 'box' ? autoSection(f, b) + slotSection(f, b) : ''}
     ${sizingSection(f, b)}
-    ${b.kind !== 'image' ? fillSection(b) : ''}
+    ${b.kind !== 'image' && b.kind !== 'video' ? fillSection(b) : ''}
     ${strokeSection(b)}
     ${effectsSection(b)}
     <div class="cv-section cv-adv"><h3>Code</h3><textarea class="cv-code" data-code="block" spellcheck="false">${esc(JSON.stringify(stripBlock(b), null, 1))}</textarea><div class="cv-row">${btn('apply-code', 'Apply JSON')}${btn('copy-code', 'Copy')}</div></div>`;
@@ -1910,6 +1996,7 @@ const CanvasUI = (() => {
     else if (k === 'absolute') { if (v) b.absolute = true; else delete b.absolute; delete b.rx; delete b.ry; delete b.lx; delete b.ly; }
     else if (k === 'minW' || k === 'maxW' || k === 'minH' || k === 'maxH') { if (v === '' || v == null) delete b[k]; else b[k] = Math.max(0, +v); }
     else if (k === 'clip') b.clip = !!v;
+    else if (k === 'loop' || k === 'muted') { if (v) delete b[k]; else b[k] = false; }
     else if (k === 'hasFill') { if (v) b.fill = '#FFFFFF'; else { b.fill = 'none'; delete b.gradient; delete b.fillToken; } }
     else b[k] = v;
   }
@@ -2023,6 +2110,7 @@ const CanvasUI = (() => {
     let liveField = null;
     el.addEventListener('change', e => {
       if (e.target.dataset.pal || e.target.dataset.gen) return;
+      if (e.target.dataset.adj || e.target.dataset.crop || e.target.dataset.vposter) { liveField = null; persist(); updateUndo(); renderProps(); return; }
       if (liveField === e.target) { liveField = null; apply(e, true); renderProps(); } else apply(e, false);
     });
     // Brand palette rows edit the kit itself; the generator, every swatch row and every bound color follow.
@@ -2034,8 +2122,16 @@ const CanvasUI = (() => {
       if (key === 'name' && oldName && c.name) renameToken(oldName, c.name);
       env.updateColors(colors); followTokens(); renderProps();
     });
+    let posterTimer = 0;
     el.addEventListener('input', e => {
-      const t = e.target;
+      const t = e.target; const f = selFrame(); const b = selBlocks()[0];
+      if ((t.dataset.adj || t.dataset.crop || t.dataset.vposter) && f && b) {
+        if (liveField !== t) { hist.push(doc); liveField = t; updateUndo(); }
+        const show = t.parentElement && t.parentElement.querySelector('b');
+        if (t.dataset.adj) { const k = t.dataset.adj; const v = +t.value; b.adjust = { ...Canvas.adjustOf(b), [k]: v }; if (!Canvas.adjustActive(b)) delete b.adjust; if (show) show.textContent = k === 'hue' ? Math.round(v) + '°' : k === 'blur' ? v + 'px' : Math.round(v * 100) + '%'; rerenderFrame(f); positionPlayer(); return; }
+        if (t.dataset.crop) { const a = imageAssetOf(b); if (!a) return; Canvas.setCropZoom(b, a, +t.value); if (cropping && !b.crop) b.crop = Canvas.cropFrom(Canvas.cropRect(b, a), a); if (show) show.textContent = (+t.value).toFixed(2) + '×'; rerenderFrame(f); drawOverlay(); return; }
+        if (t.dataset.vposter) { const a = videoAssetOf(b); if (!a || !env.setVideoPoster) return; const tm = +t.value; if (show) show.textContent = `${Math.floor(tm / 60)}:${String(Math.floor(tm % 60)).padStart(2, '0')}.${String(Math.floor((tm % 1) * 10))}`; clearTimeout(posterTimer); posterTimer = setTimeout(async () => { try { await env.setVideoPoster(a, tm); rerenderFrame(f); persist(); } catch (err) { env.toast(err.message); } }, 80); return; }
+      }
       if (t.dataset.gen) { const b = selBlocks()[0]; if (b) { b.genPrompt = t.value; persist(); } return; }
       if (t.dataset.pal || t.dataset.fr || t.dataset.var) return;
       if (t.type === 'color' || t.type === 'range' || (t.tagName === 'TEXTAREA' && t.dataset.p) || (t.type === 'text' && (t.dataset.p === 'text' || t.dataset.f === 'name' || t.dataset.p === 'label'))) {
@@ -2053,6 +2149,7 @@ const CanvasUI = (() => {
       const pa = e.target.closest('[data-act="pen-edit"], [data-act="pen-close"]');
       if (pa && f && bs.length === 1 && bs[0].pen) { if (pa.dataset.act === 'pen-close') { hist.push(doc); bs[0].pen.closed = true; Canvas.penFit(bs[0]); rerenderFrame(f); renderProps(); persist(); updateUndo(); } else if (penEdit && penEdit.b === bs[0]) { penEditEnd(); renderProps(); } else { penEditStart(f, bs[0]); renderProps(); } return; }
       const al = e.target.closest('[data-align]'); if (al && f) { hist.push(doc); Canvas.align(f, bs.length ? bs : [], al.dataset.align); rerenderFrame(f); drawOverlay(); liveProps(); persist(); updateUndo(); return; }
+      const pz = e.target.closest('[data-aipreset]'); if (pz && f && bs[0]) { const P = ImageGen.EDIT_PRESETS.find(x => x[0] === pz.dataset.aipreset); if (!P) return; if (P[0] === 'swap') { const ta = el.querySelector('[data-aiprompt]'); if (ta) { ta.value = P[2]; ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); } return; } await aiEdit(f, bs[0], '', P, pz); return; }
       const add = e.target.closest('[data-add]'); if (add && f) { hist.push(doc); const b = add.dataset.add === 'stack' ? { id: Canvas.uid(), kind: 'box', x: f.layout.grid.mx, y: f.layout.grid.my, w: 480, h: 240, fill: 'none', radius: 0, clip: false, decorative: true, hidden: false, locked: false, sizeW: 'fixed', sizeH: 'hug', auto: { v: 2, mode: 'vertical', wrap: false, gap: 16, gapAuto: false, counterGap: 16, counterGapAuto: false, pad: { t: 24, r: 24, b: 24, l: 24 }, main: 'start', cross: 'start' } } : Canvas.newBlock(add.dataset.add, f, env.getKit(), null); if (b) { f.layout.blocks.push(b); const sb = selBlocks(); const host = sb.length === 1 && sb[0].kind === 'box' ? sb[0] : null; if (host) { b.parent = host.id; if (Auto.on(Auto.settingsOf(f, host))) { Auto.moveInList(f, b, host.id, null); if ((b.kind === 'text' || b.kind === 'list') && Auto.settingsOf(f, host).mode === 'vertical') b.sizeW = 'fill'; } } else if (Auto.on(Auto.settingsOf(f, null))) Auto.moveInList(f, b, '', null); select(f.id, [b.id]); rerenderFrame(f); persist(); updateUndo(); if (b.kind === 'image') { const inp = $('cvProps').querySelector('[data-file="image"]'); if (inp) inp.click(); } } return; }
       const lv = e.target.closest('[data-logo-variant]'); if (lv && bs[0] && bs[0].kind === 'logo') { hist.push(doc); setLogoVariant(f, bs[0], lv.dataset.logoVariant); rerenderFrame(f); renderProps(); drawOverlay(); persist(); updateUndo(); return; }
       const dirB = e.target.closest('[data-al-dir]'); const cell = e.target.closest('[data-al-cell]');
@@ -2068,6 +2165,12 @@ const CanvasUI = (() => {
         if (!it) { env.toast('No component by that name in a library that is on'); return; }
         hist.push(doc); const list = bs[0].slot.accepts = bs[0].slot.accepts || []; if (!list.includes(it.id)) list.push(it.id); renderProps(); persist(); updateUndo(); return;
       }
+      if (a === 'crop-edit' && f && bs[0]) { if (cropping && cropping.blockId === bs[0].id) cropEnd(); else cropStart(f, bs[0]); return; }
+      if (a === 'crop-reset' && f && bs[0]) { hist.push(doc); delete bs[0].crop; if (cropping) { cropping = null; stage().style.cursor = 'default'; } rerenderFrame(f); drawOverlay(); renderProps(); persist(); updateUndo(); return; }
+      if (a === 'adj-reset' && f && bs[0]) { hist.push(doc); delete bs[0].adjust; rerenderFrame(f); positionPlayer(); renderProps(); persist(); updateUndo(); return; }
+      if (a === 'video-play' && f && bs[0]) { togglePlay(f, bs[0]); return; }
+      if (a === 'ai-settings') { if (env.openSettings) env.openSettings(); return; }
+      if (a === 'ai-edit' && f && bs[0]) { const ta = el.querySelector('[data-aiprompt]'); await aiEdit(f, bs[0], ta ? ta.value : '', null, act); return; }
       if (a.startsWith('inst-') && f && bs[0]) {
         const root = instanceOwner(f, bs[0]); if (!root) return;
         if (a === 'inst-select') select(f.id, [root.id]); else if (a === 'inst-reset') resetInstance(f, root); else if (a === 'inst-detach') detachInstance(f, root); else if (a === 'inst-show') Library.reveal(root.inst.of);
@@ -2127,11 +2230,25 @@ const CanvasUI = (() => {
       }
     });
     el.addEventListener('change', async e => {
+      const vin = e.target.closest('[data-file="video"]');
+      if (vin && vin.files[0]) { const f = selFrame(); const b = selBlocks()[0]; if (!f || !b || !env.addVideo) return; try { const asset = await env.addVideo(vin.files[0], vin.files[0].name); hist.push(doc); b.asset = asset.id; if (player && player.blockId === b.id) stopPlay(); rerenderFrame(f); renderProps(); persist(); updateUndo(); } catch (err) { env.toast('Could not load video: ' + err.message); } vin.value = ''; return; }
       const inp = e.target.closest('[data-file="image"]'); if (!inp || !inp.files[0]) return;
       const f = selFrame(); const b = selBlocks()[0]; if (!f || !b) return;
       try { const asset = await env.addImage(inp.files[0]); hist.push(doc); b.asset = asset.id; rerenderFrame(f); renderProps(); persist(); updateUndo(); } catch (err) { env.toast('Could not load image: ' + err.message); }
       inp.value = '';
     });
+  }
+  // An AI edit of the picture a block shows: the new picture becomes a new asset; undo returns the old one.
+  async function aiEdit(f, b, prompt, preset, button) {
+    const a = imageAssetOf(b); if (!a || !a.dataUrl) { env.toast('This picture has no pixels to edit here'); return; }
+    const text = preset ? preset[2] + (prompt ? ' ' + prompt : '') : String(prompt || '').trim(); if (!text) { env.toast('Say what should change, or pick a preset'); return; }
+    const was = button ? button.textContent : ''; if (button) { button.disabled = true; button.textContent = 'Editing…'; }
+    try {
+      const out = await ImageGen.edit({ dataUrl: a.dataUrl, prompt: text, transparent: !!(preset && preset[3]) });
+      const asset = await env.addImageData(out.dataUrl, `${a.name || 'image'} · edited`);
+      hist.push(doc); b.asset = asset.id; delete b.crop; b.editPrompt = text.slice(0, 500); b.genMeta = { provider: out.provider, model: out.model, ms: out.ms };
+      emit('action', 'image.edit', preset ? preset[0] : 'prompt'); rerenderFrame(f); renderProps(); persist(); updateUndo(); env.toast(`Edited with ${out.model} in ${(out.ms / 1000).toFixed(1)}s`);
+    } catch (err) { env.toast(err.message || String(err)); if (button) { button.disabled = false; button.textContent = was; } }
   }
   function renameToken(from, to) { const lo = String(from).toLowerCase(); for (const f of doc.frames) { if (String(f.layout.palette.bgToken || '').toLowerCase() === lo) f.layout.palette.bgToken = to; for (const b of f.layout.blocks) { if (String(b.fillToken || '').toLowerCase() === lo) b.fillToken = to; if (String(b.colorToken || '').toLowerCase() === lo) b.colorToken = to; } } }
   function followTokens() { const n = Canvas.applyTokens(doc, env.getKit()); if (n) { renderFrames(); persist(); env.toast(`${n} bound color${n > 1 ? 's' : ''} updated`); } }
@@ -2141,7 +2258,7 @@ const CanvasUI = (() => {
   return {
     init, open, close, addLayouts, count, fit, fitTo: ids => fitTo(ids.map(id => Canvas.frameById(doc, id)).filter(Boolean)),
     get doc() { return doc; }, get active() { return active; },
-    select, selectFrames, selection, setTool, createFrame, placeRow, placeFrames, insertBlocks, insertComponent, screenFromImage, mutate, remoteApplied, replaceDoc, renderAll, rerender: ids => ids.forEach(id => { const f = Canvas.frameById(doc, id); if (f) rerenderFrame(f); }),
+    select, selectFrames, selection, setTool, createFrame, placeRow, placeFrames, insertBlocks, insertComponent, screenFromImage, placeVideo, togglePlay, cropStart, mutate, remoteApplied, replaceDoc, renderAll, rerender: ids => ids.forEach(id => { const f = Canvas.frameById(doc, id); if (f) rerenderFrame(f); }),
     centerOn: (x, y) => { const r = stage().getBoundingClientRect(); doc.view.x = r.width / 2 - x * doc.view.zoom; doc.view.y = r.height / 2 - y * doc.view.zoom; applyView(); },
     regrid, exportAction, makeVariations, resizeScreens, copySelection, pasteClipboard, startEdit: (fid, bid) => { const f = Canvas.frameById(doc, fid); return startEdit(f, f && Canvas.blockById(f, bid)); },
     on: (k, fn) => { hooks[k].push(fn); return () => { hooks[k] = hooks[k].filter(x => x !== fn); }; },
