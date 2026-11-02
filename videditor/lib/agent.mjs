@@ -92,7 +92,11 @@ export function runClaude({ dir, prompt, system, sessionId, model, onEvent, idle
 /** Turn Claude Code's error strings into something a person can act on. */
 export function friendlyError(text) {
   const t = String(text);
-  if (/authenticat|oauth|logged? ?in|login|api key/i.test(t)) return `Claude Code is not logged in on this computer (${t.trim()}). In a terminal run: claude   then type /login and finish the sign-in in the browser. Then send your message again.`;
+  if (/authenticat|oauth|logged? ?in|login|api key/i.test(t)) {
+    const envTokens = ['CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN'].filter((k) => process.env[k]);
+    const hint = envTokens.length ? ` The server's environment sets ${envTokens.join(' and ')}, which Claude Code uses instead of your login; unset it (check ~/.zshrc), open a new terminal and start the server again.` : ' In a terminal run: claude   then type /login and finish the sign-in in the browser, then start the Videditor server again from a new terminal.';
+    return `Claude Code could not authenticate on this computer (${t.trim()}).${hint}`;
+  }
   if (/rate limit|usage limit|overloaded|529/i.test(t)) return `Claude is rate-limited right now (${t.trim()}). Wait a few minutes and send again.`;
   if (/credit|billing|out_of_credits/i.test(t)) return `Your Claude plan has no credit available (${t.trim()}). Check your plan, then try again.`;
   return t;
