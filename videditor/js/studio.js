@@ -4,6 +4,8 @@
 import { api } from './api.js';
 import { h, btn, svg, modal, toast, fmtTime, relTime, avatar, getAuthor, ensureAuthor, copyText, confirmDeleteProject } from './ui.js';
 import { Stage } from './stage.js';
+import { DrawLayer, COLORS } from './draw.js';
+import { VoiceRecorder, highlightPointing } from './voice.js';
 
 export async function renderStudio(root, { projectId, prompt, navigate, topbar }) {
   let project = await api.project(projectId);
@@ -17,11 +19,78 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
   const overlayMsg = h('div.overlay-msg', 'Loading composition…');
   stageWrap.append(overlayMsg);
   const stage = new Stage(stageWrap);
+  // Talk & draw on the preview: a drawing canvas sits exactly over the composition; a voice note records while you
+  // play, pause, scrub and draw; when you stop, the note (transcript, strokes, frames) goes straight to the agent.
+  const noteCanvas = h('canvas.overlay.stage-overlay'); stageWrap.append(noteCanvas);
+  const noteLayer = new DrawLayer(noteCanvas, () => stage.time);
+  stage.on('fit', (r) => { Object.assign(noteCanvas.style, { left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`, height: `${r.height}px` }); noteLayer.resize(); });
+  const liveTranscript = h('div.live-transcript.hidden');
+  stageWrap.append(liveTranscript);
+  const N = { recording: null, anchor: null, tool: null, autoSend: localStorage.getItem('videditor.autoSend') !== '0' };
+  const snapshotLive = async (strokes, opts = {}) => {
+    const img = new Image(); img.src = `/api/projects/${project.id}/frame?t=${stage.time}&_=${Date.now()}`;
+    await new Promise((r) => { img.onload = r; img.onerror = r; });
+    return DrawLayer.snapshot(img.naturalWidth ? img : { width: stage.info?.width || 1280, height: stage.info?.height || 720 }, strokes, opts);
+  };
   const src = () => `/project-files/${project.id}/index.html?runtime=1&_=${Date.now()}`;
   const timeEl = h('span.time');
   const playBtn = btn('', { icon: 'play', cls: 'icon', title: 'Play / pause (space)', onClick: () => stage.toggle() });
   const renderBtn = btn('Render', { icon: 'render', cls: 'primary', title: 'Render to MP4 and add it as a version for review', onClick: renderNow });
-  const transport = h('div.transport', playBtn, btn('', { icon: 'stepBack', cls: 'icon ghost', title: 'Back one frame (←)', onClick: () => step(-1) }), btn('', { icon: 'stepFwd', cls: 'icon ghost', title: 'Forward one frame (→)', onClick: () => step(1) }), timeEl, h('span.spacer'), h('span.hint', 'Click an element in the preview to select it · drag clips on the timeline'), btn('Reload', { cls: 'ghost sm', title: 'Reload the composition from disk', onClick: () => reloadComp() }), renderBtn);
+  const toolBtns = {};
+  const setNoteTool = (t) => { N.tool = t; noteLayer.tool = t || 'pen'; noteLayer.setEnabled(!!t); for (const [k, b] of Object.entries(toolBtns)) b.classList.toggle('active', k === t); };
+  const toolBtn = (name, ic, title) => (toolBtns[name] = btn('', { icon: ic, cls: 'icon sm', title, onClick: () => setNoteTool(N.tool === name ? null : name) }));
+  const colors = h('span.colors', COLORS.map((c) => h('span.swatch', { style: { background: c }, class: `swatch ${c === noteLayer.color ? 'active' : ''}`, on: { click: (e) => { noteLayer.color = c; colors.querySelectorAll('.swatch').forEach((x) => x.classList.toggle('active', x === e.currentTarget)); } } })));
+  const recBtn = btn('Talk', { icon: 'mic', cls: 'sm', title: 'Record a voice note on the preview (R). Pause, play, scrub and draw while you talk; when you stop it goes to the agent.', onClick: () => toggleNoteRecord() });
+  const sendNoteBtn = btn('Send drawing', { icon: 'spark', cls: 'sm hidden', title: 'Send the drawing (and selected element) to the agent', onClick: () => finishNote() });
+  const autoSend = h('label.autosend', { title: 'Send to the agent automatically when a voice note ends' }, h('input', { type: 'checkbox', checked: N.autoSend, on: { change: (e) => { N.autoSend = e.target.checked; localStorage.setItem('videditor.autoSend', N.autoSend ? '1' : '0'); } } }), 'auto-send');
+  const zoomOutBtn = btn('', { icon: 'minus', cls: 'icon ghost sm', title: 'Zoom timeline out (−)', onClick: () => setZoom(zoom / 1.5) });
+  const zoomInBtn = btn('', { icon: 'plus', cls: 'icon ghost sm', title: 'Zoom timeline in (+)', onClick: () => setZoom(zoom * 1.5) });
+  const zoomFitBtn = btn('Fit', { cls: 'ghost sm', title: 'Fit the whole video (0)', onClick: () => setZoom(1) });
+  const transport = h('div.transport', playBtn, btn('', { icon: 'stepBack', cls: 'icon ghost', title: 'Back one frame (←)', onClick: () => step(-1) }), btn('', { icon: 'stepFwd', cls: 'icon ghost', title: 'Forward one frame (→)', onClick: () => step(1) }), timeEl,
+    h('span.sep'), toolBtn('pen', 'pen', 'Draw on the preview (D)'), toolBtn('arrow', 'arrow', 'Arrow'), toolBtn('rect', 'rect', 'Box'), toolBtn('ellipse', 'ellipse', 'Circle'), colors, btn('', { icon: 'undo', cls: 'icon sm ghost', title: 'Undo stroke (Z)', onClick: () => noteLayer.undo() }), recBtn, sendNoteBtn, autoSend,
+    h('span.spacer'), zoomOutBtn, zoomFitBtn, zoomInBtn, btn('Reload', { cls: 'ghost sm', title: 'Reload the composition from disk', onClick: () => reloadComp() }), renderBtn);
+  noteLayer.onChange = (strokes) => { if (strokes.length && N.anchor === null) N.anchor = strokes[0].points[0][2]; sendNoteBtn.classList.toggle('hidden', !strokes.length || !!N.recording); };
+
+  let recorder = null;
+  async function toggleNoteRecord() {
+    if (N.recording) return finishNote();
+    if (!VoiceRecorder.supported()) return toast('This browser cannot record audio. Use Chrome.', 'err');
+    try {
+      recorder = new VoiceRecorder({ getTime: () => stage.time, snapshot: () => snapshotLive(noteLayer.strokes, { maxWidth: 960, quality: 0.8 }) });
+      await recorder.start((r) => { liveTranscript.classList.remove('hidden'); liveTranscript.innerHTML = (r.transcript ? highlightPointing(r.transcript.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]))) : '') + (r.interim ? ` <span class="muted">${r.interim.replace(/[&<>]/g, '')}</span>` : '') || '<span class="muted">Listening… talk, point with “this” / “here”, draw, play or scrub.</span>'; });
+      N.recording = recorder; if (N.anchor === null) N.anchor = stage.time;
+      recBtn.replaceChildren(svg('stop'), 'Stop'); recBtn.classList.add('danger'); stageWrap.classList.add('rec');
+      if (!N.tool) setNoteTool('pen');
+    } catch (e) { toast(`Microphone: ${e.message}`, 'err'); recorder = null; }
+  }
+  async function finishNote() {
+    let voice = null;
+    if (N.recording) { recBtn.disabled = true; voice = await N.recording.stop(); N.recording = null; recorder = null; recBtn.disabled = false; recBtn.replaceChildren(svg('mic'), 'Talk'); recBtn.classList.remove('danger'); stageWrap.classList.remove('rec'); }
+    const strokes = noteLayer.strokes.slice(); const t = N.anchor ?? stage.time;
+    if (!voice?.transcript && !voice?.audio && !strokes.length) { liveTranscript.classList.add('hidden'); return; }
+    liveTranscript.innerHTML = '<span class="muted">Saving note…</span>';
+    const frames = [];
+    if (Math.abs(stage.time - t) > 0.05) await stage.seek(t);
+    frames.push({ time: t, label: strokes.length ? 'annotated frame' : 'frame', dataUrl: await snapshotLive(strokes) });
+    if (voice) for (const f of voice.frames) if (f.label !== 'start of note') frames.push(f);
+    const author = await ensureAuthor();
+    const body = voice?.transcript || (strokes.length ? `Drawing on the frame${selected ? ` around #${selected}` : ''}` : '');
+    try {
+      const note = await api.postFeedback({ projectId: project.id, versionId: null, author, body, time: t, timeEnd: voice && voice.endTime > voice.startTime + 0.3 ? voice.endTime : null, kind: voice ? 'voice' : 'drawing', drawing: strokes.length ? { color: noteLayer.color, strokes } : null, frames, transcript: voice?.transcript || null, visualReferences: voice?.visualReferences || [], audio: voice?.audio || null, tags: ['studio'] });
+      noteLayer.clear(); N.anchor = null; setNoteTool(null); sendNoteBtn.classList.add('hidden'); liveTranscript.classList.add('hidden');
+      if (N.autoSend) { await sendNotesToAgent([note.id], body); } else { project.chat.push({ role: 'user', text: `[note saved] ${body}`, at: new Date().toISOString(), author }); renderChat(project.chat); toast('Note saved. Auto-send is off; send it from the chat.', 'ok'); }
+    } catch (e) { toast(e.message, 'err'); liveTranscript.classList.add('hidden'); }
+  }
+  async function sendNotesToAgent(ids, summary) {
+    if (agentJob) { toast('The agent is still busy. The note is saved; send it when it finishes.', 'err'); return; }
+    const live = { role: 'agent', text: '', tools: [], at: new Date().toISOString(), live: true, status: 'reading your note' };
+    project.chat.push({ role: 'user', text: `🎙 ${summary || 'Voice note'}`, at: new Date().toISOString(), author: getAuthor() });
+    renderChat([...project.chat, live]); setBusy(true);
+    try {
+      const { jobId } = await api.agent(project.id, '', { author: getAuthor(), fromNotes: ids, agent: project.agent || 'claude' });
+      followJob(jobId, live);
+    } catch (e) { setBusy(false); live.live = false; live.error = e.message; renderChat([...project.chat, live]); }
+  }
   const step = (n) => { stage.pause(); stage.seek(Math.max(0, Math.min(stage.duration, stage.time + n / stage.fps))); };
   function updateTime() { timeEl.innerHTML = `<b>${fmtTime(stage.time, { frames: true, fps: stage.fps })}</b> / ${fmtTime(stage.duration, { frames: true, fps: stage.fps })}`; playBtn.replaceChildren(svg(stage.playing ? 'pause' : 'play')); drawPlayhead(); for (const el of tracksEl.querySelectorAll('.tclip')) el.classList.toggle('on', stage.time >= Number(el.dataset.start) && stage.time < Number(el.dataset.end)); if (sideTab === 'layers') renderLayers(false); }
   stage.on('time', updateTime); stage.on('play', updateTime); stage.on('pause', updateTime);
@@ -31,29 +100,51 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
 
   // ---------- timeline
   const ruler = h('div.ruler'); const tracksEl = h('div.tracks'); const phead = h('div.phead');
-  const tl = h('div.tl', ruler, tracksEl, phead, h('span.hint-tl', 'drag = move · drag edge = trim'));
+  const tlInner = h('div.tlinner', ruler, tracksEl, phead);
+  const tlScroll = h('div.tlscroll', tlInner);
+  const tl = h('div.tl', tlScroll, h('span.hint-tl', 'drag = move · drag edge = trim · ⌘/Ctrl + wheel = zoom'));
   const PAD = 70;
-  const pxPerSec = () => (tracksEl.clientWidth - PAD - 16) / Math.max(0.5, stage.duration || composition?.duration || 5);
-  function drawPlayhead() { if (!stage.duration) return; phead.style.left = `${PAD + stage.time * pxPerSec()}px`; }
+  let zoom = 1;
+  const pxPerSec = () => ((tlScroll.clientWidth - PAD - 16) / Math.max(0.5, stage.duration || composition?.duration || 5)) * zoom;
+  function setZoom(z, anchorX) {
+    const old = pxPerSec(); zoom = Math.max(1, Math.min(60, z));
+    renderTimeline();
+    // keep the time under the cursor (or the playhead) where it was
+    const now = pxPerSec(); const ax = anchorX ?? (PAD + stage.time * old - tlScroll.scrollLeft);
+    const tAt = (ax + tlScroll.scrollLeft - PAD) / old; tlScroll.scrollLeft = Math.max(0, PAD + tAt * now - ax);
+    zoomFitBtn.textContent = zoom === 1 ? 'Fit' : `${zoom.toFixed(1)}×`;
+  }
+  tlScroll.addEventListener('wheel', (e) => { if (e.ctrlKey || e.metaKey) { e.preventDefault(); const r = tlScroll.getBoundingClientRect(); setZoom(zoom * (e.deltaY < 0 ? 1.15 : 1 / 1.15), e.clientX - r.left); } else if (Math.abs(e.deltaX) < Math.abs(e.deltaY) && zoom > 1 && e.shiftKey) { e.preventDefault(); tlScroll.scrollLeft += e.deltaY; } }, { passive: false });
+  function drawPlayhead() {
+    if (!stage.duration) return; const x = PAD + stage.time * pxPerSec(); phead.style.left = `${x}px`;
+    if (stage.playing && zoom > 1) { const vis = x - tlScroll.scrollLeft; if (vis > tlScroll.clientWidth - 40 || vis < PAD) tlScroll.scrollLeft = Math.max(0, x - PAD - 20); }
+  }
   ruler.addEventListener('pointerdown', (e) => { const seekAt = (ev) => { const r = ruler.getBoundingClientRect(); stage.pause(); stage.seek(Math.max(0, Math.min(stage.duration, (ev.clientX - r.left) / pxPerSec()))); }; seekAt(e); const mv = (ev) => seekAt(ev); const up = () => { window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up); }; window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up); });
   function renderTimeline() {
     if (dragState) return;
     const dur = stage.duration || composition?.duration || 5; const pps = pxPerSec();
-    ruler.replaceChildren(); const stepS = dur > 30 ? 5 : dur > 12 ? 2 : dur > 6 ? 1 : 0.5;
-    for (let t = 0; t <= dur + 1e-6; t += stepS) ruler.append(h('div.tick', { style: { left: `${t * pps}px` } }, t % 1 === 0 ? `${t}s` : ''));
+    tlInner.style.width = `${PAD + dur * pps + 16}px`;
+    ruler.replaceChildren(); const secPx = pps; const stepS = secPx > 400 ? 0.1 : secPx > 160 ? 0.25 : secPx > 70 ? 0.5 : secPx > 30 ? 1 : secPx > 12 ? 2 : secPx > 6 ? 5 : 10;
+    for (let i = 0, t = 0; t <= dur + 1e-6; i++, t = Math.round(i * stepS * 1000) / 1000) ruler.append(h('div.tick', { style: { left: `${t * pps}px` } }, Math.abs(t - Math.round(t)) < 1e-6 ? `${Math.round(t)}s` : (stepS < 1 && secPx > 160 ? `${t.toFixed(stepS < 0.25 ? 1 : 2).replace(/0+$/, '').replace(/\.$/, '')}` : '')));
     if (beatGrid) for (const bt of beatGrid.beats) { if (bt > dur) break; ruler.append(h('div.beat', { style: { left: `${bt * pps}px` }, title: `beat ${fmtTime(bt)} · ${beatGrid.bpm} BPM` })); }
     const clips = (composition?.clips || []).filter((c) => c.start !== null && c.depth === 0);
     const tracks = new Map(); for (const c of clips) { const k = c.track ?? 0; if (!tracks.has(k)) tracks.set(k, []); tracks.get(k).push(c); }
     const keys = [...tracks.keys()].sort((a, b) => b - a); if (!keys.length) keys.push(0);
-    tracksEl.replaceChildren(...keys.map((k) => {
-      const area = h('div.tarea');
-      for (const c of tracks.get(k) || []) {
-        const d = c.duration ?? (dur - c.start);
-        const el = h('div.tclip', { class: `tclip ${c.tag === 'video' || c.tag === 'img' ? 'media' : c.tag === 'audio' ? 'audio' : ''} ${c.id && c.id === selected ? 'sel' : ''}`, 'data-id': c.id || '', 'data-start': c.start, 'data-end': c.start + d, style: { left: `${c.start * pps}px`, width: `${Math.max(14, d * pps)}px` }, title: `${c.id ? '#' + c.id : c.tag} ${fmtTime(c.start)}–${fmtTime(c.start + d)}${c.text ? ` “${c.text}”` : ''}` }, h('span.lh'), c.id ? `#${c.id}` : c.tag, c.text ? ` “${c.text}”` : '', h('span.rh'));
-        attachDrag(el, c, d);
-        area.append(el);
-      }
-      return h('div.trow', h('div.tname', `T${k}`), area);
+    // Clips on one track that overlap in time get their own sub-row so none is hidden behind another.
+    tracksEl.replaceChildren(...keys.flatMap((k) => {
+      const rows = [];
+      for (const c of [...(tracks.get(k) || [])].sort((a, b) => a.start - b.start)) { const end = c.start + (c.duration ?? (dur - c.start)); let row = rows.find((r) => r.end <= c.start + 1e-6); if (!row) { row = { end: 0, clips: [] }; rows.push(row); } row.end = end; row.clips.push(c); }
+      if (!rows.length) rows.push({ end: 0, clips: [] });
+      return rows.map((row, ri) => {
+        const area = h('div.tarea');
+        for (const c of row.clips) {
+          const d = c.duration ?? (dur - c.start);
+          const el = h('div.tclip', { class: `tclip ${c.tag === 'video' || c.tag === 'img' ? 'media' : c.tag === 'audio' ? 'audio' : ''} ${c.id && c.id === selected ? 'sel' : ''}`, 'data-id': c.id || '', 'data-start': c.start, 'data-end': c.start + d, style: { left: `${c.start * pps}px`, width: `${Math.max(14, d * pps)}px` }, title: `${c.id ? '#' + c.id : c.tag} ${fmtTime(c.start)}–${fmtTime(c.start + d)}${c.text ? ` “${c.text}”` : ''}` }, h('span.lh'), c.id ? `#${c.id}` : c.tag, c.text ? ` “${c.text}”` : '', h('span.rh'));
+          attachDrag(el, c, d);
+          area.append(el);
+        }
+        return h('div.trow', { class: `trow ${ri ? 'sub' : ''}` }, h('div.tname', ri ? '' : `T${k}`), area);
+      });
     }));
     drawPlayhead();
   }
@@ -244,6 +335,10 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
     setBusy(true);
     try {
       const { jobId } = await api.agent(project.id, message, { author, agent: kind });
+      followJob(jobId, live);
+    } catch (e) { agentJob = null; setBusy(false); live.live = false; live.error = e.message; renderChat([...project.chat, live]); }
+  }
+  function followJob(jobId, live) {
       agentJob = jobId;
       const es = new EventSource(`/api/jobs/${jobId}/events`);
       const redraw = () => { renderChat([...project.chat, live]); };
@@ -262,7 +357,6 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
         await reloadComp(); toast(d.ok ? 'Agent finished' : 'Agent stopped with an error', d.ok ? 'ok' : 'err');
       });
       es.onerror = () => { es.close(); agentJob = null; setBusy(false); live.live = false; redraw(); };
-    } catch (e) { agentJob = null; setBusy(false); live.live = false; live.error = e.message; renderChat([...project.chat, live]); }
   }
 
   // ---------- render
@@ -308,9 +402,9 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
   root.replaceChildren(h('div.studio', chat, h('div.center', stageWrap, transport, tl), side));
   if (!Array.isArray(project.chat)) project.chat = [];
   renderChat(project.chat);
-  const key = (e) => { if (e.target.matches('input, textarea, select') || e.metaKey || e.ctrlKey) return; if (e.code === 'Space') { e.preventDefault(); stage.toggle(); } else if (e.key === 'ArrowLeft') { e.preventDefault(); e.shiftKey ? stage.seek(Math.max(0, stage.time - 1)) : step(-1); } else if (e.key === 'ArrowRight') { e.preventDefault(); e.shiftKey ? stage.seek(Math.min(stage.duration, stage.time + 1)) : step(1); } else if (e.key === 'Home') stage.seek(0); else if (e.key === 'Escape') selectClip(null); };
+  const key = (e) => { if (e.target.matches('input, textarea, select') || e.metaKey || e.ctrlKey) return; const k = e.key.toLowerCase(); if (k === 'd') return setNoteTool(N.tool === 'pen' ? null : 'pen'); if (k === 'r') return toggleNoteRecord(); if (k === 'z') return noteLayer.undo(); if (k === '+' || k === '=') return setZoom(zoom * 1.5); if (k === '-') return setZoom(zoom / 1.5); if (k === '0') return setZoom(1); if (e.code === 'Space') { e.preventDefault(); stage.toggle(); } else if (e.key === 'ArrowLeft') { e.preventDefault(); e.shiftKey ? stage.seek(Math.max(0, stage.time - 1)) : step(-1); } else if (e.key === 'ArrowRight') { e.preventDefault(); e.shiftKey ? stage.seek(Math.min(stage.duration, stage.time + 1)) : step(1); } else if (e.key === 'Home') stage.seek(0); else if (e.key === 'Escape') selectClip(null); };
   document.addEventListener('keydown', key);
-  new ResizeObserver(() => { renderTimeline(); }).observe(tracksEl);
+  new ResizeObserver(() => { renderTimeline(); }).observe(tlScroll);
   await stage.load(src());
   if (!stage.info) overlayMsg.textContent = 'The composition did not load. Check index.html in Files.';
   // Resume a running agent job (page reload mid-run) or start with a prompt from the URL.

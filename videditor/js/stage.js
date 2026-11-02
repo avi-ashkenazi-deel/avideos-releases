@@ -45,8 +45,10 @@ export class Stage {
     const r = this.container.getBoundingClientRect();
     const { width, height } = this.info;
     const scale = Math.min((r.width - 24) / width, (r.height - 24) / height, 1.5);
-    Object.assign(this.iframe.style, { width: `${width}px`, height: `${height}px`, transform: `scale(${scale})`, left: `${(r.width - width * scale) / 2}px`, top: `${(r.height - height * scale) / 2}px` });
-    this.scale = scale;
+    const left = (r.width - width * scale) / 2, top = (r.height - height * scale) / 2;
+    Object.assign(this.iframe.style, { width: `${width}px`, height: `${height}px`, transform: `scale(${scale})`, left: `${left}px`, top: `${top}px` });
+    this.scale = scale; this.rect = { left, top, width: width * scale, height: height * scale };
+    this.emit('fit', this.rect);
   }
   destroy() { window.removeEventListener('message', this._onMsg); this.ro.disconnect(); this.iframe.remove(); }
 }

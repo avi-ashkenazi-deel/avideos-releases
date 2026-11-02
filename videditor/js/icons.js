@@ -25,6 +25,7 @@ export const icons = {
   folder: w('<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>'),
   film: w('<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 4v16M17 4v16M3 9h4M3 15h4M17 9h4M17 15h4"/>'),
   plus: w('<path d="M12 5v14M5 12h14"/>'),
+  minus: w('<path d="M5 12h14"/>'),
   close: w('<path d="M6 6l12 12M18 6L6 18"/>'),
   back: w('<path d="M15 5l-7 7 7 7"/>'),
   render: w('<path d="M5 3l14 9-14 9z"/>'),

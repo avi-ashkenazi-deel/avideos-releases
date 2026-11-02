@@ -5,14 +5,15 @@ export function buildPrompt({ project, version, feedback, composition, baseUrl, 
   const open = feedback.filter((f) => !f.replyTo && f.status !== 'done');
   const replies = (id) => feedback.filter((f) => f.replyTo === id);
   const lines = [];
-  lines.push(`# Video review brief: ${project.name} ${version.label}`);
+  const live = !version;
+  lines.push(`# Video review brief: ${project.name} ${live ? '(live composition)' : version.label}`);
   lines.push('');
-  lines.push(`You are revising a video. A reviewer left timestamped feedback on the current render in Videditor. Apply the feedback, render a new version, register it, then reply on each item and mark it done.`);
+  lines.push(live ? `You are revising a video. The reviewer paused the live composition in Videditor Studio, talked and drew on the frame. Apply the feedback to the composition; the person renders.` : `You are revising a video. A reviewer left timestamped feedback on the current render in Videditor. Apply the feedback, render a new version, register it, then reply on each item and mark it done.`);
   lines.push('');
-  lines.push(`- Videditor: ${baseUrl}/#/p/${project.id}?v=${version.id}`);
+  lines.push(live ? `- Videditor Studio: ${baseUrl}/#/studio/${project.id}` : `- Videditor: ${baseUrl}/#/p/${project.id}?v=${version.id}`);
   if (project.dir) lines.push(`- Composition folder: ${project.dir}`);
-  lines.push(`- Reviewed render: ${version.filePath || version.mediaUrl}${version.duration ? ` (${fmt(version.duration)}, ${version.width}×${version.height})` : ''}`);
-  if (version.notes) lines.push(`- Notes on this version: ${version.notes.split('\n')[0]}`);
+  if (!live) lines.push(`- Reviewed render: ${version.filePath || version.mediaUrl}${version.duration ? ` (${fmt(version.duration)}, ${version.width}×${version.height})` : ''}`);
+  if (!live && version.notes) lines.push(`- Notes on this version: ${version.notes.split('\n')[0]}`);
   lines.push('');
   lines.push(`## Open feedback (${open.length})`);
   if (!open.length) lines.push('_Nothing open. All feedback on this version is done._');
@@ -37,6 +38,7 @@ export function buildPrompt({ project, version, feedback, composition, baseUrl, 
   });
   lines.push('');
   lines.push('## How to respond');
+  if (live) { lines.push(`1. Edit \`${project.dir}/index.html\` (timing in \`data-start\` / \`data-duration\`; effects in \`dugma-motion.css\`; rules in \`MOTION.md\`). Change only what the notes ask.`); lines.push('2. Do not render. Reply with what changed per note (clip id, attribute, from → to).'); return lines.join('\n'); }
   const n = version.number + 1;
   if (project.dir) {
     lines.push(`1. Edit the composition in \`${project.dir}/index.html\` (the video is HTML; timing lives in \`data-start\` / \`data-duration\` attributes; the format is documented in \`videditor/skills/videditor/SKILL.md\`).`);

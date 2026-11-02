@@ -348,16 +348,22 @@ async function api(req, res, url) {
     const kind = AGENTS[prj.agent] ? prj.agent : 'claude';
     if (!findBin(AGENTS[kind].bin())) return err(res, 501, `${AGENTS[kind].label} was not found on PATH (looked for "${AGENTS[kind].bin()}"). Install it with: ${AGENTS[kind].install}`);
     let message = String(b.message || '').trim().slice(0, 20000);
-    if (b.fromFeedback) {
-      // Review → Studio: the open notes on a version become the agent's instruction, with annotated frames as local files it can open.
-      const version = store.version(b.fromFeedback) || store.latestVersion(prj.id); if (!version) return err(res, 400, 'No version to take feedback from');
-      const open = store.feedback({ versionId: version.id }).filter((f) => !f.replyTo && f.status !== 'done'); if (!open.length) return err(res, 400, 'No open notes on this version');
-      const brief = buildPrompt({ project: prj, version, feedback: store.feedback({ versionId: version.id }), composition: parseProject(prj.dir), baseUrl: baseUrl(req), dataDir: DATA });
+    if (b.fromFeedback || b.fromNotes) {
+      // Review → Studio: the open notes on a version (or specific live notes from the Studio stage) become the agent's
+      // instruction, with annotated frames as local files it can open.
+      let version = null, notes = [];
+      if (b.fromNotes) { notes = (Array.isArray(b.fromNotes) ? b.fromNotes : [b.fromNotes]).map((id) => store.feedbackItem(id)).filter(Boolean); if (!notes.length) return err(res, 400, 'Notes not found'); }
+      else { version = store.version(b.fromFeedback) || store.latestVersion(prj.id); if (!version) return err(res, 400, 'No version to take feedback from'); notes = store.feedback({ versionId: version.id }); if (!notes.some((f) => !f.replyTo && f.status !== 'done')) return err(res, 400, 'No open notes on this version'); }
+      const brief = buildPrompt({ project: prj, version, feedback: notes, composition: parseProject(prj.dir), baseUrl: baseUrl(req), dataDir: DATA });
       message = `Apply the review feedback below to the composition in this folder. Open the annotated frames (Read the image files) to see what each note points at. Change only what the notes ask for, keep everything else as it is, and follow MOTION.md. Do not render. When done, list what you changed per note (clip id, attribute, from → to).${b.message ? `\n\nExtra instruction from the reviewer: ${String(b.message).trim()}` : ''}\n\n${brief}`.slice(0, 60000);
     }
     if (!message) return err(res, 400, 'message is required');
     const job = newJob('agent');
-    prj.chat = prj.chat || []; prj.chat.push({ role: 'user', text: message, at: new Date().toISOString(), author: b.author || null }); store.save();
+    // The chat shows a short line for note handoffs; the full brief goes only to the agent.
+    let shown = message;
+    if (b.fromNotes) { const ns = (Array.isArray(b.fromNotes) ? b.fromNotes : [b.fromNotes]).map((id) => store.feedbackItem(id)).filter(Boolean); shown = `🎙 ${ns.map((n) => n.body || n.transcript || 'drawing').join(' · ').slice(0, 400)}${b.message ? ` — ${String(b.message).trim()}` : ''}`; }
+    else if (b.fromFeedback) { const v = store.version(b.fromFeedback); const k = store.feedback({ versionId: v?.id }).filter((f) => !f.replyTo && f.status !== 'done').length; shown = `📝 Review notes on ${v?.label || 'the latest version'} (${k} open)${b.message ? ` — ${String(b.message).trim()}` : ''}`; }
+    prj.chat = prj.chat || []; prj.chat.push({ role: 'user', text: shown, at: new Date().toISOString(), author: b.author || null }); store.save();
     const entry = { role: 'agent', text: '', tools: [], at: new Date().toISOString() };
     const system = systemPrompt({ dir: prj.dir, composition: parseProject(prj.dir), files: listFiles(prj.dir), assetsDir: prj.assetsDir || null });
     const handle = { jobId: job.id, kill: null };
@@ -477,8 +483,10 @@ async function api(req, res, url) {
   }
   if (p === '/api/feedback' && req.method === 'POST') {
     const b = await readJson(req);
-    const version = store.version(b.versionId); if (!version) return err(res, 400, 'versionId is required');
-    const prj = store.project(version.projectId);
+    // A note belongs to a rendered version, or (from Studio) to the live composition of a project.
+    const version = b.versionId ? store.version(b.versionId) : null;
+    const prj = version ? store.project(version.projectId) : store.project(b.projectId);
+    if (!prj) return err(res, 400, 'versionId or projectId is required');
     const id = store.id('fb');
     const frames = [];
     for (const [i, fr] of (b.frames || []).entries()) {
@@ -491,7 +499,7 @@ async function api(req, res, url) {
     for (const [i, r] of (b.refs || []).entries()) { const file = path.join(DATA, 'refs', `${id}-${i}`); const mime = dataUrlToFile(r, file); if (!mime) continue; const ext = extFor(mime) || '.png'; fs.renameSync(file, file + ext); refs.push(`/media/refs/${id}-${i}${ext}`); }
     let clipContext = [];
     if (prj?.dir && typeof b.time === 'number') { const comp = parseProject(prj.dir); clipContext = clipsAt(comp, b.time).map((c) => ({ id: c.id, tag: c.tag, start: c.start, duration: c.duration, track: c.track, label: describeClip(c) })); }
-    const f = store.addFeedback({ id, projectId: version.projectId, versionId: version.id, author: String(b.author || 'Anonymous').slice(0, 60), body: String(b.body || '').slice(0, 20000), time: typeof b.time === 'number' ? b.time : null, timeEnd: typeof b.timeEnd === 'number' ? b.timeEnd : null, kind: ['text', 'voice', 'drawing'].includes(b.kind) ? b.kind : 'text', tags: Array.isArray(b.tags) ? b.tags.slice(0, 10) : [], replyTo: typeof b.replyTo === 'string' && store.feedbackItem(b.replyTo) ? b.replyTo : null, postedByAgent: !!b.postedByAgent, transcript: b.transcript || null, visualReferences: Array.isArray(b.visualReferences) ? b.visualReferences : [], drawing: b.drawing || null, frames, audioUrl, refs, clipContext });
+    const f = store.addFeedback({ id, projectId: prj.id, versionId: version ? version.id : null, live: !version, author: String(b.author || 'Anonymous').slice(0, 60), body: String(b.body || '').slice(0, 20000), time: typeof b.time === 'number' ? b.time : null, timeEnd: typeof b.timeEnd === 'number' ? b.timeEnd : null, kind: ['text', 'voice', 'drawing'].includes(b.kind) ? b.kind : 'text', tags: Array.isArray(b.tags) ? b.tags.slice(0, 10) : [], replyTo: typeof b.replyTo === 'string' && store.feedbackItem(b.replyTo) ? b.replyTo : null, postedByAgent: !!b.postedByAgent, transcript: b.transcript || null, visualReferences: Array.isArray(b.visualReferences) ? b.visualReferences : [], drawing: b.drawing || null, frames, audioUrl, refs, clipContext });
     notifyWaiters();
     return send(res, 201, f);
   }
