@@ -12,7 +12,7 @@ import { scanMedia, analyzeFile, writeManifest, loadManifest, analysisDirFor, ki
 import { hasFfmpeg, probe, poster, frameAt } from './lib/media.mjs';
 import { buildPrompt } from './lib/prompt.mjs';
 import { renderProject, loadPlaywright, captureFrame } from './lib/render.mjs';
-import { runClaude, systemPrompt } from './lib/agent.mjs';
+import { runClaude, systemPrompt, diagnoseClaude } from './lib/agent.mjs';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.VIDEDITOR_PORT || process.env.PORT || 8787);
@@ -334,18 +334,35 @@ async function api(req, res, url) {
     const system = systemPrompt({ dir: prj.dir, composition: parseProject(prj.dir), files: listFiles(prj.dir), assetsDir: prj.assetsDir || null });
     const handle = { jobId: job.id, kill: null };
     agents.set(prj.id, handle);
-    const run = runClaude({ dir: prj.dir, prompt: message, system, sessionId: b.fresh ? null : prj.agentSessionId, onEvent: (ev) => {
+    const onEvent = (ev) => {
       if (ev.type === 'text') entry.text += (entry.text ? '\n\n' : '') + ev.text;
       if (ev.type === 'tool') entry.tools.push({ name: ev.name, detail: ev.detail });
-      if (ev.type === 'status' && ev.sessionId) { const p = store.project(prj.id); if (p) { p.agentSessionId = ev.sessionId; store.save(); } }
+      if (ev.type === 'done') return; // emitted below, once
       job.push(ev);
-    } });
-    run.then((out) => {
+    };
+    (async () => {
+      const resumeId = b.fresh ? null : prj.agentSessionId || null;
+      let out = await runClaude({ dir: prj.dir, prompt: message, system, sessionId: resumeId, onEvent });
+      if (out.error && resumeId) {
+        // The stored conversation could not be resumed (or died): start a fresh one instead of failing forever.
+        job.push({ type: 'status', message: 'Previous conversation could not be resumed; starting a fresh one' });
+        entry.text = ''; entry.tools = [];
+        out = await runClaude({ dir: prj.dir, prompt: message, system, sessionId: null, onEvent });
+      }
       const p = store.project(prj.id);
-      if (p) { if (!entry.text && out.result) entry.text = out.result; if (out.error) entry.error = out.error; p.chat.push(entry); if (out.sessionId) p.agentSessionId = out.sessionId; store.save(); }
+      if (p) {
+        if (!entry.text && out.result) entry.text = out.result;
+        if (out.error) entry.error = out.error;
+        p.chat.push(entry);
+        // Keep the session only when the run succeeded, so a broken session never blocks the chat.
+        p.agentSessionId = out.error ? null : (out.sessionId || p.agentSessionId || null);
+        store.save();
+      }
       if (out.error) console.error(`[agent] ${prj.name}: ${out.error}`);
-      agents.delete(prj.id); job.finish(!out.error, { result: out.result, cost: out.cost });
-    });
+      agents.delete(prj.id);
+      job.push({ type: 'done', result: out.result, cost: out.cost, sessionId: out.sessionId });
+      job.finish(!out.error, { result: out.result, cost: out.cost });
+    })().catch((e) => { agents.delete(prj.id); job.push({ type: 'error', message: e.message }); job.finish(false); });
     return send(res, 202, { jobId: job.id });
   }
   if ((x = m(/^\/api\/projects\/([^/]+)\/agent\/reset$/)) && req.method === 'POST') { const prj = store.project(x[1]); if (!prj) return err(res, 404, 'Project not found'); store.updateProject(prj.id, { agentSessionId: null, chat: [] }); return send(res, 200, { ok: true }); }
@@ -450,6 +467,7 @@ async function api(req, res, url) {
     if (req.method === 'DELETE') { store.removeFeedback(f.id); return send(res, 200, { ok: true }); }
   }
   if (p === '/api/projects/detect' || p === '/api/hyperframes/detect') return send(res, 200, detectProject(q.path));
+  if (p === '/api/agent/diagnose') { const prj = q.projectId ? store.project(q.projectId) : null; return send(res, 200, diagnoseClaude(prj?.dir || ROOT)); }
   if (p === '/api/capabilities') return send(res, 200, { ffmpeg: FFMPEG, playwright: !!loadPlaywright(), claude: findBin(CLAUDE_BIN) });
   if (p === '/api/guide') return send(res, 200, GUIDE, { 'Content-Type': 'text/markdown; charset=utf-8' });
   return err(res, 404, `No route ${req.method} ${p}`);

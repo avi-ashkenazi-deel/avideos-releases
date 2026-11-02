@@ -3,7 +3,7 @@
 // key: it runs on the user's own Claude Code install and subscription.
 import fs from 'node:fs';
 import path from 'node:path';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
@@ -91,4 +91,15 @@ function describeTool(b, dir) {
     case 'WebFetch': return i.url || '';
     default: return '';
   }
+}
+
+/** Run a tiny smoke test of the local Claude Code install and return what it printed. */
+export function diagnoseClaude(dir) {
+  const bin = process.env.VIDEDITOR_CLAUDE_BIN || 'claude';
+  const env = { ...process.env }; delete env.CLAUDECODE; delete env.CLAUDE_CODE_ENTRYPOINT;
+  const run = (args, timeout) => { const r = spawnSync(bin, args, { cwd: dir, env, encoding: 'utf8', timeout, maxBuffer: 4 * 1024 * 1024 }); return { code: r.status, signal: r.signal, error: r.error?.message || null, stdout: (r.stdout || '').trim().slice(-2000), stderr: (r.stderr || '').trim().slice(-2000) }; };
+  const version = run(['--version'], 20000);
+  const test = run(['-p', 'Reply with the single word ok.', '--output-format', 'json', '--permission-mode', 'acceptEdits'], 90000);
+  let parsed = null; try { parsed = JSON.parse(test.stdout); } catch {}
+  return { bin, cwd: dir, version, test: { ...test, result: parsed ? { is_error: parsed.is_error, subtype: parsed.subtype, result: String(parsed.result || '').slice(0, 300) } : null }, path: process.env.PATH };
 }

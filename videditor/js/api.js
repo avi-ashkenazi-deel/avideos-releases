@@ -23,6 +23,7 @@ export const api = {
   analyze: (id, force) => req('POST', `/api/projects/${id}/assets/analyze`, { force: !!force }),
   insertClip: (id, b) => req('POST', `/api/projects/${id}/clips`, b),
   brand: (id) => req('GET', `/api/projects/${id}/brand`),
+  diagnose: (projectId) => req('GET', `/api/agent/diagnose${projectId ? `?projectId=${projectId}` : ''}`),
   saveBrand: (id, b) => req('PUT', `/api/projects/${id}/brand`, b),
   composition: (id, t) => req('GET', `/api/projects/${id}/composition${t !== undefined ? `?t=${t}` : ''}`),
   files: (id) => req('GET', `/api/projects/${id}/files`),

@@ -188,13 +188,19 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
     const el = h('div.msg', { class: `msg ${m.role}` }, h('div.who', avatar(m.role === 'agent' ? 'Agent' : (m.author || getAuthor() || 'You'), m.role === 'agent'), m.role === 'agent' ? 'Agent' : (m.author || getAuthor() || 'You'), h('span.muted', relTime(m.at))));
     if (m.tools?.length) el.append(h('div.tools', m.tools.map((t) => h('span.t', { title: `${t.name} ${t.detail || ''}` }, h('b', t.name), t.detail ? ` ${t.detail}` : ''))));
     if (m.text) el.append(h('div.bubble', m.text));
-    if (m.error) el.append(h('div.bubble.err', { style: { fontFamily: 'var(--mono)', fontSize: '12px' } }, m.error, h('div', { style: { marginTop: '6px' } }, btn('Copy error', { cls: 'sm ghost', icon: 'copy', onClick: async () => { await copyText(m.error); toast('Copied', 'ok'); } }))));
+    if (m.error) el.append(h('div.bubble.err', { style: { fontFamily: 'var(--mono)', fontSize: '12px' } }, m.error, h('div', { style: { marginTop: '6px', display: 'flex', gap: '4px', flexWrap: 'wrap' } }, btn('Copy error', { cls: 'sm ghost', icon: 'copy', onClick: async () => { await copyText(m.error); toast('Copied', 'ok'); } }), btn('Run diagnostics', { cls: 'sm ghost', onClick: runDiagnostics }))));
     if (m.live) el.append(h('div.thinking', h('i'), h('i'), h('i'), ' ', m.status || 'thinking'));
     return el;
   }
   function renderChat(list) {
     msgs.replaceChildren(...(list.length ? list.map(msgEl) : [h('div.empty-chat', h('p', 'Describe the video you want. The agent (Claude Code, running on this computer) writes the composition, you watch it in the preview and adjust on the timeline.'), ['Make a 10-second product teaser: dark background, bold title, three feature lines, call to action at the end.', 'Change the title to "Hello world" and make it enter at 1s.', 'Add a warm gradient background and a logo sting at the start.'].map((s) => h('button.btn.ghost.sm.sug', { on: { click: () => { ta.value = s; ta.focus(); } } }, s)))]));
     msgs.scrollTop = msgs.scrollHeight;
+  }
+  async function runDiagnostics() {
+    const pre = h('pre', 'Running claude --version and a one-line prompt in the project folder… (up to 90s)');
+    const close = modal('Claude Code diagnostics', h('div', h('p.small.muted', 'This is what the Videditor server sees when it runs Claude Code on this computer. Paste it to whoever is helping you.'), pre), { wide: true, actions: [{ label: 'Copy', icon: 'copy', onClick: async () => { await copyText(pre.textContent); toast('Copied', 'ok'); return false; } }] });
+    try { const d = await api.diagnose(project.id); pre.textContent = JSON.stringify(d, null, 2); } catch (e) { pre.textContent = e.message; }
+    return close;
   }
   async function send() {
     const text = ta.value.trim(); if (!text || agentJob) return;
