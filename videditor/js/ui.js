@@ -53,7 +53,17 @@ export function toast(msg, kind = '') {
 export function modal(title, body, { actions = [], wide = false } = {}) {
   return new Promise((resolve) => {
     const close = (v) => { bg.remove(); document.removeEventListener('keydown', esc); resolve(v); };
-    const esc = (e) => { if (e.key === 'Escape') close(null); };
+    // Esc closes. Enter in a text field (or ⌘/Ctrl+Enter in a textarea) runs the primary action, else the last one.
+    const esc = (e) => {
+      if (e.key === 'Escape') { e.preventDefault(); return close(null); }
+      if (e.key !== 'Enter' || !actions.length) return;
+      const t = e.target; const inText = t instanceof HTMLInputElement && !['checkbox', 'radio', 'file', 'color'].includes(t.type); const inArea = t instanceof HTMLTextAreaElement;
+      if (!(inText || (inArea && (e.metaKey || e.ctrlKey)) || (!inArea && !inText && !(t instanceof HTMLSelectElement) && !(t instanceof HTMLButtonElement)))) return;
+      if (!bg.contains(t) && t !== document.body) return;
+      e.preventDefault();
+      const btns = [...bg.querySelectorAll('.actions .btn')]; const primary = btns.find((b) => b.classList.contains('primary')) || btns[btns.length - 1];
+      primary?.click();
+    };
     const bg = h('div.modal-bg', { on: { click: (e) => { if (e.target === bg) close(null); } } },
       h('div.modal', { style: wide ? { width: 'min(960px,100%)' } : {} },
         h('div', { style: { display: 'flex', alignItems: 'center', gap: '8px' } }, h('h2', { style: { flex: 1 } }, title), btn('', { icon: 'close', cls: 'ghost icon', title: 'Close', onClick: () => close(null) })),
@@ -91,4 +101,9 @@ export async function confirmDeleteProject(api, p) {
   ), { actions: [{ label: 'Delete', cls: 'danger', value: true }] });
   if (!r) return false;
   try { await api.deleteProject(p.id, own && cb.checked); toast('Project deleted', 'ok'); return true; } catch (e) { toast(e.message, 'err'); return false; }
+}
+
+/** Keyboard shortcut sheet (press ? in Studio or Review). rows: [[key, what], …] */
+export function shortcutsSheet(title, rows) {
+  return modal(title, h('div', { style: { display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '6px 14px', fontSize: '13px' } }, rows.flatMap(([k, what]) => [h('span', k.split(' ').map((kk, i) => [i ? ' ' : null, h('span.kbd', kk)])), h('span.muted', what)])), { actions: [{ label: 'Close', value: true }] });
 }

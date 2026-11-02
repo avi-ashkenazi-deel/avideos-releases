@@ -2,7 +2,7 @@
 // middle, timeline below, layers/files on the right. The preview is the real
 // composition running in an iframe with the seekable runtime.
 import { api } from './api.js';
-import { h, btn, svg, modal, toast, fmtTime, relTime, avatar, getAuthor, ensureAuthor, copyText, confirmDeleteProject } from './ui.js';
+import { h, btn, svg, modal, toast, fmtTime, relTime, avatar, getAuthor, ensureAuthor, copyText, confirmDeleteProject, shortcutsSheet } from './ui.js';
 import { Stage } from './stage.js';
 import { DrawLayer, COLORS } from './draw.js';
 import { VoiceRecorder, highlightPointing } from './voice.js';
@@ -323,7 +323,7 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
 
   // ---------- chat
   const msgs = h('div.msgs');
-  const ta = h('textarea.text', { placeholder: 'Tell the agent what to make or change… (⌘/Ctrl+Enter to send)' });
+  const ta = h('textarea.text', { placeholder: 'Tell the agent what to make or change… (Enter to send, Shift+Enter for a new line)' });
   const ctx = h('span.ctx.hidden');
   const sendBtn = btn('Send', { cls: 'primary sm', icon: 'spark', onClick: send });
   const stopBtn = btn('Stop', { cls: 'sm danger hidden', icon: 'stop', title: 'Stop the agent', onClick: async () => { try { await api.agentCancel(project.id); toast('Stopping…'); } catch (e) { toast(e.message, 'err'); } } });
@@ -333,7 +333,8 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
     Object.entries(caps.agents || { claude: { label: 'Claude Code', available: caps.claude } }).map(([k, v]) => h('option', { value: k, selected: (project.agent || 'claude') === k }, `${v.label}${v.available ? '' : ' (not installed)'}`)));
   const compose = h('div.compose', ctx, ta, h('div.row', agentSel, stopBtn, btn('', { icon: 'more', cls: 'ghost icon sm', title: 'New conversation (forget context)', onClick: async () => { if (await modal('Start a new conversation?', h('p.muted', 'The agent forgets this chat. The composition files are kept.'), { actions: [{ label: 'New conversation', cls: 'primary', value: true }] })) { await api.agentReset(project.id); project.chat = []; renderChat([]); } } }), stopHint, h('span.spacer'), sendBtn));
   const chat = h('div.chat', msgs, compose);
-  ta.addEventListener('keydown', (e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') send(); e.stopPropagation(); });
+  // Enter sends, Shift+Enter makes a new line, ⌘/Ctrl+Enter also sends; Esc leaves the box.
+  ta.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); } else if (e.key === 'Escape') ta.blur(); e.stopPropagation(); });
   function ctxChip(id) { ctx.classList.remove('hidden'); ctx.replaceChildren('About ', h('code', `#${id}`), btn('', { icon: 'close', cls: 'ghost icon sm', title: 'Clear', onClick: () => { ctx.classList.add('hidden'); ctx._id = null; } })); ctx._id = id; }
   function msgEl(m) {
     const el = h('div.msg', { class: `msg ${m.role}` }, h('div.who', avatar(m.role === 'agent' ? 'Agent' : (m.author || getAuthor() || 'You'), m.role === 'agent'), m.role === 'agent' ? 'Agent' : (m.author || getAuthor() || 'You'), h('span.muted', relTime(m.at))));
@@ -451,7 +452,9 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
   root.replaceChildren(h('div.studio', chat, h('div.center', stageWrap, transport, tl), side));
   if (!Array.isArray(project.chat)) project.chat = [];
   renderChat(project.chat);
-  const key = (e) => { if (e.target.matches('input, textarea, select') || e.metaKey || e.ctrlKey) return; const k = e.key.toLowerCase(); if (k === 'd') return setNoteTool(N.tool === 'pen' ? null : 'pen'); if (k === 'r') return toggleNoteRecord(); if (k === 'z') return noteLayer.undo(); if (k === '+' || k === '=') return setZoom(zoom * 1.5); if (k === '-') return setZoom(zoom / 1.5); if (k === '0') return setZoom(1); if (e.code === 'Space') { e.preventDefault(); stage.toggle(); } else if (e.key === 'ArrowLeft') { e.preventDefault(); e.shiftKey ? stage.seek(Math.max(0, stage.time - 1)) : step(-1); } else if (e.key === 'ArrowRight') { e.preventDefault(); e.shiftKey ? stage.seek(Math.min(stage.duration, stage.time + 1)) : step(1); } else if (e.key === 'Home') stage.seek(0); else if (e.key === 'Escape') selectClip(null); };
+  const key = (e) => { if (e.target.matches('input, textarea, select') || e.metaKey || e.ctrlKey) return; const k = e.key.toLowerCase();
+    if (e.key === '?' || (e.key === '/' && e.shiftKey)) return shortcutsSheet('Studio shortcuts', [['Space', 'Play / pause'], ['← →', 'One frame back / forward'], ['Shift+← →', 'One second'], ['Home', 'Go to start'], ['D', 'Draw on the preview'], ['A', 'Arrow tool'], ['R', 'Talk: start / stop a voice note (goes to the agent)'], ['Z', 'Undo last stroke'], ['Esc', 'Deselect / stop drawing'], ['+ −', 'Zoom timeline'], ['0', 'Fit timeline'], ['⌘ wheel', 'Zoom timeline around the cursor'], ['Enter', 'Send to the agent (in the chat box)'], ['Shift+Enter', 'New line in the chat box'], ['Enter', 'Confirm a dialog'], ['?', 'This sheet']]);
+    if (k === 'c') { e.preventDefault(); ta.focus(); return; } if (k === 'd') return setNoteTool(N.tool === 'pen' ? null : 'pen'); if (k === 'r') return toggleNoteRecord(); if (k === 'z') return noteLayer.undo(); if (k === '+' || k === '=') return setZoom(zoom * 1.5); if (k === '-') return setZoom(zoom / 1.5); if (k === '0') return setZoom(1); if (e.code === 'Space') { e.preventDefault(); stage.toggle(); } else if (e.key === 'ArrowLeft') { e.preventDefault(); e.shiftKey ? stage.seek(Math.max(0, stage.time - 1)) : step(-1); } else if (e.key === 'ArrowRight') { e.preventDefault(); e.shiftKey ? stage.seek(Math.min(stage.duration, stage.time + 1)) : step(1); } else if (e.key === 'Home') stage.seek(0); else if (e.key === 'Escape') selectClip(null); };
   document.addEventListener('keydown', key);
   new ResizeObserver(() => { renderTimeline(); }).observe(tlScroll);
   await stage.load(src());

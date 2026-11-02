@@ -1,5 +1,5 @@
 import { api } from './api.js';
-import { h, btn, svg, modal, toast, fmtTime, relTime, avatar, getAuthor, ensureAuthor, copyText, fileToDataUrl, confirmDeleteProject } from './ui.js';
+import { h, btn, svg, modal, toast, fmtTime, relTime, avatar, getAuthor, ensureAuthor, copyText, fileToDataUrl, confirmDeleteProject, shortcutsSheet } from './ui.js';
 import { Player } from './player.js';
 import { DrawLayer, COLORS, drawStroke } from './draw.js';
 import { VoiceRecorder, highlightPointing } from './voice.js';
@@ -81,7 +81,7 @@ export async function renderReview(root, { projectId, versionId, navigate, topba
   scrub.addEventListener('pointerup', () => { scrubbing = false; });
 
   // composer
-  const ta = h('textarea', { placeholder: 'Leave a note at the playhead… (C)', rows: 2 });
+  const ta = h('textarea', { placeholder: 'Leave a note at the playhead… (C, Enter to post)', rows: 2 });
   const anchorPill = h('span.pill.time', { title: 'Click to pin to the playhead', on: { click: () => { S.anchor = player.time; S.anchorEnd = null; updateComposer(); } } });
   const unpin = btn('', { icon: 'unpin', cls: 'ghost icon sm', title: 'Comment on the whole video', onClick: () => { S.anchor = null; S.anchorEnd = null; updateComposer(); } });
   const rangeBtn = btn('to here', { cls: 'ghost sm', title: 'Extend the note to the playhead (O)', onClick: () => { if (S.anchor === null) S.anchor = player.time; S.anchorEnd = Math.max(S.anchor + 0.1, player.time); updateComposer(); } });
@@ -113,7 +113,8 @@ export async function renderReview(root, { projectId, versionId, navigate, topba
     if (S.anchor !== null && S.anchorEnd !== null && player.duration) { rangeEl.style.left = `${(S.anchor / player.duration) * 100}%`; rangeEl.style.width = `${((S.anchorEnd - S.anchor) / player.duration) * 100}%`; }
   }
   ta.addEventListener('input', updateComposer);
-  ta.addEventListener('keydown', (e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') post(); if (e.key === 'Escape') ta.blur(); });
+  // Enter posts the note, Shift+Enter makes a new line, ⌘/Ctrl+Enter also posts; Esc leaves the box.
+  ta.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); post(); } else if (e.key === 'Escape') ta.blur(); });
 
   // voice
   let recorder = null;
@@ -337,6 +338,7 @@ export async function renderReview(root, { projectId, versionId, navigate, topba
   const key = (e) => {
     if (e.target.matches('input, textarea, select') || e.metaKey || e.ctrlKey) return;
     const k = e.key.toLowerCase();
+    if (e.key === '?' || (e.key === '/' && e.shiftKey)) return shortcutsSheet('Review shortcuts', [['Space / K', 'Play / pause'], ['← →', 'One frame'], ['Shift+← →', 'One second'], ['J / L', 'Five seconds back / forward'], ['Home / End', 'Start / end'], ['C', 'Write a note at the playhead'], ['D', 'Draw on the frame'], ['A', 'Arrow tool'], ['R', 'Record a voice note'], ['I / O', 'Note start / extend note to here'], ['M', 'Mute'], ['Z', 'Undo stroke'], ['Esc', 'Deselect / stop drawing'], ['Enter', 'Post the note (in the note box)'], ['Shift+Enter', 'New line in the note box'], ['?', 'This sheet']]);
     if (e.code === 'Space' || k === 'k') { e.preventDefault(); player.toggle(); }
     else if (k === 'arrowleft') { e.preventDefault(); e.shiftKey ? player.seek(player.time - 1) : player.step(-1); }
     else if (k === 'arrowright') { e.preventDefault(); e.shiftKey ? player.seek(player.time + 1) : player.step(1); }
