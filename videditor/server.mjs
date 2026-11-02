@@ -162,6 +162,8 @@ function watchAssets(prj) {
   watchers.set(prj.id, list);
 }
 
+// Paths pasted from Finder or a shell often carry quotes, a trailing slash or escaped spaces.
+const cleanDir = (v) => path.resolve(String(v).trim().replace(/^['"]|['"]$/g, '').replace(/\\ /g, ' ').replace(/^~(?=$|\/)/, process.env.HOME || '~').replace(/\/+$/, ''));
 function findBin(name) { if (name.includes('/')) return fs.existsSync(name); return (process.env.PATH || '').split(path.delimiter).some((d) => fs.existsSync(path.join(d, name)) || fs.existsSync(path.join(d, name + '.cmd'))); }
 const CLAUDE_BIN = process.env.VIDEDITOR_CLAUDE_BIN || 'claude';
 
@@ -192,7 +194,7 @@ async function api(req, res, url) {
   const m = (re) => re.exec(p);
   let x;
 
-  if (p === '/api/detect' || p === '/api/projects/detect' || p === '/api/hyperframes/detect') return send(res, 200, detectProject(q.path));
+  if (p === '/api/detect' || p === '/api/projects/detect' || p === '/api/hyperframes/detect') return send(res, 200, detectProject(q.path ? cleanDir(q.path) : q.path));
   if (p === '/api/state' && req.method === 'GET') {
     return send(res, 200, { projects: store.projects().map(projectView), ffmpeg: FFMPEG, dataDir: DATA, port: PORT });
   }
@@ -201,8 +203,8 @@ async function api(req, res, url) {
     if (b.create) {
       b.dir = createProject(b.name || 'Untitled', { template: String(b.template || 'blank').replace(/[^\w-]/g, ''), width: Number(b.width) || 1280, height: Number(b.height) || 720, fps: Number(b.fps) || 30, brand: b.brand || null });
       if (b.brief) fs.writeFileSync(path.join(b.dir, 'BRIEF.md'), `# ${b.name || 'Untitled'}\n\n${String(b.brief).trim()}\n`);
-    } else if (b.dir) { const d = detectProject(b.dir); if (!d.ok) return err(res, 400, `Not a composition folder: ${d.reason}`); b.dir = d.dir; }
-    if (b.assetsDir) { const a = path.resolve(String(b.assetsDir)); if (!fs.existsSync(a) || !fs.statSync(a).isDirectory()) return err(res, 400, `Asset folder does not exist: ${a}`); b.assetsDir = a; }
+    } else if (b.dir) { const d = detectProject(cleanDir(b.dir)); if (!d.ok) return err(res, 400, `Not a composition folder: ${d.reason}`); b.dir = d.dir; }
+    if (b.assetsDir) { const a = cleanDir(b.assetsDir); if (!fs.existsSync(a) || !fs.statSync(a).isDirectory()) return err(res, 400, `Asset folder does not exist: ${a}`); b.assetsDir = a; }
     const prj = store.addProject({ name: (b.name || 'Untitled').slice(0, 120), dir: b.dir || null, assetsDir: b.assetsDir || null, tags: b.tags || [], chat: [] });
     if (prj.dir) { watchAssets(prj); startAnalyze(prj); }
     // Adopt existing renders as versions when linking a folder.
@@ -220,7 +222,7 @@ async function api(req, res, url) {
       if (b.name) patch.name = String(b.name).slice(0, 120);
       if (b.tags) patch.tags = b.tags;
       if ('dir' in b) { if (b.dir) { const d = detectProject(b.dir); if (!d.ok) return err(res, 400, d.reason); patch.dir = d.dir; } else patch.dir = null; }
-      if ('assetsDir' in b) { if (b.assetsDir) { const a = path.resolve(String(b.assetsDir).replace(/^~(?=$|\/)/, process.env.HOME || '~')); if (!fs.existsSync(a) || !fs.statSync(a).isDirectory()) return err(res, 400, `Folder does not exist: ${a}`); patch.assetsDir = a; } else patch.assetsDir = null; }
+      if ('assetsDir' in b) { if (b.assetsDir) { const a = cleanDir(b.assetsDir); if (!fs.existsSync(a) || !fs.statSync(a).isDirectory()) return err(res, 400, `Folder does not exist: ${a}`); patch.assetsDir = a; } else patch.assetsDir = null; }
       const out = store.updateProject(prj.id, patch);
       if (('assetsDir' in b || 'dir' in b) && out.dir) { watchAssets(out); startAnalyze(out); }
       return send(res, 200, projectView(out));
