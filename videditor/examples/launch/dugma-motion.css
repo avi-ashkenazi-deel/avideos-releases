@@ -1,0 +1,34 @@
+/* Dugma motion for Videditor compositions. Put fx-<effect> on a clip (see MOTION.md).
+   Animations run on the clip's local time; the runtime drives them to the exact frame. */
+:root {
+  --ease-enter: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-bounce: cubic-bezier(0.34, 1.32, 0.64, 1);
+  --ease-draw: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-exit: cubic-bezier(0.4, 0, 1, 1);
+  --rise: 3vh; /* 3% of frame height; compositions are rendered at exact size so vh = stage height */
+  --fx-delay: 0ms;
+}
+.fx-fade   { animation: fxFade 650ms var(--ease-enter) var(--fx-delay) both; }
+.fx-reveal { animation: fxReveal 1200ms var(--ease-enter) var(--fx-delay) both; }
+.fx-rise   { animation: fxRise 750ms var(--ease-enter) var(--fx-delay) both; }
+.fx-pop    { animation: fxPop 700ms var(--ease-bounce) var(--fx-delay) both; }
+.fx-count  { animation: fxRise 750ms var(--ease-enter) var(--fx-delay) both; }
+.fx-lines > * { animation: fxLine 900ms var(--ease-enter) var(--fx-delay) both; }
+.fx-lines > :nth-child(2) { animation-delay: calc(var(--fx-delay) + 90ms); }
+.fx-lines > :nth-child(3) { animation-delay: calc(var(--fx-delay) + 180ms); }
+.fx-lines > :nth-child(4) { animation-delay: calc(var(--fx-delay) + 270ms); }
+.fx-lines { overflow: hidden; }
+.fx-lines > * { display: block; }
+.fx-draw   { stroke-dasharray: 1000; animation: fxDraw 1000ms var(--ease-draw) var(--fx-delay) both, fxDrawIn 1000ms linear var(--fx-delay) both; }
+.fx-out    { animation-name: fxOut; animation-duration: 300ms; animation-timing-function: var(--ease-exit); animation-fill-mode: forwards; }
+/* Stagger helpers: fx-d1 … fx-d8 add Dugma's role delays. */
+.fx-d1 { --fx-delay: 120ms; } .fx-d2 { --fx-delay: 180ms; } .fx-d3 { --fx-delay: 260ms; } .fx-d4 { --fx-delay: 360ms; }
+.fx-d5 { --fx-delay: 420ms; } .fx-d6 { --fx-delay: 520ms; } .fx-d7 { --fx-delay: 640ms; } .fx-d8 { --fx-delay: 820ms; } .fx-d9 { --fx-delay: 900ms; }
+@keyframes fxFade   { from { opacity: 0; } to { opacity: 1; } }
+@keyframes fxReveal { from { opacity: 0; transform: scale(1.08); } to { opacity: 1; transform: none; } }
+@keyframes fxRise   { from { opacity: 0; transform: translateY(var(--rise)); } to { opacity: 1; transform: none; } }
+@keyframes fxLine   { from { transform: translateY(110%); } to { transform: none; } }
+@keyframes fxPop    { from { opacity: 0; transform: scale(0.82); } to { opacity: 1; transform: none; } }
+@keyframes fxDraw   { from { stroke-dashoffset: 1000; } to { stroke-dashoffset: 0; } }
+@keyframes fxDrawIn { from { opacity: 0; } 15% { opacity: 1; } to { opacity: 1; } }
+@keyframes fxOut    { to { opacity: 0; transform: translateY(2%); } }

@@ -4,17 +4,18 @@
 <meta charset="utf-8">
 <title>{{title}}</title>
 <link rel="stylesheet" href="brand.css">
+<link rel="stylesheet" href="dugma-motion.css">
 <style>
   html, body { margin: 0; background: #000; }
   #stage { position: relative; width: {{width}}px; height: {{height}}px; overflow: hidden; background: var(--brand-background); color: var(--brand-text); font-family: var(--brand-font); }
   .clip { position: absolute; }
   #bg { inset: 0; background: radial-gradient(120% 90% at 80% 0%, color-mix(in srgb, var(--brand-primary) 28%, var(--brand-background)), var(--brand-background) 65%); }
-  #title { left: 7%; right: 7%; top: 34%; margin: 0; font-size: 8.5vw; font-size: calc({{width}}px * 0.072); font-weight: 800; letter-spacing: -0.025em; line-height: 1; animation: rise .8s cubic-bezier(.2,.7,.2,1) both, fade .5s 2.6s both; }
-  .feature { left: 7%; right: 7%; margin: 0; font-size: calc({{width}}px * 0.045); font-weight: 700; letter-spacing: -0.01em; line-height: 1.1; animation: rise .6s cubic-bezier(.2,.7,.2,1) both, fade .4s 2.0s both; }
+  #title { left: 7%; right: 7%; top: 34%; margin: 0; font-size: 8.5vw; font-size: calc({{width}}px * 0.072); font-weight: 800; letter-spacing: -0.025em; line-height: 1;  }
+  .feature { left: 7%; right: 7%; margin: 0; font-size: calc({{width}}px * 0.045); font-weight: 700; letter-spacing: -0.01em; line-height: 1.1;  }
   .feature b { color: var(--brand-primary); }
   #f1 { top: 40%; } #f2 { top: 40%; } #f3 { top: 40%; }
-  #cta { left: 7%; top: 44%; padding: calc({{width}}px * 0.012) calc({{width}}px * 0.03); border-radius: 999px; background: var(--brand-primary); color: var(--brand-background); font-weight: 800; font-size: calc({{width}}px * 0.028); animation: pop .5s cubic-bezier(.2,1.4,.3,1) both; }
-  #ctatext { left: 7%; top: 30%; margin: 0; font-size: calc({{width}}px * 0.055); font-weight: 800; letter-spacing: -0.02em; animation: rise .6s both; }
+  #cta { left: 7%; top: 44%; padding: calc({{width}}px * 0.012) calc({{width}}px * 0.03); border-radius: 999px; background: var(--brand-primary); color: var(--brand-background); font-weight: 800; font-size: calc({{width}}px * 0.028);  }
+  #ctatext { left: 7%; top: 30%; margin: 0; font-size: calc({{width}}px * 0.055); font-weight: 800; letter-spacing: -0.02em;  }
   #logo { right: 7%; bottom: 8%; width: calc({{width}}px * 0.12); height: calc({{width}}px * 0.05); background: var(--brand-logo) right center / contain no-repeat; }
   @keyframes rise { from { opacity: 0; transform: translateY(40px); } to { opacity: 1; transform: none; } }
   @keyframes pop { from { opacity: 0; transform: scale(.7); } to { opacity: 1; transform: none; } }
@@ -24,13 +25,13 @@
 <body>
 <div id="stage" data-composition-id="{{id}}" data-duration="12" data-width="{{width}}" data-height="{{height}}" data-fps="{{fps}}">
   <div id="bg" class="clip" data-start="0" data-duration="12" data-track-index="0"></div>
-  <h1 id="title" class="clip" data-start="0.3" data-duration="3" data-track-index="2">{{title}}</h1>
-  <p id="f1" class="clip feature" data-start="3.3" data-duration="2.4" data-track-index="2"><b>One.</b> First thing it does.</p>
-  <p id="f2" class="clip feature" data-start="5.7" data-duration="2.4" data-track-index="2"><b>Two.</b> Second thing it does.</p>
-  <p id="f3" class="clip feature" data-start="8.1" data-duration="2.4" data-track-index="2"><b>Three.</b> Third thing it does.</p>
-  <p id="ctatext" class="clip" data-start="10.4" data-duration="1.6" data-track-index="2">Ready when you are.</p>
-  <div id="cta" class="clip" data-start="10.7" data-duration="1.3" data-track-index="3">Try it</div>
-  <div id="logo" class="clip" data-start="0" data-duration="12" data-track-index="4"></div>
+  <h1 id="title" class="clip fx-lines fx-d2" data-start="0.3" data-duration="3" data-track-index="2"><span>{{title}}</span></h1>
+  <p id="f1" class="clip feature fx-rise fx-d6" data-start="3.3" data-duration="2.4" data-track-index="2"><b>One.</b> First thing it does.</p>
+  <p id="f2" class="clip feature fx-rise fx-d6" data-start="5.7" data-duration="2.4" data-track-index="2"><b>Two.</b> Second thing it does.</p>
+  <p id="f3" class="clip feature fx-rise fx-d6" data-start="8.1" data-duration="2.4" data-track-index="2"><b>Three.</b> Third thing it does.</p>
+  <p id="ctatext" class="clip fx-rise fx-d2" data-start="10.4" data-duration="1.6" data-track-index="2">Ready when you are.</p>
+  <div id="cta" class="clip fx-pop fx-d8" data-start="10.7" data-duration="1.3" data-track-index="3">Try it</div>
+  <div id="logo" class="clip fx-fade fx-d9" data-start="0" data-duration="12" data-track-index="4"></div>
 </div>
 </body>
 </html>

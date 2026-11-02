@@ -164,6 +164,12 @@ function watchAssets(prj) {
 
 // Paths pasted from Finder or a shell often carry quotes, a trailing slash or escaped spaces.
 const cleanDir = (v) => path.resolve(String(v).trim().replace(/^['"]|['"]$/g, '').replace(/\\ /g, ' ').replace(/^~(?=$|\/)/, process.env.HOME || '~').replace(/\/+$/, ''));
+// Projects made before a guideline file existed get the current defaults (never overwrites).
+function ensureProjectFiles(prj) {
+  if (!prj.dir || !fs.existsSync(prj.dir)) return;
+  for (const f of ['MOTION.md', 'dugma-motion.css']) { const dest = path.join(prj.dir, f); if (!fs.existsSync(dest)) { try { fs.copyFileSync(path.join(ROOT, 'templates', 'blank', f), dest); } catch {} } }
+  if (!fs.existsSync(path.join(prj.dir, 'brand.json'))) { try { writeBrand(prj.dir, {}); } catch {} }
+}
 function findBin(name) { if (name.includes('/')) return fs.existsSync(name); return (process.env.PATH || '').split(path.delimiter).some((d) => fs.existsSync(path.join(d, name)) || fs.existsSync(path.join(d, name + '.cmd'))); }
 const CLAUDE_BIN = process.env.VIDEDITOR_CLAUDE_BIN || 'claude';
 
@@ -216,7 +222,7 @@ async function api(req, res, url) {
   }
   if ((x = m(/^\/api\/projects\/([^/]+)$/))) {
     const prj = store.project(x[1]); if (!prj) return err(res, 404, 'Project not found');
-    if (req.method === 'GET') return send(res, 200, projectView(prj));
+    if (req.method === 'GET') { ensureProjectFiles(prj); return send(res, 200, projectView(prj)); }
     if (req.method === 'PATCH') {
       const b = await readJson(req); const patch = {};
       if (b.name) patch.name = String(b.name).slice(0, 120);
