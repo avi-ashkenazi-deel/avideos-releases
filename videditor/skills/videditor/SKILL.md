@@ -40,6 +40,7 @@ A video is a folder. `index.html` is the video. Videditor plays it in the browse
 - Use `data-media-start` + `data-duration` to use a segment of a source clip. Several `<video>` elements can use the same file.
 - **Cut to the beat**: start clips on beat times from `MEDIA.md` (or multiples: every 2nd/4th beat for calmer pacing), and let the music's loud moments land on the biggest visual change. Set the composition `data-duration` to end on a beat.
 - "Only UI, no text" style requests: skip keyframes that show on-screen text, lower thirds, slides; prefer product UI, motion, hands-on footage. When unsure, ask or offer two variants.
+- **Motion**: `MOTION.md` is the law for how things move (timing, easing, zoom limits, transitions). Read it before animating; when a request conflicts with it, say so and follow the person.
 - Brand: `brand.json` → `brand.css` exposes `--brand-primary`, `--brand-background`, `--brand-text`, `--brand-muted`, `--brand-accent`, `--brand-font`, `--brand-logo`. Link `brand.css` and use the variables instead of hard-coded colors so the person can rebrand without editing the composition.
 - Nested scenes: a clip with `data-composition-id="x" data-composition-src="compositions/x.html" data-start data-duration` plays another composition file inside it (same format, transparent body, same size). Use them for reusable scenes or long videos.
 
