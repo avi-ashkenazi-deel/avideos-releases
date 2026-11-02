@@ -9,6 +9,8 @@ async function cleanup() {
   const state = await (await fetch(BASE + '/api/state')).json();
   for (const p of state.projects.filter((p) => /^E2E /.test(p.name))) { await fetch(`${BASE}/api/projects/${p.id}`, { method: 'DELETE' }); if (p.dir && /\/projects\//.test(p.dir)) require('fs').rmSync(p.dir, { recursive: true, force: true }); }
   const demo = state.projects.find((p) => p.name.includes('demo')); if (!demo) return;
+  // Agent runs (ours or the user's) may have changed the demo composition; the test needs the known one.
+  if (demo.dir && /launch-demo$/.test(demo.dir)) { const fs = require('fs'), path = require('path'); fs.copyFileSync(path.resolve(__dirname, '..', 'examples', 'launch', 'index.html'), path.join(demo.dir, 'index.html')); }
   for (const v of demo.versions.filter((v) => v.notes === 'E2E agent version')) await fetch(`${BASE}/api/versions/${v.id}`, { method: 'DELETE' });
   const fb = await (await fetch(`${BASE}/api/feedback?projectId=${demo.id}`)).json();
   for (const f of fb.filter((f) => /^E2E/.test(f.body) && !f.replyTo)) await fetch(`${BASE}/api/feedback/${f.id}`, { method: 'DELETE' });

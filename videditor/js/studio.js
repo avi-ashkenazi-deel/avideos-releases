@@ -102,7 +102,10 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
   const ruler = h('div.ruler'); const tracksEl = h('div.tracks'); const phead = h('div.phead');
   const tlInner = h('div.tlinner', ruler, tracksEl, phead);
   const tlScroll = h('div.tlscroll', tlInner);
-  const tl = h('div.tl', tlScroll, h('span.hint-tl', 'drag = move · drag edge = trim · ⌘/Ctrl + wheel = zoom'));
+  const tlGrip = h('div.tlgrip', { title: 'Drag to resize the timeline' });
+  const tl = h('div.tl', tlGrip, tlScroll, h('span.hint-tl', 'drag = move · drag edge = trim · ⌘/Ctrl + wheel = zoom'));
+  tl.style.height = `${Math.min(Math.max(Number(localStorage.getItem('videditor.tlHeight')) || 240, 140), 700)}px`;
+  tlGrip.addEventListener('pointerdown', (e) => { e.preventDefault(); const y0 = e.clientY, h0 = tl.offsetHeight; const mv = (ev) => { const hh = Math.min(Math.max(h0 - (ev.clientY - y0), 140), window.innerHeight * 0.75); tl.style.height = `${hh}px`; }; const up = () => { window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up); localStorage.setItem('videditor.tlHeight', String(tl.offsetHeight)); renderTimeline(); }; window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up); });
   const PAD = 70;
   let zoom = 1;
   const pxPerSec = () => ((tlScroll.clientWidth - PAD - 16) / Math.max(0.5, stage.duration || composition?.duration || 5)) * zoom;
@@ -132,8 +135,9 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
     const keys = [...tracks.keys()].sort((a, b) => b - a); if (!keys.length) keys.push(0);
     // Clips on one track that overlap in time get their own sub-row so none is hidden behind another.
     tracksEl.replaceChildren(...keys.flatMap((k) => {
-      const rows = [];
-      for (const c of [...(tracks.get(k) || [])].sort((a, b) => a.start - b.start)) { const end = c.start + (c.duration ?? (dur - c.start)); let row = rows.find((r) => r.end <= c.start + 1e-6); if (!row) { row = { end: 0, clips: [] }; rows.push(row); } row.end = end; row.clips.push(c); }
+      // Overlapping clips go to sub-rows, at most 3 per track; beyond that they share the last row (tooltips still name them).
+      const rows = []; const MAX_ROWS = 3;
+      for (const c of [...(tracks.get(k) || [])].sort((a, b) => a.start - b.start)) { const end = c.start + (c.duration ?? (dur - c.start)); let row = rows.find((r) => r.end <= c.start + 1e-6); if (!row) { if (rows.length < MAX_ROWS) { row = { end: 0, clips: [] }; rows.push(row); } else row = rows.reduce((a, b) => (a.end <= b.end ? a : b)); } row.end = Math.max(row.end, end); row.clips.push(c); }
       if (!rows.length) rows.push({ end: 0, clips: [] });
       return rows.map((row, ri) => {
         const area = h('div.tarea');
@@ -143,7 +147,7 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
           attachDrag(el, c, d);
           area.append(el);
         }
-        return h('div.trow', { class: `trow ${ri ? 'sub' : ''}` }, h('div.tname', ri ? '' : `T${k}`), area);
+        return h('div.trow', { class: `trow ${ri ? 'sub' : ''}` }, h('div.tname', ri ? `T${k} ·` : `T${k}`), area);
       });
     }));
     drawPlayhead();
@@ -197,17 +201,17 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
     const dur = stage.duration || composition?.duration || 5;
     const on = all.filter((c) => c.start !== null && t >= c.start - 1e-6 && t < c.start + (c.duration ?? (dur - c.start)) + 1e-6).sort((a, b) => (b.track ?? 0) - (a.track ?? 0) || b.start - a.start);
     const off = all.filter((c) => !on.includes(c)).sort((a, b) => a.start - b.start);
-    const key = on.map((c) => c.id || c.tag).join('|') + '#' + selected + '#' + all.length;
+    const key = on.map((c) => c.id || c.tag).join('|') + '#' + selected + '#' + all.length + '#' + Math.round(t * 10);
     if (!force && key === layersKey) return; layersKey = key;
     const row = (c, dim) => h('div.layer', { class: `layer ${c.id && c.id === selected ? 'sel' : ''} ${dim ? 'dim' : ''}`, title: `${c.id ? '#' + c.id : c.tag} · ${fmtTime(c.start)}${c.duration !== null ? `–${fmtTime(c.start + c.duration)}` : ''} · track ${c.track ?? 0}`, on: { click: () => { selectClip(c.id); if (dim && c.start !== null) stage.seek(c.start + 0.01); } } },
       h('span.lz', c.tag === 'audio' ? '♪' : String(c.track ?? 0)), h('span.lid', c.id ? `#${c.id}` : `<${c.tag}>`), c.text ? h('span.ltxt', `“${c.text}”`) : c.src ? h('span.ltxt', c.src.split('/').pop()) : null, dim ? h('span.lt', fmtTime(c.start)) : null);
     const visible = on.filter((c) => c.tag !== 'audio'), audio = on.filter((c) => c.tag === 'audio');
-    layersEl.replaceChildren(
+    layersEl.replaceChildren(...[
       h('div.lhead', `On screen at ${fmtTime(t)}`, h('span.muted', ' · front to back')),
       ...(visible.length ? visible.map((c) => row(c, false)) : [h('div.small.muted', { style: { padding: '4px 8px' } }, all.length ? 'Nothing visible at this moment.' : 'No clips yet. Ask the agent to build the video, or edit index.html in Files.')]),
       audio.length ? h('div.lhead', 'Playing') : null, ...audio.map((c) => row(c, false)),
       off.length ? h('details.loff', { open: !visible.length }, h('summary', `Not on screen now (${off.length})`), ...off.map((c) => row(c, true))) : null,
-    );
+    ].filter(Boolean));
     renderInspector();
   }
   function renderInspector() {
