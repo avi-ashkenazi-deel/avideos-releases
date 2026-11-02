@@ -1504,6 +1504,14 @@ const Brand = (() => {
   };
   const customFonts = {}; // name -> {css, weights, buffer, mime}
 
+  // A page's or design's family name for a face this build ships, matched loosely: "Bagoss Standard" is Bagoss, "inter" is Inter.
+  function matchFamily(name) {
+    name = String(name || '').trim(); if (!name || FONTS[name] || customFonts[name]) return name;
+    const norm = s => String(s).toLowerCase().replace(/\s+(standard|std|text|display|pro|variable|vf)$/i, '').replace(/[^a-z0-9]/g, '');
+    const want = norm(name); if (!want) return name;
+    for (const k of [...Object.keys(customFonts), ...Object.keys(FONTS)]) if (norm(k) === want) return k;
+    return name;
+  }
   function fontCss(name) { return (FONTS[name] || customFonts[name] || { css: `"${name}", sans-serif` }).css; }
   function fontWeights(name) { return (FONTS[name] || customFonts[name] || { weights: [400, 700] }).weights; }
   function allFontNames() { return [...Object.keys(FONTS), ...Object.keys(customFonts)]; }
@@ -1826,7 +1834,7 @@ const Brand = (() => {
     if (typeof LibStore === 'undefined' || !LibStore.guide) return ''; const k = kitGuideId(kit || currentKit);
     return ids.map(id => { const t = String(LibStore.guide(LibStore.guideKey(k, id)) || '').trim(); return t ? `${(kit || currentKit || {}).name || 'Brand'} guidelines, ${id}.md (follow them):\n${t.length > max ? t.slice(0, max) + '\n…' : t}` : ''; }).filter(Boolean).join('\n\n');
   }
-  return { fontsReady, useKit, kitGuideId, voiceText, guidesText, FONTS, customFonts, fontCss, fontWeights, allFontNames, PRESETS, fromPreset, pairs, themesOf, tokenHex, tokenFor, parseSvg, logoInner, logoColorFor, logosOf, logoVariant, logoAspectOf, makeDemoImage, serialize, clone };
+  return { fontsReady, useKit, kitGuideId, voiceText, guidesText, FONTS, customFonts, fontCss, fontWeights, matchFamily, allFontNames, PRESETS, fromPreset, pairs, themesOf, tokenHex, tokenFor, parseSvg, logoInner, logoColorFor, logosOf, logoVariant, logoAspectOf, makeDemoImage, serialize, clone };
 })();
 
 /* js/grid.js */
@@ -4647,20 +4655,32 @@ const FigmaImport = (() => {
   }
   // The first visible paint decides; Figma stacks paints, we keep the top solid/gradient/image.
   function mainPaint(ps) { const v = visiblePaints(ps); return v.length ? v[v.length - 1] : null; }
+  // Of several drop shadows (Elevation/XL is two), the softest stands for the elevation; spread widens the blur.
   function shadowOf(effects) {
-    const e = (effects || []).find(x => x && x.visible !== false && x.type === 'DROP_SHADOW'); if (!e) return null;
-    return { on: true, x: r2(e.offset ? e.offset.x : 0), y: r2(e.offset ? e.offset.y : 0), blur: r2(e.radius || 0), color: colorHex(e.color || { r: 0, g: 0, b: 0 }), alpha: r2(e.color ? e.color.a ?? 0.25 : 0.25) };
+    let e = null; for (const x of effects || []) if (x && x.visible !== false && x.type === 'DROP_SHADOW' && (!e || (x.radius || 0) + (x.spread || 0) > (e.radius || 0) + (e.spread || 0))) e = x;
+    if (!e) return null;
+    return { on: true, x: r2(e.offset ? e.offset.x : 0), y: r2(e.offset ? e.offset.y : 0), blur: r2((e.radius || 0) + Math.max(0, e.spread || 0) * 2), color: colorHex(e.color || { r: 0, g: 0, b: 0 }), alpha: r2(e.color ? e.color.a ?? 0.25 : 0.25) };
   }
   function strokeOf(n) {
     const p = mainPaint(n.strokePaints); if (!p || p.type !== 'SOLID' || !(n.strokeWeight > 0)) return null;
     return { color: colorHex(p.color), width: r2(n.strokeWeight) };
   }
+  // Dugma paints a stroke inside the box. A design's centre or outside stroke keeps its place by growing the box.
+  function outsetStroke(b, n) {
+    if (!b || !b.stroke || !(b.stroke.width > 0) || !n) return b; const k = n.strokeAlign === 'OUTSIDE' ? 1 : n.strokeAlign === 'CENTER' ? 0.5 : 0; if (!k) return b;
+    const d = b.stroke.width * k; b.x = r2(b.x - d); b.y = r2(b.y - d); b.w = r2(b.w + 2 * d); b.h = r2(b.h + 2 * d); if (b.radius) b.radius = r2(b.radius + d); return b;
+  }
   const WEIGHTS = [[/thin|hairline/i, 100], [/extra ?light|ultra ?light/i, 200], [/light/i, 300], [/semi ?bold|demi ?bold/i, 600], [/extra ?bold|ultra ?bold/i, 800], [/black|heavy/i, 900], [/bold/i, 700], [/medium/i, 500]];
   const weightOf = style => { for (const [re, w] of WEIGHTS) if (re.test(style || '')) return w; return 400; };
   function fontFamilyCss(family) {
-    family = String(family || 'Inter').replace(/["'<>]/g, '');
+    family = String(family || 'Inter').replace(/["'<>]/g, ''); if (typeof Brand !== 'undefined' && Brand.matchFamily) family = Brand.matchFamily(family);
     if (typeof Brand !== 'undefined' && (Brand.FONTS[family] || Brand.customFonts[family])) return Brand.fontCss(family);
     return `"${family}", Inter, system-ui, sans-serif`;
+  }
+  // Figma's Auto line height is the face's ascent plus descent; measured when the face is loaded here, else 1.2.
+  function autoLineHeight(css, weight) {
+    try { const fam = String(css).split(',')[0]; if (typeof Text !== 'undefined' && Text.metrics && document.fonts.check(`${weight} 16px ${fam}`)) { const m = Text.metrics({ family: css, weight }); const lh = m.asc + m.desc; if (lh > 0.9 && lh < 1.8) return Math.round(lh * 1000) / 1000; } } catch { }
+    return 1.2;
   }
   function numberOf(v, size, dflt) { if (!v || typeof v.value !== 'number') return dflt; if (v.units === 'PIXELS') return size ? v.value / size : dflt; if (v.units === 'PERCENT') return v.value / 100; return v.value || dflt; }
   // Vector geometry: a blob of commands (0 close, 1 move, 2 line, 3 quad, 4 cubic) with little-endian float32 points.
@@ -4746,7 +4766,7 @@ const FigmaImport = (() => {
       const op = opacity * (n.opacity ?? 1);
       // The first block a node makes takes its place in the parent's stack; any extra layers ride along absolutely.
       let made = 0;
-      const common = b => { if (box.rotation) b.rotation = box.rotation; if (op < 0.999 && b.kind !== 'box') b.opacity = r2(op); else if (op < 0.999) b.opacity = r2(n.opacity ?? 1); const sh = shadowOf(n.effects); if (sh) b.shadow = sh; if (n.name) b.label = String(n.name).slice(0, 80); if (parentId) b.parent = parentId; if (made++ === 0) applySizing(n, b, parentNode); else if (parentNode && AUTO && autoOf(parentNode)) b.absolute = true; stats.blocks++; out.push(b); return b; };
+      const common = b => { if (box.rotation) b.rotation = box.rotation; if (op < 0.999 && b.kind !== 'box') b.opacity = r2(op); else if (op < 0.999) b.opacity = r2(n.opacity ?? 1); const sh = shadowOf(n.effects); if (sh) b.shadow = sh; outsetStroke(b, n); if (n.name) b.label = String(n.name).slice(0, 80); if (parentId) b.parent = parentId; if (made++ === 0) applySizing(n, b, parentNode); else if (parentNode && AUTO && autoOf(parentNode)) b.absolute = true; stats.blocks++; out.push(b); return b; };
       const t = n.type;
       if (t === 'TEXT') { textBlock(n, box, common); return; }
       let boxId = null;
@@ -4811,7 +4831,7 @@ const FigmaImport = (() => {
         else { const g = gradientOf(p, n.size ? n.size.x : 0, n.size ? n.size.y : 0); if (!g) continue; b.gradient = g; b.fill = g.stops[0].c; }
         common(b);
       }
-      if (st) { const last = out && out[out.length - 1]; if (paints.length && last && last.kind === 'field' && last.x === box.x && last.y === box.y && !last.stroke) last.stroke = st; else common({ id: uid(), kind: 'field', x: box.x, y: box.y, w: box.w, h: box.h, radius, fill: 'none', alpha: 0, stroke: st, decorative: true }); }
+      if (st) { const last = out && out[out.length - 1]; if (paints.length && last && last.kind === 'field' && last.x === box.x && last.y === box.y && !last.stroke) { last.stroke = st; outsetStroke(last, n); } else common({ id: uid(), kind: 'field', x: box.x, y: box.y, w: box.w, h: box.h, radius, fill: 'none', alpha: 0, stroke: st, decorative: true }); }
     }
     async function imageBlock(n, box, common, p, radius) {
       const asset = await imageAsset(p);
@@ -4836,7 +4856,7 @@ const FigmaImport = (() => {
       const b = {
         id: uid(), kind: 'text', role: 'text', path: 'text_' + uid(), text: chars.replace(/\u2028|\u2029/g, '\n'),
         x: box.x, y: box.y, w: box.w, h: box.h, align: { CENTER: 'center', RIGHT: 'right' }[n.textAlignHorizontal] || 'left',
-        font: { family: fontFamilyCss(fam), weight: weightOf(style), size, lineHeight: r2(numberOf(n.lineHeight, size, 1.2) || 1.2), letterSpacing: r2(numberOf(n.letterSpacing, size, 0)), transform: n.textCase === 'UPPER' ? 'upper' : n.textCase === 'LOWER' ? 'lower' : undefined, style: /italic|oblique/i.test(style) ? 'italic' : undefined },
+        font: { family: fontFamilyCss(fam), weight: weightOf(style), size, lineHeight: r2(numberOf(n.lineHeight, size, autoLineHeight(fontFamilyCss(fam), weightOf(style))) || 1.2), letterSpacing: r2(numberOf(n.letterSpacing, size, 0)), transform: n.textCase === 'UPPER' ? 'upper' : n.textCase === 'LOWER' ? 'lower' : undefined, style: /italic|oblique/i.test(style) ? 'italic' : undefined },
         fill: p && p.type === 'SOLID' ? colorHex(p.color) : '#000000', decorative: false,
       };
       if (p && p.type !== 'SOLID' && p.type !== 'IMAGE') { const g = gradientOf(p, box.w, box.h); if (g) { b.gradient = g; b.fill = g.stops[0].c; } }
@@ -4851,7 +4871,7 @@ const FigmaImport = (() => {
     }
     const uid = () => Math.random().toString(36).slice(2, 8);
     // An instance without its own paints shows its main component's.
-    const VISUAL = ['fillPaints', 'strokePaints', 'strokeWeight', 'cornerRadius', 'effects', 'rectangleTopLeftCornerRadius', 'rectangleTopRightCornerRadius', 'rectangleBottomLeftCornerRadius', 'rectangleBottomRightCornerRadius', 'opacity', 'frameMaskDisabled',
+    const VISUAL = ['fillPaints', 'strokePaints', 'strokeWeight', 'strokeAlign', 'cornerRadius', 'effects', 'rectangleTopLeftCornerRadius', 'rectangleTopRightCornerRadius', 'rectangleBottomLeftCornerRadius', 'rectangleBottomRightCornerRadius', 'opacity', 'frameMaskDisabled',
       'stackMode', 'stackSpacing', 'stackPadding', 'stackHorizontalPadding', 'stackVerticalPadding', 'stackPaddingRight', 'stackPaddingBottom', 'stackPrimarySizing', 'stackCounterSizing', 'stackPrimaryAlignItems', 'stackCounterAlignItems', 'stackWrap', 'stackCounterSpacing', 'stackCounterAlignContent'];
     function inheritFromMain(n) {
       if (n.type !== 'INSTANCE' || !n.symbolData) return n;
@@ -6708,14 +6728,7 @@ const WebImport = (() => {
   }
   // Capture -> one frame. Flex containers and their items are boxes; with auto layout chosen they become stacks whose
   // sizing (Hug, Fill, Fixed) is read from how the browser had laid them out. The original look is kept for Looks.
-    // A page's family name for a face this build ships, matched loosely: "Bagoss Standard" is Bagoss, "inter" is Inter.
-  function knownFamily(name) {
-    if (Brand.FONTS[name] || Brand.customFonts[name]) return name;
-    const norm = s => String(s).toLowerCase().replace(/\s+(standard|std|text|display|pro|variable|vf)$/i, '').replace(/[^a-z0-9]/g, '');
-    const want = norm(name); if (!want) return name;
-    for (const k of [...Object.keys(Brand.customFonts), ...Object.keys(Brand.FONTS)]) if (norm(k) === want) return k;
-    return name;
-  }
+    const knownFamily = name => Brand.matchFamily ? Brand.matchFamily(name) : name;
   async function importCapture(cap) {
     if (!cap || !Array.isArray(cap.nodes)) throw new Error('empty capture');
     const kit = env.getKit(); const W = Math.max(64, Math.round(cap.w || 1280)), H = Math.max(64, Math.round(cap.h || 800));

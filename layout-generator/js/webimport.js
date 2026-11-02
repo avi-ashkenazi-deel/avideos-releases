@@ -295,14 +295,7 @@ const WebImport = (() => {
   }
   // Capture -> one frame. Flex containers and their items are boxes; with auto layout chosen they become stacks whose
   // sizing (Hug, Fill, Fixed) is read from how the browser had laid them out. The original look is kept for Looks.
-    // A page's family name for a face this build ships, matched loosely: "Bagoss Standard" is Bagoss, "inter" is Inter.
-  function knownFamily(name) {
-    if (Brand.FONTS[name] || Brand.customFonts[name]) return name;
-    const norm = s => String(s).toLowerCase().replace(/\s+(standard|std|text|display|pro|variable|vf)$/i, '').replace(/[^a-z0-9]/g, '');
-    const want = norm(name); if (!want) return name;
-    for (const k of [...Object.keys(Brand.customFonts), ...Object.keys(Brand.FONTS)]) if (norm(k) === want) return k;
-    return name;
-  }
+    const knownFamily = name => Brand.matchFamily ? Brand.matchFamily(name) : name;
   async function importCapture(cap) {
     if (!cap || !Array.isArray(cap.nodes)) throw new Error('empty capture');
     const kit = env.getKit(); const W = Math.max(64, Math.round(cap.w || 1280)), H = Math.max(64, Math.round(cap.h || 800));

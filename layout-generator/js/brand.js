@@ -12,6 +12,14 @@ const Brand = (() => {
   };
   const customFonts = {}; // name -> {css, weights, buffer, mime}
 
+  // A page's or design's family name for a face this build ships, matched loosely: "Bagoss Standard" is Bagoss, "inter" is Inter.
+  function matchFamily(name) {
+    name = String(name || '').trim(); if (!name || FONTS[name] || customFonts[name]) return name;
+    const norm = s => String(s).toLowerCase().replace(/\s+(standard|std|text|display|pro|variable|vf)$/i, '').replace(/[^a-z0-9]/g, '');
+    const want = norm(name); if (!want) return name;
+    for (const k of [...Object.keys(customFonts), ...Object.keys(FONTS)]) if (norm(k) === want) return k;
+    return name;
+  }
   function fontCss(name) { return (FONTS[name] || customFonts[name] || { css: `"${name}", sans-serif` }).css; }
   function fontWeights(name) { return (FONTS[name] || customFonts[name] || { weights: [400, 700] }).weights; }
   function allFontNames() { return [...Object.keys(FONTS), ...Object.keys(customFonts)]; }
@@ -334,5 +342,5 @@ const Brand = (() => {
     if (typeof LibStore === 'undefined' || !LibStore.guide) return ''; const k = kitGuideId(kit || currentKit);
     return ids.map(id => { const t = String(LibStore.guide(LibStore.guideKey(k, id)) || '').trim(); return t ? `${(kit || currentKit || {}).name || 'Brand'} guidelines, ${id}.md (follow them):\n${t.length > max ? t.slice(0, max) + '\n…' : t}` : ''; }).filter(Boolean).join('\n\n');
   }
-  return { fontsReady, useKit, kitGuideId, voiceText, guidesText, FONTS, customFonts, fontCss, fontWeights, allFontNames, PRESETS, fromPreset, pairs, themesOf, tokenHex, tokenFor, parseSvg, logoInner, logoColorFor, logosOf, logoVariant, logoAspectOf, makeDemoImage, serialize, clone };
+  return { fontsReady, useKit, kitGuideId, voiceText, guidesText, FONTS, customFonts, fontCss, fontWeights, matchFamily, allFontNames, PRESETS, fromPreset, pairs, themesOf, tokenHex, tokenFor, parseSvg, logoInner, logoColorFor, logosOf, logoVariant, logoAspectOf, makeDemoImage, serialize, clone };
 })();
