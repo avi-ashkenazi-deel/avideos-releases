@@ -37,6 +37,7 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
   function drawPlayhead() { if (!stage.duration) return; phead.style.left = `${PAD + stage.time * pxPerSec()}px`; }
   ruler.addEventListener('pointerdown', (e) => { const seekAt = (ev) => { const r = ruler.getBoundingClientRect(); stage.pause(); stage.seek(Math.max(0, Math.min(stage.duration, (ev.clientX - r.left) / pxPerSec()))); }; seekAt(e); const mv = (ev) => seekAt(ev); const up = () => { window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up); }; window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up); });
   function renderTimeline() {
+    if (dragState) return;
     const dur = stage.duration || composition?.duration || 5; const pps = pxPerSec();
     ruler.replaceChildren(); const stepS = dur > 30 ? 5 : dur > 12 ? 2 : dur > 6 ? 1 : 0.5;
     for (let t = 0; t <= dur + 1e-6; t += stepS) ruler.append(h('div.tick', { style: { left: `${t * pps}px` } }, t % 1 === 0 ? `${t}s` : ''));
@@ -55,29 +56,35 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
     }));
     drawPlayhead();
   }
+  let dragState = null; // while set, renderTimeline() is paused so the dragged element survives
   function attachDrag(el, c, d) {
     el.addEventListener('pointerdown', (e) => {
       if (e.button !== 0) return; e.preventDefault(); e.stopPropagation();
       const mode = e.target.classList.contains('rh') ? 'end' : e.target.classList.contains('lh') ? 'start' : 'move';
       const pps = pxPerSec(); const x0 = e.clientX; const s0 = c.start, d0 = d; let moved = false;
-      el.setPointerCapture(e.pointerId); el.classList.add('dragging');
       const snap = (v) => Math.round(v * stage.fps) / stage.fps;
+      dragState = { id: c.id, s: s0, dd: d0 };
+      el.classList.add('dragging');
+      let lastSeek = 0;
       const mv = (ev) => {
         const dx = (ev.clientX - x0) / pps; if (Math.abs(ev.clientX - x0) > 2) moved = true;
         let s = s0, dd = d0;
-        if (mode === 'move') s = Math.max(0, snap(s0 + dx)); else if (mode === 'end') dd = Math.max(1 / stage.fps, snap(d0 + dx)); else { s = Math.max(0, Math.min(s0 + d0 - 1 / stage.fps, snap(s0 + dx))); dd = s0 + d0 - s; }
-        el.style.left = `${s * pps}px`; el.style.width = `${Math.max(14, dd * pps)}px`; el._live = { s, dd };
-        stage.seek(mode === 'end' ? s + dd - 0.001 : s);
+        if (mode === 'move') s = Math.max(0, snap(s0 + dx));
+        else if (mode === 'end') dd = Math.max(1 / stage.fps, snap(d0 + dx));
+        else { s = Math.max(0, Math.min(s0 + d0 - 1 / stage.fps, snap(s0 + dx))); dd = s0 + d0 - s; }
+        el.style.left = `${s * pps}px`; el.style.width = `${Math.max(14, dd * pps)}px`; dragState.s = s; dragState.dd = dd;
+        const now = performance.now(); if (now - lastSeek > 40) { lastSeek = now; stage.seek(mode === 'end' ? s + dd - 0.001 : s); }
       };
       const up = async () => {
-        el.removeEventListener('pointermove', mv); el.removeEventListener('pointerup', up); el.classList.remove('dragging');
-        if (!moved) { selectClip(c.id); return; }
+        window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', up);
+        el.classList.remove('dragging');
+        const { s, dd } = dragState; dragState = null;
+        if (!moved) { renderTimeline(); selectClip(c.id); return; }
         if (!c.id) { toast('Give this element an id to edit it from the timeline', 'err'); renderTimeline(); return; }
-        const { s, dd } = el._live || { s: s0, dd: d0 };
-        try { const r = await api.updateClip(project.id, c.id, { start: s, ...(c.duration !== null || mode !== 'move' ? { duration: dd } : {}) }); composition = r.composition; await stage.reload(true); renderTimeline(); renderLayers(); selectClip(c.id); }
+        try { const r = await api.updateClip(project.id, c.id, { start: s, ...(c.duration !== null || mode !== 'move' ? { duration: dd } : {}) }); composition = r.composition; await stage.reload(true); renderTimeline(); renderLayers(); selectClip(c.id); toast(`#${c.id}: ${fmtTime(s)} – ${fmtTime(s + dd)}`, 'ok'); }
         catch (err) { toast(err.message, 'err'); renderTimeline(); }
       };
-      el.addEventListener('pointermove', mv); el.addEventListener('pointerup', up);
+      window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up);
     });
   }
 

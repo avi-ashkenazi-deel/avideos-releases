@@ -160,6 +160,24 @@ export function updateClip(dir, id, patch) {
   return parseAttrs(attrs);
 }
 
+/** Set attributes on the root composition element (e.g. data-duration). */
+export function updateRoot(dir, patch) {
+  const file = path.join(dir, 'index.html');
+  let html = fs.readFileSync(file, 'utf8');
+  const m = /<([a-zA-Z][\w-]*)\b([^>]*?\bdata-composition-id=["'][^"']*["'][^>]*?)(\/?)>/.exec(html);
+  if (!m) return null;
+  let attrs = m[2];
+  for (const [name, value] of Object.entries(patch)) {
+    if (value === null || value === undefined) continue;
+    const v = typeof value === 'number' ? String(Math.round(value * 1000) / 1000) : String(value);
+    const ar = new RegExp(`(\\s${name}=)(["'])[^"']*\\2`);
+    attrs = ar.test(attrs) ? attrs.replace(ar, `$1"${v}"`) : `${attrs} ${name}="${v}"`;
+  }
+  html = html.slice(0, m.index) + `<${m[1]}${attrs}${m[3]}>` + html.slice(m.index + m[0].length);
+  fs.writeFileSync(file, html);
+  return parseAttrs(attrs);
+}
+
 /** Create a new project folder from a template. Returns the absolute dir. */
 export function createProject(name, { template = 'blank', base = path.join(ROOT, 'projects'), width = 1280, height = 720, fps = 30 } = {}) {
   const slug = String(name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'video';

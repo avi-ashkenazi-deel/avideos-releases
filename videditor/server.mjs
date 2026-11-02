@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Store } from './lib/store.mjs';
-import { detectProject, parseProject, clipsAt, describeClip, listFiles, updateClip, createProject, safePath } from './lib/composition.mjs';
+import { detectProject, parseProject, clipsAt, describeClip, listFiles, updateClip, updateRoot, createProject, safePath } from './lib/composition.mjs';
 import { hasFfmpeg, probe, poster, frameAt } from './lib/media.mjs';
 import { buildPrompt } from './lib/prompt.mjs';
 import { renderProject, loadPlaywright } from './lib/render.mjs';
@@ -218,8 +218,12 @@ async function api(req, res, url) {
     const patch = {}; for (const k of ['start', 'duration', 'track']) if (k in b) patch[k] = Number(b[k]);
     const attrs = updateClip(prj.dir, decodeURIComponent(x[2]), patch);
     if (!attrs) return err(res, 404, `No clip with id ${x[2]} in index.html`);
+    // A clip dragged past the end extends the composition so it stays visible.
+    let comp = parseProject(prj.dir);
+    const end = Number(attrs['data-start']) + Number(attrs['data-duration'] || 0);
+    if (comp && Number.isFinite(end) && comp.duration !== null && end > comp.duration + 1e-6) { updateRoot(prj.dir, { 'data-duration': end }); comp = parseProject(prj.dir); }
     store.touch(prj.id); store.save();
-    return send(res, 200, { ok: true, attrs, composition: parseProject(prj.dir) });
+    return send(res, 200, { ok: true, attrs, composition: comp });
   }
   if ((x = m(/^\/api\/projects\/([^/]+)\/chat$/)) && req.method === 'GET') {
     const prj = store.project(x[1]); if (!prj) return err(res, 404, 'Project not found');
