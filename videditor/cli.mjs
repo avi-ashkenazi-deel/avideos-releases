@@ -6,6 +6,7 @@
 //   node videditor/cli.mjs add-version <projectId> <file.mp4> [--notes "..."] [--label v3]
 //   node videditor/cli.mjs reply <feedbackId> "text" [--done]
 //   node videditor/cli.mjs done <feedbackId>
+//   node videditor/cli.mjs render <projectId> [--notes "..."] [--quality draft|looks|high]
 //   node videditor/cli.mjs wait <projectId>
 // Env: VIDEDITOR_URL (default http://localhost:8787)
 import fs from 'node:fs';
@@ -22,11 +23,12 @@ async function api(method, p, body) {
 const fmt = (s) => (s === null || s === undefined ? '–' : `${Math.floor(s / 60)}:${(s % 60).toFixed(2).padStart(5, '0')}`);
 try {
   switch (cmd) {
-    case 'projects': { const s = await api('GET', '/api/state'); for (const p of s.projects) console.log(`${p.id}\t${p.name}\t${p.versions.map((v) => `${v.label}:${v.id}`).join(' ')}${p.hyperframesDir ? `\t${p.hyperframesDir}` : ''}`); break; }
+    case 'projects': { const s = await api('GET', '/api/state'); for (const p of s.projects) console.log(`${p.id}\t${p.name}\t${p.versions.map((v) => `${v.label}:${v.id}`).join(' ')}${p.dir ? `\t${p.dir}` : ''}`); break; }
     case 'feedback': { const p = await api('GET', `/api/projects/${args[0]}`); const vid = flags.version || p.latest?.id; const items = await api('GET', `/api/feedback?versionId=${vid}${flags.all ? '' : '&status=open'}`); for (const f of items.filter((f) => !f.replyTo)) console.log(`${f.id}\t${fmt(f.time)}\t${f.status}\t${f.author}\t${(f.body || f.transcript || '').replace(/\n/g, ' ')}${f.clipContext?.length ? `\n\t on screen: ${f.clipContext.map((c) => c.label).join('; ')}` : ''}`); break; }
     case 'prompt': console.log(await api('GET', `/api/projects/${args[0]}/prompt${flags.version ? `?versionId=${flags.version}` : ''}`)); break;
-    case 'add-version': { const p = await api('GET', `/api/projects/${args[0]}`); const abs = path.isAbsolute(args[1]) ? args[1] : path.resolve(p.hyperframesDir || process.cwd(), args[1]); if (!fs.existsSync(abs)) { console.error(`File not found: ${abs}`); process.exit(1); } const v = await api('POST', `/api/projects/${args[0]}/versions`, { path: abs, notes: flags.notes || '', label: flags.label, postedByAgent: true }); console.log(`Registered ${v.label} (${v.id}) → ${BASE}/#/p/${args[0]}?v=${v.id}`); break; }
+    case 'add-version': { const p = await api('GET', `/api/projects/${args[0]}`); const abs = path.isAbsolute(args[1]) ? args[1] : path.resolve(p.dir || process.cwd(), args[1]); if (!fs.existsSync(abs)) { console.error(`File not found: ${abs}`); process.exit(1); } const v = await api('POST', `/api/projects/${args[0]}/versions`, { path: abs, notes: flags.notes || '', label: flags.label, postedByAgent: true }); console.log(`Registered ${v.label} (${v.id}) → ${BASE}/#/p/${args[0]}?v=${v.id}`); break; }
     case 'reply': { const parent = await api('GET', `/api/feedback/${args[0]}`); const f = await api('POST', '/api/feedback', { versionId: parent.versionId, replyTo: parent.id, body: args[1] || '', author: process.env.VIDEDITOR_AGENT_NAME || 'Agent', postedByAgent: true }); if (flags.done) await api('PATCH', `/api/feedback/${parent.id}`, { status: 'done' }); console.log(`Replied ${f.id}${flags.done ? ', marked done' : ''}`); break; }
+    case 'render': { const { jobId } = await api('POST', `/api/projects/${args[0]}/render`, { quality: flags.quality || 'looks', notes: flags.notes || '' }); for (;;) { await new Promise((r) => setTimeout(r, 1000)); const j = await api('GET', `/api/jobs/${jobId}`); const prog = j.lines.filter((l) => l.type === 'progress').slice(-1)[0]; if (prog) process.stderr.write(`\rframe ${prog.frame}/${prog.frames}   `); if (j.done) { process.stderr.write('\n'); console.log(j.lines.filter((l) => l.type === 'log').map((l) => l.text).join('\n')); if (!j.ok) process.exit(1); console.log(`→ ${BASE}/#/p/${args[0]}?v=${j.versionId}`); break; } } break; }
     case 'done': await api('PATCH', `/api/feedback/${args[0]}`, { status: 'done' }); console.log('Marked done'); break;
     case 'wait': { const r = await api('GET', `/api/feedback/wait?projectId=${args[0]}&timeout=45000&humanOnly=1`); console.log(r.items.length ? JSON.stringify(r.items, null, 2) : 'No new feedback (timed out).'); break; }
     default: console.log(fs.readFileSync(new URL(import.meta.url)).toString().split('\n').filter((l) => l.startsWith('//')).map((l) => l.slice(3)).join('\n'));

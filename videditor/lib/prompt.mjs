@@ -1,5 +1,5 @@
 // Builds the agent brief ("Copy Prompt") from open feedback on a version.
-import { clipsAt, describeClip, fmt } from './hyperframes.mjs';
+import { clipsAt, describeClip, fmt } from './composition.mjs';
 
 export function buildPrompt({ project, version, feedback, composition, baseUrl, dataDir }) {
   const open = feedback.filter((f) => !f.replyTo && f.status !== 'done');
@@ -10,7 +10,7 @@ export function buildPrompt({ project, version, feedback, composition, baseUrl, 
   lines.push(`You are revising a video. A reviewer left timestamped feedback on the current render in Videditor. Apply the feedback, render a new version, register it, then reply on each item and mark it done.`);
   lines.push('');
   lines.push(`- Videditor: ${baseUrl}/#/p/${project.id}?v=${version.id}`);
-  if (project.hyperframesDir) lines.push(`- HyperFrames project folder: ${project.hyperframesDir}`);
+  if (project.dir) lines.push(`- Composition folder: ${project.dir}`);
   lines.push(`- Reviewed render: ${version.filePath || version.mediaUrl}${version.duration ? ` (${fmt(version.duration)}, ${version.width}×${version.height})` : ''}`);
   if (version.notes) lines.push(`- Notes on this version: ${version.notes.split('\n')[0]}`);
   lines.push('');
@@ -38,10 +38,10 @@ export function buildPrompt({ project, version, feedback, composition, baseUrl, 
   lines.push('');
   lines.push('## How to respond');
   const n = version.number + 1;
-  if (project.hyperframesDir) {
-    lines.push(`1. Edit the HyperFrames project in \`${project.hyperframesDir}\` (timing lives in \`data-start\` / \`data-duration\` attributes; scenes in \`compositions/\`).`);
-    lines.push(`2. Check and render: \`npx hyperframes lint && npx hyperframes render --output renders/v${n}.mp4\``);
-    lines.push(`3. Register the render as v${n} with a changelog. With the Videditor MCP server: call \`version_add\` with project_id \`${project.id}\`, file \`renders/v${n}.mp4\` and notes. Without MCP: \`node videditor/cli.mjs add-version ${project.id} renders/v${n}.mp4 --notes "..."\``);
+  if (project.dir) {
+    lines.push(`1. Edit the composition in \`${project.dir}/index.html\` (the video is HTML; timing lives in \`data-start\` / \`data-duration\` attributes; the format is documented in \`videditor/skills/videditor/SKILL.md\`).`);
+    lines.push(`2. Render and register v${n}: with the Videditor MCP server call \`render_version\` with project_id \`${project.id}\` and notes describing the changes. Without MCP: \`node videditor/cli.mjs render ${project.id} --notes "..."\``);
+    lines.push(`3. If you produced the MP4 some other way, register it with \`version_add\` or \`node videditor/cli.mjs add-version ${project.id} path.mp4\`.`);
   } else {
     lines.push(`1. Make the edits in your editing tool and export a new MP4.`);
     lines.push(`2. Register it as v${n}: MCP \`version_add\` (project_id \`${project.id}\`) or \`node videditor/cli.mjs add-version ${project.id} path/to/v${n}.mp4 --notes "..."\``);

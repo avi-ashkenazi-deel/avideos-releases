@@ -11,7 +11,7 @@ export async function renderReview(root, { projectId, versionId, navigate, topba
   if (!project.versions.length) return renderNoVersions(root, project, { navigate, topbar });
   let version = project.versions.find((v) => v.id === versionId) || project.versions[project.versions.length - 1];
   let feedback = await api.feedback({ versionId: version.id });
-  let composition = project.hyperframesDir ? await api.composition(project.id).catch(() => null) : null;
+  let composition = project.dir ? await api.composition(project.id).catch(() => null) : null;
   const fps = composition?.fps || version.fps || 30;
   let selectedId = null, filter = 'all', tab = 'feedback';
   const S = { anchor: null, anchorEnd: null, refs: [], voice: null, tool: null };
@@ -191,13 +191,13 @@ export async function renderReview(root, { projectId, versionId, navigate, topba
     const sections = [];
     const notesTa = h('textarea.text', { value: version.notes || '', rows: 4, placeholder: 'What changed in this version? Which notes does it address?' });
     sections.push(h('div.section', h('h3', `${version.label} notes`, version.postedByAgent ? h('span.pill.agent', 'agent') : null, h('span.spacer'), btn('Save', { cls: 'sm ghost', onClick: async () => { version = await api.updateVersion(version.id, { notes: notesTa.value }); toast('Saved', 'ok'); } })), notesTa, h('div.small.muted', { style: { marginTop: '6px' } }, `${version.originalName || ''} · ${version.width || '?'}×${version.height || '?'} · ${fmtTime(version.duration)} · ${version.source} · ${relTime(version.createdAt)}`)));
-    if (!project.hyperframesDir) {
-      const dirIn = h('input.text', { placeholder: '/path/to/hyperframes/project' });
-      sections.push(h('div.section', h('h3', 'HyperFrames project'), h('p.small.muted', 'Link the folder this video was rendered from. Videditor will then show the composition timeline, tell your agent which clips are under each note, and render new versions.'), dirIn, h('div', { style: { marginTop: '8px' } }, btn('Link folder', { cls: 'sm', onClick: async () => { try { project = await api.updateProject(project.id, { hyperframesDir: dirIn.value.trim() }); composition = await api.composition(project.id); toast('Linked', 'ok'); renderContext(); renderLanes(); } catch (e) { toast(e.message, 'err'); } } }))));
+    if (!project.dir) {
+      const dirIn = h('input.text', { placeholder: '/path/to/composition/folder' });
+      sections.push(h('div.section', h('h3', 'Composition folder'), h('p.small.muted', 'Link the folder this video was rendered from (a Videditor composition with index.html). You then get the clip lanes, the agent is told which clips are under each note, and you can render new versions.'), dirIn, h('div', { style: { marginTop: '8px' } }, btn('Link folder', { cls: 'sm', onClick: async () => { try { project = await api.updateProject(project.id, { dir: dirIn.value.trim() }); composition = await api.composition(project.id); toast('Linked', 'ok'); renderContext(); renderLanes(); } catch (e) { toast(e.message, 'err'); } } }))));
     } else {
       const comp = composition;
-      sections.push(h('div.section', h('h3', 'HyperFrames project', h('span.spacer'), btn('Unlink', { cls: 'sm ghost', onClick: async () => { project = await api.updateProject(project.id, { hyperframesDir: null }); composition = null; renderContext(); renderLanes(); } })),
-        h('dl.kv', h('dt', 'Folder'), h('dd.mono.small', project.hyperframesDir), comp ? [h('dt', 'Composition'), h('dd', `${comp.id || '?'} · ${comp.width || '?'}×${comp.height || '?'} · ${fmtTime(comp.duration)} · ${comp.fps || 30} fps · ${comp.clips.length} clips`)] : [h('dt', 'Composition'), h('dd.muted', 'index.html not parsed')])));
+      sections.push(h('div.section', h('h3', 'Composition', h('span.spacer'), btn('Open in Studio', { cls: 'sm', icon: 'spark', onClick: () => navigate(`#/studio/${project.id}`) }), btn('Unlink', { cls: 'sm ghost', onClick: async () => { project = await api.updateProject(project.id, { dir: null }); composition = null; renderContext(); renderLanes(); } })),
+        h('dl.kv', h('dt', 'Folder'), h('dd.mono.small', project.dir), comp ? [h('dt', 'Composition'), h('dd', `${comp.id || '?'} · ${comp.width || '?'}×${comp.height || '?'} · ${fmtTime(comp.duration)} · ${comp.fps || 30} fps · ${comp.clips.length} clips`)] : [h('dt', 'Composition'), h('dd.muted', 'index.html not parsed')])));
       if (comp?.clips?.length) {
         const list = h('div.cliplist');
         for (const c of comp.clips.filter((c) => c.start !== null)) list.append(h('div.c', { 'data-start': c.start, 'data-end': c.duration === null ? 1e9 : c.start + c.duration, title: c.file, on: { click: () => player.seek(c.start + 0.01) } }, h('span.t', `${fmtTime(c.start)}${c.duration !== null ? `–${fmtTime(c.start + c.duration)}` : ''}`), h('span', { style: { flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, c.id ? `#${c.id}` : c.compositionId ? `⟨${c.compositionId}⟩` : `<${c.tag}>`, c.text ? h('span.muted', ` “${c.text}”`) : c.src ? h('span.muted', ` ${c.src}`) : null), c.track !== null && c.track !== undefined ? h('span.muted', `T${c.track}`) : null));
@@ -220,17 +220,17 @@ export async function renderReview(root, { projectId, versionId, navigate, topba
     upload.addEventListener('change', () => { if (upload.files[0]) doUpload(upload.files[0]); });
     async function doUpload(file) { const notes = prompt('Notes for this version (what changed?)', '') ?? ''; const prog = h('div.small.muted', 'Uploading 0%'); drop.replaceWith(prog); try { const v = await api.upload(project.id, file, notes, (p) => { prog.textContent = `Uploading ${Math.round(p * 100)}%`; }); toast(`${v.label} added`, 'ok'); navigate(`#/p/${project.id}?v=${v.id}`); } catch (e) { toast(e.message, 'err'); renderVersions(); } }
     const log = h('pre.log.hidden');
-    const renderBtn = project.hyperframesDir ? btn(`Render v${project.versions.length + 1} with HyperFrames`, { icon: 'render', cls: 'sm', onClick: async () => {
+    const renderBtn = project.dir ? btn(`Render v${project.versions.length + 1} from the composition`, { icon: 'render', cls: 'sm', onClick: async () => {
       renderBtn.disabled = true; log.classList.remove('hidden'); log.textContent = 'Starting render…\n';
       try {
         const { jobId } = await api.render(project.id, {});
         const es = new EventSource(`/api/jobs/${jobId}/events`);
-        es.onmessage = (e) => { log.textContent += JSON.parse(e.data) + '\n'; log.scrollTop = log.scrollHeight; };
+        es.onmessage = (e) => { const d = JSON.parse(e.data); if (d.type === 'progress') { const l = log.textContent.split('\n'); if (/^frame /.test(l[l.length - 2] || '')) l.splice(l.length - 2, 1); log.textContent = l.join('\n').replace(/\n?$/, '\n') + `frame ${d.frame}/${d.frames}\n`; } else log.textContent += (d.text || d.message || '') + '\n'; log.scrollTop = log.scrollHeight; };
         es.addEventListener('done', async (e) => { es.close(); const d = JSON.parse(e.data); renderBtn.disabled = false; if (d.ok) { toast('Rendered', 'ok'); navigate(`#/p/${project.id}?v=${d.versionId}`); } else toast('Render failed, see log', 'err'); });
       } catch (e) { toast(e.message, 'err'); renderBtn.disabled = false; }
     } }) : null;
     verBody.replaceChildren(
-      h('div.section', drop, upload, renderBtn ? h('div', { style: { marginTop: '8px' } }, renderBtn) : h('p.hint', { style: { marginTop: '8px' } }, 'Link a HyperFrames folder in Context to render new versions from here.'), log),
+      h('div.section', drop, upload, renderBtn ? h('div', { style: { marginTop: '8px' } }, renderBtn) : h('p.hint', { style: { marginTop: '8px' } }, 'Link a composition folder in Context to render new versions from here.'), log),
       h('div.section', { style: { display: 'grid', gap: '8px' } }, [...project.versions].reverse().map((v) => h('div.version-row', { class: `version-row ${v.id === version.id ? 'current' : ''}`, on: { click: () => navigate(`#/p/${project.id}?v=${v.id}`) } }, v.posterUrl ? h('img', { src: v.posterUrl }) : h('div.noimg'), h('div.vb', h('div.l', v.label, v.postedByAgent ? h('span.pill.agent', 'agent') : null, h('span.small.muted', relTime(v.createdAt)), h('span.spacer', { style: { flex: 1 } }), v.openCount ? h('span.pill.open', `${v.openCount} open`) : h('span.small.muted', `${v.feedbackCount} notes`)), h('div.n', v.notes || h('span.muted', 'No notes'))), h('div', { style: { display: 'grid', gap: '4px' } }, btn('', { icon: 'compare', cls: 'icon sm ghost', title: 'Compare with current', onClick: (e) => { e.stopPropagation(); navigate(`#/p/${project.id}/compare?a=${v.id}&b=${version.id}`); } }), h('a.btn.icon.sm.ghost', { href: `/api/versions/${v.id}/download`, title: 'Download', on: { click: (e) => e.stopPropagation() } }, svg('download')))))),
     );
     counts.versions.textContent = project.versions.length;
@@ -242,7 +242,7 @@ export async function renderReview(root, { projectId, versionId, navigate, topba
     const d = player.duration || composition?.duration; if (!composition?.clips?.length || !d) return;
     const tracks = new Map();
     for (const c of composition.clips.filter((c) => c.start !== null && c.depth === 0)) { const k = c.track ?? 0; if (!tracks.has(k)) tracks.set(k, []); tracks.get(k).push(c); }
-    lanesTitle.classList.remove('hidden'); lanesTitle.replaceChildren(svg('spark'), `HyperFrames composition ${composition.id || ''}`, h('span.muted', `· ${tracks.size} track${tracks.size > 1 ? 's' : ''}, click a clip to seek`));
+    lanesTitle.classList.remove('hidden'); lanesTitle.replaceChildren(svg('spark'), `Composition ${composition.id || ''}`, h('span.muted', `· ${tracks.size} track${tracks.size > 1 ? 's' : ''}, click a clip to seek`));
     for (const k of [...tracks.keys()].sort((a, b) => b - a)) {
       // Clips on one track that overlap in time get their own sub-row so none is hidden.
       const rows = [];
@@ -260,8 +260,8 @@ export async function renderReview(root, { projectId, versionId, navigate, topba
   topbar([
     btn('', { icon: 'back', cls: 'ghost icon', title: 'All projects', onClick: () => navigate('#/') }),
     h('span.title', { title: 'Rename', style: { cursor: 'text' }, on: { click: async () => { const i = h('input.text', { value: project.name }); if (await modal('Rename project', i, { actions: [{ label: 'Save', cls: 'primary' }] })) { project = await api.updateProject(project.id, { name: i.value }); renderReview(root, { projectId, versionId: version.id, navigate, topbar }); } } } }, project.name),
-    project.hyperframesDir ? h('span.pill', { title: project.hyperframesDir }, svg('spark'), 'HyperFrames') : null,
     verSel,
+    project.dir ? btn('Studio', { icon: 'spark', title: 'Edit the composition and chat with the agent', onClick: () => navigate(`#/studio/${project.id}`) }) : null,
     h('span.spacer'),
     project.versions.length > 1 ? btn('Compare', { icon: 'compare', onClick: () => navigate(`#/p/${project.id}/compare?a=${project.versions[Math.max(0, project.versions.findIndex((v) => v.id === version.id) - 1)].id}&b=${version.id}`) }) : null,
     btn('Copy link', { icon: 'link', onClick: async () => { await copyText(location.href); toast('Link copied', 'ok'); } }),
@@ -326,7 +326,7 @@ function renderNoVersions(root, project, { navigate, topbar }) {
   const upload = h('input', { type: 'file', accept: 'video/*', style: { display: 'none' } });
   upload.addEventListener('change', async () => { if (!upload.files[0]) return; toast('Uploading…'); try { const v = await api.upload(project.id, upload.files[0], 'First version'); navigate(`#/p/${project.id}?v=${v.id}`); } catch (e) { toast(e.message, 'err'); } });
   root.replaceChildren(h('div.empty', h('h2', 'No render yet'), h('p', 'Upload the first video to start reviewing.'), btn('Upload v1', { icon: 'upload', cls: 'primary', onClick: () => upload.click() }), upload,
-    project.hyperframesDir ? h('p.small.muted', { style: { marginTop: '16px' } }, `Or render it from the HyperFrames folder: run npx hyperframes render --output renders/v1.mp4 in ${project.hyperframesDir}, then upload or register it with node videditor/cli.mjs add-version ${project.id} renders/v1.mp4`) : null));
+    project.dir ? h('div', { style: { marginTop: '16px' } }, btn('Open in Studio and render', { icon: 'spark', onClick: () => navigate(`#/studio/${project.id}`) })) : null));
 }
 function zoom(url, title) { modal(title, h('img.zoom', { src: url }), { wide: true }); }
 function colorToRgb(hex) { const n = parseInt(hex.slice(1), 16); return `rgb(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255})`; }

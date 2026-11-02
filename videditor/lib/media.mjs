@@ -36,7 +36,7 @@ export function hasFilter(name) {
   return r.status === 0 && new RegExp(`\\s${name}\\s`).test(r.stdout);
 }
 
-export function makeDemoVideo(out, { title = 'Launch day', seconds = 6, hue = 200, titleAt = 1.0, label = 'HyperFrames demo render', text = hasFilter('drawtext') } = {}) {
+export function makeDemoVideo(out, { title = 'Launch day', seconds = 6, hue = 200, titleAt = 1.0, label = 'demo render', text = hasFilter('drawtext') } = {}) {
   // Homebrew and some distro ffmpeg builds ship without drawtext (needs libfreetype): fall back to a plain gradient.
   const font = text ? findFont() : null;
   const bg = `gradients=s=1280x720:d=${seconds}:c0=${hslHex(hue, 0.6, 0.25)}:c1=${hslHex((hue + 60) % 360, 0.7, 0.45)}:speed=0.02`;

@@ -1,4 +1,6 @@
 # Local review data: uploaded videos, annotated frames, voice notes.
 data/
+# Compositions you make in Studio live here.
+projects/
 node_modules/
 *.log

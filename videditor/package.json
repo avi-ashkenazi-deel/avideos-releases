@@ -1,0 +1,16 @@
+{
+  "name": "videditor",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Make videos as HTML compositions with your agent, render them frame-exact, and review them with timestamped notes.",
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node --test tests/unit.mjs",
+    "e2e": "node tests/e2e.cjs"
+  },
+  "dependencies": {
+    "playwright-core": "^1.52.0"
+  },
+  "engines": { "node": ">=22" }
+}

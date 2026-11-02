@@ -1,10 +1,12 @@
-// HyperFrames project awareness: detect a project folder, parse its
-// composition HTML into clips/tracks, and tell which clips are on screen
-// at a given time. Regex-based on purpose: zero dependencies, and the
-// HyperFrames schema is plain data attributes on ordinary HTML tags.
+// Composition projects: a folder whose index.html is the video. This module
+// detects a project, parses the composition into clips/tracks, tells which
+// clips are on screen at a time, edits clip timing in place, and creates
+// projects from templates. Regex-based on purpose: zero dependencies, and
+// the format is plain data attributes on ordinary HTML tags.
 import fs from 'node:fs';
 import path from 'node:path';
-import { spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
 const TAG_RE = /<([a-zA-Z][\w-]*)\b([^>]*?)\/?>/g;
 const ATTR_RE = /([\w:.-]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+)))?/g;
@@ -20,7 +22,7 @@ export function detectProject(dir) {
   const abs = path.resolve(dir);
   if (!fs.existsSync(abs) || !fs.statSync(abs).isDirectory()) return { ok: false, reason: 'Folder does not exist', dir: abs };
   const index = path.join(abs, 'index.html');
-  const settings = path.join(abs, 'hyperframes.json');
+  const settings = path.join(abs, 'videditor.json');
   const hasIndex = fs.existsSync(index);
   const hasSettings = fs.existsSync(settings);
   let isComposition = false;
@@ -28,7 +30,7 @@ export function detectProject(dir) {
   const ok = hasSettings || isComposition;
   const renders = path.join(abs, 'renders');
   const renderFiles = fs.existsSync(renders) ? fs.readdirSync(renders).filter((f) => /\.(mp4|mov|webm)$/i.test(f)).map((f) => path.join('renders', f)) : [];
-  return { ok, dir: abs, hasIndex, hasSettings, isComposition, renderFiles, reason: ok ? null : 'No index.html composition or hyperframes.json found' };
+  return { ok, dir: abs, hasIndex, hasSettings, isComposition, renderFiles, reason: ok ? null : 'No index.html with a data-composition-id root found' };
 }
 
 const num = (v) => (v === undefined || v === '' ? null : (Number.isFinite(Number(v)) ? Number(v) : null));
@@ -64,7 +66,8 @@ export function parseComposition(file, { offset = 0, depth = 0, maxDepth = 3, ho
       duration: num(a['data-duration']), track: hostTrack ?? num(a['data-track-index']),
       src: a.src || a['data-composition-src'] || null, text: /^(h[1-6]|p|span|div|li|button)$/.test(tag) ? textAfter(html, m.index) : '',
       compositionId: a['data-composition-id'] || null, depth, file: path.relative(process.cwd(), file),
-      mediaStart: num(a['data-media-start'] ?? a['data-playback-start']), volume: num(a['data-volume']),
+      mediaStart: num(a['data-media-start'] ?? a['data-playback-start']) ?? 0, volume: num(a['data-volume']) ?? 1,
+      muted: 'muted' in a, hasAudio: tag === 'audio' || (tag === 'video' && !('muted' in a)),
     };
     if (clip.duration === null && (tag === 'img')) clip.duration = 3;
     comp.clips.push(clip);
@@ -117,13 +120,13 @@ export function fmt(s) {
 /** List project files (text-ish, small) for the Context panel. */
 export function listFiles(dir, { max = 400 } = {}) {
   const out = [];
-  const skip = new Set(['node_modules', '.git', '.hyperframes', 'renders', '.cache']);
+  const skip = new Set(['node_modules', '.git', 'renders', '.cache']);
   const walk = (d, rel) => {
     if (out.length >= max) return;
     let entries = [];
     try { entries = fs.readdirSync(d, { withFileTypes: true }); } catch { return; }
     for (const e of entries.sort((a, b) => a.name.localeCompare(b.name))) {
-      if (e.name.startsWith('.') && e.name !== '.hyperframes') continue;
+      if (e.name.startsWith('.')) continue;
       const r = rel ? `${rel}/${e.name}` : e.name;
       if (e.isDirectory()) { if (!skip.has(e.name)) walk(path.join(d, e.name), r); continue; }
       let size = 0; try { size = fs.statSync(path.join(d, e.name)).size; } catch {}
@@ -135,19 +138,50 @@ export function listFiles(dir, { max = 400 } = {}) {
   return out;
 }
 
-/** Run a HyperFrames CLI command inside the project dir. Streams lines to onLine. */
-export function runHyperframes(dir, args, onLine) {
-  return new Promise((resolve) => {
-    const cmd = process.platform === 'win32' ? 'npx.cmd' : 'npx';
-    const child = spawn(cmd, ['--yes', 'hyperframes', ...args], { cwd: dir, env: { ...process.env, CI: '1', FORCE_COLOR: '0' } });
-    let buf = '';
-    const feed = (chunk) => {
-      buf += chunk.toString();
-      let i;
-      while ((i = buf.search(/[\r\n]/)) >= 0) { const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1); if (line) onLine?.(line); }
-    };
-    child.stdout.on('data', feed); child.stderr.on('data', feed);
-    child.on('error', (e) => { onLine?.(`error: ${e.message}`); resolve({ code: 1, error: e.message }); });
-    child.on('close', (code) => { if (buf.trim()) onLine?.(buf.trim()); resolve({ code }); });
-  });
+/** Edit a clip's timing/track attributes in index.html by element id. Returns the new attrs or null. */
+export function updateClip(dir, id, patch) {
+  const file = path.join(dir, 'index.html');
+  let html = fs.readFileSync(file, 'utf8');
+  const re = new RegExp(`<([a-zA-Z][\\w-]*)\\b([^>]*?\\bid=["']${id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["'][^>]*?)(/?)>`);
+  const m = re.exec(html);
+  if (!m) return null;
+  let attrs = m[2];
+  const set = (name, value) => {
+    if (value === null || value === undefined) return;
+    const v = typeof value === 'number' ? String(Math.round(value * 1000) / 1000) : String(value);
+    const ar = new RegExp(`(\\s${name}=)(["'])[^"']*\\2`);
+    attrs = ar.test(attrs) ? attrs.replace(ar, `$1"${v}"`) : `${attrs} ${name}="${v}"`;
+  };
+  if ('start' in patch) set('data-start', Math.max(0, patch.start));
+  if ('duration' in patch) set('data-duration', Math.max(0.04, patch.duration));
+  if ('track' in patch) set('data-track-index', patch.track);
+  html = html.slice(0, m.index) + `<${m[1]}${attrs}${m[3]}>` + html.slice(m.index + m[0].length);
+  fs.writeFileSync(file, html);
+  return parseAttrs(attrs);
+}
+
+/** Create a new project folder from a template. Returns the absolute dir. */
+export function createProject(name, { template = 'blank', base = path.join(ROOT, 'projects'), width = 1280, height = 720, fps = 30 } = {}) {
+  const slug = String(name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'video';
+  fs.mkdirSync(base, { recursive: true });
+  let dir = path.join(base, slug); let n = 2;
+  while (fs.existsSync(dir)) dir = path.join(base, `${slug}-${n++}`);
+  const tpl = path.join(ROOT, 'templates', template);
+  fs.cpSync(tpl, dir, { recursive: true });
+  for (const sub of ['assets', 'renders']) fs.mkdirSync(path.join(dir, sub), { recursive: true });
+  const index = path.join(dir, 'index.html');
+  if (fs.existsSync(index)) {
+    let html = fs.readFileSync(index, 'utf8');
+    html = html.replace(/\{\{title\}\}/g, name).replace(/\{\{id\}\}/g, slug).replace(/\{\{width\}\}/g, String(width)).replace(/\{\{height\}\}/g, String(height)).replace(/\{\{fps\}\}/g, String(fps));
+    fs.writeFileSync(index, html);
+  }
+  const brief = path.join(dir, 'BRIEF.md');
+  if (fs.existsSync(brief)) fs.writeFileSync(brief, fs.readFileSync(brief, 'utf8').replace(/\{\{title\}\}/g, name));
+  return dir;
+}
+
+/** Resolve a project-relative path safely. Returns null when it escapes the project. */
+export function safePath(dir, rel) {
+  const abs = path.resolve(dir, rel || '');
+  return abs === dir || abs.startsWith(dir + path.sep) ? abs : null;
 }

@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{{title}}</title>
+<style>
+  html, body { margin: 0; background: #000; }
+  #stage { position: relative; width: {{width}}px; height: {{height}}px; overflow: hidden; background: #101218; color: #fff; font-family: -apple-system, Inter, Helvetica, Arial, sans-serif; }
+  .clip { position: absolute; }
+  #bg { inset: 0; background: radial-gradient(120% 90% at 20% 10%, #2a2f4a, #101218 70%); }
+  #title { left: 6%; right: 6%; top: 38%; margin: 0; font-size: 88px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.05; }
+  .anim-rise { animation: rise .8s cubic-bezier(.2,.7,.2,1) both; }
+  @keyframes rise { from { opacity: 0; transform: translateY(40px); } to { opacity: 1; transform: none; } }
+</style>
+</head>
+<body>
+<div id="stage" data-composition-id="{{id}}" data-duration="5" data-width="{{width}}" data-height="{{height}}" data-fps="{{fps}}">
+  <div id="bg" class="clip" data-start="0" data-duration="5" data-track-index="0"></div>
+  <h1 id="title" class="clip anim-rise" data-start="0.5" data-duration="4.5" data-track-index="1">{{title}}</h1>
+</div>
+</body>
+</html>

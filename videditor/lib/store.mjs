@@ -36,7 +36,7 @@ export class Store {
   projects() { return [...this.db.projects].sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || '')); }
   addProject(data) {
     const now = new Date().toISOString();
-    const p = { id: this.id('prj'), name: 'Untitled', hyperframesDir: null, tags: [], createdAt: now, updatedAt: now, ...data };
+    const p = { id: this.id('prj'), name: 'Untitled', dir: null, chat: [], tags: [], createdAt: now, updatedAt: now, ...data };
     this.db.projects.push(p); this.save(); return p;
   }
   updateProject(id, patch) {
@@ -59,6 +59,12 @@ export class Store {
     const number = this.versions(projectId).length + 1;
     const v = { id: this.id('ver'), projectId, number, label: `v${number}`, createdAt: new Date().toISOString(), notes: '', source: 'upload', postedByAgent: false, ...data };
     this.db.versions.push(v); this.touch(projectId); this.save(); return v;
+  }
+  removeVersion(id) {
+    const v = this.version(id); if (!v) return;
+    this.db.versions = this.db.versions.filter((x) => x.id !== id);
+    this.db.feedback = this.db.feedback.filter((f) => f.versionId !== id);
+    this.touch(v.projectId); this.save();
   }
   updateVersion(id, patch) { const v = this.version(id); if (!v) return null; Object.assign(v, patch); this.touch(v.projectId); this.save(); return v; }
 

@@ -2,6 +2,7 @@ import { h, svg, avatar, getAuthor, setAuthor, modal, toast } from './ui.js';
 import { renderLibrary } from './library.js';
 import { renderReview } from './review.js';
 import { renderCompare } from './compare.js';
+import { renderStudio } from './studio.js';
 
 const app = document.getElementById('app');
 const bar = h('div.topbar');
@@ -26,7 +27,8 @@ async function route() {
   const q = new URLSearchParams(qs || '');
   try {
     let m;
-    if ((m = /^\/p\/([^/]+)\/compare$/.exec(path))) await renderCompare(view, { projectId: m[1], a: q.get('a'), b: q.get('b'), navigate, topbar });
+    if ((m = /^\/studio\/([^/]+)$/.exec(path))) { topbar([h('span.muted', 'Loading…')]); await renderStudio(view, { projectId: m[1], prompt: q.get('prompt'), navigate, topbar }); }
+    else if ((m = /^\/p\/([^/]+)\/compare$/.exec(path))) await renderCompare(view, { projectId: m[1], a: q.get('a'), b: q.get('b'), navigate, topbar });
     else if ((m = /^\/p\/([^/]+)$/.exec(path))) { topbar([h('span.muted', 'Loading…')]); await renderReview(view, { projectId: m[1], versionId: q.get('v'), navigate, topbar }); }
     else { topbar([]); await renderLibrary(view, { navigate }); }
   } catch (e) {

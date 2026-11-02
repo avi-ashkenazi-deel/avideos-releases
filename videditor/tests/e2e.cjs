@@ -4,7 +4,18 @@ const { chromium } = require('playwright');
 const assert = require('node:assert/strict');
 const BASE = process.env.VIDEDITOR_URL || 'http://localhost:8787';
 
+async function cleanup() {
+  // Remove anything an E2E run created (also from earlier failed runs) so the demo stays tidy.
+  const state = await (await fetch(BASE + '/api/state')).json();
+  for (const p of state.projects.filter((p) => /^E2E /.test(p.name))) { await fetch(`${BASE}/api/projects/${p.id}`, { method: 'DELETE' }); if (p.dir && /\/projects\//.test(p.dir)) require('fs').rmSync(p.dir, { recursive: true, force: true }); }
+  const demo = state.projects.find((p) => p.name.includes('demo')); if (!demo) return;
+  for (const v of demo.versions.filter((v) => v.notes === 'E2E agent version')) await fetch(`${BASE}/api/versions/${v.id}`, { method: 'DELETE' });
+  const fb = await (await fetch(`${BASE}/api/feedback?projectId=${demo.id}`)).json();
+  for (const f of fb.filter((f) => /^E2E/.test(f.body) && !f.replyTo)) await fetch(`${BASE}/api/feedback/${f.id}`, { method: 'DELETE' });
+}
+
 (async () => {
+  await cleanup();
   const browser = await chromium.launch();
   const ctx = await browser.newContext({ viewport: { width: 1400, height: 900 }, permissions: [] });
   const page = await ctx.newPage();
@@ -82,6 +93,18 @@ const BASE = process.env.VIDEDITOR_URL || 'http://localhost:8787';
   assert.ok(brief.includes('On screen at'), 'brief includes clip context');
   await page.keyboard.press('Escape');
 
+  console.log('step: agent api');
+  // Agent-side API: register a version via the JSON endpoint and see it in the UI poll
+  const state = await (await fetch(BASE + '/api/state')).json();
+  const prj = state.projects.find((p) => p.name.includes('demo'));
+  const r = await fetch(`${BASE}/api/projects/${prj.id}/versions`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: prj.versions[0].filePath, notes: 'E2E agent version', postedByAgent: true }) });
+  assert.equal(r.status, 201, 'agent version registered');
+  const v3 = await r.json();
+  await page.goto(`${BASE}/#/p/${prj.id}?v=${v3.id}`); await page.waitForTimeout(500);
+  await page.waitForSelector('.topbar select');
+  const selected = await page.$eval('.topbar select', (s) => s.options[s.selectedIndex].text);
+  assert.ok(selected.startsWith(v3.label) && selected.includes('agent'), `agent version selected (${selected})`);
+
   console.log('step: context');
   // Context tab shows the HyperFrames project and files; Versions tab lists versions
   await page.click('.tab:has-text("Context")');
@@ -89,7 +112,7 @@ const BASE = process.env.VIDEDITOR_URL || 'http://localhost:8787';
   await page.waitForSelector('.files .f');
   await page.click('.tab:has-text("Versions")');
   const versions = await page.$$('.version-row');
-  assert.ok(versions.length >= 2, 'two demo versions listed');
+  assert.ok(versions.length >= 2, 'demo + agent version listed');
 
   console.log('step: compare');
   // Compare view syncs playback
@@ -102,33 +125,34 @@ const BASE = process.env.VIDEDITOR_URL || 'http://localhost:8787';
   assert.ok(Math.abs(ta - tb) < 0.1 && ta > 0, `compare videos synced (${ta} vs ${tb})`);
   console.log('compare ok');
 
-  console.log('step: agent api');
-  // Agent-side API: register a version via the JSON endpoint and see it in the UI poll
-  const state = await (await fetch(BASE + '/api/state')).json();
-  const prj = state.projects.find((p) => p.name.includes('demo'));
-  const r = await fetch(`${BASE}/api/projects/${prj.id}/versions`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: prj.versions[0].filePath, notes: 'E2E agent version', postedByAgent: true }) });
-  assert.equal(r.status, 201, 'agent version registered');
-  const v3 = await r.json();
-  await page.goto(`${BASE}/#/p/${prj.id}?v=${v3.id}`);
-  await page.waitForSelector('.topbar select');
-  const selected = await page.$eval('.topbar select', (s) => s.options[s.selectedIndex].text);
-  assert.ok(selected.startsWith(v3.label) && selected.includes('agent'), `agent version selected (${selected})`);
-
   console.log('step: new project');
-  // New-project flow with a HyperFrames folder
+  // "Review an existing render" with a composition folder → opens Studio
   await page.goto(BASE + '/#/');
   await page.click('.card.new');
+  await page.click('.modal .tab:has-text("Review an existing render")');
   await page.fill('.modal input[placeholder*="Product launch"]', 'E2E project');
   await page.fill('.modal input[placeholder*="/path/to"]', require('path').resolve(__dirname, '..', 'examples', 'launch'));
-  await page.waitForSelector('.modal .hint:has-text("HyperFrames project found")');
+  await page.waitForSelector('.modal .hint:has-text("Composition found")');
   await page.click('.modal .actions button:has-text("Create")');
-  await page.waitForSelector('.empty:has-text("No render yet")');
-  console.log('new project ok');
-  // Clean up what this run created so the demo stays tidy.
-  const after = await (await fetch(BASE + '/api/state')).json();
-  for (const p of after.projects.filter((p) => p.name === 'E2E project')) await fetch(`${BASE}/api/projects/${p.id}`, { method: 'DELETE' });
-  const fb = await (await fetch(`${BASE}/api/feedback?projectId=${prj.id}`)).json();
-  for (const f of fb.filter((f) => /^E2E/.test(f.body) && !f.replyTo)) await fetch(`${BASE}/api/feedback/${f.id}`, { method: 'DELETE' });
+  await page.waitForSelector('.studio .tl .tclip', { timeout: 20000 });
+  console.log('new project (review tab) → studio ok');
+
+  // "Make a new video" → blank composition in Studio; timeline drag edits index.html
+  await page.goto(BASE + '/#/'); await page.click('.card.new');
+  await page.fill('.modal input[placeholder*="Product launch"]', 'E2E studio');
+  await page.click('.modal .actions button:has-text("Create")');
+  await page.waitForSelector('.studio .tl .tclip[data-id="title"]', { timeout: 20000 });
+  const st = await (await fetch(BASE + '/api/state')).json(); const sp = st.projects.find((p) => p.name === 'E2E studio');
+  const clip = await page.$('.tclip[data-id="title"]'); const cb = await clip.boundingBox();
+  await page.mouse.move(cb.x + cb.width / 2, cb.y + cb.height / 2); await page.mouse.down(); await page.mouse.move(cb.x + cb.width / 2 + 80, cb.y + cb.height / 2, { steps: 6 }); await page.mouse.up();
+  await page.waitForTimeout(1500);
+  const comp = await (await fetch(`${BASE}/api/projects/${sp.id}/composition`)).json();
+  assert.ok(comp.clips.find((c) => c.id === 'title').start > 0.5, 'drag moved the clip start in index.html');
+  await page.keyboard.press('Home'); await page.waitForTimeout(200); await page.keyboard.press('ArrowRight'); await page.waitForTimeout(400);
+  assert.match(await page.textContent('.transport .time'), /0:00\.01/, 'frame step moved the stage time by one frame');
+  console.log('studio ok');
+
+  await cleanup();
 
   assert.deepEqual(errors.filter((e) => !/favicon|ERR_|net::/.test(e)), [], 'no page errors');
   await browser.close();
