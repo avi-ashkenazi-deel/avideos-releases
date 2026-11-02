@@ -31,8 +31,14 @@ export function frameAt(file, t, { width = 1280 } = {}) {
 }
 
 /** Make a small demo render with ffmpeg so the app has content on first run. */
-export function makeDemoVideo(out, { title = 'Launch day', seconds = 6, hue = 200, titleAt = 1.0, label = 'HyperFrames demo render' } = {}) {
-  const font = findFont();
+export function hasFilter(name) {
+  const r = spawnSync('ffmpeg', ['-hide_banner', '-filters'], { encoding: 'utf8' });
+  return r.status === 0 && new RegExp(`\\s${name}\\s`).test(r.stdout);
+}
+
+export function makeDemoVideo(out, { title = 'Launch day', seconds = 6, hue = 200, titleAt = 1.0, label = 'HyperFrames demo render', text = hasFilter('drawtext') } = {}) {
+  // Homebrew and some distro ffmpeg builds ship without drawtext (needs libfreetype): fall back to a plain gradient.
+  const font = text ? findFont() : null;
   const bg = `gradients=s=1280x720:d=${seconds}:c0=${hslHex(hue, 0.6, 0.25)}:c1=${hslHex((hue + 60) % 360, 0.7, 0.45)}:speed=0.02`;
   const drawText = font
     ? `,drawtext=fontfile=${font}:text='${title.replace(/[':\\]/g, '')}':fontcolor=white:fontsize=96:x=(w-text_w)/2:y=(h-text_h)/2:enable='gte(t\\,${titleAt})':alpha='min(1\\,(t-${titleAt})/0.8)'` +
