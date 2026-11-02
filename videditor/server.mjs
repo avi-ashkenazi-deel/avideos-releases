@@ -343,6 +343,7 @@ async function api(req, res, url) {
     run.then((out) => {
       const p = store.project(prj.id);
       if (p) { if (!entry.text && out.result) entry.text = out.result; if (out.error) entry.error = out.error; p.chat.push(entry); if (out.sessionId) p.agentSessionId = out.sessionId; store.save(); }
+      if (out.error) console.error(`[agent] ${prj.name}: ${out.error}`);
       agents.delete(prj.id); job.finish(!out.error, { result: out.result, cost: out.cost });
     });
     return send(res, 202, { jobId: job.id });

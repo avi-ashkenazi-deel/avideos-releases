@@ -47,7 +47,7 @@ export function runClaude({ dir, prompt, system, sessionId, model, onEvent }) {
     try { child = spawn(bin, args, { cwd: dir, env, stdio: ['ignore', 'pipe', 'pipe'] }); }
     catch (e) { onEvent?.({ type: 'error', message: e.message }); return resolve({ error: e.message }); }
     const out = { sessionId: sessionId || null, result: '', cost: null, error: null };
-    let buf = ''; let stderr = '';
+    let buf = ''; let stderr = ''; let rawOut = '';
     const handle = (msg) => {
       if (msg.type === 'system' && msg.subtype === 'init') { out.sessionId = msg.session_id; onEvent?.({ type: 'status', message: `Claude Code ${msg.model || ''} started`, sessionId: msg.session_id }); }
       else if (msg.type === 'assistant') {
@@ -62,11 +62,16 @@ export function runClaude({ dir, prompt, system, sessionId, model, onEvent }) {
         if (msg.is_error) out.error = msg.result || msg.subtype || 'error';
       }
     };
-    child.stdout.on('data', (d) => { buf += d.toString(); let i; while ((i = buf.indexOf('\n')) >= 0) { const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1); if (!line) continue; try { handle(JSON.parse(line)); } catch {} } });
+    child.stdout.on('data', (d) => { buf += d.toString(); let i; while ((i = buf.indexOf('\n')) >= 0) { const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1); if (!line) continue; try { handle(JSON.parse(line)); } catch { rawOut += line + '\n'; if (rawOut.length > 4000) rawOut = rawOut.slice(-4000); } } });
     child.stderr.on('data', (d) => { stderr += d.toString(); if (stderr.length > 4000) stderr = stderr.slice(-4000); });
     child.on('error', (e) => { const msg = e.code === 'ENOENT' ? `Claude Code was not found (looked for "${bin}"). Install it: npm install -g @anthropic-ai/claude-code, or set VIDEDITOR_CLAUDE_BIN.` : e.message; onEvent?.({ type: 'error', message: msg }); resolve({ ...out, error: msg }); });
     child.on('close', (code) => {
-      if (code !== 0 && !out.error) out.error = `claude exited ${code}${stderr.trim() ? ': ' + stderr.trim().split('\n').slice(-2).join(' ') : ''}`;
+      if (buf.trim()) { try { handle(JSON.parse(buf.trim())); } catch { rawOut += buf; } }
+      if (code !== 0 && !out.error) {
+        const detail = [stderr.trim(), rawOut.trim()].filter(Boolean).join('\n');
+        out.error = `Claude Code exited with code ${code}${detail ? ':\n' + detail.split('\n').slice(-12).join('\n') : ' and printed nothing. Try running this in a terminal inside the project folder to see why:\n' + bin + ' -p "hello" --output-format stream-json --verbose'}`;
+      }
+      if (out.error && (stderr.trim() || rawOut.trim()) && !out.error.includes(stderr.trim().split('\n').slice(-1)[0] || '\u0000')) out.error += '\n' + [stderr.trim(), rawOut.trim()].filter(Boolean).join('\n').split('\n').slice(-8).join('\n');
       if (out.error) onEvent?.({ type: 'error', message: out.error });
       onEvent?.({ type: 'done', result: out.result, cost: out.cost, sessionId: out.sessionId });
       resolve(out);

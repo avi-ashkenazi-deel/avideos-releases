@@ -188,7 +188,7 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
     const el = h('div.msg', { class: `msg ${m.role}` }, h('div.who', avatar(m.role === 'agent' ? 'Agent' : (m.author || getAuthor() || 'You'), m.role === 'agent'), m.role === 'agent' ? 'Agent' : (m.author || getAuthor() || 'You'), h('span.muted', relTime(m.at))));
     if (m.tools?.length) el.append(h('div.tools', m.tools.map((t) => h('span.t', { title: `${t.name} ${t.detail || ''}` }, h('b', t.name), t.detail ? ` ${t.detail}` : ''))));
     if (m.text) el.append(h('div.bubble', m.text));
-    if (m.error) el.append(h('div.bubble.err', m.error));
+    if (m.error) el.append(h('div.bubble.err', { style: { fontFamily: 'var(--mono)', fontSize: '12px' } }, m.error, h('div', { style: { marginTop: '6px' } }, btn('Copy error', { cls: 'sm ghost', icon: 'copy', onClick: async () => { await copyText(m.error); toast('Copied', 'ok'); } }))));
     if (m.live) el.append(h('div.thinking', h('i'), h('i'), h('i'), ' ', m.status || 'thinking'));
     return el;
   }
