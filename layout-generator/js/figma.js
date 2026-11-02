@@ -423,5 +423,59 @@ const FigmaImport = (() => {
       return { name: F.name, x: F.x, y: F.y, layout, clip: F.clip, loose: !!F.loose, autoLayout: F.autoLayout || null, page: F.page || '' };
     });
   }
-  return { readFile, readClipboardHTML, hasFigmaHTML, convert, toLayouts, _kiwi: { decodeSchema, compile, BB }, _pathOf: pathOf, _zip: { readZip, zipEntry }, readArchive };
+  // ---- Geometry from Figma's metadata (the MCP get_metadata XML: id, name, x, y, width, height per node) -------------
+  // Code generated from Figma lays out close to the design, not on it: flex rounding, text metrics and negative gaps
+  // drift by a few pixels. The metadata has every node's true box, so a capture of the rendered code is snapped to it.
+  // Several XML documents merge: the frame's own (instances unexpanded) plus one per instance that was expanded. An
+  // instance that was not expanded borrows the subtree of an expanded instance with the same name (same component),
+  // its child ids re-prefixed the way Figma does (I<instance>;<child>).
+  function boundsFromMetadata(xmls) {
+    const docs = (Array.isArray(xmls) ? xmls : [xmls]).map(x => { try { return new DOMParser().parseFromString(String(x), 'text/xml').documentElement; } catch { return null; } }).filter(e => e && e.tagName !== 'parsererror');
+    if (!docs.length) return new Map();
+    const byId = new Map(); for (const d of docs) byId.set(d.getAttribute('id'), d);
+    const root = docs[0]; const bounds = new Map(); const pre = id => (id.startsWith('I') ? id : 'I' + id) + ';';
+    const byName = new Map(); for (const d of docs) for (const el of [d, ...d.querySelectorAll('*')]) if (el.children.length && el.getAttribute('name')) { const k = el.tagName + '|' + el.getAttribute('name'); if (!byName.has(k)) byName.set(k, el); }
+    const num = (el, a) => parseFloat(el.getAttribute(a)) || 0;
+    const walk = (el, ox, oy, idMap, depth) => {
+      if (depth > 40) return;
+      let id = el.getAttribute('id') || ''; if (idMap) id = idMap(id); if (el.getAttribute('hidden') === 'true') return;
+      const x = ox + num(el, 'x'), y = oy + num(el, 'y'), w = num(el, 'width'), h = num(el, 'height');
+      if (id && !bounds.has(id)) bounds.set(id, { x, y, w, h, name: el.getAttribute('name') || '', type: el.tagName, tpl: !!idMap });
+      let kids = [...el.children]; let map = idMap;
+      if (!kids.length) {
+        const own = byId.get(id); if (own && own !== el) kids = [...own.children];
+        else if (el.tagName === 'instance') { const t = byName.get(el.tagName + '|' + (el.getAttribute('name') || '')); if (t && t !== el && t.getAttribute('id') !== id) { const from = pre(t.getAttribute('id')), to = pre(id); kids = [...t.children]; const prev = idMap; map = cid => { const m = prev ? prev(cid) : cid; return m.startsWith(from) ? to + m.slice(from.length) : m; }; } }
+      }
+      for (const k of kids) walk(k, x, y, map, depth + 1);
+    };
+    walk(root, -num(root, 'x'), -num(root, 'y'), null, 0);
+    return bounds;
+  }
+  // Snap a web capture (WebImport.capturePage of the rendered code) to the design's geometry: each layer moves with the
+  // tagged element it belongs to, mapped from that element's rendered box to the node's box in Figma.
+  function alignCapture(cap, bounds, opts = {}) {
+    if (!cap || !Array.isArray(cap.nodes) || !bounds || !bounds.size) return 0;
+    const ox = Number(opts.offsetX) || 0, oy = Number(opts.offsetY) || 0; let moved = 0;
+    const r1 = v => Math.round(v * 10) / 10;
+    for (const n of cap.nodes) {
+      // the nearest tagged element the metadata knows: the layer's own tag, else a tagged ancestor
+      let b = n.fig && bounds.get(n.fig), fr = n.figRect, own = !!n.figOwn, border = n.figBorder;
+      if (!b && Array.isArray(n.figUp)) for (const up of n.figUp) { const bb = bounds.get(up[0]); if (bb) { b = bb; fr = up.slice(1, 5); border = up.length >= 9 ? up.slice(5, 9) : null; own = false; break; } }
+      if (!b || !Array.isArray(fr) || fr.length !== 4 || !(fr[2] > 0) || !(fr[3] > 0)) continue;
+      // A stroke outside the node in Figma (an avatar's white ring) is a border around the content in the generated code,
+      // and the metadata box excludes it: when the node's box is the rendered content box, the layer takes the border
+      // box around Figma's node, so the ring lands where Figma paints it and the picture under it keeps its size.
+      if (Array.isArray(border) && border.some(Boolean)) { const [bt, br, bb, bl] = border; if (Math.abs(fr[2] - (bl + br) - b.w) < 0.75 && Math.abs(fr[3] - (bt + bb) - b.h) < 0.75) b = { x: b.x - bl, y: b.y - bt, w: b.w + bl + br, h: b.h + bt + bb }; }
+      const sx = b.w > 0 ? b.w / fr[2] : 1, sy = b.h > 0 ? b.h / fr[3] : 1;
+      const nx = b.x + ox + (n.x - fr[0]) * sx, ny = b.y + oy + (n.y - fr[1]) * sy;
+      let nw = own ? (b.w || n.w) : n.w * sx, nh = own ? (b.h || n.h) : (n.t === 'text' ? n.h : n.h * sy);
+      // a borrowed subtree (another instance of the same component) has that instance's text widths: words keep the room
+      // the browser gave them, and never less, or a label that fit on one line wraps
+      if (n.t === 'text') { if (b.tpl) { nw = n.w; nh = n.h; } else nw = Math.max(nw, n.w); }
+      if (Math.abs(nx - n.x) + Math.abs(ny - n.y) + Math.abs(nw - n.w) + Math.abs(nh - n.h) > 0.05) moved++;
+      n.x = r1(nx); n.y = r1(ny); n.w = r1(nw); n.h = r1(nh);
+    }
+    return moved;
+  }
+  return { readFile, readClipboardHTML, hasFigmaHTML, convert, toLayouts, boundsFromMetadata, alignCapture, _kiwi: { decodeSchema, compile, BB }, _pathOf: pathOf, _zip: { readZip, zipEntry }, readArchive };
 })();

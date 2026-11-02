@@ -56,6 +56,19 @@ const Text = (() => {
     if (mode === 'lower') return String(str).toLowerCase();
     return String(str);
   }
-  function clearCache() { cache.clear(); }
-  return { width, wrap, fit, fontString, transform, clearCache, quote };
+  function clearCache() { cache.clear(); metricsCache.clear(); }
+  // The face's content box in em: ascent above and descent below the baseline. A browser (and Figma) centre that box in
+  // the line box, so this is where the baseline goes; without the measurement, a typical 0.78 / 0.22 split.
+  const metricsCache = new Map();
+  function metrics(f) {
+    const key = `${f.style || 'normal'} ${f.weight || 400} ${quote(f.family || 'sans-serif')}`;
+    let m = metricsCache.get(key);
+    if (!m) {
+      m = { asc: 0.78, desc: 0.22 };
+      try { ctx.font = `${f.style || 'normal'} ${f.weight || 400} 100px ${quote(f.family || 'sans-serif')}`; const t = ctx.measureText('Hg'); if (t.fontBoundingBoxAscent > 0 && t.fontBoundingBoxDescent >= 0) m = { asc: t.fontBoundingBoxAscent / 100, desc: t.fontBoundingBoxDescent / 100 }; } catch { }
+      metricsCache.set(key, m);
+    }
+    return m;
+  }
+  return { width, wrap, fit, fontString, transform, clearCache, quote, metrics };
 })();

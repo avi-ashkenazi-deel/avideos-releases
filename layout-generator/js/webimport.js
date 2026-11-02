@@ -15,24 +15,67 @@ const WebImport = (() => {
     const hexA = c => { const m = /rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:\s*[,/]\s*([\d.]+%?))?/.exec(c || ''); if (!m) return null; let a = m[4] == null ? 1 : /%$/.test(m[4]) ? parseFloat(m[4]) / 100 : parseFloat(m[4]); return { hex: '#' + [m[1], m[2], m[3]].map(v => Math.round(+v).toString(16).padStart(2, '0')).join('').toUpperCase(), a: Math.round(a * 1000) / 1000 }; };
     const px = v => parseFloat(v) || 0;
     const r1 = v => Math.round(v * 10) / 10;
-    const famOf = ff => { const first = String(ff || '').split(',').map(s => s.trim().replace(/^["']|["']$/g, '')).find(Boolean) || 'Inter'; return first; };
+    // Code generated from Figma names a face the Figma way, "Instrument Sans:SemiBold" (family:style), which no browser
+    // matches: read the family and carry the style's weight and slant, so the layer gets the face the design meant.
+    const STYLE_W = { thin: 100, hairline: 100, extralight: 200, ultralight: 200, light: 300, book: 400, regular: 400, normal: 400, roman: 400, medium: 500, semibold: 600, demibold: 600, demi: 600, bold: 700, extrabold: 800, ultrabold: 800, heavy: 800, black: 900 };
+    const faceOf = ff => {
+      const first = String(ff || '').split(',').map(s => s.trim().replace(/^["']|["']$/g, '')).find(Boolean) || 'Inter';
+      const m = /^([^:]+):(.+)$/.exec(first); if (!m) return { family: first };
+      const style = m[2].trim().toLowerCase().replace(/\s+/g, ''); const italic = /italic|oblique/.test(style); const key = style.replace(/italic|oblique/g, '');
+      return { family: m[1].trim(), weight: STYLE_W[key] || (key ? undefined : 400), italic };
+    };
+    const famOf = ff => faceOf(ff).family;
     const isCookie = el => { const t = (el.innerText || '').slice(0, 400).toLowerCase(); return /cookie|consent|gdpr|privacy preferences/.test(t) && t.length < 1600; };
     const nameOf = el => { const tag = el.tagName.toLowerCase(); const cls = (typeof el.className === 'string' ? el.className : '').split(/\s+/).filter(c => c && c.length < 28 && !/^(css|sc|jsx|_|svelte)-/.test(c))[0]; const role = el.getAttribute('aria-label') || el.getAttribute('alt') || ''; return (tag + (cls ? '.' + cls : '') + (role ? ' ' + role.slice(0, 24) : '')).slice(0, 60); };
     // stacking: a layer under a positioned ancestor with a z-index paints above its plain siblings (labels over fields,
     // dialogs over the page). The outermost such ancestor decides, so a whole dialog moves together.
     const zs = new Map();
     function zp(el) { if (zs.has(el)) return zs.get(el); let z = 0; for (let e = el; e && e !== document.body && e !== document.documentElement; e = e.parentElement) { const cs = getComputedStyle(e); if (cs.position !== 'static' && cs.zIndex !== 'auto') z = parseInt(cs.zIndex, 10) || 0; } const o = z ? { z } : {}; zs.set(el, o); return o; }
+    // Code generated from Figma tags elements with data-node-id: a layer remembers the nearest tagged element and its box,
+    // so the import can snap it to the node's geometry in Figma (FigmaImport.alignCapture).
+    const fgs = new Map();
+    function fg(el) {
+      if (fgs.has(el)) return fgs.get(el);
+      const owner = el.closest ? el.closest('[data-node-id]') : null; let o = {};
+      if (owner) {
+        const box = e => { const r = e.getBoundingClientRect(); return [r1(r.left + sx), r1(r.top + sy), r1(r.width), r1(r.height)]; };
+        o = { fig: owner.getAttribute('data-node-id'), figOwn: owner === el, figRect: box(owner), figUp: [] };
+        const ob = [getComputedStyle(owner)].map(c => [c.borderTopWidth, c.borderRightWidth, c.borderBottomWidth, c.borderLeftWidth].map(v => r1(px(v))))[0]; if (ob.some(Boolean)) o.figBorder = ob;
+        // tagged ancestors too: the metadata may not reach as deep as the code's tags (instances inside instances)
+        const border = e => { const c = getComputedStyle(e); return [c.borderTopWidth, c.borderRightWidth, c.borderBottomWidth, c.borderLeftWidth].map(v => r1(px(v))); };
+        for (let a = owner.parentElement && owner.parentElement.closest('[data-node-id]'), k = 0; a && k < 8; a = a.parentElement && a.parentElement.closest('[data-node-id]'), k++) o.figUp.push([a.getAttribute('data-node-id'), ...box(a), ...border(a)]);
+      }
+      fgs.set(el, o); return o;
+    }
     function rectOf(el) { const r = el.getBoundingClientRect(); return { x: r1(r.left + sx), y: r1(r.top + sy), w: r1(r.width), h: r1(r.height) }; }
     function visible(r, clip) { if (r.w < 1 || r.h < 1) return false; if (r.y > H || r.x > W + 2 || r.x + r.w < -2 || r.y + r.h < 0) return false; if (clip && (r.x >= clip.x + clip.w || r.y >= clip.y + clip.h || r.x + r.w <= clip.x || r.y + r.h <= clip.y)) return false; return true; }
-    function shadowOf(cs) { const s = cs.boxShadow; if (!s || s === 'none') return null; const m = /(rgba?\([^)]*\))\s+(-?[\d.]+)px\s+(-?[\d.]+)px\s+([\d.]+)px/.exec(s); if (!m || /inset/.test(s.split(m[0])[0])) return null; const c = hexA(m[1]); return c && c.a > 0.01 ? { color: c.hex, alpha: c.a, x: +m[2], y: +m[3], blur: +m[4] } : null; }
+    // box-shadow is a list (Tailwind starts it with two transparent ring placeholders): the softest visible outer shadow
+    // stands for the elevation; insets and clear ones are skipped.
+    function shadowOf(cs) {
+      const s = cs.boxShadow; if (!s || s === 'none') return null; let best = null;
+      for (const part of s.split(/,(?![^(]*\))/)) {
+        if (/inset/.test(part)) continue; const m = /(rgba?\([^)]*\)|#[0-9a-f]{3,8})\s+(-?[\d.]+)px\s+(-?[\d.]+)px\s+([\d.]+)px(?:\s+(-?[\d.]+)px)?/i.exec(part); if (!m) continue;
+        const c = hexA(m[1]); if (!c || c.a <= 0.01) continue; const sh = { color: c.hex, alpha: c.a, x: +m[2], y: +m[3], blur: +m[4] + Math.max(0, +(m[5] || 0)) * 2 };
+        if (!best || sh.blur > best.blur) best = sh;
+      }
+      return best;
+    }
     function radiusOf(cs, r) { const v = cs.borderTopLeftRadius; if (!v || v === '0px') return 0; return Math.min(/%$/.test(v) ? Math.min(r.w, r.h) * parseFloat(v) / 100 : px(v), Math.min(r.w, r.h) / 2); }
+    // A range around text measures the glyphs' content box (about 1.2em a line), not the line boxes the browser laid the
+    // text in. Layers keep line boxes (top of the first line, lines × line height), so the glyphs land where they were.
+    function lineBox(rr, size, lhPx) {
+      const lines = Math.max(1, Math.round((rr.height - size * 1.2) / Math.max(1, lhPx)) + 1);
+      const content = rr.height - (lines - 1) * lhPx; const half = (lhPx - content) / 2;
+      return { x: r1(rr.left + sx), y: r1(rr.top + sy - half), w: r1(Math.max(rr.width, 4)), h: r1(Math.max(lines * lhPx, 4)) };
+    }
     function imgRef(src) { if (!src || /^data:image\/svg/.test(src) && src.length > 400000) return null; if (!imgs.has(src)) imgs.set(src, null); return src; }
     function pushText(el, cs, op, text, box, fixed, p, flow, more) {
       text = text.replace(/[ \t ]+/g, ' ').replace(/ *\n */g, '\n').trim(); if (!text) return;
       fonts.add(famOf(cs.fontFamily));
       const c = hexA(cs.color) || { hex: '#000000', a: 1 }; const size = px(cs.fontSize) || 16;
       const lh = cs.lineHeight === 'normal' ? 1.2 : Math.round(px(cs.lineHeight) / size * 100) / 100;
-      out.push({ t: 'text', name: nameOf(el), ...zp(el), ...box, text, color: c.hex, alpha: c.a * op, family: famOf(cs.fontFamily), size, weight: parseInt(cs.fontWeight, 10) || 400, italic: cs.fontStyle === 'italic', lh: lh || 1.2, ls: cs.letterSpacing === 'normal' ? 0 : Math.round(px(cs.letterSpacing) / size * 1000) / 1000, align: /center/.test(cs.textAlign) ? 'center' : /right|end/.test(cs.textAlign) ? 'right' : 'left', transform: cs.textTransform === 'uppercase' ? 'upper' : cs.textTransform === 'lowercase' ? 'lower' : '', deco: /underline/.test(cs.textDecorationLine) ? 'underline' : /line-through/.test(cs.textDecorationLine) ? 'line-through' : '', fixed: !!fixed, p: fixed ? 0 : p || 0, flow: !!flow && !fixed, ...(more || {}) });
+      const face = faceOf(cs.fontFamily);
+      out.push({ t: 'text', name: nameOf(el), ...zp(el), ...fg(el), ...box, text, color: c.hex, alpha: c.a * op, family: face.family, size, weight: face.weight || parseInt(cs.fontWeight, 10) || 400, italic: face.italic || cs.fontStyle === 'italic', lh: lh || 1.2, ls: cs.letterSpacing === 'normal' ? 0 : Math.round(px(cs.letterSpacing) / size * 1000) / 1000, align: /center/.test(cs.textAlign) ? 'center' : /right|end/.test(cs.textAlign) ? 'right' : 'left', transform: cs.textTransform === 'uppercase' ? 'upper' : cs.textTransform === 'lowercase' ? 'lower' : '', deco: /underline/.test(cs.textDecorationLine) ? 'underline' : /line-through/.test(cs.textDecorationLine) ? 'line-through' : '', fixed: !!fixed, p: fixed ? 0 : p || 0, flow: !!flow && !fixed, ...(more || {}) });
     }
     function svgMarkup(svg) {
       const clone = svg.cloneNode(true); const src = svg.querySelectorAll('*'); const dst = clone.querySelectorAll('*');
@@ -67,8 +110,8 @@ const WebImport = (() => {
       const outOfFlow = cs.position === 'absolute' || cs.position === 'fixed';
       const item = !!flexParent && vis && !isFixed && !outOfFlow;
       const it = item ? { grow: parseFloat(cs.flexGrow) || 0, self: cs.alignSelf } : undefined;
-      if (tag === 'svg' || el instanceof SVGSVGElement) { if (vis) { const m = svgMarkup(el); out.push({ t: 'svg', name: nameOf(el), ...zp(el), ...r, svg: m.inner, viewBox: m.viewBox, color: m.color, alpha: o, fixed: isFixed, p: P, flow: item, it }); } return; }
-      if (tag === 'IFRAME' || tag === 'EMBED' || tag === 'OBJECT') { if (vis) out.push({ t: 'box', name: nameOf(el), ...zp(el), ...r, bg: '#E4E4EA', bga: 1, radius: 0, alpha: o, fixed: isFixed, p: P, flow: item, it }); return; }
+      if (tag === 'svg' || el instanceof SVGSVGElement) { if (vis) { const m = svgMarkup(el); out.push({ t: 'svg', name: nameOf(el), ...zp(el), ...fg(el), ...r, svg: m.inner, viewBox: m.viewBox, color: m.color, alpha: o, fixed: isFixed, p: P, flow: item, it }); } return; }
+      if (tag === 'IFRAME' || tag === 'EMBED' || tag === 'OBJECT') { if (vis) out.push({ t: 'box', name: nameOf(el), ...zp(el), ...fg(el), ...r, bg: '#E4E4EA', bga: 1, radius: 0, alpha: o, fixed: isFixed, p: P, flow: item, it }); return; }
       const leaf = tag === 'IMG' || tag === 'VIDEO' || tag === 'CANVAS' || tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
       // grids read as stacks too: several columns wrap like a row, one column stacks vertically
       const isGrid = /^(grid|inline-grid)$/.test(cs.display); const cols = isGrid ? String(cs.gridTemplateColumns || '').split(/\s+(?![^(]*\))/).filter(v => v && v !== 'none').length : 0;
@@ -76,21 +119,21 @@ const WebImport = (() => {
       let frame = null, myP = P;
       if (vis && !isFixed && !leaf && (isFlex || item) && fseq < 800) {
         const v = visualsOf(el, cs, r);
-        frame = { t: 'frame', id: ++fseq, p: P, name: nameOf(el), ...zp(el), ...r, alpha: o, flow: item, it, bg: v.bg && v.bg.a > 0.02 ? v.bg.hex : null, bga: v.bg ? v.bg.a : 0, grad: v.grad, radius: v.radius, border: v.uniform ? { w: v.bw[0], c: v.bc[0].hex } : null, shadow: v.sh,
+        frame = { t: 'frame', id: ++fseq, p: P, name: nameOf(el), ...zp(el), ...fg(el), ...r, alpha: o, flow: item, it, bg: v.bg && v.bg.a > 0.02 ? v.bg.hex : null, bga: v.bg ? v.bg.a : 0, grad: v.grad, radius: v.radius, border: v.uniform ? { w: v.bw[0], c: v.bc[0].hex } : null, shadow: v.sh,
           clip: cs.overflowX !== 'visible' || cs.overflowY !== 'visible', pad: [px(cs.paddingTop) + v.bw[0], px(cs.paddingRight) + v.bw[1], px(cs.paddingBottom) + v.bw[2], px(cs.paddingLeft) + v.bw[3]], textAlign: cs.textAlign };
         if (isFlex) frame.flex = isGrid ? { dir: cols > 1 ? 'row' : 'column', wrap: cols > 1, gapC: px(cs.columnGap), gapR: px(cs.rowGap), justify: cs.justifyContent, align: cs.alignItems, grid: cols } : { dir: cs.flexDirection, wrap: cs.flexWrap !== 'nowrap', gapC: px(cs.columnGap), gapR: px(cs.rowGap), justify: cs.justifyContent, align: cs.alignItems };
         out.push(frame); myP = frame.id;
       }
       if (vis) {
         const v = visualsOf(el, cs, r); const { bg, bi, bw, bc, sides, radius, sh, grad, uniform } = v;
-        if (!frame && ((bg && bg.a > 0.02) || grad || uniform || sh)) out.push({ t: 'box', name: nameOf(el), ...zp(el), ...r, bg: bg && bg.a > 0.02 ? bg.hex : null, bga: bg ? bg.a : 0, grad, radius, border: uniform ? { w: bw[0], c: bc[0].hex } : null, shadow: sh, alpha: o, fixed: isFixed, p: P, flow: false });
-        if (!uniform) sides.forEach((on, i) => { if (!on) return; const w = bw[i]; const b = i === 0 ? { x: r.x, y: r.y, w: r.w, h: w } : i === 1 ? { x: r.x + r.w - w, y: r.y, w, h: r.h } : i === 2 ? { x: r.x, y: r.y + r.h - w, w: r.w, h: w } : { x: r.x, y: r.y, w, h: r.h }; out.push({ t: 'box', name: nameOf(el) + ' border', ...zp(el), ...b, bg: bc[i].hex, bga: bc[i].a, radius: 0, alpha: o, fixed: isFixed, p: myP, flow: false }); });
+        if (!frame && ((bg && bg.a > 0.02) || grad || uniform || sh)) out.push({ t: 'box', name: nameOf(el), ...zp(el), ...fg(el), ...r, bg: bg && bg.a > 0.02 ? bg.hex : null, bga: bg ? bg.a : 0, grad, radius, border: uniform ? { w: bw[0], c: bc[0].hex } : null, shadow: sh, alpha: o, fixed: isFixed, p: P, flow: false });
+        if (!uniform) sides.forEach((on, i) => { if (!on) return; const w = bw[i]; const b = i === 0 ? { x: r.x, y: r.y, w: r.w, h: w } : i === 1 ? { x: r.x + r.w - w, y: r.y, w, h: r.h } : i === 2 ? { x: r.x, y: r.y + r.h - w, w: r.w, h: w } : { x: r.x, y: r.y, w, h: r.h }; out.push({ t: 'box', name: nameOf(el) + ' border', ...zp(el), ...fg(el), ...b, bg: bc[i].hex, bga: bc[i].a, radius: 0, alpha: o, fixed: isFixed, p: myP, flow: false }); });
         const url = bi && /url\(/.test(bi) ? (/url\(["']?([^"')]+)["']?\)/.exec(bi) || [])[1] : null;
-        if (url) out.push({ t: 'img', name: nameOf(el) + ' bg', ...zp(el), ...r, src: imgRef(new URL(url, location.href).href), fit: cs.backgroundSize === 'contain' ? 'contain' : 'cover', radius, alpha: o, fixed: isFixed, p: myP, flow: false });
+        if (url) out.push({ t: 'img', name: nameOf(el) + ' bg', ...zp(el), ...fg(el), ...r, src: imgRef(new URL(url, location.href).href), fit: cs.backgroundSize === 'contain' ? 'contain' : 'cover', radius, alpha: o, fixed: isFixed, p: myP, flow: false });
         if (tag === 'IMG' || tag === 'VIDEO' || tag === 'CANVAS') {
           let src = tag === 'IMG' ? (el.currentSrc || el.src) : tag === 'VIDEO' ? el.poster : null;
           if (tag === 'CANVAS') { try { src = el.toDataURL('image/png'); } catch { src = null; } }
-          out.push({ t: 'img', name: nameOf(el), ...zp(el), ...r, src: src ? imgRef(src) : null, fit: cs.objectFit === 'contain' ? 'contain' : 'cover', radius, alpha: o, fixed: isFixed, p: P, flow: item, it });
+          out.push({ t: 'img', name: nameOf(el), ...zp(el), ...fg(el), ...r, src: src ? imgRef(src) : null, fit: cs.objectFit === 'contain' ? 'contain' : 'cover', radius, alpha: o, fixed: isFixed, p: P, flow: item, it });
           return;
         }
         if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
@@ -98,7 +141,7 @@ const WebImport = (() => {
           const phShown = () => { try { return parseFloat(getComputedStyle(el, '::placeholder').opacity || '1') > 0.05; } catch { return true; } };
           const val = tag === 'SELECT' ? (el.options[el.selectedIndex] || {}).text || '' : (el.type === 'password' ? '••••••' : el.value || (el.placeholder && phShown() ? el.placeholder : ''));
           // an empty field still takes its room in the row (the icon after it stays at the end)
-          if (!val && item && tag !== 'SELECT' && el.type !== 'checkbox' && el.type !== 'radio' && el.type !== 'hidden') out.push({ t: 'frame', id: ++fseq, p: P, name: nameOf(el), ...zp(el), ...r, alpha: o, flow: true, it, field: 1, bg: null, bga: 0, radius: 0, pad: [0, 0, 0, 0] });
+          if (!val && item && tag !== 'SELECT' && el.type !== 'checkbox' && el.type !== 'radio' && el.type !== 'hidden') out.push({ t: 'frame', id: ++fseq, p: P, name: nameOf(el), ...zp(el), ...fg(el), ...r, alpha: o, flow: true, it, field: 1, bg: null, bga: 0, radius: 0, pad: [0, 0, 0, 0] });
           if (val && el.type !== 'checkbox' && el.type !== 'radio' && el.type !== 'hidden') { const pl = px(cs.paddingLeft), pt = px(cs.paddingTop); pushText(el, cs, el.value ? o : o * 0.6, val, { x: r.x + pl, y: r.y + Math.max(pt, (r.h - px(cs.fontSize) * 1.2) / 2), w: Math.max(4, r.w - pl - px(cs.paddingRight)), h: px(cs.fontSize) * 1.3 }, isFixed, P, item, { field: 1, it }); }
           return;
         }
@@ -109,10 +152,10 @@ const WebImport = (() => {
       let textDone = false;
       if (hasText && !blockKid && vis) {
         const range = document.createRange(); range.selectNodeContents(el); const rr = range.getBoundingClientRect();
-        const box = { x: r1(rr.left + sx), y: r1(rr.top + sy), w: r1(Math.max(rr.width, 4)), h: r1(Math.max(rr.height, 4)) };
-        // Wrapped or centred text takes the container's content width, which is what the browser wrapped against.
         const size = px(cs.fontSize) || 16; const lhPx = cs.lineHeight === 'normal' ? size * 1.2 : px(cs.lineHeight);
         const multi = rr.height > lhPx * 1.5; const disp = cs.display;
+        const box = lineBox(rr, size, lhPx);
+        // Wrapped or centred text takes the container's content width, which is what the browser wrapped against.
         if ((multi || /center|right|end/.test(cs.textAlign)) && disp !== 'inline') {
           const cl = r.x + px(cs.borderLeftWidth) + px(cs.paddingLeft); const cw = r.w - px(cs.borderLeftWidth) - px(cs.borderRightWidth) - px(cs.paddingLeft) - px(cs.paddingRight);
           if (cw > box.w) { box.x = r1(cl); box.w = r1(cw); }
@@ -120,7 +163,7 @@ const WebImport = (() => {
         if (visible(box, clip)) { pushText(el, cs, o, el.innerText || el.textContent || '', box, isFixed, myP, !!frame || item); textDone = true; }
       } else if (hasText && vis) {
         // mixed content: each direct text run on its own
-        for (const k of kids) if (k.nodeType === 3 && k.nodeValue.trim()) { const range = document.createRange(); range.selectNodeContents(k); const rr = range.getBoundingClientRect(); const box = { x: r1(rr.left + sx), y: r1(rr.top + sy), w: r1(rr.width), h: r1(rr.height) }; if (visible(box, clip)) pushText(el, cs, o, k.nodeValue, box, isFixed, myP, !!(frame && frame.flex)); }
+        for (const k of kids) if (k.nodeType === 3 && k.nodeValue.trim()) { const range = document.createRange(); range.selectNodeContents(k); const rr = range.getBoundingClientRect(); const size = px(cs.fontSize) || 16; const box = lineBox(rr, size, cs.lineHeight === 'normal' ? size * 1.2 : px(cs.lineHeight)); if (visible(box, clip)) pushText(el, cs, o, k.nodeValue, box, isFixed, myP, !!(frame && frame.flex)); }
       }
       const clips = cs.overflowX !== 'visible' || cs.overflowY !== 'visible';
       // a collapsed clipping box (an accordion or menu that is shut) shows none of what is inside
@@ -138,9 +181,9 @@ const WebImport = (() => {
       const cs = getComputedStyle(el); if (cs.display === 'none' || cs.visibility === 'hidden') return;
       const o = op * (parseFloat(cs.opacity) || 0); const r = rectOf(el); if (!visible(r, clip)) return;
       const P = fixed ? 0 : p || 0;
-      if (el instanceof SVGSVGElement) { const m = svgMarkup(el); out.push({ t: 'svg', name: nameOf(el), ...zp(el), ...r, svg: m.inner, viewBox: m.viewBox, color: m.color, alpha: o, fixed, p: P, flow: false }); return; }
-      if (el.tagName === 'IMG') { out.push({ t: 'img', name: nameOf(el), ...zp(el), ...r, src: imgRef(el.currentSrc || el.src), fit: cs.objectFit === 'contain' ? 'contain' : 'cover', radius: radiusOf(cs, r), alpha: o, fixed, p: P, flow: false }); return; }
-      const bg = hexA(cs.backgroundColor); if (bg && bg.a > 0.02) out.push({ t: 'box', name: nameOf(el), ...zp(el), ...r, bg: bg.hex, bga: bg.a, radius: radiusOf(cs, r), alpha: o, fixed, p: P, flow: false });
+      if (el instanceof SVGSVGElement) { const m = svgMarkup(el); out.push({ t: 'svg', name: nameOf(el), ...zp(el), ...fg(el), ...r, svg: m.inner, viewBox: m.viewBox, color: m.color, alpha: o, fixed, p: P, flow: false }); return; }
+      if (el.tagName === 'IMG') { out.push({ t: 'img', name: nameOf(el), ...zp(el), ...fg(el), ...r, src: imgRef(el.currentSrc || el.src), fit: cs.objectFit === 'contain' ? 'contain' : 'cover', radius: radiusOf(cs, r), alpha: o, fixed, p: P, flow: false }); return; }
+      const bg = hexA(cs.backgroundColor); if (bg && bg.a > 0.02) out.push({ t: 'box', name: nameOf(el), ...zp(el), ...fg(el), ...r, bg: bg.hex, bga: bg.a, radius: radiusOf(cs, r), alpha: o, fixed, p: P, flow: false });
       for (const k of el.children) walkBoxesOnly(k, o, clip, fixed, depth + 1, p);
     }
     async function embed(src) {
@@ -252,6 +295,14 @@ const WebImport = (() => {
   }
   // Capture -> one frame. Flex containers and their items are boxes; with auto layout chosen they become stacks whose
   // sizing (Hug, Fill, Fixed) is read from how the browser had laid them out. The original look is kept for Looks.
+    // A page's family name for a face this build ships, matched loosely: "Bagoss Standard" is Bagoss, "inter" is Inter.
+  function knownFamily(name) {
+    if (Brand.FONTS[name] || Brand.customFonts[name]) return name;
+    const norm = s => String(s).toLowerCase().replace(/\s+(standard|std|text|display|pro|variable|vf)$/i, '').replace(/[^a-z0-9]/g, '');
+    const want = norm(name); if (!want) return name;
+    for (const k of [...Object.keys(Brand.customFonts), ...Object.keys(Brand.FONTS)]) if (norm(k) === want) return k;
+    return name;
+  }
   async function importCapture(cap) {
     if (!cap || !Array.isArray(cap.nodes)) throw new Error('empty capture');
     const kit = env.getKit(); const W = Math.max(64, Math.round(cap.w || 1280)), H = Math.max(64, Math.round(cap.h || 800));
@@ -269,7 +320,7 @@ const WebImport = (() => {
     };
     for (const n of cap.nodes) {
       const x = r2(n.x), y = r2(n.y), w = r2(Math.max(1, n.w)), h = r2(Math.max(1, n.h)); if (!(w > 0 && h > 0) || y > H || x > W) continue;
-      const base = { id: uid(), x, y, w, h, label: String(n.name || n.t).slice(0, 60) };
+      const base = { id: uid(), x, y, w, h, label: String(n.name || n.t).slice(0, 60) }; if (n.fig && n.figOwn) base.figma = String(n.fig).slice(0, 80);
       const pid = n.p && !n.fixed ? frameIds.get(n.p) : null; if (pid) base.parent = pid;
       if (n.alpha != null && n.alpha < 0.999) base.opacity = r2(n.alpha);
       let b = null;
@@ -290,10 +341,10 @@ const WebImport = (() => {
       } else if (n.t === 'svg') {
         b = { ...base, kind: 'vector', svg: String(n.svg || '').slice(0, 200000), viewBox: Array.isArray(n.viewBox) && n.viewBox.length === 4 ? n.viewBox.map(Number) : [0, 0, w, h], keepAspect: true, fill: safeHex(n.color) || '#000000', decorative: true };
       } else if (n.t === 'text') {
-        const size = r2(Math.max(4, n.size || 16)); const fam = String(n.family || 'Inter').replace(/["'<>]/g, '');
+        const size = r2(Math.max(4, n.size || 16)); const fam = knownFamily(String(n.family || 'Inter').replace(/["'<>]/g, ''));
         const lines = Math.max(1, Math.round(h / (size * (n.lh || 1.2))));
         b = { ...base, kind: 'text', role: size >= 32 ? 'headline' : 'text', path: 'text_' + uid(), text: String(n.text || '').slice(0, 4000), align: n.align || 'left', fill: safeHex(n.color) || '#000000', decorative: false,
-          font: { family: Brand.FONTS[fam] || Brand.customFonts[fam] ? Brand.fontCss(fam) : `"${fam}", Inter, system-ui, sans-serif`, size, weight: n.weight || 400, lineHeight: r2(n.lh || 1.2), letterSpacing: r2(n.ls || 0) } };
+          font: { family: Brand.FONTS[fam] || Brand.customFonts[fam] ? Brand.fontCss(fam) : `"${fam}", Inter, system-ui, sans-serif`, size, weight: n.weight || 400, lineHeight: r2(n.lh || 1.2), letterSpacing: Math.round((n.ls || 0) * 1000) / 1000 } };
         if (n.italic) b.font.style = 'italic'; if (n.transform) b.font.transform = n.transform; if (n.deco) b.decoration = n.deco;
         // single lines get room for font substitution, unless a stack will size them
         if (lines === 1 && !/\n/.test(b.text) && !(AUTO && n.flow)) { const extra = b.w * 0.12 + 4; if (b.align === 'center') b.x -= extra / 2; else if (b.align === 'right') b.x -= extra; b.w += extra; }

@@ -98,7 +98,7 @@ const Auto = (() => {
     return { w, h };
   }
   function baseline(b, h) {
-    if ((b.kind === 'text' || b.kind === 'list') && b.font) { const s = b.font.size || 16; return s * 0.78 + (s * (b.font.lineHeight || 1.2) - s) / 2; }
+    if ((b.kind === 'text' || b.kind === 'list') && b.font) { const s = b.font.size || 16; const m = typeof Text !== 'undefined' && Text.metrics ? Text.metrics(b.font) : { asc: 0.78, desc: 0.22 }; return (s * (b.font.lineHeight || 1.2) - (m.asc + m.desc) * s) / 2 + m.asc * s; }
     if (b.kind === 'button' && b.font) return h / 2 + (b.font.size || 16) * 0.35;
     if (isBox(b) && b.firstBaseline != null) return b.firstBaseline;
     return h;

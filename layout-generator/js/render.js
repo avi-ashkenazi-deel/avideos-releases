@@ -54,6 +54,9 @@ const Render = (() => {
     if (key === 'fill' && b.gradient && Array.isArray(b.gradient.stops) && b.gradient.stops.length >= 2) { const id = ctx.id('p'); ctx.defs.push(gradientDef(b.gradient, id)); return `url(#${id})`; }
     return col(b[key]);
   }
+  // A rectangle with its stroke inside the box (as a CSS border and Figma's default stroke are): the geometry is inset
+  // by half the stroke width so a 1px line lands on one pixel row, not blurred over two.
+  function rectGeom(b) { const sw = b.stroke && Number(b.stroke.width) > 0 ? Number(b.stroke.width) : 0; const h = sw / 2; return `x="${n(b.x + h)}" y="${n(b.y + h)}" width="${n(Math.max(0, b.w - sw))}" height="${n(Math.max(0, b.h - sw))}" rx="${n(Math.max(0, (b.radius || 0) - h))}"`; }
   function strokeAttr(b) { const s = b.stroke; if (!s || !(Number(s.width) > 0)) return ''; return ` stroke="${col(s.color, '#000000')}" stroke-width="${n(s.width)}"${s.dash ? ` stroke-dasharray="${n(s.width) * 3} ${n(s.width) * 2}"` : ''}`; }
   // Opacity, drop shadow and rotation wrap the element in a group.
   function fx(b, el, ctx) {
@@ -83,12 +86,14 @@ const Render = (() => {
     if (at < line.length) out.push({ text: line.slice(at), on: false });
     return out.length ? out : [{ text: line, on: false }];
   }
+  // First baseline of a line box at top: the face's content box (ascent + descent) sits centred in the line height.
+  function baseline(top, f, size, lh) { const m = Text.metrics(f); return top + (lh - (m.asc + m.desc) * size) / 2 + m.asc * size; }
   function textEl(b, ctx) {
     const f = b.font || {};
     const anchor = b.align === 'center' ? 'middle' : b.align === 'right' ? 'end' : 'start';
     const x = b.align === 'center' ? b.x + b.w / 2 : b.align === 'right' ? b.x + b.w : b.x;
     const size = n(f.size || 16); const lh = size * (Number(f.lineHeight) || 1.2);
-    const first = b.y + size * 0.78 + (lh - size) / 2;
+    const first = baseline(b.y, f, size, lh);
     const ls = f.letterSpacing ? ` letter-spacing="${n(f.letterSpacing * size)}"` : '';
     const it = f.style === 'italic' ? ' font-style="italic"' : '';
     const deco = b.decoration === 'underline' || b.decoration === 'line-through' ? ` text-decoration="${b.decoration}"` : '';
@@ -102,7 +107,7 @@ const Render = (() => {
   function listEl(b, ctx) {
     const f = b.font || {}; const size = n(f.size || 16);
     const lh = size * (Number(f.lineHeight) || 1.3);
-    const first = b.y + size * 0.78 + (lh - size) / 2;
+    const first = baseline(b.y, f, size, lh);
     const ls = f.letterSpacing ? ` letter-spacing="${n(f.letterSpacing * size)}"` : '';
     const parts = []; let yy = first;
     for (const line of (b.lines || [])) {
@@ -165,7 +170,7 @@ const Render = (() => {
     // Boxes draw their fill, then their children (clipped when the box clips); siblings in list order.
     const blockEl = b => {
       let el = '';
-      if (b.kind === 'field') el = `<rect x="${n(b.x)}" y="${n(b.y)}" width="${n(b.w)}" height="${n(b.h)}" rx="${n(b.radius || 0)}" fill="${paint(b, ctx)}"${b.alpha != null && b.alpha < 1 ? ` fill-opacity="${n(clamp01(b.alpha))}"` : ''}${strokeAttr(b)}/>`;
+      if (b.kind === 'field') el = `<rect ${rectGeom(b)} fill="${paint(b, ctx)}"${b.alpha != null && b.alpha < 1 ? ` fill-opacity="${n(clamp01(b.alpha))}"` : ''}${strokeAttr(b)}/>`;
       else if (b.kind === 'image') {
         const a = assets.images.find(i => i.id === b.asset);
         const href = a ? (opts.forExport ? a.dataUrl : a.url) : '';
@@ -173,7 +178,7 @@ const Render = (() => {
         if (b.radius) { const id = ctx.id('c'); ctx.defs.push(`<clipPath id="${id}"><rect x="${n(b.x)}" y="${n(b.y)}" width="${n(b.w)}" height="${n(b.h)}" rx="${n(b.radius)}"/></clipPath>`); clip = ` clip-path="url(#${id})"`; }
         if (!a) el = `<rect x="${n(b.x)}" y="${n(b.y)}" width="${n(b.w)}" height="${n(b.h)}" rx="${n(b.radius || 0)}" fill="${col(b.placeholder, '#C9C8D1')}"/>`;
         else el = `<image x="${n(b.x)}" y="${n(b.y)}" width="${n(b.w)}" height="${n(b.h)}" href="${esc(href)}" preserveAspectRatio="${FOCAL.has(b.focal) ? b.focal : 'xMidYMid'} ${b.fit === 'contain' ? 'meet' : 'slice'}"${clip}/>`;
-        if (b.stroke && Number(b.stroke.width) > 0) el += `<rect x="${n(b.x)}" y="${n(b.y)}" width="${n(b.w)}" height="${n(b.h)}" rx="${n(b.radius || 0)}" fill="none"${strokeAttr(b)}/>`;
+        if (b.stroke && Number(b.stroke.width) > 0) el += `<rect ${rectGeom(b)} fill="none"${strokeAttr(b)}/>`;
       } else if (b.kind === 'scrim') {
         const id = ctx.id('g');
         const dir = b.dir || 'up';
@@ -185,7 +190,7 @@ const Render = (() => {
       else if (b.kind === 'rule') el = `<rect x="${n(b.x)}" y="${n(b.y)}" width="${n(b.w)}" height="${n(b.h)}" fill="${paint(b, ctx)}"/>`;
       else if (b.kind === 'button') {
         const f = b.font || {};
-        el = `<rect x="${n(b.x)}" y="${n(b.y)}" width="${n(b.w)}" height="${n(b.h)}" rx="${n(b.radius || 0)}" fill="${paint(b, ctx)}"${strokeAttr(b)}/>`
+        el = `<rect ${rectGeom(b)} fill="${paint(b, ctx)}"${strokeAttr(b)}/>`
           + `<text x="${n(b.x + b.w / 2)}" y="${n(b.y + b.h / 2 + (f.size || 16) * 0.35)}" font-family='${fam(f)}' font-size="${n(f.size || 16)}" font-weight="${n(f.weight || 600)}" fill="${col(b.color)}" text-anchor="middle">${esc(b.text)}</text>`;
       } else if (b.kind === 'text') el = textEl(b, ctx);
       else if (b.kind === 'list') el = listEl(b, ctx);
@@ -220,11 +225,13 @@ const Render = (() => {
       if (b.kind !== 'box') { const el = blockEl(b); return el ? fx(b, el, ctx) : ''; }
       const hasFill = (b.fill && b.fill !== 'none') || (b.gradient && Array.isArray(b.gradient.stops) && b.gradient.stops.length >= 2);
       const st = strokeAttr(b);
-      const rect = hasFill || st ? `<rect x="${n(b.x)}" y="${n(b.y)}" width="${n(b.w)}" height="${n(b.h)}" rx="${n(b.radius || 0)}" fill="${hasFill ? paint(b, ctx) : 'none'}"${b.fillAlpha != null && b.fillAlpha < 1 ? ` fill-opacity="${n(clamp01(b.fillAlpha))}"` : ''}${st}/>` : '';
       let kids = drawList(b.id);
+      // as in Figma, a box's stroke paints above its children: the fill goes under them, the stroke over
+      const rect = hasFill || (st && !kids) ? `<rect ${rectGeom(b)} fill="${hasFill ? paint(b, ctx) : 'none'}"${b.fillAlpha != null && b.fillAlpha < 1 ? ` fill-opacity="${n(clamp01(b.fillAlpha))}"` : ''}${kids ? '' : st}/>` : '';
+      const over = st && kids ? `<rect ${rectGeom(b)} fill="none"${st}/>` : '';
       if (b.clip && kids) { const id = ctx.id('k'); ctx.defs.push(`<clipPath id="${id}"><rect x="${n(b.x)}" y="${n(b.y)}" width="${n(b.w)}" height="${n(b.h)}" rx="${n(b.radius || 0)}"/></clipPath>`); kids = `<g clip-path="url(#${id})">${kids}</g>`; }
       const bg = rect ? fx({ x: b.x, y: b.y, w: b.w, h: b.h, shadow: b.shadow, rotation: b.rotation }, rect, ctx) : '';
-      return fx({ x: b.x, y: b.y, w: b.w, h: b.h, opacity: b.opacity }, bg + kids, ctx);
+      return fx({ x: b.x, y: b.y, w: b.w, h: b.h, opacity: b.opacity }, bg + kids + (over ? fx({ x: b.x, y: b.y, w: b.w, h: b.h, rotation: b.rotation }, over, ctx) : ''), ctx);
     };
     parts.push(drawList(''));
     if (opts.showGrid) parts.push(gridOverlay(layout));
@@ -275,9 +282,10 @@ const Render = (() => {
         else if (cf.dataUrl) out.push(`@font-face{font-family:"${fam}";src:url(${cf.dataUrl});font-weight:100 900;}`);
         continue;
       }
-      if (!Brand.FONTS[fam]) continue;
       if (fontCache.has(fam)) { out.push(fontCache.get(fam)); continue; }
-      const spec = GOOGLE_SPECS[fam];
+      // a family this build does not ship (a captured page's Instrument Sans): Google Fonts, in the weights the layout uses
+      const spec = GOOGLE_SPECS[fam] || (webFamily(fam) ? `${encodeURIComponent(fam).replace(/%20/g, '+')}:wght@${(families.weights && families.weights.get(fam) ? [...families.weights.get(fam)] : [400, 700]).filter(w => w >= 100 && w <= 900).sort((a, b) => a - b).join(';')}` : null);
+      if (!spec) continue;
       if (embedBlocked) { lastEmbedFailed = true; if (!forRaster) out.push(`@import url("https://fonts.googleapis.com/css2?family=${spec}&display=swap");`); continue; }
       try {
         const css = latinOnly(await (await fetch(`https://fonts.googleapis.com/css2?family=${spec}&display=swap`)).text());
@@ -299,8 +307,20 @@ const Render = (() => {
     return out.join('\n');
   }
   function fontsEmbedded() { return !lastEmbedFailed; }
+  const webFamily = name => !!name && !/^(inter|system-ui|-apple-system|sans-serif|serif|monospace|ui-monospace|georgia|arial|helvetica|times new roman)$/i.test(name) && !/,/.test(name);
+  // Every family the layout's text uses, with its weights: the kit's pair, then what captured and imported layers brought.
+  function familiesOf(layout, kit) {
+    const fams = [kit.fonts.display, kit.fonts.body]; const weights = new Map();
+    for (const b of (layout && layout.blocks) || []) {
+      const f = b.font; if (!f || !f.family) continue;
+      const name = String(f.family).split(',')[0].replace(/["']/g, '').trim(); if (!name) continue;
+      if (!fams.includes(name)) fams.push(name);
+      if (!weights.has(name)) weights.set(name, new Set([400])); weights.get(name).add(Number(f.weight) || 400); if (b.emph) weights.get(name).add(Number(b.emphWeight) || 700);
+    }
+    fams.weights = weights; return fams;
+  }
   async function exportSVG(layout, opts, forRaster = false) {
-    const fams = [opts.kit.fonts.display, opts.kit.fonts.body];
+    const fams = familiesOf(layout, opts.kit);
     const fontStyle = await fontFaceCss(fams, forRaster);
     return toSVG(layout, { ...opts, forExport: true, fontStyle, showGrid: false });
   }
