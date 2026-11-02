@@ -189,7 +189,9 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
   const stopBtn = btn('Stop', { cls: 'sm danger hidden', icon: 'stop', title: 'Stop the agent', onClick: async () => { try { await api.agentCancel(project.id); toast('Stopping…'); } catch (e) { toast(e.message, 'err'); } } });
   const stopHint = h('span.hint.hidden', 'Working… this can take a minute.');
   const setBusy = (on) => { sendBtn.disabled = on; stopHint.classList.toggle('hidden', !on); stopBtn.classList.toggle('hidden', !on); };
-  const compose = h('div.compose', ctx, ta, h('div.row', stopBtn, btn('', { icon: 'more', cls: 'ghost icon sm', title: 'New conversation (forget context)', onClick: async () => { if (await modal('Start a new conversation?', h('p.muted', 'The agent forgets this chat. The composition files are kept.'), { actions: [{ label: 'New conversation', cls: 'primary', value: true }] })) { await api.agentReset(project.id); project.chat = []; renderChat([]); } } }), stopHint, h('span.spacer'), sendBtn));
+  const agentSel = h('select.text', { style: { width: 'auto', padding: '4px 6px', fontSize: '12px' }, title: 'Which coding agent edits the composition (runs on this computer, on your own account)', on: { change: async () => { try { project = await api.updateProject(project.id, { agent: agentSel.value }); toast(`Using ${caps.agents?.[agentSel.value]?.label || agentSel.value}`, 'ok'); } catch (e) { toast(e.message, 'err'); } } } },
+    Object.entries(caps.agents || { claude: { label: 'Claude Code', available: caps.claude } }).map(([k, v]) => h('option', { value: k, selected: (project.agent || 'claude') === k }, `${v.label}${v.available ? '' : ' (not installed)'}`)));
+  const compose = h('div.compose', ctx, ta, h('div.row', agentSel, stopBtn, btn('', { icon: 'more', cls: 'ghost icon sm', title: 'New conversation (forget context)', onClick: async () => { if (await modal('Start a new conversation?', h('p.muted', 'The agent forgets this chat. The composition files are kept.'), { actions: [{ label: 'New conversation', cls: 'primary', value: true }] })) { await api.agentReset(project.id); project.chat = []; renderChat([]); } } }), stopHint, h('span.spacer'), sendBtn));
   const chat = h('div.chat', msgs, compose);
   ta.addEventListener('keydown', (e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') send(); e.stopPropagation(); });
   function ctxChip(id) { ctx.classList.remove('hidden'); ctx.replaceChildren('About ', h('code', `#${id}`), btn('', { icon: 'close', cls: 'ghost icon sm', title: 'Clear', onClick: () => { ctx.classList.add('hidden'); ctx._id = null; } })); ctx._id = id; }
@@ -214,16 +216,17 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
   async function send() {
     const text = ta.value.trim(); if (!text) return;
     if (agentJob) return toast('The agent is still working on the previous message. Press Stop to interrupt it.', 'err');
-    if (!caps.claude) { toast('Claude Code was not found on this computer', 'err'); return msgs.append(h('div.msg.agent', h('div.bubble.err', 'Claude Code is not installed or not on PATH. Install it with: npm install -g @anthropic-ai/claude-code  then restart the Videditor server.'))); }
+    const kind = agentSel.value || project.agent || 'claude'; const cap = caps.agents?.[kind] || { label: 'Claude Code', available: caps.claude, install: 'npm install -g @anthropic-ai/claude-code' };
+    if (!cap.available) { toast(`${cap.label} was not found on this computer`, 'err'); return msgs.append(h('div.msg.agent', h('div.bubble.err', `${cap.label} is not installed or not on PATH. Install it with: ${cap.install}   sign in once, then restart the Videditor server.`))); }
     const author = await ensureAuthor();
     const message = ctx._id ? `About the clip #${ctx._id}: ${text}` : text;
     ta.value = ''; ctx.classList.add('hidden'); ctx._id = null;
     project.chat = project.chat || []; project.chat.push({ role: 'user', text: message, at: new Date().toISOString(), author });
-    const live = { role: 'agent', text: '', tools: [], at: new Date().toISOString(), live: true, status: 'starting Claude Code' };
+    const live = { role: 'agent', text: '', tools: [], at: new Date().toISOString(), live: true, status: 'starting the agent' };
     renderChat([...project.chat, live]);
     setBusy(true);
     try {
-      const { jobId } = await api.agent(project.id, message, { author });
+      const { jobId } = await api.agent(project.id, message, { author, agent: kind });
       agentJob = jobId;
       const es = new EventSource(`/api/jobs/${jobId}/events`);
       const redraw = () => { renderChat([...project.chat, live]); };

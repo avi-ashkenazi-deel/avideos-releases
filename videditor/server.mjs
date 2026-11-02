@@ -12,7 +12,7 @@ import { scanMedia, analyzeFile, writeManifest, loadManifest, analysisDirFor, ki
 import { hasFfmpeg, probe, poster, frameAt } from './lib/media.mjs';
 import { buildPrompt } from './lib/prompt.mjs';
 import { renderProject, loadPlaywright, captureFrame } from './lib/render.mjs';
-import { runClaude, systemPrompt, diagnoseClaude } from './lib/agent.mjs';
+import { runAgent, AGENTS, systemPrompt, diagnoseClaude } from './lib/agent.mjs';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.VIDEDITOR_PORT || process.env.PORT || 8787);
@@ -221,6 +221,7 @@ async function api(req, res, url) {
       const b = await readJson(req); const patch = {};
       if (b.name) patch.name = String(b.name).slice(0, 120);
       if (b.tags) patch.tags = b.tags;
+      if (b.agent && AGENTS[b.agent] && b.agent !== prj.agent) { patch.agent = b.agent; patch.agentSessionId = null; }
       if ('dir' in b) { if (b.dir) { const d = detectProject(b.dir); if (!d.ok) return err(res, 400, d.reason); patch.dir = d.dir; } else patch.dir = null; }
       if ('assetsDir' in b) { if (b.assetsDir) { const a = cleanDir(b.assetsDir); if (!fs.existsSync(a) || !fs.statSync(a).isDirectory()) return err(res, 400, `Folder does not exist: ${a}`); patch.assetsDir = a; } else patch.assetsDir = null; }
       const out = store.updateProject(prj.id, patch);
@@ -329,15 +330,17 @@ async function api(req, res, url) {
   }
   if ((x = m(/^\/api\/projects\/([^/]+)\/chat$/)) && req.method === 'GET') {
     const prj = store.project(x[1]); if (!prj) return err(res, 404, 'Project not found');
-    return send(res, 200, { chat: prj.chat || [], running: agents.get(prj.id)?.jobId || null, sessionId: prj.agentSessionId || null, claude: findBin(CLAUDE_BIN) });
+    return send(res, 200, { chat: prj.chat || [], running: agents.get(prj.id)?.jobId || null, sessionId: prj.agentSessionId || null, claude: findBin(CLAUDE_BIN), agent: prj.agent || 'claude' });
   }
   if ((x = m(/^\/api\/projects\/([^/]+)\/agent$/)) && req.method === 'POST') {
     // The Studio chat: hands the message to Claude Code running in the project folder.
     const prj = store.project(x[1]); if (!prj) return err(res, 404, 'Project not found');
     if (!prj.dir) return err(res, 400, 'Project has no composition folder');
     if (agents.has(prj.id)) return err(res, 409, 'The agent is already working on this project');
-    if (!findBin(CLAUDE_BIN)) return err(res, 501, `Claude Code was not found on PATH (looked for "${CLAUDE_BIN}"). Install it with: npm install -g @anthropic-ai/claude-code`);
     const b = await readJson(req);
+    if (b.agent && AGENTS[b.agent] && b.agent !== prj.agent) { prj.agent = b.agent; prj.agentSessionId = null; store.save(); }
+    const kind = AGENTS[prj.agent] ? prj.agent : 'claude';
+    if (!findBin(AGENTS[kind].bin())) return err(res, 501, `${AGENTS[kind].label} was not found on PATH (looked for "${AGENTS[kind].bin()}"). Install it with: ${AGENTS[kind].install}`);
     const message = String(b.message || '').trim().slice(0, 20000); if (!message) return err(res, 400, 'message is required');
     const job = newJob('agent');
     prj.chat = prj.chat || []; prj.chat.push({ role: 'user', text: message, at: new Date().toISOString(), author: b.author || null }); store.save();
@@ -353,13 +356,13 @@ async function api(req, res, url) {
     };
     (async () => {
       const resumeId = b.fresh ? null : prj.agentSessionId || null;
-      let run = runClaude({ dir: prj.dir, prompt: message, system, sessionId: resumeId, onEvent }); handle.kill = run.kill;
+      let run = runAgent(kind, { dir: prj.dir, prompt: message, system, sessionId: resumeId, onEvent }); handle.kill = run.kill;
       let out = await run;
       if (out.error && resumeId && !handle.cancelled) {
         // The stored conversation could not be resumed (or died): start a fresh one instead of failing forever.
         job.push({ type: 'status', message: 'Previous conversation could not be resumed; starting a fresh one' });
         entry.text = ''; entry.tools = [];
-        run = runClaude({ dir: prj.dir, prompt: message, system, sessionId: null, onEvent }); handle.kill = run.kill;
+        run = runAgent(kind, { dir: prj.dir, prompt: message, system, sessionId: null, onEvent }); handle.kill = run.kill;
         out = await run;
       }
       const p = store.project(prj.id);
@@ -486,7 +489,7 @@ async function api(req, res, url) {
   }
   if (p === '/api/projects/detect' || p === '/api/hyperframes/detect') return send(res, 200, detectProject(q.path));
   if (p === '/api/agent/diagnose') { const prj = q.projectId ? store.project(q.projectId) : null; return send(res, 200, diagnoseClaude(prj?.dir || ROOT)); }
-  if (p === '/api/capabilities') return send(res, 200, { ffmpeg: FFMPEG, playwright: !!loadPlaywright(), claude: findBin(CLAUDE_BIN) });
+  if (p === '/api/capabilities') return send(res, 200, { ffmpeg: FFMPEG, playwright: !!loadPlaywright(), claude: findBin(CLAUDE_BIN), agents: Object.fromEntries(Object.entries(AGENTS).map(([k, v]) => [k, { label: v.label, available: findBin(v.bin()), install: v.install }])) });
   if (p === '/api/guide') return send(res, 200, GUIDE, { 'Content-Type': 'text/markdown; charset=utf-8' });
   return err(res, 404, `No route ${req.method} ${p}`);
 }
