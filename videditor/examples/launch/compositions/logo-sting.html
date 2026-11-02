@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><style>
+  html, body { margin: 0; background: transparent; }
+  #sting { position: relative; width: 1280px; height: 720px; }
+  .clip { position: absolute; }
+  #mark { left: 590px; top: 310px; width: 100px; height: 100px; border-radius: 24px; background: #ffd166; }
+</style></head>
+<body>
+<div id="sting" data-composition-id="logo-sting" data-start="0" data-duration="2.2" data-width="1280" data-height="720">
+  <div id="mark" class="clip" data-start="0.2" data-duration="2" data-track-index="0"></div>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3/dist/gsap.min.js"></script>
+  <script>
+    const tl = gsap.timeline({ paused: true });
+    tl.from('#mark', { scale: 0, rotate: -90, duration: 0.7, ease: 'back.out(1.7)' }, 0.2);
+    tl.to('#mark', { opacity: 0, duration: 0.4 }, 1.8);
+    window.__timelines = window.__timelines || {};
+    window.__timelines['logo-sting'] = tl;
+  </script>
+</div>
+</body>
+</html>

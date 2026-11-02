@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Launch day</title>
+<style>
+  html, body { margin: 0; background: #000; }
+  #stage { position: relative; width: 1280px; height: 720px; overflow: hidden; font-family: -apple-system, Inter, Helvetica, Arial, sans-serif; color: #fff; }
+  .clip { position: absolute; }
+  #bg { inset: 0; background: linear-gradient(135deg, hsl(200 60% 25%), hsl(260 70% 45%)); }
+  #title { left: 0; right: 0; top: 290px; text-align: center; font-size: 96px; font-weight: 800; letter-spacing: -0.02em; margin: 0; }
+  #tagline { left: 0; right: 0; top: 410px; text-align: center; font-size: 32px; opacity: .85; margin: 0; }
+  #cta { left: 540px; top: 520px; width: 200px; padding: 14px 0; text-align: center; border-radius: 999px; background: #ffd166; color: #1a1500; font-weight: 700; font-size: 24px; }
+</style>
+</head>
+<body>
+<div id="stage" data-composition-id="launch" data-start="0" data-duration="6" data-width="1280" data-height="720" data-fps="30">
+  <div id="bg" class="clip" data-start="0" data-duration="6" data-track-index="0"></div>
+  <div class="clip" data-composition-id="logo-sting" data-composition-src="compositions/logo-sting.html" data-start="0" data-duration="2.2" data-track-index="1" data-width="1280" data-height="720"></div>
+  <h1 id="title" class="clip" data-start="2.2" data-duration="3.8" data-track-index="2">Launch day</h1>
+  <p id="tagline" class="clip" data-start="3" data-duration="3" data-track-index="2">Review less. Ship more.</p>
+  <div id="cta" class="clip" data-start="4.2" data-duration="1.8" data-track-index="3">Try it</div>
+  <audio id="music" data-start="0" data-duration="6" data-track-index="4" data-volume="0.5" src="assets/music.wav"></audio>
+
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3/dist/gsap.min.js"></script>
+  <script>
+    const tl = gsap.timeline({ paused: true });
+    tl.from('#title', { opacity: 0, y: 40, duration: 0.8 }, 2.2);
+    tl.from('#tagline', { opacity: 0, y: 20, duration: 0.6 }, 3.0);
+    tl.from('#cta', { opacity: 0, scale: 0.8, duration: 0.5 }, 4.2);
+    window.__timelines = window.__timelines || {};
+    window.__timelines.launch = tl;
+  </script>
+</div>
+</body>
+</html>

@@ -1,0 +1,4 @@
+# Local review data: uploaded videos, annotated frames, voice notes.
+data/
+node_modules/
+*.log

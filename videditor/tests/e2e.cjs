@@ -1,0 +1,136 @@
+// End-to-end: drives the real UI against a server on VIDEDITOR_URL (default :8787).
+//   node videditor/server.mjs &  node videditor/tests/e2e.cjs
+const { chromium } = require('playwright');
+const assert = require('node:assert/strict');
+const BASE = process.env.VIDEDITOR_URL || 'http://localhost:8787';
+
+(async () => {
+  const browser = await chromium.launch();
+  const ctx = await browser.newContext({ viewport: { width: 1400, height: 900 }, permissions: [] });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+  await page.addInitScript(() => localStorage.setItem('videditor.author', 'E2E Bot'));
+
+  // Library
+  await page.goto(BASE + '/#/');
+  await page.waitForSelector('.card:has-text("demo")');
+  const name = await page.textContent('.card:has-text("demo") .name');
+  console.log('library ok:', name.trim());
+  await page.click('.card:has-text("demo")');
+
+  // Review loads, timeline lanes from the HyperFrames composition
+  await page.waitForSelector('.review video');
+  await page.waitForFunction(() => document.querySelector('.review video').readyState >= 1);
+  await page.waitForSelector('.lanes .clip');
+  const laneClips = await page.$$eval('.lanes .clip', (els) => els.map((e) => e.textContent));
+  assert.ok(laneClips.some((t) => t.includes('#title')), 'composition lane shows #title');
+  console.log('lanes ok:', laneClips.length, 'clips');
+
+  // Seek by clicking a clip, step frames with keyboard
+  await page.click('.lanes .clip:has-text("#title")');
+  await page.waitForTimeout(300);
+  let t = await page.$eval('video', (v) => v.currentTime);
+  assert.ok(t > 2.1 && t < 2.4, `seeked to the title clip (got ${t})`);
+  await page.keyboard.press('ArrowRight');
+  await page.waitForTimeout(200);
+  const t2 = await page.$eval('video', (v) => v.currentTime);
+  assert.ok(t2 > t, 'frame step advanced');
+
+  // Existing demo feedback shows, selecting one shows the drawing ghost
+  const cards = await page.$$('.fb');
+  console.log('feedback cards:', cards.length);
+  await page.click('.fb:has-text("Avi")');
+  await page.waitForTimeout(300);
+  const hasGhost = await page.evaluate(() => { const c = document.querySelector('canvas.overlay'); const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; for (let i = 3; i < d.length; i += 4) if (d[i] > 0) return true; return false; });
+  assert.ok(hasGhost, 'selected note draws its annotation on the overlay');
+
+  // Draw a rectangle and post a text note at the playhead
+  await page.keyboard.press('Escape');
+  await page.click('button[title="Rectangle"]');
+  const box = await page.$eval('canvas.overlay', (c) => { const r = c.getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; });
+  await page.mouse.move(box.x + box.w * 0.2, box.y + box.h * 0.2); await page.mouse.down();
+  await page.mouse.move(box.x + box.w * 0.6, box.y + box.h * 0.6, { steps: 5 }); await page.mouse.up();
+  await page.fill('.composer textarea', 'E2E make this box bigger');
+  await page.click('.composer .btn.primary');
+  await page.waitForSelector('.fb:has-text("E2E make this box bigger")');
+  const posted = await page.locator('.fb', { hasText: 'E2E make this box bigger' }).locator('.media img').count();
+  assert.ok(posted > 0, 'annotated frame attached to the posted note');
+  const onScreen = await page.locator('.fb', { hasText: 'E2E make this box bigger' }).locator('.ctx').textContent();
+  assert.ok(onScreen.includes('On screen'), 'note has HyperFrames clip context');
+  console.log('posted note with frame; context:', onScreen.trim());
+
+  // Reply, mark done, filter
+  console.log('step: reply');
+  await page.click('.fb:has-text("E2E make this box bigger")');
+  await page.fill('.fb.selected .replybox input', 'E2E reply');
+  await page.keyboard.press('Enter');
+  await page.waitForSelector('.fb .reply:has-text("E2E reply")');
+  const note = page.locator('.fb', { hasText: 'E2E make this box bigger' });
+  await note.locator('button', { hasText: 'Done' }).click();
+  await page.waitForSelector('.fb.done:has-text("E2E make this box bigger")');
+  await page.click('.filters button:has-text("Open")');
+  assert.equal(await note.count(), 0, 'done note hidden by Open filter');
+
+  console.log('step: copy prompt');
+  // Copy prompt modal contains the brief
+  await page.click('.topbar button:has-text("Copy prompt")');
+  await page.waitForSelector('.modal pre');
+  const brief = await page.textContent('.modal pre');
+  assert.ok(brief.includes('# Video review brief'), 'brief rendered');
+  assert.ok(brief.includes('On screen at'), 'brief includes clip context');
+  await page.keyboard.press('Escape');
+
+  console.log('step: context');
+  // Context tab shows the HyperFrames project and files; Versions tab lists versions
+  await page.click('.tab:has-text("Context")');
+  await page.waitForSelector('.cliplist .c');
+  await page.waitForSelector('.files .f');
+  await page.click('.tab:has-text("Versions")');
+  const versions = await page.$$('.version-row');
+  assert.ok(versions.length >= 2, 'two demo versions listed');
+
+  console.log('step: compare');
+  // Compare view syncs playback
+  await page.click('.topbar button:has-text("Compare")');
+  await page.waitForSelector('.compare video.a');
+  await page.waitForFunction(() => document.querySelectorAll('.compare video').length === 2 && [...document.querySelectorAll('.compare video')].every((v) => v.readyState >= 1));
+  await page.keyboard.press('ArrowRight'); await page.keyboard.press('ArrowRight');
+  await page.waitForTimeout(300);
+  const [ta, tb] = await page.$$eval('.compare video', (vs) => vs.map((v) => v.currentTime));
+  assert.ok(Math.abs(ta - tb) < 0.1 && ta > 0, `compare videos synced (${ta} vs ${tb})`);
+  console.log('compare ok');
+
+  console.log('step: agent api');
+  // Agent-side API: register a version via the JSON endpoint and see it in the UI poll
+  const state = await (await fetch(BASE + '/api/state')).json();
+  const prj = state.projects.find((p) => p.name.includes('demo'));
+  const r = await fetch(`${BASE}/api/projects/${prj.id}/versions`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: prj.versions[0].filePath, notes: 'E2E agent version', postedByAgent: true }) });
+  assert.equal(r.status, 201, 'agent version registered');
+  const v3 = await r.json();
+  await page.goto(`${BASE}/#/p/${prj.id}?v=${v3.id}`);
+  await page.waitForSelector('.topbar select');
+  const selected = await page.$eval('.topbar select', (s) => s.options[s.selectedIndex].text);
+  assert.ok(selected.startsWith(v3.label) && selected.includes('agent'), `agent version selected (${selected})`);
+
+  console.log('step: new project');
+  // New-project flow with a HyperFrames folder
+  await page.goto(BASE + '/#/');
+  await page.click('.card.new');
+  await page.fill('.modal input[placeholder*="Product launch"]', 'E2E project');
+  await page.fill('.modal input[placeholder*="/path/to"]', require('path').resolve(__dirname, '..', 'examples', 'launch'));
+  await page.waitForSelector('.modal .hint:has-text("HyperFrames project found")');
+  await page.click('.modal .actions button:has-text("Create")');
+  await page.waitForSelector('.empty:has-text("No render yet")');
+  console.log('new project ok');
+  // Clean up what this run created so the demo stays tidy.
+  const after = await (await fetch(BASE + '/api/state')).json();
+  for (const p of after.projects.filter((p) => p.name === 'E2E project')) await fetch(`${BASE}/api/projects/${p.id}`, { method: 'DELETE' });
+  const fb = await (await fetch(`${BASE}/api/feedback?projectId=${prj.id}`)).json();
+  for (const f of fb.filter((f) => /^E2E/.test(f.body) && !f.replyTo)) await fetch(`${BASE}/api/feedback/${f.id}`, { method: 'DELETE' });
+
+  assert.deepEqual(errors.filter((e) => !/favicon|ERR_|net::/.test(e)), [], 'no page errors');
+  await browser.close();
+  console.log('E2E PASSED');
+})().catch((e) => { console.error('E2E FAILED:', e); process.exit(1); });
