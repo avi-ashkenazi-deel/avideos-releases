@@ -50,7 +50,7 @@ export async function renderReview(root, { projectId, versionId, navigate, topba
     if (on) {
       video.classList.add('hidden'); stage = new Stage(frame); stage.iframe.style.zIndex = '1';
       player = new StagePlayer(stage, fps); for (const fn of playerSubs) player.on(fn);
-      await stage.load(`/project-files/${project.id}/index.html?runtime=1&_=${Date.now()}`);
+      await stage.load(`/project-files/${project.id}/${project.composition || 'index.html'}?runtime=1&_=${Date.now()}`);
       stage.on('select', (m) => { toast(`Selected #${m.id}`, 'ok'); if (!ta.value.trim()) { ta.value = `#${m.id}: `; } if (S.anchor === null) S.anchor = player.time; updateComposer(); ta.focus(); });
       renderMarkers(); renderLanes(); player.emit();
     } else {

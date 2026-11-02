@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 export const SKILL = fs.readFileSync(path.join(ROOT, 'skills', 'videditor', 'SKILL.md'), 'utf8');
 
-export function systemPrompt({ dir, composition, files, assetsDir = null }) {
+export function systemPrompt({ dir, composition, files, assetsDir = null, entry = 'index.html', variants = ['index.html'] }) {
   let media = ''; try { media = fs.readFileSync(path.join(dir, 'MEDIA.md'), 'utf8'); if (media.length > 12000) media = media.slice(0, 12000) + '\n…(truncated; open MEDIA.md for the rest)'; } catch {}
   let brand = ''; try { brand = fs.readFileSync(path.join(dir, 'brand.json'), 'utf8'); } catch {}
   let motion = ''; try { motion = fs.readFileSync(path.join(dir, 'MOTION.md'), 'utf8').slice(0, 6000); } catch {}
@@ -21,6 +21,7 @@ export function systemPrompt({ dir, composition, files, assetsDir = null }) {
     '',
     `## This project`,
     `Folder: ${dir}`,
+    `Active composition file: ${entry}${variants.length > 1 ? ` (others in this project: ${variants.filter((v) => v !== entry).join(', ')})` : ''}. Edit this file unless the person asks for a new variant.`,
     composition ? `Composition "${composition.id}": ${composition.width}×${composition.height}, ${composition.duration ?? '?'}s, ${composition.fps || 30} fps, ${composition.clips.length} clips:\n${clips}` : 'No composition parsed yet.',
     files?.length ? `Files: ${files.slice(0, 80).map((f) => f.path).join(', ')}` : '',
     assetsDir ? `Linked asset folder (use as library/<name> in src): ${assetsDir}` : '',

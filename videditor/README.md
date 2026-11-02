@@ -44,6 +44,13 @@ subscription. No accounts, no credits.
   use the variables, so rebranding never touches the composition. Templates: blank, teaser (title, three
   features, call to action). Formats: 16:9, vertical 9:16, square.
 
+**Variants and history**
+- A project can hold several compositions: the main one plus `variants/*.html`. Switch in the Studio top bar,
+  create one from the current composition, or ask the agent ("make another version that is warmer"). Each
+  render notes which variant it came from.
+- **History** (Studio tab): a snapshot of the composition before and after every change (timeline drags,
+  Files edits, agent runs), with one-click restore.
+
 **Export**
 - Render at composition size, 720p, 1080p or 4K (the composition is supersampled, text stays crisp), or
   **Render all sizes** in one go. Each render becomes a version in Review.

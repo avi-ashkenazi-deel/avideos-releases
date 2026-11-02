@@ -88,12 +88,62 @@ export function parseComposition(file, { offset = 0, depth = 0, maxDepth = 3, ho
   return comp;
 }
 
-export function parseProject(dir) {
+export function parseProject(dir, entry = 'index.html') {
   const d = detectProject(dir);
-  if (!d.ok || !d.hasIndex) return null;
-  const comp = parseComposition(path.join(d.dir, 'index.html'));
-  comp.dir = d.dir;
+  if (!d.ok) return null;
+  const file = safePath(d.dir, entry || 'index.html'); if (!file || !fs.existsSync(file)) return null;
+  const comp = parseComposition(file);
+  comp.dir = d.dir; comp.entry = path.relative(d.dir, file);
   return comp;
+}
+
+/** Compositions in a project: index.html plus variants/*.html (each a full composition). */
+export function listVariants(dir) {
+  const out = [{ entry: 'index.html', name: 'Main' }];
+  const vd = path.join(dir, 'variants');
+  if (fs.existsSync(vd)) for (const f of fs.readdirSync(vd).filter((f) => /\.html?$/i.test(f)).sort()) out.push({ entry: `variants/${f}`, name: f.replace(/\.html?$/i, '').replace(/[-_]+/g, ' ') });
+  return out.map((v) => { let title = null; try { const m = /<title>([^<]*)<\/title>/i.exec(fs.readFileSync(path.join(dir, v.entry), 'utf8')); title = m ? m[1].trim() : null; } catch {} return { ...v, title }; });
+}
+export function createVariant(dir, name, from = 'index.html') {
+  const src = safePath(dir, from); if (!src || !fs.existsSync(src)) return null;
+  const slug = String(name || 'variant').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'variant';
+  fs.mkdirSync(path.join(dir, 'variants'), { recursive: true });
+  let file = path.join(dir, 'variants', `${slug}.html`); let n = 2; while (fs.existsSync(file)) file = path.join(dir, 'variants', `${slug}-${n++}.html`);
+  let html = fs.readFileSync(src, 'utf8');
+  // variants live one folder down: make root-relative references work from there
+  if (path.dirname(src) === dir) html = html.replace(/(href|src)=(["'])(?!https?:|\/|data:|#|\.\.\/)([^"']+)\2/g, '$1=$2../$3$2');
+  // the variant's display name lives in its <title>
+  const title = String(name || slug).replace(/[<>&]/g, '');
+  html = /<title>[^<]*<\/title>/i.test(html) ? html.replace(/<title>[^<]*<\/title>/i, `<title>${title}</title>`) : html.replace(/<head[^>]*>/i, (m) => `${m}\n<title>${title}</title>`);
+  fs.writeFileSync(file, html);
+  return path.relative(dir, file);
+}
+
+/** History: snapshots of a composition file under .history/, newest first. */
+export function snapshot(dir, entry, label = '', by = 'you') {
+  const src = safePath(dir, entry); if (!src || !fs.existsSync(src)) return null;
+  const hd = path.join(dir, '.history'); fs.mkdirSync(hd, { recursive: true });
+  const content = fs.readFileSync(src);
+  const last = listHistory(dir, entry)[0];
+  if (last && fs.existsSync(path.join(dir, last.file)) && fs.readFileSync(path.join(dir, last.file)).equals(content)) return last; // unchanged: no duplicate
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const name = `${stamp}__${entry.replace(/[\/\\]/g, '~')}__${by}__${String(label).replace(/[^\w .#-]+/g, '').slice(0, 40)}.html`;
+  fs.writeFileSync(path.join(hd, name), content);
+  const all = listHistory(dir, entry); for (const h of all.slice(120)) { try { fs.unlinkSync(path.join(dir, h.file)); } catch {} }
+  return { file: `.history/${name}`, at: new Date().toISOString(), entry, by, label };
+}
+export function listHistory(dir, entry = null) {
+  const hd = path.join(dir, '.history'); if (!fs.existsSync(hd)) return [];
+  return fs.readdirSync(hd).filter((f) => f.endsWith('.html')).map((f) => {
+    const m = /^(.+?)__(.+?)__(.+?)__(.*)\.html$/.exec(f); if (!m) return null;
+    const at = m[1].replace(/^(\d{4}-\d{2}-\d{2})T(\d{2})-(\d{2})-(\d{2})-(\d{3})Z$/, '$1T$2:$3:$4.$5Z');
+    return { file: `.history/${f}`, at, entry: m[2].replace(/~/g, '/'), by: m[3], label: m[4], size: fs.statSync(path.join(hd, f)).size };
+  }).filter(Boolean).filter((h) => !entry || h.entry === entry).sort((a, b) => b.at.localeCompare(a.at));
+}
+export function restoreSnapshot(dir, file, entry) {
+  const src = safePath(dir, file); const dest = safePath(dir, entry); if (!src || !dest || !fs.existsSync(src)) return false;
+  snapshot(dir, entry, 'before restore', 'you');
+  fs.copyFileSync(src, dest); return true;
 }
 
 /** Clips visible at time t (seconds), topmost track first. */
@@ -120,7 +170,7 @@ export function fmt(s) {
 /** List project files (text-ish, small) for the Context panel. */
 export function listFiles(dir, { max = 400 } = {}) {
   const out = [];
-  const skip = new Set(['node_modules', '.git', 'renders', '.cache']);
+  const skip = new Set(['node_modules', '.git', 'renders', '.cache', '.history', '.analysis']);
   const walk = (d, rel) => {
     if (out.length >= max) return;
     let entries = [];
@@ -139,8 +189,8 @@ export function listFiles(dir, { max = 400 } = {}) {
 }
 
 /** Edit a clip's timing/track attributes in index.html by element id. Returns the new attrs or null. */
-export function updateClip(dir, id, patch) {
-  const file = path.join(dir, 'index.html');
+export function updateClip(dir, id, patch, entry = 'index.html') {
+  const file = safePath(dir, entry); if (!file || !fs.existsSync(file)) return null;
   let html = fs.readFileSync(file, 'utf8');
   const re = new RegExp(`<([a-zA-Z][\\w-]*)\\b([^>]*?\\bid=["']${id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["'][^>]*?)(/?)>`);
   const m = re.exec(html);
@@ -161,8 +211,8 @@ export function updateClip(dir, id, patch) {
 }
 
 /** Set attributes on the root composition element (e.g. data-duration). */
-export function updateRoot(dir, patch) {
-  const file = path.join(dir, 'index.html');
+export function updateRoot(dir, patch, entry = 'index.html') {
+  const file = safePath(dir, entry); if (!file || !fs.existsSync(file)) return null;
   let html = fs.readFileSync(file, 'utf8');
   const m = /<([a-zA-Z][\w-]*)\b([^>]*?\bdata-composition-id=["'][^"']*["'][^>]*?)(\/?)>/.exec(html);
   if (!m) return null;
@@ -222,8 +272,8 @@ export function writeBrand(dir, brand) {
 export function readBrand(dir) { try { return { ...DEFAULT_BRAND, ...JSON.parse(fs.readFileSync(path.join(dir, 'brand.json'), 'utf8')) }; } catch { return null; } }
 
 /** Insert a clip element into index.html right after the root composition's opening tag. */
-export function insertClipHtml(dir, html) {
-  const file = path.join(dir, 'index.html');
+export function insertClipHtml(dir, html, entry = 'index.html') {
+  const file = safePath(dir, entry); if (!file || !fs.existsSync(file)) return false;
   let src = fs.readFileSync(file, 'utf8');
   const m = /<([a-zA-Z][\w-]*)\b[^>]*?\bdata-composition-id=["'][^"']*["'][^>]*>/.exec(src);
   if (!m) return false;

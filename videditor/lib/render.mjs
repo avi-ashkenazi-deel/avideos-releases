@@ -51,7 +51,8 @@ export async function renderProject({ pageUrl, dir, assetsDir = null, out, fps: 
     log(`composition ${info.id}: ${width}×${height}${scale !== 1 ? ` × ${scale} = ${Math.round(width * scale)}×${Math.round(height * scale)}` : ''}, ${info.duration}s @ ${fps}fps → ${frames} frames`);
 
     // Audio inputs from the parsed composition (needs src paths, which the runtime doesn't expose).
-    const comp = parseProject(dir);
+    const entry = (() => { try { const u = new URL(pageUrl); const mm = /\/project-files\/[^/]+\/(.+)$/.exec(u.pathname); return mm ? decodeURIComponent(mm[1]) : 'index.html'; } catch { return 'index.html'; } })();
+    const comp = parseProject(dir, entry);
     const audio = (comp?.clips || []).filter((c) => c.hasAudio && c.src && c.start !== null).map((c) => ({ ...c, file: resolveSrc(dir, assetsDir, c.src, c.fileAbs) })).filter((c) => c.file && fs.existsSync(c.file) && hasAudioStream(c.file));
     const crf = quality === 'high' ? 14 : quality === 'draft' ? 28 : 18;
     const args = ['-y', '-v', 'error', '-stats_period', '1', '-f', 'image2pipe', '-framerate', String(fps), '-i', 'pipe:0'];

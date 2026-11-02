@@ -44,6 +44,10 @@ A video is a folder. `index.html` is the video. Videditor plays it in the browse
 - Brand: `brand.json` → `brand.css` exposes `--brand-primary`, `--brand-background`, `--brand-text`, `--brand-muted`, `--brand-accent`, `--brand-font`, `--brand-logo`. Link `brand.css` and use the variables instead of hard-coded colors so the person can rebrand without editing the composition.
 - Nested scenes: a clip with `data-composition-id="x" data-composition-src="compositions/x.html" data-start data-duration` plays another composition file inside it (same format, transparent body, same size). Use them for reusable scenes or long videos.
 
+## Variants and history
+- "Make another version / an alternative / a vertical one" means a **variant**: copy the active composition to `variants/<short-name>.html` (keep the original untouched), change it there, and say which file you made. A variant one folder down references `../assets/…`, `../brand.css`, `../dugma-motion.css`. Videditor lists variants in Studio and the person switches between them.
+- Every edit is snapshotted under `.history/` (restorable from Studio → History). Never write into `.history/`.
+
 ## Workflow
 
 1. Read `BRIEF.md` (goal, audience, tone) and the current `index.html`.

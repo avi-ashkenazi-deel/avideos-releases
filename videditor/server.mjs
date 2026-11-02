@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Store } from './lib/store.mjs';
-import { detectProject, parseProject, clipsAt, describeClip, listFiles, updateClip, updateRoot, createProject, safePath, resolveSrc, readBrand, writeBrand, insertClipHtml } from './lib/composition.mjs';
+import { detectProject, parseProject, clipsAt, describeClip, listFiles, updateClip, updateRoot, createProject, safePath, resolveSrc, readBrand, writeBrand, insertClipHtml, listVariants, createVariant, snapshot, listHistory, restoreSnapshot } from './lib/composition.mjs';
 import { scanMedia, analyzeFile, writeManifest, loadManifest, analysisDirFor, kindOf, ANALYSIS_VERSION } from './lib/analyze.mjs';
 import { hasFfmpeg, probe, poster, frameAt } from './lib/media.mjs';
 import { buildPrompt } from './lib/prompt.mjs';
@@ -82,7 +82,7 @@ function projectView(p) {
   const versions = store.versions(p.id).map(versionView);
   const latest = versions[versions.length - 1] || null;
   const last = store.feedback({ projectId: p.id }).slice(-1)[0] || null;
-  return { ...p, versions, latest, stats: store.stats(p.id), lastActivity: last ? { at: last.createdAt, author: last.author, body: (last.body || last.transcript || '').slice(0, 80) } : null, project: p.dir ? detectProject(p.dir) : null, chat: p.chat || [], lastChat: (p.chat || []).slice(-1)[0] || null, agentRunning: agents.has(p.id) };
+  return { ...p, versions, latest, stats: store.stats(p.id), lastActivity: last ? { at: last.createdAt, author: last.author, body: (last.body || last.transcript || '').slice(0, 80) } : null, project: p.dir ? detectProject(p.dir) : null, composition: p.dir ? entryOf(p) : null, variants: p.dir && fs.existsSync(p.dir) ? listVariants(p.dir).length : 0, chat: p.chat || [], lastChat: (p.chat || []).slice(-1)[0] || null, agentRunning: agents.has(p.id) };
 }
 
 function registerVersion(project, srcFile, { notes = '', source = 'upload', postedByAgent = false, originalName = null, move = false, label = null } = {}) {
@@ -94,7 +94,7 @@ function registerVersion(project, srcFile, { notes = '', source = 'upload', post
   const info = FFMPEG ? probe(dest) : {};
   let posterUrl = null;
   if (FFMPEG && poster(dest, path.join(DATA, 'media', `${id}.jpg`), Math.min(0.5, (info.duration || 1) / 2))) posterUrl = `/media/media/${id}.jpg`;
-  const composition = project.dir ? summarizeComposition(parseProject(project.dir)) : null;
+  const composition = project.dir ? summarizeComposition(parseProject(project.dir, entryOf(project))) : null;
   return store.addVersion(project.id, { id, fileName, filePath: dest, originalName: originalName || path.basename(srcFile), mediaUrl: `/media/media/${fileName}`, posterUrl, notes, source, postedByAgent, ...info, composition, ...(label ? { label } : {}) });
 }
 const summarizeComposition = (c) => (c ? { id: c.id, width: c.width, height: c.height, duration: c.duration, fps: c.fps, clipCount: c.clips.length } : null);
@@ -109,15 +109,16 @@ function newJob(kind) {
   job.finish = (ok, extra = {}) => { job.ok = ok; Object.assign(job, extra); job.done = true; for (const l of job.listeners) l(null); setTimeout(() => jobs.delete(job.id), 30 * 60 * 1000).unref(); };
   return job;
 }
-const pageUrlFor = (projectId) => `http://127.0.0.1:${PORT}/project-files/${projectId}/index.html?runtime=1&render=1`;
+const entryOf = (prj) => (prj?.composition && safePath(prj.dir, prj.composition) && fs.existsSync(safePath(prj.dir, prj.composition)) ? prj.composition : 'index.html');
+const pageUrlFor = (projectId, entry = 'index.html') => `http://127.0.0.1:${PORT}/project-files/${projectId}/${entry}?runtime=1&render=1`;
 function startRender(prj, { quality = 'looks', fps, notes, scale = 1, label = null } = {}) {
   const n = store.versions(prj.id).length + 1;
   const rel = `renders/v${n}${label ? '-' + String(label).replace(/[^\w-]+/g, '') : ''}.mp4`; const out = path.join(prj.dir, rel);
   const job = newJob('render');
   (async () => {
     try {
-      const r = await renderProject({ pageUrl: pageUrlFor(prj.id), dir: prj.dir, assetsDir: prj.assetsDir || null, out, quality, scale, fps: fps ? Number(fps) : undefined, onLog: (text) => job.push({ type: 'log', text }), onProgress: (p) => job.push({ type: 'progress', ...p }) });
-      const v = registerVersion(prj, out, { notes: notes || `Rendered from Studio (${r.width}×${r.height}, ${r.frames} frames @ ${r.fps} fps)`, source: 'render', originalName: `v${n}${label ? '-' + label : ''}.mp4`, label: label ? `v${n} ${label}` : null });
+      const r = await renderProject({ pageUrl: pageUrlFor(prj.id, entryOf(prj)), dir: prj.dir, assetsDir: prj.assetsDir || null, out, quality, scale, fps: fps ? Number(fps) : undefined, onLog: (text) => job.push({ type: 'log', text }), onProgress: (p) => job.push({ type: 'progress', ...p }) });
+      const v = registerVersion(prj, out, { notes: notes || `Rendered from Studio (${r.width}×${r.height}, ${r.frames} frames @ ${r.fps} fps)${entryOf(prj) !== 'index.html' ? `\nVariant: ${entryOf(prj)}` : ''}`, source: 'render', originalName: `v${n}${label ? '-' + label : ''}.mp4`, label: label ? `v${n} ${label}` : null });
       job.push({ type: 'log', text: `registered ${v.label}` }); notifyWaiters(); job.finish(true, { versionId: v.id });
     } catch (e) { job.push({ type: 'log', text: `failed: ${e.message}` }); job.finish(false); }
   })();
@@ -281,12 +282,15 @@ async function api(req, res, url) {
     const prj = store.project(x[1]); if (!prj?.dir) return err(res, 404, 'Project not found');
     const b = await readJson(req);
     const patch = {}; for (const k of ['start', 'duration', 'track']) if (k in b) patch[k] = Number(b[k]);
-    const attrs = updateClip(prj.dir, decodeURIComponent(x[2]), patch);
-    if (!attrs) return err(res, 404, `No clip with id ${x[2]} in index.html`);
+    const entry = entryOf(prj);
+    snapshot(prj.dir, entry, `before moving #${decodeURIComponent(x[2])}`, 'you');
+    const attrs = updateClip(prj.dir, decodeURIComponent(x[2]), patch, entry);
+    if (!attrs) return err(res, 404, `No clip with id ${x[2]} in ${entry}`);
     // A clip dragged past the end extends the composition so it stays visible.
-    let comp = parseProject(prj.dir);
+    let comp = parseProject(prj.dir, entry);
     const end = Number(attrs['data-start']) + Number(attrs['data-duration'] || 0);
-    if (comp && Number.isFinite(end) && comp.duration !== null && end > comp.duration + 1e-6) { updateRoot(prj.dir, { 'data-duration': end }); comp = parseProject(prj.dir); }
+    if (comp && Number.isFinite(end) && comp.duration !== null && end > comp.duration + 1e-6) { updateRoot(prj.dir, { 'data-duration': end }, entry); comp = parseProject(prj.dir, entry); }
+    snapshot(prj.dir, entry, `moved #${decodeURIComponent(x[2])}`, 'you');
     store.touch(prj.id); store.save();
     return send(res, 200, { ok: true, attrs, composition: comp });
   }
@@ -307,7 +311,7 @@ async function api(req, res, url) {
     const b = await readJson(req);
     const esc = (v) => String(v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
     const start = Math.max(0, Number(b.start) || 0); const track = Number.isFinite(Number(b.track)) ? Number(b.track) : 1;
-    const comp = parseProject(prj.dir); const ids = new Set((comp?.clips || []).map((c) => c.id).filter(Boolean));
+    const comp = parseProject(prj.dir, entryOf(prj)); const ids = new Set((comp?.clips || []).map((c) => c.id).filter(Boolean));
     let base = String(b.id || (b.src ? path.basename(b.src).replace(/\.[^.]+$/, '') : b.kind || 'clip')).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$|^(\d)/g, (mm, d) => (d ? 'c' + d : '')) || 'clip';
     let id = base, n = 2; while (ids.has(id)) id = `${base}-${n++}`;
     const dur = b.duration !== undefined && b.duration !== null ? ` data-duration="${Math.max(0.04, Number(b.duration))}"` : '';
@@ -317,17 +321,36 @@ async function api(req, res, url) {
     else if (b.src && kindOf(b.src) === 'image') html = `<img id="${id}" class="clip" src="${esc(b.src)}" data-start="${start}"${dur || ' data-duration="3"'} data-track-index="${track}" style="inset:0;width:100%;height:100%;object-fit:cover">`;
     else if (b.kind === 'text') html = `<p id="${id}" class="clip" data-start="${start}"${dur || ' data-duration="3"'} data-track-index="${track}" style="left:8%;right:8%;top:40%;margin:0;font-size:64px;font-weight:800;color:var(--brand-text,#fff)">${esc(b.text || 'Text')}</p>`;
     else return err(res, 400, 'Need a media src or kind "text"');
-    if (!insertClipHtml(prj.dir, html)) return err(res, 400, 'No composition root in index.html');
-    const after = parseProject(prj.dir); const end = start + (Number(b.duration) || 3);
-    if (after && after.duration !== null && end > after.duration + 1e-6) updateRoot(prj.dir, { 'data-duration': end });
+    const entry = entryOf(prj); snapshot(prj.dir, entry, `before inserting ${id}`, 'you');
+    if (!insertClipHtml(prj.dir, html, entry)) return err(res, 400, `No composition root in ${entry}`);
+    const after = parseProject(prj.dir, entry); const end = start + (Number(b.duration) || 3);
+    if (after && after.duration !== null && end > after.duration + 1e-6) updateRoot(prj.dir, { 'data-duration': end }, entry);
+    snapshot(prj.dir, entry, `inserted ${id}`, 'you');
     store.touch(prj.id); store.save();
-    return send(res, 201, { ok: true, id, composition: parseProject(prj.dir) });
+    return send(res, 201, { ok: true, id, composition: parseProject(prj.dir, entryOf(prj)) });
   }
   if ((x = m(/^\/api\/projects\/([^/]+)\/frame$/))) {
     // A frame of the live composition (not a rendered version), for Live review notes and agents.
     const prj = store.project(x[1]); if (!prj?.dir) return err(res, 404, 'Project not found');
-    try { const { buf } = await captureFrame({ pageUrl: pageUrlFor(prj.id), t: Number(q.t || 0), width: Number(q.w || 1280) }); return send(res, 200, buf, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'no-store' }); }
+    try { const { buf } = await captureFrame({ pageUrl: pageUrlFor(prj.id, entryOf(prj)), t: Number(q.t || 0), width: Number(q.w || 1280) }); return send(res, 200, buf, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'no-store' }); }
     catch (e) { return err(res, 501, e.message); }
+  }
+  if ((x = m(/^\/api\/projects\/([^/]+)\/variants$/))) {
+    const prj = store.project(x[1]); if (!prj?.dir) return err(res, 404, 'Project not found');
+    if (req.method === 'GET') return send(res, 200, { active: entryOf(prj), variants: listVariants(prj.dir) });
+    if (req.method === 'POST') {
+      const b = await readJson(req);
+      if (b.activate) { if (!safePath(prj.dir, b.activate) || !fs.existsSync(safePath(prj.dir, b.activate))) return err(res, 404, 'No such composition'); store.updateProject(prj.id, { composition: b.activate === 'index.html' ? null : b.activate }); return send(res, 200, { active: entryOf(store.project(prj.id)), variants: listVariants(prj.dir) }); }
+      const entry = createVariant(prj.dir, b.name || 'variant', b.from || entryOf(prj)); if (!entry) return err(res, 400, 'Could not create the variant');
+      store.updateProject(prj.id, { composition: entry });
+      return send(res, 201, { active: entry, variants: listVariants(prj.dir) });
+    }
+    if (req.method === 'DELETE') { const q2 = q.entry; if (!q2 || q2 === 'index.html') return err(res, 400, 'The main composition cannot be deleted'); const abs = safePath(prj.dir, q2); if (!abs || !/^variants\//.test(q2)) return err(res, 400, 'Not a variant'); try { fs.unlinkSync(abs); } catch {} if (entryOf(prj) === q2 || prj.composition === q2) store.updateProject(prj.id, { composition: null }); return send(res, 200, { active: entryOf(store.project(prj.id)), variants: listVariants(prj.dir) }); }
+  }
+  if ((x = m(/^\/api\/projects\/([^/]+)\/history$/))) {
+    const prj = store.project(x[1]); if (!prj?.dir) return err(res, 404, 'Project not found');
+    if (req.method === 'GET') return send(res, 200, { entry: entryOf(prj), items: listHistory(prj.dir, q.all ? null : entryOf(prj)).slice(0, 200) });
+    if (req.method === 'POST') { const b = await readJson(req); if (!restoreSnapshot(prj.dir, b.file, entryOf(prj))) return err(res, 400, 'Could not restore'); store.touch(prj.id); store.save(); return send(res, 200, { ok: true, composition: parseProject(prj.dir, entryOf(prj)) }); }
   }
   if ((x = m(/^\/api\/projects\/([^/]+)\/brand$/))) {
     const prj = store.project(x[1]); if (!prj?.dir) return err(res, 404, 'Project not found');
@@ -354,7 +377,7 @@ async function api(req, res, url) {
       let version = null, notes = [];
       if (b.fromNotes) { notes = (Array.isArray(b.fromNotes) ? b.fromNotes : [b.fromNotes]).map((id) => store.feedbackItem(id)).filter(Boolean); if (!notes.length) return err(res, 400, 'Notes not found'); }
       else { version = store.version(b.fromFeedback) || store.latestVersion(prj.id); if (!version) return err(res, 400, 'No version to take feedback from'); notes = store.feedback({ versionId: version.id }); if (!notes.some((f) => !f.replyTo && f.status !== 'done')) return err(res, 400, 'No open notes on this version'); }
-      const brief = buildPrompt({ project: prj, version, feedback: notes, composition: parseProject(prj.dir), baseUrl: baseUrl(req), dataDir: DATA });
+      const brief = buildPrompt({ project: prj, version, feedback: notes, composition: parseProject(prj.dir, entryOf(prj)), baseUrl: baseUrl(req), dataDir: DATA });
       message = `Apply the review feedback below to the composition in this folder. Open the annotated frames (Read the image files) to see what each note points at. Change only what the notes ask for, keep everything else as it is, and follow MOTION.md. Do not render. When done, list what you changed per note (clip id, attribute, from → to).${b.message ? `\n\nExtra instruction from the reviewer: ${String(b.message).trim()}` : ''}\n\n${brief}`.slice(0, 60000);
     }
     if (!message) return err(res, 400, 'message is required');
@@ -365,7 +388,9 @@ async function api(req, res, url) {
     else if (b.fromFeedback) { const v = store.version(b.fromFeedback); const k = store.feedback({ versionId: v?.id }).filter((f) => !f.replyTo && f.status !== 'done').length; shown = `📝 Review notes on ${v?.label || 'the latest version'} (${k} open)${b.message ? ` — ${String(b.message).trim()}` : ''}`; }
     prj.chat = prj.chat || []; prj.chat.push({ role: 'user', text: shown, at: new Date().toISOString(), author: b.author || null }); store.save();
     const entry = { role: 'agent', text: '', tools: [], at: new Date().toISOString() };
-    const system = systemPrompt({ dir: prj.dir, composition: parseProject(prj.dir), files: listFiles(prj.dir), assetsDir: prj.assetsDir || null });
+    const activeEntry = entryOf(prj);
+    snapshot(prj.dir, activeEntry, 'before agent run', 'you');
+    const system = systemPrompt({ dir: prj.dir, composition: parseProject(prj.dir, activeEntry), files: listFiles(prj.dir), assetsDir: prj.assetsDir || null, entry: activeEntry, variants: listVariants(prj.dir).map((v) => v.entry) });
     const handle = { jobId: job.id, kill: null };
     agents.set(prj.id, handle);
     const onEvent = (ev) => {
@@ -395,6 +420,7 @@ async function api(req, res, url) {
         store.save();
       }
       if (out.error) console.error(`[agent] ${prj.name}: ${out.error}`);
+      for (const v of listVariants(prj.dir)) snapshot(prj.dir, v.entry, (message.startsWith('Apply the review feedback') ? 'review notes' : message.replace(/^🎙 /, '')).slice(0, 40), 'agent');
       agents.delete(prj.id);
       job.push({ type: 'done', result: out.result, cost: out.cost, sessionId: out.sessionId });
       job.finish(!out.error, { result: out.result, cost: out.cost });
@@ -422,14 +448,14 @@ async function api(req, res, url) {
     const prj = store.project(x[1]); if (!prj) return err(res, 404, 'Project not found');
     const version = q.versionId ? store.version(q.versionId) : store.latestVersion(prj.id);
     if (!version) return err(res, 404, 'No version to review');
-    const composition = prj.dir ? parseProject(prj.dir) : null;
+    const composition = prj.dir ? parseProject(prj.dir, entryOf(prj)) : null;
     const text = buildPrompt({ project: prj, version, feedback: store.feedback({ versionId: version.id }), composition, baseUrl: baseUrl(req), dataDir: q.paths === 'local' ? path.join(DATA) : null });
     return send(res, 200, text, { 'Content-Type': 'text/markdown; charset=utf-8' });
   }
   if ((x = m(/^\/api\/projects\/([^/]+)\/composition$/))) {
     const prj = store.project(x[1]); if (!prj) return err(res, 404, 'Project not found');
     if (!prj.dir) return send(res, 200, null);
-    const comp = parseProject(prj.dir);
+    const comp = parseProject(prj.dir, entryOf(prj));
     if (comp && q.t !== undefined) return send(res, 200, { at: Number(q.t), clips: clipsAt(comp, Number(q.t)).map((c) => ({ ...c, label: describeClip(c) })) });
     return send(res, 200, comp);
   }
@@ -441,8 +467,11 @@ async function api(req, res, url) {
       const abs = safePath(prj.dir, q.path); if (!abs) return err(res, 403, 'Outside project');
       if (!/\.(html?|css|js|mjs|json|md|txt|svg|csv)$/i.test(abs)) return err(res, 400, 'Only text files can be saved here');
       const chunks = []; let size = 0; for await (const c of req) { size += c.length; if (size > 5 * 1024 * 1024) return err(res, 413, 'File too large'); chunks.push(c); }
+      const relSaved = path.relative(prj.dir, abs);
+      if (/\.html?$/i.test(abs) && fs.existsSync(abs)) snapshot(prj.dir, relSaved, 'before editing in Files', 'you');
       fs.mkdirSync(path.dirname(abs), { recursive: true }); fs.writeFileSync(abs, Buffer.concat(chunks)); store.touch(prj.id); store.save();
-      return send(res, 200, { ok: true, composition: /index\.html$/.test(abs) ? parseProject(prj.dir) : undefined });
+      if (/\.html?$/i.test(abs)) snapshot(prj.dir, relSaved, 'edited in Files', 'you');
+      return send(res, 200, { ok: true, composition: /\.html?$/i.test(abs) ? parseProject(prj.dir, entryOf(prj)) : undefined });
     }
     if (q.path !== undefined) {
       const abs = safePath(prj.dir, q.path); if (!abs) return err(res, 403, 'Outside project');
@@ -498,7 +527,7 @@ async function api(req, res, url) {
     const refs = [];
     for (const [i, r] of (b.refs || []).entries()) { const file = path.join(DATA, 'refs', `${id}-${i}`); const mime = dataUrlToFile(r, file); if (!mime) continue; const ext = extFor(mime) || '.png'; fs.renameSync(file, file + ext); refs.push(`/media/refs/${id}-${i}${ext}`); }
     let clipContext = [];
-    if (prj?.dir && typeof b.time === 'number') { const comp = parseProject(prj.dir); clipContext = clipsAt(comp, b.time).map((c) => ({ id: c.id, tag: c.tag, start: c.start, duration: c.duration, track: c.track, label: describeClip(c) })); }
+    if (prj?.dir && typeof b.time === 'number') { const comp = parseProject(prj.dir, entryOf(prj)); clipContext = clipsAt(comp, b.time).map((c) => ({ id: c.id, tag: c.tag, start: c.start, duration: c.duration, track: c.track, label: describeClip(c) })); }
     const f = store.addFeedback({ id, projectId: prj.id, versionId: version ? version.id : null, live: !version, author: String(b.author || 'Anonymous').slice(0, 60), body: String(b.body || '').slice(0, 20000), time: typeof b.time === 'number' ? b.time : null, timeEnd: typeof b.timeEnd === 'number' ? b.timeEnd : null, kind: ['text', 'voice', 'drawing'].includes(b.kind) ? b.kind : 'text', tags: Array.isArray(b.tags) ? b.tags.slice(0, 10) : [], replyTo: typeof b.replyTo === 'string' && store.feedbackItem(b.replyTo) ? b.replyTo : null, postedByAgent: !!b.postedByAgent, transcript: b.transcript || null, visualReferences: Array.isArray(b.visualReferences) ? b.visualReferences : [], drawing: b.drawing || null, frames, audioUrl, refs, clipContext });
     notifyWaiters();
     return send(res, 201, f);

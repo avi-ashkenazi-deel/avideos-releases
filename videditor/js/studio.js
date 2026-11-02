@@ -32,7 +32,8 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
     await new Promise((r) => { img.onload = r; img.onerror = r; });
     return DrawLayer.snapshot(img.naturalWidth ? img : { width: stage.info?.width || 1280, height: stage.info?.height || 720 }, strokes, opts);
   };
-  const src = () => `/project-files/${project.id}/index.html?runtime=1&_=${Date.now()}`;
+  const src = () => `/project-files/${project.id}/${project.composition || 'index.html'}?runtime=1&_=${Date.now()}`;
+  const activeEntry = () => project.composition || 'index.html';
   const timeEl = h('span.time');
   const playBtn = btn('', { icon: 'play', cls: 'icon', title: 'Play / pause (space)', onClick: () => stage.toggle() });
   const renderBtn = btn('Render', { icon: 'render', cls: 'primary', title: 'Render to MP4 and add it as a version for review', onClick: renderNow });
@@ -96,7 +97,7 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
   stage.on('time', updateTime); stage.on('play', updateTime); stage.on('pause', updateTime);
   stage.on('ready', () => { overlayMsg.remove(); updateTime(); renderTimeline(); renderLayers(); });
   stage.on('select', (m) => selectClip(m.id, { fromStage: true }));
-  async function reloadComp() { composition = await api.composition(project.id).catch(() => composition); await stage.reload(true); renderTimeline(); renderLayers(); }
+  async function reloadComp() { composition = await api.composition(project.id).catch(() => composition); const t = stage.time; await stage.load(src()); await stage.seek(Math.min(t, stage.duration || t)); renderTimeline(); renderLayers(); if (sideTab === 'history') renderHistory(); }
 
   // ---------- timeline
   const ruler = h('div.ruler'); const tracksEl = h('div.tracks'); const phead = h('div.phead');
@@ -185,11 +186,11 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
   }
 
   // ---------- side panel: layers / files
-  const layersEl = h('div.layers'); const filesHost = h('div'); const assetsHost = h('div'); const brandHost = h('div');
+  const layersEl = h('div.layers'); const filesHost = h('div'); const assetsHost = h('div'); const brandHost = h('div'); const historyHost = h('div');
   const inspector = h('div.inspector.hidden');
   let sideTab = 'layers';
-  const hosts = { layers: () => [inspector, layersEl], files: () => [filesHost], assets: () => [assetsHost], brand: () => [brandHost] };
-  const sideTabs = h('div.tabs', [['layers', 'Layers'], ['assets', 'Assets'], ['files', 'Files'], ['brand', 'Brand']].map(([k, l]) => h('span.tab', { class: `tab ${k === sideTab ? 'active' : ''}`, 'data-tab': k, on: { click: (e) => { sideTab = k; sideTabs.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t === e.currentTarget)); sideBody.replaceChildren(...hosts[k]()); if (k === 'files') renderFiles(); if (k === 'assets') renderAssets(); if (k === 'brand') renderBrand(); } } }, l)), h('span', { style: { flex: 1 } }), project.versions.length ? h('a.tab', { href: `#/p/${project.id}` }, 'Review ↗') : null);
+  const hosts = { layers: () => [inspector, layersEl], files: () => [filesHost], assets: () => [assetsHost], brand: () => [brandHost], history: () => [historyHost] };
+  const sideTabs = h('div.tabs', [['layers', 'Layers'], ['assets', 'Assets'], ['history', 'History'], ['files', 'Files'], ['brand', 'Brand']].map(([k, l]) => h('span.tab', { class: `tab ${k === sideTab ? 'active' : ''}`, 'data-tab': k, on: { click: (e) => { sideTab = k; sideTabs.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t === e.currentTarget)); sideBody.replaceChildren(...hosts[k]()); if (k === 'files') renderFiles(); if (k === 'assets') renderAssets(); if (k === 'brand') renderBrand(); if (k === 'history') renderHistory(); } } }, l)), h('span', { style: { flex: 1 } }), project.versions.length ? h('a.tab', { href: `#/p/${project.id}` }, 'Review ↗') : null);
   const sideBody = h('div.body', inspector, layersEl);
   const side = h('div.side', sideTabs, sideBody);
   // Layers = what is on screen at the playhead, front to back (like Figma's layers for the current frame).
@@ -284,6 +285,33 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
       h('div', { style: { display: 'flex', gap: '6px', marginTop: '8px' } }, btn('Save guidelines', { cls: 'primary sm', icon: 'check', onClick: async () => { try { await api.saveFile(project.id, 'MOTION.md', ta2.value); toast('MOTION.md saved', 'ok'); } catch (e) { toast(e.message, 'err'); } } }), btn('Ask agent to re-time to these rules', { cls: 'sm ghost', icon: 'spark', onClick: () => { ta.value = 'Re-time every animation and transition in the composition to follow MOTION.md exactly (durations, easing, zoom limits). List what you changed.'; ta.focus(); } })));
   }
 
+  // ---------- history (snapshots of the active composition)
+  async function renderHistory() {
+    historyHost.replaceChildren(h('div.section', h('div.muted.small', 'Loading…')));
+    let data; try { data = await api.history(project.id); } catch (e) { return historyHost.replaceChildren(h('div.section', h('div.muted', e.message))); }
+    const rows = data.items.map((it, i) => h('div.version-row', { style: { cursor: 'default', alignItems: 'center' } },
+      h('div.vb', h('div.l', h('span', { style: { color: it.by === 'agent' ? 'var(--agent)' : 'var(--fg)' } }, it.by === 'agent' ? 'Agent' : 'You'), h('span.small.muted', relTime(it.at)), h('span.spacer', { style: { flex: 1 } }), i === 0 ? h('span.pill', 'latest') : null), h('div.n', it.label || '(no label)')),
+      i === 0 ? null : btn('Restore', { cls: 'sm', icon: 'undo', title: 'Make the composition exactly like this snapshot (the current state is snapshotted first)', onClick: async () => { try { const r = await api.restore(project.id, it.file); composition = r.composition; await reloadComp(); toast('Restored', 'ok'); renderHistory(); } catch (e) { toast(e.message, 'err'); } } })));
+    historyHost.replaceChildren(h('div.section', h('h3', `History · ${data.entry}`), h('p.small.muted', 'A snapshot is taken before and after every change: timeline drags, Files edits, agent runs. Restore brings that state back; nothing is lost because the current state is snapshotted first.')), h('div', { style: { display: 'grid', gap: '6px', padding: '0 12px 12px' } }, ...(rows.length ? rows : [h('div.muted.small', 'No snapshots yet. They appear as soon as something changes.')])));
+  }
+
+  // ---------- variants (several compositions in one project)
+  const variantSel = h('select.text', { style: { width: 'auto', maxWidth: '220px' }, title: 'Which composition you are looking at. A variant is a separate copy you can take in another direction.' });
+  async function renderVariants() {
+    let data; try { data = await api.variants(project.id); } catch { return; }
+    variantSel.replaceChildren(...data.variants.map((v) => h('option', { value: v.entry, selected: v.entry === data.active }, v.entry === 'index.html' ? 'Main composition' : `Variant: ${v.title || v.name}`)), h('option', { value: '__new' }, '+ New variant from this one…'), data.active !== 'index.html' ? h('option', { value: '__delete' }, '✕ Delete this variant') : null);
+  }
+  variantSel.addEventListener('change', async () => {
+    const v = variantSel.value;
+    try {
+      if (v === '__new') { const name = h('input.text', { placeholder: 'e.g. warm cut, vertical, shorter' }); if (await modal('New variant', h('div', h('p.muted', 'A copy of the current composition you can change independently. The original stays as it is. You can also just tell the agent: "make another version that is …".'), name), { actions: [{ label: 'Create', cls: 'primary', value: true }] })) { const r = await api.createVariant(project.id, name.value.trim() || 'variant', activeEntry()); project.composition = r.active; toast(`Variant created: ${r.active}`, 'ok'); } }
+      else if (v === '__delete') { if (await modal('Delete this variant?', h('p.muted', `${activeEntry()} is removed. The main composition is kept.`), { actions: [{ label: 'Delete', cls: 'danger', value: true }] })) { const r = await api.deleteVariant(project.id, activeEntry()); project.composition = r.active === 'index.html' ? null : r.active; } }
+      else { const r = await api.activateVariant(project.id, v); project.composition = r.active === 'index.html' ? null : r.active; }
+    } catch (e) { toast(e.message, 'err'); }
+    await renderVariants(); await reloadComp();
+  });
+  renderVariants();
+
   function selectClip(id, { fromStage = false } = {}) {
     selected = id || null;
     if (!fromStage) stage.select(selected);
@@ -358,7 +386,7 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
         es.close(); agentJob = null; setBusy(false);
         const d = JSON.parse(e.data); live.live = false; if (!live.text && d.result) live.text = d.result;
         project = await api.project(project.id); if (!Array.isArray(project.chat)) project.chat = []; renderChat(project.chat.length ? project.chat : [...project.chat, live]);
-        await reloadComp(); toast(d.ok ? 'Agent finished' : 'Agent stopped with an error', d.ok ? 'ok' : 'err');
+        await renderVariants(); await reloadComp(); toast(d.ok ? 'Agent finished' : 'Agent stopped with an error', d.ok ? 'ok' : 'err');
       });
       es.onerror = () => { es.close(); agentJob = null; setBusy(false); live.live = false; redraw(); };
   }
@@ -396,7 +424,7 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
   // ---------- top bar + layout
   topbar([
     btn('', { icon: 'back', cls: 'ghost icon', title: 'All videos', onClick: () => navigate('#/') }),
-    h('span.title', project.name), h('span.pill', svg('spark'), 'Studio'),
+    h('span.title', project.name), h('span.pill', svg('spark'), 'Studio'), variantSel,
     h('span.spacer'),
     project.versions.length ? btn('Review', { icon: 'chat', title: 'Review the latest render', onClick: () => navigate(`#/p/${project.id}`) }) : null,
     btn('Copy folder path', { icon: 'copy', cls: 'ghost', title: project.dir, onClick: async () => { await copyText(project.dir); toast('Copied', 'ok'); } }),
