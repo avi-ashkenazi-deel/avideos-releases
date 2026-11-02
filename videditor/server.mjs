@@ -9,7 +9,8 @@ import { fileURLToPath } from 'node:url';
 import { Store } from './lib/store.mjs';
 import { detectProject, parseProject, clipsAt, describeClip, listFiles, updateClip, updateRoot, createProject, safePath, resolveSrc, readBrand, writeBrand, insertClipHtml, listVariants, createVariant, snapshot, listHistory, restoreSnapshot } from './lib/composition.mjs';
 import { scanMedia, analyzeFile, writeManifest, loadManifest, analysisDirFor, kindOf, ANALYSIS_VERSION } from './lib/analyze.mjs';
-import { hasFfmpeg, probe, poster, frameAt } from './lib/media.mjs';
+import { hasFfmpeg, probe, poster, frameAt, listEncoders } from './lib/media.mjs';
+import { availableFormats, DEFAULT_FORMAT } from './lib/formats.mjs';
 import { buildPrompt } from './lib/prompt.mjs';
 import { renderProject, loadPlaywright, captureFrame } from './lib/render.mjs';
 import { runAgent, AGENTS, systemPrompt, diagnoseClaude } from './lib/agent.mjs';
@@ -85,7 +86,7 @@ function projectView(p) {
   return { ...p, versions, latest, stats: store.stats(p.id), lastActivity: last ? { at: last.createdAt, author: last.author, body: (last.body || last.transcript || '').slice(0, 80) } : null, project: p.dir ? detectProject(p.dir) : null, composition: p.dir ? entryOf(p) : null, variants: p.dir && fs.existsSync(p.dir) ? listVariants(p.dir).length : 0, chat: p.chat || [], lastChat: (p.chat || []).slice(-1)[0] || null, agentRunning: agents.has(p.id) };
 }
 
-function registerVersion(project, srcFile, { notes = '', source = 'upload', postedByAgent = false, originalName = null, move = false, label = null } = {}) {
+function registerVersion(project, srcFile, { notes = '', source = 'upload', postedByAgent = false, originalName = null, move = false, label = null, ...extra } = {}) {
   const id = store.id('ver');
   const ext = path.extname(originalName || srcFile).toLowerCase() || '.mp4';
   const fileName = `${id}${ext}`;
@@ -95,7 +96,8 @@ function registerVersion(project, srcFile, { notes = '', source = 'upload', post
   let posterUrl = null;
   if (FFMPEG && poster(dest, path.join(DATA, 'media', `${id}.jpg`), Math.min(0.5, (info.duration || 1) / 2))) posterUrl = `/media/media/${id}.jpg`;
   const composition = project.dir ? summarizeComposition(parseProject(project.dir, entryOf(project))) : null;
-  return store.addVersion(project.id, { id, fileName, filePath: dest, originalName: originalName || path.basename(srcFile), mediaUrl: `/media/media/${fileName}`, posterUrl, notes, source, postedByAgent, ...info, composition, ...(label ? { label } : {}) });
+  const playable = ['.mp4', '.webm'].includes(ext);
+  return store.addVersion(project.id, { id, fileName, filePath: dest, originalName: originalName || path.basename(srcFile), mediaUrl: `/media/media/${fileName}`, posterUrl, notes, source, postedByAgent, ...info, composition, playable, ...extra, ...(label ? { label } : {}) });
 }
 const summarizeComposition = (c) => (c ? { id: c.id, width: c.width, height: c.height, duration: c.duration, fps: c.fps, clipCount: c.clips.length } : null);
 
@@ -111,14 +113,17 @@ function newJob(kind) {
 }
 const entryOf = (prj) => (prj?.composition && safePath(prj.dir, prj.composition) && fs.existsSync(safePath(prj.dir, prj.composition)) ? prj.composition : 'index.html');
 const pageUrlFor = (projectId, entry = 'index.html') => `http://127.0.0.1:${PORT}/project-files/${projectId}/${entry}?runtime=1&render=1`;
-function startRender(prj, { quality = 'looks', fps, notes, scale = 1, label = null } = {}) {
+const ENCODERS = FFMPEG ? listEncoders() : [];
+function startRender(prj, { quality = 'looks', fps, notes, scale = 1, label = null, format = DEFAULT_FORMAT, crf, maxBitrate, audio = true, alpha = false } = {}) {
+  const fmts = availableFormats(ENCODERS); const fmt = fmts[format]?.available ? format : DEFAULT_FORMAT;
   const n = store.versions(prj.id).length + 1;
-  const rel = `renders/v${n}${label ? '-' + String(label).replace(/[^\w-]+/g, '') : ''}.mp4`; const out = path.join(prj.dir, rel);
+  const rel = `renders/v${n}${label ? '-' + String(label).replace(/[^\w-]+/g, '') : ''}${fmt === 'png-seq' ? '-frames' : fmts[fmt].ext}`; const out = path.join(prj.dir, rel);
   const job = newJob('render');
   (async () => {
     try {
-      const r = await renderProject({ pageUrl: pageUrlFor(prj.id, entryOf(prj)), dir: prj.dir, assetsDir: prj.assetsDir || null, out, quality, scale, fps: fps ? Number(fps) : undefined, onLog: (text) => job.push({ type: 'log', text }), onProgress: (p) => job.push({ type: 'progress', ...p }) });
-      const v = registerVersion(prj, out, { notes: notes || `Rendered from Studio (${r.width}×${r.height}, ${r.frames} frames @ ${r.fps} fps)${entryOf(prj) !== 'index.html' ? `\nVariant: ${entryOf(prj)}` : ''}`, source: 'render', originalName: `v${n}${label ? '-' + label : ''}.mp4`, label: label ? `v${n} ${label}` : null });
+      const r = await renderProject({ pageUrl: pageUrlFor(prj.id, entryOf(prj)), dir: prj.dir, assetsDir: prj.assetsDir || null, out, quality, scale, fps: fps ? Number(fps) : undefined, format: fmt, crf: crf !== undefined && crf !== null && crf !== '' ? Number(crf) : undefined, maxBitrate: maxBitrate ? Number(maxBitrate) : undefined, audio: audio !== false && audio !== 'false', alpha: !!alpha, onLog: (text) => job.push({ type: 'log', text }), onProgress: (p) => job.push({ type: 'progress', ...p }) });
+      if (r.folder) { job.push({ type: 'log', text: `PNG sequence written to ${out}` }); return job.finish(true, { folder: out }); }
+      const v = registerVersion(prj, out, { notes: notes || `Rendered from Studio: ${r.label}, ${r.width}×${r.height}, ${r.frames} frames @ ${r.fps} fps${entryOf(prj) !== 'index.html' ? `\nVariant: ${entryOf(prj)}` : ''}`, source: 'render', originalName: path.basename(out), label: label ? `v${n} ${label}` : null, format: fmt, formatLabel: r.label, alpha: !!alpha });
       job.push({ type: 'log', text: `registered ${v.label}` }); notifyWaiters(); job.finish(true, { versionId: v.id });
     } catch (e) { job.push({ type: 'log', text: `failed: ${e.message}` }); job.finish(false); }
   })();
@@ -436,7 +441,7 @@ async function api(req, res, url) {
   if ((x = m(/^\/api\/jobs\/([^/]+)\/events$/))) {
     const job = jobs.get(x[1]); if (!job) return err(res, 404, 'Job not found');
     res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive', 'Access-Control-Allow-Origin': '*' });
-    const write = (line) => { if (line === null) { res.write(`event: done\ndata: ${JSON.stringify({ ok: job.ok, versionId: job.versionId, result: job.result, cost: job.cost })}\n\n`); res.end(); } else res.write(`data: ${JSON.stringify(line)}\n\n`); };
+    const write = (line) => { if (line === null) { res.write(`event: done\ndata: ${JSON.stringify({ ok: job.ok, versionId: job.versionId, result: job.result, cost: job.cost, folder: job.folder || null })}\n\n`); res.end(); } else res.write(`data: ${JSON.stringify(line)}\n\n`); };
     for (const l of job.lines) write(l);
     if (job.done) return write(null);
     job.listeners.add(write); req.on('close', () => job.listeners.delete(write));
@@ -540,7 +545,7 @@ async function api(req, res, url) {
   }
   if (p === '/api/projects/detect' || p === '/api/hyperframes/detect') return send(res, 200, detectProject(q.path));
   if (p === '/api/agent/diagnose') { const prj = q.projectId ? store.project(q.projectId) : null; return send(res, 200, diagnoseClaude(prj?.dir || ROOT)); }
-  if (p === '/api/capabilities') return send(res, 200, { ffmpeg: FFMPEG, playwright: !!loadPlaywright(), claude: findBin(CLAUDE_BIN), agents: Object.fromEntries(Object.entries(AGENTS).map(([k, v]) => [k, { label: v.label, available: findBin(v.bin()), install: v.install }])) });
+  if (p === '/api/capabilities') return send(res, 200, { ffmpeg: FFMPEG, playwright: !!loadPlaywright(), claude: findBin(CLAUDE_BIN), encoders: ENCODERS, formats: availableFormats(ENCODERS), defaultFormat: DEFAULT_FORMAT, agents: Object.fromEntries(Object.entries(AGENTS).map(([k, v]) => [k, { label: v.label, available: findBin(v.bin()), install: v.install }])) });
   if (p === '/api/guide') return send(res, 200, GUIDE, { 'Content-Type': 'text/markdown; charset=utf-8' });
   return err(res, 404, `No route ${req.method} ${p}`);
 }

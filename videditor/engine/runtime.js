@@ -21,6 +21,8 @@
   const num = (v, d = null) => (v === undefined || v === null || v === '' || Number.isNaN(Number(v)) ? d : Number(v));
   const root = document.querySelector('[data-composition-id]') || document.body;
   const inRender = /[?&]render=1/.test(location.search);
+  // Transparent renders (WebM/ProRes with alpha): the page background goes away; the stage keeps whatever it declares.
+  if (/[?&]alpha=1/.test(location.search)) { document.documentElement.style.background = 'transparent'; if (document.body) document.body.style.background = 'transparent'; else window.addEventListener('DOMContentLoaded', () => { document.body.style.background = 'transparent'; }); }
   const state = { t: 0, playing: false, clock0: 0, t0: 0, raf: null, selected: null, pending: 0 };
 
   const collectClips = () => Array.from(document.querySelectorAll('[data-start]')).filter((el) => el !== root).map((el) => {

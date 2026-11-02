@@ -27,7 +27,8 @@ export async function renderReview(root, { projectId, versionId, navigate, topba
   const S = { anchor: null, anchorEnd: null, refs: [], voice: null, tool: null };
 
   // ---------- stage
-  const video = h('video', { src: version.mediaUrl, poster: version.posterUrl || undefined, preload: 'auto', playsinline: true, crossorigin: 'anonymous' });
+  const video = h('video', { src: version.playable === false ? undefined : version.mediaUrl, poster: version.posterUrl || undefined, preload: 'auto', playsinline: true, crossorigin: 'anonymous' });
+  if (version.playable === false) setTimeout(() => toast(`${version.formatLabel || version.originalName} does not play in a browser. Download it from Versions, or switch to Live to review the composition.`, 'err'), 300);
   const canvas = h('canvas.overlay');
   const recBadge = h('div.badge-rec.hidden', h('i'), 'Recording');
   const frame = h('div.frame', { style: { '--ar': version.width && version.height ? `${version.width}/${version.height}` : '16/9' } }, video, canvas, recBadge);
@@ -267,7 +268,7 @@ export async function renderReview(root, { projectId, versionId, navigate, topba
     } }) : null;
     verBody.replaceChildren(
       h('div.section', drop, upload, renderBtn ? h('div', { style: { marginTop: '8px' } }, renderBtn) : h('p.hint', { style: { marginTop: '8px' } }, 'Link a composition folder in Context to render new versions from here.'), log),
-      h('div.section', { style: { display: 'grid', gap: '8px' } }, [...project.versions].reverse().map((v) => h('div.version-row', { class: `version-row ${v.id === version.id ? 'current' : ''}`, on: { click: () => navigate(`#/p/${project.id}?v=${v.id}`) } }, v.posterUrl ? h('img', { src: v.posterUrl }) : h('div.noimg'), h('div.vb', h('div.l', v.label, v.postedByAgent ? h('span.pill.agent', 'agent') : null, h('span.small.muted', relTime(v.createdAt)), h('span.spacer', { style: { flex: 1 } }), v.openCount ? h('span.pill.open', `${v.openCount} open`) : h('span.small.muted', `${v.feedbackCount} notes`)), h('div.n', v.notes || h('span.muted', 'No notes'))), h('div', { style: { display: 'grid', gap: '4px' } }, btn('', { icon: 'compare', cls: 'icon sm ghost', title: 'Compare with current', onClick: (e) => { e.stopPropagation(); navigate(`#/p/${project.id}/compare?a=${v.id}&b=${version.id}`); } }), h('a.btn.icon.sm.ghost', { href: `/api/versions/${v.id}/download`, title: 'Download', on: { click: (e) => e.stopPropagation() } }, svg('download')))))),
+      h('div.section', { style: { display: 'grid', gap: '8px' } }, [...project.versions].reverse().map((v) => h('div.version-row', { class: `version-row ${v.id === version.id ? 'current' : ''}`, on: { click: () => navigate(`#/p/${project.id}?v=${v.id}`) } }, v.posterUrl ? h('img', { src: v.posterUrl }) : h('div.noimg'), h('div.vb', h('div.l', v.label, v.formatLabel ? h('span.pill', v.formatLabel) : null, v.postedByAgent ? h('span.pill.agent', 'agent') : null, h('span.small.muted', relTime(v.createdAt)), h('span.spacer', { style: { flex: 1 } }), v.openCount ? h('span.pill.open', `${v.openCount} open`) : h('span.small.muted', `${v.feedbackCount} notes`)), h('div.n', v.notes || h('span.muted', 'No notes'))), h('div', { style: { display: 'grid', gap: '4px' } }, btn('', { icon: 'compare', cls: 'icon sm ghost', title: 'Compare with current', onClick: (e) => { e.stopPropagation(); navigate(`#/p/${project.id}/compare?a=${v.id}&b=${version.id}`); } }), h('a.btn.icon.sm.ghost', { href: `/api/versions/${v.id}/download`, title: 'Download', on: { click: (e) => e.stopPropagation() } }, svg('download')))))),
     );
     counts.versions.textContent = project.versions.length;
   }

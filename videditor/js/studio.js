@@ -394,27 +394,44 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
   // ---------- render
   async function renderNow() {
     if (!caps.playwright) return modal('Renderer not set up', h('div', h('p', 'Rendering uses your installed Chrome through Playwright. Install it once:'), h('pre.log', 'cd videditor && npm install'), h('p.muted', 'Then restart the server.')));
-    const quality = h('select.text', { style: { width: 'auto' } }, [['draft', 'Draft (fast)'], ['looks', 'Normal'], ['high', 'High (PNG frames, slow)']].map(([v, l]) => h('option', { value: v, selected: v === 'looks' }, l)));
+    const fmts = caps.formats || {}; const keys = Object.keys(fmts);
+    const saved = JSON.parse(localStorage.getItem('videditor.renderOpts') || '{}');
     const ch = stage.info?.height || 720;
-    const PRESETS = [['1', `Composition size (${stage.info?.width || '?'}×${ch})`], [String(720 / ch), '720p · Slack, quick share'], [String(1080 / ch), '1080p · LinkedIn, YouTube'], [String(2160 / ch), '4K']].filter(([v]) => Number(v) >= 0.25 && Number(v) <= 4);
-    const preset = h('select.text', { style: { width: 'auto' } }, PRESETS.map(([v, l]) => h('option', { value: v, selected: v === '1' }, l)));
+    const PRESETS = [['1', `Composition size (${stage.info?.width || '?'}×${ch})`], [String(720 / ch), '720p'], [String(1080 / ch), '1080p'], [String(2160 / ch), '4K']].filter(([v]) => Number(v) >= 0.25 && Number(v) <= 4);
+    const preset = h('select.text', { style: { width: 'auto' } }, PRESETS.map(([v, l]) => h('option', { value: v, selected: v === (saved.scale || '1') }, l)));
+    const format = h('select.text', { style: { width: 'auto', maxWidth: '100%' } }, keys.map((k) => h('option', { value: k, selected: k === (saved.format || caps.defaultFormat || 'mp4-h264'), disabled: !fmts[k].available }, `${fmts[k].label}${fmts[k].available ? '' : ' (encoder missing)'}`)));
+    const note = h('p.hint');
+    const quality = h('select.text', { style: { width: 'auto' } }, [['draft', 'Draft (fast)'], ['looks', 'Normal'], ['high', 'High']].map(([v, l]) => h('option', { value: v, selected: v === (saved.quality || 'looks') }, l)));
+    const crf = h('input.text', { type: 'number', min: 0, max: 63, placeholder: 'auto', value: saved.crf || '', style: { width: '90px' }, title: 'Constant rate factor: lower = better and bigger. Leave empty to use the quality preset.' });
+    const maxBitrate = h('input.text', { type: 'number', min: 0.5, step: 0.5, placeholder: 'none', value: saved.maxBitrate || '', style: { width: '90px' }, title: 'Cap the bitrate (Mbps) for platforms with upload limits' });
+    const fpsIn = h('input.text', { type: 'number', min: 1, max: 120, placeholder: String(stage.info?.fps || 30), value: saved.fps || '', style: { width: '90px' } });
+    const audioCb = h('input', { type: 'checkbox', checked: saved.audio !== false });
+    const alphaCb = h('input', { type: 'checkbox', checked: !!saved.alpha });
+    const alphaRow = h('label', { style: { display: 'flex', gap: '8px', alignItems: 'center' } }, alphaCb, h('span', 'Transparent background (drops the page background; the stage keeps its own)'));
+    const crfRow = h('div.irow', h('span', 'CRF'), h('div', { style: { display: 'flex', gap: '8px', alignItems: 'center' } }, crf, h('span.small.muted', 'auto from quality')));
     const notes = h('textarea.text', { rows: 2, placeholder: 'What changed in this version?' });
-    const ok = await modal(`Render v${project.versions.length + 1}`, h('div', h('label.field', h('span', 'Size'), preset), h('label.field', h('span', 'Quality'), quality), h('label.field', h('span', 'Version notes'), notes), h('p.hint', 'Different aspect ratios (vertical, square) are separate compositions: ask the agent for "a vertical version" and it will add one.')), { actions: [{ label: 'Render all sizes', cls: 'ghost', value: 'all' }, { label: 'Render', cls: 'primary', icon: 'render', value: true }] });
+    const sync = () => { const f = fmts[format.value] || {}; note.textContent = f.note || ''; alphaRow.style.display = f.alpha ? 'flex' : 'none'; crfRow.style.display = f.crf ? 'grid' : 'none'; const auto = f.crf ? f.crf[quality.value] : null; crfRow.querySelector('.small').textContent = auto !== null ? `auto ${auto} for ${quality.options[quality.selectedIndex].text.toLowerCase()}` : ''; };
+    format.addEventListener('change', sync); quality.addEventListener('change', sync); sync();
+    const adv = h('details', { open: !!(saved.crf || saved.maxBitrate || saved.fps || saved.audio === false || saved.alpha) }, h('summary', { style: { cursor: 'pointer', color: 'var(--fg-1)', fontSize: '12.5px' } }, 'Advanced'),
+      h('div.inspector', { style: { border: 0, padding: '8px 0 0' } }, crfRow, h('div.irow', h('span', 'Max bitrate'), h('div', { style: { display: 'flex', gap: '8px', alignItems: 'center' } }, maxBitrate, h('span.small.muted', 'Mbps'))), h('div.irow', h('span', 'Frame rate'), h('div', { style: { display: 'flex', gap: '8px', alignItems: 'center' } }, fpsIn, h('span.small.muted', 'fps'))), h('div.irow', h('span', 'Audio'), h('label', { style: { display: 'flex', gap: '8px', alignItems: 'center' } }, audioCb, h('span', 'include the composition\'s audio'))), h('div.irow', h('span', 'Alpha'), alphaRow)));
+    const ok = await modal(`Render v${project.versions.length + 1}`, h('div', h('label.field', h('span', 'Format'), format, note), h('div', { style: { display: 'flex', gap: '12px' } }, h('label.field', { style: { flex: 1 } }, h('span', 'Size'), preset), h('label.field', { style: { flex: 1 } }, h('span', 'Quality'), quality)), adv, h('label.field', { style: { marginTop: '10px' } }, h('span', 'Version notes'), notes)), { actions: [{ label: 'Render all sizes', cls: 'ghost', value: 'all' }, { label: 'Render', cls: 'primary', icon: 'render', value: true }] });
     if (!ok) return;
+    const opts = { format: format.value, quality: quality.value, crf: crf.value ? Number(crf.value) : undefined, maxBitrate: maxBitrate.value ? Number(maxBitrate.value) : undefined, fps: fpsIn.value ? Number(fpsIn.value) : undefined, audio: audioCb.checked, alpha: alphaCb.checked && !!fmts[format.value]?.alpha, notes: notes.value.trim() };
+    localStorage.setItem('videditor.renderOpts', JSON.stringify({ format: opts.format, quality: opts.quality, crf: crf.value, maxBitrate: maxBitrate.value, fps: fpsIn.value, audio: opts.audio, alpha: opts.alpha, scale: preset.value }));
     const scales = ok === 'all' ? PRESETS.filter(([v]) => v !== '1' || PRESETS.length === 1).map(([v, l]) => ({ scale: Number(v), label: l.split(' ')[0] })) : [{ scale: Number(preset.value), label: null }];
-    for (const [i, sc] of scales.entries()) await renderOne({ quality: quality.value, notes: notes.value.trim(), scale: sc.scale, label: scales.length > 1 ? sc.label : null, last: i === scales.length - 1 });
+    for (const [i, sc] of scales.entries()) await renderOne({ ...opts, scale: sc.scale, label: scales.length > 1 ? sc.label : null, last: i === scales.length - 1 });
   }
-  async function renderOne({ quality, notes, scale, label, last }) {
+  async function renderOne({ quality, notes, scale, label, last, ...rest }) {
     const bar = h('div.progress', h('i')); const log = h('pre.log', { style: { maxHeight: '40vh' } }); const status = h('div.small.muted', 'Starting…');
     const bg = h('div.modal-bg', h('div.modal', h('h2', `Rendering v${project.versions.length + 1}${label ? ` · ${label}` : ''}`), bar, status, log));
     document.body.append(bg);
     await new Promise((resolve) => {
       (async () => {
         try {
-          const { jobId } = await api.render(project.id, { quality, notes, scale, label });
+          const { jobId } = await api.render(project.id, { quality, notes, scale, label, ...rest });
           const es = new EventSource(`/api/jobs/${jobId}/events`);
           es.onmessage = (e) => { const d = JSON.parse(e.data); if (d.type === 'progress') { bar.firstChild.style.width = `${(d.frame / d.frames) * 100}%`; status.textContent = `Frame ${d.frame} / ${d.frames} · ${d.elapsed.toFixed(0)}s`; } else { log.textContent += (d.text || '') + '\n'; log.scrollTop = log.scrollHeight; } };
-          es.addEventListener('done', async (e) => { es.close(); const d = JSON.parse(e.data); bg.remove(); if (d.ok) { project = await api.project(project.id); toast(`Rendered v${project.versions.length}`, 'ok'); if (last && await modal('Render finished', h('p', `v${project.versions.length} is ready. Open it in Review to leave notes, or keep editing.`), { actions: [{ label: 'Keep editing', cls: 'ghost', value: 'stay' }, { label: 'Open in Review', cls: 'primary', value: 'review' }] }) === 'review') navigate(`#/p/${project.id}?v=${d.versionId}`); } else await modal('Render failed', h('pre.log', log.textContent)); resolve(); });
+          es.addEventListener('done', async (e) => { es.close(); const d = JSON.parse(e.data); bg.remove(); if (d.ok && d.folder) { await modal('PNG sequence ready', h('div', h('p', 'The frames are in:'), h('pre.log', d.folder))); } else if (d.ok) { project = await api.project(project.id); toast(`Rendered v${project.versions.length}`, 'ok'); if (last && await modal('Render finished', h('p', `v${project.versions.length} is ready. Open it in Review to leave notes, or keep editing.`), { actions: [{ label: 'Keep editing', cls: 'ghost', value: 'stay' }, { label: 'Open in Review', cls: 'primary', value: 'review' }] }) === 'review') navigate(`#/p/${project.id}?v=${d.versionId}`); } else await modal('Render failed', h('pre.log', log.textContent)); resolve(); });
           es.onerror = () => { es.close(); bg.remove(); toast('Lost connection to the render', 'err'); resolve(); };
         } catch (e) { bg.remove(); toast(e.message, 'err'); resolve(); }
       })();

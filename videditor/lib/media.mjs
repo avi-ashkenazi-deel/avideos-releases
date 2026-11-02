@@ -68,3 +68,11 @@ export function copyInto(src, destDir, name) {
   fs.copyFileSync(src, dest);
   return dest;
 }
+
+/** Video/audio encoders this ffmpeg build has. */
+export function listEncoders() {
+  const r = spawnSync('ffmpeg', ['-hide_banner', '-encoders'], { encoding: 'utf8' });
+  const out = new Set();
+  for (const name of ['libx264', 'libx265', 'libsvtav1', 'libaom-av1', 'librav1e', 'libvpx-vp9', 'prores_ks', 'gif', 'aac', 'libopus']) if (new RegExp(`\\s${name.replace(/[-]/g, '\\-')}\\s`).test(r.stdout || '')) out.add(name);
+  return [...out];
+}

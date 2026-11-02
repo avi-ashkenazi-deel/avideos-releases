@@ -52,8 +52,13 @@ subscription. No accounts, no credits.
   Files edits, agent runs), with one-click restore.
 
 **Export**
-- Render at composition size, 720p, 1080p or 4K (the composition is supersampled, text stays crisp), or
-  **Render all sizes** in one go. Each render becomes a version in Review.
+- Formats: MP4 H.264 (plays everywhere), MP4 HEVC, MP4 or WebM **AV1** (smallest files), WebM VP9 (with
+  transparency), MOV ProRes 4444 (for editing, with alpha), GIF, PNG sequence. Only formats your ffmpeg
+  can encode are offered (Homebrew's ffmpeg has all of them).
+- Quality draft / normal / high maps to a per-codec CRF; **Advanced** exposes CRF, a bitrate cap (Mbps),
+  frame rate, audio on/off and transparent background.
+- Size: composition, 720p, 1080p or 4K (supersampled, text stays crisp), or **Render all sizes**.
+  Each render becomes a version in Review (ProRes and GIF show a download instead of a player).
 
 **Review** (`#/p/<project>`)
 - Frame-accurate player, timestamped notes pinned to a moment or a range, **drawings** on the frame
