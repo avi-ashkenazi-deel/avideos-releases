@@ -109,7 +109,7 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
     const key = on.map((c) => c.id || c.tag).join('|') + '#' + selected + '#' + all.length;
     if (!force && key === layersKey) return; layersKey = key;
     const row = (c, dim) => h('div.layer', { class: `layer ${c.id && c.id === selected ? 'sel' : ''} ${dim ? 'dim' : ''}`, title: `${c.id ? '#' + c.id : c.tag} · ${fmtTime(c.start)}${c.duration !== null ? `–${fmtTime(c.start + c.duration)}` : ''} · track ${c.track ?? 0}`, on: { click: () => { selectClip(c.id); if (dim && c.start !== null) stage.seek(c.start + 0.01); } } },
-      h('span.lz', c.tag === 'audio' ? '♪' : (c.track ?? 0)), h('span.lid', c.id ? `#${c.id}` : `<${c.tag}>`), c.text ? h('span.ltxt', `“${c.text}”`) : c.src ? h('span.ltxt', c.src.split('/').pop()) : null, dim ? h('span.lt', fmtTime(c.start)) : null);
+      h('span.lz', c.tag === 'audio' ? '♪' : String(c.track ?? 0)), h('span.lid', c.id ? `#${c.id}` : `<${c.tag}>`), c.text ? h('span.ltxt', `“${c.text}”`) : c.src ? h('span.ltxt', c.src.split('/').pop()) : null, dim ? h('span.lt', fmtTime(c.start)) : null);
     const visible = on.filter((c) => c.tag !== 'audio'), audio = on.filter((c) => c.tag === 'audio');
     layersEl.replaceChildren(
       h('div.lhead', `On screen at ${fmtTime(t)}`, h('span.muted', ' · front to back')),
