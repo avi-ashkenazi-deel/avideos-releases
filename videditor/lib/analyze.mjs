@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
+export const ANALYSIS_VERSION = 2; // bump when the analysis output changes so cached manifests are redone
 export const MEDIA_RE = /\.(mp4|mov|m4v|webm|mkv|avi|mp3|wav|m4a|aac|ogg|flac|png|jpe?g|webp|gif|svg)$/i;
 export const kindOf = (f) => (/\.(mp4|mov|m4v|webm|mkv|avi)$/i.test(f) ? 'video' : /\.(mp3|wav|m4a|aac|ogg|flac)$/i.test(f) ? 'audio' : /\.(png|jpe?g|webp|gif|svg)$/i.test(f) ? 'image' : null);
 const slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60) || 'file';
@@ -114,7 +115,7 @@ export function analyzeAudio(file, { seconds = 90 } = {}) {
 export function analyzeFile(entry, outDir, { onLog } = {}) {
   fs.mkdirSync(outDir, { recursive: true });
   const info = probeMedia(entry.path) || {};
-  const rec = { ...entry, ...info, analyzedAt: new Date().toISOString(), scenes: [], frames: [], sheet: null, audio: null };
+  const rec = { ...entry, ...info, analyzedAt: new Date().toISOString(), version: ANALYSIS_VERSION, scenes: [], frames: [], sheet: null, audio: null };
   const relOut = (f) => path.join('.analysis', path.basename(outDir), f);
   if (entry.kind === 'image') {
     if (extractFrame(entry.path, 0, path.join(outDir, 'thumb.jpg'), { width: 480 })) rec.frames.push({ t: 0, file: relOut('thumb.jpg') }), (rec.sheet = relOut('thumb.jpg'));

@@ -8,7 +8,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Store } from './lib/store.mjs';
 import { detectProject, parseProject, clipsAt, describeClip, listFiles, updateClip, updateRoot, createProject, safePath, resolveSrc, readBrand, writeBrand, insertClipHtml } from './lib/composition.mjs';
-import { scanMedia, analyzeFile, writeManifest, loadManifest, analysisDirFor, kindOf } from './lib/analyze.mjs';
+import { scanMedia, analyzeFile, writeManifest, loadManifest, analysisDirFor, kindOf, ANALYSIS_VERSION } from './lib/analyze.mjs';
 import { hasFfmpeg, probe, poster, frameAt } from './lib/media.mjs';
 import { buildPrompt } from './lib/prompt.mjs';
 import { renderProject, loadPlaywright, captureFrame } from './lib/render.mjs';
@@ -127,7 +127,7 @@ function startRender(prj, { quality = 'looks', fps, notes, scale = 1, label = nu
 function listAssets(prj) {
   const items = [...scanMedia(path.join(prj.dir, 'assets'), { prefix: 'assets' }), ...(prj.assetsDir && fs.existsSync(prj.assetsDir) ? scanMedia(prj.assetsDir, { prefix: 'library' }) : [])];
   const manifest = loadManifest(prj.dir);
-  return items.map((it) => { const a = manifest.find((m) => m.rel === it.rel); const fresh = a && a.size === it.size && Math.abs(a.mtime - it.mtime) < 1; return { ...it, analyzed: !!fresh, analysis: fresh ? { duration: a.duration, width: a.width, height: a.height, fps: a.fps, hasAudio: a.hasAudio, scenes: a.scenes?.length || 0, sheet: a.sheet, frames: a.frames, audio: a.audio ? { bpm: a.audio.bpm, offset: a.audio.offset, confidence: a.audio.confidence, beats: a.audio.beats.slice(0, 64), peaks: a.audio.peaks } : null } : null }; });
+  return items.map((it) => { const a = manifest.find((m) => m.rel === it.rel); const fresh = a && a.size === it.size && Math.abs(a.mtime - it.mtime) < 1 && a.version === ANALYSIS_VERSION; return { ...it, analyzed: !!fresh, analysis: fresh ? { duration: a.duration, width: a.width, height: a.height, fps: a.fps, hasAudio: a.hasAudio, scenes: a.scenes?.length || 0, sheet: a.sheet, frames: a.frames, audio: a.audio ? { bpm: a.audio.bpm, offset: a.audio.offset, confidence: a.audio.confidence, beats: a.audio.beats.slice(0, 64), peaks: a.audio.peaks } : null } : null }; });
 }
 const analyzing = new Map(); // projectId -> job
 function startAnalyze(prj, { force = false } = {}) {

@@ -136,17 +136,18 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
     for (const it of data.items) {
       const a = it.analysis; const src = it.rel;
       const thumb = a?.sheet || a?.frames?.[0]?.file;
-      const meta = a ? [a.duration ? fmtTime(a.duration) : null, a.width ? `${a.width}×${a.height}` : null, a.scenes ? `${a.scenes} cuts` : null, a.audio ? `${a.audio.bpm} BPM` : null].filter(Boolean).join(' · ') : (it.analyzed ? '' : 'analyzing…');
+      const beat = a?.audio && a.audio.confidence >= 0.15 ? a.audio : null;
+      const meta = a ? [a.duration ? fmtTime(a.duration) : null, a.width ? `${a.width}×${a.height}` : null, a.scenes ? `${a.scenes} cuts` : null, beat ? `${beat.bpm} BPM` : (a.audio ? 'no clear beat' : null)].filter(Boolean).join(' · ') : (it.analyzed ? '' : 'analyzing…');
       list.append(h('div.version-row', { style: { cursor: 'default' } },
         thumb ? h('img', { src: `/project-files/${project.id}/${thumb}`, style: { width: '96px', cursor: 'zoom-in' }, on: { click: () => modal(src, h('img.zoom', { src: `/project-files/${project.id}/${thumb}` }), { wide: true }) } }) : h('div.noimg', { style: { width: '96px', display: 'grid', placeItems: 'center', color: 'var(--fg-2)', fontSize: '11px' } }, it.kind),
         h('div.vb', h('div.l', h('span.mono.small', { style: { overflow: 'hidden', textOverflow: 'ellipsis' } }, src)), h('div.n', meta || ' '),
           h('div', { style: { display: 'flex', gap: '4px', marginTop: '6px', flexWrap: 'wrap' } },
             btn('Insert at playhead', { cls: 'sm', icon: 'plus', onClick: async () => { try { const r = await api.insertClip(project.id, { src, start: Math.round(stage.time * 100) / 100, duration: it.kind === 'image' ? 3 : (a?.duration ? Math.min(a.duration, Math.max(0.5, (stage.duration || 5) - stage.time)) : null), track: it.kind === 'audio' ? 9 : 1, muted: it.kind === 'video' }); composition = r.composition; await stage.reload(true); renderTimeline(); renderLayers(); selectClip(r.id); toast(`Added #${r.id}`, 'ok'); } catch (e) { toast(e.message, 'err'); } } }),
             btn('Mention in chat', { cls: 'sm ghost', icon: 'chat', onClick: () => { ta.value = (ta.value ? ta.value + ' ' : '') + `\`${src}\``; ta.focus(); } }),
-            a?.audio ? btn(`Beats ${a.audio.bpm}`, { cls: 'sm ghost', title: 'Show the beat grid on the timeline', onClick: () => { beatGrid = beatGrid?.src === src ? null : { src, beats: a.audio.beats, bpm: a.audio.bpm }; renderTimeline(); } }) : null))));
+            beat ? btn(`Beats ${beat.bpm}`, { cls: 'sm ghost', title: 'Show the beat grid on the timeline', onClick: () => { beatGrid = beatGrid?.src === src ? null : { src, beats: beat.beats, bpm: beat.bpm }; renderTimeline(); } }) : null))));
     }
     const job = data.analyzing ? h('div.section', h('div.small.muted', 'Analyzing media…'), h('div.progress', h('i'))) : null;
-    assetsHost.replaceChildren(link, job, h('div.section', h('h3', `Media (${data.items.length})`), h('p.small.muted', 'Tell the agent what to do with them: "cut library/demo.mp4 to the music, UI-only shots, 15 seconds".')), list);
+    assetsHost.replaceChildren(...[link, job, h('div.section', h('h3', `Media (${data.items.length})`), h('p.small.muted', 'Tell the agent what to do with them: "cut library/demo.mp4 to the music, UI-only shots, 15 seconds".')), list].filter(Boolean));
     if (data.analyzing || data.items.some((i) => !i.analyzed)) assetsPoll = setInterval(async () => { const d = await api.assets(project.id).catch(() => null); if (d && !d.analyzing && d.items.every((i) => i.analyzed)) { clearInterval(assetsPoll); if (sideTab === 'assets') renderAssets(); } }, 2500);
   }
   let beatGrid = null;
