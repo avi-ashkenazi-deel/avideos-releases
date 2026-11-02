@@ -27,7 +27,7 @@ export class DrawLayer {
   render() { const { ctx, canvas } = this; ctx.clearRect(0, 0, canvas.width, canvas.height); for (const s of this.ghost) drawStroke(ctx, s, canvas.width, canvas.height); for (const s of this.strokes) drawStroke(ctx, s, canvas.width, canvas.height); if (this.live) drawStroke(ctx, this.live, canvas.width, canvas.height); }
   /** Composite the current video frame with given strokes to a JPEG data URL. */
   static snapshot(video, strokes, { maxWidth = 1280, quality = 0.85 } = {}) {
-    const vw = video.videoWidth || 1280, vh = video.videoHeight || 720;
+    const vw = video.videoWidth || video.naturalWidth || video.width || 1280, vh = video.videoHeight || video.naturalHeight || video.height || 720;
     const scale = Math.min(1, maxWidth / vw);
     const c = document.createElement('canvas'); c.width = Math.round(vw * scale); c.height = Math.round(vh * scale);
     const ctx = c.getContext('2d');

@@ -9,7 +9,9 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 export const SKILL = fs.readFileSync(path.join(ROOT, 'skills', 'videditor', 'SKILL.md'), 'utf8');
 
-export function systemPrompt({ dir, composition, files }) {
+export function systemPrompt({ dir, composition, files, assetsDir = null }) {
+  let media = ''; try { media = fs.readFileSync(path.join(dir, 'MEDIA.md'), 'utf8'); if (media.length > 12000) media = media.slice(0, 12000) + '\n…(truncated; open MEDIA.md for the rest)'; } catch {}
+  let brand = ''; try { brand = fs.readFileSync(path.join(dir, 'brand.json'), 'utf8'); } catch {}
   const clips = (composition?.clips || []).slice(0, 60).map((c) => `  ${c.id ? '#' + c.id : '<' + c.tag + '>'} start=${c.start} dur=${c.duration ?? 'auto'} track=${c.track ?? 0}${c.text ? ` "${c.text}"` : ''}${c.src ? ` src=${c.src}` : ''}`).join('\n');
   return [
     'You are the video editor agent inside Videditor. The project folder is the current working directory. Work only inside it.',
@@ -20,6 +22,9 @@ export function systemPrompt({ dir, composition, files }) {
     `Folder: ${dir}`,
     composition ? `Composition "${composition.id}": ${composition.width}×${composition.height}, ${composition.duration ?? '?'}s, ${composition.fps || 30} fps, ${composition.clips.length} clips:\n${clips}` : 'No composition parsed yet.',
     files?.length ? `Files: ${files.slice(0, 80).map((f) => f.path).join(', ')}` : '',
+    assetsDir ? `Linked asset folder (use as library/<name> in src): ${assetsDir}` : '',
+    brand ? `\n## Brand (brand.json → brand.css variables)\n${brand}` : '',
+    media ? `\n## Media analysis (from MEDIA.md)\n${media}` : '',
     '',
     'When you finish, reply with a short summary of what changed (clip ids, seconds) and anything you want the person to check. Do not run a render; Videditor renders.',
   ].join('\n');

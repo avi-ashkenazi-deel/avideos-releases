@@ -32,6 +32,17 @@ A video is a folder. `index.html` is the video. Videditor plays it in the browse
 - **Assets** live in `assets/`. Reference them relatively (`assets/x.png`). Fonts: `@font-face` with files in `assets/`, or a Google Fonts `<link>`.
 - **Text** is real HTML text. Prefer large type, strong contrast, generous margins (safe area 5%).
 
+## Assets, analysis and the asset library
+
+- `MEDIA.md` in the project lists every media file Videditor knows about: duration, size, **cut times**, a **contact sheet** and **keyframes** under `.analysis/`, and for anything with sound the **tempo (BPM), first beat and beat times** plus loud moments. Read it first when the request mentions footage, music, pace or "the clips".
+- **Look before you cut.** Open the contact sheet (`Read .analysis/<file>/sheet.jpg`) and the keyframes to judge content: which segments show UI, which show text or people, where the action is. Choose segments by what you see, not by filename. Say in your reply which frames you looked at.
+- Files under `library/…` live in a folder the person linked; reference them exactly as `library/<name>` in `src`. Files under `assets/` are in the project.
+- Use `data-media-start` + `data-duration` to use a segment of a source clip. Several `<video>` elements can use the same file.
+- **Cut to the beat**: start clips on beat times from `MEDIA.md` (or multiples: every 2nd/4th beat for calmer pacing), and let the music's loud moments land on the biggest visual change. Set the composition `data-duration` to end on a beat.
+- "Only UI, no text" style requests: skip keyframes that show on-screen text, lower thirds, slides; prefer product UI, motion, hands-on footage. When unsure, ask or offer two variants.
+- Brand: `brand.json` → `brand.css` exposes `--brand-primary`, `--brand-background`, `--brand-text`, `--brand-muted`, `--brand-accent`, `--brand-font`, `--brand-logo`. Link `brand.css` and use the variables instead of hard-coded colors so the person can rebrand without editing the composition.
+- Nested scenes: a clip with `data-composition-id="x" data-composition-src="compositions/x.html" data-start data-duration` plays another composition file inside it (same format, transparent body, same size). Use them for reusable scenes or long videos.
+
 ## Workflow
 
 1. Read `BRIEF.md` (goal, audience, tone) and the current `index.html`.

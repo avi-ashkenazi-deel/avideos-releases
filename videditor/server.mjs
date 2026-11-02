@@ -7,10 +7,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Store } from './lib/store.mjs';
-import { detectProject, parseProject, clipsAt, describeClip, listFiles, updateClip, updateRoot, createProject, safePath } from './lib/composition.mjs';
+import { detectProject, parseProject, clipsAt, describeClip, listFiles, updateClip, updateRoot, createProject, safePath, resolveSrc, readBrand, writeBrand, insertClipHtml } from './lib/composition.mjs';
+import { scanMedia, analyzeFile, writeManifest, loadManifest, analysisDirFor, kindOf } from './lib/analyze.mjs';
 import { hasFfmpeg, probe, poster, frameAt } from './lib/media.mjs';
 import { buildPrompt } from './lib/prompt.mjs';
-import { renderProject, loadPlaywright } from './lib/render.mjs';
+import { renderProject, loadPlaywright, captureFrame } from './lib/render.mjs';
 import { runClaude, systemPrompt } from './lib/agent.mjs';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
@@ -109,19 +110,58 @@ function newJob(kind) {
   return job;
 }
 const pageUrlFor = (projectId) => `http://127.0.0.1:${PORT}/project-files/${projectId}/index.html?runtime=1&render=1`;
-function startRender(prj, { quality = 'looks', fps, notes } = {}) {
+function startRender(prj, { quality = 'looks', fps, notes, scale = 1, label = null } = {}) {
   const n = store.versions(prj.id).length + 1;
-  const rel = `renders/v${n}.mp4`; const out = path.join(prj.dir, rel);
+  const rel = `renders/v${n}${label ? '-' + String(label).replace(/[^\w-]+/g, '') : ''}.mp4`; const out = path.join(prj.dir, rel);
   const job = newJob('render');
   (async () => {
     try {
-      const r = await renderProject({ pageUrl: pageUrlFor(prj.id), dir: prj.dir, out, quality, fps: fps ? Number(fps) : undefined, onLog: (text) => job.push({ type: 'log', text }), onProgress: (p) => job.push({ type: 'progress', ...p }) });
-      const v = registerVersion(prj, out, { notes: notes || `Rendered from Studio (${r.frames} frames @ ${r.fps} fps)`, source: 'render', originalName: `v${n}.mp4` });
+      const r = await renderProject({ pageUrl: pageUrlFor(prj.id), dir: prj.dir, assetsDir: prj.assetsDir || null, out, quality, scale, fps: fps ? Number(fps) : undefined, onLog: (text) => job.push({ type: 'log', text }), onProgress: (p) => job.push({ type: 'progress', ...p }) });
+      const v = registerVersion(prj, out, { notes: notes || `Rendered from Studio (${r.width}×${r.height}, ${r.frames} frames @ ${r.fps} fps)`, source: 'render', originalName: `v${n}${label ? '-' + label : ''}.mp4`, label: label ? `v${n} ${label}` : null });
       job.push({ type: 'log', text: `registered ${v.label}` }); notifyWaiters(); job.finish(true, { versionId: v.id });
     } catch (e) { job.push({ type: 'log', text: `failed: ${e.message}` }); job.finish(false); }
   })();
   return { job, out: rel };
 }
+// ---------- asset library: scan project assets/ + linked folder, analyze new files, watch for drops
+function listAssets(prj) {
+  const items = [...scanMedia(path.join(prj.dir, 'assets'), { prefix: 'assets' }), ...(prj.assetsDir && fs.existsSync(prj.assetsDir) ? scanMedia(prj.assetsDir, { prefix: 'library' }) : [])];
+  const manifest = loadManifest(prj.dir);
+  return items.map((it) => { const a = manifest.find((m) => m.rel === it.rel); const fresh = a && a.size === it.size && Math.abs(a.mtime - it.mtime) < 1; return { ...it, analyzed: !!fresh, analysis: fresh ? { duration: a.duration, width: a.width, height: a.height, fps: a.fps, hasAudio: a.hasAudio, scenes: a.scenes?.length || 0, sheet: a.sheet, frames: a.frames, audio: a.audio ? { bpm: a.audio.bpm, offset: a.audio.offset, confidence: a.audio.confidence, beats: a.audio.beats.slice(0, 64), peaks: a.audio.peaks } : null } : null }; });
+}
+const analyzing = new Map(); // projectId -> job
+function startAnalyze(prj, { force = false } = {}) {
+  if (analyzing.has(prj.id)) return analyzing.get(prj.id);
+  const job = newJob('analyze'); analyzing.set(prj.id, job);
+  (async () => {
+    try {
+      const items = listAssets(prj); const todo = items.filter((it) => force || !it.analyzed);
+      const manifest = loadManifest(prj.dir).filter((m) => items.some((it) => it.rel === m.rel));
+      job.push({ type: 'log', text: `${todo.length} file(s) to analyze` });
+      for (const [i, it] of todo.entries()) {
+        job.push({ type: 'progress', frame: i + 1, frames: todo.length, name: it.name });
+        const rec = await new Promise((r) => setTimeout(() => r(analyzeFile(it, analysisDirFor(prj.dir, it), { onLog: (t) => job.push({ type: 'log', text: t }) })), 0));
+        const idx = manifest.findIndex((m) => m.rel === rec.rel); if (idx >= 0) manifest[idx] = rec; else manifest.push(rec);
+        writeManifest(prj.dir, manifest, { libraryDir: prj.assetsDir });
+      }
+      writeManifest(prj.dir, manifest, { libraryDir: prj.assetsDir });
+      job.push({ type: 'log', text: 'MEDIA.md updated' }); job.finish(true);
+    } catch (e) { job.push({ type: 'log', text: `failed: ${e.message}` }); job.finish(false); }
+    finally { analyzing.delete(prj.id); }
+  })();
+  return job;
+}
+const watchers = new Map(); // projectId -> fs.FSWatcher[]
+function watchAssets(prj) {
+  for (const w of watchers.get(prj.id) || []) w.close();
+  const list = [];
+  for (const d of [path.join(prj.dir, 'assets'), prj.assetsDir].filter((d) => d && fs.existsSync(d))) {
+    let timer = null;
+    try { const w = fs.watch(d, { recursive: true }, (ev, name) => { if (!name || !kindOf(String(name))) return; clearTimeout(timer); timer = setTimeout(() => { const p = store.project(prj.id); if (p) startAnalyze(p); }, 1500); }); list.push(w); } catch {}
+  }
+  watchers.set(prj.id, list);
+}
+
 function findBin(name) { if (name.includes('/')) return fs.existsSync(name); return (process.env.PATH || '').split(path.delimiter).some((d) => fs.existsSync(path.join(d, name)) || fs.existsSync(path.join(d, name + '.cmd'))); }
 const CLAUDE_BIN = process.env.VIDEDITOR_CLAUDE_BIN || 'claude';
 
@@ -159,10 +199,12 @@ async function api(req, res, url) {
   if (p === '/api/projects' && req.method === 'POST') {
     const b = await readJson(req);
     if (b.create) {
-      b.dir = createProject(b.name || 'Untitled', { width: Number(b.width) || 1280, height: Number(b.height) || 720, fps: Number(b.fps) || 30 });
+      b.dir = createProject(b.name || 'Untitled', { template: String(b.template || 'blank').replace(/[^\w-]/g, ''), width: Number(b.width) || 1280, height: Number(b.height) || 720, fps: Number(b.fps) || 30, brand: b.brand || null });
       if (b.brief) fs.writeFileSync(path.join(b.dir, 'BRIEF.md'), `# ${b.name || 'Untitled'}\n\n${String(b.brief).trim()}\n`);
     } else if (b.dir) { const d = detectProject(b.dir); if (!d.ok) return err(res, 400, `Not a composition folder: ${d.reason}`); b.dir = d.dir; }
-    const prj = store.addProject({ name: (b.name || 'Untitled').slice(0, 120), dir: b.dir || null, tags: b.tags || [], chat: [] });
+    if (b.assetsDir) { const a = path.resolve(String(b.assetsDir)); if (!fs.existsSync(a) || !fs.statSync(a).isDirectory()) return err(res, 400, `Asset folder does not exist: ${a}`); b.assetsDir = a; }
+    const prj = store.addProject({ name: (b.name || 'Untitled').slice(0, 120), dir: b.dir || null, assetsDir: b.assetsDir || null, tags: b.tags || [], chat: [] });
+    if (prj.dir) { watchAssets(prj); startAnalyze(prj); }
     // Adopt existing renders as versions when linking a folder.
     if (prj.dir && b.importRenders !== false) {
       const d = detectProject(prj.dir);
@@ -178,7 +220,10 @@ async function api(req, res, url) {
       if (b.name) patch.name = String(b.name).slice(0, 120);
       if (b.tags) patch.tags = b.tags;
       if ('dir' in b) { if (b.dir) { const d = detectProject(b.dir); if (!d.ok) return err(res, 400, d.reason); patch.dir = d.dir; } else patch.dir = null; }
-      return send(res, 200, projectView(store.updateProject(prj.id, patch)));
+      if ('assetsDir' in b) { if (b.assetsDir) { const a = path.resolve(String(b.assetsDir).replace(/^~(?=$|\/)/, process.env.HOME || '~')); if (!fs.existsSync(a) || !fs.statSync(a).isDirectory()) return err(res, 400, `Folder does not exist: ${a}`); patch.assetsDir = a; } else patch.assetsDir = null; }
+      const out = store.updateProject(prj.id, patch);
+      if (('assetsDir' in b || 'dir' in b) && out.dir) { watchAssets(out); startAnalyze(out); }
+      return send(res, 200, projectView(out));
     }
     if (req.method === 'DELETE') { for (const v of store.versions(prj.id)) { try { fs.unlinkSync(v.filePath); } catch {} } store.removeProject(prj.id); return send(res, 200, { ok: true }); }
   }
@@ -225,6 +270,50 @@ async function api(req, res, url) {
     store.touch(prj.id); store.save();
     return send(res, 200, { ok: true, attrs, composition: comp });
   }
+  if ((x = m(/^\/api\/projects\/([^/]+)\/assets$/)) && req.method === 'GET') {
+    const prj = store.project(x[1]); if (!prj?.dir) return err(res, 404, 'Project not found');
+    return send(res, 200, { assetsDir: prj.assetsDir || null, items: listAssets(prj), analyzing: analyzing.get(prj.id)?.id || null });
+  }
+  if ((x = m(/^\/api\/projects\/([^/]+)\/assets\/analyze$/)) && req.method === 'POST') {
+    const prj = store.project(x[1]); if (!prj?.dir) return err(res, 404, 'Project not found');
+    if (!FFMPEG) return err(res, 501, 'Media analysis needs ffmpeg on PATH');
+    const b = await readJson(req);
+    const job = startAnalyze(prj, { force: !!b.force });
+    return send(res, 202, { jobId: job.id });
+  }
+  if ((x = m(/^\/api\/projects\/([^/]+)\/clips$/)) && req.method === 'POST') {
+    // Insert a media clip from the asset library (or a text/box element) into index.html.
+    const prj = store.project(x[1]); if (!prj?.dir) return err(res, 404, 'Project not found');
+    const b = await readJson(req);
+    const esc = (v) => String(v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    const start = Math.max(0, Number(b.start) || 0); const track = Number.isFinite(Number(b.track)) ? Number(b.track) : 1;
+    const comp = parseProject(prj.dir); const ids = new Set((comp?.clips || []).map((c) => c.id).filter(Boolean));
+    let base = String(b.id || (b.src ? path.basename(b.src).replace(/\.[^.]+$/, '') : b.kind || 'clip')).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$|^(\d)/g, (mm, d) => (d ? 'c' + d : '')) || 'clip';
+    let id = base, n = 2; while (ids.has(id)) id = `${base}-${n++}`;
+    const dur = b.duration !== undefined && b.duration !== null ? ` data-duration="${Math.max(0.04, Number(b.duration))}"` : '';
+    let html;
+    if (b.src && kindOf(b.src) === 'video') html = `<video id="${id}" class="clip" src="${esc(b.src)}" data-start="${start}"${dur} data-track-index="${track}"${b.mediaStart ? ` data-media-start="${Number(b.mediaStart)}"` : ''}${b.muted ? ' muted' : ''} style="inset:0;width:100%;height:100%;object-fit:cover" playsinline></video>`;
+    else if (b.src && kindOf(b.src) === 'audio') html = `<audio id="${id}" src="${esc(b.src)}" data-start="${start}"${dur} data-track-index="${track}" data-volume="${Number(b.volume ?? 0.8)}"${b.mediaStart ? ` data-media-start="${Number(b.mediaStart)}"` : ''}></audio>`;
+    else if (b.src && kindOf(b.src) === 'image') html = `<img id="${id}" class="clip" src="${esc(b.src)}" data-start="${start}"${dur || ' data-duration="3"'} data-track-index="${track}" style="inset:0;width:100%;height:100%;object-fit:cover">`;
+    else if (b.kind === 'text') html = `<p id="${id}" class="clip" data-start="${start}"${dur || ' data-duration="3"'} data-track-index="${track}" style="left:8%;right:8%;top:40%;margin:0;font-size:64px;font-weight:800;color:var(--brand-text,#fff)">${esc(b.text || 'Text')}</p>`;
+    else return err(res, 400, 'Need a media src or kind "text"');
+    if (!insertClipHtml(prj.dir, html)) return err(res, 400, 'No composition root in index.html');
+    const after = parseProject(prj.dir); const end = start + (Number(b.duration) || 3);
+    if (after && after.duration !== null && end > after.duration + 1e-6) updateRoot(prj.dir, { 'data-duration': end });
+    store.touch(prj.id); store.save();
+    return send(res, 201, { ok: true, id, composition: parseProject(prj.dir) });
+  }
+  if ((x = m(/^\/api\/projects\/([^/]+)\/frame$/))) {
+    // A frame of the live composition (not a rendered version), for Live review notes and agents.
+    const prj = store.project(x[1]); if (!prj?.dir) return err(res, 404, 'Project not found');
+    try { const { buf } = await captureFrame({ pageUrl: pageUrlFor(prj.id), t: Number(q.t || 0), width: Number(q.w || 1280) }); return send(res, 200, buf, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'no-store' }); }
+    catch (e) { return err(res, 501, e.message); }
+  }
+  if ((x = m(/^\/api\/projects\/([^/]+)\/brand$/))) {
+    const prj = store.project(x[1]); if (!prj?.dir) return err(res, 404, 'Project not found');
+    if (req.method === 'GET') return send(res, 200, readBrand(prj.dir) || writeBrand(prj.dir, {}));
+    if (req.method === 'PUT') { const b = await readJson(req); const out = writeBrand(prj.dir, b); store.touch(prj.id); store.save(); return send(res, 200, out); }
+  }
   if ((x = m(/^\/api\/projects\/([^/]+)\/chat$/)) && req.method === 'GET') {
     const prj = store.project(x[1]); if (!prj) return err(res, 404, 'Project not found');
     return send(res, 200, { chat: prj.chat || [], running: agents.get(prj.id)?.jobId || null, sessionId: prj.agentSessionId || null, claude: findBin(CLAUDE_BIN) });
@@ -240,7 +329,7 @@ async function api(req, res, url) {
     const job = newJob('agent');
     prj.chat = prj.chat || []; prj.chat.push({ role: 'user', text: message, at: new Date().toISOString(), author: b.author || null }); store.save();
     const entry = { role: 'agent', text: '', tools: [], at: new Date().toISOString() };
-    const system = systemPrompt({ dir: prj.dir, composition: parseProject(prj.dir), files: listFiles(prj.dir) });
+    const system = systemPrompt({ dir: prj.dir, composition: parseProject(prj.dir), files: listFiles(prj.dir), assetsDir: prj.assetsDir || null });
     const handle = { jobId: job.id, kill: null };
     agents.set(prj.id, handle);
     const run = runClaude({ dir: prj.dir, prompt: message, system, sessionId: b.fresh ? null : prj.agentSessionId, onEvent: (ev) => {
@@ -388,7 +477,9 @@ const server = http.createServer(async (req, res) => {
     const pf = /^\/project-files\/([^/]+)\/(.*)$/.exec(url.pathname);
     if (pf) {
       const prj = store.project(pf[1]); if (!prj?.dir) return err(res, 404, 'Not found');
-      const abs = safePath(prj.dir, decodeURIComponent(pf[2] || 'index.html')); if (!abs) return err(res, 403, 'Forbidden');
+      const relPath = decodeURIComponent(pf[2] || 'index.html');
+      if (/^library\//.test(relPath)) { if (!prj.assetsDir) return err(res, 404, 'No asset folder linked'); const la = safePath(prj.assetsDir, relPath.slice('library/'.length)); if (!la) return err(res, 403, 'Forbidden'); return serveFile(req, res, la); }
+      const abs = safePath(prj.dir, relPath); if (!abs) return err(res, 403, 'Forbidden');
       if (url.searchParams.get('runtime') === '1' && /\.html?$/i.test(abs)) {
         // Serve the composition with the seekable runtime injected (Studio preview and renderer).
         let html; try { html = fs.readFileSync(abs, 'utf8'); } catch { return err(res, 404, 'Not found'); }
@@ -408,6 +499,7 @@ const server = http.createServer(async (req, res) => {
 });
 
 seedDemo();
+for (const p of store.db.projects) if (p.dir && fs.existsSync(p.dir)) { watchAssets(p); if (FFMPEG) startAnalyze(p); }
 server.listen(PORT, () => {
   console.log(`[videditor] http://localhost:${PORT}  data: ${DATA}`);
   console.log(`[videditor] ffmpeg: ${FFMPEG ? 'yes' : 'NO (install ffmpeg)'}  renderer: ${loadPlaywright() ? 'yes' : 'NO (run npm install in videditor/)'}  claude code: ${findBin(CLAUDE_BIN) ? 'yes' : 'NO (install Claude Code for the Studio chat)'}`);

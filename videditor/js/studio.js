@@ -41,6 +41,7 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
     const dur = stage.duration || composition?.duration || 5; const pps = pxPerSec();
     ruler.replaceChildren(); const stepS = dur > 30 ? 5 : dur > 12 ? 2 : dur > 6 ? 1 : 0.5;
     for (let t = 0; t <= dur + 1e-6; t += stepS) ruler.append(h('div.tick', { style: { left: `${t * pps}px` } }, t % 1 === 0 ? `${t}s` : ''));
+    if (beatGrid) for (const bt of beatGrid.beats) { if (bt > dur) break; ruler.append(h('div.beat', { style: { left: `${bt * pps}px` }, title: `beat ${fmtTime(bt)} · ${beatGrid.bpm} BPM` })); }
     const clips = (composition?.clips || []).filter((c) => c.start !== null && c.depth === 0);
     const tracks = new Map(); for (const c of clips) { const k = c.track ?? 0; if (!tracks.has(k)) tracks.set(k, []); tracks.get(k).push(c); }
     const keys = [...tracks.keys()].sort((a, b) => b - a); if (!keys.length) keys.push(0);
@@ -89,10 +90,11 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
   }
 
   // ---------- side panel: layers / files
-  const layersEl = h('div.layers'); const filesHost = h('div');
+  const layersEl = h('div.layers'); const filesHost = h('div'); const assetsHost = h('div'); const brandHost = h('div');
   const inspector = h('div.inspector.hidden');
   let sideTab = 'layers';
-  const sideTabs = h('div.tabs', [['layers', 'Layers'], ['files', 'Files']].map(([k, l]) => h('span.tab', { class: `tab ${k === sideTab ? 'active' : ''}`, on: { click: (e) => { sideTab = k; sideTabs.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t === e.currentTarget)); sideBody.replaceChildren(...(k === 'layers' ? [inspector, layersEl] : [filesHost])); if (k === 'files') renderFiles(); } } }, l)), h('span', { style: { flex: 1 } }), project.versions.length ? h('a.tab', { href: `#/p/${project.id}` }, 'Review ↗') : null);
+  const hosts = { layers: () => [inspector, layersEl], files: () => [filesHost], assets: () => [assetsHost], brand: () => [brandHost] };
+  const sideTabs = h('div.tabs', [['layers', 'Layers'], ['assets', 'Assets'], ['files', 'Files'], ['brand', 'Brand']].map(([k, l]) => h('span.tab', { class: `tab ${k === sideTab ? 'active' : ''}`, 'data-tab': k, on: { click: (e) => { sideTab = k; sideTabs.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t === e.currentTarget)); sideBody.replaceChildren(...hosts[k]()); if (k === 'files') renderFiles(); if (k === 'assets') renderAssets(); if (k === 'brand') renderBrand(); } } }, l)), h('span', { style: { flex: 1 } }), project.versions.length ? h('a.tab', { href: `#/p/${project.id}` }, 'Review ↗') : null);
   const sideBody = h('div.body', inspector, layersEl);
   const side = h('div.side', sideTabs, sideBody);
   function renderLayers() {
@@ -119,6 +121,47 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
     const ta2 = h('textarea.text', { value: text, spellcheck: false, style: { minHeight: '60vh', fontFamily: 'var(--mono)', fontSize: '12px' } });
     ta2.addEventListener('keydown', (e) => { if (e.key === 'Tab') { e.preventDefault(); const s = ta2.selectionStart; ta2.setRangeText('  ', s, ta2.selectionEnd, 'end'); } });
     await modal(p, ta2, { wide: true, actions: [{ label: 'Save', cls: 'primary', icon: 'check', onClick: async () => { try { const r = await api.saveFile(project.id, p, ta2.value); if (r.composition) composition = r.composition; toast('Saved', 'ok'); await stage.reload(true); renderTimeline(); renderLayers(); return false; } catch (e) { toast(e.message, 'err'); return false; } } }] });
+  }
+
+  // ---------- assets
+  let assetsPoll = null;
+  async function renderAssets() {
+    clearInterval(assetsPoll);
+    assetsHost.replaceChildren(h('div.section', h('div.muted.small', 'Loading…')));
+    let data; try { data = await api.assets(project.id); } catch (e) { return assetsHost.replaceChildren(h('div.section', h('div.muted', e.message))); }
+    const dirIn = h('input.text', { value: data.assetsDir || '', placeholder: '/Users/you/Movies/my-footage' });
+    const link = h('div.section', h('h3', 'Asset folder'), h('p.small.muted', 'Point Videditor at a folder on this computer. New files dropped there are picked up and analyzed automatically (cuts, keyframes, tempo), and the agent can use them as library/<name>.'), dirIn, h('div', { style: { display: 'flex', gap: '6px', marginTop: '8px' } }, btn(data.assetsDir ? 'Update' : 'Link folder', { cls: 'sm primary', onClick: async () => { try { project = await api.updateProject(project.id, { assetsDir: dirIn.value.trim() || null }); toast(dirIn.value.trim() ? 'Folder linked, analyzing…' : 'Unlinked', 'ok'); renderAssets(); } catch (e) { toast(e.message, 'err'); } } }), data.assetsDir ? btn('Unlink', { cls: 'sm ghost', onClick: async () => { project = await api.updateProject(project.id, { assetsDir: null }); renderAssets(); } }) : null, h('span', { style: { flex: 1 } }), btn('Re-analyze all', { cls: 'sm ghost', onClick: async () => { await api.analyze(project.id, true); toast('Analyzing…'); renderAssets(); } })));
+    const list = h('div', { style: { display: 'grid', gap: '8px', padding: '10px 12px' } });
+    if (!data.items.length) list.append(h('div.empty', h('p', 'No media yet.'), h('p.small', 'Drop video, audio or images into the project\'s assets/ folder or link a folder above.')));
+    for (const it of data.items) {
+      const a = it.analysis; const src = it.rel;
+      const thumb = a?.sheet || a?.frames?.[0]?.file;
+      const meta = a ? [a.duration ? fmtTime(a.duration) : null, a.width ? `${a.width}×${a.height}` : null, a.scenes ? `${a.scenes} cuts` : null, a.audio ? `${a.audio.bpm} BPM` : null].filter(Boolean).join(' · ') : (it.analyzed ? '' : 'analyzing…');
+      list.append(h('div.version-row', { style: { cursor: 'default' } },
+        thumb ? h('img', { src: `/project-files/${project.id}/${thumb}`, style: { width: '96px', cursor: 'zoom-in' }, on: { click: () => modal(src, h('img.zoom', { src: `/project-files/${project.id}/${thumb}` }), { wide: true }) } }) : h('div.noimg', { style: { width: '96px', display: 'grid', placeItems: 'center', color: 'var(--fg-2)', fontSize: '11px' } }, it.kind),
+        h('div.vb', h('div.l', h('span.mono.small', { style: { overflow: 'hidden', textOverflow: 'ellipsis' } }, src)), h('div.n', meta || ' '),
+          h('div', { style: { display: 'flex', gap: '4px', marginTop: '6px', flexWrap: 'wrap' } },
+            btn('Insert at playhead', { cls: 'sm', icon: 'plus', onClick: async () => { try { const r = await api.insertClip(project.id, { src, start: Math.round(stage.time * 100) / 100, duration: it.kind === 'image' ? 3 : (a?.duration ? Math.min(a.duration, Math.max(0.5, (stage.duration || 5) - stage.time)) : null), track: it.kind === 'audio' ? 9 : 1, muted: it.kind === 'video' }); composition = r.composition; await stage.reload(true); renderTimeline(); renderLayers(); selectClip(r.id); toast(`Added #${r.id}`, 'ok'); } catch (e) { toast(e.message, 'err'); } } }),
+            btn('Mention in chat', { cls: 'sm ghost', icon: 'chat', onClick: () => { ta.value = (ta.value ? ta.value + ' ' : '') + `\`${src}\``; ta.focus(); } }),
+            a?.audio ? btn(`Beats ${a.audio.bpm}`, { cls: 'sm ghost', title: 'Show the beat grid on the timeline', onClick: () => { beatGrid = beatGrid?.src === src ? null : { src, beats: a.audio.beats, bpm: a.audio.bpm }; renderTimeline(); } }) : null))));
+    }
+    const job = data.analyzing ? h('div.section', h('div.small.muted', 'Analyzing media…'), h('div.progress', h('i'))) : null;
+    assetsHost.replaceChildren(link, job, h('div.section', h('h3', `Media (${data.items.length})`), h('p.small.muted', 'Tell the agent what to do with them: "cut library/demo.mp4 to the music, UI-only shots, 15 seconds".')), list);
+    if (data.analyzing || data.items.some((i) => !i.analyzed)) assetsPoll = setInterval(async () => { const d = await api.assets(project.id).catch(() => null); if (d && !d.analyzing && d.items.every((i) => i.analyzed)) { clearInterval(assetsPoll); if (sideTab === 'assets') renderAssets(); } }, 2500);
+  }
+  let beatGrid = null;
+
+  // ---------- brand
+  async function renderBrand() {
+    brandHost.replaceChildren(h('div.section', h('div.muted.small', 'Loading…')));
+    let b; try { b = await api.brand(project.id); } catch (e) { return brandHost.replaceChildren(h('div.section', h('div.muted', e.message))); }
+    const color = (key, label) => { const inp = h('input', { type: 'color', value: b.colors[key] || '#000000', style: { width: '36px', height: '28px', padding: 0, border: 0, background: 'none' } }); const txt = h('input.text', { value: b.colors[key] || '', style: { fontFamily: 'var(--mono)' } }); inp.addEventListener('input', () => { txt.value = inp.value; }); txt.addEventListener('change', () => { if (/^#[0-9a-f]{6}$/i.test(txt.value)) inp.value = txt.value; }); return { row: h('div.irow', h('span', label), h('div', { style: { display: 'flex', gap: '6px' } }, inp, txt)), get: () => txt.value.trim() }; };
+    const rows = { primary: color('primary', 'Primary'), background: color('background', 'Background'), text: color('text', 'Text'), muted: color('muted', 'Muted'), accent: color('accent', 'Accent') };
+    const font = h('input.text', { value: b.font.family || '' }); const fontUrl = h('input.text', { value: b.font.url || '', placeholder: 'https://fonts.googleapis.com/css2?family=…' });
+    const logo = h('input.text', { value: b.logo || '', placeholder: 'assets/logo.svg or library/logo.png' }); const name = h('input.text', { value: b.name || '', placeholder: 'Brand name' }); const notes = h('textarea.text', { rows: 3, value: b.notes || '', placeholder: 'Tone, do/don\'t, anything the agent should respect' });
+    brandHost.replaceChildren(h('div.section', h('h3', 'Brand kit'), h('p.small.muted', 'Saved to brand.json and brand.css in the project. Templates and the agent use these as CSS variables (--brand-primary …), so you can rebrand a video without touching the composition.'),
+      h('div.inspector', { style: { border: 0, padding: 0 } }, h('div.irow', h('span', 'Name'), name), ...Object.values(rows).map((r) => r.row), h('div.irow', h('span', 'Font'), font), h('div.irow', h('span', 'Font URL'), fontUrl), h('div.irow', h('span', 'Logo'), logo)), h('label.field', { style: { marginTop: '10px' } }, h('span', 'Notes for the agent'), notes),
+      h('div', { style: { display: 'flex', gap: '6px' } }, btn('Save brand', { cls: 'primary sm', icon: 'check', onClick: async () => { try { await api.saveBrand(project.id, { name: name.value, colors: Object.fromEntries(Object.entries(rows).map(([k, r]) => [k, r.get()])), font: { family: font.value, url: fontUrl.value.trim() }, logo: logo.value.trim(), notes: notes.value }); toast('Brand saved', 'ok'); await stage.reload(true); } catch (e) { toast(e.message, 'err'); } } }), btn('Ask agent to apply', { cls: 'sm ghost', icon: 'spark', onClick: () => { ta.value = 'Apply brand.css variables everywhere in the composition (colors, font, logo) instead of hard-coded values.'; ta.focus(); } }))));
   }
 
   function selectClip(id, { fromStage = false } = {}) {
@@ -189,19 +232,30 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
   async function renderNow() {
     if (!caps.playwright) return modal('Renderer not set up', h('div', h('p', 'Rendering uses your installed Chrome through Playwright. Install it once:'), h('pre.log', 'cd videditor && npm install'), h('p.muted', 'Then restart the server.')));
     const quality = h('select.text', { style: { width: 'auto' } }, [['draft', 'Draft (fast)'], ['looks', 'Normal'], ['high', 'High (PNG frames, slow)']].map(([v, l]) => h('option', { value: v, selected: v === 'looks' }, l)));
+    const ch = stage.info?.height || 720;
+    const PRESETS = [['1', `Composition size (${stage.info?.width || '?'}×${ch})`], [String(720 / ch), '720p · Slack, quick share'], [String(1080 / ch), '1080p · LinkedIn, YouTube'], [String(2160 / ch), '4K']].filter(([v]) => Number(v) >= 0.25 && Number(v) <= 4);
+    const preset = h('select.text', { style: { width: 'auto' } }, PRESETS.map(([v, l]) => h('option', { value: v, selected: v === '1' }, l)));
     const notes = h('textarea.text', { rows: 2, placeholder: 'What changed in this version?' });
-    const ok = await modal(`Render v${project.versions.length + 1}`, h('div', h('label.field', h('span', 'Quality'), quality), h('label.field', h('span', 'Version notes'), notes)), { actions: [{ label: 'Render', cls: 'primary', icon: 'render', value: true }] });
+    const ok = await modal(`Render v${project.versions.length + 1}`, h('div', h('label.field', h('span', 'Size'), preset), h('label.field', h('span', 'Quality'), quality), h('label.field', h('span', 'Version notes'), notes), h('p.hint', 'Different aspect ratios (vertical, square) are separate compositions: ask the agent for "a vertical version" and it will add one.')), { actions: [{ label: 'Render all sizes', cls: 'ghost', value: 'all' }, { label: 'Render', cls: 'primary', icon: 'render', value: true }] });
     if (!ok) return;
+    const scales = ok === 'all' ? PRESETS.filter(([v]) => v !== '1' || PRESETS.length === 1).map(([v, l]) => ({ scale: Number(v), label: l.split(' ')[0] })) : [{ scale: Number(preset.value), label: null }];
+    for (const [i, sc] of scales.entries()) await renderOne({ quality: quality.value, notes: notes.value.trim(), scale: sc.scale, label: scales.length > 1 ? sc.label : null, last: i === scales.length - 1 });
+  }
+  async function renderOne({ quality, notes, scale, label, last }) {
     const bar = h('div.progress', h('i')); const log = h('pre.log', { style: { maxHeight: '40vh' } }); const status = h('div.small.muted', 'Starting…');
-    const bg = h('div.modal-bg', h('div.modal', h('h2', `Rendering v${project.versions.length + 1}`), bar, status, log));
+    const bg = h('div.modal-bg', h('div.modal', h('h2', `Rendering v${project.versions.length + 1}${label ? ` · ${label}` : ''}`), bar, status, log));
     document.body.append(bg);
-    try {
-      const { jobId } = await api.render(project.id, { quality: quality.value, notes: notes.value.trim() });
-      const es = new EventSource(`/api/jobs/${jobId}/events`);
-      es.onmessage = (e) => { const d = JSON.parse(e.data); if (d.type === 'progress') { bar.firstChild.style.width = `${(d.frame / d.frames) * 100}%`; status.textContent = `Frame ${d.frame} / ${d.frames} · ${d.elapsed.toFixed(0)}s`; } else { log.textContent += (d.text || '') + '\n'; log.scrollTop = log.scrollHeight; } };
-      es.addEventListener('done', async (e) => { es.close(); const d = JSON.parse(e.data); bg.remove(); if (d.ok) { project = await api.project(project.id); toast('Rendered', 'ok'); if (await modal('Render finished', h('p', `v${project.versions.length} is ready. Open it in Review to leave notes, or keep editing.`), { actions: [{ label: 'Keep editing', cls: 'ghost', value: 'stay' }, { label: 'Open in Review', cls: 'primary', value: 'review' }] }) === 'review') navigate(`#/p/${project.id}?v=${d.versionId}`); } else modal('Render failed', h('pre.log', log.textContent)); });
-      es.onerror = () => { es.close(); bg.remove(); toast('Lost connection to the render', 'err'); };
-    } catch (e) { bg.remove(); toast(e.message, 'err'); }
+    await new Promise((resolve) => {
+      (async () => {
+        try {
+          const { jobId } = await api.render(project.id, { quality, notes, scale, label });
+          const es = new EventSource(`/api/jobs/${jobId}/events`);
+          es.onmessage = (e) => { const d = JSON.parse(e.data); if (d.type === 'progress') { bar.firstChild.style.width = `${(d.frame / d.frames) * 100}%`; status.textContent = `Frame ${d.frame} / ${d.frames} · ${d.elapsed.toFixed(0)}s`; } else { log.textContent += (d.text || '') + '\n'; log.scrollTop = log.scrollHeight; } };
+          es.addEventListener('done', async (e) => { es.close(); const d = JSON.parse(e.data); bg.remove(); if (d.ok) { project = await api.project(project.id); toast(`Rendered v${project.versions.length}`, 'ok'); if (last && await modal('Render finished', h('p', `v${project.versions.length} is ready. Open it in Review to leave notes, or keep editing.`), { actions: [{ label: 'Keep editing', cls: 'ghost', value: 'stay' }, { label: 'Open in Review', cls: 'primary', value: 'review' }] }) === 'review') navigate(`#/p/${project.id}?v=${d.versionId}`); } else await modal('Render failed', h('pre.log', log.textContent)); resolve(); });
+          es.onerror = () => { es.close(); bg.remove(); toast('Lost connection to the render', 'err'); resolve(); };
+        } catch (e) { bg.remove(); toast(e.message, 'err'); resolve(); }
+      })();
+    });
   }
 
   // ---------- top bar + layout
@@ -210,8 +264,9 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
     h('span.title', project.name), h('span.pill', svg('spark'), 'Studio'),
     h('span.spacer'),
     project.versions.length ? btn('Review', { icon: 'chat', title: 'Review the latest render', onClick: () => navigate(`#/p/${project.id}`) }) : null,
-    btn('Copy folder path', { icon: 'copy', cls: 'ghost', onClick: async () => { await copyText(project.dir); toast('Copied', 'ok'); } }),
+    btn('Copy folder path', { icon: 'copy', cls: 'ghost', title: project.dir, onClick: async () => { await copyText(project.dir); toast('Copied', 'ok'); } }),
   ]);
+  root._cleanupExtra = () => clearInterval(assetsPoll);
   root.replaceChildren(h('div.studio', chat, h('div.center', stageWrap, transport, tl), side));
   renderChat(project.chat || []);
   const key = (e) => { if (e.target.matches('input, textarea, select') || e.metaKey || e.ctrlKey) return; if (e.code === 'Space') { e.preventDefault(); stage.toggle(); } else if (e.key === 'ArrowLeft') { e.preventDefault(); e.shiftKey ? stage.seek(Math.max(0, stage.time - 1)) : step(-1); } else if (e.key === 'ArrowRight') { e.preventDefault(); e.shiftKey ? stage.seek(Math.min(stage.duration, stage.time + 1)) : step(1); } else if (e.key === 'Home') stage.seek(0); else if (e.key === 'Escape') selectClip(null); };
@@ -223,5 +278,5 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
   const chatState = await api.chat(project.id).catch(() => null);
   if (chatState?.running) { agentJob = chatState.running; sendBtn.disabled = true; stopHint.classList.remove('hidden'); const es = new EventSource(`/api/jobs/${chatState.running}/events`); es.addEventListener('done', async () => { es.close(); agentJob = null; sendBtn.disabled = false; stopHint.classList.add('hidden'); project = await api.project(project.id); renderChat(project.chat); reloadComp(); }); }
   if (prompt && !chatState?.running) { ta.value = prompt; history.replaceState(null, '', `#/studio/${project.id}`); setTimeout(send, 400); }
-  root._cleanup = () => { document.removeEventListener('keydown', key); stage.destroy(); };
+  root._cleanup = () => { document.removeEventListener('keydown', key); stage.destroy(); root._cleanupExtra?.(); };
 }

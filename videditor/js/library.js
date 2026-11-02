@@ -41,7 +41,9 @@ export async function newProject(navigate) {
     catch (e) { status.textContent = e.message; }
   }, 350);
   dir.addEventListener('input', check);
-  const panes = { make: h('div', h('label.field', h('span', 'Brief for the agent'), brief), h('label.field', h('span', 'Format'), size)), review: h('div', drop, file, h('div.muted.small', { style: { margin: '10px 0 6px' } }, 'or'), h('label.field', h('span', 'Composition folder'), dir, status)) };
+  const template = h('select.text', { style: { width: 'auto' } }, [['blank', 'Blank'], ['teaser', 'Teaser: title, 3 features, call to action']].map(([v, l]) => h('option', { value: v }, l)));
+  const assets = h('input.text', { placeholder: '/Users/you/Movies/footage (optional, picked up and analyzed automatically)' });
+  const panes = { make: h('div', h('label.field', h('span', 'Brief for the agent'), brief), h('div', { style: { display: 'flex', gap: '12px' } }, h('label.field', { style: { flex: 1 } }, h('span', 'Format'), size), h('label.field', { style: { flex: 1 } }, h('span', 'Start from'), template)), h('label.field', h('span', 'Asset folder'), assets)), review: h('div', drop, file, h('div.muted.small', { style: { margin: '10px 0 6px' } }, 'or'), h('label.field', h('span', 'Composition folder'), dir, status)) };
   const paneHost = h('div', panes.make);
   const tabs = h('div.tabs', { style: { marginBottom: '12px' } }, [['make', 'Make a new video'], ['review', 'Review an existing render']].map(([k, l]) => h('span.tab', { class: `tab ${k === mode ? 'active' : ''}`, on: { click: (e) => { mode = k; tabs.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t === e.currentTarget)); paneHost.replaceChildren(panes[k]); } } }, l)));
   const ok = await modal('New video', h('div', tabs, h('label.field', h('span', 'Name'), name), paneHost), { actions: [{ label: 'Create', cls: 'primary', onClick: () => { if (!name.value.trim() && !file.files[0]) { name.focus(); return false; } if (mode === 'review' && dir.value.trim() && detected && !detected.ok) { dir.focus(); return false; } return true; } }] });
@@ -50,7 +52,7 @@ export async function newProject(navigate) {
     const nm = name.value.trim() || file.files[0]?.name.replace(/\.[^.]+$/, '') || 'Untitled';
     if (mode === 'make') {
       const [w, hgt] = size.value.split('x').map(Number);
-      const p = await api.createProject({ name: nm, create: true, width: w, height: hgt, fps: 30, brief: brief.value.trim() });
+      const p = await api.createProject({ name: nm, create: true, template: template.value, width: w, height: hgt, fps: 30, brief: brief.value.trim(), assetsDir: assets.value.trim() || null });
       navigate(`#/studio/${p.id}${brief.value.trim() ? `?prompt=${encodeURIComponent('Build this video from BRIEF.md: ' + brief.value.trim())}` : ''}`);
     } else {
       const p = await api.createProject({ name: nm, dir: dir.value.trim() || null });

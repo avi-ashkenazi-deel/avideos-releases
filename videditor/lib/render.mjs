@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
-import { parseProject } from './composition.mjs';
+import { parseProject, resolveSrc } from './composition.mjs';
 
 const require = createRequire(import.meta.url);
 
@@ -29,7 +29,7 @@ function hasAudioStream(file) {
  * renderProject({ pageUrl, dir, out, fps, quality, onProgress, onLog })
  * pageUrl: the composition served with the runtime injected (…/index.html?runtime=1&render=1)
  */
-export async function renderProject({ pageUrl, dir, out, fps: fpsOpt, quality = 'looks', onProgress, onLog }) {
+export async function renderProject({ pageUrl, dir, assetsDir = null, out, fps: fpsOpt, quality = 'looks', scale = 1, onProgress, onLog }) {
   const log = (m) => onLog?.(m);
   const pw = loadPlaywright();
   if (!pw) throw new Error('Playwright is not installed. Run: npm install   (inside the videditor folder)');
@@ -37,7 +37,8 @@ export async function renderProject({ pageUrl, dir, out, fps: fpsOpt, quality = 
   log(`browser: ${browser.browserType().name()} ${browser.version()}`);
   let ffmpeg = null;
   try {
-    const page = await browser.newPage({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1 });
+    scale = Math.max(0.25, Math.min(4, Number(scale) || 1));
+    const page = await browser.newPage({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: scale });
     page.on('pageerror', (e) => log(`page error: ${e.message}`));
     page.on('console', (m) => { if (m.type() === 'error') log(`console: ${m.text().slice(0, 200)}`); });
     await page.goto(pageUrl, { waitUntil: 'load' });
@@ -47,11 +48,11 @@ export async function renderProject({ pageUrl, dir, out, fps: fpsOpt, quality = 
     const width = info.width, height = info.height;
     await page.setViewportSize({ width, height });
     const frames = Math.max(1, Math.round(info.duration * fps));
-    log(`composition ${info.id}: ${width}×${height}, ${info.duration}s @ ${fps}fps → ${frames} frames`);
+    log(`composition ${info.id}: ${width}×${height}${scale !== 1 ? ` × ${scale} = ${Math.round(width * scale)}×${Math.round(height * scale)}` : ''}, ${info.duration}s @ ${fps}fps → ${frames} frames`);
 
     // Audio inputs from the parsed composition (needs src paths, which the runtime doesn't expose).
     const comp = parseProject(dir);
-    const audio = (comp?.clips || []).filter((c) => c.hasAudio && c.src && c.start !== null).map((c) => ({ ...c, file: path.resolve(dir, c.src.replace(/^\.?\//, '')) })).filter((c) => fs.existsSync(c.file) && hasAudioStream(c.file));
+    const audio = (comp?.clips || []).filter((c) => c.hasAudio && c.src && c.start !== null).map((c) => ({ ...c, file: resolveSrc(dir, assetsDir, c.src, c.fileAbs) })).filter((c) => c.file && fs.existsSync(c.file) && hasAudioStream(c.file));
     const crf = quality === 'high' ? 14 : quality === 'draft' ? 28 : 18;
     const args = ['-y', '-v', 'error', '-stats_period', '1', '-f', 'image2pipe', '-framerate', String(fps), '-i', 'pipe:0'];
     for (const a of audio) args.push('-i', a.file);
@@ -65,6 +66,7 @@ export async function renderProject({ pageUrl, dir, out, fps: fpsOpt, quality = 
       filters.push(`${audio.map((_, i) => `[a${i}]`).join('')}amix=inputs=${audio.length}:normalize=0:duration=longest,apad=whole_dur=${info.duration}[aout]`);
       args.push('-filter_complex', filters.join(';'), '-map', '0:v', '-map', '[aout]', '-c:a', 'aac', '-b:a', '192k');
     } else args.push('-map', '0:v', '-an');
+    if (scale !== 1) args.push('-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2');
     args.push('-c:v', 'libx264', '-preset', quality === 'draft' ? 'veryfast' : 'medium', '-crf', String(crf), '-pix_fmt', 'yuv420p', '-movflags', '+faststart', '-t', String(info.duration), out);
     fs.mkdirSync(path.dirname(out), { recursive: true });
     log(`audio tracks: ${audio.length ? audio.map((a) => path.basename(a.file)).join(', ') : 'none'}`);
@@ -86,9 +88,30 @@ export async function renderProject({ pageUrl, dir, out, fps: fpsOpt, quality = 
     ffmpeg.stdin.end();
     await ffDone;
     log(`done in ${((Date.now() - t0) / 1000).toFixed(1)}s → ${out}`);
-    return { out, frames, fps, width, height, duration: info.duration };
+    return { out, frames, fps, width: Math.round(width * scale), height: Math.round(height * scale), duration: info.duration };
   } finally {
     try { ffmpeg?.stdin?.destroy(); } catch {}
     await browser.close().catch(() => {});
   }
+}
+
+// ---- live frame capture (Review "Live" mode, MCP get_frame on the composition). One warm page per URL.
+const livePages = new Map(); // pageUrl -> { browser, page, timer, info }
+export async function captureFrame({ pageUrl, t, width = 1280 }) {
+  const pw = loadPlaywright(); if (!pw) throw new Error('Playwright is not installed (npm install in videditor/)');
+  let lp = livePages.get(pageUrl);
+  if (!lp) {
+    const browser = await launchBrowser(pw);
+    const page = await browser.newPage({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1 });
+    await page.goto(pageUrl, { waitUntil: 'load' });
+    await page.waitForFunction(() => !!window.__videditor, null, { timeout: 15000 });
+    const info = await page.evaluate(() => window.__videditor.info());
+    await page.setViewportSize({ width: info.width, height: info.height });
+    lp = { browser, page, info, timer: null }; livePages.set(pageUrl, lp);
+  } else { await lp.page.reload({ waitUntil: 'load' }).catch(() => {}); await lp.page.waitForFunction(() => !!window.__videditor, null, { timeout: 15000 }); lp.info = await lp.page.evaluate(() => window.__videditor.info()); }
+  clearTimeout(lp.timer); lp.timer = setTimeout(async () => { livePages.delete(pageUrl); await lp.browser.close().catch(() => {}); }, 90 * 1000); lp.timer.unref?.();
+  await lp.page.evaluate((tt) => window.__videditor.seekAndSettle(tt), Math.max(0, Math.min(lp.info.duration, t)));
+  const scale = Math.min(1, width / lp.info.width);
+  const buf = await lp.page.screenshot({ type: 'jpeg', quality: 90, clip: { x: 0, y: 0, width: lp.info.width, height: lp.info.height }, scale: 'css' });
+  return { buf, info: lp.info, scale };
 }

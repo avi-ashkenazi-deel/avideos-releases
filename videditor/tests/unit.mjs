@@ -97,3 +97,58 @@ test('prompt lists open feedback with on-screen clips and the response loop', ()
 test('describeDrawing names the region', () => {
   assert.equal(describeDrawing({ color: 'red', strokes: [{ tool: 'arrow', points: [[0.05, 0.05, 0], [0.2, 0.1, 0]] }] }), '1 arrow in the top-left of frame (red)');
 });
+
+import { resolveSrc, insertClipHtml, brandCss, writeBrand, readBrand, updateRoot } from '../lib/composition.mjs';
+import { scanMedia, probeMedia, detectScenes, analyzeAudio, analyzeFile, writeManifest, analysisDirFor, kindOf } from '../lib/analyze.mjs';
+import { spawnSync } from 'node:child_process';
+
+test('resolveSrc maps library/ to the linked folder and relative paths to the composition file', () => {
+  assert.equal(resolveSrc('/p', '/lib', 'library/a.mp4'), path.resolve('/lib/a.mp4'));
+  assert.equal(resolveSrc('/p', null, 'library/a.mp4'), null);
+  assert.equal(resolveSrc('/p', null, 'assets/x.wav'), path.resolve('/p/assets/x.wav'));
+  assert.equal(resolveSrc('/p', null, '../assets/x.wav', '/p/compositions/s.html'), path.resolve('/p/assets/x.wav'));
+  assert.equal(resolveSrc('/p', null, 'https://cdn/x.mp4'), null);
+});
+
+test('insertClipHtml adds a clip after the root opening tag; updateRoot changes the duration', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'vd-'));
+  fs.cpSync(example, dir, { recursive: true });
+  assert.ok(insertClipHtml(dir, '<img id="shot" class="clip" src="library/a.png" data-start="1" data-duration="2" data-track-index="1">'));
+  const c = parseProject(dir); const shot = c.clips.find((x) => x.id === 'shot');
+  assert.equal(shot.start, 1); assert.equal(shot.src, 'library/a.png');
+  updateRoot(dir, { 'data-duration': 9 }); assert.equal(parseProject(dir).duration, 9);
+  fs.rmSync(dir, { recursive: true });
+});
+
+test('brand.json round-trips to CSS variables', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'vd-'));
+  const b = writeBrand(dir, { colors: { primary: '#ff6a00' }, font: { family: 'Georgia' } });
+  assert.equal(b.colors.primary, '#ff6a00'); assert.equal(b.colors.background, '#101218');
+  const css = fs.readFileSync(path.join(dir, 'brand.css'), 'utf8');
+  assert.match(css, /--brand-primary: #ff6a00;/); assert.match(css, /--brand-font: Georgia;/);
+  assert.equal(readBrand(dir).font.family, 'Georgia'); assert.match(brandCss({}), /--brand-logo: none;/);
+  fs.rmSync(dir, { recursive: true });
+});
+
+test('media analysis: scan, cuts, keyframes, tempo and manifest', { timeout: 120000 }, () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'vd-media-'));
+  const clip = path.join(dir, 'clip.mp4'); const music = path.join(dir, 'beat.wav');
+  let r = spawnSync('ffmpeg', ['-y', '-v', 'error', '-f', 'lavfi', '-i', 'testsrc2=s=320x180:r=30:d=4', '-filter_complex', '[0:v]split=2[a][b];[a]trim=0:2,setpts=PTS-STARTPTS[a1];[b]trim=2:4,setpts=PTS-STARTPTS,negate[b1];[a1][b1]concat=n=2:v=1:a=0[v]', '-map', '[v]', '-c:v', 'libx264', '-preset', 'veryfast', clip]);
+  assert.equal(r.status, 0, 'test clip made');
+  r = spawnSync('ffmpeg', ['-y', '-v', 'error', '-f', 'lavfi', '-i', 'anoisesrc=d=12:c=pink:a=0.5', '-af', "aeval='val(0)*gt(mod(t\\,0.5)\\,0.45)',volume=3", '-ar', '22050', music]);
+  assert.equal(r.status, 0, 'test music made');
+  const items = scanMedia(dir, { prefix: 'library' });
+  assert.deepEqual(items.map((i) => [i.rel, i.kind]), [['library/beat.wav', 'audio'], ['library/clip.mp4', 'video']]);
+  assert.equal(probeMedia(clip).width, 320);
+  const cuts = detectScenes(clip); assert.ok(cuts.some((t) => Math.abs(t - 2) < 0.15), `cut found near 2s (${cuts})`);
+  const a = analyzeAudio(music); assert.ok(Math.abs(a.bpm - 120) < 1.5, `120 BPM detected (${a.bpm})`); assert.ok(a.confidence > 0.15);
+  const projectDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vd-proj-'));
+  const recs = items.map((it) => analyzeFile(it, analysisDirFor(projectDir, it)));
+  const video = recs.find((x) => x.kind === 'video');
+  assert.ok(video.frames.length >= 3 && video.sheet && fs.existsSync(path.join(projectDir, video.sheet)), 'keyframes and contact sheet written');
+  writeManifest(projectDir, recs, { libraryDir: dir });
+  const md = fs.readFileSync(path.join(projectDir, 'MEDIA.md'), 'utf8');
+  assert.match(md, /## library\/clip.mp4/); assert.match(md, /Cuts at:/); assert.match(md, /Tempo: 1(19|20|21)/);
+  assert.equal(kindOf('x.webp'), 'image');
+  fs.rmSync(dir, { recursive: true }); fs.rmSync(projectDir, { recursive: true });
+});

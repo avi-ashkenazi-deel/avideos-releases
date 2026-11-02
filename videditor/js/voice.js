@@ -49,6 +49,8 @@ export class VoiceRecorder {
     const blob = await new Promise((resolve) => { this.rec.onstop = () => resolve(new Blob(this.chunks, { type: this.rec.mimeType || 'audio/webm' })); this.rec.stop(); });
     this.stream.getTracks().forEach((t) => t.stop());
     const audio = await new Promise((res) => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(blob); });
+    for (const f of this.frames) { try { f.dataUrl = await f.dataUrl; } catch { f.dataUrl = null; } }
+    this.frames = this.frames.filter((f) => f.dataUrl);
     return { audio, transcript: (this.transcript + ' ' + this.interim).trim(), visualReferences: this.visualReferences, frames: this.frames, startTime: this.startTime, endTime: this.getTime(), seconds: blob.size ? null : 0 };
   }
 }

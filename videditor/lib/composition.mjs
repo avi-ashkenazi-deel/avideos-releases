@@ -65,7 +65,7 @@ export function parseComposition(file, { offset = 0, depth = 0, maxDepth = 3, ho
       id: a.id || null, tag, start: start === null ? null : start + offset, startExpr: start === null ? a['data-start'] : null,
       duration: num(a['data-duration']), track: hostTrack ?? num(a['data-track-index']),
       src: a.src || a['data-composition-src'] || null, text: /^(h[1-6]|p|span|div|li|button)$/.test(tag) ? textAfter(html, m.index) : '',
-      compositionId: a['data-composition-id'] || null, depth, file: path.relative(process.cwd(), file),
+      compositionId: a['data-composition-id'] || null, depth, file: path.relative(process.cwd(), file), fileAbs: file,
       mediaStart: num(a['data-media-start'] ?? a['data-playback-start']) ?? 0, volume: num(a['data-volume']) ?? 1,
       muted: 'muted' in a, hasAudio: tag === 'audio' || (tag === 'video' && !('muted' in a)),
     };
@@ -179,13 +179,14 @@ export function updateRoot(dir, patch) {
 }
 
 /** Create a new project folder from a template. Returns the absolute dir. */
-export function createProject(name, { template = 'blank', base = path.join(ROOT, 'projects'), width = 1280, height = 720, fps = 30 } = {}) {
+export function createProject(name, { template = 'blank', base = path.join(ROOT, 'projects'), width = 1280, height = 720, fps = 30, brand = null } = {}) {
   const slug = String(name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'video';
   fs.mkdirSync(base, { recursive: true });
   let dir = path.join(base, slug); let n = 2;
   while (fs.existsSync(dir)) dir = path.join(base, `${slug}-${n++}`);
-  const tpl = path.join(ROOT, 'templates', template);
+  const tpl = path.join(ROOT, 'templates', fs.existsSync(path.join(ROOT, 'templates', template)) ? template : 'blank');
   fs.cpSync(tpl, dir, { recursive: true });
+  writeBrand(dir, brand || readBrand(dir) || {});
   for (const sub of ['assets', 'renders']) fs.mkdirSync(path.join(dir, sub), { recursive: true });
   const index = path.join(dir, 'index.html');
   if (fs.existsSync(index)) {
@@ -196,6 +197,40 @@ export function createProject(name, { template = 'blank', base = path.join(ROOT,
   const brief = path.join(dir, 'BRIEF.md');
   if (fs.existsSync(brief)) fs.writeFileSync(brief, fs.readFileSync(brief, 'utf8').replace(/\{\{title\}\}/g, name));
   return dir;
+}
+
+/** Resolve a media src used in a composition to an absolute path. `library/…` points into the linked asset folder. */
+export function resolveSrc(projectDir, assetsDir, src, fromFile = null) {
+  if (!src || /^(https?:|data:|blob:)/i.test(src)) return null;
+  const clean = src.replace(/[?#].*$/, '');
+  if (/^\/?library\//.test(clean)) return assetsDir ? path.resolve(assetsDir, clean.replace(/^\/?library\//, '')) : null;
+  if (clean.startsWith('/')) return path.resolve(projectDir, '.' + clean);
+  return path.resolve(fromFile ? path.dirname(fromFile) : projectDir, clean);
+}
+
+export const DEFAULT_BRAND = { name: '', colors: { primary: '#ffd166', background: '#101218', text: '#ffffff', muted: '#aeb4c2', accent: '#7cc4ff' }, font: { family: '-apple-system, Inter, Helvetica, Arial, sans-serif', url: '' }, logo: '', notes: '' };
+export function brandCss(brand) {
+  const b = { ...DEFAULT_BRAND, ...brand, colors: { ...DEFAULT_BRAND.colors, ...(brand?.colors || {}) }, font: { ...DEFAULT_BRAND.font, ...(brand?.font || {}) } };
+  return `/* generated from brand.json; edit brand.json or the Brand panel, not this file */\n${b.font.url ? `@import url("${b.font.url}");\n` : ''}:root {\n  --brand-primary: ${b.colors.primary};\n  --brand-background: ${b.colors.background};\n  --brand-text: ${b.colors.text};\n  --brand-muted: ${b.colors.muted};\n  --brand-accent: ${b.colors.accent};\n  --brand-font: ${b.font.family};\n  --brand-logo: ${b.logo ? `url("${b.logo}")` : 'none'};\n}\n`;
+}
+export function writeBrand(dir, brand) {
+  const b = { ...DEFAULT_BRAND, ...brand, colors: { ...DEFAULT_BRAND.colors, ...(brand?.colors || {}) }, font: { ...DEFAULT_BRAND.font, ...(brand?.font || {}) } };
+  fs.writeFileSync(path.join(dir, 'brand.json'), JSON.stringify(b, null, 2));
+  fs.writeFileSync(path.join(dir, 'brand.css'), brandCss(b));
+  return b;
+}
+export function readBrand(dir) { try { return { ...DEFAULT_BRAND, ...JSON.parse(fs.readFileSync(path.join(dir, 'brand.json'), 'utf8')) }; } catch { return null; } }
+
+/** Insert a clip element into index.html right after the root composition's opening tag. */
+export function insertClipHtml(dir, html) {
+  const file = path.join(dir, 'index.html');
+  let src = fs.readFileSync(file, 'utf8');
+  const m = /<([a-zA-Z][\w-]*)\b[^>]*?\bdata-composition-id=["'][^"']*["'][^>]*>/.exec(src);
+  if (!m) return false;
+  const at = m.index + m[0].length;
+  src = src.slice(0, at) + '\n  ' + html.trim() + src.slice(at);
+  fs.writeFileSync(file, src);
+  return true;
 }
 
 /** Resolve a project-relative path safely. Returns null when it escapes the project. */

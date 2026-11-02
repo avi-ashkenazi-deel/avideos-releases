@@ -28,12 +28,35 @@ subscription. No accounts, no credits.
   a time, piped into ffmpeg (H.264 + AAC, audio clips trimmed, delayed and mixed from the composition).
   No dropped frames, ever; a slow machine just takes longer.
 
+**Assets and media analysis**
+- Link any folder on your computer (**Studio → Assets**, or when creating a video). Videditor watches it:
+  anything you drop in is picked up and analyzed. Each video gets its **cut times**, a **contact sheet** and
+  **keyframes** (the agent opens them to judge content: UI vs text vs people); anything with sound gets a
+  **tempo estimate, first beat and beat grid**, plus loud moments. All of it is written to `MEDIA.md` in
+  the project and into the agent's context, so you can say *"cut `library/demo.mp4` to the music, UI shots
+  only, no text on screen, 15 seconds"*. Use files as `library/<name>` in compositions; `assets/` is the
+  project's own folder. **Insert at playhead** drops a clip onto the timeline without the agent; the beat
+  grid can be shown on the ruler.
+
+**Brand kit and templates**
+- `brand.json` → `brand.css` with `--brand-primary`, `--brand-background`, `--brand-text`, `--brand-muted`,
+  `--brand-accent`, `--brand-font`, `--brand-logo`. Edit it in **Studio → Brand**; templates and the agent
+  use the variables, so rebranding never touches the composition. Templates: blank, teaser (title, three
+  features, call to action). Formats: 16:9, vertical 9:16, square.
+
+**Export**
+- Render at composition size, 720p, 1080p or 4K (the composition is supersampled, text stays crisp), or
+  **Render all sizes** in one go. Each render becomes a version in Review.
+
 **Review** (`#/p/<project>`)
 - Frame-accurate player, timestamped notes pinned to a moment or a range, **drawings** on the frame
   (pen, arrow, box, circle) that replay in sync, **voice notes** transcribed live with *pointing phrases*
   ("this", "here") logged against the video time and a captured frame each.
 - Each note records which clips were on screen. Versions, side-by-side / wipe **compare**, open/done,
   threads, tags, reference images.
+- **Live** toggles from the rendered MP4 to the composition itself, running in the page: you review the
+  current state without rendering, click an element to name it in a note, and frames for your drawings are
+  captured from the live composition.
 - **Copy prompt** builds a brief for any agent. The **MCP server** (`mcp.mjs`) lets Claude Code read
   feedback, fetch annotated frames, post replies, **render the next version** and wait for new notes.
 
@@ -89,7 +112,8 @@ videditor/
 ├── server.mjs          HTTP server: UI, JSON API, media, runtime injection, render + agent jobs (SSE)
 ├── engine/runtime.js   seekable composition runtime, injected into the composition page
 ├── lib/
-│   ├── composition.mjs project detection, HTML → clips parser, clip edits, project templates
+│   ├── composition.mjs project detection, HTML → clips parser, clip edits, brand, project templates
+│   ├── analyze.mjs     media analysis: probe, cuts, keyframes, contact sheet, tempo/beats, MEDIA.md
 │   ├── render.mjs      Chrome + ffmpeg frame-exact renderer
 │   ├── agent.mjs       Claude Code runner (stream-json) and the agent system prompt
 │   ├── prompt.mjs      review brief for agents
@@ -97,7 +121,7 @@ videditor/
 │   └── media.mjs       ffprobe / ffmpeg helpers
 ├── mcp.mjs, cli.mjs    agent-side access (MCP tools; CLI for scripts)
 ├── skills/videditor/   the composition format as an agent skill
-├── templates/blank/    new-project template
+├── templates/          blank and teaser project templates (brand variables)
 ├── examples/launch/    demo composition
 ├── js/, css/, index.html   front end (vanilla ES modules, no build)
 └── tests/              node --test unit tests; Playwright end-to-end
@@ -119,6 +143,7 @@ node server.mjs &  node tests/e2e.cjs
   addition in `lib/agent.mjs`.
 - `<video>` clips need a Chrome build with H.264 (your installed Chrome has it; the bundled Playwright
   Chromium does not), which is why the renderer prefers Chrome.
-- Nested compositions (`data-composition-src`) are parsed for the timeline but not yet played by the runtime.
-- Live review of the composition itself (instead of the MP4) is the obvious next feature: the runtime
-  already supports it.
+- Nested compositions (`data-composition-src`) play through an iframe per scene; the nested file should
+  match the host's size and use a transparent body.
+- Tempo detection is an estimate (onset autocorrelation). It is solid on music with a clear pulse and says
+  so when it is not; ambient tracks report "no clear beat".

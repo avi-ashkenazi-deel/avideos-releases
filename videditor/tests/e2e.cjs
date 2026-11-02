@@ -29,7 +29,9 @@ async function cleanup() {
   await page.waitForSelector('.card:has-text("demo")');
   const name = await page.textContent('.card:has-text("demo") .name');
   console.log('library ok:', name.trim());
-  await page.click('.card:has-text("demo")');
+  // Review the first version (the one with the seeded notes), whatever else was rendered since.
+  const demo0 = (await (await fetch(BASE + '/api/state')).json()).projects.find((p) => p.name.includes('demo'));
+  await page.goto(`${BASE}/#/p/${demo0.id}?v=${demo0.versions[0].id}`);
 
   // Review loads, timeline lanes from the HyperFrames composition
   await page.waitForSelector('.review video');
