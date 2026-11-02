@@ -154,6 +154,17 @@ async function cleanup() {
   assert.match(await page.textContent('.transport .time'), /0:00\.01/, 'frame step moved the stage time by one frame');
   console.log('studio ok');
 
+  // Studio chat: send a message through the real UI and expect the agent's reply (needs Claude Code on PATH).
+  const caps = await (await fetch(BASE + '/api/capabilities')).json();
+  if (caps.claude) {
+    await page.fill('.chat .compose textarea', 'Reply with exactly: e2e ok. Do not edit files.');
+    await page.click('.chat .compose .btn.primary');
+    await page.waitForSelector('.chat .msg.user', { timeout: 5000 });
+    await page.waitForFunction(() => [...document.querySelectorAll('.chat .msg.agent .bubble')].some((b) => /e2e ok/i.test(b.textContent)), null, { timeout: 180000 });
+    assert.equal(await page.$('.chat .msg .bubble.err'), null, 'no agent error bubble');
+    console.log('studio chat ok');
+  } else console.log('studio chat skipped (no claude on PATH)');
+
   await cleanup();
 
   assert.deepEqual(errors.filter((e) => !/favicon|ERR_|net::/.test(e)), [], 'no page errors');

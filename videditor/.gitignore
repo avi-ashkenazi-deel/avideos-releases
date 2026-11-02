@@ -4,3 +4,5 @@ data/
 projects/
 node_modules/
 *.log
+tools/doctor.png
+tools/doctor-report.txt

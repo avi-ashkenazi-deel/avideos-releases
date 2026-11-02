@@ -4,7 +4,7 @@ import { h } from './ui.js';
 export class Stage {
   constructor(container) {
     this.container = container; this.info = null; this.time = 0; this.playing = false; this.listeners = new Map(); this._seq = 0; this._pending = new Map();
-    this.iframe = h('iframe', { class: 'stage-frame', sandbox: 'allow-scripts allow-same-origin', title: 'Composition preview' });
+    this.iframe = h('iframe', { class: 'stage-frame', title: 'Composition preview' });
     this.container.append(this.iframe);
     window.addEventListener('message', this._onMsg = (e) => { const m = e.data; if (!m || !m.__videditor || e.source !== this.iframe.contentWindow) return; this._handle(m); });
     this.ro = new ResizeObserver(() => this.fit()); this.ro.observe(container);

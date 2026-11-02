@@ -82,7 +82,7 @@ function projectView(p) {
   const versions = store.versions(p.id).map(versionView);
   const latest = versions[versions.length - 1] || null;
   const last = store.feedback({ projectId: p.id }).slice(-1)[0] || null;
-  return { ...p, versions, latest, stats: store.stats(p.id), lastActivity: last ? { at: last.createdAt, author: last.author, body: (last.body || last.transcript || '').slice(0, 80) } : null, project: p.dir ? detectProject(p.dir) : null, chat: (p.chat || []).slice(-1)[0] || null, agentRunning: agents.has(p.id) };
+  return { ...p, versions, latest, stats: store.stats(p.id), lastActivity: last ? { at: last.createdAt, author: last.author, body: (last.body || last.transcript || '').slice(0, 80) } : null, project: p.dir ? detectProject(p.dir) : null, chat: p.chat || [], lastChat: (p.chat || []).slice(-1)[0] || null, agentRunning: agents.has(p.id) };
 }
 
 function registerVersion(project, srcFile, { notes = '', source = 'upload', postedByAgent = false, originalName = null, move = false, label = null } = {}) {

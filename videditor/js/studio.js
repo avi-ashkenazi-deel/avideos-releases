@@ -231,7 +231,7 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
       es.addEventListener('done', async (e) => {
         es.close(); agentJob = null; setBusy(false);
         const d = JSON.parse(e.data); live.live = false; if (!live.text && d.result) live.text = d.result;
-        project = await api.project(project.id); renderChat(project.chat || [...project.chat, live]);
+        project = await api.project(project.id); if (!Array.isArray(project.chat)) project.chat = []; renderChat(project.chat.length ? project.chat : [...project.chat, live]);
         await reloadComp(); toast(d.ok ? 'Agent finished' : 'Agent stopped with an error', d.ok ? 'ok' : 'err');
       });
       es.onerror = () => { es.close(); agentJob = null; setBusy(false); live.live = false; redraw(); };
@@ -279,7 +279,8 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
   ]);
   root._cleanupExtra = () => clearInterval(assetsPoll);
   root.replaceChildren(h('div.studio', chat, h('div.center', stageWrap, transport, tl), side));
-  renderChat(project.chat || []);
+  if (!Array.isArray(project.chat)) project.chat = [];
+  renderChat(project.chat);
   const key = (e) => { if (e.target.matches('input, textarea, select') || e.metaKey || e.ctrlKey) return; if (e.code === 'Space') { e.preventDefault(); stage.toggle(); } else if (e.key === 'ArrowLeft') { e.preventDefault(); e.shiftKey ? stage.seek(Math.max(0, stage.time - 1)) : step(-1); } else if (e.key === 'ArrowRight') { e.preventDefault(); e.shiftKey ? stage.seek(Math.min(stage.duration, stage.time + 1)) : step(1); } else if (e.key === 'Home') stage.seek(0); else if (e.key === 'Escape') selectClip(null); };
   document.addEventListener('keydown', key);
   new ResizeObserver(() => { renderTimeline(); }).observe(tracksEl);
@@ -287,6 +288,7 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
   if (!stage.info) overlayMsg.textContent = 'The composition did not load. Check index.html in Files.';
   // Resume a running agent job (page reload mid-run) or start with a prompt from the URL.
   const chatState = await api.chat(project.id).catch(() => null);
+  if (Array.isArray(chatState?.chat)) { project.chat = chatState.chat; renderChat(project.chat); }
   if (chatState?.running) {
     agentJob = chatState.running; setBusy(true);
     const live = { role: 'agent', text: '', tools: [], at: new Date().toISOString(), live: true, status: 'still working on your earlier message (press Stop to interrupt)' };
