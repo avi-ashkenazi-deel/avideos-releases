@@ -302,10 +302,20 @@ export async function renderReview(root, { projectId, versionId, navigate, topba
     h('span.spacer'),
     project.versions.length > 1 ? btn('Compare', { icon: 'compare', onClick: () => navigate(`#/p/${project.id}/compare?a=${project.versions[Math.max(0, project.versions.findIndex((v) => v.id === version.id) - 1)].id}&b=${version.id}`) }) : null,
     btn('Copy link', { icon: 'link', onClick: async () => { await copyText(location.href); toast('Link copied', 'ok'); } }),
-    btn('Copy prompt', { icon: 'copy', cls: 'primary', title: 'Brief for your agent with all open feedback', onClick: copyPrompt }),
+    btn('Copy prompt', { icon: 'copy', cls: project.dir ? '' : 'primary', title: 'Brief for any agent with all open feedback', onClick: copyPrompt }),
+    project.dir ? btn('Send to agent', { icon: 'spark', cls: 'primary', title: 'Hand all open notes on this version to the Studio agent and watch it edit', onClick: sendToAgent }) : null,
     btn('', { icon: 'trash', cls: 'ghost icon', title: 'Delete project', onClick: async () => { if (await confirmDeleteProject(api, project)) navigate('#/'); } }),
   ]);
 
+  async function sendToAgent() {
+    const open = feedback.filter((f) => !f.replyTo && f.status !== 'done');
+    if (!open.length) return toast('No open notes on this version. Leave a note first (C to type, D to draw, R to talk).', 'err');
+    const extra = h('textarea.text', { rows: 2, placeholder: 'Anything to add for the agent? (optional)' });
+    const ok = await modal(`Send ${open.length} open note${open.length > 1 ? 's' : ''} to the agent?`, h('div', h('p.muted', `The agent (in Studio) gets every open note on ${version.label} with its timestamps, transcripts, drawings and frames, edits the composition, and reports back. You then press Render for the next version.`), extra), { actions: [{ label: 'Send and open Studio', cls: 'primary', icon: 'spark', value: true }] });
+    if (!ok) return;
+    try { await api.agent(project.id, extra.value.trim(), { author: getAuthor(), fromFeedback: version.id }); toast('Sent. The agent is working…', 'ok'); navigate(`#/studio/${project.id}`); }
+    catch (e) { toast(e.message, 'err'); }
+  }
   async function copyPrompt() {
     try { const text = await api.prompt(project.id, version.id); await copyText(text); toast('Prompt copied to clipboard', 'ok'); modal('Agent brief (copied)', h('div', h('p.small.muted', 'Paste this into Claude Code, Cursor or Codex. If the MCP server is connected the agent can also pull it with get_prompt.'), h('pre', text)), { wide: true, actions: [{ label: 'Copy again', icon: 'copy', onClick: async () => { await copyText(text); toast('Copied', 'ok'); return false; } }] }); }
     catch (e) { toast(e.message, 'err'); }

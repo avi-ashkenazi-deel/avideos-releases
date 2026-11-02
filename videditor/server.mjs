@@ -347,7 +347,15 @@ async function api(req, res, url) {
     if (b.agent && AGENTS[b.agent] && b.agent !== prj.agent) { prj.agent = b.agent; prj.agentSessionId = null; store.save(); }
     const kind = AGENTS[prj.agent] ? prj.agent : 'claude';
     if (!findBin(AGENTS[kind].bin())) return err(res, 501, `${AGENTS[kind].label} was not found on PATH (looked for "${AGENTS[kind].bin()}"). Install it with: ${AGENTS[kind].install}`);
-    const message = String(b.message || '').trim().slice(0, 20000); if (!message) return err(res, 400, 'message is required');
+    let message = String(b.message || '').trim().slice(0, 20000);
+    if (b.fromFeedback) {
+      // Review → Studio: the open notes on a version become the agent's instruction, with annotated frames as local files it can open.
+      const version = store.version(b.fromFeedback) || store.latestVersion(prj.id); if (!version) return err(res, 400, 'No version to take feedback from');
+      const open = store.feedback({ versionId: version.id }).filter((f) => !f.replyTo && f.status !== 'done'); if (!open.length) return err(res, 400, 'No open notes on this version');
+      const brief = buildPrompt({ project: prj, version, feedback: store.feedback({ versionId: version.id }), composition: parseProject(prj.dir), baseUrl: baseUrl(req), dataDir: DATA });
+      message = `Apply the review feedback below to the composition in this folder. Open the annotated frames (Read the image files) to see what each note points at. Change only what the notes ask for, keep everything else as it is, and follow MOTION.md. Do not render. When done, list what you changed per note (clip id, attribute, from → to).${b.message ? `\n\nExtra instruction from the reviewer: ${String(b.message).trim()}` : ''}\n\n${brief}`.slice(0, 60000);
+    }
+    if (!message) return err(res, 400, 'message is required');
     const job = newJob('agent');
     prj.chat = prj.chat || []; prj.chat.push({ role: 'user', text: message, at: new Date().toISOString(), author: b.author || null }); store.save();
     const entry = { role: 'agent', text: '', tools: [], at: new Date().toISOString() };
