@@ -74,8 +74,8 @@ const WebImport = (() => {
       fonts.add(famOf(cs.fontFamily));
       const c = hexA(cs.color) || { hex: '#000000', a: 1 }; const size = px(cs.fontSize) || 16;
       const lh = cs.lineHeight === 'normal' ? 1.2 : Math.round(px(cs.lineHeight) / size * 100) / 100;
-      const face = faceOf(cs.fontFamily);
-      out.push({ t: 'text', name: nameOf(el), ...zp(el), ...fg(el), ...box, text, color: c.hex, alpha: c.a * op, family: face.family, size, weight: face.weight || parseInt(cs.fontWeight, 10) || 400, italic: face.italic || cs.fontStyle === 'italic', lh: lh || 1.2, ls: cs.letterSpacing === 'normal' ? 0 : Math.round(px(cs.letterSpacing) / size * 1000) / 1000, align: /center/.test(cs.textAlign) ? 'center' : /right|end/.test(cs.textAlign) ? 'right' : 'left', transform: cs.textTransform === 'uppercase' ? 'upper' : cs.textTransform === 'lowercase' ? 'lower' : '', deco: /underline/.test(cs.textDecorationLine) ? 'underline' : /line-through/.test(cs.textDecorationLine) ? 'line-through' : '', fixed: !!fixed, p: fixed ? 0 : p || 0, flow: !!flow && !fixed, ...(more || {}) });
+      const face = faceOf(cs.fontFamily); const er = el.getBoundingClientRect();
+      out.push({ t: 'text', name: nameOf(el), ...zp(el), ...fg(el), ...box, ew: r1(er.width), text, color: c.hex, alpha: c.a * op, family: face.family, size, weight: face.weight || parseInt(cs.fontWeight, 10) || 400, italic: face.italic || cs.fontStyle === 'italic', lh: lh || 1.2, ls: cs.letterSpacing === 'normal' ? 0 : Math.round(px(cs.letterSpacing) / size * 1000) / 1000, align: /center/.test(cs.textAlign) ? 'center' : /right|end/.test(cs.textAlign) ? 'right' : 'left', transform: cs.textTransform === 'uppercase' ? 'upper' : cs.textTransform === 'lowercase' ? 'lower' : '', deco: /underline/.test(cs.textDecorationLine) ? 'underline' : /line-through/.test(cs.textDecorationLine) ? 'line-through' : '', fixed: !!fixed, p: fixed ? 0 : p || 0, flow: !!flow && !fixed, ...(more || {}) });
     }
     function svgMarkup(svg) {
       const clone = svg.cloneNode(true); const src = svg.querySelectorAll('*'); const dst = clone.querySelectorAll('*');
@@ -391,7 +391,9 @@ const WebImport = (() => {
       if (!flow.length) continue;
       const sorted = flow.slice().sort((a, b) => row ? (s.wrap ? (a.y - b.y) || (a.x - b.x) : a.x - b.x) : a.y - b.y);
       const slots = flow.map(k => list.indexOf(k)).sort((a, b) => a - b); sorted.forEach((k, i) => { list[slots[i]] = k; });
-      if (!s.gap && !s.gapAuto && sorted.length > 1 && !s.wrap) { const gaps = []; for (let i = 1; i < sorted.length; i++) gaps.push(row ? sorted[i].x - (sorted[i - 1].x + sorted[i - 1].w) : sorted[i].y - (sorted[i - 1].y + sorted[i - 1].h)); gaps.sort((a, b) => a - b); const g = gaps[Math.floor(gaps.length / 2)]; if (g > 0) s.gap = r2(g); }
+      // the gap the page shows beats the gap CSS declares: margins between items (an avatar stack's negative margins)
+      // are spacing too, and Figma's own geometry, when the capture was aligned to it, is the truth
+      if (!s.gapAuto && sorted.length > 1 && !s.wrap) { const gaps = []; for (let i = 1; i < sorted.length; i++) gaps.push(row ? sorted[i].x - (sorted[i - 1].x + sorted[i - 1].w) : sorted[i].y - (sorted[i - 1].y + sorted[i - 1].h)); gaps.sort((a, b) => a - b); const g = gaps[Math.floor(gaps.length / 2)]; const even = gaps[gaps.length - 1] - gaps[0] <= 1.5; if ((!s.gap && g > 0) || (even && Math.abs(g - (s.gap || 0)) > 0.75)) s.gap = r2(g); }
       const g = s.gapAuto ? 0 : s.gap;
       const ext = row ? { main: flow.reduce((t, k) => t + k.w, 0) + g * (flow.length - 1), cross: Math.max(...flow.map(k => k.h)) } : { main: flow.reduce((t, k) => t + k.h, 0) + g * (flow.length - 1), cross: Math.max(...flow.map(k => k.w)) };
       hug.set(P.id, { w: !s.wrap && !s.gapAuto && near(P.w, (row ? ext.main : ext.cross) + s.pad.l + s.pad.r, 2), h: near(P.h, (row ? ext.cross : ext.main) + s.pad.t + s.pad.b, 2) });
@@ -410,6 +412,9 @@ const WebImport = (() => {
         // wrapped text keeps its width; the line count comes from the page, not from fonts that may not have loaded here
         const mk = meta.get(k.id); const pageLines = k.kind === 'text' && mk ? Math.round(mk.h / ((mk.size || 16) * (mk.lh || 1.2))) : 1;
         if (k.kind === 'text' && k.sizeW === 'hug' && pageLines > 1) k.sizeW = row ? 'fixed' : (near(k.w, innerW, 3) ? 'fill' : 'fixed');
+        // a one-line paragraph whose element spans the column fills it (as Figma's fill-width text): longer words wrap
+        // there instead of pushing the column wider; a label as wide as its words keeps hugging
+        if (k.kind === 'text' && k.sizeW === 'hug' && !row && mk && mk.ew && mk.ew - mk.w > 8 && near(mk.ew, innerW, 3) && (k.align || 'left') === 'left') { k.sizeW = 'fill'; k.x = P.x + s.pad.l; k.w = r2(innerW); }
       }
     }
     // 3. stacks outside any flow hug where they did

@@ -1208,20 +1208,27 @@
     return null;
   }
   // ---- Import: Figma files and clipboard, canvas JSON ---------------------------------------------------------------
-  const loadedFamilies = new Set();
+  const familyLinks = new Map(); // family -> promise of its stylesheet having arrived (true) or failed (false)
   // Load families the import uses that we don't ship, from Google Fonts when they exist there; then refit their text.
+  // The stylesheet must have arrived before document.fonts.load can find its faces (asked earlier it answers at once
+  // with nothing, and the text is measured in Inter); faces that arrive after the wait refit the text once more.
   async function ensureFonts(frames) {
     const fams = new Map();
     for (const f of frames) for (const b of f.layout.blocks) if (b.font && b.font.family) { const name = String(b.font.family).split(',')[0].replace(/["']/g, '').trim(); if (!Brand.FONTS[name] && !Brand.customFonts[name] && !/^(inter|system-ui|sans-serif|serif|monospace)$/i.test(name)) { if (!fams.has(name)) fams.set(name, new Set()); fams.get(name).add(b.font.weight || 400); } }
-    const loads = [];
-    for (const [name, weights] of fams) {
-      if (!loadedFamilies.has(name)) { loadedFamilies.add(name); const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(name).replace(/%20/g, '+')}:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&display=swap`; document.head.appendChild(l); }
-      for (const w of weights) loads.push(document.fonts.load(`${w} 24px "${name}"`).catch(() => null));
+    if (!fams.size) return 0;
+    for (const name of fams.keys()) {
+      if (familyLinks.has(name)) continue;
+      const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(name).replace(/%20/g, '+')}:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&display=swap`;
+      familyLinks.set(name, new Promise(res => { l.addEventListener('load', () => res(true), { once: true }); l.addEventListener('error', () => res(false), { once: true }); setTimeout(() => res(false), 5000); }));
+      document.head.appendChild(l);
     }
-    if (!loads.length) return 0;
-    await Promise.race([Promise.all(loads), new Promise(r => setTimeout(r, 3500))]);
-    Text.clearCache();
-    for (const f of frames) for (const b of f.layout.blocks) if (b.kind === 'text' || b.kind === 'list') Canvas.refit(b);
+    await Promise.all([...fams.keys()].map(n => familyLinks.get(n)));
+    const loads = []; for (const [name, weights] of fams) for (const w of weights) loads.push(document.fonts.load(`${w} 24px "${name}"`).catch(() => null));
+    const refit = () => { Text.clearCache(); for (const f of frames) for (const b of f.layout.blocks) if (b.kind === 'text' || b.kind === 'list') Canvas.refit(b); };
+    let done = false; const all = Promise.all(loads).then(() => { done = true; });
+    await Promise.race([all, new Promise(r => setTimeout(r, 3500))]);
+    refit();
+    if (!done) all.then(() => { refit(); if (typeof CanvasUI !== 'undefined') CanvasUI.mutate(() => { }, { history: false, frames: frames.map(f => f.id).filter(Boolean) }); });
     return fams.size;
   }
   // Imports keep auto layout (stacks reflow when text changes) or fixed positions (every layer stays where it was

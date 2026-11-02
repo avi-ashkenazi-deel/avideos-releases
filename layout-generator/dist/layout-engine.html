@@ -6487,8 +6487,8 @@ const WebImport = (() => {
       fonts.add(famOf(cs.fontFamily));
       const c = hexA(cs.color) || { hex: '#000000', a: 1 }; const size = px(cs.fontSize) || 16;
       const lh = cs.lineHeight === 'normal' ? 1.2 : Math.round(px(cs.lineHeight) / size * 100) / 100;
-      const face = faceOf(cs.fontFamily);
-      out.push({ t: 'text', name: nameOf(el), ...zp(el), ...fg(el), ...box, text, color: c.hex, alpha: c.a * op, family: face.family, size, weight: face.weight || parseInt(cs.fontWeight, 10) || 400, italic: face.italic || cs.fontStyle === 'italic', lh: lh || 1.2, ls: cs.letterSpacing === 'normal' ? 0 : Math.round(px(cs.letterSpacing) / size * 1000) / 1000, align: /center/.test(cs.textAlign) ? 'center' : /right|end/.test(cs.textAlign) ? 'right' : 'left', transform: cs.textTransform === 'uppercase' ? 'upper' : cs.textTransform === 'lowercase' ? 'lower' : '', deco: /underline/.test(cs.textDecorationLine) ? 'underline' : /line-through/.test(cs.textDecorationLine) ? 'line-through' : '', fixed: !!fixed, p: fixed ? 0 : p || 0, flow: !!flow && !fixed, ...(more || {}) });
+      const face = faceOf(cs.fontFamily); const er = el.getBoundingClientRect();
+      out.push({ t: 'text', name: nameOf(el), ...zp(el), ...fg(el), ...box, ew: r1(er.width), text, color: c.hex, alpha: c.a * op, family: face.family, size, weight: face.weight || parseInt(cs.fontWeight, 10) || 400, italic: face.italic || cs.fontStyle === 'italic', lh: lh || 1.2, ls: cs.letterSpacing === 'normal' ? 0 : Math.round(px(cs.letterSpacing) / size * 1000) / 1000, align: /center/.test(cs.textAlign) ? 'center' : /right|end/.test(cs.textAlign) ? 'right' : 'left', transform: cs.textTransform === 'uppercase' ? 'upper' : cs.textTransform === 'lowercase' ? 'lower' : '', deco: /underline/.test(cs.textDecorationLine) ? 'underline' : /line-through/.test(cs.textDecorationLine) ? 'line-through' : '', fixed: !!fixed, p: fixed ? 0 : p || 0, flow: !!flow && !fixed, ...(more || {}) });
     }
     function svgMarkup(svg) {
       const clone = svg.cloneNode(true); const src = svg.querySelectorAll('*'); const dst = clone.querySelectorAll('*');
@@ -6804,7 +6804,9 @@ const WebImport = (() => {
       if (!flow.length) continue;
       const sorted = flow.slice().sort((a, b) => row ? (s.wrap ? (a.y - b.y) || (a.x - b.x) : a.x - b.x) : a.y - b.y);
       const slots = flow.map(k => list.indexOf(k)).sort((a, b) => a - b); sorted.forEach((k, i) => { list[slots[i]] = k; });
-      if (!s.gap && !s.gapAuto && sorted.length > 1 && !s.wrap) { const gaps = []; for (let i = 1; i < sorted.length; i++) gaps.push(row ? sorted[i].x - (sorted[i - 1].x + sorted[i - 1].w) : sorted[i].y - (sorted[i - 1].y + sorted[i - 1].h)); gaps.sort((a, b) => a - b); const g = gaps[Math.floor(gaps.length / 2)]; if (g > 0) s.gap = r2(g); }
+      // the gap the page shows beats the gap CSS declares: margins between items (an avatar stack's negative margins)
+      // are spacing too, and Figma's own geometry, when the capture was aligned to it, is the truth
+      if (!s.gapAuto && sorted.length > 1 && !s.wrap) { const gaps = []; for (let i = 1; i < sorted.length; i++) gaps.push(row ? sorted[i].x - (sorted[i - 1].x + sorted[i - 1].w) : sorted[i].y - (sorted[i - 1].y + sorted[i - 1].h)); gaps.sort((a, b) => a - b); const g = gaps[Math.floor(gaps.length / 2)]; const even = gaps[gaps.length - 1] - gaps[0] <= 1.5; if ((!s.gap && g > 0) || (even && Math.abs(g - (s.gap || 0)) > 0.75)) s.gap = r2(g); }
       const g = s.gapAuto ? 0 : s.gap;
       const ext = row ? { main: flow.reduce((t, k) => t + k.w, 0) + g * (flow.length - 1), cross: Math.max(...flow.map(k => k.h)) } : { main: flow.reduce((t, k) => t + k.h, 0) + g * (flow.length - 1), cross: Math.max(...flow.map(k => k.w)) };
       hug.set(P.id, { w: !s.wrap && !s.gapAuto && near(P.w, (row ? ext.main : ext.cross) + s.pad.l + s.pad.r, 2), h: near(P.h, (row ? ext.cross : ext.main) + s.pad.t + s.pad.b, 2) });
@@ -6823,6 +6825,9 @@ const WebImport = (() => {
         // wrapped text keeps its width; the line count comes from the page, not from fonts that may not have loaded here
         const mk = meta.get(k.id); const pageLines = k.kind === 'text' && mk ? Math.round(mk.h / ((mk.size || 16) * (mk.lh || 1.2))) : 1;
         if (k.kind === 'text' && k.sizeW === 'hug' && pageLines > 1) k.sizeW = row ? 'fixed' : (near(k.w, innerW, 3) ? 'fill' : 'fixed');
+        // a one-line paragraph whose element spans the column fills it (as Figma's fill-width text): longer words wrap
+        // there instead of pushing the column wider; a label as wide as its words keeps hugging
+        if (k.kind === 'text' && k.sizeW === 'hug' && !row && mk && mk.ew && mk.ew - mk.w > 8 && near(mk.ew, innerW, 3) && (k.align || 'left') === 'left') { k.sizeW = 'fill'; k.x = P.x + s.pad.l; k.w = r2(innerW); }
       }
     }
     // 3. stacks outside any flow hug where they did
@@ -7552,7 +7557,7 @@ const Auto = (() => {
   }
   const clampW = (b, v) => Math.max(1, Math.min(num(b.maxW, Infinity), Math.max(num(b.minW, 0), v)));
   const clampH = (b, v) => Math.max(1, Math.min(num(b.maxH, Infinity), Math.max(num(b.minH, 0), v)));
-  function textHugW(b) { const f = b.font || { size: 16, weight: 400, family: 'sans-serif' }; const t = Text.transform(Canvas.sourceText(b), f.transform); return Math.ceil(Math.max(8, ...t.split('\n').map(l => Text.width(l, f)))) + 1; }
+  function textHugW(b) { const f = b.font || { size: 16, weight: 400, family: 'sans-serif' }; const t = Text.transform(Canvas.sourceText(b), f.transform); return Math.ceil(Math.max(8, ...t.split('\n').map(l => Text.width(l, f))) * 2) / 2; }
   function listHugW(b) { const f = b.font || { size: 16, weight: 400, family: 'sans-serif' }; const indent = b.indent || Math.round(f.size * (b.marker === 'number' ? 2.1 : 1.3)); return Math.ceil(indent + Math.max(8, ...(b.items && b.items.length ? b.items : ['']).map(i => Text.width(String(i), f)))) + 1; }
   function buttonHug(b) { const f = b.font || { size: 16, weight: 600, family: 'sans-serif' }; const px = num(b.padX, Math.round(f.size * 1.4)), py = num(b.padY, Math.round(f.size * 0.75)); return { w: Math.ceil(Text.width(String(b.text || ''), f) + 2 * px), h: Math.ceil(f.size * (f.lineHeight || 1.2) + 2 * py) }; }
   function hugW(I, b) {
@@ -13825,20 +13830,27 @@ Layer kinds:
     return null;
   }
   // ---- Import: Figma files and clipboard, canvas JSON ---------------------------------------------------------------
-  const loadedFamilies = new Set();
+  const familyLinks = new Map(); // family -> promise of its stylesheet having arrived (true) or failed (false)
   // Load families the import uses that we don't ship, from Google Fonts when they exist there; then refit their text.
+  // The stylesheet must have arrived before document.fonts.load can find its faces (asked earlier it answers at once
+  // with nothing, and the text is measured in Inter); faces that arrive after the wait refit the text once more.
   async function ensureFonts(frames) {
     const fams = new Map();
     for (const f of frames) for (const b of f.layout.blocks) if (b.font && b.font.family) { const name = String(b.font.family).split(',')[0].replace(/["']/g, '').trim(); if (!Brand.FONTS[name] && !Brand.customFonts[name] && !/^(inter|system-ui|sans-serif|serif|monospace)$/i.test(name)) { if (!fams.has(name)) fams.set(name, new Set()); fams.get(name).add(b.font.weight || 400); } }
-    const loads = [];
-    for (const [name, weights] of fams) {
-      if (!loadedFamilies.has(name)) { loadedFamilies.add(name); const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(name).replace(/%20/g, '+')}:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&display=swap`; document.head.appendChild(l); }
-      for (const w of weights) loads.push(document.fonts.load(`${w} 24px "${name}"`).catch(() => null));
+    if (!fams.size) return 0;
+    for (const name of fams.keys()) {
+      if (familyLinks.has(name)) continue;
+      const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(name).replace(/%20/g, '+')}:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&display=swap`;
+      familyLinks.set(name, new Promise(res => { l.addEventListener('load', () => res(true), { once: true }); l.addEventListener('error', () => res(false), { once: true }); setTimeout(() => res(false), 5000); }));
+      document.head.appendChild(l);
     }
-    if (!loads.length) return 0;
-    await Promise.race([Promise.all(loads), new Promise(r => setTimeout(r, 3500))]);
-    Text.clearCache();
-    for (const f of frames) for (const b of f.layout.blocks) if (b.kind === 'text' || b.kind === 'list') Canvas.refit(b);
+    await Promise.all([...fams.keys()].map(n => familyLinks.get(n)));
+    const loads = []; for (const [name, weights] of fams) for (const w of weights) loads.push(document.fonts.load(`${w} 24px "${name}"`).catch(() => null));
+    const refit = () => { Text.clearCache(); for (const f of frames) for (const b of f.layout.blocks) if (b.kind === 'text' || b.kind === 'list') Canvas.refit(b); };
+    let done = false; const all = Promise.all(loads).then(() => { done = true; });
+    await Promise.race([all, new Promise(r => setTimeout(r, 3500))]);
+    refit();
+    if (!done) all.then(() => { refit(); if (typeof CanvasUI !== 'undefined') CanvasUI.mutate(() => { }, { history: false, frames: frames.map(f => f.id).filter(Boolean) }); });
     return fams.size;
   }
   // Imports keep auto layout (stacks reflow when text changes) or fixed positions (every layer stays where it was
