@@ -23,7 +23,7 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
   const renderBtn = btn('Render', { icon: 'render', cls: 'primary', title: 'Render to MP4 and add it as a version for review', onClick: renderNow });
   const transport = h('div.transport', playBtn, btn('', { icon: 'stepBack', cls: 'icon ghost', title: 'Back one frame (←)', onClick: () => step(-1) }), btn('', { icon: 'stepFwd', cls: 'icon ghost', title: 'Forward one frame (→)', onClick: () => step(1) }), timeEl, h('span.spacer'), h('span.hint', 'Click an element in the preview to select it · drag clips on the timeline'), btn('Reload', { cls: 'ghost sm', title: 'Reload the composition from disk', onClick: () => reloadComp() }), renderBtn);
   const step = (n) => { stage.pause(); stage.seek(Math.max(0, Math.min(stage.duration, stage.time + n / stage.fps))); };
-  function updateTime() { timeEl.innerHTML = `<b>${fmtTime(stage.time, { frames: true, fps: stage.fps })}</b> / ${fmtTime(stage.duration, { frames: true, fps: stage.fps })}`; playBtn.replaceChildren(svg(stage.playing ? 'pause' : 'play')); drawPlayhead(); for (const el of tracksEl.querySelectorAll('.tclip')) el.classList.toggle('on', stage.time >= Number(el.dataset.start) && stage.time < Number(el.dataset.end)); }
+  function updateTime() { timeEl.innerHTML = `<b>${fmtTime(stage.time, { frames: true, fps: stage.fps })}</b> / ${fmtTime(stage.duration, { frames: true, fps: stage.fps })}`; playBtn.replaceChildren(svg(stage.playing ? 'pause' : 'play')); drawPlayhead(); for (const el of tracksEl.querySelectorAll('.tclip')) el.classList.toggle('on', stage.time >= Number(el.dataset.start) && stage.time < Number(el.dataset.end)); if (sideTab === 'layers') renderLayers(false); }
   stage.on('time', updateTime); stage.on('play', updateTime); stage.on('pause', updateTime);
   stage.on('ready', () => { overlayMsg.remove(); updateTime(); renderTimeline(); renderLayers(); });
   stage.on('select', (m) => selectClip(m.id, { fromStage: true }));
@@ -97,9 +97,26 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
   const sideTabs = h('div.tabs', [['layers', 'Layers'], ['assets', 'Assets'], ['files', 'Files'], ['brand', 'Brand']].map(([k, l]) => h('span.tab', { class: `tab ${k === sideTab ? 'active' : ''}`, 'data-tab': k, on: { click: (e) => { sideTab = k; sideTabs.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t === e.currentTarget)); sideBody.replaceChildren(...hosts[k]()); if (k === 'files') renderFiles(); if (k === 'assets') renderAssets(); if (k === 'brand') renderBrand(); } } }, l)), h('span', { style: { flex: 1 } }), project.versions.length ? h('a.tab', { href: `#/p/${project.id}` }, 'Review ↗') : null);
   const sideBody = h('div.body', inspector, layersEl);
   const side = h('div.side', sideTabs, sideBody);
-  function renderLayers() {
-    const clips = (composition?.clips || []).filter((c) => c.depth === 0).sort((a, b) => (b.track ?? 0) - (a.track ?? 0) || a.start - b.start);
-    layersEl.replaceChildren(...(clips.length ? clips.map((c) => h('div.layer', { class: `layer ${c.id && c.id === selected ? 'sel' : ''}`, on: { click: () => { selectClip(c.id); if (c.start !== null) stage.seek(c.start + 0.01); } } }, h('span.lid', c.id ? `#${c.id}` : `<${c.tag}>`), c.text ? h('span.ltxt', `“${c.text}”`) : c.src ? h('span.ltxt', c.src) : null, h('span.lt', `${fmtTime(c.start)}${c.duration !== null ? `–${fmtTime(c.start + c.duration)}` : ''} · T${c.track ?? 0}`))) : [h('div.empty', h('p', 'No clips yet. Ask the agent to build the video, or edit index.html in Files.'))]));
+  // Layers = what is on screen at the playhead, front to back (like Figma's layers for the current frame).
+  // The timeline owns the sequence; this panel owns the stacking. Everything else is folded away but findable.
+  let layersKey = '';
+  function renderLayers(force = true) {
+    const all = (composition?.clips || []).filter((c) => c.depth === 0);
+    const t = stage.time;
+    const dur = stage.duration || composition?.duration || 5;
+    const on = all.filter((c) => c.start !== null && t >= c.start - 1e-6 && t < c.start + (c.duration ?? (dur - c.start)) + 1e-6).sort((a, b) => (b.track ?? 0) - (a.track ?? 0) || b.start - a.start);
+    const off = all.filter((c) => !on.includes(c)).sort((a, b) => a.start - b.start);
+    const key = on.map((c) => c.id || c.tag).join('|') + '#' + selected + '#' + all.length;
+    if (!force && key === layersKey) return; layersKey = key;
+    const row = (c, dim) => h('div.layer', { class: `layer ${c.id && c.id === selected ? 'sel' : ''} ${dim ? 'dim' : ''}`, title: `${c.id ? '#' + c.id : c.tag} · ${fmtTime(c.start)}${c.duration !== null ? `–${fmtTime(c.start + c.duration)}` : ''} · track ${c.track ?? 0}`, on: { click: () => { selectClip(c.id); if (dim && c.start !== null) stage.seek(c.start + 0.01); } } },
+      h('span.lz', c.tag === 'audio' ? '♪' : (c.track ?? 0)), h('span.lid', c.id ? `#${c.id}` : `<${c.tag}>`), c.text ? h('span.ltxt', `“${c.text}”`) : c.src ? h('span.ltxt', c.src.split('/').pop()) : null, dim ? h('span.lt', fmtTime(c.start)) : null);
+    const visible = on.filter((c) => c.tag !== 'audio'), audio = on.filter((c) => c.tag === 'audio');
+    layersEl.replaceChildren(
+      h('div.lhead', `On screen at ${fmtTime(t)}`, h('span.muted', ' · front to back')),
+      ...(visible.length ? visible.map((c) => row(c, false)) : [h('div.small.muted', { style: { padding: '4px 8px' } }, all.length ? 'Nothing visible at this moment.' : 'No clips yet. Ask the agent to build the video, or edit index.html in Files.')]),
+      audio.length ? h('div.lhead', 'Playing') : null, ...audio.map((c) => row(c, false)),
+      off.length ? h('details.loff', { open: !visible.length }, h('summary', `Not on screen now (${off.length})`), ...off.map((c) => row(c, true))) : null,
+    );
     renderInspector();
   }
   function renderInspector() {
@@ -176,7 +193,7 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
     selected = id || null;
     if (!fromStage) stage.select(selected);
     tracksEl.querySelectorAll('.tclip').forEach((el) => el.classList.toggle('sel', !!selected && el.dataset.id === selected));
-    layersEl.querySelectorAll('.layer').forEach((el, i) => el.classList.toggle('sel', !!selected && el.querySelector('.lid')?.textContent === `#${selected}`));
+    renderLayers(true);
     renderInspector();
     if (selected) ctxChip(selected);
   }
