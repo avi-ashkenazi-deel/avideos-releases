@@ -65,7 +65,7 @@ export function runClaude({ dir, prompt, system, sessionId, model, onEvent, idle
         for (const b of msg.message?.content || []) if (b.type === 'tool_result' && b.is_error) onEvent?.({ type: 'tool_result', error: true, text: String(typeof b.content === 'string' ? b.content : JSON.stringify(b.content)).slice(0, 300) });
       } else if (msg.type === 'result') {
         out.result = msg.result || ''; out.cost = msg.total_cost_usd ?? null;
-        if (msg.is_error) out.error = msg.result || msg.subtype || 'error';
+        if (msg.is_error) out.error = friendlyError(msg.result || msg.subtype || 'error');
       }
     };
     child.stdout.on('data', (d) => { armIdle(); buf += d.toString(); let i; while ((i = buf.indexOf('\n')) >= 0) { const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1); if (!line) continue; try { handle(JSON.parse(line)); } catch { rawOut += line + '\n'; if (rawOut.length > 4000) rawOut = rawOut.slice(-4000); } } });
@@ -87,6 +87,15 @@ export function runClaude({ dir, prompt, system, sessionId, model, onEvent, idle
   });
   promise.kill = (reason) => killer?.(reason);
   return promise;
+}
+
+/** Turn Claude Code's error strings into something a person can act on. */
+export function friendlyError(text) {
+  const t = String(text);
+  if (/authenticat|oauth|logged? ?in|login|api key/i.test(t)) return `Claude Code is not logged in on this computer (${t.trim()}). In a terminal run: claude   then type /login and finish the sign-in in the browser. Then send your message again.`;
+  if (/rate limit|usage limit|overloaded|529/i.test(t)) return `Claude is rate-limited right now (${t.trim()}). Wait a few minutes and send again.`;
+  if (/credit|billing|out_of_credits/i.test(t)) return `Your Claude plan has no credit available (${t.trim()}). Check your plan, then try again.`;
+  return t;
 }
 
 function describeTool(b, dir) {
