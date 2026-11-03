@@ -10,6 +10,21 @@ const view = h('div', { style: { flex: 1, display: 'flex', flexDirection: 'colum
 app.append(bar, view);
 
 const navigate = (hash) => { if (location.hash === hash) route(); else location.hash = hash; };
+// Account: just the initials; the name and 'Change name' show when it opens.
+function accountMenu(who) {
+  const changeName = async () => { close(); const i = h('input.text', { value: who, maxlength: 60, placeholder: 'Your name' }); if (await modal('Your name', i, { actions: [{ label: 'Save', cls: 'primary' }] }) && i.value.trim()) { setAuthor(i.value.trim()); route(); } };
+  const trigger = h('button.account', { title: who || 'Set your name', 'aria-label': 'Account', 'aria-haspopup': 'menu' }, avatar(who || '?'));
+  const pop = h('div.menu.account-menu.hidden', { role: 'menu' },
+    h('div.account-head', avatar(who || '?'), h('div', h('div.account-name', who || 'No name yet'), h('div.mi-hint', 'Shown on your notes and messages'))),
+    h('div.menu-sep'),
+    h('button.menu-item', { on: { click: changeName } }, svg('pen'), h('span.mi-text', h('span', who ? 'Change name' : 'Set your name'))));
+  const wrap = h('div.menuwrap.accountwrap', trigger, pop);
+  const onDoc = (e) => { if (!wrap.contains(e.target)) close(); };
+  function close() { pop.classList.add('hidden'); document.removeEventListener('pointerdown', onDoc); window.removeEventListener('blur', close); }
+  trigger.addEventListener('click', () => { if (pop.classList.contains('hidden')) { pop.classList.remove('hidden'); setTimeout(() => document.addEventListener('pointerdown', onDoc), 0); window.addEventListener('blur', close); } else close(); });
+  pop.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); trigger.focus(); } });
+  return wrap;
+}
 function topbar(items = []) {
   const who = getAuthor();
   bar.replaceChildren(...[
@@ -17,7 +32,7 @@ function topbar(items = []) {
     items.length ? h('span.crumb', '/') : null,
     ...items,
     items.length ? null : h('span.spacer'),
-    h('span.author', { title: 'Change your name', on: { click: async () => { const i = h('input.text', { value: who, maxlength: 60 }); if (await modal('Your name', i, { actions: [{ label: 'Save', cls: 'primary' }] }) && i.value.trim()) { setAuthor(i.value.trim()); route(); } } } }, avatar(who || '?'), h('span.small', who || 'Set your name')),
+    accountMenu(who),
   ].filter(Boolean));
 }
 

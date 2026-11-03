@@ -39,8 +39,16 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
   const renderBtn = btn('Render', { icon: 'render', cls: 'primary', title: 'Render now (choose format, size, range)', onClick: renderNow });
   const autoRenderCb = h('input', { type: 'checkbox', checked: project.autoRender !== false, on: { change: async (e) => { try { project = await api.updateProject(project.id, { autoRender: e.target.checked }); toast(e.target.checked ? 'Auto-render on: every agent edit renders in the background' : 'Auto-render off', 'ok'); } catch (err) { toast(err.message, 'err'); } } } });
   const revealCb = h('input', { type: 'checkbox', checked: project.revealOnRender !== false, on: { change: async (e) => { try { project = await api.updateProject(project.id, { revealOnRender: e.target.checked }); toast(e.target.checked ? 'Finished renders open in Finder' : 'Finder stays closed after renders', 'ok'); } catch (err) { toast(err.message, 'err'); } } } });
-  const revealLbl = h('label.autosend', { title: 'When a render finishes, open Finder with the file selected' }, revealCb, 'show in Finder');
-  const autoRenderLbl = h('label.autosend', { title: 'After the agent changes the composition, render it in the background (render.json outputs if present, else your last render settings)' }, autoRenderCb, 'auto-render');
+  // Render lives in the top bar next to the account: the main action of the project. Its options sit in the caret menu.
+  const renderOpts = h('div.menu.render-menu.hidden', { role: 'menu' },
+    h('label.menu-item.check', autoRenderCb, h('span.mi-text', h('span', 'Auto-render after agent edits'), h('span.mi-hint', 'Renders in the background with your last settings'))),
+    h('label.menu-item.check', revealCb, h('span.mi-text', h('span', 'Show in Finder when done'), h('span.mi-hint', 'Opens the folder with the new file selected'))));
+  const renderCaret = h('button.btn.primary.split-caret', { title: 'Render options', 'aria-label': 'Render options', 'aria-haspopup': 'menu' }, svg('chevron'));
+  const renderGroup = h('div.menuwrap.splitbtn', renderBtn, renderCaret, renderOpts);
+  const onRoDoc = (e) => { if (!renderGroup.contains(e.target)) closeRo(); };
+  function closeRo() { renderOpts.classList.add('hidden'); document.removeEventListener('pointerdown', onRoDoc); window.removeEventListener('blur', closeRo); }
+  renderCaret.addEventListener('click', () => { if (renderOpts.classList.contains('hidden')) { renderOpts.classList.remove('hidden'); setTimeout(() => document.addEventListener('pointerdown', onRoDoc), 0); window.addEventListener('blur', closeRo); } else closeRo(); });
+  renderOpts.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); closeRo(); renderCaret.focus(); } });
   // Background render status: a pill in the transport instead of a blocking dialog.
   const renderPill = h('button.btn.sm.renderpill.hidden', { title: 'Rendering in the background. Click for the log.' }, svg('render'), h('span.rp-text', 'Rendering…'), h('span.rp-bar', h('i')));
   let renderLog = ''; let renderLogEl = null;
@@ -76,7 +84,7 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
   const zoomFitBtn = btn('Fit', { cls: 'ghost sm', title: 'Fit the whole video (0)', onClick: () => setZoom(1) });
   const transport = h('div.transport', playBtn, btn('', { icon: 'stepBack', cls: 'icon ghost', title: 'Back one frame (←)', onClick: () => step(-1) }), btn('', { icon: 'stepFwd', cls: 'icon ghost', title: 'Forward one frame (→)', onClick: () => step(1) }), timeEl,
     h('span.sep'), runBtn, toolBtn('pen', 'pen', 'Draw on the preview (D)'), btn('', { icon: 'undo', cls: 'icon sm ghost', title: 'Undo stroke (Z)', onClick: () => noteLayer.undo() }), sendNoteBtn, autoSend,
-    h('span.spacer'), zoomCtl, btn('Reload', { cls: 'ghost sm', title: 'Reload the composition from disk', onClick: () => reloadComp() }), renderPill, autoRenderLbl, revealLbl, renderBtn);
+    h('span.spacer'), zoomCtl, btn('Reload', { cls: 'ghost sm', title: 'Reload the composition from disk', onClick: () => reloadComp() }));
   noteLayer.onChange = (strokes) => { if (strokes.length && N.anchor === null) N.anchor = strokes[0].points[0][2]; sendNoteBtn.classList.toggle('hidden', !strokes.length || !!N.recording); };
 
   let recorder = null;
@@ -403,8 +411,8 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
     if (!compMenu.classList.contains('hidden')) drawCompMenu();
   };
   const onCompDoc = (e) => { if (!compPicker.contains(e.target)) closeCompMenu(); };
-  function openCompMenu() { drawCompMenu(); compMenu.classList.remove('hidden'); compTrigger.classList.add('active'); setTimeout(() => document.addEventListener('pointerdown', onCompDoc), 0); }
-  function closeCompMenu() { compMenu.classList.add('hidden'); compTrigger.classList.remove('active'); document.removeEventListener('pointerdown', onCompDoc); }
+  function openCompMenu() { drawCompMenu(); compMenu.classList.remove('hidden'); compTrigger.classList.add('active'); setTimeout(() => document.addEventListener('pointerdown', onCompDoc), 0); window.addEventListener('blur', closeCompMenu); }
+  function closeCompMenu() { compMenu.classList.add('hidden'); compTrigger.classList.remove('active'); document.removeEventListener('pointerdown', onCompDoc); window.removeEventListener('blur', closeCompMenu); }
   compTrigger.addEventListener('click', () => (compMenu.classList.contains('hidden') ? openCompMenu() : closeCompMenu()));
   compMenu.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); closeCompMenu(); compTrigger.focus(); } });
   const rowBtn = (ic, title, fn) => h('button.cr-btn', { title, 'aria-label': title, on: { click: (e) => { e.stopPropagation(); fn(); } } }, svg(ic));
@@ -625,7 +633,7 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
   topbar([
     btn('', { icon: 'back', cls: 'ghost icon', title: 'All videos', onClick: () => navigate('#/') }),
     h('span.title', project.name), modeToggle(project, 'studio', navigate), compPicker,
-    h('span.spacer'),
+    h('span.spacer'), renderPill, renderGroup,
   ]);
   root._cleanupExtra = () => clearInterval(assetsPoll);
   root.replaceChildren(h('div.studio', chat, h('div.center', stageWrap, transport, tl), side));
