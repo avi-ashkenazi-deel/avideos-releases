@@ -161,10 +161,10 @@ async function cleanup() {
   const caps = await (await fetch(BASE + '/api/capabilities')).json();
   if (caps.claude) {
     await page.fill('.chat .compose textarea', 'Reply with exactly: e2e ok. Do not edit files.');
-    await page.click('.chat .compose .btn.primary');
+    await page.click('.chat .compose .roundbtn.btn.primary');
     await page.waitForSelector('.chat .msg.user', { timeout: 5000 });
-    await page.waitForFunction(() => [...document.querySelectorAll('.chat .msg.agent .bubble')].some((b) => /e2e ok/i.test(b.textContent)), null, { timeout: 180000 });
-    assert.ok(!(await page.$$eval('.chat .msg.agent', (els) => els.slice(-1)[0]?.querySelector('.bubble.err'))), 'no error on the agent reply');
+    await page.waitForFunction(() => [...document.querySelectorAll('.chat .msg.agent .body')].some((b) => /e2e ok/i.test(b.textContent)), null, { timeout: 180000 });
+    assert.ok(!(await page.$$eval('.chat .msg.agent', (els) => els.slice(-1)[0]?.querySelector('.errcard'))), 'no error on the agent reply');
     console.log('studio chat ok');
   } else console.log('studio chat skipped (no claude on PATH)');
 

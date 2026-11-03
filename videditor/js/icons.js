@@ -38,6 +38,12 @@ export const icons = {
   mute: w('<path d="M4 10v4h4l5 4V6L8 10zM17 9l4 6M21 9l-4 6"/>'),
   select: w('<path d="M5 3l14 9-7 1-4 7z"/>'),
   reply: w('<path d="M9 17l-5-5 5-5M4 12h11a5 5 0 0 1 5 5v2"/>'),
+  file: w('<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/>'),
+  search: w('<circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/>'),
+  terminal: w('<path d="M4 17l6-5-6-5M12 19h8"/>'),
+  chevron: w('<path d="M9 6l6 6-6 6"/>'),
+  send: w('<path d="M12 19V5M5 12l7-7 7 7"/>'),
+  sparkle: w('<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/>'),
   download: w('<path d="M12 4v12M6 10l6 6 6-6M4 20h16"/>'),
 };
 export const icon = (name) => icons[name] || '';

@@ -44,6 +44,36 @@ export function relTime(iso) {
 export const initials = (name) => (name || '?').split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase();
 export const avatar = (name, agent) => h('span.avatar', { class: `avatar ${agent ? 'agent' : ''}`, title: name }, agent ? svg('spark') : initials(name));
 
+/** Small, safe Markdown → DOM: paragraphs, headings, lists, fenced code, `code`, **bold**, *em*, links. */
+export function md(text) {
+  const root = document.createDocumentFragment();
+  const lines = String(text || '').replace(/\r/g, '').split('\n');
+  let i = 0; let para = [];
+  const flush = () => { if (para.length) { root.append(h('p', inline(para.join('\n')))); para = []; } };
+  const isItem = (l) => /^\s*([-*•]|\d+[.)])\s+/.test(l);
+  while (i < lines.length) {
+    const l = lines[i];
+    if (/^\s*```/.test(l)) { flush(); const buf = []; i++; while (i < lines.length && !/^\s*```/.test(lines[i])) buf.push(lines[i++]); i++; root.append(h('pre.code', h('code', buf.join('\n')))); continue; }
+    if (/^#{1,6}\s/.test(l)) { flush(); const lvl = l.match(/^#+/)[0].length; root.append(h(`h${Math.min(6, lvl + 2)}`, inline(l.replace(/^#+\s*/, '')))); i++; continue; }
+    if (isItem(l)) { flush(); const list = h(/^\s*\d/.test(l) ? 'ol' : 'ul'); while (i < lines.length && isItem(lines[i])) { list.append(h('li', inline(lines[i].replace(/^\s*([-*•]|\d+[.)])\s+/, '')))); i++; } root.append(list); continue; }
+    if (!l.trim()) { flush(); i++; continue; }
+    para.push(l); i++;
+  }
+  flush();
+  return root;
+}
+function inline(s) {
+  const out = []; const re = /(`[^`\n]+`)|(\*\*[^*\n]+\*\*)|(\*[^*\n]+\*)|(https?:\/\/[^\s)<>]+)/g; let last = 0; let m;
+  const br = (t) => t.split('\n').flatMap((part, k) => (k ? [h('br'), part] : [part]));
+  while ((m = re.exec(s))) {
+    if (m.index > last) out.push(...br(s.slice(last, m.index)));
+    if (m[1]) out.push(h('code', m[1].slice(1, -1))); else if (m[2]) out.push(h('strong', m[2].slice(2, -2))); else if (m[3]) out.push(h('em', m[3].slice(1, -1))); else out.push(h('a', { href: m[4], target: '_blank', rel: 'noopener' }, m[4]));
+    last = re.lastIndex;
+  }
+  if (last < s.length) out.push(...br(s.slice(last)));
+  return out;
+}
+
 export function toast(msg, kind = '') {
   const t = h('div.toast', { class: `toast ${kind}` }, msg);
   document.getElementById('toasts').append(t);

@@ -124,7 +124,7 @@ function trackRender(prj, job, source) {
   const l = (e) => { if (e !== null) return; job.listeners.delete(l); if (renderJobs.get(prj.id) === job) renderJobs.delete(prj.id);
     const p = store.project(prj.id); if (!p) return;
     const vs = store.versions(p.id); const made = job.batch ? job.batch.filter((x) => typeof x === 'string' && x.startsWith('ver_')).map((id) => vs.find((v) => v.id === id)?.label).filter(Boolean) : (job.versionId ? [vs.find((v) => v.id === job.versionId)?.label].filter(Boolean) : []);
-    p.chat = p.chat || []; p.chat.push({ role: 'agent', system: true, text: job.ok ? `✅ ${source === 'auto' ? 'Auto-rendered' : 'Rendered'} ${made.length ? made.join(', ') : (job.folder ? 'PNG sequence' : 'nothing new')}. Open Review to watch it.` : `⚠️ ${source === 'auto' ? 'Auto-render' : 'Render'} failed: ${(job.lines.filter((x) => x.type === 'log').slice(-1)[0]?.text || 'see the log').slice(0, 200)}`, at: new Date().toISOString(), renderJobId: job.id, versionId: job.versionId || null }); store.save();
+    p.chat = p.chat || []; p.chat.push({ role: 'agent', system: true, text: job.ok ? `✅ ${source === 'auto' ? 'Auto-rendered' : 'Rendered'} ${made.length ? made.join(', ') : (job.folder ? 'PNG sequence' : 'nothing new')}` : `⚠️ ${source === 'auto' ? 'Auto-render' : 'Render'} failed: ${(job.lines.filter((x) => x.type === 'log').slice(-1)[0]?.text || 'see the log').slice(0, 200)}`, at: new Date().toISOString(), renderJobId: job.id, versionId: job.versionId || null }); store.save();
   };
   job.listeners.add(l);
   if (job.done) l(null);
@@ -138,7 +138,7 @@ function autoRenderIfChanged(prj, before, versionsBefore, reason = '') {
   const plan = readRenderPlan(p);
   const defaults = { quality: 'looks', ...(p.renderDefaults || {}), notes: `Auto-rendered after: ${String(reason).replace(/\s+/g, ' ').slice(0, 160) || 'agent edit'}`, label: null };
   const { job } = plan.length ? startBatch(p, plan) : startRender(p, defaults);
-  p.chat = p.chat || []; p.chat.push({ role: 'agent', system: true, text: plan.length ? `⏳ Auto-rendering ${plan.length} output${plan.length > 1 ? 's' : ''} from render.json in the background…` : `⏳ Auto-rendering v${store.versions(p.id).length + 1} in the background…`, at: new Date().toISOString(), renderJobId: job.id }); store.save();
+  p.chat = p.chat || []; p.chat.push({ role: 'agent', system: true, text: plan.length ? `⏳ Auto-rendering ${plan.length} output${plan.length > 1 ? 's' : ''} from render.json…` : `⏳ Auto-rendering v${store.versions(p.id).length + 1}…`, at: new Date().toISOString(), renderJobId: job.id }); store.save();
   trackRender(p, job, 'auto');
   return job;
 }

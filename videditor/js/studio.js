@@ -2,7 +2,7 @@
 // middle, timeline below, layers/files on the right. The preview is the real
 // composition running in an iframe with the seekable runtime.
 import { api } from './api.js';
-import { h, btn, svg, modal, toast, fmtTime, relTime, avatar, getAuthor, ensureAuthor, copyText, confirmDeleteProject, shortcutsSheet } from './ui.js';
+import { h, btn, svg, modal, toast, fmtTime, relTime, md, getAuthor, ensureAuthor, copyText, confirmDeleteProject, shortcutsSheet } from './ui.js';
 import { Stage } from './stage.js';
 import { DrawLayer, COLORS } from './draw.js';
 import { VoiceRecorder, highlightPointing } from './voice.js';
@@ -352,31 +352,55 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
 
   // ---------- chat
   const msgs = h('div.msgs');
-  const ta = h('textarea.text', { placeholder: 'Tell the agent what to make or change… (Enter to send, Shift+Enter for a new line)' });
+  const ta = h('textarea', { placeholder: 'Ask the agent to make or change something…', rows: 1 });
   const ctx = h('span.ctx.hidden');
-  const sendBtn = btn('Send', { cls: 'primary sm', icon: 'spark', onClick: send });
-  const stopBtn = btn('Stop', { cls: 'sm danger hidden', icon: 'stop', title: 'Stop the agent', onClick: async () => { try { await api.agentCancel(project.id); toast('Stopping…'); } catch (e) { toast(e.message, 'err'); } } });
-  const stopHint = h('span.hint.hidden', 'Working… this can take a minute.');
-  const setBusy = (on) => { sendBtn.disabled = on; stopHint.classList.toggle('hidden', !on); stopBtn.classList.toggle('hidden', !on); };
-  const agentSel = h('select.text', { style: { width: 'auto', padding: '4px 6px', fontSize: '12px' }, title: 'Which coding agent edits the composition (runs on this computer, on your own account)', on: { change: async () => { try { project = await api.updateProject(project.id, { agent: agentSel.value }); toast(`Using ${caps.agents?.[agentSel.value]?.label || agentSel.value}`, 'ok'); } catch (e) { toast(e.message, 'err'); } } } },
+  const grow = () => { ta.style.height = 'auto'; ta.style.height = `${Math.min(ta.scrollHeight, 220)}px`; };
+  ta.addEventListener('input', grow);
+  const sendBtn = h('button.roundbtn.btn.primary', { title: 'Send (Enter)', 'aria-label': 'Send', on: { click: () => send() } }, svg('send'));
+  const stopBtn = h('button.roundbtn.stop.hidden', { title: 'Stop the agent', 'aria-label': 'Stop', on: { click: async () => { try { await api.agentCancel(project.id); toast('Stopping…'); } catch (e) { toast(e.message, 'err'); } } } }, svg('stop'));
+  const setBusy = (on) => { sendBtn.classList.toggle('hidden', on); stopBtn.classList.toggle('hidden', !on); ta.placeholder = on ? 'Agent is working… (Stop to interrupt)' : 'Ask the agent to make or change something…'; };
+  const agentSel = h('select.pick', { title: 'Which coding agent edits the composition (runs on this computer, on your own account)', on: { change: async () => { try { project = await api.updateProject(project.id, { agent: agentSel.value }); toast(`Using ${caps.agents?.[agentSel.value]?.label || agentSel.value}`, 'ok'); } catch (e) { toast(e.message, 'err'); } } } },
     Object.entries(caps.agents || { claude: { label: 'Claude Code', available: caps.claude } }).map(([k, v]) => h('option', { value: k, selected: (project.agent || 'claude') === k }, `${v.label}${v.available ? '' : ' (not installed)'}`)));
-  const compose = h('div.compose', ctx, ta, h('div.row', agentSel, stopBtn, btn('', { icon: 'more', cls: 'ghost icon sm', title: 'New conversation (forget context)', onClick: async () => { if (await modal('Start a new conversation?', h('p.muted', 'The agent forgets this chat. The composition files are kept.'), { actions: [{ label: 'New conversation', cls: 'primary', value: true }] })) { await api.agentReset(project.id); project.chat = []; renderChat([]); } } }), stopHint, h('span.spacer'), sendBtn));
+  const fitPick = () => { const cv = fitPick.cv || (fitPick.cv = document.createElement('canvas').getContext('2d')); cv.font = getComputedStyle(agentSel).font || '12px sans-serif'; agentSel.style.width = `${Math.ceil(cv.measureText(agentSel.selectedOptions[0]?.textContent || '').width) + 30}px`; };
+  agentSel.addEventListener('change', fitPick); requestAnimationFrame(fitPick);
+  const newChatBtn = h('button.pick.iconpick', { title: 'New conversation (the agent forgets this chat; files are kept)', 'aria-label': 'New conversation', on: { click: async () => { if (await modal('Start a new conversation?', h('p.muted', 'The agent forgets this chat. The composition files are kept.'), { actions: [{ label: 'New conversation', cls: 'primary', value: true }] })) { await api.agentReset(project.id); project.chat = []; renderChat([]); } } } }, svg('plus'));
+  const compose = h('div.compose', h('div.box', ctx, ta, h('div.row', agentSel, newChatBtn, h('span.spacer'), h('span.hint', 'Enter ↵'), stopBtn, sendBtn)));
   const chat = h('div.chat', msgs, compose);
   // Enter sends, Shift+Enter makes a new line, ⌘/Ctrl+Enter also sends; Esc leaves the box.
   ta.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); } else if (e.key === 'Escape') ta.blur(); e.stopPropagation(); });
   function ctxChip(id) { ctx.classList.remove('hidden'); ctx.replaceChildren('About ', h('code', `#${id}`), btn('', { icon: 'close', cls: 'ghost icon sm', title: 'Clear', onClick: () => { ctx.classList.add('hidden'); ctx._id = null; } })); ctx._id = id; }
+  // Tool calls become compact step rows (Cursor-style): "Edited index.html", "Searched tagline", "Ran ffprobe …".
+  const TOOL_VIEW = { Read: ['file', 'Read'], Edit: ['pen', 'Edited'], MultiEdit: ['pen', 'Edited'], Write: ['pen', 'Wrote'], NotebookEdit: ['pen', 'Edited'], Grep: ['search', 'Searched'], Glob: ['search', 'Listed'], LS: ['folder', 'Listed'], Bash: ['terminal', 'Ran'], WebFetch: ['link', 'Fetched'], WebSearch: ['search', 'Searched the web'], Task: ['sparkle', 'Delegated'], TodoWrite: ['check', 'Planned'] };
+  function stepRow(t) {
+    const name = String(t.name || ''); const mcp = name.match(/^mcp__\w+?__(.+)$/);
+    const [ic, verb] = TOOL_VIEW[name] || (mcp ? ['sparkle', mcp[1].replace(/_/g, ' ')] : ['sparkle', name]);
+    const what = (t.detail || '').replace(/\s+/g, ' ').trim();
+    return h('div.step', { title: `${name} ${t.detail || ''}`.trim() }, svg(ic), h('span.verb', verb), what ? h('span.what', what) : null);
+  }
+  function stepsEl(m) {
+    const n = m.tools.length; const open = m.live || m._open === true || (m._open !== false && n <= 3);
+    const box = h('div.steps', { class: `steps ${open ? 'open' : ''}` });
+    const edited = new Set(m.tools.filter((t) => /^(Edit|MultiEdit|Write)$/.test(t.name) && t.detail).map((t) => t.detail.split('/').pop()));
+    const summary = edited.size ? `Edited ${[...edited].slice(0, 2).join(', ')}${edited.size > 2 ? ` +${edited.size - 2}` : ''}` : `${n} step${n > 1 ? 's' : ''}`;
+    const head = h('div.shead', { on: { click: () => { m._open = !box.classList.contains('open'); box.classList.toggle('open', m._open); } } }, svg('chevron'), h('span', m.live ? `${n} step${n > 1 ? 's' : ''}` : summary), !m.live && edited.size ? h('span.muted', ` · ${n} step${n > 1 ? 's' : ''}`) : null);
+    box.append(head, h('div.slist', m.tools.map(stepRow)));
+    return box;
+  }
   function msgEl(m) {
-    const el = h('div.msg', { class: `msg ${m.role}` }, h('div.who', avatar(m.role === 'agent' ? 'Agent' : (m.author || getAuthor() || 'You'), m.role === 'agent'), m.role === 'agent' ? 'Agent' : (m.author || getAuthor() || 'You'), h('span.muted', relTime(m.at))));
-    if (m.tools?.length) el.append(h('div.tools', m.tools.map((t) => h('span.t', { title: `${t.name} ${t.detail || ''}` }, h('b', t.name), t.detail ? ` ${t.detail}` : ''))));
-    if (m.system) { el.replaceChildren(h('div.sysline', m.text, m.versionId ? h('a', { href: `#/p/${project.id}?v=${m.versionId}`, style: { marginLeft: '6px' } }, 'Review ↗') : null)); return el; }
-    if (m.text) el.append(h('div.bubble', m.text));
-    if (m.error) el.append(h('div.bubble.err', { style: { fontFamily: 'var(--mono)', fontSize: '12px' } }, m.error, h('div', { style: { marginTop: '6px', display: 'flex', gap: '4px', flexWrap: 'wrap' } }, btn('Copy error', { cls: 'sm ghost', icon: 'copy', onClick: async () => { await copyText(m.error); toast('Copied', 'ok'); } }), btn('Run diagnostics', { cls: 'sm ghost', onClick: runDiagnostics }))));
-    if (m.live) el.append(h('div.thinking', h('i'), h('i'), h('i'), ' ', m.status || 'thinking'));
+    const el = h('div.msg', { class: `msg ${m.role}` });
+    if (m.system) { el.classList.add('sys'); el.append(h('div.sysline', h('span', m.text), m.versionId ? h('a', { href: `#/p/${project.id}?v=${m.versionId}` }, 'Review ↗') : null)); return el; }
+    if (m.role === 'user') { el.append(h('div.card', m.text), h('div.meta', [m.author || getAuthor() || 'You', relTime(m.at)].filter(Boolean).join(' · '))); return el; }
+    if (m.tools?.length) el.append(stepsEl(m));
+    if (m.text) el.append(h('div.body', md(m.text)));
+    if (m.error) el.append(h('div.errcard', m.error, h('div.actions', btn('Copy error', { cls: 'sm ghost', icon: 'copy', onClick: async () => { await copyText(m.error); toast('Copied', 'ok'); } }), btn('Run diagnostics', { cls: 'sm ghost', onClick: runDiagnostics }))));
+    if (m.live) el.append(h('div.gen', h('span.shimmer', m.status && m.status !== 'thinking' ? m.status : 'Generating…')));
+    if (!m.live && !m.error && m.text) el.append(h('div.meta', relTime(m.at)));
     return el;
   }
   function renderChat(list) {
-    msgs.replaceChildren(...(list.length ? list.map(msgEl) : [h('div.empty-chat', h('p', 'Describe the video you want. The agent (Claude Code, running on this computer) writes the composition, you watch it in the preview and adjust on the timeline.'), ['Make a 10-second product teaser: dark background, bold title, three feature lines, call to action at the end.', 'Change the title to "Hello world" and make it enter at 1s.', 'Add a warm gradient background and a logo sting at the start.'].map((s) => h('button.btn.ghost.sm.sug', { on: { click: () => { ta.value = s; ta.focus(); } } }, s)))]));
-    msgs.scrollTop = msgs.scrollHeight;
+    const atBottom = msgs.scrollHeight - msgs.scrollTop - msgs.clientHeight < 80;
+    msgs.replaceChildren(...(list.length ? list.map(msgEl) : [h('div.empty-chat', h('div.ehead', svg('sparkle'), h('b', 'Make a video with the agent')), h('p', 'Describe what you want. The agent writes the composition on this computer; watch it in the preview, adjust on the timeline, talk and draw on the frame to change it.'), h('div.sugs', ['Make a 10-second product teaser: dark background, bold title, three feature lines, call to action at the end.', 'Change the title to "Hello world" and make it enter at 1s.', 'Add a warm gradient background and a logo sting at the start.'].map((s) => h('button.sug', { on: { click: () => { ta.value = s; grow(); ta.focus(); } } }, s))))]));
+    if (atBottom || list.some((m) => m.live)) msgs.scrollTop = msgs.scrollHeight;
   }
   async function runDiagnostics() {
     const pre = h('pre', 'Running claude --version and a one-line prompt in the project folder… (up to 90s)');
@@ -388,10 +412,10 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
     const text = ta.value.trim(); if (!text) return;
     if (agentJob) return toast('The agent is still working on the previous message. Press Stop to interrupt it.', 'err');
     const kind = agentSel.value || project.agent || 'claude'; const cap = caps.agents?.[kind] || { label: 'Claude Code', available: caps.claude, install: 'npm install -g @anthropic-ai/claude-code' };
-    if (!cap.available) { toast(`${cap.label} was not found on this computer`, 'err'); return msgs.append(h('div.msg.agent', h('div.bubble.err', `${cap.label} is not installed or not on PATH. Install it with: ${cap.install}   sign in once, then restart the Videditor server.`))); }
+    if (!cap.available) { toast(`${cap.label} was not found on this computer`, 'err'); return msgs.append(h('div.msg.agent', h('div.errcard', `${cap.label} is not installed or not on PATH. Install it with: ${cap.install}   sign in once, then restart the Videditor server.`))); }
     const author = await ensureAuthor();
     const message = ctx._id ? `About the clip #${ctx._id}: ${text}` : text;
-    ta.value = ''; ctx.classList.add('hidden'); ctx._id = null;
+    ta.value = ''; grow(); ctx.classList.add('hidden'); ctx._id = null;
     project.chat = project.chat || []; project.chat.push({ role: 'user', text: message, at: new Date().toISOString(), author });
     const live = { role: 'agent', text: '', tools: [], at: new Date().toISOString(), live: true, status: 'starting the agent' };
     renderChat([...project.chat, live]);
