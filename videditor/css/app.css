@@ -416,3 +416,35 @@ label.field > span { display: block; font-size: 12px; color: var(--fg-1); margin
 .menu-item.primary .ic { color: var(--accent); }
 .menu-item .mi-text { display: grid; gap: 1px; font-size: 13px; }
 .menu-item .mi-hint { font-size: 11.5px; color: var(--fg-2); }
+
+/* Composition picker (custom menu with rename / delete per row) */
+.comp-trigger { max-width: 280px; gap: 8px; }
+.comp-trigger .ct-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.comp-trigger .ic { width: 12px; height: 12px; transform: rotate(90deg); opacity: .7; flex: none; }
+.comp-menu { left: 0; right: auto; min-width: 300px; max-width: 420px; max-height: 60vh; overflow: auto; }
+.comp-row { display: flex; align-items: center; gap: 8px; padding: 7px 8px 7px 10px; border-radius: 7px; cursor: pointer; font-size: 13px; color: var(--fg); min-height: 34px; }
+.comp-row:hover, .comp-row:focus-visible { background: var(--bg-2); outline: none; }
+.comp-row > .ic, .comp-row .cr-gap { width: 14px; height: 14px; flex: none; }
+.comp-row.on > .ic { color: var(--accent); }
+.comp-row .cr-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.comp-row .cr-tag { font-size: 10.5px; color: var(--fg-2); border: 1px solid var(--line-2); border-radius: 4px; padding: 0 5px; flex: none; }
+.comp-row .cr-actions { display: inline-flex; gap: 2px; opacity: 0; transition: opacity .12s; flex: none; }
+.comp-row:hover .cr-actions, .comp-row:focus-within .cr-actions { opacity: 1; }
+.cr-btn { border: 0; background: transparent; color: var(--fg-2); width: 24px; height: 24px; display: inline-grid; place-items: center; border-radius: 5px; cursor: pointer; padding: 0; }
+.cr-btn .ic { width: 13px; height: 13px; }
+.cr-btn:hover { background: var(--bg-3); color: var(--fg); }
+.cr-btn[title="Delete"]:hover { color: var(--danger); }
+.comp-row.editing { cursor: default; background: var(--bg-2); }
+.comp-row.editing > .ic { color: var(--fg-2); }
+.comp-row .comp-rename { flex: 1; padding: 4px 8px; font-size: 13px; }
+.menu-sep { height: 1px; background: var(--line); margin: 4px 2px; }
+
+/* Timeline zoom slider */
+.zoomctl { display: inline-flex; align-items: center; gap: 6px; min-width: 0; color: var(--fg-2); flex: none; }
+.zoomctl .ic { width: 14px; height: 14px; }
+.zoom-slider { -webkit-appearance: none; appearance: none; width: 120px; height: 4px; border-radius: 2px; background: var(--line-2); outline: none; cursor: pointer; }
+.zoom-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: var(--fg); border: 0; box-shadow: 0 1px 3px rgba(0,0,0,.4); }
+.zoom-slider::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: var(--fg); border: 0; }
+.zoom-slider:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px rgba(255,209,102,.35); }
+.comp-trigger.active { background: var(--bg-3); color: var(--fg); border-color: var(--line-2); }
+.zoomctl .btn { min-width: 44px; justify-content: center; }

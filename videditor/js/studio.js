@@ -68,12 +68,15 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
   const runBtn = btn('Run-through', { icon: 'mic', cls: 'sm', title: 'Plays the video and listens: talk (and draw) as it runs. Every remark is pinned to the cut on screen; when the video ends it all goes to the agent. (R)', onClick: () => toggleRun() });
   const sendNoteBtn = btn('Send drawing', { icon: 'spark', cls: 'sm hidden', title: 'Send the drawing (and selected element) to the agent', onClick: () => finishNote() });
   const autoSend = h('label.autosend', { title: 'Send to the agent automatically when a voice note ends' }, h('input', { type: 'checkbox', checked: N.autoSend, on: { change: (e) => { N.autoSend = e.target.checked; localStorage.setItem('videditor.autoSend', N.autoSend ? '1' : '0'); } } }), 'auto-send');
-  const zoomOutBtn = btn('', { icon: 'minus', cls: 'icon ghost sm', title: 'Zoom timeline out (−)', onClick: () => setZoom(zoom / 1.5) });
-  const zoomInBtn = btn('', { icon: 'plus', cls: 'icon ghost sm', title: 'Zoom timeline in (+)', onClick: () => setZoom(zoom * 1.5) });
+  // Timeline zoom: a slider (log scale, 1× = whole video … 60×). −/+ keys and ⌘-scroll still work.
+  const ZMAX = 60; const zToV = (z) => Math.round((Math.log(z) / Math.log(ZMAX)) * 1000); const vToZ = (v) => Math.pow(ZMAX, v / 1000);
+  const zoomSlider = h('input.zoom-slider', { type: 'range', min: 0, max: 1000, step: 1, value: 0, title: 'Zoom the timeline (− / + keys, ⌘-scroll)', 'aria-label': 'Timeline zoom', on: { input: (e) => setZoom(vToZ(Number(e.target.value))), keydown: (e) => e.stopPropagation() } });
+  const zoomCtl = h('div.zoomctl', svg('search'), zoomSlider);
+  queueMicrotask(() => zoomCtl.append(zoomFitBtn));
   const zoomFitBtn = btn('Fit', { cls: 'ghost sm', title: 'Fit the whole video (0)', onClick: () => setZoom(1) });
   const transport = h('div.transport', playBtn, btn('', { icon: 'stepBack', cls: 'icon ghost', title: 'Back one frame (←)', onClick: () => step(-1) }), btn('', { icon: 'stepFwd', cls: 'icon ghost', title: 'Forward one frame (→)', onClick: () => step(1) }), timeEl,
     h('span.sep'), runBtn, toolBtn('pen', 'pen', 'Draw on the preview (D)'), btn('', { icon: 'undo', cls: 'icon sm ghost', title: 'Undo stroke (Z)', onClick: () => noteLayer.undo() }), sendNoteBtn, autoSend,
-    h('span.spacer'), zoomOutBtn, zoomFitBtn, zoomInBtn, btn('Reload', { cls: 'ghost sm', title: 'Reload the composition from disk', onClick: () => reloadComp() }), renderPill, autoRenderLbl, revealLbl, renderBtn);
+    h('span.spacer'), zoomCtl, btn('Reload', { cls: 'ghost sm', title: 'Reload the composition from disk', onClick: () => reloadComp() }), renderPill, autoRenderLbl, revealLbl, renderBtn);
   noteLayer.onChange = (strokes) => { if (strokes.length && N.anchor === null) N.anchor = strokes[0].points[0][2]; sendNoteBtn.classList.toggle('hidden', !strokes.length || !!N.recording); };
 
   let recorder = null;
@@ -203,12 +206,13 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
   let zoom = 1;
   const pxPerSec = () => ((tlScroll.clientWidth - PAD - 16) / Math.max(0.5, stage.duration || composition?.duration || 5)) * zoom;
   function setZoom(z, anchorX) {
-    const old = pxPerSec(); zoom = Math.max(1, Math.min(60, z));
+    const old = pxPerSec(); zoom = Math.max(1, Math.min(ZMAX, z));
     renderTimeline();
     // keep the time under the cursor (or the playhead) where it was
     const now = pxPerSec(); const ax = anchorX ?? (PAD + stage.time * old - tlScroll.scrollLeft);
     const tAt = (ax + tlScroll.scrollLeft - PAD) / old; tlScroll.scrollLeft = Math.max(0, PAD + tAt * now - ax);
-    zoomFitBtn.textContent = zoom === 1 ? 'Fit' : `${zoom.toFixed(1)}×`;
+    zoomFitBtn.textContent = zoom === 1 ? 'Fit' : `${zoom.toFixed(1)}×`; zoomFitBtn.title = zoom === 1 ? 'Showing the whole video' : 'Back to the whole video (0)';
+    if (document.activeElement !== zoomSlider) zoomSlider.value = String(zToV(zoom));
   }
   tlScroll.addEventListener('wheel', (e) => { if (e.ctrlKey || e.metaKey) { e.preventDefault(); const r = tlScroll.getBoundingClientRect(); setZoom(zoom * (e.deltaY < 0 ? 1.15 : 1 / 1.15), e.clientX - r.left); } else if (Math.abs(e.deltaX) < Math.abs(e.deltaY) && zoom > 1 && e.shiftKey) { e.preventDefault(); tlScroll.scrollLeft += e.deltaY; } }, { passive: false });
   function drawPlayhead() {
@@ -387,32 +391,65 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
     historyHost.replaceChildren(h('div.section', h('h3', `History · ${data.entry}`), h('p.small.muted', 'A snapshot is taken before and after every change: timeline drags, Files edits, agent runs. Restore brings that state back; nothing is lost because the current state is snapshotted first.')), h('div', { style: { display: 'grid', gap: '6px', padding: '0 12px 12px' } }, ...(rows.length ? rows : [h('div.muted.small', 'No snapshots yet. They appear as soon as something changes.')])));
   }
 
-  // ---------- variants (several compositions in one project)
-  const variantSel = h('select.text', { style: { width: 'auto', maxWidth: '220px' }, title: 'Which composition you are looking at. A variant is a separate copy you can take in another direction.' });
+  // ---------- compositions (main + variants): custom picker with rename / delete inside the menu
+  const nameOf = (v) => (v ? v.title || (v.entry === 'index.html' ? 'Main' : v.name) : 'Main');
+  const compTrigger = h('button.btn.comp-trigger', { title: 'Which composition you are working on. Rename, delete or add one from this menu.', 'aria-haspopup': 'menu' }, h('span.ct-name', 'Main'), svg('chevron'));
+  const compMenu = h('div.menu.comp-menu.hidden', { role: 'menu' });
+  const compPicker = h('div.menuwrap.comppick', compTrigger, compMenu);
+  let compData = null;
   let renderVariants = async function () {
-    let data; try { data = await api.variants(project.id); } catch { return; }
-    variantSel.replaceChildren(...data.variants.map((v) => h('option', { value: v.entry, selected: v.entry === data.active }, v.entry === 'index.html' ? `${v.title || 'Main'} (main)` : (v.title || v.name))), h('option', { value: '__new' }, '+ New variant from this one…'), h('option', { value: '__rename' }, '✎ Rename this composition…'), data.active !== 'index.html' ? h('option', { value: '__delete' }, '✕ Delete this variant') : null);
+    try { compData = await api.variants(project.id); } catch { return; }
+    compTrigger.querySelector('.ct-name').textContent = nameOf(compData.variants.find((v) => v.entry === compData.active));
+    if (!compMenu.classList.contains('hidden')) drawCompMenu();
+  };
+  const onCompDoc = (e) => { if (!compPicker.contains(e.target)) closeCompMenu(); };
+  function openCompMenu() { drawCompMenu(); compMenu.classList.remove('hidden'); compTrigger.classList.add('active'); setTimeout(() => document.addEventListener('pointerdown', onCompDoc), 0); }
+  function closeCompMenu() { compMenu.classList.add('hidden'); compTrigger.classList.remove('active'); document.removeEventListener('pointerdown', onCompDoc); }
+  compTrigger.addEventListener('click', () => (compMenu.classList.contains('hidden') ? openCompMenu() : closeCompMenu()));
+  compMenu.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); closeCompMenu(); compTrigger.focus(); } });
+  const rowBtn = (ic, title, fn) => h('button.cr-btn', { title, 'aria-label': title, on: { click: (e) => { e.stopPropagation(); fn(); } } }, svg(ic));
+  function drawCompMenu(editing = null) {
+    if (!compData) return;
+    const rows = compData.variants.map((v) => {
+      const isMain = v.entry === 'index.html'; const active = v.entry === compData.active;
+      if (editing === v.entry) {
+        const inp = h('input.text.comp-rename', { value: nameOf(v), placeholder: 'Name' });
+        let done = false;
+        const finish = async (save) => {
+          if (done) return; done = true; const n = inp.value.trim();
+          if (save && n && n !== nameOf(v)) { try { await api.renameVariant(project.id, v.entry, n); toast(`Renamed to ${n}`, 'ok'); } catch (err) { toast(err.message, 'err'); } await renderVariants(); }
+          drawCompMenu();
+        };
+        inp.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter') { e.preventDefault(); finish(true); } else if (e.key === 'Escape') { e.preventDefault(); finish(false); } });
+        inp.addEventListener('blur', () => finish(true));
+        setTimeout(() => { inp.focus(); inp.select(); }, 0);
+        return h('div.comp-row.editing', svg('pen'), inp);
+      }
+      return h('div.comp-row', { class: `comp-row ${active ? 'on' : ''}`, role: 'menuitemradio', tabindex: 0, 'aria-checked': String(active), on: { click: () => activateComp(v.entry), keydown: (e) => { if (e.key === 'Enter') activateComp(v.entry); } } },
+        active ? svg('check') : h('span.cr-gap'), h('span.cr-name', nameOf(v)), isMain ? h('span.cr-tag', 'main') : null,
+        h('span.cr-actions', rowBtn('pen', 'Rename', () => drawCompMenu(v.entry)), isMain ? null : rowBtn('trash', 'Delete', () => deleteComp(v))));
+    });
+    compMenu.replaceChildren(...rows, h('div.menu-sep'),
+      h('button.menu-item', { on: { click: () => newVariant() } }, svg('plus'), h('span.mi-text', h('span', 'New variant from this one'), h('span.mi-hint', 'A copy you can take in another direction'))));
   }
-  variantSel.addEventListener('change', async () => {
-    const v = variantSel.value;
-    try {
-      if (v === '__new') { const name = h('input.text', { placeholder: 'e.g. warm cut, vertical, shorter' }); if (await modal('New variant', h('div', h('p.muted', 'A copy of the current composition you can change independently. The original stays as it is. You can also just tell the agent: "make another version that is …".'), name), { actions: [{ label: 'Create', cls: 'primary', value: true }] })) { const r = await api.createVariant(project.id, name.value.trim() || 'variant', activeEntry()); project.composition = r.active; toast(`Variant created: ${r.active}`, 'ok'); } }
-      else if (v === '__rename') { await renameComposition(); }
-      else if (v === '__delete') { if (await modal('Delete this variant?', h('p.muted', `${activeEntry()} is removed. The main composition is kept.`), { actions: [{ label: 'Delete', cls: 'danger', value: true }] })) { const r = await api.deleteVariant(project.id, activeEntry()); project.composition = r.active === 'index.html' ? null : r.active; } }
-      else { const r = await api.activateVariant(project.id, v); project.composition = r.active === 'index.html' ? null : r.active; }
-    } catch (e) { toast(e.message, 'err'); }
+  async function activateComp(entry) {
+    closeCompMenu(); if (entry === activeEntry()) return;
+    try { const r = await api.activateVariant(project.id, entry); project.composition = r.active === 'index.html' ? null : r.active; } catch (e) { toast(e.message, 'err'); }
     await renderVariants(); await reloadComp();
-  });
-  async function renameComposition() {
-    const cur = ([...variantSel.options].find((o) => o.value === activeEntry())?.textContent || '').replace(/ \(main\)$/, '').replace(/^Main$/, '');
-    const name = h('input.text', { value: cur, placeholder: 'e.g. Vertical cut, Teaser 15s' });
-    if (!(await modal('Rename composition', h('div', h('p.muted', 'The name shows in the picker, in render notes and in the browser tab. The file name does not change.'), name), { actions: [{ label: 'Rename', cls: 'primary', value: true }] }))) return;
-    const n = name.value.trim(); if (!n) return;
-    await api.renameVariant(project.id, activeEntry(), n); toast(`Renamed to ${n}`, 'ok');
   }
-  const variantRenBtn = btn('', { icon: 'pen', cls: 'ghost icon sm', title: 'Rename this composition', onClick: async () => { try { await renameComposition(); await renderVariants(); } catch (e) { toast(e.message, 'err'); } } });
-  const variantDelBtn = btn('', { icon: 'trash', cls: 'ghost icon sm hidden', title: 'Delete this variant (the main composition is kept)', onClick: async () => { variantSel.value = '__delete'; variantSel.dispatchEvent(new Event('change')); } });
-  const _rv = renderVariants; renderVariants = async () => { await _rv(); variantDelBtn.classList.toggle('hidden', activeEntry() === 'index.html'); };
+  async function deleteComp(v) {
+    closeCompMenu();
+    if (!(await modal(`Delete "${nameOf(v)}"?`, h('p.muted', 'This variant is removed. The main composition and the other variants are kept.'), { actions: [{ label: 'Delete', cls: 'danger', value: true }] }))) return;
+    try { const r = await api.deleteVariant(project.id, v.entry); project.composition = r.active === 'index.html' ? null : r.active; toast('Deleted', 'ok'); } catch (e) { toast(e.message, 'err'); }
+    await renderVariants(); await reloadComp();
+  }
+  async function newVariant() {
+    closeCompMenu();
+    const name = h('input.text', { placeholder: 'e.g. warm cut, vertical, shorter' });
+    if (!(await modal('New variant', h('div', h('p.muted', 'A copy of the current composition you can change independently. The original stays as it is. You can also just tell the agent: "make another version that is …".'), name), { actions: [{ label: 'Create', cls: 'primary', value: true }] }))) return;
+    try { const r = await api.createVariant(project.id, name.value.trim() || 'variant', activeEntry()); project.composition = r.active; toast('Variant created', 'ok'); } catch (e) { toast(e.message, 'err'); }
+    await renderVariants(); await reloadComp();
+  }
   renderVariants();
 
   function selectClip(id, { fromStage = false } = {}) {
@@ -587,9 +624,8 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
   // ---------- top bar + layout
   topbar([
     btn('', { icon: 'back', cls: 'ghost icon', title: 'All videos', onClick: () => navigate('#/') }),
-    h('span.title', project.name), modeToggle(project, 'studio', navigate), variantSel, variantRenBtn, variantDelBtn,
+    h('span.title', project.name), modeToggle(project, 'studio', navigate), compPicker,
     h('span.spacer'),
-    btn('', { icon: 'trash', cls: 'ghost icon', title: 'Delete project', onClick: async () => { if (await confirmDeleteProject(api, project)) navigate('#/'); } }),
   ]);
   root._cleanupExtra = () => clearInterval(assetsPoll);
   root.replaceChildren(h('div.studio', chat, h('div.center', stageWrap, transport, tl), side));

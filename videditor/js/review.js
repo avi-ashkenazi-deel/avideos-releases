@@ -279,7 +279,6 @@ export async function renderReview(root, { projectId, versionId, navigate, topba
       { label: 'Copy link', hint: 'Link to this version', icon: 'link', onClick: async () => { await copyText(location.href); toast('Link copied', 'ok'); } },
       { label: 'Show in Finder', hint: 'Open the folder with this render selected', icon: 'folder', onClick: async () => { try { const r = await api.revealVersion(version.id); toast(r.ok ? 'Opened in Finder' : `Saved at ${r.path}`, r.ok ? 'ok' : ''); } catch (e) { toast(e.message, 'err'); } } },
     ]),
-    btn('', { icon: 'trash', cls: 'ghost icon', title: 'Delete project', onClick: async () => { if (await confirmDeleteProject(api, project)) navigate('#/'); } }),
   ]);
 
   async function sendToAgent() {
