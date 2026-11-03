@@ -838,6 +838,13 @@ input[disabled] { opacity: .5; cursor: not-allowed; }
 .cv-ta { width: 100%; background: var(--bg); border: 1px solid var(--line-2); border-radius: 4px; color: var(--fg); font: inherit; font-size: 12px; padding: 6px 8px; margin: 6px 0; }
 .cv-f.cv-range input[type=range] { border: 0; background: transparent; padding: 0; height: 22px; }
 
+/* the text editor's formatting bar */
+.cv-richbar { position: absolute; z-index: 7; display: flex; align-items: center; gap: 2px; padding: 3px 4px; background: var(--panel, #1b1b22); border: 1px solid var(--line-2); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.25); font-size: 12px; }
+.cv-richbar button { width: 24px; height: 24px; border: 0; border-radius: 5px; background: transparent; color: var(--fg); cursor: pointer; font: inherit; display: grid; place-items: center; }
+.cv-richbar button:hover { background: var(--bg-2, rgba(127,127,127,.15)); }
+.cv-richbar .sw { width: 16px; height: 16px; border-radius: 50%; margin: 0 2px; border: 1px solid rgba(127,127,127,.4); }
+.cv-richbar .sep { width: 1px; height: 16px; background: var(--line-2); margin: 0 4px; }
+
 </style>
 </head>
 <body>
@@ -1998,6 +2005,181 @@ const Text = (() => {
     return m;
   }
   return { width, wrap, fit, fontString, transform, clearCache, quote, metrics };
+})();
+
+/* js/rich.js */
+/* Rich text: words inside one text block that differ from the block's font (bold, italic, underline, strike, a color,
+   a token, a gradient, a link, a size). A block keeps its plain `text`; `runs` split that same text into styled pieces,
+   in order, and wrap together as one paragraph. Agents read and write the same thing as inline markup:
+     **bold**  *italic*  __underline__  ~~strike~~  [words](https://…)  <c=#5938B8>color</c>  <c=primary.main>token</c>
+     <g=#A,#B>gradient</g>  <size=32>bigger</size>   (a backslash keeps a mark literal: \*)
+   Fonts are measured through Text; nothing here touches the DOM except the editor helpers at the end. */
+const Rich = (() => {
+  const STYLE_KEYS = ['weight', 'italic', 'underline', 'strike', 'fill', 'fillToken', 'gradient', 'link', 'size'];
+  const styled = r => STYLE_KEYS.some(k => r[k] != null && r[k] !== false && r[k] !== '');
+  const same = (a, b) => STYLE_KEYS.every(k => JSON.stringify(a[k] ?? null) === JSON.stringify(b[k] ?? null));
+  const clean = r => { const o = { text: String(r.text ?? '') }; for (const k of STYLE_KEYS) if (r[k] != null && r[k] !== false && r[k] !== '') o[k] = r[k]; return o; };
+  // Runs as the block stores them: non-empty, adjacent twins merged, only real styles kept.
+  function norm(runs) {
+    const out = [];
+    for (const r0 of Array.isArray(runs) ? runs : []) { const r = clean(r0); if (!r.text) continue; const last = out[out.length - 1]; if (last && same(last, r)) last.text += r.text; else out.push(r); }
+    return out;
+  }
+  const plain = runs => (runs || []).map(r => String(r.text ?? '')).join('');
+  // Do the runs say anything the block's font does not? (Runs that only repeat the base style are dropped.)
+  const hasStyle = runs => Array.isArray(runs) && runs.some(styled);
+  function isRich(b) { return !!(b && b.kind === 'text' && Array.isArray(b.runs) && b.runs.length && hasStyle(b.runs) && plain(b.runs) === String(b.text ?? '')); }
+  // A run's font: the block's font with the run's weight, slant and size over it.
+  function fontOf(run, font) {
+    const f = { ...(font || {}) };
+    if (run.weight) f.weight = run.weight; if (run.italic) f.style = 'italic'; if (run.size > 0) f.size = run.size;
+    return f;
+  }
+  const boldWeight = base => (Number(base) || 400) >= 700 ? 900 : 700;
+
+  // ---- markup ------------------------------------------------------------------------------------------------------
+  // Parse inline markup into {text, runs}. Marks nest; unknown or unbalanced marks stay as plain characters.
+  function parse(src, opts = {}) { const runs = parseRuns(src, opts); return { text: plain(runs), runs: hasStyle(runs) ? runs : null }; }
+  function parseRuns(src, opts = {}) {
+    const s = String(src ?? ''); const out = []; const st = { weight: 0, italic: 0, underline: 0, strike: 0, fill: [], fillToken: [], gradient: [], link: [], size: [] };
+    const base = opts.baseWeight || 400;
+    const cur = () => { const r = {}; if (st.weight) r.weight = boldWeight(base); if (st.italic) r.italic = true; if (st.underline) r.underline = true; if (st.strike) r.strike = true; const c = st.fill[st.fill.length - 1]; if (c) r.fill = c; const t = st.fillToken[st.fillToken.length - 1]; if (t) r.fillToken = t; const g = st.gradient[st.gradient.length - 1]; if (g) r.gradient = g; const l = st.link[st.link.length - 1]; if (l) r.link = l; const z = st.size[st.size.length - 1]; if (z) r.size = z; return r; };
+    const push = t => { if (!t) return; out.push({ ...cur(), text: t }); };
+    let i = 0, buf = '';
+    const flush = () => { push(buf); buf = ''; };
+    const closes = (mark) => s.indexOf(mark, i + mark.length) >= 0; // a mark only opens when it closes later
+    while (i < s.length) {
+      const ch = s[i], two = s.slice(i, i + 2);
+      if (ch === '\\' && i + 1 < s.length && /[*_~\[<\\]/.test(s[i + 1])) { buf += s[i + 1]; i += 2; continue; }
+      if (two === '**') { if (st.weight) { flush(); st.weight = 0; i += 2; continue; } if (closes('**')) { flush(); st.weight = 1; i += 2; continue; } }
+      if (two === '__') { if (st.underline) { flush(); st.underline = 0; i += 2; continue; } if (closes('__')) { flush(); st.underline = 1; i += 2; continue; } }
+      if (two === '~~') { if (st.strike) { flush(); st.strike = 0; i += 2; continue; } if (closes('~~')) { flush(); st.strike = 1; i += 2; continue; } }
+      if (ch === '*' && s[i + 1] !== '*' && s[i - 1] !== '*') { if (st.italic) { flush(); st.italic = 0; i += 1; continue; } if (s[i + 1] && !/\s/.test(s[i + 1]) && closes('*')) { flush(); st.italic = 1; i += 1; continue; } }
+      if (ch === '_' && s[i + 1] !== '_' && s[i - 1] !== '_' && (i === 0 || /[\s(]/.test(s[i - 1]) || st.italic)) { if (st.italic) { flush(); st.italic = 0; i += 1; continue; } if (s[i + 1] && !/\s/.test(s[i + 1]) && closes('_')) { flush(); st.italic = 1; i += 1; continue; } }
+      if (ch === '[') { const m = /^\[([^\]]+)\]\((https?:\/\/[^)\s]+|mailto:[^)\s]+|#[^)\s]*)\)/.exec(s.slice(i)); if (m) { flush(); st.link.push(m[2]); const inner = parseRuns(m[1], opts); for (const r of inner) out.push({ ...cur(), ...r, text: r.text }); st.link.pop(); i += m[0].length; continue; } }
+      if (ch === '<') {
+        const m = /^<(c|g|size|b|i|u|s|strong|em)(?:=([^>]+))?>/i.exec(s.slice(i));
+        if (m) { const tag = m[1].toLowerCase(); const close = `</${tag}>`; const end = s.toLowerCase().indexOf(close, i + m[0].length);
+          if (end > 0) { flush(); const val = (m[2] || '').trim();
+            if (tag === 'c') { if (/^#[0-9a-f]{3,8}$/i.test(val)) st.fill.push(val.toUpperCase()); else st.fillToken.push(val); }
+            else if (tag === 'g') { const stops = val.split(/\s*,\s*/).filter(Boolean); if (stops.length >= 2) st.gradient.push({ type: 'linear', angle: 90, stops: stops.map(x => /^#/.test(x) ? x.toUpperCase() : x) }); }
+            else if (tag === 'size') { const z = parseFloat(val); if (z > 0) st.size.push(Math.round(z * 100) / 100); }
+            else if (tag === 'b' || tag === 'strong') st.weight++; else if (tag === 'i' || tag === 'em') st.italic++; else if (tag === 'u') st.underline++; else if (tag === 's') st.strike++;
+            const inner = parseRuns(s.slice(i + m[0].length, end), opts); for (const r of inner) out.push({ ...cur(), ...r, text: r.text });
+            if (tag === 'c') { if (/^#/.test(val)) st.fill.pop(); else st.fillToken.pop(); } else if (tag === 'g') { if (val.split(/\s*,\s*/).filter(Boolean).length >= 2) st.gradient.pop(); } else if (tag === 'size') { if (parseFloat(val) > 0) st.size.pop(); } else if (tag === 'b' || tag === 'strong') st.weight--; else if (tag === 'i' || tag === 'em') st.italic--; else if (tag === 'u') st.underline--; else if (tag === 's') st.strike--;
+            i = end + close.length; continue; } }
+      }
+      buf += ch; i++;
+    }
+    flush();
+    return norm(out);
+  }
+  // The markup for runs; plain text comes back as itself with marks escaped only where they would read as marks.
+  const escape = t => String(t).replace(/\\/g, '\\\\').replace(/\*\*|__|~~|(?<=^|\s)\*(?=\S)|(?<=^|\s)_(?=\S)|\[(?=[^\]]*\]\()|<(?=(c|g|size|b|i|u|s|strong|em)[=>])/gi, m => m.length === 2 ? '\\' + m[0] + '\\' + m[1] : '\\' + m);
+  function markup(runs) {
+    if (!Array.isArray(runs) || !runs.length) return '';
+    return runs.map(r => {
+      let t = escape(r.text);
+      if (r.size > 0) t = `<size=${r.size}>${t}</size>`;
+      if (r.gradient && r.gradient.stops) t = `<g=${r.gradient.stops.join(',')}>${t}</g>`;
+      else if (r.fillToken) t = `<c=${r.fillToken}>${t}</c>`; else if (r.fill) t = `<c=${r.fill}>${t}</c>`;
+      if (r.strike) t = `~~${t}~~`; if (r.underline) t = `__${t}__`; if (r.italic) t = `*${t}*`; if (r.weight && r.weight >= 600) t = `**${t}**`;
+      if (r.link) t = `[${t}](${r.link})`;
+      return t;
+    }).join('');
+  }
+  const textOf = b => isRich(b) ? markup(b.runs) : String(b && b.text != null ? b.text : '');
+
+  // ---- wrapping ----------------------------------------------------------------------------------------------------
+  // Greedy word wrap over the runs. Returns lines of fragments [{text, ri}] with the line's text alongside; a run's own
+  // font measures its words, so a bold word takes the room it needs. Returns null when a single word cannot fit.
+  function wrap(runs, font, maxWidth, measure) {
+    const W = measure || ((t, f) => Text.width(t, f));
+    const fonts = runs.map(r => fontOf(r, font));
+    // pieces: words and single spaces, each inside one run; a newline ends the line
+    const pieces = [];
+    runs.forEach((r, ri) => { const t = String(r.text ?? ''); let m; const re = /\n|[^\S\n]+|[^\s]+/g; while ((m = re.exec(t))) pieces.push({ text: m[0], ri, nl: m[0] === '\n', sp: !/\S/.test(m[0]) && m[0] !== '\n' }); });
+    const lines = []; let line = [], lineW = 0;
+    const widthOf = p => W(p.text, fonts[p.ri]);
+    const commit = () => { while (line.length && line[line.length - 1].sp) line.pop(); lines.push(line); line = []; lineW = 0; };
+    for (const p of pieces) {
+      if (p.nl) { commit(); continue; }
+      if (p.sp) { if (!line.length) continue; const w = widthOf({ ...p, text: ' ' }); line.push({ ...p, text: ' ' }); lineW += w; continue; }
+      const w = widthOf(p);
+      if (lineW + w > maxWidth + 0.01 && line.some(x => !x.sp)) { commit(); }
+      if (w > maxWidth + 0.01 && !line.length) return null;
+      line.push(p); lineW += w;
+    }
+    commit();
+    if (!lines.length) lines.push([]);
+    return lines.map(frs => { const merged = []; for (const f of frs) { const last = merged[merged.length - 1]; if (last && last.ri === f.ri) last.text += f.text; else merged.push({ text: f.text, ri: f.ri }); } return { text: merged.map(f => f.text).join(''), frags: merged }; });
+  }
+  function lineWidth(line, runs, font, measure) {
+    const W = measure || ((t, f) => Text.width(t, f));
+    if (!line || !line.frags) return W(typeof line === 'string' ? line : (line && line.text) || '', font);
+    return line.frags.reduce((t, f) => t + W(f.text, fontOf(runs[f.ri] || {}, font)), 0);
+  }
+  // The widest line when nothing wraps (hug width).
+  function widestLine(runs, font, measure) { const lines = wrap(runs, font, 1e9, measure) || []; return Math.max(0, ...lines.map(l => lineWidth(l, runs, font, measure))); }
+  // The same text case on every run (upper, lower).
+  const transformed = (runs, mode) => mode ? runs.map(r => ({ ...r, text: Text.transform(r.text, mode) })) : runs;
+
+  // ---- the editor and HTML -----------------------------------------------------------------------------------------
+  const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  // Runs as HTML (the editor's content, and the HTML export): b, i, u, s, span with a color, a.
+  function toHTML(runs, opts = {}) {
+    const resolve = opts.resolveToken || (() => null);
+    return (runs || []).map(r => {
+      let h = esc(r.text).replace(/\n/g, '<br>');
+      const color = r.fill || (r.fillToken ? resolve(r.fillToken) : null); const styles = [];
+      if (color) styles.push(`color:${color}`); if (r.size > 0) styles.push(`font-size:${opts.sizeScale ? r.size * opts.sizeScale : r.size}px`);
+      if (r.gradient && r.gradient.stops && !opts.noGradient) styles.push(`background:linear-gradient(90deg,${r.gradient.stops.join(',')});-webkit-background-clip:text;background-clip:text;color:transparent`);
+      if (styles.length || r.fillToken) h = `<span style="${styles.join(';')}"${r.fillToken ? ` data-token="${esc(r.fillToken)}"` : ''}${r.gradient ? ` data-gradient="${esc((r.gradient.stops || []).join(','))}"` : ''}>${h}</span>`;
+      if (r.weight && r.weight >= 600) h = `<b>${h}</b>`; if (r.italic) h = `<i>${h}</i>`; if (r.underline) h = `<u>${h}</u>`; if (r.strike) h = `<s>${h}</s>`;
+      if (r.link) h = `<a href="${esc(r.link)}">${h}</a>`;
+      return h;
+    }).join('');
+  }
+  // Runs from an edited DOM (the contenteditable editor): tags and inline styles decide, so what every browser's
+  // execCommand writes (b/strong, i/em, u, s, span style, font color) reads back the same.
+  function fromDOM(root, base = {}) {
+    const runs = []; const baseWeight = Number(base.weight) || 400;
+    const walk = (node, st) => {
+      if (node.nodeType === 3) { runs.push({ ...st, text: node.nodeValue.replace(/ /g, ' ') }); return; }
+      if (node.nodeType !== 1) return;
+      const tag = node.tagName.toLowerCase(); const s = { ...st }; const css = node.style || {};
+      if (tag === 'br') { runs.push({ ...st, text: '\n' }); return; }
+      if (tag === 'b' || tag === 'strong' || /^(bold|[6-9]00)$/.test(css.fontWeight || '')) s.weight = boldWeight(baseWeight);
+      if (css.fontWeight === 'normal' || css.fontWeight === '400') delete s.weight;
+      if (tag === 'i' || tag === 'em' || css.fontStyle === 'italic') s.italic = true; if (css.fontStyle === 'normal') delete s.italic;
+      if (tag === 'u' || /underline/.test(css.textDecorationLine || css.textDecoration || '')) s.underline = true;
+      if (tag === 's' || tag === 'strike' || tag === 'del' || /line-through/.test(css.textDecorationLine || css.textDecoration || '')) s.strike = true;
+      if (tag === 'a' && node.getAttribute('href')) s.link = node.getAttribute('href');
+      if (node.dataset && node.dataset.token) { s.fillToken = node.dataset.token; delete s.fill; }
+      else if (css.color && css.color !== 'inherit') { const hex = toHex(css.color); if (hex) { s.fill = hex; delete s.fillToken; } }
+      if (tag === 'font' && node.getAttribute('color')) { const hex = toHex(node.getAttribute('color')); if (hex) { s.fill = hex; delete s.fillToken; } }
+      if (node.dataset && node.dataset.gradient) { const stops = node.dataset.gradient.split(','); if (stops.length >= 2) s.gradient = { type: 'linear', angle: 90, stops }; }
+      if (css.fontSize && /px$/.test(css.fontSize)) { const z = parseFloat(css.fontSize); if (z > 0) s.size = base.sizeScale ? Math.round(z / base.sizeScale * 100) / 100 : z; }
+      const block = /^(div|p|li)$/.test(tag);
+      if (block && runs.length && !/\n$/.test(runs[runs.length - 1].text)) runs.push({ ...st, text: '\n' });
+      for (const k of node.childNodes) walk(k, s);
+    };
+    for (const k of root.childNodes) walk(k, {});
+    const out = norm(runs); let text = plain(out);
+    return { text, runs: hasStyle(out) ? out : null };
+  }
+  function toHex(c) {
+    if (!c) return null; c = String(c).trim();
+    if (/^#[0-9a-f]{6}$/i.test(c)) return c.toUpperCase(); if (/^#[0-9a-f]{3}$/i.test(c)) return ('#' + c.slice(1).split('').map(x => x + x).join('')).toUpperCase();
+    const m = /^rgba?\(\s*(\d+)[,\s]+(\d+)[,\s]+(\d+)/.exec(c); if (m) return '#' + [m[1], m[2], m[3]].map(v => (+v).toString(16).padStart(2, '0')).join('').toUpperCase();
+    return null;
+  }
+  // Replace words in runs the way replaceText does on plain text (matches inside one run; runs rejoin after).
+  function replace(runs, re, repl, count) {
+    const out = runs.map(r => ({ ...r, text: String(r.text).replace(re, () => { count.n++; return repl; }) }));
+    return norm(out);
+  }
+  return { STYLE_KEYS, norm, plain, hasStyle, isRich, fontOf, parse, markup, textOf, wrap, lineWidth, widestLine, transformed, toHTML, fromDOM, replace, boldWeight, toHex };
 })();
 
 /* js/engine.js */
@@ -3452,7 +3634,18 @@ const Render = (() => {
     const it = f.style === 'italic' ? ' font-style="italic"' : '';
     const deco = b.decoration === 'underline' || b.decoration === 'line-through' ? ` text-decoration="${b.decoration}"` : '';
     const bold = n(b.emphWeight || 700);
-    const span = (line, i) => `<tspan x="${n(x)}" y="${n(first + i * lh)}">${emphRuns(typeof line === 'string' ? line : line.text, b.emph).map(r => r.on ? `<tspan font-weight="${bold}">${esc(r.text)}</tspan>` : esc(r.text)).join('')}</tspan>`;
+    const runs = Array.isArray(b.runs) ? b.runs : null;
+    const frag = fr => {
+      const r = runs && runs[fr.ri]; if (!r) return esc(fr.text);
+      const at = [];
+      if (r.weight) at.push(`font-weight="${n(r.weight)}"`); if (r.italic) at.push('font-style="italic"'); if (r.size > 0) at.push(`font-size="${n(r.size)}"`);
+      const deco = [r.underline || (r.link && !r.fill && !r.fillToken && !r.gradient) ? 'underline' : '', r.strike ? 'line-through' : ''].filter(Boolean).join(' '); if (deco) at.push(`text-decoration="${deco}"`);
+      const color = r.gradient && Array.isArray(r.gradient.stops) && r.gradient.stops.length >= 2 ? paint({ ...b, gradient: r.gradient }, ctx) : r.fill ? col(r.fill) : r.fillToken && ctx.tokenHex ? col(ctx.tokenHex(r.fillToken) || b.fill) : null;
+      if (color) at.push(`fill="${color}"`);
+      const t = at.length ? `<tspan ${at.join(' ')}>${esc(fr.text)}</tspan>` : esc(fr.text);
+      return r.link ? `<a href="${esc(r.link)}" target="_blank" rel="noopener">${t}</a>` : t;
+    };
+    const span = (line, i) => `<tspan x="${n(x)}" y="${n(first + i * lh)}">${line && line.frags && runs ? line.frags.map(frag).join('') : emphRuns(typeof line === 'string' ? line : line.text, b.emph).map(r => r.on ? `<tspan font-weight="${bold}">${esc(r.text)}</tspan>` : esc(r.text)).join('')}</tspan>`;
     const open = `<text font-family='${fam(f)}' font-size="${size}" font-weight="${n(f.weight || 400)}"${it}${deco} fill="${paint(b, ctx)}" text-anchor="${anchor}"${ls}`;
     // drawn for motion: each line its own text in a mask, so lines can rise into view one after another
     if (ctx.tag) return (b.lines || []).map((line, i) => { const id = ctx.id('ln'); const top = first + i * lh - size * 1.02; ctx.defs.push(`<clipPath id="${id}"><rect x="${n(b.x - size)}" y="${n(top)}" width="${n(b.w + size * 2)}" height="${n(size * 1.36)}"/></clipPath>`); return `<g data-line="${i}" clip-path="url(#${id})">${open} data-lh="${n(size * 1.3)}">${span(line, i)}</text></g>`; }).join('');
@@ -3518,7 +3711,7 @@ const Render = (() => {
     const W = n(layout.format.w), H = n(layout.format.h);
     const prefix = String(layout.id || 'l').replace(/[^A-Za-z0-9_-]/g, '') || 'l';
     let seq = 0;
-    const ctx = { defs: [], id: k => `${prefix}-${k}${seq++}`, tag: !!opts.tag };
+    const ctx = { defs: [], id: k => `${prefix}-${k}${seq++}`, tag: !!opts.tag, tokenHex: name => kit && typeof Brand !== 'undefined' && Brand.tokenHex ? Brand.tokenHex(kit, name, opts.theme || 'light') : null };
     const parts = [];
     if (!opts.transparent) parts.push(`<rect width="${W}" height="${H}" fill="${layout.palette && layout.palette.bgGradient ? (() => { const id = ctx.id('bg'); ctx.defs.push(gradientDef(layout.palette.bgGradient, id)); return `url(#${id})`; })() : col(layout.palette && layout.palette.bg, '#FFFFFF')}"/>`);
     // Boxes draw their fill, then their children (clipped when the box clips); siblings in list order.
@@ -3671,7 +3864,7 @@ const Render = (() => {
       const f = b.font; if (!f || !f.family) continue;
       const name = String(f.family).split(',')[0].replace(/["']/g, '').trim(); if (!name) continue;
       if (!fams.includes(name)) fams.push(name);
-      if (!weights.has(name)) weights.set(name, new Set([400])); weights.get(name).add(Number(f.weight) || 400); if (b.emph) weights.get(name).add(Number(b.emphWeight) || 700);
+      if (!weights.has(name)) weights.set(name, new Set([400])); weights.get(name).add(Number(f.weight) || 400); if (b.emph) weights.get(name).add(Number(b.emphWeight) || 700); if (Array.isArray(b.runs)) for (const r of b.runs) if (r.weight) weights.get(name).add(Number(r.weight));
     }
     fams.weights = weights; return fams;
   }
@@ -3845,7 +4038,8 @@ const ExportPptx = (() => {
       } else if (b.kind === 'text') {
         const f = b.font;
         // bold figures inside a line stay bold: the text goes in as runs
-        const body = b.emph && b.emph.length ? b.lines.flatMap((ln, i) => Render.emphRuns(typeof ln === 'string' ? ln : ln.text, b.emph).map((r, j, a) => ({ text: r.text, options: { bold: r.on ? true : f.weight >= 600, breakLine: j === a.length - 1 && i < b.lines.length - 1 } }))) : b.lines.join('\n');
+        const rich = typeof Rich !== 'undefined' && Rich.isRich(b) && b.lines.every(ln => ln && ln.frags);
+        const body = rich ? b.lines.flatMap((ln, i) => ln.frags.map((fr, j, a) => { const r = b.runs[fr.ri] || {}; const o = { bold: r.weight ? r.weight >= 600 : f.weight >= 600, italic: !!r.italic || f.style === 'italic', breakLine: j === a.length - 1 && i < b.lines.length - 1 }; if (r.underline) o.underline = { style: 'sng' }; if (r.strike) o.strike = 'sngStrike'; if (r.fill) o.color = hex(r.fill); else if (r.gradient && r.gradient.stops) o.color = hex(r.gradient.stops[0]); if (r.size > 0) o.fontSize = pt(r.size); if (r.link) o.hyperlink = { url: r.link }; return { text: fr.text, options: o }; })) : b.emph && b.emph.length ? b.lines.flatMap((ln, i) => Render.emphRuns(typeof ln === 'string' ? ln : ln.text, b.emph).map((r, j, a) => ({ text: r.text, options: { bold: r.on ? true : f.weight >= 600, breakLine: j === a.length - 1 && i < b.lines.length - 1 } }))) : b.lines.join('\n');
         slide.addText(body, {
           ...box, h: inch(b.h + f.size * 0.4),
           fontFace: fontName(f.family), fontSize: pt(f.size), color: hex(b.fill), bold: f.weight >= 600,
@@ -4941,6 +5135,20 @@ const FigmaImport = (() => {
       if (p && p.type === 'SOLID' && (p.color.a ?? 1) * (p.opacity ?? 1) < 0.999) b.opacity = r2((p.color.a ?? 1) * (p.opacity ?? 1));
       if (n.textDecoration === 'UNDERLINE') b.decoration = 'underline'; else if (n.textDecoration === 'STRIKETHROUGH') b.decoration = 'line-through';
       if (!b.font.transform) delete b.font.transform; if (!b.font.style) delete b.font.style;
+      // words styled on their own (characterStyleIDs point into styleOverrideTable) become runs
+      const ids = n.textData && n.textData.characterStyleIDs, table = n.textData && n.textData.styleOverrideTable;
+      if (typeof Rich !== 'undefined' && Array.isArray(ids) && ids.length && Array.isArray(table) && table.length) {
+        const byId = new Map(table.map(o => [o.styleID ?? o.styleId ?? o.id, o])); const runs = []; const src = b.text;
+        for (let i = 0; i < src.length; i++) { const sid = ids[i] ?? ids[ids.length - 1] ?? 0; const last = runs[runs.length - 1]; if (last && last.sid === sid) last.text += src[i]; else runs.push({ sid, text: src[i] }); }
+        const out = runs.map(r => { const o = { text: r.text }; const ov = byId.get(r.sid); if (!ov || !r.sid) return o;
+          if (ov.fontName) { const w = weightOf(ov.fontName.style); if (w !== b.font.weight) o.weight = w; if (/italic|oblique/i.test(ov.fontName.style || '') && !b.font.style) o.italic = true; }
+          if (ov.fontSize && Math.abs(ov.fontSize - size) > 0.4) o.size = r2(ov.fontSize);
+          if (ov.textDecoration === 'UNDERLINE') o.underline = true; else if (ov.textDecoration === 'STRIKETHROUGH') o.strike = true;
+          if (ov.fillPaints) { const fp = mainPaint(ov.fillPaints); if (fp && fp.type === 'SOLID') { const hx = colorHex(fp.color); if (hx !== b.fill) o.fill = hx; } else if (fp && /^GRADIENT/.test(fp.type)) { const g = gradientOf(fp, box.w, box.h); if (g) o.gradient = { type: 'linear', angle: 90, stops: g.stops.map(st => st.c) }; } }
+          if (ov.hyperlink && ov.hyperlink.url) o.link = String(ov.hyperlink.url).slice(0, 500);
+          return o; });
+        const normed = Rich.norm(out); if (Rich.hasStyle(normed) && Rich.plain(normed) === b.text) b.runs = normed;
+      }
       // Auto-width text never wraps in Figma; give it room for font substitution.
       if (n.textAutoResize === 'WIDTH_AND_HEIGHT' && !/\n/.test(chars) && !AUTO) { const extra = b.w * 0.15; if (b.align === 'center') b.x -= extra / 2; else if (b.align === 'right') b.x -= extra; b.w += extra; }
       if (/^(headline|title|heading|h1|h2|hero)/i.test(n.name || '') || size >= 40) b.role = 'headline';
@@ -6580,6 +6788,35 @@ const WebImport = (() => {
       return { x: r1(rr.left + sx), y: r1(rr.top + sy - half), w: r1(Math.max(rr.width, 4)), h: r1(Math.max(lines * lhPx, 4)) };
     }
     function imgRef(src) { if (!src || /^data:image\/svg/.test(src) && src.length > 400000) return null; if (!imgs.has(src)) imgs.set(src, null); return src; }
+    // The styled words inside a text element (bold, italic, underline, strike, another color or size, a link) as runs,
+    // or null when every word shares the element's style. Whitespace collapses the way the page shows it.
+    function inlineRuns(el, cs) {
+      const base = { w: parseInt(cs.fontWeight, 10) || 400, i: cs.fontStyle === 'italic', c: (hexA(cs.color) || {}).hex, z: px(cs.fontSize) };
+      const runs = []; let styled = false;
+      const walk = (node, a) => {
+        if (node.nodeType === 3) { const t = node.nodeValue.replace(/[ \t\r\n\f]+/g, ' '); if (t) runs.push({ ...a, text: t }); return; }
+        if (node.nodeType !== 1) return; const tag = node.tagName; if (tag === 'BR') { runs.push({ ...a, text: '\n' }); return; }
+        if (tag === 'SCRIPT' || tag === 'STYLE' || tag === 'SVG' || tag === 'IMG') return;
+        const k = getComputedStyle(node); if (k.display === 'none' || k.visibility === 'hidden') return;
+        const f = faceOf(k.fontFamily); const r = { ...a };
+        const w = f.weight || parseInt(k.fontWeight, 10) || 400; if (w !== base.w) r.weight = w; else delete r.weight;
+        const it = f.italic || k.fontStyle === 'italic'; if (it !== base.i) r.italic = it || undefined; if (!r.italic) delete r.italic;
+        if (/underline/.test(k.textDecorationLine)) r.underline = true; if (/line-through/.test(k.textDecorationLine)) r.strike = true;
+        const c = (hexA(k.color) || {}).hex; if (c && c !== base.c) r.fill = c; else delete r.fill;
+        const z = px(k.fontSize); if (z && Math.abs(z - base.z) > 0.5) r.size = r1(z); else delete r.size;
+        if (tag === 'A' && node.getAttribute('href')) { try { r.link = new URL(node.getAttribute('href'), location.href).href.slice(0, 500); } catch { } }
+        if (r.weight || r.italic || r.underline || r.strike || r.fill || r.size || r.link) styled = true;
+        for (const ch of node.childNodes) walk(ch, r);
+      };
+      for (const ch of el.childNodes) walk(ch, {});
+      if (!styled) return null;
+      // whitespace at the edges and doubled spaces across runs go, as the page's own text does
+      const merged = []; for (const r of runs) { const last = merged[merged.length - 1]; if (last && ['weight', 'italic', 'underline', 'strike', 'fill', 'size', 'link'].every(k => last[k] === r[k])) last.text += r.text; else merged.push({ ...r }); }
+      let text = merged.map(r => r.text).join(''); const lead = text.match(/^ +/); const trail = text.match(/ +$/);
+      if (lead && merged[0]) merged[0].text = merged[0].text.replace(/^ +/, ''); if (trail && merged[merged.length - 1]) merged[merged.length - 1].text = merged[merged.length - 1].text.replace(/ +$/, '');
+      const out = merged.filter(r => r.text); text = out.map(r => r.text).join('').replace(/ *\n */g, '\n');
+      return { text, runs: out.map(r => { const o = { text: r.text }; for (const k of ['weight', 'italic', 'underline', 'strike', 'fill', 'size', 'link']) if (r[k]) o[k] = r[k]; return o; }) };
+    }
     function pushText(el, cs, op, text, box, fixed, p, flow, more) {
       text = text.replace(/[ \t ]+/g, ' ').replace(/ *\n */g, '\n').trim(); if (!text) return;
       fonts.add(famOf(cs.fontFamily));
@@ -6671,7 +6908,7 @@ const WebImport = (() => {
           const cl = r.x + px(cs.borderLeftWidth) + px(cs.paddingLeft); const cw = r.w - px(cs.borderLeftWidth) - px(cs.borderRightWidth) - px(cs.paddingLeft) - px(cs.paddingRight);
           if (cw > box.w) { box.x = r1(cl); box.w = r1(cw); }
         }
-        if (visible(box, clip)) { pushText(el, cs, o, el.innerText || el.textContent || '', box, isFixed, myP, !!frame || item); textDone = true; }
+        if (visible(box, clip)) { const rr2 = inlineRuns(el, cs); pushText(el, cs, o, rr2 ? rr2.text : (el.innerText || el.textContent || ''), box, isFixed, myP, !!frame || item, rr2 ? { runs: rr2.runs } : null); textDone = true; }
       } else if (hasText && vis) {
         // mixed content: each direct text run on its own
         for (const k of kids) if (k.nodeType === 3 && k.nodeValue.trim()) { const range = document.createRange(); range.selectNodeContents(k); const rr = range.getBoundingClientRect(); const size = px(cs.fontSize) || 16; const box = lineBox(rr, size, cs.lineHeight === 'normal' ? size * 1.2 : px(cs.lineHeight)); if (visible(box, clip)) pushText(el, cs, o, k.nodeValue, box, isFixed, myP, !!(frame && frame.flex)); }
@@ -6850,6 +7087,7 @@ const WebImport = (() => {
         b = { ...base, kind: 'text', role: size >= 32 ? 'headline' : 'text', path: 'text_' + uid(), text: String(n.text || '').slice(0, 4000), align: n.align || 'left', fill: safeHex(n.color) || '#000000', decorative: false,
           font: { family: Brand.FONTS[fam] || Brand.customFonts[fam] ? Brand.fontCss(fam) : `"${fam}", Inter, system-ui, sans-serif`, size, weight: n.weight || 400, lineHeight: r2(n.lh || 1.2), letterSpacing: Math.round((n.ls || 0) * 1000) / 1000 } };
         if (n.italic) b.font.style = 'italic'; if (n.transform) b.font.transform = n.transform; if (n.deco) b.decoration = n.deco;
+        if (Array.isArray(n.runs) && n.runs.length && typeof Rich !== 'undefined') { const runs = Rich.norm(n.runs.map(r => { const o = { text: String(r.text || '') }; if (r.weight) o.weight = +r.weight; if (r.italic) o.italic = true; if (r.underline) o.underline = true; if (r.strike) o.strike = true; if (safeHex(r.fill)) o.fill = safeHex(r.fill); if (r.size > 0) o.size = r2(r.size); if (r.link && /^https?:/.test(r.link)) o.link = String(r.link).slice(0, 500); return o; })); if (Rich.hasStyle(runs) && Rich.plain(runs) === b.text) b.runs = runs; }
         // single lines get room for font substitution, unless a stack will size them
         if (lines === 1 && !/\n/.test(b.text) && !(AUTO && n.flow)) { const extra = b.w * 0.12 + 4; if (b.align === 'center') b.x -= extra / 2; else if (b.align === 'right') b.x -= extra; b.w += extra; }
         Canvas.refit(b);
@@ -6983,9 +7221,29 @@ const Canvas = (() => {
 
   // ---- Text refitting ------------------------------------------------------------------------
   function sourceText(b) { return b.text != null ? String(b.text) : (b.lines ? b.lines.map(l => typeof l === 'string' ? l : l.text).join(' ') : ''); }
+  // Words with marks in them (**bold**, [links](…), <c=#hex>colors</c>) become runs; plain words clear them.
+  function setText(b, markup) {
+    if (b.kind !== 'text') { b.text = String(markup ?? ''); return refit(b); }
+    const src = String(markup ?? '').slice(0, 4000);
+    if (typeof Rich !== 'undefined') { const r = Rich.parse(src, { baseWeight: b.font && b.font.weight }); b.text = r.text; if (r.runs) b.runs = r.runs; else delete b.runs; }
+    else b.text = src;
+    return refit(b);
+  }
+  // The text as an agent or the properties panel sees it: markup when runs carry styles, else the words.
+  function richText(b) { return typeof Rich !== 'undefined' ? Rich.textOf(b) : sourceText(b); }
   function refit(b) {
     if (b.kind === 'text') {
       const f = b.font; const text = Text.transform(sourceText(b), f.transform);
+      if (typeof Rich !== 'undefined' && Rich.isRich(b)) {
+        // styled words wrap together as one paragraph, each measured in its own weight and size
+        const runs = Rich.transformed(b.runs, f.transform); let lines = Rich.wrap(runs, f, Math.max(8, b.w));
+        if (!lines) lines = (Rich.wrap(runs, f, 1e9) || []).flatMap(l => l.frags.length ? [l] : [{ text: '', frags: [] }]);
+        b.lines = lines;
+        b.h = Math.max(f.size, Math.round(lines.length * f.size * (f.lineHeight || 1.2)));
+        const ws = lines.map(l => Rich.lineWidth(l, runs, f)); b.inkW = Math.min(b.w, Math.max(0, ...ws)); b.overflow = ws.some(w => w > b.w + 1);
+        return b;
+      }
+      if (b.runs) delete b.runs; // runs that no longer match the text (or say nothing) go
       let lines = Text.wrap(text, f, Math.max(8, b.w));
       if (!lines) lines = text.split(/\s+/); // a single word wider than the box: keep it on one line per word
       b.lines = lines;
@@ -7200,7 +7458,7 @@ const Canvas = (() => {
     if (b.kind === 'field' || b.kind === 'rule') return { tag: 'div', bg: bg || cssColor(b.fill), radius: b.radius || 0, alpha: b.alpha, fxs, role: b.role || b.kind };
     if (b.kind === 'shape') return { tag: 'div', bg: bg || cssColor(b.fill), radius: b.shape === 'pill' ? 9999 : (b.shape === 'circle' || b.shape === 'ellipse') ? '50%' : '0 100% 0 0', fxs, role: b.shape };
     if (b.kind === 'image') { const a = env && env.assets && env.assets.images.find(i => i.id === b.asset); return { tag: 'img', src: a ? (a.name || 'image') : 'image.jpg', radius: b.radius || 0, fit: b.fit === 'contain' ? 'contain' : 'cover', fxs, role: 'image' }; }
-    if (b.kind === 'text') return { tag: /^(headline|stat|quote)$/.test(b.role) ? 'h2' : 'p', text: sourceText(b), color: cssColor(b.fill), bgText: bg, type, align: b.align || 'left', upper: f.transform === 'upper', fxs, role: b.role || 'text' };
+    if (b.kind === 'text') return { tag: /^(headline|stat|quote)$/.test(b.role) ? 'h2' : 'p', text: sourceText(b), runs: typeof Rich !== 'undefined' && Rich.isRich(b) ? b.runs : null, color: cssColor(b.fill), bgText: bg, type, align: b.align || 'left', upper: f.transform === 'upper', fxs, role: b.role || 'text' };
     if (b.kind === 'list') return { tag: b.marker === 'number' ? 'ol' : 'ul', items: b.items || [], color: cssColor(b.fill), type, indent: b.indent || 24, fxs, role: b.role || 'list' };
     if (b.kind === 'button') return { tag: 'a', text: b.text, color: cssColor(b.color), bg: bg || cssColor(b.fill), radius: b.radius || 0, type: { ...type, weight: f.weight || 600 }, fxs, role: 'cta' };
     if (b.kind === 'icon') { const g = Icons.get(b.name) || { inner: '', viewBox: '0 0 256 256' }; return { tag: 'svg', inner: g.inner.replace(/currentColor/g, cssColor(b.fill)), viewBox: g.viewBox, fxs, role: 'icon ' + b.name }; }
@@ -7273,7 +7531,7 @@ const Canvas = (() => {
       if (nd.tag === 'img') parts.push(`${pad}<img src="${e(nd.src)}" alt="" style="${s}">`);
       else if (nd.tag === 'svg') parts.push(`${pad}<svg viewBox="${nd.viewBox}" preserveAspectRatio="none" style="${s}">${nd.inner}</svg>`);
       else if (nd.tag === 'ul' || nd.tag === 'ol') parts.push(`${pad}<${nd.tag} style="${s}">${nd.items.map(i => `<li>${e(i)}</li>`).join('')}</${nd.tag}>`);
-      else parts.push(`${pad}<${nd.tag}${nd.tag === 'a' ? ' href="#"' : ''} style="${s}">${e(nd.text || '')}</${nd.tag}>`);
+      else parts.push(`${pad}<${nd.tag}${nd.tag === 'a' ? ' href="#"' : ''} style="${s}">${nd.runs ? Rich.toHTML(nd.runs) : e(nd.text || '')}</${nd.tag}>`);
     };
     tree.children.forEach(nd => emitNode(nd, 1));
     parts.push('</div>');
@@ -7536,7 +7794,7 @@ const Canvas = (() => {
     if (!find) return 0; let n = 0;
     const re = new RegExp(find.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), opts.caseSensitive ? 'g' : 'gi');
     for (const f of frames) for (const b of f.layout.blocks) {
-      if (b.kind === 'text') { const t = sourceText(b); const nt = t.replace(re, () => { n++; return repl; }); if (nt !== t) { b.text = nt; refit(b); } }
+      if (b.kind === 'text') { const t = sourceText(b); const nt = t.replace(re, () => { n++; return repl; }); if (nt !== t) { if (typeof Rich !== 'undefined' && Rich.isRich(b)) { const c = { n: 0 }; b.runs = Rich.replace(b.runs, re, repl, c); b.text = Rich.plain(b.runs); } else b.text = nt; refit(b); } }
       else if (b.kind === 'button') { const nt = String(b.text || '').replace(re, () => { n++; return repl; }); if (nt !== b.text) { b.text = nt; refit(b); } }
       else if (b.kind === 'list') { const items = (b.items || []).map(i => String(i).replace(re, () => { n++; return repl; })); if (items.join('\n') !== (b.items || []).join('\n')) { b.items = items; refit(b); } }
     }
@@ -7608,7 +7866,7 @@ const Canvas = (() => {
     };
   }
 
-  return { create, addFrame, blankFrame, migrate, defaultAuto, frameById, blockById, refit, sourceText, newBlock, moveBlock, resizeBlock, reorder, duplicateBlock, removeBlocks, transferBlocks, pasteBlocks, customFormat, align, distribute, bounds, applyAutoLayout, isBackground, serialize, deserialize, toLink, fromHash, toHTML, toReact, codeTree, codeNodes, recolor, extractContent, scaleFrame, clusters, mainCluster, applyFrameTokens, tokenizeFrame, applyTokens, group, ungroup, groupMembers, tidy, compact, penD, penFit, maskShape, maskedBy, replaceText, setFonts, pasteFrames, framesBounds, cssGradient, cropRect, cropFrom, cropZoom, setCropZoom, adjustOf, adjustActive, adjustCss, ADJUST_DEFAULT, history, snap, uid, clone };
+  return { create, addFrame, blankFrame, migrate, defaultAuto, frameById, blockById, refit, sourceText, newBlock, moveBlock, resizeBlock, reorder, duplicateBlock, removeBlocks, transferBlocks, pasteBlocks, customFormat, align, distribute, bounds, applyAutoLayout, isBackground, serialize, deserialize, toLink, fromHash, toHTML, toReact, codeTree, codeNodes, recolor, extractContent, scaleFrame, clusters, mainCluster, applyFrameTokens, tokenizeFrame, applyTokens, group, ungroup, groupMembers, tidy, compact, penD, penFit, maskShape, maskedBy, replaceText, setFonts, pasteFrames, framesBounds, cssGradient, setText, richText, cropRect, cropFrom, cropZoom, setCropZoom, adjustOf, adjustActive, adjustCss, ADJUST_DEFAULT, history, snap, uid, clone };
 })();
 
 /* js/autolayout.js */
@@ -7682,7 +7940,7 @@ const Auto = (() => {
   }
   const clampW = (b, v) => Math.max(1, Math.min(num(b.maxW, Infinity), Math.max(num(b.minW, 0), v)));
   const clampH = (b, v) => Math.max(1, Math.min(num(b.maxH, Infinity), Math.max(num(b.minH, 0), v)));
-  function textHugW(b) { const f = b.font || { size: 16, weight: 400, family: 'sans-serif' }; const t = Text.transform(Canvas.sourceText(b), f.transform); return Math.ceil(Math.max(8, ...t.split('\n').map(l => Text.width(l, f))) * 2) / 2; }
+  function textHugW(b) { const f = b.font || { size: 16, weight: 400, family: 'sans-serif' }; if (typeof Rich !== 'undefined' && Rich.isRich(b)) return Math.ceil(Math.max(8, Rich.widestLine(Rich.transformed(b.runs, f.transform), f)) * 2) / 2; const t = Text.transform(Canvas.sourceText(b), f.transform); return Math.ceil(Math.max(8, ...t.split('\n').map(l => Text.width(l, f))) * 2) / 2; }
   function listHugW(b) { const f = b.font || { size: 16, weight: 400, family: 'sans-serif' }; const indent = b.indent || Math.round(f.size * (b.marker === 'number' ? 2.1 : 1.3)); return Math.ceil(indent + Math.max(8, ...(b.items && b.items.length ? b.items : ['']).map(i => Text.width(String(i), f)))) + 1; }
   function buttonHug(b) { const f = b.font || { size: 16, weight: 600, family: 'sans-serif' }; const px = num(b.padX, Math.round(f.size * 1.4)), py = num(b.padY, Math.round(f.size * 0.75)); return { w: Math.ceil(Text.width(String(b.text || ''), f) + 2 * px), h: Math.ceil(f.size * (f.lineHeight || 1.2) + 2 * py) }; }
   function hugW(I, b) {
@@ -9013,23 +9271,36 @@ const CanvasUI = (() => {
     if (!opts.noHistory) { hist.push(doc); updateUndo(); }
     select(f.id, [b.id], { keepGroupFocus: true });
     const ed = document.createElement('div'); ed.className = 'cv-editor';
-    ed.contentEditable = 'plaintext-only'; if (ed.contentEditable !== 'plaintext-only') ed.contentEditable = 'true';
+    const rich = b.kind === 'text' && typeof Rich !== 'undefined';
+    if (rich) ed.contentEditable = 'true'; else { ed.contentEditable = 'plaintext-only'; if (ed.contentEditable !== 'plaintext-only') ed.contentEditable = 'true'; }
     ed.spellcheck = true; ed.setAttribute('role', 'textbox'); ed.setAttribute('aria-label', 'Edit text');
-    ed.textContent = b.kind === 'list' ? (b.items || []).join('\n') : b.kind === 'button' ? String(b.text || '') : Canvas.sourceText(b);
-    editing = { frameId: f.id, blockId: b.id, el: ed, hide: b.kind !== 'button' };
-    stage().appendChild(ed); positionEditor(); rerenderFrame(f); drawOverlay();
+    const Z0 = doc.view.zoom;
+    if (rich) ed.innerHTML = Rich.toHTML(Rich.isRich(b) ? b.runs : [{ text: Canvas.sourceText(b) }], { sizeScale: Z0, resolveToken: tk => Brand.tokenHex(env.getKit(), tk, f.theme || 'light') });
+    else ed.textContent = b.kind === 'list' ? (b.items || []).join('\n') : b.kind === 'button' ? String(b.text || '') : Canvas.sourceText(b);
+    editing = { frameId: f.id, blockId: b.id, el: ed, hide: b.kind !== 'button', rich, scale: Z0 };
+    stage().appendChild(ed);
+    if (rich) { const bar = document.createElement('div'); bar.className = 'cv-richbar'; bar.innerHTML = `<button type="button" data-rt="bold" title="Bold ⌘B"><b>B</b></button><button type="button" data-rt="italic" title="Italic ⌘I"><i>I</i></button><button type="button" data-rt="underline" title="Underline ⌘U"><u>U</u></button><button type="button" data-rt="strikeThrough" title="Strike ⌘⇧X"><s>S</s></button><button type="button" data-rt="link" title="Link ⌘K">⛓</button><span class="sep"></span>${env.getKit().colors.slice(0, 10).map(c => `<button type="button" class="sw" data-rt="color" data-hex="${toHex(c.hex)}" title="${esc(c.name || c.hex)}" style="background:${toHex(c.hex)}"></button>`).join('')}<span class="sep"></span><button type="button" data-rt="clear" title="Clear formatting">⌫</button>`;
+      bar.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); });
+      bar.addEventListener('click', e => { const bt = e.target.closest('[data-rt]'); if (!bt) return; e.preventDefault(); ed.focus(); const k = bt.dataset.rt;
+        if (k === 'color') document.execCommand('foreColor', false, bt.dataset.hex); else if (k === 'link') { const url = prompt('Link to (https://…)'); if (url) document.execCommand('createLink', false, url); } else if (k === 'clear') { document.execCommand('removeFormat'); document.execCommand('unlink'); } else document.execCommand(k);
+        ed.dispatchEvent(new Event('input')); });
+      stage().appendChild(bar); editing.bar = bar; }
+    positionEditor(); rerenderFrame(f); drawOverlay();
     ed.focus();
     try { const range = document.createRange(); range.selectNodeContents(ed); const s = getSelection(); s.removeAllRanges(); s.addRange(range); } catch { }
     ed.addEventListener('input', () => {
       const fr = Canvas.frameById(doc, f.id); const bl = fr && Canvas.blockById(fr, b.id); if (!bl) return;
       const t = ed.innerText.replace(/ /g, ' ');
-      if (bl.kind === 'list') bl.items = t.split('\n').map(x => x.trim()).filter(Boolean); else if (bl.kind === 'button') bl.text = t.replace(/\s*\n+\s*/g, ' '); else bl.text = t.replace(/\n{3,}/g, '\n\n');
+      if (editing.rich) { const r = Rich.fromDOM(ed, { weight: bl.font && bl.font.weight, sizeScale: editing.scale }); bl.text = r.text.replace(/\n{3,}/g, '\n\n'); if (r.runs && r.text === bl.text) bl.runs = r.runs; else delete bl.runs; }
+      else if (bl.kind === 'list') bl.items = t.split('\n').map(x => x.trim()).filter(Boolean); else if (bl.kind === 'button') bl.text = t.replace(/\s*\n+\s*/g, ' '); else bl.text = t.replace(/\n{3,}/g, '\n\n');
       Canvas.refit(bl); positionEditor(); if (!editing.hide) rerenderFrame(fr); drawOverlay(); emitLive([fr.id]);
     });
     ed.addEventListener('keydown', e => {
       e.stopPropagation();
+      if (rich && (e.metaKey || e.ctrlKey) && !e.altKey) { const k = e.key.toLowerCase(); const cmd = k === 'b' ? 'bold' : k === 'i' ? 'italic' : k === 'u' ? 'underline' : (k === 'x' && e.shiftKey) ? 'strikeThrough' : (k === 'k') ? 'link' : null; if (cmd) { e.preventDefault(); if (cmd === 'link') { const url = prompt('Link to (https://…)'); if (url) document.execCommand('createLink', false, url); } else document.execCommand(cmd); ed.dispatchEvent(new Event('input')); return; } }
       if (e.key === 'Escape' || (e.key === 'Enter' && (b.kind !== 'list' || e.metaKey || e.ctrlKey) && !e.shiftKey)) { e.preventDefault(); endEdit(); }
     });
+    if (rich) ed.addEventListener('paste', e => { e.preventDefault(); const t = (e.clipboardData || window.clipboardData).getData('text/plain'); if (t) document.execCommand('insertText', false, t); });
     ed.addEventListener('blur', () => setTimeout(() => { if (editing && editing.el === ed) endEdit(); }, 0));
     ed.addEventListener('pointerdown', e => e.stopPropagation());
     return true;
@@ -9045,10 +9316,11 @@ const CanvasUI = (() => {
       paddingLeft: b.kind === 'list' ? (b.indent || 0) * Z + 'px' : '0',
     });
     if (b.kind === 'button') Object.assign(ed.style, { height: b.h * Z + 'px', minHeight: '0', display: 'flex', alignItems: 'center', justifyContent: 'center', background: Render.col(b.fill), borderRadius: (b.radius || 0) * Z + 'px' });
+    if (editing.bar) Object.assign(editing.bar.style, { left: p.x + 'px', top: (p.y - 36) + 'px' });
   }
   function endEdit(cancel) {
     if (!editing) return;
-    const ed = editing; editing = null; ed.el.remove();
+    const ed = editing; editing = null; ed.el.remove(); if (ed.bar) ed.bar.remove();
     const f = Canvas.frameById(doc, ed.frameId);
     if (f) {
       const b = Canvas.blockById(f, ed.blockId);
@@ -9911,7 +10183,7 @@ const CanvasUI = (() => {
     </div>
     ${codeSection(f, b)}
     ${instanceSection(f, b)}
-    ${b.kind === 'text' ? `<div class="cv-section"><h3>Text</h3><textarea class="cv-text" data-p="text" rows="3" spellcheck="true">${esc(Canvas.sourceText(b))}</textarea><p class="hint">Or double-click the text on the canvas.</p>${b.overflow ? '<p class="hint" style="color:var(--danger)">Text is wider than its box. Widen the box or lower the size.</p>' : ''}</div>` : ''}
+    ${b.kind === 'text' ? `<div class="cv-section"><h3>Text</h3><textarea class="cv-text" data-p="text" rows="3" spellcheck="true">${esc(Canvas.richText(b))}</textarea><p class="hint">Or double-click the text on the canvas.</p>${b.overflow ? '<p class="hint" style="color:var(--danger)">Text is wider than its box. Widen the box or lower the size.</p>' : ''}</div>` : ''}
     ${b.kind === 'list' ? `<div class="cv-section"><h3>Items</h3><textarea class="cv-text" data-p="items" rows="4" spellcheck="true">${esc((b.items || []).join('\n'))}</textarea>${selectF('marker', 'Marker', b.marker || 'bullet', [['bullet', 'Bullet'], ['number', 'Number'], ['none', 'None']])}</div>` : ''}
     ${b.kind === 'button' ? `<div class="cv-section"><h3>Label</h3><input type="text" class="cv-text" data-p="text" value="${esc(b.text)}">${color('color', 'Text color', b.color, b.colorToken)}</div>` : ''}
     ${isText && b.font ? `<div class="cv-section"><h3>Typography</h3>
@@ -9974,7 +10246,7 @@ const CanvasUI = (() => {
   }
   function secondColor(hex) { const kit = env.getKit(); const c = kit.colors.map(x => toHex(x.hex)).filter(x => x !== toHex(hex)).sort((a, b) => Color.contrast(hex, b) - Color.contrast(hex, a))[0]; return c || '#FFFFFF'; }
   function setBlockProp(b, k, v) {
-    if (k === 'text') { b.text = v; Canvas.refit(b); }
+    if (k === 'text') { if (b.kind === 'text') Canvas.setText(b, v); else { b.text = v; Canvas.refit(b); } }
     else if (k === 'items') { b.items = String(v).split('\n').map(x => x.trim()).filter(Boolean); Canvas.refit(b); }
     else if (k === 'label') { if (v) b.label = String(v).slice(0, 80); else delete b.label; }
     else if (k === 'slot.name') { if (b.slot) b.slot.name = String(v).slice(0, 40); }
@@ -12208,7 +12480,7 @@ const TOOL_DEFS = [
   { name: 'get_screenshot', description: 'A PNG of one screen, to check how it looks after changes.', inputSchema: { type: 'object', properties: { frame_id: { type: 'string' }, scale: { type: 'number', description: '0.25 to 1, default 0.5' } }, required: ['frame_id'] } },
   { name: 'get_code', description: 'One screen as code: React with Tailwind classes, or plain HTML/CSS.', inputSchema: { type: 'object', properties: { frame_id: { type: 'string' }, format: { type: 'string', enum: ['react', 'html'] } }, required: ['frame_id'] } },
   { name: 'select', description: 'Select screens, or blocks inside one screen, so the person sees what you mean.', inputSchema: { type: 'object', properties: { frame_ids: { type: 'array', items: { type: 'string' } }, block_ids: { type: 'array', items: { type: 'string' }, description: 'Only with exactly one frame id' } } } },
-  { name: 'update_blocks', core: true, description: 'Change blocks. Each update names frame_id, block_id and the props to set: text, items, x, y, w, h, fill (hex or brand color name; \"none\" for no fill on boxes and rectangles), stroke ({width, color}; width 0 removes it), padding (stacks: a number or {top,right,bottom,left}), color (button label), font_size, font_weight, font_family, line_height (multiple of the size, e.g. 1.2), letter_spacing (in em, e.g. 0.02; 0.1 is already wide), align, case, opacity, radius, rotation, hidden, label, shadow, stroke, gradient, z, size_w / size_h (fixed, hug, fill: sizing inside a stack), absolute (true: ignore the stack), variant and product (logo: wordmark, symbol, appicon, lockup). Moving a box moves everything inside it. Returns overflow ids when text no longer fits its box.',
+  { name: 'update_blocks', core: true, description: 'Change blocks. Each update names frame_id, block_id and the props to set: text (inline marks style words inside it: **bold**, *italic*, __underline__, ~~strike~~, [words](https://…), <c=#hex>color</c>, <c=token.name>token</c>, <g=#A,#B>gradient</g>, <size=32>size</size>; get_frame returns the same marks), items, x, y, w, h, fill (hex or brand color name; \"none\" for no fill on boxes and rectangles), stroke ({width, color}; width 0 removes it), padding (stacks: a number or {top,right,bottom,left}), color (button label), font_size, font_weight, font_family, line_height (multiple of the size, e.g. 1.2), letter_spacing (in em, e.g. 0.02; 0.1 is already wide), align, case, opacity, radius, rotation, hidden, label, shadow, stroke, gradient, z, size_w / size_h (fixed, hug, fill: sizing inside a stack), absolute (true: ignore the stack), variant and product (logo: wordmark, symbol, appicon, lockup). Moving a box moves everything inside it. Returns overflow ids when text no longer fits its box.',
     inputSchema: { type: 'object', properties: { updates: { type: 'array', items: { type: 'object', properties: { frame_id: { type: 'string' }, block_id: { type: 'string' }, props: { type: 'object', description: 'e.g. {"text":"New headline","font_size":72} or {"fill":"Acai"} or {"shadow":{"y":8,"blur":24,"alpha":0.2}} or {"gradient":{"type":"linear","angle":180,"stops":["#5938B8","#191A25"]}} or {"z":"front"}' } }, required: ['frame_id', 'block_id', 'props'] } } }, required: ['updates'] } },
   { name: 'add_blocks', core: true, description: 'Add blocks to a screen. kind is text, body, button, rect, ellipse, image, icon or logo; then any props update_blocks takes. box_id puts a block straight into a box (in a stack it joins the flow, before before_id or at the end). Returns the new block ids.',
     inputSchema: { type: 'object', properties: { frame_id: { type: 'string' }, blocks: { type: 'array', items: { type: 'object', properties: { kind: { type: 'string', enum: ['text', 'body', 'button', 'rect', 'ellipse', 'image', 'icon', 'logo'] }, props: { type: 'object' }, box_id: { type: 'string' }, before_id: { type: 'string' } }, required: ['kind'] } } }, required: ['frame_id', 'blocks'] } },
@@ -12269,7 +12541,7 @@ const AgentTools = (() => {
     if (b.role) o.role = b.role; if (b.label) o.label = b.label; if (b.group) o.group = b.group; if (b.inst) o.instance_of = b.inst.of;
     if (b.slot) o.slot = { name: b.slot.name || 'Slot', accepts: (b.slot.accepts || []).slice(0, 20) };
     Object.assign(o, { x: Math.round(b.x), y: Math.round(b.y), w: Math.round(b.w), h: Math.round(b.h) });
-    if (b.kind === 'text') o.text = Canvas.sourceText(b).slice(0, MAX_TEXT);
+    if (b.kind === 'text') { o.text = Canvas.richText(b).slice(0, MAX_TEXT); if (Rich.isRich(b)) o.rich = true; }
     if (b.kind === 'button') o.text = String(b.text || '').slice(0, MAX_TEXT);
     if (b.kind === 'list') o.items = (b.items || []).map(i => String(i).slice(0, 120)).slice(0, 12);
     if (b.fill) o.fill = b.fillToken ? `${b.fill} (${b.fillToken})` : b.fill;
@@ -12301,7 +12573,7 @@ const AgentTools = (() => {
     if (!p || typeof p !== 'object') throw new Error('props must be an object');
     const num = (k, min = -1e6, max = 1e6) => { const v = Number(p[k]); if (!Number.isFinite(v)) throw new Error(`${k} must be a number`); return Math.max(min, Math.min(max, v)); };
     let refit = false;
-    if ('text' in p) { if (b.kind === 'button') b.text = String(p.text).slice(0, 80); else if (b.kind === 'text') { b.text = String(p.text).slice(0, 4000); refit = true; } }
+    if ('text' in p) { if (b.kind === 'button') b.text = String(p.text).slice(0, 80); else if (b.kind === 'text') { Canvas.setText(b, String(p.text)); refit = true; } }
     if ('items' in p && b.kind === 'list') { b.items = arr(p.items).map(String).slice(0, 20); refit = true; }
     for (const k of ['x', 'y']) if (k in p) b[k] = Math.round(num(k));
     for (const k of ['w', 'h']) if (k in p) { b[k] = Math.round(num(k, 4, 20000)); refit = true; }
@@ -12540,6 +12812,7 @@ const AgentTools = (() => {
       if (!L || !L.format || !(L.format.w > 0 && L.format.h > 0) || !Array.isArray(L.blocks)) throw new Error('layout needs format {w, h} and a blocks array');
       L.palette = { ...f.layout.palette, ...(L.palette || {}) }; L.grid = L.grid || f.layout.grid; L.type = L.type || f.layout.type; L.meta = { ...(L.meta || {}) };
       L.blocks = L.blocks.slice(0, 1500).map(b => { const c = { ...b }; if (!c.id) c.id = Canvas.uid(); if (!Number.isFinite(c.x)) c.x = 0; if (!Number.isFinite(c.y)) c.y = 0; if (!(c.w > 0)) c.w = 100; if (!(c.h > 0)) c.h = 40; if ((c.kind === 'text' || c.kind === 'list' || c.kind === 'button') && !c.font) c.font = { family: Brand.fontCss(kit().fonts.body), size: 24, weight: 400, lineHeight: 1.3 }; if (c.kind === 'text' || c.kind === 'list') Canvas.refit(c); return c; });
+      for (const c of L.blocks) if (c.kind === 'text' && typeof c.text === 'string' && /\*\*|__|~~|\]\(|<(c|g|size|b|i|u|s)[=>]/.test(c.text)) Canvas.setText(c, c.text);
       write(() => { f.layout = L; CanvasUI.regrid(f); }, [f.id]);
       note(`Rebuilt ${f.name}`); return { blocks: L.blocks.length };
     },

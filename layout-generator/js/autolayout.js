@@ -68,7 +68,7 @@ const Auto = (() => {
   }
   const clampW = (b, v) => Math.max(1, Math.min(num(b.maxW, Infinity), Math.max(num(b.minW, 0), v)));
   const clampH = (b, v) => Math.max(1, Math.min(num(b.maxH, Infinity), Math.max(num(b.minH, 0), v)));
-  function textHugW(b) { const f = b.font || { size: 16, weight: 400, family: 'sans-serif' }; const t = Text.transform(Canvas.sourceText(b), f.transform); return Math.ceil(Math.max(8, ...t.split('\n').map(l => Text.width(l, f))) * 2) / 2; }
+  function textHugW(b) { const f = b.font || { size: 16, weight: 400, family: 'sans-serif' }; if (typeof Rich !== 'undefined' && Rich.isRich(b)) return Math.ceil(Math.max(8, Rich.widestLine(Rich.transformed(b.runs, f.transform), f)) * 2) / 2; const t = Text.transform(Canvas.sourceText(b), f.transform); return Math.ceil(Math.max(8, ...t.split('\n').map(l => Text.width(l, f))) * 2) / 2; }
   function listHugW(b) { const f = b.font || { size: 16, weight: 400, family: 'sans-serif' }; const indent = b.indent || Math.round(f.size * (b.marker === 'number' ? 2.1 : 1.3)); return Math.ceil(indent + Math.max(8, ...(b.items && b.items.length ? b.items : ['']).map(i => Text.width(String(i), f)))) + 1; }
   function buttonHug(b) { const f = b.font || { size: 16, weight: 600, family: 'sans-serif' }; const px = num(b.padX, Math.round(f.size * 1.4)), py = num(b.padY, Math.round(f.size * 0.75)); return { w: Math.ceil(Text.width(String(b.text || ''), f) + 2 * px), h: Math.ceil(f.size * (f.lineHeight || 1.2) + 2 * py) }; }
   function hugW(I, b) {

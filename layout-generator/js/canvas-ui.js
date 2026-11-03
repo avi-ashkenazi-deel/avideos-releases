@@ -1012,23 +1012,36 @@ const CanvasUI = (() => {
     if (!opts.noHistory) { hist.push(doc); updateUndo(); }
     select(f.id, [b.id], { keepGroupFocus: true });
     const ed = document.createElement('div'); ed.className = 'cv-editor';
-    ed.contentEditable = 'plaintext-only'; if (ed.contentEditable !== 'plaintext-only') ed.contentEditable = 'true';
+    const rich = b.kind === 'text' && typeof Rich !== 'undefined';
+    if (rich) ed.contentEditable = 'true'; else { ed.contentEditable = 'plaintext-only'; if (ed.contentEditable !== 'plaintext-only') ed.contentEditable = 'true'; }
     ed.spellcheck = true; ed.setAttribute('role', 'textbox'); ed.setAttribute('aria-label', 'Edit text');
-    ed.textContent = b.kind === 'list' ? (b.items || []).join('\n') : b.kind === 'button' ? String(b.text || '') : Canvas.sourceText(b);
-    editing = { frameId: f.id, blockId: b.id, el: ed, hide: b.kind !== 'button' };
-    stage().appendChild(ed); positionEditor(); rerenderFrame(f); drawOverlay();
+    const Z0 = doc.view.zoom;
+    if (rich) ed.innerHTML = Rich.toHTML(Rich.isRich(b) ? b.runs : [{ text: Canvas.sourceText(b) }], { sizeScale: Z0, resolveToken: tk => Brand.tokenHex(env.getKit(), tk, f.theme || 'light') });
+    else ed.textContent = b.kind === 'list' ? (b.items || []).join('\n') : b.kind === 'button' ? String(b.text || '') : Canvas.sourceText(b);
+    editing = { frameId: f.id, blockId: b.id, el: ed, hide: b.kind !== 'button', rich, scale: Z0 };
+    stage().appendChild(ed);
+    if (rich) { const bar = document.createElement('div'); bar.className = 'cv-richbar'; bar.innerHTML = `<button type="button" data-rt="bold" title="Bold ⌘B"><b>B</b></button><button type="button" data-rt="italic" title="Italic ⌘I"><i>I</i></button><button type="button" data-rt="underline" title="Underline ⌘U"><u>U</u></button><button type="button" data-rt="strikeThrough" title="Strike ⌘⇧X"><s>S</s></button><button type="button" data-rt="link" title="Link ⌘K">⛓</button><span class="sep"></span>${env.getKit().colors.slice(0, 10).map(c => `<button type="button" class="sw" data-rt="color" data-hex="${toHex(c.hex)}" title="${esc(c.name || c.hex)}" style="background:${toHex(c.hex)}"></button>`).join('')}<span class="sep"></span><button type="button" data-rt="clear" title="Clear formatting">⌫</button>`;
+      bar.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); });
+      bar.addEventListener('click', e => { const bt = e.target.closest('[data-rt]'); if (!bt) return; e.preventDefault(); ed.focus(); const k = bt.dataset.rt;
+        if (k === 'color') document.execCommand('foreColor', false, bt.dataset.hex); else if (k === 'link') { const url = prompt('Link to (https://…)'); if (url) document.execCommand('createLink', false, url); } else if (k === 'clear') { document.execCommand('removeFormat'); document.execCommand('unlink'); } else document.execCommand(k);
+        ed.dispatchEvent(new Event('input')); });
+      stage().appendChild(bar); editing.bar = bar; }
+    positionEditor(); rerenderFrame(f); drawOverlay();
     ed.focus();
     try { const range = document.createRange(); range.selectNodeContents(ed); const s = getSelection(); s.removeAllRanges(); s.addRange(range); } catch { }
     ed.addEventListener('input', () => {
       const fr = Canvas.frameById(doc, f.id); const bl = fr && Canvas.blockById(fr, b.id); if (!bl) return;
       const t = ed.innerText.replace(/ /g, ' ');
-      if (bl.kind === 'list') bl.items = t.split('\n').map(x => x.trim()).filter(Boolean); else if (bl.kind === 'button') bl.text = t.replace(/\s*\n+\s*/g, ' '); else bl.text = t.replace(/\n{3,}/g, '\n\n');
+      if (editing.rich) { const r = Rich.fromDOM(ed, { weight: bl.font && bl.font.weight, sizeScale: editing.scale }); bl.text = r.text.replace(/\n{3,}/g, '\n\n'); if (r.runs && r.text === bl.text) bl.runs = r.runs; else delete bl.runs; }
+      else if (bl.kind === 'list') bl.items = t.split('\n').map(x => x.trim()).filter(Boolean); else if (bl.kind === 'button') bl.text = t.replace(/\s*\n+\s*/g, ' '); else bl.text = t.replace(/\n{3,}/g, '\n\n');
       Canvas.refit(bl); positionEditor(); if (!editing.hide) rerenderFrame(fr); drawOverlay(); emitLive([fr.id]);
     });
     ed.addEventListener('keydown', e => {
       e.stopPropagation();
+      if (rich && (e.metaKey || e.ctrlKey) && !e.altKey) { const k = e.key.toLowerCase(); const cmd = k === 'b' ? 'bold' : k === 'i' ? 'italic' : k === 'u' ? 'underline' : (k === 'x' && e.shiftKey) ? 'strikeThrough' : (k === 'k') ? 'link' : null; if (cmd) { e.preventDefault(); if (cmd === 'link') { const url = prompt('Link to (https://…)'); if (url) document.execCommand('createLink', false, url); } else document.execCommand(cmd); ed.dispatchEvent(new Event('input')); return; } }
       if (e.key === 'Escape' || (e.key === 'Enter' && (b.kind !== 'list' || e.metaKey || e.ctrlKey) && !e.shiftKey)) { e.preventDefault(); endEdit(); }
     });
+    if (rich) ed.addEventListener('paste', e => { e.preventDefault(); const t = (e.clipboardData || window.clipboardData).getData('text/plain'); if (t) document.execCommand('insertText', false, t); });
     ed.addEventListener('blur', () => setTimeout(() => { if (editing && editing.el === ed) endEdit(); }, 0));
     ed.addEventListener('pointerdown', e => e.stopPropagation());
     return true;
@@ -1044,10 +1057,11 @@ const CanvasUI = (() => {
       paddingLeft: b.kind === 'list' ? (b.indent || 0) * Z + 'px' : '0',
     });
     if (b.kind === 'button') Object.assign(ed.style, { height: b.h * Z + 'px', minHeight: '0', display: 'flex', alignItems: 'center', justifyContent: 'center', background: Render.col(b.fill), borderRadius: (b.radius || 0) * Z + 'px' });
+    if (editing.bar) Object.assign(editing.bar.style, { left: p.x + 'px', top: (p.y - 36) + 'px' });
   }
   function endEdit(cancel) {
     if (!editing) return;
-    const ed = editing; editing = null; ed.el.remove();
+    const ed = editing; editing = null; ed.el.remove(); if (ed.bar) ed.bar.remove();
     const f = Canvas.frameById(doc, ed.frameId);
     if (f) {
       const b = Canvas.blockById(f, ed.blockId);
@@ -1910,7 +1924,7 @@ const CanvasUI = (() => {
     </div>
     ${codeSection(f, b)}
     ${instanceSection(f, b)}
-    ${b.kind === 'text' ? `<div class="cv-section"><h3>Text</h3><textarea class="cv-text" data-p="text" rows="3" spellcheck="true">${esc(Canvas.sourceText(b))}</textarea><p class="hint">Or double-click the text on the canvas.</p>${b.overflow ? '<p class="hint" style="color:var(--danger)">Text is wider than its box. Widen the box or lower the size.</p>' : ''}</div>` : ''}
+    ${b.kind === 'text' ? `<div class="cv-section"><h3>Text</h3><textarea class="cv-text" data-p="text" rows="3" spellcheck="true">${esc(Canvas.richText(b))}</textarea><p class="hint">Or double-click the text on the canvas.</p>${b.overflow ? '<p class="hint" style="color:var(--danger)">Text is wider than its box. Widen the box or lower the size.</p>' : ''}</div>` : ''}
     ${b.kind === 'list' ? `<div class="cv-section"><h3>Items</h3><textarea class="cv-text" data-p="items" rows="4" spellcheck="true">${esc((b.items || []).join('\n'))}</textarea>${selectF('marker', 'Marker', b.marker || 'bullet', [['bullet', 'Bullet'], ['number', 'Number'], ['none', 'None']])}</div>` : ''}
     ${b.kind === 'button' ? `<div class="cv-section"><h3>Label</h3><input type="text" class="cv-text" data-p="text" value="${esc(b.text)}">${color('color', 'Text color', b.color, b.colorToken)}</div>` : ''}
     ${isText && b.font ? `<div class="cv-section"><h3>Typography</h3>
@@ -1973,7 +1987,7 @@ const CanvasUI = (() => {
   }
   function secondColor(hex) { const kit = env.getKit(); const c = kit.colors.map(x => toHex(x.hex)).filter(x => x !== toHex(hex)).sort((a, b) => Color.contrast(hex, b) - Color.contrast(hex, a))[0]; return c || '#FFFFFF'; }
   function setBlockProp(b, k, v) {
-    if (k === 'text') { b.text = v; Canvas.refit(b); }
+    if (k === 'text') { if (b.kind === 'text') Canvas.setText(b, v); else { b.text = v; Canvas.refit(b); } }
     else if (k === 'items') { b.items = String(v).split('\n').map(x => x.trim()).filter(Boolean); Canvas.refit(b); }
     else if (k === 'label') { if (v) b.label = String(v).slice(0, 80); else delete b.label; }
     else if (k === 'slot.name') { if (b.slot) b.slot.name = String(v).slice(0, 40); }

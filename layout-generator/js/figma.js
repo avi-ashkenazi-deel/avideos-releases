@@ -366,6 +366,20 @@ const FigmaImport = (() => {
       if (p && p.type === 'SOLID' && (p.color.a ?? 1) * (p.opacity ?? 1) < 0.999) b.opacity = r2((p.color.a ?? 1) * (p.opacity ?? 1));
       if (n.textDecoration === 'UNDERLINE') b.decoration = 'underline'; else if (n.textDecoration === 'STRIKETHROUGH') b.decoration = 'line-through';
       if (!b.font.transform) delete b.font.transform; if (!b.font.style) delete b.font.style;
+      // words styled on their own (characterStyleIDs point into styleOverrideTable) become runs
+      const ids = n.textData && n.textData.characterStyleIDs, table = n.textData && n.textData.styleOverrideTable;
+      if (typeof Rich !== 'undefined' && Array.isArray(ids) && ids.length && Array.isArray(table) && table.length) {
+        const byId = new Map(table.map(o => [o.styleID ?? o.styleId ?? o.id, o])); const runs = []; const src = b.text;
+        for (let i = 0; i < src.length; i++) { const sid = ids[i] ?? ids[ids.length - 1] ?? 0; const last = runs[runs.length - 1]; if (last && last.sid === sid) last.text += src[i]; else runs.push({ sid, text: src[i] }); }
+        const out = runs.map(r => { const o = { text: r.text }; const ov = byId.get(r.sid); if (!ov || !r.sid) return o;
+          if (ov.fontName) { const w = weightOf(ov.fontName.style); if (w !== b.font.weight) o.weight = w; if (/italic|oblique/i.test(ov.fontName.style || '') && !b.font.style) o.italic = true; }
+          if (ov.fontSize && Math.abs(ov.fontSize - size) > 0.4) o.size = r2(ov.fontSize);
+          if (ov.textDecoration === 'UNDERLINE') o.underline = true; else if (ov.textDecoration === 'STRIKETHROUGH') o.strike = true;
+          if (ov.fillPaints) { const fp = mainPaint(ov.fillPaints); if (fp && fp.type === 'SOLID') { const hx = colorHex(fp.color); if (hx !== b.fill) o.fill = hx; } else if (fp && /^GRADIENT/.test(fp.type)) { const g = gradientOf(fp, box.w, box.h); if (g) o.gradient = { type: 'linear', angle: 90, stops: g.stops.map(st => st.c) }; } }
+          if (ov.hyperlink && ov.hyperlink.url) o.link = String(ov.hyperlink.url).slice(0, 500);
+          return o; });
+        const normed = Rich.norm(out); if (Rich.hasStyle(normed) && Rich.plain(normed) === b.text) b.runs = normed;
+      }
       // Auto-width text never wraps in Figma; give it room for font substitution.
       if (n.textAutoResize === 'WIDTH_AND_HEIGHT' && !/\n/.test(chars) && !AUTO) { const extra = b.w * 0.15; if (b.align === 'center') b.x -= extra / 2; else if (b.align === 'right') b.x -= extra; b.w += extra; }
       if (/^(headline|title|heading|h1|h2|hero)/i.test(n.name || '') || size >= 40) b.role = 'headline';

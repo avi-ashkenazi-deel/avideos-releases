@@ -113,7 +113,18 @@ const Render = (() => {
     const it = f.style === 'italic' ? ' font-style="italic"' : '';
     const deco = b.decoration === 'underline' || b.decoration === 'line-through' ? ` text-decoration="${b.decoration}"` : '';
     const bold = n(b.emphWeight || 700);
-    const span = (line, i) => `<tspan x="${n(x)}" y="${n(first + i * lh)}">${emphRuns(typeof line === 'string' ? line : line.text, b.emph).map(r => r.on ? `<tspan font-weight="${bold}">${esc(r.text)}</tspan>` : esc(r.text)).join('')}</tspan>`;
+    const runs = Array.isArray(b.runs) ? b.runs : null;
+    const frag = fr => {
+      const r = runs && runs[fr.ri]; if (!r) return esc(fr.text);
+      const at = [];
+      if (r.weight) at.push(`font-weight="${n(r.weight)}"`); if (r.italic) at.push('font-style="italic"'); if (r.size > 0) at.push(`font-size="${n(r.size)}"`);
+      const deco = [r.underline || (r.link && !r.fill && !r.fillToken && !r.gradient) ? 'underline' : '', r.strike ? 'line-through' : ''].filter(Boolean).join(' '); if (deco) at.push(`text-decoration="${deco}"`);
+      const color = r.gradient && Array.isArray(r.gradient.stops) && r.gradient.stops.length >= 2 ? paint({ ...b, gradient: r.gradient }, ctx) : r.fill ? col(r.fill) : r.fillToken && ctx.tokenHex ? col(ctx.tokenHex(r.fillToken) || b.fill) : null;
+      if (color) at.push(`fill="${color}"`);
+      const t = at.length ? `<tspan ${at.join(' ')}>${esc(fr.text)}</tspan>` : esc(fr.text);
+      return r.link ? `<a href="${esc(r.link)}" target="_blank" rel="noopener">${t}</a>` : t;
+    };
+    const span = (line, i) => `<tspan x="${n(x)}" y="${n(first + i * lh)}">${line && line.frags && runs ? line.frags.map(frag).join('') : emphRuns(typeof line === 'string' ? line : line.text, b.emph).map(r => r.on ? `<tspan font-weight="${bold}">${esc(r.text)}</tspan>` : esc(r.text)).join('')}</tspan>`;
     const open = `<text font-family='${fam(f)}' font-size="${size}" font-weight="${n(f.weight || 400)}"${it}${deco} fill="${paint(b, ctx)}" text-anchor="${anchor}"${ls}`;
     // drawn for motion: each line its own text in a mask, so lines can rise into view one after another
     if (ctx.tag) return (b.lines || []).map((line, i) => { const id = ctx.id('ln'); const top = first + i * lh - size * 1.02; ctx.defs.push(`<clipPath id="${id}"><rect x="${n(b.x - size)}" y="${n(top)}" width="${n(b.w + size * 2)}" height="${n(size * 1.36)}"/></clipPath>`); return `<g data-line="${i}" clip-path="url(#${id})">${open} data-lh="${n(size * 1.3)}">${span(line, i)}</text></g>`; }).join('');
@@ -179,7 +190,7 @@ const Render = (() => {
     const W = n(layout.format.w), H = n(layout.format.h);
     const prefix = String(layout.id || 'l').replace(/[^A-Za-z0-9_-]/g, '') || 'l';
     let seq = 0;
-    const ctx = { defs: [], id: k => `${prefix}-${k}${seq++}`, tag: !!opts.tag };
+    const ctx = { defs: [], id: k => `${prefix}-${k}${seq++}`, tag: !!opts.tag, tokenHex: name => kit && typeof Brand !== 'undefined' && Brand.tokenHex ? Brand.tokenHex(kit, name, opts.theme || 'light') : null };
     const parts = [];
     if (!opts.transparent) parts.push(`<rect width="${W}" height="${H}" fill="${layout.palette && layout.palette.bgGradient ? (() => { const id = ctx.id('bg'); ctx.defs.push(gradientDef(layout.palette.bgGradient, id)); return `url(#${id})`; })() : col(layout.palette && layout.palette.bg, '#FFFFFF')}"/>`);
     // Boxes draw their fill, then their children (clipped when the box clips); siblings in list order.
@@ -332,7 +343,7 @@ const Render = (() => {
       const f = b.font; if (!f || !f.family) continue;
       const name = String(f.family).split(',')[0].replace(/["']/g, '').trim(); if (!name) continue;
       if (!fams.includes(name)) fams.push(name);
-      if (!weights.has(name)) weights.set(name, new Set([400])); weights.get(name).add(Number(f.weight) || 400); if (b.emph) weights.get(name).add(Number(b.emphWeight) || 700);
+      if (!weights.has(name)) weights.set(name, new Set([400])); weights.get(name).add(Number(f.weight) || 400); if (b.emph) weights.get(name).add(Number(b.emphWeight) || 700); if (Array.isArray(b.runs)) for (const r of b.runs) if (r.weight) weights.get(name).add(Number(r.weight));
     }
     fams.weights = weights; return fams;
   }

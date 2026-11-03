@@ -89,7 +89,8 @@ const ExportPptx = (() => {
       } else if (b.kind === 'text') {
         const f = b.font;
         // bold figures inside a line stay bold: the text goes in as runs
-        const body = b.emph && b.emph.length ? b.lines.flatMap((ln, i) => Render.emphRuns(typeof ln === 'string' ? ln : ln.text, b.emph).map((r, j, a) => ({ text: r.text, options: { bold: r.on ? true : f.weight >= 600, breakLine: j === a.length - 1 && i < b.lines.length - 1 } }))) : b.lines.join('\n');
+        const rich = typeof Rich !== 'undefined' && Rich.isRich(b) && b.lines.every(ln => ln && ln.frags);
+        const body = rich ? b.lines.flatMap((ln, i) => ln.frags.map((fr, j, a) => { const r = b.runs[fr.ri] || {}; const o = { bold: r.weight ? r.weight >= 600 : f.weight >= 600, italic: !!r.italic || f.style === 'italic', breakLine: j === a.length - 1 && i < b.lines.length - 1 }; if (r.underline) o.underline = { style: 'sng' }; if (r.strike) o.strike = 'sngStrike'; if (r.fill) o.color = hex(r.fill); else if (r.gradient && r.gradient.stops) o.color = hex(r.gradient.stops[0]); if (r.size > 0) o.fontSize = pt(r.size); if (r.link) o.hyperlink = { url: r.link }; return { text: fr.text, options: o }; })) : b.emph && b.emph.length ? b.lines.flatMap((ln, i) => Render.emphRuns(typeof ln === 'string' ? ln : ln.text, b.emph).map((r, j, a) => ({ text: r.text, options: { bold: r.on ? true : f.weight >= 600, breakLine: j === a.length - 1 && i < b.lines.length - 1 } }))) : b.lines.join('\n');
         slide.addText(body, {
           ...box, h: inch(b.h + f.size * 0.4),
           fontFace: fontName(f.family), fontSize: pt(f.size), color: hex(b.fill), bold: f.weight >= 600,

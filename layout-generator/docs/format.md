@@ -34,7 +34,7 @@ Every block has `id` and `kind`, and its box `x`, `y`, `w`, `h` in px from the s
 | kind | what it is | its props |
 |---|---|---|
 | `box` | a container; with `auto` it is an auto layout stack | `auto`, `clip`, `slot`, children by `parent` |
-| `text` | words | `text`, `font` {family, size, weight, lineHeight, letterSpacing, transform, style}, `align`, `role` |
+| `text` | words | `text`, `font` {family, size, weight, lineHeight, letterSpacing, transform, style}, `align`, `role`, `runs` (styled words inside the text: `[{text, weight, italic, underline, strike, fill, fillToken, gradient, link, size}]`, concatenating to `text`; agents and the properties panel write them as marks: `**bold**`, `*italic*`, `__underline__`, `~~strike~~`, `[words](url)`, `<c=#hex>` or `<c=token>`, `<g=#A,#B>`, `<size=32>`) |
 | `list` | items | `items`, `marker`, `font` |
 | `button` | a button with a label | `text`, `color` (label), `fill`, `radius`, `font` |
 | `image` | a picture | `asset` (id in the assets store), `fit`, `focal`, `crop` (the part shown: fractions `x, y, w, h` of the source, at the block's aspect), `adjust` (`brightness`, `contrast`, `saturation` as factors, `blur` px, `grayscale` 0–1, `hue` °), `placeholder` |

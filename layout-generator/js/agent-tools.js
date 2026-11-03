@@ -27,7 +27,7 @@ const AgentTools = (() => {
     if (b.role) o.role = b.role; if (b.label) o.label = b.label; if (b.group) o.group = b.group; if (b.inst) o.instance_of = b.inst.of;
     if (b.slot) o.slot = { name: b.slot.name || 'Slot', accepts: (b.slot.accepts || []).slice(0, 20) };
     Object.assign(o, { x: Math.round(b.x), y: Math.round(b.y), w: Math.round(b.w), h: Math.round(b.h) });
-    if (b.kind === 'text') o.text = Canvas.sourceText(b).slice(0, MAX_TEXT);
+    if (b.kind === 'text') { o.text = Canvas.richText(b).slice(0, MAX_TEXT); if (Rich.isRich(b)) o.rich = true; }
     if (b.kind === 'button') o.text = String(b.text || '').slice(0, MAX_TEXT);
     if (b.kind === 'list') o.items = (b.items || []).map(i => String(i).slice(0, 120)).slice(0, 12);
     if (b.fill) o.fill = b.fillToken ? `${b.fill} (${b.fillToken})` : b.fill;
@@ -59,7 +59,7 @@ const AgentTools = (() => {
     if (!p || typeof p !== 'object') throw new Error('props must be an object');
     const num = (k, min = -1e6, max = 1e6) => { const v = Number(p[k]); if (!Number.isFinite(v)) throw new Error(`${k} must be a number`); return Math.max(min, Math.min(max, v)); };
     let refit = false;
-    if ('text' in p) { if (b.kind === 'button') b.text = String(p.text).slice(0, 80); else if (b.kind === 'text') { b.text = String(p.text).slice(0, 4000); refit = true; } }
+    if ('text' in p) { if (b.kind === 'button') b.text = String(p.text).slice(0, 80); else if (b.kind === 'text') { Canvas.setText(b, String(p.text)); refit = true; } }
     if ('items' in p && b.kind === 'list') { b.items = arr(p.items).map(String).slice(0, 20); refit = true; }
     for (const k of ['x', 'y']) if (k in p) b[k] = Math.round(num(k));
     for (const k of ['w', 'h']) if (k in p) { b[k] = Math.round(num(k, 4, 20000)); refit = true; }
@@ -298,6 +298,7 @@ const AgentTools = (() => {
       if (!L || !L.format || !(L.format.w > 0 && L.format.h > 0) || !Array.isArray(L.blocks)) throw new Error('layout needs format {w, h} and a blocks array');
       L.palette = { ...f.layout.palette, ...(L.palette || {}) }; L.grid = L.grid || f.layout.grid; L.type = L.type || f.layout.type; L.meta = { ...(L.meta || {}) };
       L.blocks = L.blocks.slice(0, 1500).map(b => { const c = { ...b }; if (!c.id) c.id = Canvas.uid(); if (!Number.isFinite(c.x)) c.x = 0; if (!Number.isFinite(c.y)) c.y = 0; if (!(c.w > 0)) c.w = 100; if (!(c.h > 0)) c.h = 40; if ((c.kind === 'text' || c.kind === 'list' || c.kind === 'button') && !c.font) c.font = { family: Brand.fontCss(kit().fonts.body), size: 24, weight: 400, lineHeight: 1.3 }; if (c.kind === 'text' || c.kind === 'list') Canvas.refit(c); return c; });
+      for (const c of L.blocks) if (c.kind === 'text' && typeof c.text === 'string' && /\*\*|__|~~|\]\(|<(c|g|size|b|i|u|s)[=>]/.test(c.text)) Canvas.setText(c, c.text);
       write(() => { f.layout = L; CanvasUI.regrid(f); }, [f.id]);
       note(`Rebuilt ${f.name}`); return { blocks: L.blocks.length };
     },

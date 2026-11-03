@@ -69,6 +69,35 @@ const WebImport = (() => {
       return { x: r1(rr.left + sx), y: r1(rr.top + sy - half), w: r1(Math.max(rr.width, 4)), h: r1(Math.max(lines * lhPx, 4)) };
     }
     function imgRef(src) { if (!src || /^data:image\/svg/.test(src) && src.length > 400000) return null; if (!imgs.has(src)) imgs.set(src, null); return src; }
+    // The styled words inside a text element (bold, italic, underline, strike, another color or size, a link) as runs,
+    // or null when every word shares the element's style. Whitespace collapses the way the page shows it.
+    function inlineRuns(el, cs) {
+      const base = { w: parseInt(cs.fontWeight, 10) || 400, i: cs.fontStyle === 'italic', c: (hexA(cs.color) || {}).hex, z: px(cs.fontSize) };
+      const runs = []; let styled = false;
+      const walk = (node, a) => {
+        if (node.nodeType === 3) { const t = node.nodeValue.replace(/[ \t\r\n\f]+/g, ' '); if (t) runs.push({ ...a, text: t }); return; }
+        if (node.nodeType !== 1) return; const tag = node.tagName; if (tag === 'BR') { runs.push({ ...a, text: '\n' }); return; }
+        if (tag === 'SCRIPT' || tag === 'STYLE' || tag === 'SVG' || tag === 'IMG') return;
+        const k = getComputedStyle(node); if (k.display === 'none' || k.visibility === 'hidden') return;
+        const f = faceOf(k.fontFamily); const r = { ...a };
+        const w = f.weight || parseInt(k.fontWeight, 10) || 400; if (w !== base.w) r.weight = w; else delete r.weight;
+        const it = f.italic || k.fontStyle === 'italic'; if (it !== base.i) r.italic = it || undefined; if (!r.italic) delete r.italic;
+        if (/underline/.test(k.textDecorationLine)) r.underline = true; if (/line-through/.test(k.textDecorationLine)) r.strike = true;
+        const c = (hexA(k.color) || {}).hex; if (c && c !== base.c) r.fill = c; else delete r.fill;
+        const z = px(k.fontSize); if (z && Math.abs(z - base.z) > 0.5) r.size = r1(z); else delete r.size;
+        if (tag === 'A' && node.getAttribute('href')) { try { r.link = new URL(node.getAttribute('href'), location.href).href.slice(0, 500); } catch { } }
+        if (r.weight || r.italic || r.underline || r.strike || r.fill || r.size || r.link) styled = true;
+        for (const ch of node.childNodes) walk(ch, r);
+      };
+      for (const ch of el.childNodes) walk(ch, {});
+      if (!styled) return null;
+      // whitespace at the edges and doubled spaces across runs go, as the page's own text does
+      const merged = []; for (const r of runs) { const last = merged[merged.length - 1]; if (last && ['weight', 'italic', 'underline', 'strike', 'fill', 'size', 'link'].every(k => last[k] === r[k])) last.text += r.text; else merged.push({ ...r }); }
+      let text = merged.map(r => r.text).join(''); const lead = text.match(/^ +/); const trail = text.match(/ +$/);
+      if (lead && merged[0]) merged[0].text = merged[0].text.replace(/^ +/, ''); if (trail && merged[merged.length - 1]) merged[merged.length - 1].text = merged[merged.length - 1].text.replace(/ +$/, '');
+      const out = merged.filter(r => r.text); text = out.map(r => r.text).join('').replace(/ *\n */g, '\n');
+      return { text, runs: out.map(r => { const o = { text: r.text }; for (const k of ['weight', 'italic', 'underline', 'strike', 'fill', 'size', 'link']) if (r[k]) o[k] = r[k]; return o; }) };
+    }
     function pushText(el, cs, op, text, box, fixed, p, flow, more) {
       text = text.replace(/[ \t ]+/g, ' ').replace(/ *\n */g, '\n').trim(); if (!text) return;
       fonts.add(famOf(cs.fontFamily));
@@ -160,7 +189,7 @@ const WebImport = (() => {
           const cl = r.x + px(cs.borderLeftWidth) + px(cs.paddingLeft); const cw = r.w - px(cs.borderLeftWidth) - px(cs.borderRightWidth) - px(cs.paddingLeft) - px(cs.paddingRight);
           if (cw > box.w) { box.x = r1(cl); box.w = r1(cw); }
         }
-        if (visible(box, clip)) { pushText(el, cs, o, el.innerText || el.textContent || '', box, isFixed, myP, !!frame || item); textDone = true; }
+        if (visible(box, clip)) { const rr2 = inlineRuns(el, cs); pushText(el, cs, o, rr2 ? rr2.text : (el.innerText || el.textContent || ''), box, isFixed, myP, !!frame || item, rr2 ? { runs: rr2.runs } : null); textDone = true; }
       } else if (hasText && vis) {
         // mixed content: each direct text run on its own
         for (const k of kids) if (k.nodeType === 3 && k.nodeValue.trim()) { const range = document.createRange(); range.selectNodeContents(k); const rr = range.getBoundingClientRect(); const size = px(cs.fontSize) || 16; const box = lineBox(rr, size, cs.lineHeight === 'normal' ? size * 1.2 : px(cs.lineHeight)); if (visible(box, clip)) pushText(el, cs, o, k.nodeValue, box, isFixed, myP, !!(frame && frame.flex)); }
@@ -339,6 +368,7 @@ const WebImport = (() => {
         b = { ...base, kind: 'text', role: size >= 32 ? 'headline' : 'text', path: 'text_' + uid(), text: String(n.text || '').slice(0, 4000), align: n.align || 'left', fill: safeHex(n.color) || '#000000', decorative: false,
           font: { family: Brand.FONTS[fam] || Brand.customFonts[fam] ? Brand.fontCss(fam) : `"${fam}", Inter, system-ui, sans-serif`, size, weight: n.weight || 400, lineHeight: r2(n.lh || 1.2), letterSpacing: Math.round((n.ls || 0) * 1000) / 1000 } };
         if (n.italic) b.font.style = 'italic'; if (n.transform) b.font.transform = n.transform; if (n.deco) b.decoration = n.deco;
+        if (Array.isArray(n.runs) && n.runs.length && typeof Rich !== 'undefined') { const runs = Rich.norm(n.runs.map(r => { const o = { text: String(r.text || '') }; if (r.weight) o.weight = +r.weight; if (r.italic) o.italic = true; if (r.underline) o.underline = true; if (r.strike) o.strike = true; if (safeHex(r.fill)) o.fill = safeHex(r.fill); if (r.size > 0) o.size = r2(r.size); if (r.link && /^https?:/.test(r.link)) o.link = String(r.link).slice(0, 500); return o; })); if (Rich.hasStyle(runs) && Rich.plain(runs) === b.text) b.runs = runs; }
         // single lines get room for font substitution, unless a stack will size them
         if (lines === 1 && !/\n/.test(b.text) && !(AUTO && n.flow)) { const extra = b.w * 0.12 + 4; if (b.align === 'center') b.x -= extra / 2; else if (b.align === 'right') b.x -= extra; b.w += extra; }
         Canvas.refit(b);

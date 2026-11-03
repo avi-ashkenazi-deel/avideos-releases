@@ -50,9 +50,29 @@ const Canvas = (() => {
 
   // ---- Text refitting ------------------------------------------------------------------------
   function sourceText(b) { return b.text != null ? String(b.text) : (b.lines ? b.lines.map(l => typeof l === 'string' ? l : l.text).join(' ') : ''); }
+  // Words with marks in them (**bold**, [links](…), <c=#hex>colors</c>) become runs; plain words clear them.
+  function setText(b, markup) {
+    if (b.kind !== 'text') { b.text = String(markup ?? ''); return refit(b); }
+    const src = String(markup ?? '').slice(0, 4000);
+    if (typeof Rich !== 'undefined') { const r = Rich.parse(src, { baseWeight: b.font && b.font.weight }); b.text = r.text; if (r.runs) b.runs = r.runs; else delete b.runs; }
+    else b.text = src;
+    return refit(b);
+  }
+  // The text as an agent or the properties panel sees it: markup when runs carry styles, else the words.
+  function richText(b) { return typeof Rich !== 'undefined' ? Rich.textOf(b) : sourceText(b); }
   function refit(b) {
     if (b.kind === 'text') {
       const f = b.font; const text = Text.transform(sourceText(b), f.transform);
+      if (typeof Rich !== 'undefined' && Rich.isRich(b)) {
+        // styled words wrap together as one paragraph, each measured in its own weight and size
+        const runs = Rich.transformed(b.runs, f.transform); let lines = Rich.wrap(runs, f, Math.max(8, b.w));
+        if (!lines) lines = (Rich.wrap(runs, f, 1e9) || []).flatMap(l => l.frags.length ? [l] : [{ text: '', frags: [] }]);
+        b.lines = lines;
+        b.h = Math.max(f.size, Math.round(lines.length * f.size * (f.lineHeight || 1.2)));
+        const ws = lines.map(l => Rich.lineWidth(l, runs, f)); b.inkW = Math.min(b.w, Math.max(0, ...ws)); b.overflow = ws.some(w => w > b.w + 1);
+        return b;
+      }
+      if (b.runs) delete b.runs; // runs that no longer match the text (or say nothing) go
       let lines = Text.wrap(text, f, Math.max(8, b.w));
       if (!lines) lines = text.split(/\s+/); // a single word wider than the box: keep it on one line per word
       b.lines = lines;
@@ -267,7 +287,7 @@ const Canvas = (() => {
     if (b.kind === 'field' || b.kind === 'rule') return { tag: 'div', bg: bg || cssColor(b.fill), radius: b.radius || 0, alpha: b.alpha, fxs, role: b.role || b.kind };
     if (b.kind === 'shape') return { tag: 'div', bg: bg || cssColor(b.fill), radius: b.shape === 'pill' ? 9999 : (b.shape === 'circle' || b.shape === 'ellipse') ? '50%' : '0 100% 0 0', fxs, role: b.shape };
     if (b.kind === 'image') { const a = env && env.assets && env.assets.images.find(i => i.id === b.asset); return { tag: 'img', src: a ? (a.name || 'image') : 'image.jpg', radius: b.radius || 0, fit: b.fit === 'contain' ? 'contain' : 'cover', fxs, role: 'image' }; }
-    if (b.kind === 'text') return { tag: /^(headline|stat|quote)$/.test(b.role) ? 'h2' : 'p', text: sourceText(b), color: cssColor(b.fill), bgText: bg, type, align: b.align || 'left', upper: f.transform === 'upper', fxs, role: b.role || 'text' };
+    if (b.kind === 'text') return { tag: /^(headline|stat|quote)$/.test(b.role) ? 'h2' : 'p', text: sourceText(b), runs: typeof Rich !== 'undefined' && Rich.isRich(b) ? b.runs : null, color: cssColor(b.fill), bgText: bg, type, align: b.align || 'left', upper: f.transform === 'upper', fxs, role: b.role || 'text' };
     if (b.kind === 'list') return { tag: b.marker === 'number' ? 'ol' : 'ul', items: b.items || [], color: cssColor(b.fill), type, indent: b.indent || 24, fxs, role: b.role || 'list' };
     if (b.kind === 'button') return { tag: 'a', text: b.text, color: cssColor(b.color), bg: bg || cssColor(b.fill), radius: b.radius || 0, type: { ...type, weight: f.weight || 600 }, fxs, role: 'cta' };
     if (b.kind === 'icon') { const g = Icons.get(b.name) || { inner: '', viewBox: '0 0 256 256' }; return { tag: 'svg', inner: g.inner.replace(/currentColor/g, cssColor(b.fill)), viewBox: g.viewBox, fxs, role: 'icon ' + b.name }; }
@@ -340,7 +360,7 @@ const Canvas = (() => {
       if (nd.tag === 'img') parts.push(`${pad}<img src="${e(nd.src)}" alt="" style="${s}">`);
       else if (nd.tag === 'svg') parts.push(`${pad}<svg viewBox="${nd.viewBox}" preserveAspectRatio="none" style="${s}">${nd.inner}</svg>`);
       else if (nd.tag === 'ul' || nd.tag === 'ol') parts.push(`${pad}<${nd.tag} style="${s}">${nd.items.map(i => `<li>${e(i)}</li>`).join('')}</${nd.tag}>`);
-      else parts.push(`${pad}<${nd.tag}${nd.tag === 'a' ? ' href="#"' : ''} style="${s}">${e(nd.text || '')}</${nd.tag}>`);
+      else parts.push(`${pad}<${nd.tag}${nd.tag === 'a' ? ' href="#"' : ''} style="${s}">${nd.runs ? Rich.toHTML(nd.runs) : e(nd.text || '')}</${nd.tag}>`);
     };
     tree.children.forEach(nd => emitNode(nd, 1));
     parts.push('</div>');
@@ -603,7 +623,7 @@ const Canvas = (() => {
     if (!find) return 0; let n = 0;
     const re = new RegExp(find.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), opts.caseSensitive ? 'g' : 'gi');
     for (const f of frames) for (const b of f.layout.blocks) {
-      if (b.kind === 'text') { const t = sourceText(b); const nt = t.replace(re, () => { n++; return repl; }); if (nt !== t) { b.text = nt; refit(b); } }
+      if (b.kind === 'text') { const t = sourceText(b); const nt = t.replace(re, () => { n++; return repl; }); if (nt !== t) { if (typeof Rich !== 'undefined' && Rich.isRich(b)) { const c = { n: 0 }; b.runs = Rich.replace(b.runs, re, repl, c); b.text = Rich.plain(b.runs); } else b.text = nt; refit(b); } }
       else if (b.kind === 'button') { const nt = String(b.text || '').replace(re, () => { n++; return repl; }); if (nt !== b.text) { b.text = nt; refit(b); } }
       else if (b.kind === 'list') { const items = (b.items || []).map(i => String(i).replace(re, () => { n++; return repl; })); if (items.join('\n') !== (b.items || []).join('\n')) { b.items = items; refit(b); } }
     }
@@ -675,5 +695,5 @@ const Canvas = (() => {
     };
   }
 
-  return { create, addFrame, blankFrame, migrate, defaultAuto, frameById, blockById, refit, sourceText, newBlock, moveBlock, resizeBlock, reorder, duplicateBlock, removeBlocks, transferBlocks, pasteBlocks, customFormat, align, distribute, bounds, applyAutoLayout, isBackground, serialize, deserialize, toLink, fromHash, toHTML, toReact, codeTree, codeNodes, recolor, extractContent, scaleFrame, clusters, mainCluster, applyFrameTokens, tokenizeFrame, applyTokens, group, ungroup, groupMembers, tidy, compact, penD, penFit, maskShape, maskedBy, replaceText, setFonts, pasteFrames, framesBounds, cssGradient, cropRect, cropFrom, cropZoom, setCropZoom, adjustOf, adjustActive, adjustCss, ADJUST_DEFAULT, history, snap, uid, clone };
+  return { create, addFrame, blankFrame, migrate, defaultAuto, frameById, blockById, refit, sourceText, newBlock, moveBlock, resizeBlock, reorder, duplicateBlock, removeBlocks, transferBlocks, pasteBlocks, customFormat, align, distribute, bounds, applyAutoLayout, isBackground, serialize, deserialize, toLink, fromHash, toHTML, toReact, codeTree, codeNodes, recolor, extractContent, scaleFrame, clusters, mainCluster, applyFrameTokens, tokenizeFrame, applyTokens, group, ungroup, groupMembers, tidy, compact, penD, penFit, maskShape, maskedBy, replaceText, setFonts, pasteFrames, framesBounds, cssGradient, setText, richText, cropRect, cropFrom, cropZoom, setCropZoom, adjustOf, adjustActive, adjustCss, ADJUST_DEFAULT, history, snap, uid, clone };
 })();

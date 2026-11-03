@@ -828,3 +828,10 @@ input[disabled] { opacity: .5; cursor: not-allowed; }
 .cv-ta[data-aiprompt] { width: 100%; resize: vertical; }
 .cv-ta { width: 100%; background: var(--bg); border: 1px solid var(--line-2); border-radius: 4px; color: var(--fg); font: inherit; font-size: 12px; padding: 6px 8px; margin: 6px 0; }
 .cv-f.cv-range input[type=range] { border: 0; background: transparent; padding: 0; height: 22px; }
+
+/* the text editor's formatting bar */
+.cv-richbar { position: absolute; z-index: 7; display: flex; align-items: center; gap: 2px; padding: 3px 4px; background: var(--panel, #1b1b22); border: 1px solid var(--line-2); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.25); font-size: 12px; }
+.cv-richbar button { width: 24px; height: 24px; border: 0; border-radius: 5px; background: transparent; color: var(--fg); cursor: pointer; font: inherit; display: grid; place-items: center; }
+.cv-richbar button:hover { background: var(--bg-2, rgba(127,127,127,.15)); }
+.cv-richbar .sw { width: 16px; height: 16px; border-radius: 50%; margin: 0 2px; border: 1px solid rgba(127,127,127,.4); }
+.cv-richbar .sep { width: 1px; height: 16px; background: var(--line-2); margin: 0 4px; }
