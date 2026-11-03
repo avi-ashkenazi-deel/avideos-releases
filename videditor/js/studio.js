@@ -390,7 +390,7 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
   const variantSel = h('select.text', { style: { width: 'auto', maxWidth: '220px' }, title: 'Which composition you are looking at. A variant is a separate copy you can take in another direction.' });
   let renderVariants = async function () {
     let data; try { data = await api.variants(project.id); } catch { return; }
-    variantSel.replaceChildren(...data.variants.map((v) => h('option', { value: v.entry, selected: v.entry === data.active }, v.entry === 'index.html' ? (v.title ? `Main: ${v.title}` : 'Main composition') : `Variant: ${v.title || v.name}`)), h('option', { value: '__new' }, '+ New variant from this one…'), h('option', { value: '__rename' }, '✎ Rename this composition…'), data.active !== 'index.html' ? h('option', { value: '__delete' }, '✕ Delete this variant') : null);
+    variantSel.replaceChildren(...data.variants.map((v) => h('option', { value: v.entry, selected: v.entry === data.active }, v.entry === 'index.html' ? `${v.title || 'Main'} (main)` : (v.title || v.name))), h('option', { value: '__new' }, '+ New variant from this one…'), h('option', { value: '__rename' }, '✎ Rename this composition…'), data.active !== 'index.html' ? h('option', { value: '__delete' }, '✕ Delete this variant') : null);
   }
   variantSel.addEventListener('change', async () => {
     const v = variantSel.value;
@@ -403,7 +403,7 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
     await renderVariants(); await reloadComp();
   });
   async function renameComposition() {
-    const cur = ([...variantSel.options].find((o) => o.value === activeEntry())?.textContent || '').replace(/^(Main|Variant): /, '').replace(/^Main composition$/, '');
+    const cur = ([...variantSel.options].find((o) => o.value === activeEntry())?.textContent || '').replace(/ \(main\)$/, '').replace(/^Main$/, '');
     const name = h('input.text', { value: cur, placeholder: 'e.g. Vertical cut, Teaser 15s' });
     if (!(await modal('Rename composition', h('div', h('p.muted', 'The name shows in the picker, in render notes and in the browser tab. The file name does not change.'), name), { actions: [{ label: 'Rename', cls: 'primary', value: true }] }))) return;
     const n = name.value.trim(); if (!n) return;
