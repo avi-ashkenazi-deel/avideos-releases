@@ -390,17 +390,26 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
   const variantSel = h('select.text', { style: { width: 'auto', maxWidth: '220px' }, title: 'Which composition you are looking at. A variant is a separate copy you can take in another direction.' });
   let renderVariants = async function () {
     let data; try { data = await api.variants(project.id); } catch { return; }
-    variantSel.replaceChildren(...data.variants.map((v) => h('option', { value: v.entry, selected: v.entry === data.active }, v.entry === 'index.html' ? 'Main composition' : `Variant: ${v.title || v.name}`)), h('option', { value: '__new' }, '+ New variant from this one…'), data.active !== 'index.html' ? h('option', { value: '__delete' }, '✕ Delete this variant') : null);
+    variantSel.replaceChildren(...data.variants.map((v) => h('option', { value: v.entry, selected: v.entry === data.active }, v.entry === 'index.html' ? (v.title ? `Main: ${v.title}` : 'Main composition') : `Variant: ${v.title || v.name}`)), h('option', { value: '__new' }, '+ New variant from this one…'), h('option', { value: '__rename' }, '✎ Rename this composition…'), data.active !== 'index.html' ? h('option', { value: '__delete' }, '✕ Delete this variant') : null);
   }
   variantSel.addEventListener('change', async () => {
     const v = variantSel.value;
     try {
       if (v === '__new') { const name = h('input.text', { placeholder: 'e.g. warm cut, vertical, shorter' }); if (await modal('New variant', h('div', h('p.muted', 'A copy of the current composition you can change independently. The original stays as it is. You can also just tell the agent: "make another version that is …".'), name), { actions: [{ label: 'Create', cls: 'primary', value: true }] })) { const r = await api.createVariant(project.id, name.value.trim() || 'variant', activeEntry()); project.composition = r.active; toast(`Variant created: ${r.active}`, 'ok'); } }
+      else if (v === '__rename') { await renameComposition(); }
       else if (v === '__delete') { if (await modal('Delete this variant?', h('p.muted', `${activeEntry()} is removed. The main composition is kept.`), { actions: [{ label: 'Delete', cls: 'danger', value: true }] })) { const r = await api.deleteVariant(project.id, activeEntry()); project.composition = r.active === 'index.html' ? null : r.active; } }
       else { const r = await api.activateVariant(project.id, v); project.composition = r.active === 'index.html' ? null : r.active; }
     } catch (e) { toast(e.message, 'err'); }
     await renderVariants(); await reloadComp();
   });
+  async function renameComposition() {
+    const cur = ([...variantSel.options].find((o) => o.value === activeEntry())?.textContent || '').replace(/^(Main|Variant): /, '').replace(/^Main composition$/, '');
+    const name = h('input.text', { value: cur, placeholder: 'e.g. Vertical cut, Teaser 15s' });
+    if (!(await modal('Rename composition', h('div', h('p.muted', 'The name shows in the picker, in render notes and in the browser tab. The file name does not change.'), name), { actions: [{ label: 'Rename', cls: 'primary', value: true }] }))) return;
+    const n = name.value.trim(); if (!n) return;
+    await api.renameVariant(project.id, activeEntry(), n); toast(`Renamed to ${n}`, 'ok');
+  }
+  const variantRenBtn = btn('', { icon: 'pen', cls: 'ghost icon sm', title: 'Rename this composition', onClick: async () => { try { await renameComposition(); await renderVariants(); } catch (e) { toast(e.message, 'err'); } } });
   const variantDelBtn = btn('', { icon: 'trash', cls: 'ghost icon sm hidden', title: 'Delete this variant (the main composition is kept)', onClick: async () => { variantSel.value = '__delete'; variantSel.dispatchEvent(new Event('change')); } });
   const _rv = renderVariants; renderVariants = async () => { await _rv(); variantDelBtn.classList.toggle('hidden', activeEntry() === 'index.html'); };
   renderVariants();
@@ -576,7 +585,7 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
   // ---------- top bar + layout
   topbar([
     btn('', { icon: 'back', cls: 'ghost icon', title: 'All videos', onClick: () => navigate('#/') }),
-    h('span.title', project.name), h('span.pill', svg('spark'), 'Studio'), variantSel, variantDelBtn,
+    h('span.title', project.name), h('span.pill', svg('spark'), 'Studio'), variantSel, variantRenBtn, variantDelBtn,
     h('span.spacer'),
     project.versions.length ? btn('Review', { icon: 'chat', title: 'Review the latest render', onClick: () => navigate(`#/p/${project.id}`) }) : null,
     btn('', { icon: 'trash', cls: 'ghost icon', title: 'Delete project', onClick: async () => { if (await confirmDeleteProject(api, project)) navigate('#/'); } }),

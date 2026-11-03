@@ -104,6 +104,17 @@ export function listVariants(dir) {
   if (fs.existsSync(vd)) for (const f of fs.readdirSync(vd).filter((f) => /\.html?$/i.test(f)).sort()) out.push({ entry: `variants/${f}`, name: f.replace(/\.html?$/i, '').replace(/[-_]+/g, ' ') });
   return out.map((v) => { let title = null; try { const m = /<title>([^<]*)<\/title>/i.exec(fs.readFileSync(path.join(dir, v.entry), 'utf8')); title = m ? m[1].trim() : null; } catch {} return { ...v, title }; });
 }
+// Rename a composition: the name lives in its <title> (added if missing). The main composition can be named too.
+export function renameVariant(dir, entry, name) {
+  const abs = safePath(dir, entry); if (!abs || !fs.existsSync(abs)) return null;
+  const clean = String(name || '').replace(/[<>]/g, '').trim().slice(0, 80); if (!clean) return null;
+  let html = fs.readFileSync(abs, 'utf8');
+  if (/<title>[^<]*<\/title>/i.test(html)) html = html.replace(/<title>[^<]*<\/title>/i, `<title>${clean}</title>`);
+  else if (/<head[^>]*>/i.test(html)) html = html.replace(/<head[^>]*>/i, (m) => `${m}\n  <title>${clean}</title>`);
+  else html = `<title>${clean}</title>\n` + html;
+  fs.writeFileSync(abs, html);
+  return clean;
+}
 export function createVariant(dir, name, from = 'index.html') {
   const src = safePath(dir, from); if (!src || !fs.existsSync(src)) return null;
   const slug = String(name || 'variant').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'variant';

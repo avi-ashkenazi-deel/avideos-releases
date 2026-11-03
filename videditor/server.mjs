@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Store } from './lib/store.mjs';
-import { detectProject, parseProject, clipsAt, describeClip, listFiles, updateClip, updateRoot, createProject, safePath, resolveSrc, readBrand, writeBrand, insertClipHtml, listVariants, createVariant, snapshot, listHistory, restoreSnapshot } from './lib/composition.mjs';
+import { detectProject, parseProject, clipsAt, describeClip, listFiles, updateClip, updateRoot, createProject, safePath, resolveSrc, readBrand, writeBrand, insertClipHtml, listVariants, createVariant, renameVariant, snapshot, listHistory, restoreSnapshot } from './lib/composition.mjs';
 import { scanMedia, analyzeFile, writeManifest, loadManifest, analysisDirFor, kindOf, ANALYSIS_VERSION } from './lib/analyze.mjs';
 import { hasFfmpeg, probe, poster, frameAt, listEncoders } from './lib/media.mjs';
 import { availableFormats, DEFAULT_FORMAT } from './lib/formats.mjs';
@@ -412,6 +412,7 @@ async function api(req, res, url) {
     if (req.method === 'GET') return send(res, 200, { active: entryOf(prj), variants: listVariants(prj.dir) });
     if (req.method === 'POST') {
       const b = await readJson(req);
+      if (b.rename !== undefined) { const entry = b.entry || entryOf(prj); const name = renameVariant(prj.dir, entry, b.rename); if (!name) return err(res, 400, 'Could not rename (give a name)'); return send(res, 200, { active: entryOf(prj), variants: listVariants(prj.dir), name }); }
       if (b.activate) { if (!safePath(prj.dir, b.activate) || !fs.existsSync(safePath(prj.dir, b.activate))) return err(res, 404, 'No such composition'); store.updateProject(prj.id, { composition: b.activate === 'index.html' ? null : b.activate }); return send(res, 200, { active: entryOf(store.project(prj.id)), variants: listVariants(prj.dir) }); }
       const entry = createVariant(prj.dir, b.name || 'variant', b.from || entryOf(prj)); if (!entry) return err(res, 400, 'Could not create the variant');
       store.updateProject(prj.id, { composition: entry });

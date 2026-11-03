@@ -26,6 +26,7 @@ export const api = {
   brand: (id) => req('GET', `/api/projects/${id}/brand`),
   variants: (id) => req('GET', `/api/projects/${id}/variants`),
   createVariant: (id, name, from) => req('POST', `/api/projects/${id}/variants`, { name, from }),
+  renameVariant: (id, entry, name) => req('POST', `/api/projects/${id}/variants`, { entry, rename: name }),
   activateVariant: (id, entry) => req('POST', `/api/projects/${id}/variants`, { activate: entry }),
   deleteVariant: (id, entry) => req('DELETE', `/api/projects/${id}/variants?entry=${encodeURIComponent(entry)}`),
   history: (id, all) => req('GET', `/api/projects/${id}/history${all ? '?all=1' : ''}`),
