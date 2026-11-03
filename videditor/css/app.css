@@ -294,6 +294,7 @@ label.field > span { display: block; font-size: 12px; color: var(--fg-1); margin
 .tl .phead::before { content: ''; position: absolute; top: 0; left: -5px; border: 5px solid transparent; border-top: 7px solid #fff; }
 .tl .hint-tl { position: absolute; right: 10px; bottom: 6px; font-size: 11px; color: var(--fg-2); background: var(--bg-1); padding: 2px 6px; border-radius: 4px; z-index: 4; }
 .studio .side { border-left: 1px solid var(--line); background: var(--bg-1); display: flex; flex-direction: column; min-height: 0; }
+.studio .side .body { flex: 1; overflow: auto; min-height: 0; overscroll-behavior: contain; }
 .layers { padding: 8px; display: grid; gap: 2px; }
 .layer { display: flex; gap: 8px; align-items: center; padding: 6px 8px; border-radius: 6px; cursor: pointer; font-size: 12.5px; color: var(--fg-1); }
 .layer:hover { background: var(--bg-2); color: var(--fg); }

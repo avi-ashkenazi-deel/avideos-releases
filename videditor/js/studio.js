@@ -250,7 +250,7 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
       const a = it.analysis; const src = it.rel;
       const thumb = a?.sheet || a?.frames?.[0]?.file;
       const beat = a?.audio && a.audio.confidence >= 0.15 ? a.audio : null;
-      const meta = a ? [a.duration ? fmtTime(a.duration) : null, a.width ? `${a.width}×${a.height}` : null, a.scenes ? `${a.scenes} cuts` : null, beat ? `${beat.bpm} BPM` : (a.audio ? 'no clear beat' : null)].filter(Boolean).join(' · ') : (it.analyzed ? '' : 'analyzing…');
+      const meta = a ? [a.duration ? fmtTime(a.duration) : null, a.width && it.kind !== 'audio' ? `${a.width}×${a.height}` : null, a.scenes ? `${a.scenes} cuts` : null, beat ? `${beat.bpm} BPM` : (a.audio ? 'no clear beat' : null)].filter(Boolean).join(' · ') : (it.analyzed ? '' : 'analyzing…');
       list.append(h('div.version-row', { style: { cursor: 'default' } },
         thumb ? h('img', { src: `/project-files/${project.id}/${thumb}`, style: { width: '96px', cursor: 'zoom-in' }, on: { click: () => modal(src, h('img.zoom', { src: `/project-files/${project.id}/${thumb}` }), { wide: true }) } }) : h('div.noimg', { style: { width: '96px', display: 'grid', placeItems: 'center', color: 'var(--fg-2)', fontSize: '11px' } }, it.kind),
         h('div.vb', h('div.l', h('span.mono.small', { style: { overflow: 'hidden', textOverflow: 'ellipsis' } }, src)), h('div.n', meta || ' '),
