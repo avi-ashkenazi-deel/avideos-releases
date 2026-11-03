@@ -38,6 +38,8 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
   const playBtn = btn('', { icon: 'play', cls: 'icon', title: 'Play / pause (space)', onClick: () => stage.toggle() });
   const renderBtn = btn('Render', { icon: 'render', cls: 'primary', title: 'Render now (choose format, size, range)', onClick: renderNow });
   const autoRenderCb = h('input', { type: 'checkbox', checked: project.autoRender !== false, on: { change: async (e) => { try { project = await api.updateProject(project.id, { autoRender: e.target.checked }); toast(e.target.checked ? 'Auto-render on: every agent edit renders in the background' : 'Auto-render off', 'ok'); } catch (err) { toast(err.message, 'err'); } } } });
+  const revealCb = h('input', { type: 'checkbox', checked: project.revealOnRender !== false, on: { change: async (e) => { try { project = await api.updateProject(project.id, { revealOnRender: e.target.checked }); toast(e.target.checked ? 'Finished renders open in Finder' : 'Finder stays closed after renders', 'ok'); } catch (err) { toast(err.message, 'err'); } } } });
+  const revealLbl = h('label.autosend', { title: 'When a render finishes, open Finder with the file selected' }, revealCb, 'show in Finder');
   const autoRenderLbl = h('label.autosend', { title: 'After the agent changes the composition, render it in the background (render.json outputs if present, else your last render settings)' }, autoRenderCb, 'auto-render');
   // Background render status: a pill in the transport instead of a blocking dialog.
   const renderPill = h('button.btn.sm.renderpill.hidden', { title: 'Rendering in the background. Click for the log.' }, svg('render'), h('span.rp-text', 'Rendering…'), h('span.rp-bar', h('i')));
@@ -72,7 +74,7 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
   const zoomFitBtn = btn('Fit', { cls: 'ghost sm', title: 'Fit the whole video (0)', onClick: () => setZoom(1) });
   const transport = h('div.transport', playBtn, btn('', { icon: 'stepBack', cls: 'icon ghost', title: 'Back one frame (←)', onClick: () => step(-1) }), btn('', { icon: 'stepFwd', cls: 'icon ghost', title: 'Forward one frame (→)', onClick: () => step(1) }), timeEl,
     h('span.sep'), toolBtn('pen', 'pen', 'Draw on the preview (D)'), colors, btn('', { icon: 'undo', cls: 'icon sm ghost', title: 'Undo stroke (Z)', onClick: () => noteLayer.undo() }), recBtn, runBtn, sendNoteBtn, autoSend,
-    h('span.spacer'), zoomOutBtn, zoomFitBtn, zoomInBtn, btn('Reload', { cls: 'ghost sm', title: 'Reload the composition from disk', onClick: () => reloadComp() }), renderPill, autoRenderLbl, renderBtn);
+    h('span.spacer'), zoomOutBtn, zoomFitBtn, zoomInBtn, btn('Reload', { cls: 'ghost sm', title: 'Reload the composition from disk', onClick: () => reloadComp() }), renderPill, autoRenderLbl, revealLbl, renderBtn);
   noteLayer.onChange = (strokes) => { if (strokes.length && N.anchor === null) N.anchor = strokes[0].points[0][2]; sendNoteBtn.classList.toggle('hidden', !strokes.length || !!N.recording); };
 
   let recorder = null;

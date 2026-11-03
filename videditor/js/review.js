@@ -307,6 +307,7 @@ export async function renderReview(root, { projectId, versionId, navigate, topba
     h('span.spacer'),
     project.versions.length > 1 ? btn('Compare', { icon: 'compare', onClick: () => navigate(`#/p/${project.id}/compare?a=${project.versions[Math.max(0, project.versions.findIndex((v) => v.id === version.id) - 1)].id}&b=${version.id}`) }) : null,
     version.mediaUrl ? downloadLink(project, version) : null,
+    btn('Show in Finder', { icon: 'folder', title: 'Open Finder with this render selected', onClick: async () => { try { const r = await api.revealVersion(version.id); toast(r.ok ? 'Opened in Finder' : `Saved at ${r.path}`, r.ok ? 'ok' : ''); } catch (e) { toast(e.message, 'err'); } } }),
     btn('Copy link', { icon: 'link', onClick: async () => { await copyText(location.href); toast('Link copied', 'ok'); } }),
     btn('Copy prompt', { icon: 'copy', cls: project.dir ? '' : 'primary', title: 'Brief for any agent with all open feedback', onClick: copyPrompt }),
     project.dir ? btn('Send to agent', { icon: 'spark', cls: 'primary', title: 'Hand all open notes on this version to the Studio agent and watch it edit', onClick: sendToAgent }) : null,

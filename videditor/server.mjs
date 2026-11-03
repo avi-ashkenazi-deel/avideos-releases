@@ -14,6 +14,7 @@ import { availableFormats, DEFAULT_FORMAT } from './lib/formats.mjs';
 import { buildPrompt } from './lib/prompt.mjs';
 import { renderProject, loadPlaywright, captureFrame } from './lib/render.mjs';
 import { ensureProxy, proxyReason, isVideoFile } from './lib/proxy.mjs';
+import { revealFile } from './lib/reveal.mjs';
 import { runAgent, AGENTS, systemPrompt, diagnoseClaude } from './lib/agent.mjs';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
@@ -90,7 +91,7 @@ function projectView(p) {
   const versions = store.versions(p.id).map(versionView);
   const latest = versions[versions.length - 1] || null;
   const last = store.feedback({ projectId: p.id }).slice(-1)[0] || null;
-  return { ...p, versions, latest, stats: store.stats(p.id), lastActivity: last ? { at: last.createdAt, author: last.author, body: (last.body || last.transcript || '').slice(0, 80) } : null, project: p.dir ? detectProject(p.dir) : null, autoRender: p.autoRender !== false, composition: p.dir ? entryOf(p) : null, variants: p.dir && fs.existsSync(p.dir) ? listVariants(p.dir).length : 0, chat: p.chat || [], lastChat: (p.chat || []).slice(-1)[0] || null, agentRunning: agents.has(p.id) };
+  return { ...p, versions, latest, stats: store.stats(p.id), lastActivity: last ? { at: last.createdAt, author: last.author, body: (last.body || last.transcript || '').slice(0, 80) } : null, project: p.dir ? detectProject(p.dir) : null, revealOnRender: p.revealOnRender !== false, autoRender: p.autoRender !== false, composition: p.dir ? entryOf(p) : null, variants: p.dir && fs.existsSync(p.dir) ? listVariants(p.dir).length : 0, chat: p.chat || [], lastChat: (p.chat || []).slice(-1)[0] || null, agentRunning: agents.has(p.id) };
 }
 
 function registerVersion(project, srcFile, { notes = '', source = 'upload', postedByAgent = false, originalName = null, move = false, label = null, ...extra } = {}) {
@@ -131,6 +132,7 @@ function trackRender(prj, job, source) {
   const l = (e) => { if (e !== null) return; job.listeners.delete(l); if (renderJobs.get(prj.id) === job) renderJobs.delete(prj.id);
     const p = store.project(prj.id); if (!p) return;
     const vs = store.versions(p.id); const made = job.batch ? job.batch.filter((x) => typeof x === 'string' && x.startsWith('ver_')).map((id) => vs.find((v) => v.id === id)?.label).filter(Boolean) : (job.versionId ? [vs.find((v) => v.id === job.versionId)?.label].filter(Boolean) : []);
+    if (job.ok && p.revealOnRender !== false) { const ids = job.batch ? job.batch.filter((x) => typeof x === 'string' && x.startsWith('ver_')) : (job.versionId ? [job.versionId] : []); const v = ids.length ? vs.find((x) => x.id === ids[ids.length - 1]) : null; revealFile(v ? (v.renderPath && fs.existsSync(v.renderPath) ? v.renderPath : v.filePath) : job.folder); }
     p.chat = p.chat || []; p.chat.push({ role: 'agent', system: true, text: job.ok ? `✅ ${source === 'auto' ? 'Auto-rendered' : 'Rendered'} ${made.length ? made.join(', ') : (job.folder ? 'PNG sequence' : 'nothing new')}${(() => { const w = job.lines.filter((x) => x.type === 'log' && x.text.startsWith('⚠')); return w.length ? ` · ⚠ ${w.map((x) => x.text.slice(2, 120)).join(' · ')}` : ''; })()}` : `⚠️ ${source === 'auto' ? 'Auto-render' : 'Render'} failed: ${(job.lines.filter((x) => x.type === 'log').slice(-1)[0]?.text || 'see the log').slice(0, 200)}`, at: new Date().toISOString(), renderJobId: job.id, versionId: job.versionId || null }); store.save();
   };
   job.listeners.add(l);
@@ -167,7 +169,7 @@ async function renderItem(prj, job, { quality = 'looks', fps, notes, scale = 1, 
   const r = await renderProject({ pageUrl: pageUrlFor(prj.id, useEntry), dir: prj.dir, assetsDir: prj.assetsDir || null, out, quality, scale, fps: fps ? Number(fps) : undefined, format: fmt, crf: crf !== undefined && crf !== null && crf !== '' ? Number(crf) : undefined, maxBitrate: maxBitrate ? Number(maxBitrate) : undefined, audio: audio !== false && audio !== 'false', alpha: !!alpha, range: range && (range.start !== undefined || range.end !== undefined) ? range : null, onLog: (text) => job.push({ type: 'log', text }), onProgress: (p) => job.push({ type: 'progress', ...p, item: name || label || null }) });
   if (r.folder) { job.push({ type: 'log', text: `PNG sequence written to ${out}` }); return { folder: out }; }
   const where = [useEntry !== 'index.html' ? `Variant: ${useEntry}` : null, r.range ? `Range: ${r.range.start}–${r.range.end}s` : null].filter(Boolean).join('\n');
-  const v = registerVersion(prj, out, { notes: notes || `${name ? name + '\n' : ''}Rendered from Studio: ${r.label}, ${r.width}×${r.height}, ${r.frames} frames @ ${r.fps} fps${where ? '\n' + where : ''}`, source: 'render', originalName: path.basename(out), label: name || label ? `v${n} ${[name, label].filter(Boolean).join(' ')}` : null, format: fmt, formatLabel: r.label, alpha: !!alpha, entry: useEntry, range: r.range });
+  const v = registerVersion(prj, out, { notes: notes || `${name ? name + '\n' : ''}Rendered from Studio: ${r.label}, ${r.width}×${r.height}, ${r.frames} frames @ ${r.fps} fps${where ? '\n' + where : ''}`, source: 'render', originalName: path.basename(out), label: name || label ? `v${n} ${[name, label].filter(Boolean).join(' ')}` : null, renderPath: out, format: fmt, formatLabel: r.label, alpha: !!alpha, entry: useEntry, range: r.range });
   job.push({ type: 'log', text: `registered ${v.label}` }); notifyWaiters();
   return { versionId: v.id, version: v };
 }
@@ -303,6 +305,7 @@ async function api(req, res, url) {
       if (b.tags) patch.tags = b.tags;
       if (b.agent && AGENTS[b.agent] && b.agent !== prj.agent) { patch.agent = b.agent; patch.agentSessionId = null; }
       if ('autoRender' in b) patch.autoRender = !!b.autoRender;
+      if ('revealOnRender' in b) patch.revealOnRender = !!b.revealOnRender;
       if ('dir' in b) { if (b.dir) { const d = detectProject(b.dir); if (!d.ok) return err(res, 400, d.reason); patch.dir = d.dir; } else patch.dir = null; }
       if ('assetsDir' in b) { if (b.assetsDir) { const a = cleanDir(b.assetsDir); if (!fs.existsSync(a) || !fs.statSync(a).isDirectory()) return err(res, 400, `Folder does not exist: ${a}`); patch.assetsDir = a; } else patch.assetsDir = null; }
       const out = store.updateProject(prj.id, patch);
@@ -583,6 +586,7 @@ async function api(req, res, url) {
     if (!buf) return err(res, 500, 'Could not extract frame');
     return send(res, 200, buf, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'public, max-age=3600' });
   }
+  if ((x = m(/^\/api\/versions\/([^/]+)\/reveal$/)) && req.method === 'POST') { const v = store.version(x[1]); if (!v) return err(res, 404, 'Version not found'); const f = v.renderPath && fs.existsSync(v.renderPath) ? v.renderPath : v.filePath; return send(res, 200, { ok: revealFile(f), path: f }); }
   if ((x = m(/^\/api\/versions\/([^/]+)\/download$/))) { const v = store.version(x[1]); if (!v) return err(res, 404, 'Version not found'); return serveFile(req, res, v.filePath, { download: true }); }
 
   if (p === '/api/feedback' && req.method === 'GET') return send(res, 200, store.feedback({ projectId: q.projectId, versionId: q.versionId, since: q.since, status: q.status }));
