@@ -31,7 +31,7 @@ function hasAudioStream(file) {
  * renderProject({ pageUrl, dir, out, fps, quality, onProgress, onLog })
  * pageUrl: the composition served with the runtime injected (…/index.html?runtime=1&render=1)
  */
-export async function renderProject({ pageUrl, dir, assetsDir = null, out, fps: fpsOpt, quality = 'looks', scale = 1, format = DEFAULT_FORMAT, crf, maxBitrate, audio = true, alpha = false, onProgress, onLog }) {
+export async function renderProject({ pageUrl, dir, assetsDir = null, out, fps: fpsOpt, quality = 'looks', scale = 1, format = DEFAULT_FORMAT, crf, maxBitrate, audio = true, alpha = false, range = null, onProgress, onLog }) {
   const log = (m) => onLog?.(m);
   const pw = loadPlaywright();
   if (!pw) throw new Error('Playwright is not installed. Run: npm install   (inside the videditor folder)');
@@ -54,14 +54,19 @@ export async function renderProject({ pageUrl, dir, assetsDir = null, out, fps: 
     let fps = fpsOpt || info.fps || 30; if (format === 'gif') fps = Math.min(fps, 15);
     const width = info.width, height = info.height;
     await page.setViewportSize({ width, height });
-    const frames = Math.max(1, Math.round(info.duration * fps));
-    log(`composition ${info.id}: ${width}×${height}${scale !== 1 ? ` × ${scale} = ${Math.round(width * scale)}×${Math.round(height * scale)}` : ''}, ${info.duration}s @ ${fps}fps → ${frames} frames`);
+    // Optional range: render only [start, end) of the timeline.
+    const r0 = range && Number.isFinite(Number(range.start)) ? Math.max(0, Number(range.start)) : 0;
+    const r1 = range && Number.isFinite(Number(range.end)) ? Math.min(info.duration, Number(range.end)) : info.duration;
+    if (r1 <= r0) throw new Error(`Empty range ${r0}–${r1}s`);
+    const outDur = r1 - r0;
+    const frames = Math.max(1, Math.round(outDur * fps));
+    log(`composition ${info.id}: ${width}×${height}${scale !== 1 ? ` × ${scale} = ${Math.round(width * scale)}×${Math.round(height * scale)}` : ''}, ${r0 || r1 !== info.duration ? `${r0}–${r1}s of ${info.duration}s` : `${info.duration}s`} @ ${fps}fps → ${frames} frames`);
     log(`format: ${enc.format.label}${enc.crf !== null ? ` · crf ${enc.crf}` : ''}${enc.alpha ? ' · transparent' : ''}${audio && enc.format.acodec ? '' : ' · no audio'}`);
     if (format === 'png-seq') {
       // PNG sequence: frames straight to a folder, no ffmpeg.
       fs.mkdirSync(out, { recursive: true });
       const t0 = Date.now();
-      for (let i = 0; i < frames; i++) { await page.evaluate((tt) => window.__videditor.seekAndSettle(tt), i / fps); const shot = await page.screenshot({ type: 'png', clip: { x: 0, y: 0, width, height }, omitBackground: enc.alpha, caret: 'hide' }); fs.writeFileSync(path.join(out, `frame-${String(i + 1).padStart(5, '0')}.png`), shot); if (i % Math.max(1, Math.round(fps / 2)) === 0 || i === frames - 1) onProgress?.({ frame: i + 1, frames, t: i / fps, elapsed: (Date.now() - t0) / 1000 }); }
+      for (let i = 0; i < frames; i++) { await page.evaluate((tt) => window.__videditor.seekAndSettle(tt), r0 + i / fps); const shot = await page.screenshot({ type: 'png', clip: { x: 0, y: 0, width, height }, omitBackground: enc.alpha, caret: 'hide' }); fs.writeFileSync(path.join(out, `frame-${String(i + 1).padStart(5, '0')}.png`), shot); if (i % Math.max(1, Math.round(fps / 2)) === 0 || i === frames - 1) onProgress?.({ frame: i + 1, frames, t: i / fps, elapsed: (Date.now() - t0) / 1000 }); }
       log(`done in ${((Date.now() - t0) / 1000).toFixed(1)}s → ${frames} PNGs in ${out}`);
       return { out, frames, fps, width: Math.round(width * scale), height: Math.round(height * scale), duration: info.duration, format, folder: true };
     }
@@ -80,12 +85,12 @@ export async function renderProject({ pageUrl, dir, assetsDir = null, out, fps: 
     if (vfilters.length) filters.push(`[0:v]${vfilters.join(',')}[vout]`);
     if (wantAudio) {
       audioClips.forEach((a, i) => { const dur = a.duration ?? (info.duration - a.start); const ms = Math.round(a.start * 1000); filters.push(`[${i + 1}:a]atrim=start=${a.mediaStart || 0}:duration=${dur},asetpts=PTS-STARTPTS,volume=${a.volume ?? 1},adelay=${ms}|${ms}[a${i}]`); });
-      filters.push(`${audioClips.map((_, i) => `[a${i}]`).join('')}amix=inputs=${audioClips.length}:normalize=0:duration=longest,apad=whole_dur=${info.duration}[aout]`);
+      filters.push(`${audioClips.map((_, i) => `[a${i}]`).join('')}amix=inputs=${audioClips.length}:normalize=0:duration=longest,apad=whole_dur=${info.duration}${r0 || r1 !== info.duration ? `,atrim=start=${r0}:end=${r1},asetpts=PTS-STARTPTS` : ''}[aout]`);
     }
     if (filters.length) args.push('-filter_complex', filters.join(';'));
     args.push('-map', vfilters.length ? '[vout]' : '0:v');
     if (wantAudio) args.push('-map', '[aout]', ...enc.audioArgs); else args.push('-an');
-    args.push(...enc.args, '-t', String(info.duration), out);
+    args.push(...enc.args, '-t', String(outDur), out);
     fs.mkdirSync(path.dirname(out), { recursive: true });
     log(`audio tracks: ${wantAudio ? audioClips.map((a) => path.basename(a.file)).join(', ') : audioClips.length ? 'muted' : 'none'}`);
     ffmpeg = spawn('ffmpeg', args);
@@ -97,7 +102,7 @@ export async function renderProject({ pageUrl, dir, assetsDir = null, out, fps: 
     const type = quality === 'high' || enc.alpha || format === 'gif' || format === 'mov-prores' ? 'png' : 'jpeg';
     const t0 = Date.now();
     for (let i = 0; i < frames; i++) {
-      const t = i / fps;
+      const t = r0 + i / fps;
       await page.evaluate((tt) => window.__videditor.seekAndSettle(tt), t);
       const shot = await page.screenshot({ type, ...(type === 'jpeg' ? { quality: 95 } : {}), clip: { x: 0, y: 0, width, height }, omitBackground: enc.alpha, caret: 'hide' });
       await write(shot);
@@ -106,7 +111,7 @@ export async function renderProject({ pageUrl, dir, assetsDir = null, out, fps: 
     ffmpeg.stdin.end();
     await ffDone;
     log(`done in ${((Date.now() - t0) / 1000).toFixed(1)}s → ${out}`);
-    return { out, frames, fps, width: Math.round(width * scale), height: Math.round(height * scale), duration: info.duration, format, label: enc.format.label };
+    return { out, frames, fps, width: Math.round(width * scale), height: Math.round(height * scale), duration: outDur, range: r0 || r1 !== info.duration ? { start: r0, end: r1 } : null, format, label: enc.format.label };
   } finally {
     try { ffmpeg?.stdin?.destroy(); } catch {}
     await browser.close().catch(() => {});

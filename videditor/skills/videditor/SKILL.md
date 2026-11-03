@@ -44,6 +44,19 @@ A video is a folder. `index.html` is the video. Videditor plays it in the browse
 - Brand: `brand.json` → `brand.css` exposes `--brand-primary`, `--brand-background`, `--brand-text`, `--brand-muted`, `--brand-accent`, `--brand-font`, `--brand-logo`. Link `brand.css` and use the variables instead of hard-coded colors so the person can rebrand without editing the composition.
 - Nested scenes: a clip with `data-composition-id="x" data-composition-src="compositions/x.html" data-start data-duration` plays another composition file inside it (same format, transparent body, same size). Use them for reusable scenes or long videos.
 
+## Several videos from one project
+- "Make me 4 one-minute videos" → make four **variants** (`variants/<name>.html`, each its own composition with `data-duration="60"`), then write `render.json` listing them so one click renders all:
+  ```json
+  { "outputs": [
+    { "name": "intro",   "entry": "variants/intro.html",   "format": "mp4-h264", "scale": 1 },
+    { "name": "feature", "entry": "variants/feature.html", "format": "mp4-h264", "scale": 1 }
+  ] }
+  ```
+- A long timeline can also be cut into several files without copying anything: outputs with `start` / `end` (seconds) render that range of the given entry, audio trimmed to match:
+  `{ "name": "teaser-1", "entry": "index.html", "start": 0, "end": 60 }`.
+- Allowed keys per output: `name`, `entry`, `start`, `end`, `format` (mp4-h264, mp4-hevc, mp4-av1, webm-av1, webm-vp9, mov-prores, gif, png-seq), `scale`, `quality` (draft|looks|high), `crf`, `fps`, `alpha`, `audio`, `notes`.
+- Tell the person: "Press Render → Outputs from render.json". You do not render.
+
 ## Variants and history
 - "Make another version / an alternative / a vertical one" means a **variant**: copy the active composition to `variants/<short-name>.html` (keep the original untouched), change it there, and say which file you made. A variant one folder down references `../assets/…`, `../brand.css`, `../dugma-motion.css`. Videditor lists variants in Studio and the person switches between them.
 - Every edit is snapshotted under `.history/` (restorable from Studio → History). Never write into `.history/`.

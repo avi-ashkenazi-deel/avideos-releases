@@ -22,6 +22,7 @@ export function systemPrompt({ dir, composition, files, assetsDir = null, entry 
     `## This project`,
     `Folder: ${dir}`,
     `Active composition file: ${entry}${variants.length > 1 ? ` (others in this project: ${variants.filter((v) => v !== entry).join(', ')})` : ''}. Edit this file unless the person asks for a new variant.`,
+    (() => { try { return `render.json (current outputs): ${fs.readFileSync(path.join(dir, 'render.json'), 'utf8').slice(0, 1500)}`; } catch { return ''; } })(),
     composition ? `Composition "${composition.id}": ${composition.width}×${composition.height}, ${composition.duration ?? '?'}s, ${composition.fps || 30} fps, ${composition.clips.length} clips:\n${clips}` : 'No composition parsed yet.',
     files?.length ? `Files: ${files.slice(0, 80).map((f) => f.path).join(', ')}` : '',
     assetsDir ? `Linked asset folder (use as library/<name> in src): ${assetsDir}` : '',

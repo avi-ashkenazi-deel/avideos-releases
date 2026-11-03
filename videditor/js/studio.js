@@ -101,7 +101,14 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
 
   // ---------- timeline
   const ruler = h('div.ruler'); const tracksEl = h('div.tracks'); const phead = h('div.phead');
+  // In / out points (I / O keys): a range for rendering, shown on the ruler.
+  const IO = { in: null, out: null };
+  const ioEl = h('div.iorange.hidden');
+  const setIO = (k, v) => { IO[k] = v; if (IO.in !== null && IO.out !== null && IO.out <= IO.in) { if (k === 'in') IO.out = null; else IO.in = null; } drawIO(); };
+  const clearIO = () => { IO.in = IO.out = null; drawIO(); toast('In/out points cleared', 'ok'); };
+  function drawIO() { const dur = stage.duration || composition?.duration || 5; const pps = pxPerSec(); const a = IO.in ?? 0, b = IO.out ?? dur; const on = IO.in !== null || IO.out !== null; ioEl.classList.toggle('hidden', !on); if (on) { ioEl.style.left = `${a * pps}px`; ioEl.style.width = `${Math.max(2, (b - a) * pps)}px`; ioEl.title = `Render range ${fmtTime(a)} – ${fmtTime(b)} (I / O to set, Shift+I to clear)`; } }
   const tlInner = h('div.tlinner', ruler, tracksEl, phead);
+  ruler.append(ioEl);
   const tlScroll = h('div.tlscroll', tlInner);
   const tlGrip = h('div.tlgrip', { title: 'Drag to resize the timeline' });
   const tl = h('div.tl', tlGrip, tlScroll, h('span.hint-tl', 'drag = move · drag edge = trim · ⌘/Ctrl + wheel = zoom'));
@@ -128,7 +135,7 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
     if (dragState) return;
     const dur = stage.duration || composition?.duration || 5; const pps = pxPerSec();
     tlInner.style.width = `${PAD + dur * pps + 16}px`;
-    ruler.replaceChildren(); const secPx = pps; const stepS = secPx > 400 ? 0.1 : secPx > 160 ? 0.25 : secPx > 70 ? 0.5 : secPx > 30 ? 1 : secPx > 12 ? 2 : secPx > 6 ? 5 : 10;
+    ruler.replaceChildren(ioEl); drawIO(); const secPx = pps; const stepS = secPx > 400 ? 0.1 : secPx > 160 ? 0.25 : secPx > 70 ? 0.5 : secPx > 30 ? 1 : secPx > 12 ? 2 : secPx > 6 ? 5 : 10;
     for (let i = 0, t = 0; t <= dur + 1e-6; i++, t = Math.round(i * stepS * 1000) / 1000) ruler.append(h('div.tick', { style: { left: `${t * pps}px` } }, Math.abs(t - Math.round(t)) < 1e-6 ? `${Math.round(t)}s` : (stepS < 1 && secPx > 160 ? `${t.toFixed(stepS < 0.25 ? 1 : 2).replace(/0+$/, '').replace(/\.$/, '')}` : '')));
     if (beatGrid) for (const bt of beatGrid.beats) { if (bt > dur) break; ruler.append(h('div.beat', { style: { left: `${bt * pps}px` }, title: `beat ${fmtTime(bt)} · ${beatGrid.bpm} BPM` })); }
     const clips = (composition?.clips || []).filter((c) => c.start !== null && c.depth === 0);
@@ -411,15 +418,27 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
     const alphaRow = h('label', { style: { display: 'flex', gap: '8px', alignItems: 'center' } }, alphaCb, h('span', 'Transparent background (drops the page background; the stage keeps its own)'));
     const crfRow = h('div.irow', h('span', 'CRF'), h('div', { style: { display: 'flex', gap: '8px', alignItems: 'center' } }, crf, h('span.small.muted', 'auto from quality')));
     const notes = h('textarea.text', { rows: 2, placeholder: 'What changed in this version?' });
+    let plan = { outputs: [], exists: false }; try { plan = await api.renderPlan(project.id); } catch {}
+    let vlist = []; try { vlist = (await api.variants(project.id)).variants; } catch {}
+    const hasIO = IO.in !== null || IO.out !== null; const dur = stage.duration || 0;
+    const what = h('select.text', { style: { width: '100%' } },
+      h('option', { value: 'current' }, `This composition (${activeEntry() === 'index.html' ? 'main' : activeEntry()}), whole`),
+      hasIO ? h('option', { value: 'range', selected: true }, `In → out: ${fmtTime(IO.in ?? 0)} – ${fmtTime(IO.out ?? dur)}`) : null,
+      vlist.length > 1 ? h('option', { value: 'variants' }, `All ${vlist.length} compositions (main + variants), one file each`) : null,
+      plan.outputs.length ? h('option', { value: 'plan' }, `Outputs from render.json (${plan.outputs.length}): ${plan.outputs.map((o) => o.name).join(', ').slice(0, 80)}`) : null);
+    const planNote = plan.outputs.length ? h('p.hint', 'render.json outputs carry their own entry, range and format; the choices below are ignored for them.') : h('p.hint', 'Tip: ask the agent "make me 4 one-minute videos" and it writes a render.json with one output each; or set I / O points on the timeline to render a part.');
     const sync = () => { const f = fmts[format.value] || {}; note.textContent = f.note || ''; alphaRow.style.display = f.alpha ? 'flex' : 'none'; crfRow.style.display = f.crf ? 'grid' : 'none'; const auto = f.crf ? f.crf[quality.value] : null; crfRow.querySelector('.small').textContent = auto !== null ? `auto ${auto} for ${quality.options[quality.selectedIndex].text.toLowerCase()}` : ''; };
     format.addEventListener('change', sync); quality.addEventListener('change', sync); sync();
     const adv = h('details', { open: !!(saved.crf || saved.maxBitrate || saved.fps || saved.audio === false || saved.alpha) }, h('summary', { style: { cursor: 'pointer', color: 'var(--fg-1)', fontSize: '12.5px' } }, 'Advanced'),
       h('div.inspector', { style: { border: 0, padding: '8px 0 0' } }, crfRow, h('div.irow', h('span', 'Max bitrate'), h('div', { style: { display: 'flex', gap: '8px', alignItems: 'center' } }, maxBitrate, h('span.small.muted', 'Mbps'))), h('div.irow', h('span', 'Frame rate'), h('div', { style: { display: 'flex', gap: '8px', alignItems: 'center' } }, fpsIn, h('span.small.muted', 'fps'))), h('div.irow', h('span', 'Audio'), h('label', { style: { display: 'flex', gap: '8px', alignItems: 'center' } }, audioCb, h('span', 'include the composition\'s audio'))), h('div.irow', h('span', 'Alpha'), alphaRow)));
-    const ok = await modal(`Render v${project.versions.length + 1}`, h('div', h('label.field', h('span', 'Format'), format, note), h('div', { style: { display: 'flex', gap: '12px' } }, h('label.field', { style: { flex: 1 } }, h('span', 'Size'), preset), h('label.field', { style: { flex: 1 } }, h('span', 'Quality'), quality)), adv, h('label.field', { style: { marginTop: '10px' } }, h('span', 'Version notes'), notes)), { actions: [{ label: 'Render all sizes', cls: 'ghost', value: 'all' }, { label: 'Render', cls: 'primary', icon: 'render', value: true }] });
+    const ok = await modal(`Render v${project.versions.length + 1}`, h('div', h('label.field', h('span', 'What'), what, planNote), h('label.field', h('span', 'Format'), format, note), h('div', { style: { display: 'flex', gap: '12px' } }, h('label.field', { style: { flex: 1 } }, h('span', 'Size'), preset), h('label.field', { style: { flex: 1 } }, h('span', 'Quality'), quality)), adv, h('label.field', { style: { marginTop: '10px' } }, h('span', 'Version notes'), notes)), { actions: [{ label: 'Render all sizes', cls: 'ghost', value: 'all' }, { label: 'Render', cls: 'primary', icon: 'render', value: true }] });
     if (!ok) return;
     const opts = { format: format.value, quality: quality.value, crf: crf.value ? Number(crf.value) : undefined, maxBitrate: maxBitrate.value ? Number(maxBitrate.value) : undefined, fps: fpsIn.value ? Number(fpsIn.value) : undefined, audio: audioCb.checked, alpha: alphaCb.checked && !!fmts[format.value]?.alpha, notes: notes.value.trim() };
+    if (what.value === 'range') opts.range = { start: IO.in ?? 0, end: IO.out ?? dur };
+    if (what.value === 'variants') opts.mode = 'variants';
+    if (what.value === 'plan') opts.mode = 'plan';
     localStorage.setItem('videditor.renderOpts', JSON.stringify({ format: opts.format, quality: opts.quality, crf: crf.value, maxBitrate: maxBitrate.value, fps: fpsIn.value, audio: opts.audio, alpha: opts.alpha, scale: preset.value }));
-    const scales = ok === 'all' ? PRESETS.filter(([v]) => v !== '1' || PRESETS.length === 1).map(([v, l]) => ({ scale: Number(v), label: l.split(' ')[0] })) : [{ scale: Number(preset.value), label: null }];
+    const scales = ok === 'all' && !opts.mode ? PRESETS.filter(([v]) => v !== '1' || PRESETS.length === 1).map(([v, l]) => ({ scale: Number(v), label: l.split(' ')[0] })) : [{ scale: Number(preset.value), label: null }];
     for (const [i, sc] of scales.entries()) await renderOne({ ...opts, scale: sc.scale, label: scales.length > 1 ? sc.label : null, last: i === scales.length - 1 });
   }
   async function renderOne({ quality, notes, scale, label, last, ...rest }) {
@@ -431,8 +450,9 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
         try {
           const { jobId } = await api.render(project.id, { quality, notes, scale, label, ...rest });
           const es = new EventSource(`/api/jobs/${jobId}/events`);
-          es.onmessage = (e) => { const d = JSON.parse(e.data); if (d.type === 'progress') { bar.firstChild.style.width = `${(d.frame / d.frames) * 100}%`; status.textContent = `Frame ${d.frame} / ${d.frames} · ${d.elapsed.toFixed(0)}s`; } else { log.textContent += (d.text || '') + '\n'; log.scrollTop = log.scrollHeight; } };
-          es.addEventListener('done', async (e) => { es.close(); const d = JSON.parse(e.data); bg.remove(); if (d.ok && d.folder) { await modal('PNG sequence ready', h('div', h('p', 'The frames are in:'), h('pre.log', d.folder))); } else if (d.ok) { project = await api.project(project.id); toast(`Rendered v${project.versions.length}`, 'ok'); if (last && await modal('Render finished', h('p', `v${project.versions.length} is ready. Open it in Review to leave notes, or keep editing.`), { actions: [{ label: 'Keep editing', cls: 'ghost', value: 'stay' }, { label: 'Open in Review', cls: 'primary', value: 'review' }] }) === 'review') navigate(`#/p/${project.id}?v=${d.versionId}`); } else await modal('Render failed', h('pre.log', log.textContent)); resolve(); });
+          let batchTag = '';
+          es.onmessage = (e) => { const d = JSON.parse(e.data); if (d.type === 'batch') { batchTag = `${d.index}/${d.total}${d.name ? ' · ' + d.name : ''} · `; } else if (d.type === 'progress') { bar.firstChild.style.width = `${(d.frame / d.frames) * 100}%`; status.textContent = `${batchTag}Frame ${d.frame} / ${d.frames} · ${d.elapsed.toFixed(0)}s`; } else { log.textContent += (d.text || '') + '\n'; log.scrollTop = log.scrollHeight; } };
+          es.addEventListener('done', async (e) => { es.close(); const d = JSON.parse(e.data); bg.remove(); if (d.ok && d.folder) { await modal('PNG sequence ready', h('div', h('p', 'The frames are in:'), h('pre.log', d.folder))); } else if (d.ok && d.batch) { project = await api.project(project.id); toast(`Rendered ${d.batch.length} file${d.batch.length > 1 ? 's' : ''}`, 'ok'); if (await modal('Batch finished', h('p', `${d.batch.length} outputs are in Versions. Review them, or keep editing.`), { actions: [{ label: 'Keep editing', cls: 'ghost', value: 'stay' }, { label: 'Open Review', cls: 'primary', value: 'review' }] }) === 'review') navigate(`#/p/${project.id}`); } else if (d.ok) { project = await api.project(project.id); toast(`Rendered v${project.versions.length}`, 'ok'); if (last && await modal('Render finished', h('p', `v${project.versions.length} is ready. Open it in Review to leave notes, or keep editing.`), { actions: [{ label: 'Keep editing', cls: 'ghost', value: 'stay' }, { label: 'Open in Review', cls: 'primary', value: 'review' }] }) === 'review') navigate(`#/p/${project.id}?v=${d.versionId}`); } else await modal('Render failed', h('pre.log', log.textContent)); resolve(); });
           es.onerror = () => { es.close(); bg.remove(); toast('Lost connection to the render', 'err'); resolve(); };
         } catch (e) { bg.remove(); toast(e.message, 'err'); resolve(); }
       })();
@@ -453,8 +473,8 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
   if (!Array.isArray(project.chat)) project.chat = [];
   renderChat(project.chat);
   const key = (e) => { if (e.target.matches('input, textarea, select') || e.metaKey || e.ctrlKey) return; const k = e.key.toLowerCase();
-    if (e.key === '?' || (e.key === '/' && e.shiftKey)) return shortcutsSheet('Studio shortcuts', [['Space', 'Play / pause'], ['← →', 'One frame back / forward'], ['Shift+← →', 'One second'], ['Home', 'Go to start'], ['D', 'Draw on the preview'], ['A', 'Arrow tool'], ['R', 'Talk: start / stop a voice note (goes to the agent)'], ['Z', 'Undo last stroke'], ['Esc', 'Deselect / stop drawing'], ['+ −', 'Zoom timeline'], ['0', 'Fit timeline'], ['⌘ wheel', 'Zoom timeline around the cursor'], ['Enter', 'Send to the agent (in the chat box)'], ['Shift+Enter', 'New line in the chat box'], ['Enter', 'Confirm a dialog'], ['?', 'This sheet']]);
-    if (k === 'c') { e.preventDefault(); ta.focus(); return; } if (k === 'd') return setNoteTool(N.tool === 'pen' ? null : 'pen'); if (k === 'r') return toggleNoteRecord(); if (k === 'z') return noteLayer.undo(); if (k === '+' || k === '=') return setZoom(zoom * 1.5); if (k === '-') return setZoom(zoom / 1.5); if (k === '0') return setZoom(1); if (e.code === 'Space') { e.preventDefault(); stage.toggle(); } else if (e.key === 'ArrowLeft') { e.preventDefault(); e.shiftKey ? stage.seek(Math.max(0, stage.time - 1)) : step(-1); } else if (e.key === 'ArrowRight') { e.preventDefault(); e.shiftKey ? stage.seek(Math.min(stage.duration, stage.time + 1)) : step(1); } else if (e.key === 'Home') stage.seek(0); else if (e.key === 'Escape') selectClip(null); };
+    if (e.key === '?' || (e.key === '/' && e.shiftKey)) return shortcutsSheet('Studio shortcuts', [['Space', 'Play / pause'], ['← →', 'One frame back / forward'], ['Shift+← →', 'One second'], ['Home', 'Go to start'], ['D', 'Draw on the preview'], ['A', 'Arrow tool'], ['R', 'Talk: start / stop a voice note (goes to the agent)'], ['Z', 'Undo last stroke'], ['Esc', 'Deselect / stop drawing'], ['I / O', 'Set in / out point (render range)'], ['Shift+I', 'Clear in / out'], ['+ −', 'Zoom timeline'], ['0', 'Fit timeline'], ['⌘ wheel', 'Zoom timeline around the cursor'], ['Enter', 'Send to the agent (in the chat box)'], ['Shift+Enter', 'New line in the chat box'], ['Enter', 'Confirm a dialog'], ['?', 'This sheet']]);
+    if (k === 'c') { e.preventDefault(); ta.focus(); return; } if (k === 'd') return setNoteTool(N.tool === 'pen' ? null : 'pen'); if (k === 'r') return toggleNoteRecord(); if (k === 'i' && e.shiftKey) return clearIO(); if (k === 'i') { setIO('in', Math.round(stage.time * 100) / 100); return toast(`In point ${fmtTime(IO.in)}`, 'ok'); } if (k === 'o') { setIO('out', Math.round(stage.time * 100) / 100); return toast(`Out point ${fmtTime(IO.out)}`, 'ok'); } if (k === 'z') return noteLayer.undo(); if (k === '+' || k === '=') return setZoom(zoom * 1.5); if (k === '-') return setZoom(zoom / 1.5); if (k === '0') return setZoom(1); if (e.code === 'Space') { e.preventDefault(); stage.toggle(); } else if (e.key === 'ArrowLeft') { e.preventDefault(); e.shiftKey ? stage.seek(Math.max(0, stage.time - 1)) : step(-1); } else if (e.key === 'ArrowRight') { e.preventDefault(); e.shiftKey ? stage.seek(Math.min(stage.duration, stage.time + 1)) : step(1); } else if (e.key === 'Home') stage.seek(0); else if (e.key === 'Escape') selectClip(null); };
   document.addEventListener('keydown', key);
   new ResizeObserver(() => { renderTimeline(); }).observe(tlScroll);
   await stage.load(src());

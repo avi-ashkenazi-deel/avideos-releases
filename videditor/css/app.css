@@ -342,3 +342,4 @@ label.field > span { display: block; font-size: 12px; color: var(--fg-1); margin
 .stage-wrap .live-transcript mark { background: rgba(255,209,102,.3); color: var(--fg); border-radius: 3px; padding: 0 2px; }
 .tl .trow.sub { border-top: 1px dashed var(--line); margin-top: -1px; }
 .tl .trow.sub .tname { color: var(--line-2); }
+.tl .ruler .iorange { position: absolute; top: 2px; height: 18px; background: rgba(124,196,255,.18); border-left: 2px solid var(--accent-2); border-right: 2px solid var(--accent-2); pointer-events: none; }

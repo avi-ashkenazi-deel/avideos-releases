@@ -58,6 +58,9 @@ subscription. No accounts, no credits.
 - Quality draft / normal / high maps to a per-codec CRF; **Advanced** exposes CRF, a bitrate cap (Mbps),
   frame rate, audio on/off and transparent background.
 - Size: composition, 720p, 1080p or 4K (supersampled, text stays crisp), or **Render all sizes**.
+- **What**: the whole composition, an in/out range (I / O on the timeline), all variants in one queue, or the
+  outputs listed in `render.json`. Ask the agent "make me 4 one-minute videos" and it creates four variants
+  plus a `render.json`; one click renders all four. A long timeline can be cut into files with `start`/`end`.
   Each render becomes a version in Review (ProRes and GIF show a download instead of a player).
 
 **Review** (`#/p/<project>`)

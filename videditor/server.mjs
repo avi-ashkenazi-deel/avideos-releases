@@ -114,20 +114,46 @@ function newJob(kind) {
 const entryOf = (prj) => (prj?.composition && safePath(prj.dir, prj.composition) && fs.existsSync(safePath(prj.dir, prj.composition)) ? prj.composition : 'index.html');
 const pageUrlFor = (projectId, entry = 'index.html') => `http://127.0.0.1:${PORT}/project-files/${projectId}/${entry}?runtime=1&render=1`;
 const ENCODERS = FFMPEG ? listEncoders() : [];
-function startRender(prj, { quality = 'looks', fps, notes, scale = 1, label = null, format = DEFAULT_FORMAT, crf, maxBitrate, audio = true, alpha = false } = {}) {
+// One render item: the active composition (or a given entry), optionally a time range, in a format/size.
+async function renderItem(prj, job, { quality = 'looks', fps, notes, scale = 1, label = null, format = DEFAULT_FORMAT, crf, maxBitrate, audio = true, alpha = false, entry = null, range = null, name = null } = {}) {
   const fmts = availableFormats(ENCODERS); const fmt = fmts[format]?.available ? format : DEFAULT_FORMAT;
+  const useEntry = entry && safePath(prj.dir, entry) && fs.existsSync(safePath(prj.dir, entry)) ? entry : entryOf(prj);
   const n = store.versions(prj.id).length + 1;
-  const rel = `renders/v${n}${label ? '-' + String(label).replace(/[^\w-]+/g, '') : ''}${fmt === 'png-seq' ? '-frames' : fmts[fmt].ext}`; const out = path.join(prj.dir, rel);
+  const slug = (v) => String(v || '').replace(/[^\w-]+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
+  const tag = [name ? slug(name) : null, label ? slug(label) : null].filter(Boolean).join('-');
+  const rel = `renders/v${n}${tag ? '-' + tag : ''}${fmt === 'png-seq' ? '-frames' : fmts[fmt].ext}`; const out = path.join(prj.dir, rel);
+  const r = await renderProject({ pageUrl: pageUrlFor(prj.id, useEntry), dir: prj.dir, assetsDir: prj.assetsDir || null, out, quality, scale, fps: fps ? Number(fps) : undefined, format: fmt, crf: crf !== undefined && crf !== null && crf !== '' ? Number(crf) : undefined, maxBitrate: maxBitrate ? Number(maxBitrate) : undefined, audio: audio !== false && audio !== 'false', alpha: !!alpha, range: range && (range.start !== undefined || range.end !== undefined) ? range : null, onLog: (text) => job.push({ type: 'log', text }), onProgress: (p) => job.push({ type: 'progress', ...p, item: name || label || null }) });
+  if (r.folder) { job.push({ type: 'log', text: `PNG sequence written to ${out}` }); return { folder: out }; }
+  const where = [useEntry !== 'index.html' ? `Variant: ${useEntry}` : null, r.range ? `Range: ${r.range.start}–${r.range.end}s` : null].filter(Boolean).join('\n');
+  const v = registerVersion(prj, out, { notes: notes || `${name ? name + '\n' : ''}Rendered from Studio: ${r.label}, ${r.width}×${r.height}, ${r.frames} frames @ ${r.fps} fps${where ? '\n' + where : ''}`, source: 'render', originalName: path.basename(out), label: name || label ? `v${n} ${[name, label].filter(Boolean).join(' ')}` : null, format: fmt, formatLabel: r.label, alpha: !!alpha, entry: useEntry, range: r.range });
+  job.push({ type: 'log', text: `registered ${v.label}` }); notifyWaiters();
+  return { versionId: v.id, version: v };
+}
+function startRender(prj, opts = {}) {
   const job = newJob('render');
   (async () => {
-    try {
-      const r = await renderProject({ pageUrl: pageUrlFor(prj.id, entryOf(prj)), dir: prj.dir, assetsDir: prj.assetsDir || null, out, quality, scale, fps: fps ? Number(fps) : undefined, format: fmt, crf: crf !== undefined && crf !== null && crf !== '' ? Number(crf) : undefined, maxBitrate: maxBitrate ? Number(maxBitrate) : undefined, audio: audio !== false && audio !== 'false', alpha: !!alpha, onLog: (text) => job.push({ type: 'log', text }), onProgress: (p) => job.push({ type: 'progress', ...p }) });
-      if (r.folder) { job.push({ type: 'log', text: `PNG sequence written to ${out}` }); return job.finish(true, { folder: out }); }
-      const v = registerVersion(prj, out, { notes: notes || `Rendered from Studio: ${r.label}, ${r.width}×${r.height}, ${r.frames} frames @ ${r.fps} fps${entryOf(prj) !== 'index.html' ? `\nVariant: ${entryOf(prj)}` : ''}`, source: 'render', originalName: path.basename(out), label: label ? `v${n} ${label}` : null, format: fmt, formatLabel: r.label, alpha: !!alpha });
-      job.push({ type: 'log', text: `registered ${v.label}` }); notifyWaiters(); job.finish(true, { versionId: v.id });
-    } catch (e) { job.push({ type: 'log', text: `failed: ${e.message}` }); job.finish(false); }
+    try { const r = await renderItem(prj, job, opts); job.finish(true, r.folder ? { folder: r.folder } : { versionId: r.versionId }); }
+    catch (e) { job.push({ type: 'log', text: `failed: ${e.message}` }); job.finish(false); }
   })();
-  return { job, out: rel };
+  return { job, out: null };
+}
+/** A queue of render items (several variants, several ranges, several formats) in one job. */
+function startBatch(prj, items) {
+  const job = newJob('render');
+  (async () => {
+    const done = [];
+    for (const [i, it] of items.entries()) {
+      job.push({ type: 'log', text: `— ${i + 1}/${items.length}: ${it.name || it.label || it.entry || 'render'}` });
+      job.push({ type: 'batch', index: i + 1, total: items.length, name: it.name || it.label || it.entry || null });
+      try { const r = await renderItem(prj, job, it); done.push(r.versionId || r.folder); } catch (e) { job.push({ type: 'log', text: `failed: ${e.message}` }); }
+    }
+    job.finish(done.length === items.length, { versionId: done.filter((d) => typeof d === 'string' && d.startsWith('ver_')).slice(-1)[0] || null, batch: done });
+  })();
+  return { job };
+}
+/** render.json in the project: outputs the agent (or you) defined. */
+function readRenderPlan(prj) {
+  try { const j = JSON.parse(fs.readFileSync(path.join(prj.dir, 'render.json'), 'utf8')); const outs = Array.isArray(j) ? j : j.outputs || []; return outs.filter((o) => o && typeof o === 'object').map((o, i) => ({ name: o.name || `output ${i + 1}`, entry: o.entry || o.file || null, range: o.start !== undefined || o.end !== undefined ? { start: o.start ?? 0, end: o.end } : (o.range || null), format: o.format || DEFAULT_FORMAT, scale: o.scale || 1, quality: o.quality || 'looks', crf: o.crf, fps: o.fps, alpha: !!o.alpha, audio: o.audio !== false, notes: o.notes || '' })); } catch { return []; }
 }
 // ---------- asset library: scan project assets/ + linked folder, analyze new files, watch for drops
 function listAssets(prj) {
@@ -280,8 +306,17 @@ async function api(req, res, url) {
     if (!loadPlaywright()) return err(res, 501, 'Rendering needs Playwright: run `npm install` inside the videditor folder (it uses your installed Chrome).');
     if (!FFMPEG) return err(res, 501, 'Rendering needs ffmpeg on PATH');
     const b = await readJson(req);
-    const { job, out } = startRender(prj, b);
-    return send(res, 202, { jobId: job.id, output: out });
+    let items = null;
+    if (b.mode === 'plan') { items = readRenderPlan(prj); if (!items.length) return err(res, 400, 'No outputs in render.json'); items = items.map((it) => ({ ...it, format: b.format && !it.formatExplicit ? it.format : it.format })); }
+    else if (b.mode === 'variants') items = listVariants(prj.dir).map((v) => ({ ...b, entry: v.entry, name: v.entry === 'index.html' ? 'main' : (v.title || v.name) }));
+    else if (Array.isArray(b.items)) items = b.items;
+    if (items) { const { job } = startBatch(prj, items); return send(res, 202, { jobId: job.id, count: items.length }); }
+    const { job } = startRender(prj, b);
+    return send(res, 202, { jobId: job.id });
+  }
+  if ((x = m(/^\/api\/projects\/([^/]+)\/render-plan$/))) {
+    const prj = store.project(x[1]); if (!prj?.dir) return err(res, 404, 'Project not found');
+    return send(res, 200, { outputs: readRenderPlan(prj), exists: fs.existsSync(path.join(prj.dir, 'render.json')) });
   }
   if ((x = m(/^\/api\/projects\/([^/]+)\/clips\/([^/]+)$/)) && req.method === 'PATCH') {
     const prj = store.project(x[1]); if (!prj?.dir) return err(res, 404, 'Project not found');
@@ -441,7 +476,7 @@ async function api(req, res, url) {
   if ((x = m(/^\/api\/jobs\/([^/]+)\/events$/))) {
     const job = jobs.get(x[1]); if (!job) return err(res, 404, 'Job not found');
     res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive', 'Access-Control-Allow-Origin': '*' });
-    const write = (line) => { if (line === null) { res.write(`event: done\ndata: ${JSON.stringify({ ok: job.ok, versionId: job.versionId, result: job.result, cost: job.cost, folder: job.folder || null })}\n\n`); res.end(); } else res.write(`data: ${JSON.stringify(line)}\n\n`); };
+    const write = (line) => { if (line === null) { res.write(`event: done\ndata: ${JSON.stringify({ ok: job.ok, versionId: job.versionId, result: job.result, cost: job.cost, folder: job.folder || null, batch: job.batch || null })}\n\n`); res.end(); } else res.write(`data: ${JSON.stringify(line)}\n\n`); };
     for (const l of job.lines) write(l);
     if (job.done) return write(null);
     job.listeners.add(write); req.on('close', () => job.listeners.delete(write));
