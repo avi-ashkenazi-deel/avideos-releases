@@ -36,7 +36,29 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
   const activeEntry = () => project.composition || 'index.html';
   const timeEl = h('span.time');
   const playBtn = btn('', { icon: 'play', cls: 'icon', title: 'Play / pause (space)', onClick: () => stage.toggle() });
-  const renderBtn = btn('Render', { icon: 'render', cls: 'primary', title: 'Render to MP4 and add it as a version for review', onClick: renderNow });
+  const renderBtn = btn('Render', { icon: 'render', cls: 'primary', title: 'Render now (choose format, size, range)', onClick: renderNow });
+  const autoRenderCb = h('input', { type: 'checkbox', checked: project.autoRender !== false, on: { change: async (e) => { try { project = await api.updateProject(project.id, { autoRender: e.target.checked }); toast(e.target.checked ? 'Auto-render on: every agent edit renders in the background' : 'Auto-render off', 'ok'); } catch (err) { toast(err.message, 'err'); } } } });
+  const autoRenderLbl = h('label.autosend', { title: 'After the agent changes the composition, render it in the background (render.json outputs if present, else your last render settings)' }, autoRenderCb, 'auto-render');
+  // Background render status: a pill in the transport instead of a blocking dialog.
+  const renderPill = h('button.btn.sm.renderpill.hidden', { title: 'Rendering in the background. Click for the log.' }, svg('render'), h('span.rp-text', 'Rendering…'), h('span.rp-bar', h('i')));
+  let renderLog = ''; let renderLogEl = null;
+  renderPill.addEventListener('click', () => { renderLogEl = h('pre.log', { style: { maxHeight: '50vh' } }, renderLog); modal('Render log', renderLogEl, { wide: true }).then(() => { renderLogEl = null; }); });
+  const followingRenders = new Set();
+  function followRender(jobId, { quiet = false } = {}) {
+    if (!jobId || followingRenders.has(jobId)) return; followingRenders.add(jobId);
+    renderPill.classList.remove('hidden'); renderLog = ''; let batchTag = '';
+    const es = new EventSource(`/api/jobs/${jobId}/events`);
+    const setText = (t) => { renderPill.querySelector('.rp-text').textContent = t; };
+    es.onmessage = (e) => { const d = JSON.parse(e.data); if (d.type === 'batch') batchTag = `${d.index}/${d.total} `; else if (d.type === 'progress') { renderPill.querySelector('.rp-bar i').style.width = `${(d.frame / d.frames) * 100}%`; setText(`${batchTag}${Math.round((d.frame / d.frames) * 100)}%`); } else { renderLog += (d.text || '') + '\n'; if (renderLogEl) renderLogEl.textContent = renderLog; } };
+    es.addEventListener('done', async (e) => {
+      es.close(); followingRenders.delete(jobId); renderPill.classList.add('hidden'); renderPill.querySelector('.rp-bar i').style.width = '0';
+      const d = JSON.parse(e.data); project = await api.project(project.id); if (!Array.isArray(project.chat)) project.chat = []; renderChat(project.chat); renderVariants();
+      if (d.ok && d.folder) { toast('PNG sequence ready', 'ok'); if (!quiet) modal('PNG sequence ready', h('div', h('p', 'The frames are in:'), h('pre.log', d.folder))); }
+      else if (d.ok) { const n = d.batch ? d.batch.length : 1; const t = h('div.toast.ok', { style: { cursor: 'pointer' } }, `${n > 1 ? `${n} files` : `v${project.versions.length}`} ready · click to review`); t.addEventListener('click', () => navigate(d.versionId ? `#/p/${project.id}?v=${d.versionId}` : `#/p/${project.id}`)); document.getElementById('toasts').append(t); setTimeout(() => t.remove(), 8000); }
+      else { toast('Render failed', 'err'); modal('Render failed', h('pre.log', renderLog)); }
+    });
+    es.onerror = () => { es.close(); followingRenders.delete(jobId); renderPill.classList.add('hidden'); };
+  }
   const toolBtns = {};
   const setNoteTool = (t) => { N.tool = t; noteLayer.tool = t || 'pen'; noteLayer.setEnabled(!!t); for (const [k, b] of Object.entries(toolBtns)) b.classList.toggle('active', k === t); };
   const toolBtn = (name, ic, title) => (toolBtns[name] = btn('', { icon: ic, cls: 'icon sm', title, onClick: () => setNoteTool(N.tool === name ? null : name) }));
@@ -49,7 +71,7 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
   const zoomFitBtn = btn('Fit', { cls: 'ghost sm', title: 'Fit the whole video (0)', onClick: () => setZoom(1) });
   const transport = h('div.transport', playBtn, btn('', { icon: 'stepBack', cls: 'icon ghost', title: 'Back one frame (←)', onClick: () => step(-1) }), btn('', { icon: 'stepFwd', cls: 'icon ghost', title: 'Forward one frame (→)', onClick: () => step(1) }), timeEl,
     h('span.sep'), toolBtn('pen', 'pen', 'Draw on the preview (D)'), toolBtn('arrow', 'arrow', 'Arrow'), toolBtn('rect', 'rect', 'Box'), toolBtn('ellipse', 'ellipse', 'Circle'), colors, btn('', { icon: 'undo', cls: 'icon sm ghost', title: 'Undo stroke (Z)', onClick: () => noteLayer.undo() }), recBtn, sendNoteBtn, autoSend,
-    h('span.spacer'), zoomOutBtn, zoomFitBtn, zoomInBtn, btn('Reload', { cls: 'ghost sm', title: 'Reload the composition from disk', onClick: () => reloadComp() }), renderBtn);
+    h('span.spacer'), zoomOutBtn, zoomFitBtn, zoomInBtn, btn('Reload', { cls: 'ghost sm', title: 'Reload the composition from disk', onClick: () => reloadComp() }), renderPill, autoRenderLbl, renderBtn);
   noteLayer.onChange = (strokes) => { if (strokes.length && N.anchor === null) N.anchor = strokes[0].points[0][2]; sendNoteBtn.classList.toggle('hidden', !strokes.length || !!N.recording); };
 
   let recorder = null;
@@ -346,6 +368,7 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
   function msgEl(m) {
     const el = h('div.msg', { class: `msg ${m.role}` }, h('div.who', avatar(m.role === 'agent' ? 'Agent' : (m.author || getAuthor() || 'You'), m.role === 'agent'), m.role === 'agent' ? 'Agent' : (m.author || getAuthor() || 'You'), h('span.muted', relTime(m.at))));
     if (m.tools?.length) el.append(h('div.tools', m.tools.map((t) => h('span.t', { title: `${t.name} ${t.detail || ''}` }, h('b', t.name), t.detail ? ` ${t.detail}` : ''))));
+    if (m.system) { el.replaceChildren(h('div.sysline', m.text, m.versionId ? h('a', { href: `#/p/${project.id}?v=${m.versionId}`, style: { marginLeft: '6px' } }, 'Review ↗') : null)); return el; }
     if (m.text) el.append(h('div.bubble', m.text));
     if (m.error) el.append(h('div.bubble.err', { style: { fontFamily: 'var(--mono)', fontSize: '12px' } }, m.error, h('div', { style: { marginTop: '6px', display: 'flex', gap: '4px', flexWrap: 'wrap' } }, btn('Copy error', { cls: 'sm ghost', icon: 'copy', onClick: async () => { await copyText(m.error); toast('Copied', 'ok'); } }), btn('Run diagnostics', { cls: 'sm ghost', onClick: runDiagnostics }))));
     if (m.live) el.append(h('div.thinking', h('i'), h('i'), h('i'), ' ', m.status || 'thinking'));
@@ -394,7 +417,8 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
         es.close(); agentJob = null; setBusy(false);
         const d = JSON.parse(e.data); live.live = false; if (!live.text && d.result) live.text = d.result;
         project = await api.project(project.id); if (!Array.isArray(project.chat)) project.chat = []; renderChat(project.chat.length ? project.chat : [...project.chat, live]);
-        await renderVariants(); await reloadComp(); toast(d.ok ? 'Agent finished' : 'Agent stopped with an error', d.ok ? 'ok' : 'err');
+        await renderVariants(); await reloadComp();
+        if (d.renderJobId) followRender(d.renderJobId, { quiet: true }); toast(d.ok ? 'Agent finished' : 'Agent stopped with an error', d.ok ? 'ok' : 'err');
       });
       es.onerror = () => { es.close(); agentJob = null; setBusy(false); live.live = false; redraw(); };
   }
@@ -438,25 +462,12 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
     if (what.value === 'variants') opts.mode = 'variants';
     if (what.value === 'plan') opts.mode = 'plan';
     localStorage.setItem('videditor.renderOpts', JSON.stringify({ format: opts.format, quality: opts.quality, crf: crf.value, maxBitrate: maxBitrate.value, fps: fpsIn.value, audio: opts.audio, alpha: opts.alpha, scale: preset.value }));
-    const scales = ok === 'all' && !opts.mode ? PRESETS.filter(([v]) => v !== '1' || PRESETS.length === 1).map(([v, l]) => ({ scale: Number(v), label: l.split(' ')[0] })) : [{ scale: Number(preset.value), label: null }];
-    for (const [i, sc] of scales.entries()) await renderOne({ ...opts, scale: sc.scale, label: scales.length > 1 ? sc.label : null, last: i === scales.length - 1 });
+    if (ok === 'all' && !opts.mode) { const items = PRESETS.filter(([v]) => v !== '1' || PRESETS.length === 1).map(([v, l]) => ({ ...opts, scale: Number(v), label: l.split(' ')[0] })); try { const { jobId } = await api.render(project.id, { items }); followRender(jobId); toast(`Rendering ${items.length} sizes in the background`, 'ok'); } catch (e) { toast(e.message, 'err'); } return; }
+    await renderOne({ ...opts, scale: Number(preset.value), label: null, last: true });
   }
   async function renderOne({ quality, notes, scale, label, last, ...rest }) {
-    const bar = h('div.progress', h('i')); const log = h('pre.log', { style: { maxHeight: '40vh' } }); const status = h('div.small.muted', 'Starting…');
-    const bg = h('div.modal-bg', h('div.modal', h('h2', `Rendering v${project.versions.length + 1}${label ? ` · ${label}` : ''}`), bar, status, log));
-    document.body.append(bg);
-    await new Promise((resolve) => {
-      (async () => {
-        try {
-          const { jobId } = await api.render(project.id, { quality, notes, scale, label, ...rest });
-          const es = new EventSource(`/api/jobs/${jobId}/events`);
-          let batchTag = '';
-          es.onmessage = (e) => { const d = JSON.parse(e.data); if (d.type === 'batch') { batchTag = `${d.index}/${d.total}${d.name ? ' · ' + d.name : ''} · `; } else if (d.type === 'progress') { bar.firstChild.style.width = `${(d.frame / d.frames) * 100}%`; status.textContent = `${batchTag}Frame ${d.frame} / ${d.frames} · ${d.elapsed.toFixed(0)}s`; } else { log.textContent += (d.text || '') + '\n'; log.scrollTop = log.scrollHeight; } };
-          es.addEventListener('done', async (e) => { es.close(); const d = JSON.parse(e.data); bg.remove(); if (d.ok && d.folder) { await modal('PNG sequence ready', h('div', h('p', 'The frames are in:'), h('pre.log', d.folder))); } else if (d.ok && d.batch) { project = await api.project(project.id); toast(`Rendered ${d.batch.length} file${d.batch.length > 1 ? 's' : ''}`, 'ok'); if (await modal('Batch finished', h('p', `${d.batch.length} outputs are in Versions. Review them, or keep editing.`), { actions: [{ label: 'Keep editing', cls: 'ghost', value: 'stay' }, { label: 'Open Review', cls: 'primary', value: 'review' }] }) === 'review') navigate(`#/p/${project.id}`); } else if (d.ok) { project = await api.project(project.id); toast(`Rendered v${project.versions.length}`, 'ok'); if (last && await modal('Render finished', h('p', `v${project.versions.length} is ready. Open it in Review to leave notes, or keep editing.`), { actions: [{ label: 'Keep editing', cls: 'ghost', value: 'stay' }, { label: 'Open in Review', cls: 'primary', value: 'review' }] }) === 'review') navigate(`#/p/${project.id}?v=${d.versionId}`); } else await modal('Render failed', h('pre.log', log.textContent)); resolve(); });
-          es.onerror = () => { es.close(); bg.remove(); toast('Lost connection to the render', 'err'); resolve(); };
-        } catch (e) { bg.remove(); toast(e.message, 'err'); resolve(); }
-      })();
-    });
+    try { const { jobId } = await api.render(project.id, { quality, notes, scale, label, ...rest }); followRender(jobId); toast('Rendering in the background. Keep working; you will get a toast when it is ready.', 'ok'); }
+    catch (e) { toast(e.message, 'err'); }
   }
 
   // ---------- top bar + layout
@@ -480,6 +491,7 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
   await stage.load(src());
   if (!stage.info) overlayMsg.textContent = 'The composition did not load. Check index.html in Files.';
   // Resume a running agent job (page reload mid-run) or start with a prompt from the URL.
+  api.renderStatus(project.id).then((r) => { if (r.running) followRender(r.running, { quiet: true }); }).catch(() => {});
   const chatState = await api.chat(project.id).catch(() => null);
   if (Array.isArray(chatState?.chat)) { project.chat = chatState.chat; renderChat(project.chat); }
   if (chatState?.running) {

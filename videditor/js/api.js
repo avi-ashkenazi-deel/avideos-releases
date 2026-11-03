@@ -31,6 +31,7 @@ export const api = {
   history: (id, all) => req('GET', `/api/projects/${id}/history${all ? '?all=1' : ''}`),
   restore: (id, file) => req('POST', `/api/projects/${id}/history`, { file }),
   renderPlan: (id) => req('GET', `/api/projects/${id}/render-plan`),
+  renderStatus: (id) => req('GET', `/api/projects/${id}/render-status`),
   diagnose: (projectId) => req('GET', `/api/agent/diagnose${projectId ? `?projectId=${projectId}` : ''}`),
   saveBrand: (id, b) => req('PUT', `/api/projects/${id}/brand`, b),
   composition: (id, t) => req('GET', `/api/projects/${id}/composition${t !== undefined ? `?t=${t}` : ''}`),

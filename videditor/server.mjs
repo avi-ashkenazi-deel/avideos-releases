@@ -83,7 +83,7 @@ function projectView(p) {
   const versions = store.versions(p.id).map(versionView);
   const latest = versions[versions.length - 1] || null;
   const last = store.feedback({ projectId: p.id }).slice(-1)[0] || null;
-  return { ...p, versions, latest, stats: store.stats(p.id), lastActivity: last ? { at: last.createdAt, author: last.author, body: (last.body || last.transcript || '').slice(0, 80) } : null, project: p.dir ? detectProject(p.dir) : null, composition: p.dir ? entryOf(p) : null, variants: p.dir && fs.existsSync(p.dir) ? listVariants(p.dir).length : 0, chat: p.chat || [], lastChat: (p.chat || []).slice(-1)[0] || null, agentRunning: agents.has(p.id) };
+  return { ...p, versions, latest, stats: store.stats(p.id), lastActivity: last ? { at: last.createdAt, author: last.author, body: (last.body || last.transcript || '').slice(0, 80) } : null, project: p.dir ? detectProject(p.dir) : null, autoRender: p.autoRender !== false, composition: p.dir ? entryOf(p) : null, variants: p.dir && fs.existsSync(p.dir) ? listVariants(p.dir).length : 0, chat: p.chat || [], lastChat: (p.chat || []).slice(-1)[0] || null, agentRunning: agents.has(p.id) };
 }
 
 function registerVersion(project, srcFile, { notes = '', source = 'upload', postedByAgent = false, originalName = null, move = false, label = null, ...extra } = {}) {
@@ -114,6 +114,35 @@ function newJob(kind) {
 const entryOf = (prj) => (prj?.composition && safePath(prj.dir, prj.composition) && fs.existsSync(safePath(prj.dir, prj.composition)) ? prj.composition : 'index.html');
 const pageUrlFor = (projectId, entry = 'index.html') => `http://127.0.0.1:${PORT}/project-files/${projectId}/${entry}?runtime=1&render=1`;
 const ENCODERS = FFMPEG ? listEncoders() : [];
+// Fingerprint of every composition file, to know whether an agent run changed anything worth rendering.
+function compositionsHash(dir) {
+  try { return listVariants(dir).map((v) => { const f = path.join(dir, v.entry); const st = fs.statSync(f); return `${v.entry}:${st.size}:${Math.round(st.mtimeMs)}`; }).join('|') + '|' + (fs.existsSync(path.join(dir, 'render.json')) ? fs.statSync(path.join(dir, 'render.json')).mtimeMs : 0); } catch { return ''; }
+}
+const renderJobs = new Map(); // projectId -> job (the render currently running for that project)
+function trackRender(prj, job, source) {
+  renderJobs.set(prj.id, job);
+  const l = (e) => { if (e !== null) return; job.listeners.delete(l); if (renderJobs.get(prj.id) === job) renderJobs.delete(prj.id);
+    const p = store.project(prj.id); if (!p) return;
+    const vs = store.versions(p.id); const made = job.batch ? job.batch.filter((x) => typeof x === 'string' && x.startsWith('ver_')).map((id) => vs.find((v) => v.id === id)?.label).filter(Boolean) : (job.versionId ? [vs.find((v) => v.id === job.versionId)?.label].filter(Boolean) : []);
+    p.chat = p.chat || []; p.chat.push({ role: 'agent', system: true, text: job.ok ? `✅ ${source === 'auto' ? 'Auto-rendered' : 'Rendered'} ${made.length ? made.join(', ') : (job.folder ? 'PNG sequence' : 'nothing new')}. Open Review to watch it.` : `⚠️ ${source === 'auto' ? 'Auto-render' : 'Render'} failed: ${(job.lines.filter((x) => x.type === 'log').slice(-1)[0]?.text || 'see the log').slice(0, 200)}`, at: new Date().toISOString(), renderJobId: job.id, versionId: job.versionId || null }); store.save();
+  };
+  job.listeners.add(l);
+  if (job.done) l(null);
+}
+// After the agent changed something: render in the background (render.json outputs if present, else the active composition with the last manual settings).
+function autoRenderIfChanged(prj, before, versionsBefore, reason = '') {
+  const p = store.project(prj.id); if (!p || p.autoRender === false) return null;
+  if (compositionsHash(p.dir) === before) return null; // nothing changed
+  if (store.versions(p.id).length > versionsBefore) return null; // the agent already rendered (MCP)
+  if (renderJobs.has(p.id)) return null; // a render is already running; it will pick up the newest state
+  const plan = readRenderPlan(p);
+  const defaults = { quality: 'looks', ...(p.renderDefaults || {}), notes: `Auto-rendered after: ${String(reason).replace(/\s+/g, ' ').slice(0, 160) || 'agent edit'}`, label: null };
+  const { job } = plan.length ? startBatch(p, plan) : startRender(p, defaults);
+  p.chat = p.chat || []; p.chat.push({ role: 'agent', system: true, text: plan.length ? `⏳ Auto-rendering ${plan.length} output${plan.length > 1 ? 's' : ''} from render.json in the background…` : `⏳ Auto-rendering v${store.versions(p.id).length + 1} in the background…`, at: new Date().toISOString(), renderJobId: job.id }); store.save();
+  trackRender(p, job, 'auto');
+  return job;
+}
+
 // One render item: the active composition (or a given entry), optionally a time range, in a format/size.
 async function renderItem(prj, job, { quality = 'looks', fps, notes, scale = 1, label = null, format = DEFAULT_FORMAT, crf, maxBitrate, audio = true, alpha = false, entry = null, range = null, name = null } = {}) {
   const fmts = availableFormats(ENCODERS); const fmt = fmts[format]?.available ? format : DEFAULT_FORMAT;
@@ -260,6 +289,7 @@ async function api(req, res, url) {
       if (b.name) patch.name = String(b.name).slice(0, 120);
       if (b.tags) patch.tags = b.tags;
       if (b.agent && AGENTS[b.agent] && b.agent !== prj.agent) { patch.agent = b.agent; patch.agentSessionId = null; }
+      if ('autoRender' in b) patch.autoRender = !!b.autoRender;
       if ('dir' in b) { if (b.dir) { const d = detectProject(b.dir); if (!d.ok) return err(res, 400, d.reason); patch.dir = d.dir; } else patch.dir = null; }
       if ('assetsDir' in b) { if (b.assetsDir) { const a = cleanDir(b.assetsDir); if (!fs.existsSync(a) || !fs.statSync(a).isDirectory()) return err(res, 400, `Folder does not exist: ${a}`); patch.assetsDir = a; } else patch.assetsDir = null; }
       const out = store.updateProject(prj.id, patch);
@@ -310,10 +340,12 @@ async function api(req, res, url) {
     if (b.mode === 'plan') { items = readRenderPlan(prj); if (!items.length) return err(res, 400, 'No outputs in render.json'); items = items.map((it) => ({ ...it, format: b.format && !it.formatExplicit ? it.format : it.format })); }
     else if (b.mode === 'variants') items = listVariants(prj.dir).map((v) => ({ ...b, entry: v.entry, name: v.entry === 'index.html' ? 'main' : (v.title || v.name) }));
     else if (Array.isArray(b.items)) items = b.items;
-    if (items) { const { job } = startBatch(prj, items); return send(res, 202, { jobId: job.id, count: items.length }); }
-    const { job } = startRender(prj, b);
+    if (!b.mode && !items) { const { format, quality, scale, crf, maxBitrate, fps, audio, alpha } = b; store.updateProject(prj.id, { renderDefaults: { format, quality, scale, crf, maxBitrate, fps, audio, alpha } }); }
+    if (items) { const { job } = startBatch(prj, items); trackRender(prj, job, 'manual'); return send(res, 202, { jobId: job.id, count: items.length }); }
+    const { job } = startRender(prj, b); trackRender(prj, job, 'manual');
     return send(res, 202, { jobId: job.id });
   }
+  if ((x = m(/^\/api\/projects\/([^/]+)\/render-status$/))) { const prj = store.project(x[1]); if (!prj) return err(res, 404, 'Project not found'); const j = renderJobs.get(prj.id); return send(res, 200, { running: j && !j.done ? j.id : null, autoRender: prj.autoRender !== false, renderDefaults: prj.renderDefaults || null }); }
   if ((x = m(/^\/api\/projects\/([^/]+)\/render-plan$/))) {
     const prj = store.project(x[1]); if (!prj?.dir) return err(res, 404, 'Project not found');
     return send(res, 200, { outputs: readRenderPlan(prj), exists: fs.existsSync(path.join(prj.dir, 'render.json')) });
@@ -429,6 +461,7 @@ async function api(req, res, url) {
     prj.chat = prj.chat || []; prj.chat.push({ role: 'user', text: shown, at: new Date().toISOString(), author: b.author || null }); store.save();
     const entry = { role: 'agent', text: '', tools: [], at: new Date().toISOString() };
     const activeEntry = entryOf(prj);
+    const hashBefore = compositionsHash(prj.dir); const versionsBefore = store.versions(prj.id).length;
     snapshot(prj.dir, activeEntry, 'before agent run', 'you');
     const system = systemPrompt({ dir: prj.dir, composition: parseProject(prj.dir, activeEntry), files: listFiles(prj.dir), assetsDir: prj.assetsDir || null, entry: activeEntry, variants: listVariants(prj.dir).map((v) => v.entry) });
     const handle = { jobId: job.id, kill: null };
@@ -462,8 +495,9 @@ async function api(req, res, url) {
       if (out.error) console.error(`[agent] ${prj.name}: ${out.error}`);
       for (const v of listVariants(prj.dir)) snapshot(prj.dir, v.entry, (message.startsWith('Apply the review feedback') ? 'review notes' : message.replace(/^🎙 /, '')).slice(0, 40), 'agent');
       agents.delete(prj.id);
-      job.push({ type: 'done', result: out.result, cost: out.cost, sessionId: out.sessionId });
-      job.finish(!out.error, { result: out.result, cost: out.cost });
+      const rj = out.error ? null : autoRenderIfChanged(prj, hashBefore, versionsBefore, shown);
+      job.push({ type: 'done', result: out.result, cost: out.cost, sessionId: out.sessionId, renderJobId: rj?.id || null });
+      job.finish(!out.error, { result: out.result, cost: out.cost, renderJobId: rj?.id || null });
     })().catch((e) => { agents.delete(prj.id); job.push({ type: 'error', message: e.message }); job.finish(false); });
     return send(res, 202, { jobId: job.id });
   }
@@ -476,7 +510,7 @@ async function api(req, res, url) {
   if ((x = m(/^\/api\/jobs\/([^/]+)\/events$/))) {
     const job = jobs.get(x[1]); if (!job) return err(res, 404, 'Job not found');
     res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive', 'Access-Control-Allow-Origin': '*' });
-    const write = (line) => { if (line === null) { res.write(`event: done\ndata: ${JSON.stringify({ ok: job.ok, versionId: job.versionId, result: job.result, cost: job.cost, folder: job.folder || null, batch: job.batch || null })}\n\n`); res.end(); } else res.write(`data: ${JSON.stringify(line)}\n\n`); };
+    const write = (line) => { if (line === null) { res.write(`event: done\ndata: ${JSON.stringify({ ok: job.ok, versionId: job.versionId, result: job.result, cost: job.cost, folder: job.folder || null, batch: job.batch || null, renderJobId: job.renderJobId || null })}\n\n`); res.end(); } else res.write(`data: ${JSON.stringify(line)}\n\n`); };
     for (const l of job.lines) write(l);
     if (job.done) return write(null);
     job.listeners.add(write); req.on('close', () => job.listeners.delete(write));

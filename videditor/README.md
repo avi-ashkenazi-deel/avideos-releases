@@ -62,6 +62,11 @@ subscription. No accounts, no credits.
   outputs listed in `render.json`. Ask the agent "make me 4 one-minute videos" and it creates four variants
   plus a `render.json`; one click renders all four. A long timeline can be cut into files with `start`/`end`.
   Each render becomes a version in Review (ProRes and GIF show a download instead of a player).
+- **Auto-render** (checkbox next to Render, on by default): after the agent changes the composition, Studio
+  renders it in the background without you pressing anything. It uses `render.json` when present, otherwise
+  your last Render settings. Rendering never blocks: a progress pill sits in the transport, the chat shows
+  "⏳ Auto-rendering v5…" then "✅ Auto-rendered v5 · Review", and a toast lets you jump to the new version.
+  Nothing renders when the agent only answered a question, or when it already rendered itself.
 
 **Review** (`#/p/<project>`)
 - Frame-accurate player, timestamped notes pinned to a moment or a range, **drawings** on the frame
