@@ -96,7 +96,7 @@ export async function renderReview(root, { projectId, versionId, navigate, topba
   const recBtn = btn('Record', { icon: 'mic', cls: 'sm', title: 'Record a voice note (R). Talk, point, draw and scrub while it records.', onClick: toggleRecord });
   const postBtn = btn('Post', { cls: 'primary sm', title: 'Post (⌘/Ctrl+Enter)', onClick: () => post() });
   const composer = h('div.composer',
-    h('div.tools', toolBtn('pen', 'pen', 'Draw (D)'), toolBtn('arrow', 'arrow', 'Arrow'), toolBtn('rect', 'rect', 'Rectangle'), toolBtn('ellipse', 'ellipse', 'Circle'), colors, undoBtn, clearBtn, h('span.sep'), recBtn, btn('', { icon: 'image', cls: 'icon sm ghost', title: 'Attach a reference image', onClick: () => refInput.click() }), refInput, h('span.spacer', { style: { flex: 1 } }), h('span.hint', VoiceRecorder.speechSupported() ? 'Voice notes are transcribed live' : 'No live transcription in this browser; audio is still saved')),
+    h('div.tools', toolBtn('pen', 'pen', 'Draw (D)'), colors, undoBtn, clearBtn, h('span.sep'), recBtn, btn('', { icon: 'image', cls: 'icon sm ghost', title: 'Attach a reference image', onClick: () => refInput.click() }), refInput, h('span.spacer', { style: { flex: 1 } }), h('span.hint', VoiceRecorder.speechSupported() ? 'Voice notes are transcribed live' : 'No live transcription in this browser; audio is still saved')),
     ta, transcriptEl, attach,
     h('div.foot', h('span.anchor', svg('pin'), anchorPill, unpin, rangeBtn), h('span', { style: { flex: 1 } }), postBtn));
   ta.addEventListener('focus', () => { if (S.anchor === null && !S.touched) { S.anchor = player.time; updateComposer(); } });
@@ -338,13 +338,13 @@ export async function renderReview(root, { projectId, versionId, navigate, topba
   const key = (e) => {
     if (e.target.matches('input, textarea, select') || e.metaKey || e.ctrlKey) return;
     const k = e.key.toLowerCase();
-    if (e.key === '?' || (e.key === '/' && e.shiftKey)) return shortcutsSheet('Review shortcuts', [['Space / K', 'Play / pause'], ['← →', 'One frame'], ['Shift+← →', 'One second'], ['J / L', 'Five seconds back / forward'], ['Home / End', 'Start / end'], ['C', 'Write a note at the playhead'], ['D', 'Draw on the frame'], ['A', 'Arrow tool'], ['R', 'Record a voice note'], ['I / O', 'Note start / extend note to here'], ['M', 'Mute'], ['Z', 'Undo stroke'], ['Esc', 'Deselect / stop drawing'], ['Enter', 'Post the note (in the note box)'], ['Shift+Enter', 'New line in the note box'], ['?', 'This sheet']]);
+    if (e.key === '?' || (e.key === '/' && e.shiftKey)) return shortcutsSheet('Review shortcuts', [['Space / K', 'Play / pause'], ['← →', 'One frame'], ['Shift+← →', 'One second'], ['J / L', 'Five seconds back / forward'], ['Home / End', 'Start / end'], ['C', 'Write a note at the playhead'], ['D', 'Draw on the frame'], ['R', 'Record a voice note'], ['I / O', 'Note start / extend note to here'], ['M', 'Mute'], ['Z', 'Undo stroke'], ['Esc', 'Deselect / stop drawing'], ['Enter', 'Post the note (in the note box)'], ['Shift+Enter', 'New line in the note box'], ['?', 'This sheet']]);
     if (e.code === 'Space' || k === 'k') { e.preventDefault(); player.toggle(); }
     else if (k === 'arrowleft') { e.preventDefault(); e.shiftKey ? player.seek(player.time - 1) : player.step(-1); }
     else if (k === 'arrowright') { e.preventDefault(); e.shiftKey ? player.seek(player.time + 1) : player.step(1); }
     else if (k === 'j') player.seek(player.time - 5); else if (k === 'l') player.seek(player.time + 5);
     else if (k === 'c') { e.preventDefault(); if (S.anchor === null) S.anchor = player.time; updateComposer(); ta.focus(); }
-    else if (k === 'd') setTool(S.tool === 'pen' ? null : 'pen'); else if (k === 'a') setTool('arrow'); else if (k === 'r') toggleRecord();
+    else if (k === 'd') setTool(S.tool === 'pen' ? null : 'pen'); else if (k === 'r') toggleRecord();
     else if (k === 'i') { S.anchor = player.time; S.anchorEnd = null; updateComposer(); } else if (k === 'o') rangeBtn.click();
     else if (k === 'm') muteBtn.click(); else if (k === 'z') layer.undo();
     else if (k === 'escape') { setTool(null); selectedId = null; renderFeedback(); updateGhost(); }

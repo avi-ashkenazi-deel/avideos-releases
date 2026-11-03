@@ -70,7 +70,7 @@ subscription. No accounts, no credits.
 
 **Review** (`#/p/<project>`)
 - Frame-accurate player, timestamped notes pinned to a moment or a range, **drawings** on the frame
-  (pen, arrow, box, circle) that replay in sync, **voice notes** transcribed live with *pointing phrases*
+  (brush) that replay in sync, **voice notes** transcribed live with *pointing phrases*
   ("this", "here") logged against the video time and a captured frame each.
 - Each note records which clips were on screen. Versions, side-by-side / wipe **compare**, open/done,
   threads, tags, reference images.

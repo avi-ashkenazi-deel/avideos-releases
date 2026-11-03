@@ -64,7 +64,7 @@ async function cleanup() {
 
   // Draw a rectangle and post a text note at the playhead
   await page.keyboard.press('Escape');
-  await page.click('button[title="Rectangle"]');
+  await page.click('button[title="Draw (D)"]');
   const box = await page.$eval('canvas.overlay', (c) => { const r = c.getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; });
   await page.mouse.move(box.x + box.w * 0.2, box.y + box.h * 0.2); await page.mouse.down();
   await page.mouse.move(box.x + box.w * 0.6, box.y + box.h * 0.6, { steps: 5 }); await page.mouse.up();
