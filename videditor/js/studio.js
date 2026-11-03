@@ -255,7 +255,7 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
     try {
       const { files } = await api.files(project.id);
       const list = h('div.files', ...files.map((f) => h('div.f', { class: `f ${f.text ? '' : 'dim'}`, on: { click: () => f.text && openFile(f.path) } }, h('span', f.path), h('span.muted', f.size > 1e6 ? `${(f.size / 1e6).toFixed(1)} MB` : f.size > 1e3 ? `${Math.round(f.size / 1e3)} KB` : `${f.size} B`))));
-      filesHost.replaceChildren(h('div.section', h('h3', 'Project files', h('span.spacer'), h('span.small.muted.mono', project.dir)), list, h('p.hint', { style: { marginTop: '8px' } }, 'Drop images, video or audio into the assets/ folder on disk; the agent and index.html can reference them as assets/…')));
+      filesHost.replaceChildren(h('div.section', h('h3', 'Project files', h('span.spacer'), h('span.small.muted.mono', { style: { cursor: 'pointer' }, title: 'Click to copy the folder path (open it in Finder or a terminal)', on: { click: async () => { await copyText(project.dir); toast('Folder path copied', 'ok'); } } }, project.dir)), list, h('p.hint', { style: { marginTop: '8px' } }, 'Drop images, video or audio into the assets/ folder on disk; the agent and index.html can reference them as assets/…')));
     } catch (e) { filesHost.replaceChildren(h('div.section', h('div.muted', e.message))); }
   }
   async function openFile(p) {
@@ -515,7 +515,6 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
     h('span.title', project.name), h('span.pill', svg('spark'), 'Studio'), variantSel,
     h('span.spacer'),
     project.versions.length ? btn('Review', { icon: 'chat', title: 'Review the latest render', onClick: () => navigate(`#/p/${project.id}`) }) : null,
-    btn('Copy folder path', { icon: 'copy', cls: 'ghost', title: project.dir, onClick: async () => { await copyText(project.dir); toast('Copied', 'ok'); } }),
     btn('', { icon: 'trash', cls: 'ghost icon', title: 'Delete project', onClick: async () => { if (await confirmDeleteProject(api, project)) navigate('#/'); } }),
   ]);
   root._cleanupExtra = () => clearInterval(assetsPoll);
