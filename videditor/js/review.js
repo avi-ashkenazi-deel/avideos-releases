@@ -307,11 +307,11 @@ export async function renderReview(root, { projectId, versionId, navigate, topba
     h('span.spacer'),
     project.versions.length > 1 ? btn('Compare', { icon: 'compare', onClick: () => navigate(`#/p/${project.id}/compare?a=${project.versions[Math.max(0, project.versions.findIndex((v) => v.id === version.id) - 1)].id}&b=${version.id}`) }) : null,
     version.mediaUrl ? downloadLink(project, version) : null,
-    btn('Show in Finder', { icon: 'folder', title: 'Open Finder with this render selected', onClick: async () => { try { const r = await api.revealVersion(version.id); toast(r.ok ? 'Opened in Finder' : `Saved at ${r.path}`, r.ok ? 'ok' : ''); } catch (e) { toast(e.message, 'err'); } } }),
     menuButton('Send', { icon: 'spark', cls: 'primary', title: 'Send the open notes to the agent, or copy them' }, [
       project.dir ? { label: 'Send to agent', hint: 'Hand all open notes to the Studio agent and watch it edit', icon: 'spark', primary: true, onClick: sendToAgent } : null,
       { label: 'Copy prompt', hint: 'A brief with all open notes, for any agent', icon: 'copy', onClick: copyPrompt },
       { label: 'Copy link', hint: 'Link to this version', icon: 'link', onClick: async () => { await copyText(location.href); toast('Link copied', 'ok'); } },
+      { label: 'Show in Finder', hint: 'Open the folder with this render selected', icon: 'folder', onClick: async () => { try { const r = await api.revealVersion(version.id); toast(r.ok ? 'Opened in Finder' : `Saved at ${r.path}`, r.ok ? 'ok' : ''); } catch (e) { toast(e.message, 'err'); } } },
     ]),
     btn('', { icon: 'trash', cls: 'ghost icon', title: 'Delete project', onClick: async () => { if (await confirmDeleteProject(api, project)) navigate('#/'); } }),
   ]);
