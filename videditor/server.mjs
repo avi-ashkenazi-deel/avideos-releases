@@ -13,6 +13,7 @@ import { hasFfmpeg, probe, poster, frameAt, listEncoders } from './lib/media.mjs
 import { availableFormats, DEFAULT_FORMAT } from './lib/formats.mjs';
 import { buildPrompt } from './lib/prompt.mjs';
 import { renderProject, loadPlaywright, captureFrame } from './lib/render.mjs';
+import { ensureProxy, proxyReason, isVideoFile } from './lib/proxy.mjs';
 import { runAgent, AGENTS, systemPrompt, diagnoseClaude } from './lib/agent.mjs';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
@@ -20,6 +21,12 @@ const PORT = Number(process.env.VIDEDITOR_PORT || process.env.PORT || 8787);
 const DATA = path.resolve(process.env.VIDEDITOR_DATA || path.join(ROOT, 'data'));
 const store = new Store(DATA);
 const FFMPEG = hasFfmpeg();
+const PROXIES = path.join(DATA, 'proxies'); // browser-safe copies of footage Chrome cannot decode
+// Serve a media file, swapping in its browser-safe proxy when the original's codec does not play in Chrome.
+async function serveMedia(req, res, file) {
+  if (FFMPEG && isVideoFile(file) && fs.existsSync(file) && proxyReason(file)) { const px = await ensureProxy(PROXIES, file, { onLog: (t) => console.log(`[proxy] ${t}`) }); if (px) return serveFile(req, res, px); }
+  return serveFile(req, res, file);
+}
 const jobs = new Map(); // id -> { id, kind, lines: [], done, ok, listeners:Set, versionId }
 const agents = new Map(); // projectId -> running agent handle
 const waiters = new Set(); // long-poll feedback waiters
@@ -124,7 +131,7 @@ function trackRender(prj, job, source) {
   const l = (e) => { if (e !== null) return; job.listeners.delete(l); if (renderJobs.get(prj.id) === job) renderJobs.delete(prj.id);
     const p = store.project(prj.id); if (!p) return;
     const vs = store.versions(p.id); const made = job.batch ? job.batch.filter((x) => typeof x === 'string' && x.startsWith('ver_')).map((id) => vs.find((v) => v.id === id)?.label).filter(Boolean) : (job.versionId ? [vs.find((v) => v.id === job.versionId)?.label].filter(Boolean) : []);
-    p.chat = p.chat || []; p.chat.push({ role: 'agent', system: true, text: job.ok ? `✅ ${source === 'auto' ? 'Auto-rendered' : 'Rendered'} ${made.length ? made.join(', ') : (job.folder ? 'PNG sequence' : 'nothing new')}` : `⚠️ ${source === 'auto' ? 'Auto-render' : 'Render'} failed: ${(job.lines.filter((x) => x.type === 'log').slice(-1)[0]?.text || 'see the log').slice(0, 200)}`, at: new Date().toISOString(), renderJobId: job.id, versionId: job.versionId || null }); store.save();
+    p.chat = p.chat || []; p.chat.push({ role: 'agent', system: true, text: job.ok ? `✅ ${source === 'auto' ? 'Auto-rendered' : 'Rendered'} ${made.length ? made.join(', ') : (job.folder ? 'PNG sequence' : 'nothing new')}${(() => { const w = job.lines.filter((x) => x.type === 'log' && x.text.startsWith('⚠')); return w.length ? ` · ⚠ ${w.map((x) => x.text.slice(2, 120)).join(' · ')}` : ''; })()}` : `⚠️ ${source === 'auto' ? 'Auto-render' : 'Render'} failed: ${(job.lines.filter((x) => x.type === 'log').slice(-1)[0]?.text || 'see the log').slice(0, 200)}`, at: new Date().toISOString(), renderJobId: job.id, versionId: job.versionId || null }); store.save();
   };
   job.listeners.add(l);
   if (job.done) l(null);
@@ -153,6 +160,10 @@ async function renderItem(prj, job, { quality = 'looks', fps, notes, scale = 1, 
   const slug = (v) => String(v || '').replace(/[^\w-]+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
   const tag = [name ? slug(name) : null, label ? slug(label) : null].filter(Boolean).join('-');
   const rel = `renders/v${n}${tag ? '-' + tag : ''}${fmt === 'png-seq' ? '-frames' : fmts[fmt].ext}`; const out = path.join(prj.dir, rel);
+  if (FFMPEG) {
+    const vids = (parseProject(prj.dir, useEntry)?.clips || []).filter((c) => c.tag === 'video' && c.src).map((c) => resolveSrc(prj.dir, prj.assetsDir || null, c.src, c.fileAbs)).filter((f) => f && fs.existsSync(f));
+    for (const f of [...new Set(vids)]) await ensureProxy(PROXIES, f, { onLog: (text) => job.push({ type: 'log', text }) });
+  }
   const r = await renderProject({ pageUrl: pageUrlFor(prj.id, useEntry), dir: prj.dir, assetsDir: prj.assetsDir || null, out, quality, scale, fps: fps ? Number(fps) : undefined, format: fmt, crf: crf !== undefined && crf !== null && crf !== '' ? Number(crf) : undefined, maxBitrate: maxBitrate ? Number(maxBitrate) : undefined, audio: audio !== false && audio !== 'false', alpha: !!alpha, range: range && (range.start !== undefined || range.end !== undefined) ? range : null, onLog: (text) => job.push({ type: 'log', text }), onProgress: (p) => job.push({ type: 'progress', ...p, item: name || label || null }) });
   if (r.folder) { job.push({ type: 'log', text: `PNG sequence written to ${out}` }); return { folder: out }; }
   const where = [useEntry !== 'index.html' ? `Variant: ${useEntry}` : null, r.range ? `Range: ${r.range.start}–${r.range.end}s` : null].filter(Boolean).join('\n');
@@ -649,7 +660,7 @@ const server = http.createServer(async (req, res) => {
     if (pf) {
       const prj = store.project(pf[1]); if (!prj?.dir) return err(res, 404, 'Not found');
       const relPath = decodeURIComponent(pf[2] || 'index.html');
-      if (/^library\//.test(relPath)) { if (!prj.assetsDir) return err(res, 404, 'No asset folder linked'); const la = safePath(prj.assetsDir, relPath.slice('library/'.length)); if (!la) return err(res, 403, 'Forbidden'); return serveFile(req, res, la); }
+      if (/^library\//.test(relPath)) { if (!prj.assetsDir) return err(res, 404, 'No asset folder linked'); const la = safePath(prj.assetsDir, relPath.slice('library/'.length)); if (!la) return err(res, 403, 'Forbidden'); return serveMedia(req, res, la); }
       const abs = safePath(prj.dir, relPath); if (!abs) return err(res, 403, 'Forbidden');
       if (url.searchParams.get('runtime') === '1' && /\.html?$/i.test(abs)) {
         // Serve the composition with the seekable runtime injected (Studio preview and renderer).
@@ -658,7 +669,7 @@ const server = http.createServer(async (req, res) => {
         html = /<\/body>/i.test(html) ? html.replace(/<\/body>/i, tag + '</body>') : html + tag;
         return send(res, 200, html, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
       }
-      return serveFile(req, res, abs);
+      return serveMedia(req, res, abs);
     }
     let rel = decodeURIComponent(url.pathname); if (rel === '/' || rel === '') rel = '/index.html';
     const abs = path.resolve(ROOT, '.' + rel);

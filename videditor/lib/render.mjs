@@ -62,6 +62,13 @@ export async function renderProject({ pageUrl, dir, assetsDir = null, out, fps: 
     const frames = Math.max(1, Math.round(outDur * fps));
     log(`composition ${info.id}: ${width}×${height}${scale !== 1 ? ` × ${scale} = ${Math.round(width * scale)}×${Math.round(height * scale)}` : ''}, ${r0 || r1 !== info.duration ? `${r0}–${r1}s of ${info.duration}s` : `${info.duration}s`} @ ${fps}fps → ${frames} frames`);
     log(`format: ${enc.format.label}${enc.crf !== null ? ` · crf ${enc.crf}` : ''}${enc.alpha ? ' · transparent' : ''}${audio && enc.format.acodec ? '' : ' · no audio'}`);
+    // Every <video> clip must decode, or it renders as black frames. Wait for metadata, then say which ones fail.
+    const bad = await page.evaluate(async () => {
+      const vids = [...document.querySelectorAll('video')];
+      await Promise.all(vids.map((v) => (v.readyState >= 1 || v.error ? null : new Promise((r) => { v.addEventListener('loadedmetadata', r, { once: true }); v.addEventListener('error', r, { once: true }); setTimeout(r, 20000); }))));
+      return vids.filter((v) => v.error || !v.videoWidth).map((v) => ({ id: v.id || null, src: v.getAttribute('src'), error: v.error ? v.error.code : null }));
+    });
+    for (const b of bad) log(`⚠ video ${b.id ? '#' + b.id + ' ' : ''}(${b.src}) ${b.error ? `failed to load (error ${b.error})` : 'has no picture'}: it will render as black. Check the file exists and plays in Chrome.`);
     if (format === 'png-seq') {
       // PNG sequence: frames straight to a folder, no ffmpeg.
       fs.mkdirSync(out, { recursive: true });
