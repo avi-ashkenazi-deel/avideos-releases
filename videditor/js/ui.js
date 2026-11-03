@@ -74,6 +74,28 @@ function inline(s) {
   return out;
 }
 
+/** Studio | Review switch. Same place in both top bars. */
+export function modeToggle(project, active, navigate) {
+  const b = (key, label, href, disabled, title) => h('button', { class: `seg-btn ${active === key ? 'on' : ''}`, disabled: !!disabled, title, on: { click: () => { if (active !== key && !disabled) navigate(href); } } }, label);
+  return h('div.seg', { role: 'tablist', 'aria-label': 'Mode' },
+    b('studio', 'Studio', `#/studio/${project.id}`, !project.dir, project.dir ? 'Edit the composition with the agent' : 'This project has no composition to edit'),
+    b('review', 'Review', `#/p/${project.id}`, false, 'Watch renders and leave notes'));
+}
+
+/** A button that opens a small menu. items: [{ label, icon, hint, onClick, primary }] (null entries are skipped). */
+export function menuButton(label, { icon: ic, cls = '', title } = {}, items = []) {
+  const wrap = h('div.menuwrap');
+  const trigger = h('button', { class: `btn ${cls}`, title, 'aria-haspopup': 'menu' }, ic ? svg(ic) : null, label, svg('chevron'));
+  const pop = h('div.menu.hidden', { role: 'menu' }, items.filter(Boolean).map((it) => h('button', { class: `menu-item ${it.primary ? 'primary' : ''}`, role: 'menuitem', on: { click: async () => { close(); await it.onClick?.(); } } }, it.icon ? svg(it.icon) : null, h('span.mi-text', h('span', it.label), it.hint ? h('span.mi-hint', it.hint) : null))));
+  const onDoc = (e) => { if (!wrap.contains(e.target)) close(); };
+  const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); trigger.focus(); } };
+  function open() { pop.classList.remove('hidden'); trigger.classList.add('active'); setTimeout(() => document.addEventListener('pointerdown', onDoc), 0); document.addEventListener('keydown', onKey, true); pop.querySelector('.menu-item')?.focus(); }
+  function close() { pop.classList.add('hidden'); trigger.classList.remove('active'); document.removeEventListener('pointerdown', onDoc); document.removeEventListener('keydown', onKey, true); }
+  trigger.addEventListener('click', () => (pop.classList.contains('hidden') ? open() : close()));
+  wrap.append(trigger, pop);
+  return wrap;
+}
+
 export function toast(msg, kind = '') {
   const t = h('div.toast', { class: `toast ${kind}` }, msg);
   document.getElementById('toasts').append(t);

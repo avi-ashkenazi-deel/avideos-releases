@@ -2,7 +2,7 @@
 // middle, timeline below, layers/files on the right. The preview is the real
 // composition running in an iframe with the seekable runtime.
 import { api } from './api.js';
-import { h, btn, svg, modal, toast, fmtTime, relTime, md, getAuthor, ensureAuthor, copyText, confirmDeleteProject, shortcutsSheet } from './ui.js';
+import { h, btn, svg, modal, toast, fmtTime, relTime, md, modeToggle, getAuthor, ensureAuthor, copyText, confirmDeleteProject, shortcutsSheet } from './ui.js';
 import { Stage } from './stage.js';
 import { DrawLayer, COLORS } from './draw.js';
 import { VoiceRecorder, highlightPointing } from './voice.js';
@@ -588,9 +588,8 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
   // ---------- top bar + layout
   topbar([
     btn('', { icon: 'back', cls: 'ghost icon', title: 'All videos', onClick: () => navigate('#/') }),
-    h('span.title', project.name), h('span.pill', svg('spark'), 'Studio'), variantSel, variantRenBtn, variantDelBtn,
+    h('span.title', project.name), modeToggle(project, 'studio', navigate), variantSel, variantRenBtn, variantDelBtn,
     h('span.spacer'),
-    project.versions.length ? btn('Review', { icon: 'chat', title: 'Review the latest render', onClick: () => navigate(`#/p/${project.id}`) }) : null,
     btn('', { icon: 'trash', cls: 'ghost icon', title: 'Delete project', onClick: async () => { if (await confirmDeleteProject(api, project)) navigate('#/'); } }),
   ]);
   root._cleanupExtra = () => clearInterval(assetsPoll);

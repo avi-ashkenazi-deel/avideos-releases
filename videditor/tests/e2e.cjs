@@ -91,7 +91,8 @@ async function cleanup() {
 
   console.log('step: copy prompt');
   // Copy prompt modal contains the brief
-  await page.click('.topbar button:has-text("Copy prompt")');
+  await page.click('.topbar .menuwrap > button');
+  await page.click('.menu .menu-item:has-text("Copy prompt")');
   await page.waitForSelector('.modal pre');
   const brief = await page.textContent('.modal pre');
   assert.ok(brief.includes('# Video review brief'), 'brief rendered');

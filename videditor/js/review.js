@@ -1,5 +1,5 @@
 import { api } from './api.js';
-import { h, btn, svg, modal, toast, fmtTime, relTime, avatar, getAuthor, ensureAuthor, copyText, fileToDataUrl, confirmDeleteProject, shortcutsSheet } from './ui.js';
+import { h, btn, svg, modal, toast, fmtTime, relTime, avatar, modeToggle, menuButton, getAuthor, ensureAuthor, copyText, fileToDataUrl, confirmDeleteProject, shortcutsSheet } from './ui.js';
 import { Player } from './player.js';
 import { DrawLayer, COLORS, drawStroke } from './draw.js';
 import { VoiceRecorder, highlightPointing } from './voice.js';
@@ -301,16 +301,18 @@ export async function renderReview(root, { projectId, versionId, navigate, topba
   topbar([
     btn('', { icon: 'back', cls: 'ghost icon', title: 'All projects', onClick: () => navigate('#/') }),
     h('span.title', { title: 'Rename', style: { cursor: 'text' }, on: { click: async () => { const i = h('input.text', { value: project.name }); if (await modal('Rename project', i, { actions: [{ label: 'Save', cls: 'primary' }] })) { project = await api.updateProject(project.id, { name: i.value }); renderReview(root, { projectId, versionId: version.id, navigate, topbar }); } } } }, project.name),
+    modeToggle(project, 'review', navigate),
     verSel,
     project.dir ? (liveBtn = btn('Live', { icon: 'film', title: 'Show the live composition instead of the render', onClick: () => setLive(!live) })) : null,
-    project.dir ? btn('Studio', { icon: 'spark', title: 'Edit the composition and chat with the agent', onClick: () => navigate(`#/studio/${project.id}`) }) : null,
     h('span.spacer'),
     project.versions.length > 1 ? btn('Compare', { icon: 'compare', onClick: () => navigate(`#/p/${project.id}/compare?a=${project.versions[Math.max(0, project.versions.findIndex((v) => v.id === version.id) - 1)].id}&b=${version.id}`) }) : null,
     version.mediaUrl ? downloadLink(project, version) : null,
     btn('Show in Finder', { icon: 'folder', title: 'Open Finder with this render selected', onClick: async () => { try { const r = await api.revealVersion(version.id); toast(r.ok ? 'Opened in Finder' : `Saved at ${r.path}`, r.ok ? 'ok' : ''); } catch (e) { toast(e.message, 'err'); } } }),
-    btn('Copy link', { icon: 'link', onClick: async () => { await copyText(location.href); toast('Link copied', 'ok'); } }),
-    btn('Copy prompt', { icon: 'copy', cls: project.dir ? '' : 'primary', title: 'Brief for any agent with all open feedback', onClick: copyPrompt }),
-    project.dir ? btn('Send to agent', { icon: 'spark', cls: 'primary', title: 'Hand all open notes on this version to the Studio agent and watch it edit', onClick: sendToAgent }) : null,
+    menuButton('Send', { icon: 'spark', cls: 'primary', title: 'Send the open notes to the agent, or copy them' }, [
+      project.dir ? { label: 'Send to agent', hint: 'Hand all open notes to the Studio agent and watch it edit', icon: 'spark', primary: true, onClick: sendToAgent } : null,
+      { label: 'Copy prompt', hint: 'A brief with all open notes, for any agent', icon: 'copy', onClick: copyPrompt },
+      { label: 'Copy link', hint: 'Link to this version', icon: 'link', onClick: async () => { await copyText(location.href); toast('Link copied', 'ok'); } },
+    ]),
     btn('', { icon: 'trash', cls: 'ghost icon', title: 'Delete project', onClick: async () => { if (await confirmDeleteProject(api, project)) navigate('#/'); } }),
   ]);
 
@@ -377,7 +379,7 @@ export async function renderReview(root, { projectId, versionId, navigate, topba
 }
 
 function renderNoVersions(root, project, { navigate, topbar }) {
-  topbar([btn('', { icon: 'back', cls: 'ghost icon', onClick: () => navigate('#/') }), h('span.title', project.name)]);
+  topbar([btn('', { icon: 'back', cls: 'ghost icon', onClick: () => navigate('#/') }), h('span.title', project.name), modeToggle(project, 'review', navigate)]);
   const upload = h('input', { type: 'file', accept: 'video/*', style: { display: 'none' } });
   upload.addEventListener('change', async () => { if (!upload.files[0]) return; toast('Uploading…'); try { const v = await api.upload(project.id, upload.files[0], 'First version'); navigate(`#/p/${project.id}?v=${v.id}`); } catch (e) { toast(e.message, 'err'); } });
   root.replaceChildren(h('div.empty', h('h2', 'No render yet'), h('p', 'Upload the first video to start reviewing.'), btn('Upload v1', { icon: 'upload', cls: 'primary', onClick: () => upload.click() }), upload,
