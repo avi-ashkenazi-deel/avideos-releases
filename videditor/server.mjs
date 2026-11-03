@@ -116,7 +116,7 @@ const pageUrlFor = (projectId, entry = 'index.html') => `http://127.0.0.1:${PORT
 const ENCODERS = FFMPEG ? listEncoders() : [];
 // Fingerprint of every composition file, to know whether an agent run changed anything worth rendering.
 function compositionsHash(dir) {
-  try { return listVariants(dir).map((v) => { const f = path.join(dir, v.entry); const st = fs.statSync(f); return `${v.entry}:${st.size}:${Math.round(st.mtimeMs)}`; }).join('|') + '|' + (fs.existsSync(path.join(dir, 'render.json')) ? fs.statSync(path.join(dir, 'render.json')).mtimeMs : 0); } catch { return ''; }
+  try { return listVariants(dir).map((v) => { const f = path.join(dir, v.entry); const st = fs.statSync(f); return `${v.entry}:${st.size}:${Math.round(st.mtimeMs)}`; }).join('|') + '|' + ['render.json', 'videditor.json'].map((f) => (fs.existsSync(path.join(dir, f)) ? fs.statSync(path.join(dir, f)).mtimeMs : 0)).join(':'); } catch { return ''; }
 }
 const renderJobs = new Map(); // projectId -> job (the render currently running for that project)
 function trackRender(prj, job, source) {
@@ -130,13 +130,15 @@ function trackRender(prj, job, source) {
   if (job.done) l(null);
 }
 // After the agent changed something: render in the background (render.json outputs if present, else the active composition with the last manual settings).
+// Render settings the agent (or the person) wrote into the project's videditor.json: { "render": { "audio": false, "scale": 1.5, ... } }
+function projectRenderConfig(dir) { try { const j = JSON.parse(fs.readFileSync(path.join(dir, 'videditor.json'), 'utf8')); return j && typeof j.render === 'object' && j.render ? j.render : {}; } catch { return {}; } }
 function autoRenderIfChanged(prj, before, versionsBefore, reason = '') {
   const p = store.project(prj.id); if (!p || p.autoRender === false) return null;
   if (compositionsHash(p.dir) === before) return null; // nothing changed
   if (store.versions(p.id).length > versionsBefore) return null; // the agent already rendered (MCP)
   if (renderJobs.has(p.id)) return null; // a render is already running; it will pick up the newest state
   const plan = readRenderPlan(p);
-  const defaults = { quality: 'looks', ...(p.renderDefaults || {}), notes: `Auto-rendered after: ${String(reason).replace(/\s+/g, ' ').slice(0, 160) || 'agent edit'}`, label: null };
+  const defaults = { quality: 'looks', ...(p.renderDefaults || {}), ...projectRenderConfig(p.dir), notes: `Auto-rendered after: ${String(reason).replace(/\s+/g, ' ').slice(0, 160) || 'agent edit'}`, label: null };
   const { job } = plan.length ? startBatch(p, plan) : startRender(p, defaults);
   p.chat = p.chat || []; p.chat.push({ role: 'agent', system: true, text: plan.length ? `⏳ Auto-rendering ${plan.length} output${plan.length > 1 ? 's' : ''} from render.json…` : `⏳ Auto-rendering v${store.versions(p.id).length + 1}…`, at: new Date().toISOString(), renderJobId: job.id }); store.save();
   trackRender(p, job, 'auto');
@@ -345,7 +347,7 @@ async function api(req, res, url) {
     const { job } = startRender(prj, b); trackRender(prj, job, 'manual');
     return send(res, 202, { jobId: job.id });
   }
-  if ((x = m(/^\/api\/projects\/([^/]+)\/render-status$/))) { const prj = store.project(x[1]); if (!prj) return err(res, 404, 'Project not found'); const j = renderJobs.get(prj.id); return send(res, 200, { running: j && !j.done ? j.id : null, autoRender: prj.autoRender !== false, renderDefaults: prj.renderDefaults || null }); }
+  if ((x = m(/^\/api\/projects\/([^/]+)\/render-status$/))) { const prj = store.project(x[1]); if (!prj) return err(res, 404, 'Project not found'); const j = renderJobs.get(prj.id); return send(res, 200, { running: j && !j.done ? j.id : null, autoRender: prj.autoRender !== false, projectRender: projectRenderConfig(prj.dir), renderDefaults: prj.renderDefaults || null }); }
   if ((x = m(/^\/api\/projects\/([^/]+)\/render-plan$/))) {
     const prj = store.project(x[1]); if (!prj?.dir) return err(res, 404, 'Project not found');
     return send(res, 200, { outputs: readRenderPlan(prj), exists: fs.existsSync(path.join(prj.dir, 'render.json')) });

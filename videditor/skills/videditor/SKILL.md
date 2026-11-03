@@ -54,6 +54,10 @@ A video is a folder. `index.html` is the video. Videditor plays it in the browse
   ```
 - A long timeline can also be cut into several files without copying anything: outputs with `start` / `end` (seconds) render that range of the given entry, audio trimmed to match:
   `{ "name": "teaser-1", "entry": "index.html", "start": 0, "end": 60 }`.
+- Render preferences the person states in chat ("render without sound", "always 1080p", "AV1") go into the project's
+  `videditor.json` under `"render"`, e.g. `{ "format": "videditor-composition", "version": 1, "render": { "audio": false, "scale": 1.5 } }`.
+  Videditor's automatic render after your edit uses them (keys: `audio`, `format`, `scale`, `quality`, `crf`, `fps`, `alpha`).
+  Do not strip a composition's audio clips to make a silent render; the setting does it.
 - Allowed keys per output: `name`, `entry`, `start`, `end`, `format` (mp4-h264, mp4-hevc, mp4-av1, webm-av1, webm-vp9, mov-prores, gif, png-seq), `scale`, `quality` (draft|looks|high), `crf`, `fps`, `alpha`, `audio`, `notes`.
 - Tell the person: "Press Render → Outputs from render.json". You do not render.
 
