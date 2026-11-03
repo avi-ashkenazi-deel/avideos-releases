@@ -16,6 +16,9 @@ class StagePlayer {
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
+// A real file download for a version: <project> v5.mp4
+const downloadName = (project, v) => `${project.name} ${v.label}`.replace(/[\\/:*?"<>|]+/g, '-').trim() + (/\.[a-z0-9]+$/i.exec(v.originalName || v.mediaUrl || '')?.[0] || '.mp4');
+const downloadLink = (project, v, { label = 'Download', cls = 'btn' } = {}) => h('a', { class: cls, href: v.mediaUrl, download: downloadName(project, v), title: `Download ${v.label}${v.filePath ? `\nOn disk: ${v.filePath}` : ''}`, on: { click: (e) => e.stopPropagation() } }, svg('download'), label);
 export async function renderReview(root, { projectId, versionId, navigate, topbar }) {
   let project = await api.project(projectId);
   if (!project.versions.length) return renderNoVersions(root, project, { navigate, topbar });
@@ -269,7 +272,7 @@ export async function renderReview(root, { projectId, versionId, navigate, topba
     } }) : null;
     verBody.replaceChildren(
       h('div.section', drop, upload, renderBtn ? h('div', { style: { marginTop: '8px' } }, renderBtn) : h('p.hint', { style: { marginTop: '8px' } }, 'Link a composition folder in Context to render new versions from here.'), log),
-      h('div.section', { style: { display: 'grid', gap: '8px' } }, [...project.versions].reverse().map((v) => h('div.version-row', { class: `version-row ${v.id === version.id ? 'current' : ''}`, on: { click: () => navigate(`#/p/${project.id}?v=${v.id}`) } }, v.posterUrl ? h('img', { src: v.posterUrl }) : h('div.noimg'), h('div.vb', h('div.l', v.label, v.formatLabel ? h('span.pill', v.formatLabel) : null, v.postedByAgent ? h('span.pill.agent', 'agent') : null, h('span.small.muted', relTime(v.createdAt)), h('span.spacer', { style: { flex: 1 } }), v.openCount ? h('span.pill.open', `${v.openCount} open`) : h('span.small.muted', `${v.feedbackCount} notes`)), h('div.n', v.notes || h('span.muted', 'No notes'))), h('div', { style: { display: 'grid', gap: '4px' } }, btn('', { icon: 'compare', cls: 'icon sm ghost', title: 'Compare with current', onClick: (e) => { e.stopPropagation(); navigate(`#/p/${project.id}/compare?a=${v.id}&b=${version.id}`); } }), h('a.btn.icon.sm.ghost', { href: `/api/versions/${v.id}/download`, title: 'Download', on: { click: (e) => e.stopPropagation() } }, svg('download')))))),
+      h('div.section', { style: { display: 'grid', gap: '8px' } }, [...project.versions].reverse().map((v) => h('div.version-row', { class: `version-row ${v.id === version.id ? 'current' : ''}`, on: { click: () => navigate(`#/p/${project.id}?v=${v.id}`) } }, v.posterUrl ? h('img', { src: v.posterUrl }) : h('div.noimg'), h('div.vb', h('div.l', v.label, v.formatLabel ? h('span.pill', v.formatLabel) : null, v.postedByAgent ? h('span.pill.agent', 'agent') : null, h('span.small.muted', relTime(v.createdAt)), h('span.spacer', { style: { flex: 1 } }), v.openCount ? h('span.pill.open', `${v.openCount} open`) : h('span.small.muted', `${v.feedbackCount} notes`)), h('div.n', v.notes || h('span.muted', 'No notes'))), h('div', { style: { display: 'grid', gap: '4px' } }, v.mediaUrl ? downloadLink(project, v, { label: '', cls: 'btn icon sm ghost' }) : null, btn('', { icon: 'compare', cls: 'icon sm ghost', title: 'Compare with current', onClick: (e) => { e.stopPropagation(); navigate(`#/p/${project.id}/compare?a=${v.id}&b=${version.id}`); } }), h('a.btn.icon.sm.ghost', { href: `/api/versions/${v.id}/download`, title: 'Download', on: { click: (e) => e.stopPropagation() } }, svg('download')))))),
     );
     counts.versions.textContent = project.versions.length;
   }
@@ -303,6 +306,7 @@ export async function renderReview(root, { projectId, versionId, navigate, topba
     project.dir ? btn('Studio', { icon: 'spark', title: 'Edit the composition and chat with the agent', onClick: () => navigate(`#/studio/${project.id}`) }) : null,
     h('span.spacer'),
     project.versions.length > 1 ? btn('Compare', { icon: 'compare', onClick: () => navigate(`#/p/${project.id}/compare?a=${project.versions[Math.max(0, project.versions.findIndex((v) => v.id === version.id) - 1)].id}&b=${version.id}`) }) : null,
+    version.mediaUrl ? downloadLink(project, version) : null,
     btn('Copy link', { icon: 'link', onClick: async () => { await copyText(location.href); toast('Link copied', 'ok'); } }),
     btn('Copy prompt', { icon: 'copy', cls: project.dir ? '' : 'primary', title: 'Brief for any agent with all open feedback', onClick: copyPrompt }),
     project.dir ? btn('Send to agent', { icon: 'spark', cls: 'primary', title: 'Hand all open notes on this version to the Studio agent and watch it edit', onClick: sendToAgent }) : null,
