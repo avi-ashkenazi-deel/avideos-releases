@@ -1,7 +1,7 @@
 import { api } from './api.js';
 import { h, btn, svg, modal, toast, fmtTime, relTime, avatar, modeToggle, menuButton, getAuthor, ensureAuthor, copyText, fileToDataUrl, confirmDeleteProject, shortcutsSheet } from './ui.js';
 import { Player } from './player.js';
-import { DrawLayer, COLORS, drawStroke } from './draw.js';
+import { DrawLayer, drawStroke } from './draw.js';
 import { VoiceRecorder, highlightPointing } from './voice.js';
 
 
@@ -59,7 +59,6 @@ export async function renderReview(root, { projectId, versionId, navigate, topba
   const transcriptEl = h('div.transcript.hidden');
   const attach = h('div.attach');
   const refInput = h('input', { type: 'file', accept: 'image/*', multiple: true, style: { display: 'none' }, on: { change: async () => { for (const f of refInput.files) S.refs.push(await fileToDataUrl(f)); refInput.value = ''; updateComposer(); } } });
-  const colors = h('span.colors', COLORS.map((c) => h('span.swatch', { style: { background: c }, class: `swatch ${c === layer.color ? 'active' : ''}`, on: { click: () => { layer.color = c; colors.querySelectorAll('.swatch').forEach((s) => s.classList.toggle('active', s.style.backgroundColor === colorToRgb(c))); } } })));
   const toolBtns = {};
   const toolBtn = (name, ic, title) => (toolBtns[name] = btn('', { icon: ic, cls: 'icon sm', title, onClick: () => setTool(S.tool === name ? null : name) }));
   const undoBtn = btn('', { icon: 'undo', cls: 'icon sm ghost', title: 'Undo stroke', onClick: () => layer.undo() });
@@ -67,7 +66,7 @@ export async function renderReview(root, { projectId, versionId, navigate, topba
   const recBtn = btn('Record', { icon: 'mic', cls: 'sm', title: 'Record a voice note (R). Talk, point, draw and scrub while it records.', onClick: toggleRecord });
   const postBtn = btn('Post', { cls: 'primary sm', title: 'Post (⌘/Ctrl+Enter)', onClick: () => post() });
   const composer = h('div.composer',
-    h('div.tools', toolBtn('pen', 'pen', 'Draw (D)'), colors, undoBtn, clearBtn, h('span.sep'), recBtn, btn('', { icon: 'image', cls: 'icon sm ghost', title: 'Attach a reference image', onClick: () => refInput.click() }), refInput, h('span.spacer', { style: { flex: 1 } }), h('span.hint', VoiceRecorder.speechSupported() ? 'Voice notes are transcribed live' : 'No live transcription in this browser; audio is still saved')),
+    h('div.tools', toolBtn('pen', 'pen', 'Draw (D)'), undoBtn, clearBtn, h('span.sep'), recBtn, btn('', { icon: 'image', cls: 'icon sm ghost', title: 'Attach a reference image', onClick: () => refInput.click() }), refInput, h('span.spacer', { style: { flex: 1 } }), h('span.hint', VoiceRecorder.speechSupported() ? 'Voice notes are transcribed live' : 'No live transcription in this browser; audio is still saved')),
     ta, transcriptEl, attach,
     h('div.foot', h('span.anchor', svg('pin'), anchorPill, unpin, rangeBtn), h('span', { style: { flex: 1 } }), postBtn));
   ta.addEventListener('focus', () => { if (S.anchor === null && !S.touched) { S.anchor = player.time; updateComposer(); } });
