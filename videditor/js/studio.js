@@ -372,26 +372,41 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
   // Tool calls become compact step rows (Cursor-style): "Edited index.html", "Searched tagline", "Ran ffprobe …".
   const TOOL_VIEW = { Read: ['file', 'Read'], Edit: ['pen', 'Edited'], MultiEdit: ['pen', 'Edited'], Write: ['pen', 'Wrote'], NotebookEdit: ['pen', 'Edited'], Grep: ['search', 'Searched'], Glob: ['search', 'Listed'], LS: ['folder', 'Listed'], Bash: ['terminal', 'Ran'], WebFetch: ['link', 'Fetched'], WebSearch: ['search', 'Searched the web'], Task: ['sparkle', 'Delegated'], TodoWrite: ['check', 'Planned'] };
   function stepRow(t) {
+    if (t.note) return h('div.step.note', t.note.replace(/\s+/g, ' ').trim());
     const name = String(t.name || ''); const mcp = name.match(/^mcp__\w+?__(.+)$/);
     const [ic, verb] = TOOL_VIEW[name] || (mcp ? ['sparkle', mcp[1].replace(/_/g, ' ')] : ['sparkle', name]);
     const what = (t.detail || '').replace(/\s+/g, ' ').trim();
     return h('div.step', { title: `${name} ${t.detail || ''}`.trim() }, svg(ic), h('span.verb', verb), what ? h('span.what', what) : null);
   }
   function stepsEl(m) {
-    const n = m.tools.length; const open = m.live || m._open === true || (m._open !== false && n <= 3);
+    const n = m.tools.filter((t) => !t.note).length; const open = m.live || m._open === true || (m._open !== false && n <= 3 && !m.tools.some((t) => t.note));
     const box = h('div.steps', { class: `steps ${open ? 'open' : ''}` });
     const edited = new Set(m.tools.filter((t) => /^(Edit|MultiEdit|Write)$/.test(t.name) && t.detail).map((t) => t.detail.split('/').pop()));
     const summary = edited.size ? `Edited ${[...edited].slice(0, 2).join(', ')}${edited.size > 2 ? ` +${edited.size - 2}` : ''}` : `${n} step${n > 1 ? 's' : ''}`;
     const head = h('div.shead', { on: { click: () => { m._open = !box.classList.contains('open'); box.classList.toggle('open', m._open); } } }, svg('chevron'), h('span', m.live ? `${n} step${n > 1 ? 's' : ''}` : summary), !m.live && edited.size ? h('span.muted', ` · ${n} step${n > 1 ? 's' : ''}`) : null);
-    box.append(head, h('div.slist', m.tools.map(stepRow)));
+    box.append(head, h('div.slist', m.tools.filter((t, i) => !(t.note && t.note === m.text && i === m.tools.length - 1)).map(stepRow)));
     return box;
+  }
+  // Tight replies: show the summary (text before `Details:` or the first paragraph); the rest folds away.
+  function splitReply(text) {
+    const t = String(text || '').trim(); const k = t.search(/^\s*(details|more|notes):\s*$/im);
+    if (k >= 0) return { head: t.slice(0, k).trim(), rest: t.slice(k).replace(/^\s*(details|more|notes):\s*/i, '').trim() };
+    const paras = t.split(/\n\s*\n/); const headLen = (s) => s.split('\n').length;
+    if (paras.length > 1) { let n = 0; const head = []; for (const p of paras) { if (head.length && n + headLen(p) > 4) break; head.push(p); n += headLen(p); } if (head.length < paras.length) return { head: head.join('\n\n'), rest: paras.slice(head.length).join('\n\n') }; }
+    const lines = t.split('\n'); if (paras.length === 1 && lines.length > 5 && !lines.some((l) => /^\s*([-*•]|\d+[.)])\s+/.test(l))) return { head: lines.slice(0, 3).join('\n'), rest: lines.slice(3).join('\n') };
+    return { head: t, rest: '' };
   }
   function msgEl(m) {
     const el = h('div.msg', { class: `msg ${m.role}` });
     if (m.system) { el.classList.add('sys'); el.append(h('div.sysline', h('span', m.text), m.versionId ? h('a', { href: `#/p/${project.id}?v=${m.versionId}` }, 'Review ↗') : null)); return el; }
     if (m.role === 'user') { el.append(h('div.card', m.text), h('div.meta', [m.author || getAuthor() || 'You', relTime(m.at)].filter(Boolean).join(' · '))); return el; }
-    if (m.tools?.length) el.append(stepsEl(m));
-    if (m.text) el.append(h('div.body', md(m.text)));
+    if (m.tools?.length && (m.tools.some((t) => !t.note) || m.live)) el.append(stepsEl(m));
+    if (m.text) {
+      const { head, rest } = splitReply(m.text);
+      const body = h('div.body', md(head));
+      if (rest) { const det = h('div.details.hidden', md(rest)); const tg = h('button.more', { on: { click: () => { m._more = det.classList.toggle('hidden') === false; tg.classList.toggle('open', m._more); } } }, svg('chevron'), 'Details'); if (m._more) { det.classList.remove('hidden'); tg.classList.add('open'); } body.append(tg, det); }
+      el.append(body);
+    }
     if (m.error) el.append(h('div.errcard', m.error, h('div.actions', btn('Copy error', { cls: 'sm ghost', icon: 'copy', onClick: async () => { await copyText(m.error); toast('Copied', 'ok'); } }), btn('Run diagnostics', { cls: 'sm ghost', onClick: runDiagnostics }))));
     if (m.live) el.append(h('div.gen', h('span.shimmer', m.status && m.status !== 'thinking' ? m.status : 'Generating…')));
     if (!m.live && !m.error && m.text) el.append(h('div.meta', relTime(m.at)));
@@ -431,7 +446,7 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
       const redraw = () => { renderChat([...project.chat, live]); };
       es.onmessage = (e) => {
         const ev = JSON.parse(e.data);
-        if (ev.type === 'text') { live.text += (live.text ? '\n\n' : '') + ev.text; live.status = 'thinking'; }
+        if (ev.type === 'text') { live.tools.push({ note: ev.text }); live.text = ev.text; live.status = 'thinking'; }
         else if (ev.type === 'tool') { live.tools.push({ name: ev.name, detail: ev.detail }); live.status = `${ev.name} ${ev.detail || ''}`.trim(); if (/^(Edit|Write|MultiEdit)$/.test(ev.name) && /\.(html|css|js)$/.test(ev.detail || '')) reloadComp(); }
         else if (ev.type === 'status') live.status = ev.message;
         else if (ev.type === 'error') live.error = ev.message;
@@ -523,7 +538,7 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
     const live = { role: 'agent', text: '', tools: [], at: new Date().toISOString(), live: true, status: 'still working on your earlier message (press Stop to interrupt)' };
     renderChat([...(project.chat || []), live]);
     const es = new EventSource(`/api/jobs/${chatState.running}/events`);
-    es.onmessage = (e) => { const ev = JSON.parse(e.data); if (ev.type === 'text') live.text += (live.text ? '\n\n' : '') + ev.text; if (ev.type === 'tool') live.tools.push({ name: ev.name, detail: ev.detail }); if (ev.type === 'status') live.status = ev.message; if (ev.type === 'error') live.error = ev.message; renderChat([...(project.chat || []), live]); };
+    es.onmessage = (e) => { const ev = JSON.parse(e.data); if (ev.type === 'text') { live.tools.push({ note: ev.text }); live.text = ev.text; } if (ev.type === 'tool') live.tools.push({ name: ev.name, detail: ev.detail }); if (ev.type === 'status') live.status = ev.message; if (ev.type === 'error') live.error = ev.message; renderChat([...(project.chat || []), live]); };
     const finish = async () => { es.close(); agentJob = null; setBusy(false); project = await api.project(project.id); renderChat(project.chat || []); reloadComp(); };
     es.addEventListener('done', finish); es.onerror = finish;
   }

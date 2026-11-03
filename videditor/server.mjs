@@ -467,7 +467,7 @@ async function api(req, res, url) {
     const handle = { jobId: job.id, kill: null };
     agents.set(prj.id, handle);
     const onEvent = (ev) => {
-      if (ev.type === 'text') entry.text += (entry.text ? '\n\n' : '') + ev.text;
+      if (ev.type === 'text') { entry.tools.push({ note: ev.text }); entry.text = ev.text; }
       if (ev.type === 'tool') entry.tools.push({ name: ev.name, detail: ev.detail });
       if (ev.type === 'done') return; // emitted below, once
       job.push(ev);
@@ -486,6 +486,7 @@ async function api(req, res, url) {
       const p = store.project(prj.id);
       if (p) {
         if (!entry.text && out.result) entry.text = out.result;
+        if (entry.tools.length && entry.tools[entry.tools.length - 1].note === entry.text) entry.tools.pop(); // the final reply is shown as the body, not as a step
         if (out.error) entry.error = out.error;
         p.chat.push(entry);
         // Keep the session only when the run succeeded, so a broken session never blocks the chat.

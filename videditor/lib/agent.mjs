@@ -30,7 +30,10 @@ export function systemPrompt({ dir, composition, files, assetsDir = null, entry 
     motion ? `\n## Motion guidelines (MOTION.md, mandatory)\n${motion}` : '',
     media ? `\n## Media analysis (from MEDIA.md)\n${media}` : '',
     '',
-    'When you finish, reply with a short summary of what changed (clip ids, seconds) and anything you want the person to check. Do not run a render; Videditor renders.',
+    '## How to reply',
+    'Keep it tight. Your final reply is at most 3 short lines listing what changed (clip id, attribute, from → to), or the one-line answer. Lead with the changes, not with "Done" or "I have". No preamble, no restating the request, no explanations of how you worked, no offers of next steps.',
+    'If there is more worth knowing (choices you made, things to check), put it after a line that says exactly `Details:` — the chat folds that part away until the person opens it.',
+    'Between tool calls, write nothing or a few words at most. Do not run a render; Videditor renders.',
   ].join('\n');
 }
 
