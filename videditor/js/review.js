@@ -3,16 +3,7 @@ import { h, btn, svg, modal, toast, fmtTime, relTime, avatar, modeToggle, menuBu
 import { Player } from './player.js';
 import { DrawLayer, COLORS, drawStroke } from './draw.js';
 import { VoiceRecorder, highlightPointing } from './voice.js';
-import { Stage } from './stage.js';
 
-// Player-compatible wrapper around the live composition Stage.
-class StagePlayer {
-  constructor(stage, fps) { this.stage = stage; this.fps = fps; this.listeners = new Set(); for (const ev of ['time', 'play', 'pause', 'ready', 'ended']) stage.on(ev, () => this.emit()); }
-  get time() { return this.stage.time; } get duration() { return this.stage.duration; } get paused() { return !this.stage.playing; }
-  on(fn) { this.listeners.add(fn); return () => this.listeners.delete(fn); } emit() { for (const fn of this.listeners) fn(this); }
-  seek(t) { return this.stage.seek(Math.max(0, Math.min(this.duration || t, t))); } step(n) { this.pause(); return this.seek(this.time + n / this.fps); }
-  toggle() { this.stage.toggle(); } play() { this.stage.play(); } pause() { this.stage.pause(); } setRate() {}
-}
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -31,7 +22,7 @@ export async function renderReview(root, { projectId, versionId, navigate, topba
 
   // ---------- stage
   const video = h('video', { src: version.playable === false ? undefined : version.mediaUrl, poster: version.posterUrl || undefined, preload: 'auto', playsinline: true, crossorigin: 'anonymous' });
-  if (version.playable === false) setTimeout(() => toast(`${version.formatLabel || version.originalName} does not play in a browser. Download it from Versions, or switch to Live to review the composition.`, 'err'), 300);
+  if (version.playable === false) setTimeout(() => toast(`${version.formatLabel || version.originalName} does not play in a browser. Download it from the Send menu or the Versions list.`, 'err'), 300);
   const canvas = h('canvas.overlay');
   const recBadge = h('div.badge-rec.hidden', h('i'), 'Recording');
   const frame = h('div.frame', { style: { '--ar': version.width && version.height ? `${version.width}/${version.height}` : '16/9' } }, video, canvas, recBadge);
@@ -39,31 +30,8 @@ export async function renderReview(root, { projectId, versionId, navigate, topba
   let player = new Player(video, { fps });
   const playerSubs = []; const onPlayer = (fn) => { playerSubs.push(fn); player.on(fn); };
   const layer = new DrawLayer(canvas, () => player.time);
-  // Live mode: show the composition itself (runtime iframe) instead of the rendered MP4.
-  let live = false, stage = null;
-  const seekAndWait = async (t) => { if (live) { await player.seek(t); return; } if (Math.abs(player.time - t) <= 0.02) return; player.seek(t); await new Promise((r) => { const done = () => { video.removeEventListener('seeked', done); r(); }; video.addEventListener('seeked', done); setTimeout(r, 800); }); };
-  const snapshotAt = async (strokes, opts) => {
-    if (!live) return DrawLayer.snapshot(video, strokes, opts);
-    const img = new Image(); img.src = `/api/projects/${project.id}/frame?t=${player.time}&_=${Date.now()}`;
-    await new Promise((r) => { img.onload = r; img.onerror = r; });
-    return img.naturalWidth ? DrawLayer.snapshot(img, strokes, opts) : DrawLayer.snapshot({ width: 1280, height: 720 }, strokes, opts);
-  };
-  async function setLive(on) {
-    if (on === live) return; live = on;
-    player.pause();
-    if (on) {
-      video.classList.add('hidden'); stage = new Stage(frame); stage.iframe.style.zIndex = '1';
-      player = new StagePlayer(stage, fps); for (const fn of playerSubs) player.on(fn);
-      await stage.load(`/project-files/${project.id}/${project.composition || 'index.html'}?runtime=1&_=${Date.now()}`);
-      stage.on('select', (m) => { toast(`Selected #${m.id}`, 'ok'); if (!ta.value.trim()) { ta.value = `#${m.id}: `; } if (S.anchor === null) S.anchor = player.time; updateComposer(); ta.focus(); });
-      renderMarkers(); renderLanes(); player.emit();
-    } else {
-      stage?.destroy(); stage = null; video.classList.remove('hidden');
-      player = new Player(video, { fps }); for (const fn of playerSubs) player.on(fn); player.emit();
-    }
-    liveBtn?.classList.toggle('active', live); liveBtn && (liveBtn.title = live ? 'Showing the live composition. Click to show the rendered version.' : 'Show the live composition instead of the render');
-  }
-  let liveBtn = null;
+  const seekAndWait = async (t) => { if (Math.abs(player.time - t) <= 0.02) return; player.seek(t); await new Promise((r) => { const done = () => { video.removeEventListener('seeked', done); r(); }; video.addEventListener('seeked', done); setTimeout(r, 800); }); };
+  const snapshotAt = async (strokes, opts) => DrawLayer.snapshot(video, strokes, opts);
   fitFrame(); new ResizeObserver(fitFrame).observe(viewport);
   function fitFrame() { const r = viewport.getBoundingClientRect(); const ar = (version.width && version.height) ? version.width / version.height : 16 / 9; const w = Math.min(r.width - 32, (r.height - 24) * ar); frame.style.width = `${Math.max(200, w)}px`; frame.style.height = `${Math.max(112, w / ar)}px`; }
 
@@ -155,7 +123,7 @@ export async function renderReview(root, { projectId, versionId, navigate, topba
       frames.push({ time: t, label: layer.strokes.length ? 'annotated frame' : 'frame', dataUrl: await snapshotAt(layer.strokes) });
     }
     if (S.voice) for (const f of S.voice.frames) if (!(frames.length && Math.abs(f.time - frames[0].time) < 0.05 && f.label === 'start of note')) frames.push(f);
-    const body0 = { versionId: version.id, author, body: text, time: S.anchor, timeEnd: S.anchorEnd, tags: live ? ['live'] : [], kind: S.voice ? 'voice' : layer.strokes.length && !text ? 'drawing' : 'text', drawing: layer.strokes.length ? { color: layer.color, strokes: layer.strokes } : null, frames, refs: S.refs, transcript: S.voice?.transcript || null, visualReferences: S.voice?.visualReferences || [], audio: S.voice?.audio || null };
+    const body0 = { versionId: version.id, author, body: text, time: S.anchor, timeEnd: S.anchorEnd, tags: [], kind: S.voice ? 'voice' : layer.strokes.length && !text ? 'drawing' : 'text', drawing: layer.strokes.length ? { color: layer.color, strokes: layer.strokes } : null, frames, refs: S.refs, transcript: S.voice?.transcript || null, visualReferences: S.voice?.visualReferences || [], audio: S.voice?.audio || null };
     try {
       const f = await api.postFeedback(body0);
       ta.value = ''; layer.clear(); S.voice = null; S.refs = []; S.anchor = null; S.anchorEnd = null; S.touched = false; transcriptEl.classList.add('hidden'); setTool(null); updateComposer();
@@ -303,7 +271,6 @@ export async function renderReview(root, { projectId, versionId, navigate, topba
     h('span.title', { title: 'Rename', style: { cursor: 'text' }, on: { click: async () => { const i = h('input.text', { value: project.name }); if (await modal('Rename project', i, { actions: [{ label: 'Save', cls: 'primary' }] })) { project = await api.updateProject(project.id, { name: i.value }); renderReview(root, { projectId, versionId: version.id, navigate, topbar }); } } } }, project.name),
     modeToggle(project, 'review', navigate),
     verSel,
-    project.dir ? (liveBtn = btn('Live', { icon: 'film', title: 'Show the live composition instead of the render', onClick: () => setLive(!live) })) : null,
     h('span.spacer'),
     project.versions.length > 1 ? btn('Compare', { icon: 'compare', onClick: () => navigate(`#/p/${project.id}/compare?a=${project.versions[Math.max(0, project.versions.findIndex((v) => v.id === version.id) - 1)].id}&b=${version.id}`) }) : null,
     version.mediaUrl ? downloadLink(project, version) : null,
@@ -371,11 +338,11 @@ export async function renderReview(root, { projectId, versionId, navigate, topba
     } catch {}
   }, 4000);
 
-  root._cleanup = () => { clearInterval(poll); document.removeEventListener('keydown', key); player.pause(); stage?.destroy(); if (recorder?.recording) recorder.stop(); };
+  root._cleanup = () => { clearInterval(poll); document.removeEventListener('keydown', key); player.pause(); if (recorder?.recording) recorder.stop(); };
   root.replaceChildren(h('div.review', h('div.stage', viewport, controls, timeline, composer), panel));
   renderFeedback(); updateComposer(); counts.versions.textContent = project.versions.length;
   fitFrame();
-  const qs = new URLSearchParams(location.hash.split('?')[1] || ''); const sel = qs.get('fb'); if (sel) setTimeout(() => select(sel), 300); if (qs.get('live') === '1' && project.dir) setLive(true);
+  const qs = new URLSearchParams(location.hash.split('?')[1] || ''); const sel = qs.get('fb'); if (sel) setTimeout(() => select(sel), 300);
 }
 
 function renderNoVersions(root, project, { navigate, topbar }) {

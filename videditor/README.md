@@ -78,10 +78,8 @@ subscription. No accounts, no credits.
   ("this", "here") logged against the video time and a captured frame each.
 - Each note records which clips were on screen. Versions, side-by-side / wipe **compare**, open/done,
   threads, tags, reference images.
-- **Live** toggles from the rendered MP4 to the composition itself, running in the page: you review the
-  current state without rendering, click an element to name it in a note, and frames for your drawings are
-  captured from the live composition.
-- **Copy prompt** builds a brief for any agent. The **MCP server** (`mcp.mjs`) lets Claude Code read
+- The **Send** menu hands the open notes to the agent, copies a brief for any other agent, copies the
+  link, or shows the file in Finder. **Copy prompt** builds a brief for any agent. The **MCP server** (`mcp.mjs`) lets Claude Code read
   feedback, fetch annotated frames, post replies, **render the next version** and wait for new notes.
 
 ## Run it
