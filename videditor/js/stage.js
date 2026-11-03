@@ -12,17 +12,24 @@ export class Stage {
   on(type, fn) { if (!this.listeners.has(type)) this.listeners.set(type, new Set()); this.listeners.get(type).add(fn); return () => this.listeners.get(type).delete(fn); }
   emit(type, data) { for (const fn of this.listeners.get(type) || []) fn(data); }
   load(src) {
+    // A fresh frame never starts playing: forget the old playing state so the play button cannot get stuck.
+    if (this.playing) { this.playing = false; this.emit('pause'); }
+    // Each load gets its own token: a newer load supersedes (and resolves) an older pending one, and an old
+    // timeout can never clear a newer load's callback (that left reloads hanging when edits came in quick succession).
+    const token = (this._loadSeq = (this._loadSeq || 0) + 1);
+    this._loadResolve?.(null);
     return new Promise((resolve) => {
-      this._onReady = (info) => { this._onReady = null; resolve(info); };
+      this._loadResolve = resolve;
+      this._onReady = (info) => { if (this._loadSeq !== token) return; this._onReady = null; this._loadResolve = null; resolve(info); };
       this.iframe.src = src;
-      setTimeout(() => { if (this._onReady) { this._onReady = null; resolve(null); } }, 10000);
+      setTimeout(() => { if (this._loadSeq === token && this._onReady) { this._onReady = null; this._loadResolve = null; resolve(null); } }, 10000);
     });
   }
   reload(keepTime = true) { const t = this.time; return this.load(this.iframe.src.replace(/([?&])_=\d+/, '$1_=' + Date.now()) + (/[?&]_=/.test(this.iframe.src) ? '' : '&_=' + Date.now())).then((info) => { if (keepTime) this.seek(Math.min(t, info?.duration ?? t)); return info; }); }
   post(msg) { this.iframe.contentWindow?.postMessage({ __videditor: true, ...msg }, '*'); }
   _handle(m) {
     switch (m.type) {
-      case 'ready': this.info = m; this.fit(); this.time = 0; this.emit('ready', m); this._onReady?.(m); break;
+      case 'ready': this.info = m; this.fit(); this.time = 0; if (this.playing) { this.playing = false; this.emit('pause'); } this.emit('ready', m); this._onReady?.(m); break;
       case 'info': this.info = m; if (this._pending.has(m.id)) { this._pending.get(m.id)(m); this._pending.delete(m.id); } break;
       case 'seeked': this.time = m.t; if (this._pending.has(m.id)) { this._pending.get(m.id)(m.t); this._pending.delete(m.id); } this.emit('time', m.t); break;
       case 'timeupdate': this.time = m.t; this.emit('time', m.t); break;
@@ -34,7 +41,7 @@ export class Stage {
   }
   seek(t) { const id = ++this._seq; this.time = t; this.emit('time', t); return new Promise((resolve) => { this._pending.set(id, resolve); this.post({ type: 'seek', t, id }); setTimeout(() => { if (this._pending.has(id)) { this._pending.delete(id); resolve(t); } }, 3000); }); }
   refreshInfo() { const id = ++this._seq; return new Promise((resolve) => { this._pending.set(id, resolve); this.post({ type: 'info', id }); setTimeout(() => resolve(this.info), 2000); }); }
-  play() { this.post({ type: 'play', t: this.time }); }
+  play() { const d = this.duration; const t = d && this.time >= d - 1 / this.fps ? 0 : this.time; this.post({ type: 'play', t }); }
   pause() { this.post({ type: 'pause' }); }
   toggle() { this.playing ? this.pause() : this.play(); }
   select(id) { this.post({ type: 'select', id }); }

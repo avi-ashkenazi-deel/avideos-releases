@@ -117,9 +117,25 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
   const step = (n) => { stage.pause(); stage.seek(Math.max(0, Math.min(stage.duration, stage.time + n / stage.fps))); };
   function updateTime() { timeEl.innerHTML = `<b>${fmtTime(stage.time, { frames: true, fps: stage.fps })}</b> / ${fmtTime(stage.duration, { frames: true, fps: stage.fps })}`; playBtn.replaceChildren(svg(stage.playing ? 'pause' : 'play')); drawPlayhead(); for (const el of tracksEl.querySelectorAll('.tclip')) el.classList.toggle('on', stage.time >= Number(el.dataset.start) && stage.time < Number(el.dataset.end)); if (sideTab === 'layers') renderLayers(false); }
   stage.on('time', updateTime); stage.on('play', updateTime); stage.on('pause', updateTime);
-  stage.on('ready', () => { overlayMsg.remove(); updateTime(); renderTimeline(); renderLayers(); });
+  stage.on('ready', () => { hideOverlay(); updateTime(); renderTimeline(); renderLayers(); });
   stage.on('select', (m) => selectClip(m.id, { fromStage: true }));
-  async function reloadComp() { composition = await api.composition(project.id).catch(() => composition); const t = stage.time; await stage.load(src()); await stage.seek(Math.min(t, stage.duration || t)); renderTimeline(); renderLayers(); if (sideTab === 'history') renderHistory(); }
+  let reloading = null;
+  async function reloadComp() {
+    if (reloading) return reloading; // agent edits can arrive faster than a reload; coalesce
+    reloading = (async () => {
+      composition = await api.composition(project.id).catch(() => composition);
+      const t = stage.time; const wasPlaying = stage.playing;
+      const info = await stage.load(src());
+      if (!info) { showOverlay('The composition did not load. Check index.html in Files, or ask the agent to fix it.', true); return; }
+      hideOverlay();
+      await stage.seek(Math.min(t, stage.duration || t));
+      renderTimeline(); renderLayers(); if (sideTab === 'history') renderHistory();
+      if (wasPlaying) stage.play();
+    })().finally(() => { reloading = null; });
+    return reloading;
+  }
+  function showOverlay(text, withReload = false) { overlayMsg.replaceChildren(text, withReload ? btn('Reload', { cls: 'sm', icon: 'undo', onClick: () => reloadComp() }) : null); overlayMsg.style.pointerEvents = withReload ? 'auto' : ''; if (!overlayMsg.isConnected) stageWrap.append(overlayMsg); }
+  function hideOverlay() { overlayMsg.remove(); }
 
   // ---------- timeline
   const ruler = h('div.ruler'); const tracksEl = h('div.tracks'); const phead = h('div.phead');
@@ -527,7 +543,7 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
   document.addEventListener('keydown', key);
   new ResizeObserver(() => { renderTimeline(); }).observe(tlScroll);
   await stage.load(src());
-  if (!stage.info) overlayMsg.textContent = 'The composition did not load. Check index.html in Files.';
+  if (!stage.info) showOverlay('The composition did not load. Check index.html in Files, or ask the agent to fix it.', true);
   // Resume a running agent job (page reload mid-run) or start with a prompt from the URL.
   api.renderStatus(project.id).then((r) => { if (r.running) followRender(r.running, { quiet: true }); }).catch(() => {});
   const chatState = await api.chat(project.id).catch(() => null);

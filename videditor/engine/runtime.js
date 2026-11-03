@@ -97,10 +97,11 @@
   }
   function play(from) {
     if (state.playing) return;
+    const dur = info().duration;
     if (from !== undefined) seek(from);
+    if (state.t >= dur - 1e-3) seek(0); // play at the end starts over
     state.playing = true; state.clock0 = performance.now(); state.t0 = state.t;
     for (const a of document.getAnimations()) a.play();
-    const dur = info().duration;
     const tick = () => {
       if (!state.playing) return;
       const t = state.t0 + (performance.now() - state.clock0) / 1000;
