@@ -8,7 +8,8 @@ export function buildPrompt({ project, version, feedback, composition, baseUrl, 
   const live = !version;
   lines.push(`# Video review brief: ${project.name} ${live ? '(live composition)' : version.label}`);
   lines.push('');
-  lines.push(live ? `You are revising a video. The reviewer paused the live composition in Videditor Studio, talked and drew on the frame. Apply the feedback to the composition; the person renders.` : `You are revising a video. A reviewer left timestamped feedback on the current render in Videditor. Apply the feedback, render a new version, register it, then reply on each item and mark it done.`);
+  const run = live && open.some((f) => f.tags?.includes('run-through'));
+  lines.push(live ? (run ? `You are revising a video. The reviewer played the live composition through in Videditor Studio and talked (and drew) as it ran. Each item below is timed to the moment it was said; "this" means what was on screen then. Apply all of them to the composition; the person renders.` : `You are revising a video. The reviewer paused the live composition in Videditor Studio, talked and drew on the frame. Apply the feedback to the composition; the person renders.`) : `You are revising a video. A reviewer left timestamped feedback on the current render in Videditor. Apply the feedback, render a new version, register it, then reply on each item and mark it done.`);
   lines.push('');
   lines.push(live ? `- Videditor Studio: ${baseUrl}/#/studio/${project.id}` : `- Videditor: ${baseUrl}/#/p/${project.id}?v=${version.id}`);
   if (project.dir) lines.push(`- Composition folder: ${project.dir}`);
@@ -31,6 +32,8 @@ export function buildPrompt({ project, version, feedback, composition, baseUrl, 
     if (composition && f.time !== null) {
       const on = clipsAt(composition, f.time);
       lines.push(on.length ? `- On screen at ${fmt(f.time)}: ${on.map(describeClip).join('; ')}` : `- On screen at ${fmt(f.time)}: nothing timed (check the composition)`);
+      const cut = lastCutBefore(composition, f.time, 1.5);
+      if (cut !== null) { const before = clipsAt(composition, Math.max(0, cut - 0.05)).filter((c) => !on.includes(c)); if (before.length) lines.push(`- A cut happened ${(f.time - cut).toFixed(1)}s before this remark. Just before it: ${before.map(describeClip).join('; ')}. With a fast cut the remark may be about that section instead.`); }
     } else if (f.clipContext?.length) {
       lines.push(`- On screen: ${f.clipContext.map((c) => c.label || c.id).join('; ')}`);
     }
@@ -51,6 +54,18 @@ export function buildPrompt({ project, version, feedback, composition, baseUrl, 
   lines.push(`4. For each item above, reply in its thread (MCP \`feedback_post\` with reply_to) saying what changed, and set its status to done (\`feedback_update\`). Leave anything you chose not to change open, with a reply explaining why.`);
   lines.push(`5. If a note is ambiguous, ask in a reply instead of guessing.`);
   return lines.join('\n');
+}
+
+// The latest clip boundary (a start or an end) within `within` seconds before t, or null.
+export function lastCutBefore(composition, t, within = 1.5) {
+  let best = null;
+  for (const c of composition.clips || []) {
+    for (const b of [c.start, c.duration !== null && c.duration !== undefined ? c.start + c.duration : null]) {
+      if (b === null || !Number.isFinite(b)) continue;
+      if (b <= t + 0.05 && b >= t - within && b > 0.05 && (best === null || b > best)) best = b;
+    }
+  }
+  return best;
 }
 
 export function describeDrawing(d) {

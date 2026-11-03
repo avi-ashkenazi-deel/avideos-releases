@@ -28,7 +28,7 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
   stageWrap.append(liveTranscript);
   const N = { recording: null, anchor: null, tool: null, autoSend: localStorage.getItem('videditor.autoSend') !== '0' };
   const snapshotLive = async (strokes, opts = {}) => {
-    const img = new Image(); img.src = `/api/projects/${project.id}/frame?t=${stage.time}&_=${Date.now()}`;
+    const img = new Image(); img.src = `/api/projects/${project.id}/frame?t=${opts.t ?? stage.time}&_=${Date.now()}`;
     await new Promise((r) => { img.onload = r; img.onerror = r; });
     return DrawLayer.snapshot(img.naturalWidth ? img : { width: stage.info?.width || 1280, height: stage.info?.height || 720 }, strokes, opts);
   };
@@ -64,13 +64,14 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
   const toolBtn = (name, ic, title) => (toolBtns[name] = btn('', { icon: ic, cls: 'icon sm', title, onClick: () => setNoteTool(N.tool === name ? null : name) }));
   const colors = h('span.colors', COLORS.map((c) => h('span.swatch', { style: { background: c }, class: `swatch ${c === noteLayer.color ? 'active' : ''}`, on: { click: (e) => { noteLayer.color = c; colors.querySelectorAll('.swatch').forEach((x) => x.classList.toggle('active', x === e.currentTarget)); } } })));
   const recBtn = btn('Talk', { icon: 'mic', cls: 'sm', title: 'Record a voice note on the preview (R). Pause, play, scrub and draw while you talk; when you stop it goes to the agent.', onClick: () => toggleNoteRecord() });
+  const runBtn = btn('Run-through', { icon: 'film', cls: 'sm', title: 'Play the video from the start and just talk (and draw) as it runs. Every remark is pinned to the cut that was on screen; when the video ends it all goes to the agent. (Shift+R)', onClick: () => toggleRun() });
   const sendNoteBtn = btn('Send drawing', { icon: 'spark', cls: 'sm hidden', title: 'Send the drawing (and selected element) to the agent', onClick: () => finishNote() });
   const autoSend = h('label.autosend', { title: 'Send to the agent automatically when a voice note ends' }, h('input', { type: 'checkbox', checked: N.autoSend, on: { change: (e) => { N.autoSend = e.target.checked; localStorage.setItem('videditor.autoSend', N.autoSend ? '1' : '0'); } } }), 'auto-send');
   const zoomOutBtn = btn('', { icon: 'minus', cls: 'icon ghost sm', title: 'Zoom timeline out (−)', onClick: () => setZoom(zoom / 1.5) });
   const zoomInBtn = btn('', { icon: 'plus', cls: 'icon ghost sm', title: 'Zoom timeline in (+)', onClick: () => setZoom(zoom * 1.5) });
   const zoomFitBtn = btn('Fit', { cls: 'ghost sm', title: 'Fit the whole video (0)', onClick: () => setZoom(1) });
   const transport = h('div.transport', playBtn, btn('', { icon: 'stepBack', cls: 'icon ghost', title: 'Back one frame (←)', onClick: () => step(-1) }), btn('', { icon: 'stepFwd', cls: 'icon ghost', title: 'Forward one frame (→)', onClick: () => step(1) }), timeEl,
-    h('span.sep'), toolBtn('pen', 'pen', 'Draw on the preview (D)'), colors, btn('', { icon: 'undo', cls: 'icon sm ghost', title: 'Undo stroke (Z)', onClick: () => noteLayer.undo() }), recBtn, sendNoteBtn, autoSend,
+    h('span.sep'), toolBtn('pen', 'pen', 'Draw on the preview (D)'), colors, btn('', { icon: 'undo', cls: 'icon sm ghost', title: 'Undo stroke (Z)', onClick: () => noteLayer.undo() }), recBtn, runBtn, sendNoteBtn, autoSend,
     h('span.spacer'), zoomOutBtn, zoomFitBtn, zoomInBtn, btn('Reload', { cls: 'ghost sm', title: 'Reload the composition from disk', onClick: () => reloadComp() }), renderPill, autoRenderLbl, renderBtn);
   noteLayer.onChange = (strokes) => { if (strokes.length && N.anchor === null) N.anchor = strokes[0].points[0][2]; sendNoteBtn.classList.toggle('hidden', !strokes.length || !!N.recording); };
 
@@ -103,6 +104,51 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
       noteLayer.clear(); N.anchor = null; setNoteTool(null); sendNoteBtn.classList.add('hidden'); liveTranscript.classList.add('hidden');
       if (N.autoSend) { await sendNotesToAgent([note.id], body); } else { project.chat.push({ role: 'user', text: `[note saved] ${body}`, at: new Date().toISOString(), author }); renderChat(project.chat); toast('Note saved. Auto-send is off; send it from the chat.', 'ok'); }
     } catch (e) { toast(e.message, 'err'); liveTranscript.classList.add('hidden'); }
+  }
+  // Run-through: play the whole video and talk/draw as it runs. Each utterance becomes a note timed to the cut it was
+  // said over (the brief also names the cut just before, for fast cuts); drawings attach to the remark they happened in.
+  async function toggleRun() {
+    if (N.run) return finishRun();
+    if (N.recording) return toast('Stop the current voice note first', 'err');
+    if (agentJob) return toast('The agent is still working. Wait for it to finish, then run through.', 'err');
+    if (!VoiceRecorder.supported()) return toast('This browser cannot record audio. Use Chrome.', 'err');
+    try {
+      stage.pause(); noteLayer.clear(); N.anchor = null;
+      await stage.seek(IO.in ?? 0);
+      const rec = new VoiceRecorder({ getTime: () => stage.time, snapshot: () => null });
+      await rec.start((r) => { liveTranscript.classList.remove('hidden'); liveTranscript.innerHTML = `<span class="runtag">● Run-through · ${r.segments.length} remark${r.segments.length === 1 ? '' : 's'}</span> ` + (r.interim ? `<span class="muted">${r.interim.replace(/[&<>]/g, '')}</span>` : (r.segments.length ? highlightPointing(r.segments[r.segments.length - 1].text.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]))) : '<span class="muted">Talk as it plays. Draw if you like. It stops by itself at the end.</span>')); });
+      N.run = { rec, off: stage.on('ended', () => finishRun()) };
+      runBtn.replaceChildren(svg('stop'), 'Stop run'); runBtn.classList.add('danger'); stageWrap.classList.add('rec'); recBtn.disabled = true;
+      setNoteTool('pen');
+      stage.play();
+    } catch (e) { toast(`Microphone: ${e.message}`, 'err'); N.run = null; }
+  }
+  async function finishRun() {
+    const run = N.run; if (!run) return; N.run = null; run.off();
+    stage.pause();
+    runBtn.replaceChildren(svg('film'), 'Run-through'); runBtn.classList.remove('danger'); stageWrap.classList.remove('rec'); recBtn.disabled = false; runBtn.disabled = true;
+    liveTranscript.classList.remove('hidden'); liveTranscript.innerHTML = '<span class="muted">Building notes from your run…</span>';
+    try {
+      const voice = await run.rec.stop();
+      const segs = (voice.segments || []).filter((s) => s.text.trim()).map((s) => ({ ...s, strokes: [] }));
+      const strokes = noteLayer.strokes.slice(); const strokeT = (s) => s.points[0]?.[2] ?? 0;
+      const loose = [];
+      for (const st of strokes) { let best = null, bd = Infinity; for (const it of segs) { const t = strokeT(st); const d = t < it.start ? it.start - t : t > it.end ? t - it.end : 0; if (d < bd) { bd = d; best = it; } } if (best && bd <= 0.8) best.strokes.push(st); else loose.push(st); }
+      for (const st of loose) segs.push({ text: '', start: strokeT(st), end: strokeT(st), strokes: [st] });
+      segs.sort((a, b) => a.start - b.start);
+      if (!segs.length) { toast('Nothing was said or drawn during the run.', 'err'); noteLayer.clear(); setNoteTool(null); liveTranscript.classList.add('hidden'); return; }
+      const author = await ensureAuthor(); const ids = [];
+      for (const [i, it] of segs.entries()) {
+        liveTranscript.innerHTML = `<span class="muted">Building notes from your run… ${i + 1}/${segs.length}</span>`;
+        const frames = [{ time: it.start, label: it.strokes.length ? 'annotated frame' : 'frame', dataUrl: await snapshotLive(it.strokes, { t: it.start, maxWidth: 960, quality: 0.8 }) }];
+        const note = await api.postFeedback({ projectId: project.id, versionId: null, author, body: it.text || 'Drawing on the frame', time: it.start, timeEnd: it.end > it.start + 0.3 ? it.end : null, kind: it.text ? 'voice' : 'drawing', drawing: it.strokes.length ? { color: noteLayer.color, strokes: it.strokes } : null, frames, transcript: it.text || null, visualReferences: (voice.visualReferences || []).filter((r) => r.time >= it.start - 0.5 && r.time <= it.end + 0.5), audio: i === 0 ? voice.audio : null, tags: ['studio', 'run-through'] });
+        ids.push(note.id);
+      }
+      noteLayer.clear(); setNoteTool(null); liveTranscript.classList.add('hidden');
+      const summary = `Run-through: ${segs.length} remark${segs.length === 1 ? '' : 's'} at ${segs.map((s) => fmtTime(s.start)).join(', ')}`;
+      if (N.autoSend) await sendNotesToAgent(ids, summary); else { project.chat.push({ role: 'user', text: `[notes saved] ${summary}`, at: new Date().toISOString(), author }); renderChat(project.chat); toast('Notes saved. Auto-send is off; send them from the chat.', 'ok'); }
+    } catch (e) { toast(e.message, 'err'); liveTranscript.classList.add('hidden'); }
+    finally { runBtn.disabled = false; }
   }
   async function sendNotesToAgent(ids, summary) {
     if (agentJob) { toast('The agent is still busy. The note is saved; send it when it finishes.', 'err'); return; }
@@ -342,7 +388,7 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
 
   // ---------- variants (several compositions in one project)
   const variantSel = h('select.text', { style: { width: 'auto', maxWidth: '220px' }, title: 'Which composition you are looking at. A variant is a separate copy you can take in another direction.' });
-  async function renderVariants() {
+  let renderVariants = async function () {
     let data; try { data = await api.variants(project.id); } catch { return; }
     variantSel.replaceChildren(...data.variants.map((v) => h('option', { value: v.entry, selected: v.entry === data.active }, v.entry === 'index.html' ? 'Main composition' : `Variant: ${v.title || v.name}`)), h('option', { value: '__new' }, '+ New variant from this one…'), data.active !== 'index.html' ? h('option', { value: '__delete' }, '✕ Delete this variant') : null);
   }
@@ -355,6 +401,8 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
     } catch (e) { toast(e.message, 'err'); }
     await renderVariants(); await reloadComp();
   });
+  const variantDelBtn = btn('', { icon: 'trash', cls: 'ghost icon sm hidden', title: 'Delete this variant (the main composition is kept)', onClick: async () => { variantSel.value = '__delete'; variantSel.dispatchEvent(new Event('change')); } });
+  const _rv = renderVariants; renderVariants = async () => { await _rv(); variantDelBtn.classList.toggle('hidden', activeEntry() === 'index.html'); };
   renderVariants();
 
   function selectClip(id, { fromStage = false } = {}) {
@@ -528,7 +576,7 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
   // ---------- top bar + layout
   topbar([
     btn('', { icon: 'back', cls: 'ghost icon', title: 'All videos', onClick: () => navigate('#/') }),
-    h('span.title', project.name), h('span.pill', svg('spark'), 'Studio'), variantSel,
+    h('span.title', project.name), h('span.pill', svg('spark'), 'Studio'), variantSel, variantDelBtn,
     h('span.spacer'),
     project.versions.length ? btn('Review', { icon: 'chat', title: 'Review the latest render', onClick: () => navigate(`#/p/${project.id}`) }) : null,
     btn('', { icon: 'trash', cls: 'ghost icon', title: 'Delete project', onClick: async () => { if (await confirmDeleteProject(api, project)) navigate('#/'); } }),
@@ -538,8 +586,8 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
   if (!Array.isArray(project.chat)) project.chat = [];
   renderChat(project.chat);
   const key = (e) => { if (e.target.matches('input, textarea, select') || e.metaKey || e.ctrlKey) return; const k = e.key.toLowerCase();
-    if (e.key === '?' || (e.key === '/' && e.shiftKey)) return shortcutsSheet('Studio shortcuts', [['Space', 'Play / pause'], ['← →', 'One frame back / forward'], ['Shift+← →', 'One second'], ['Home', 'Go to start'], ['D', 'Draw on the preview'], ['R', 'Talk: start / stop a voice note (goes to the agent)'], ['Z', 'Undo last stroke'], ['Esc', 'Deselect / stop drawing'], ['I / O', 'Set in / out point (render range)'], ['Shift+I', 'Clear in / out'], ['+ −', 'Zoom timeline'], ['0', 'Fit timeline'], ['⌘ wheel', 'Zoom timeline around the cursor'], ['Enter', 'Send to the agent (in the chat box)'], ['Shift+Enter', 'New line in the chat box'], ['Enter', 'Confirm a dialog'], ['?', 'This sheet']]);
-    if (k === 'c') { e.preventDefault(); ta.focus(); return; } if (k === 'd') return setNoteTool(N.tool === 'pen' ? null : 'pen'); if (k === 'r') return toggleNoteRecord(); if (k === 'i' && e.shiftKey) return clearIO(); if (k === 'i') { setIO('in', Math.round(stage.time * 100) / 100); return toast(`In point ${fmtTime(IO.in)}`, 'ok'); } if (k === 'o') { setIO('out', Math.round(stage.time * 100) / 100); return toast(`Out point ${fmtTime(IO.out)}`, 'ok'); } if (k === 'z') return noteLayer.undo(); if (k === '+' || k === '=') return setZoom(zoom * 1.5); if (k === '-') return setZoom(zoom / 1.5); if (k === '0') return setZoom(1); if (e.code === 'Space') { e.preventDefault(); stage.toggle(); } else if (e.key === 'ArrowLeft') { e.preventDefault(); e.shiftKey ? stage.seek(Math.max(0, stage.time - 1)) : step(-1); } else if (e.key === 'ArrowRight') { e.preventDefault(); e.shiftKey ? stage.seek(Math.min(stage.duration, stage.time + 1)) : step(1); } else if (e.key === 'Home') stage.seek(0); else if (e.key === 'Escape') selectClip(null); };
+    if (e.key === '?' || (e.key === '/' && e.shiftKey)) return shortcutsSheet('Studio shortcuts', [['Space', 'Play / pause'], ['← →', 'One frame back / forward'], ['Shift+← →', 'One second'], ['Home', 'Go to start'], ['D', 'Draw on the preview'], ['R', 'Talk: start / stop a voice note (goes to the agent)'], ['Shift+R', 'Run-through: play from the start, talk and draw as it runs; everything goes to the agent at the end'], ['Z', 'Undo last stroke'], ['Esc', 'Deselect / stop drawing'], ['I / O', 'Set in / out point (render range)'], ['Shift+I', 'Clear in / out'], ['+ −', 'Zoom timeline'], ['0', 'Fit timeline'], ['⌘ wheel', 'Zoom timeline around the cursor'], ['Enter', 'Send to the agent (in the chat box)'], ['Shift+Enter', 'New line in the chat box'], ['Enter', 'Confirm a dialog'], ['?', 'This sheet']]);
+    if (k === 'c') { e.preventDefault(); ta.focus(); return; } if (k === 'd') return setNoteTool(N.tool === 'pen' ? null : 'pen'); if (k === 'r' && e.shiftKey) return toggleRun(); if (k === 'r') return toggleNoteRecord(); if (k === 'i' && e.shiftKey) return clearIO(); if (k === 'i') { setIO('in', Math.round(stage.time * 100) / 100); return toast(`In point ${fmtTime(IO.in)}`, 'ok'); } if (k === 'o') { setIO('out', Math.round(stage.time * 100) / 100); return toast(`Out point ${fmtTime(IO.out)}`, 'ok'); } if (k === 'z') return noteLayer.undo(); if (k === '+' || k === '=') return setZoom(zoom * 1.5); if (k === '-') return setZoom(zoom / 1.5); if (k === '0') return setZoom(1); if (e.code === 'Space') { e.preventDefault(); stage.toggle(); } else if (e.key === 'ArrowLeft') { e.preventDefault(); e.shiftKey ? stage.seek(Math.max(0, stage.time - 1)) : step(-1); } else if (e.key === 'ArrowRight') { e.preventDefault(); e.shiftKey ? stage.seek(Math.min(stage.duration, stage.time + 1)) : step(1); } else if (e.key === 'Home') stage.seek(0); else if (e.key === 'Escape') selectClip(null); };
   document.addEventListener('keydown', key);
   new ResizeObserver(() => { renderTimeline(); }).observe(tlScroll);
   await stage.load(src());

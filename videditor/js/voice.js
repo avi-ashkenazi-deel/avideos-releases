@@ -5,7 +5,7 @@ const POINTING = /\b(this|that|these|those|here|there|right here|over here|this 
 
 export class VoiceRecorder {
   constructor({ getTime, snapshot }) { this.getTime = getTime; this.snapshot = snapshot; this.reset(); }
-  reset() { this.transcript = ''; this.interim = ''; this.visualReferences = []; this.frames = []; this.chunks = []; this.startTime = null; this.recording = false; this.lastPointAt = -1; }
+  reset() { this.transcript = ''; this.interim = ''; this.visualReferences = []; this.frames = []; this.chunks = []; this.startTime = null; this.recording = false; this.lastPointAt = -1; this.segments = []; this._segStart = {}; this._lastIdx = -1; }
   static supported() { return !!(navigator.mediaDevices?.getUserMedia && window.MediaRecorder); }
   static speechSupported() { return !!(window.SpeechRecognition || window.webkitSpeechRecognition); }
 
@@ -25,7 +25,9 @@ export class VoiceRecorder {
         let interim = '';
         for (let i = e.resultIndex; i < e.results.length; i++) {
           const text = e.results[i][0].transcript;
-          if (e.results[i].isFinal) { this.transcript = (this.transcript + ' ' + text).trim(); this.notePointing(text); }
+          // Each recognizer result is one utterance; remember the video time it started (recognition lags speech by ~0.6s).
+          if (this._segStart[i] === undefined) { this._segStart[i] = Math.max(0, this.getTime() - 0.6); this._lastIdx = i; }
+          if (e.results[i].isFinal) { this.transcript = (this.transcript + ' ' + text).trim(); this.notePointing(text); if (text.trim()) this.segments.push({ text: text.trim(), start: this._segStart[i], end: this.getTime() }); }
           else { interim += text; this.notePointing(text, true); }
         }
         this.interim = interim; this.onUpdate?.(this);
@@ -51,7 +53,8 @@ export class VoiceRecorder {
     const audio = await new Promise((res) => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(blob); });
     for (const f of this.frames) { try { f.dataUrl = await f.dataUrl; } catch { f.dataUrl = null; } }
     this.frames = this.frames.filter((f) => f.dataUrl);
-    return { audio, transcript: (this.transcript + ' ' + this.interim).trim(), visualReferences: this.visualReferences, frames: this.frames, startTime: this.startTime, endTime: this.getTime(), seconds: blob.size ? null : 0 };
+    if (this.interim.trim()) this.segments.push({ text: this.interim.trim(), start: this._segStart[this._lastIdx] ?? Math.max(0, this.getTime() - 1), end: this.getTime() });
+    return { audio, transcript: (this.transcript + ' ' + this.interim).trim(), visualReferences: this.visualReferences, frames: this.frames, segments: this.segments, startTime: this.startTime, endTime: this.getTime(), seconds: blob.size ? null : 0 };
   }
 }
 export const highlightPointing = (text) => text.replace(POINTING, (m) => `<mark>${m}</mark>`);

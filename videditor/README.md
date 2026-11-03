@@ -21,6 +21,10 @@ subscription. No accounts, no credits.
   folder with a skill that teaches it the format (`skills/videditor/SKILL.md`). You see every file it
   edits as it works; the preview reloads live. Click an element in the preview to talk about it
   ("About `#title`: make it bigger").
+- **Run-through.** Press Run-through (Shift+R): the video plays from the start and you just talk, drawing
+  if you like, as it runs. Every remark is pinned to the moment it was said and to the cut on screen (the
+  brief also names the cut just before it, for fast cuts). When the video ends, all of it goes to the
+  agent in one go. **Talk** (R) is the same for a single paused moment.
 - **Timeline.** Lanes per track; drag a clip to move it, drag an edge to trim. Edits are written straight
   into `index.html` by element id. Layers panel and a numeric inspector for exact values. Files panel
   with an in-app editor for `index.html`, CSS and `BRIEF.md`.
