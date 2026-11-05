@@ -27,7 +27,7 @@ pkg.version = version; fs.writeFileSync(pkgFile, JSON.stringify(pkg, null, 2) + 
 const logFile = path.join(ROOT, 'CHANGELOG.md'); const prev = fs.existsSync(logFile) ? fs.readFileSync(logFile, 'utf8').replace(/^# Changelog\n+/, '') : '';
 fs.writeFileSync(logFile, `# Changelog\n\n## ${version} · ${new Date().toISOString().slice(0, 10)}\n${notes.map((n) => `- ${n}`).join('\n')}\n\n${prev}`);
 git('add', 'package.json', 'CHANGELOG.md');
-git('commit', '-q', '-m', `videditor v${version}`, '-m', notes.map((n) => `- ${n}`).join('\n'));
+git('commit', '-q', '-m', `videditor v${version}`, '-m', notes.map((n) => `- ${n}`).join('\n'), ...(process.env.RELEASE_COMMIT_TRAILER ? ['-m', process.env.RELEASE_COMMIT_TRAILER] : []));
 git('tag', '-a', tag, '-m', notes.map((n) => `• ${n}`).join('\n'));
 console.log(`release: committed and tagged ${tag}`);
 if (push) { git('push', '-q', 'origin', 'HEAD'); git('push', '-q', 'origin', tag); console.log('release: pushed. Installed copies update on their next launch.'); }

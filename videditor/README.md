@@ -94,6 +94,34 @@ subscription. No accounts, no credits.
   link, or shows the file in Finder. **Copy prompt** builds a brief for any agent. The **MCP server** (`mcp.mjs`) lets Claude Code read
   feedback, fetch annotated frames, post replies, **render the next version** and wait for new notes.
 
+## Share it (install and updates)
+
+**For the people you share it with** (Mac). They need read access to this GitHub repository and Git signed
+in to GitHub once (`brew install gh && gh auth login && gh auth setup-git`). Then one command:
+
+```bash
+gh api -H "Accept: application/vnd.github.raw" "repos/avi-ashkenazi-deel/avideos-releases/contents/videditor/install.sh?ref=Videditor" | bash
+```
+
+The installer adds what is missing (Node 22+, ffmpeg, Chrome, Claude Code; it needs Homebrew), downloads the
+newest release into `~/.videditor`, and creates a **Videditor** app in `~/Applications` (Spotlight finds it)
+plus a `videditor` command. Their videos, renders and notes live in **`~/Videditor`**, which updates never
+touch. Opening Videditor installs a newer release first (they can turn that off in the account menu); a
+green **Update** button also appears in the top bar when a release comes out while it is open.
+
+**For you: publishing an update.** Commit your work, then:
+
+```bash
+node videditor/tools/release.mjs 0.4.0 "What changed, in one line" "Another line" --push
+```
+
+That bumps the version, adds the notes to `CHANGELOG.md`, tags `videditor-v0.4.0` and pushes. Everyone gets
+it the next time they open Videditor, with your notes in the update dialog. Only tagged releases ship;
+day-to-day commits on the branch do not. To roll back, release the previous code under a newer number.
+
+Your own checkout (with `data/` next to the code) is a developer copy: it never updates itself, and you
+keep using `git pull`.
+
 ## Run it
 
 Requirements: Node 22+, ffmpeg, Google Chrome (or Edge), Claude Code (`npm i -g @anthropic-ai/claude-code`).

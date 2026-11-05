@@ -46,17 +46,20 @@ refreshUpdate();
 function accountMenu(who) {
   const changeName = async () => { close(); const i = h('input.text', { value: who, maxlength: 60, placeholder: 'Your name' }); if (await modal('Your name', i, { actions: [{ label: 'Save', cls: 'primary' }] }) && i.value.trim()) { setAuthor(i.value.trim()); route(); } };
   const trigger = h('button.account', { title: who || 'Set your name', 'aria-label': 'Account', 'aria-haspopup': 'menu' }, avatar(who || '?'));
-  const pop = h('div.menu.account-menu.hidden', { role: 'menu' },
+  const pop = h('div.menu.account-menu.hidden', { role: 'menu' });
+  // Built on every open, so the version and update state are current.
+  const fill = () => pop.replaceChildren(...[
     h('div.account-head', avatar(who || '?'), h('div', h('div.account-name', who || 'No name yet'), h('div.mi-hint', 'Shown on your notes and messages'))),
     h('div.menu-sep'),
     h('button.menu-item', { on: { click: changeName } }, svg('pen'), h('span.mi-text', h('span', who ? 'Change name' : 'Set your name'))),
     h('div.menu-sep'),
     h('button.menu-item', { on: { click: () => { close(); showUpdate(); } } }, svg('download'), h('span.mi-text', h('span', updateInfo?.available ? `Update to v${updateInfo.version}` : 'Check for updates'), h('span.mi-hint', `Videditor v${updateInfo?.current || '…'}${updateInfo?.mode === 'dev' ? ' · developer copy' : ''}`))),
-    updateInfo?.mode === 'installed' ? h('label.menu-item.check', h('input', { type: 'checkbox', checked: updateInfo.settings?.autoUpdate !== false, on: { change: async (e) => { try { await api.saveSettings({ autoUpdate: e.target.checked }); updateInfo.settings = { autoUpdate: e.target.checked }; toast(e.target.checked ? 'Updates install when you open Videditor' : 'Auto-update off: you will see a notice instead', 'ok'); } catch (err) { toast(err.message, 'err'); } } } }), h('span.mi-text', h('span', 'Update automatically'), h('span.mi-hint', 'When you open Videditor'))) : null);
+    updateInfo?.mode === 'installed' ? h('label.menu-item.check', h('input', { type: 'checkbox', checked: updateInfo.settings?.autoUpdate !== false, on: { change: async (e) => { try { await api.saveSettings({ autoUpdate: e.target.checked }); updateInfo.settings = { autoUpdate: e.target.checked }; toast(e.target.checked ? 'Updates install when you open Videditor' : 'Auto-update off: you will see a notice instead', 'ok'); } catch (err) { toast(err.message, 'err'); } } } }), h('span.mi-text', h('span', 'Update automatically'), h('span.mi-hint', 'When you open Videditor'))) : null
+  ].flat().filter(Boolean));
   const wrap = h('div.menuwrap.accountwrap', trigger, pop);
   const onDoc = (e) => { if (!wrap.contains(e.target)) close(); };
   function close() { pop.classList.add('hidden'); document.removeEventListener('pointerdown', onDoc); window.removeEventListener('blur', close); }
-  trigger.addEventListener('click', () => { if (pop.classList.contains('hidden')) { pop.classList.remove('hidden'); setTimeout(() => document.addEventListener('pointerdown', onDoc), 0); window.addEventListener('blur', close); } else close(); });
+  trigger.addEventListener('click', () => { if (pop.classList.contains('hidden')) { fill(); pop.classList.remove('hidden'); setTimeout(() => document.addEventListener('pointerdown', onDoc), 0); window.addEventListener('blur', close); } else close(); });
   pop.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); trigger.focus(); } });
   return wrap;
 }
