@@ -5,7 +5,7 @@ description: Make and edit videos as Videditor compositions (HTML that plays and
 
 # Videditor compositions
 
-A video is a folder. `index.html` is the video. Videditor plays it in the browser and renders it frame by frame to MP4 with Chrome and ffmpeg, so **everything must be a pure function of time**: no `setTimeout`, no `requestAnimationFrame` loops, no autoplay. CSS keyframe animations and Web Animations are driven to the exact frame time by the runtime. Media elements are seeked by the runtime.
+A video is a folder. `index.html` is the video. Videditor plays it in the browser and renders it frame by frame to MP4 with Chrome and ffmpeg, so **everything follows the video's time**. CSS keyframe animations and Web Animations are driven to the exact frame by the runtime, media elements are seeked by it, and the page's clock is the video's clock: `performance.now()`, `Date`, `requestAnimationFrame`, `setTimeout` and `setInterval` all run on video time, so JS animation, GSAP, Lottie and canvas loops render frame-exact. Never use `autoplay` or `video.play()`; never read time from the network.
 
 ## Format
 
@@ -28,7 +28,7 @@ A video is a folder. `index.html` is the video. Videditor plays it in the browse
   @keyframes rise { from { opacity: 0; transform: translateY(40px); } to { opacity: 1; transform: none; } }
   ```
   For an exit, add a second animation with a delay: `animation: rise .8s both, fade .5s 3.5s both;`
-- **Custom JS**: optional `window.__seek = (t) => { … }` is called with the composition time on every frame. Draw canvases, counters, charts there. Never keep your own clock.
+- **Custom JS**: a `requestAnimationFrame` loop that reads `performance.now()` works as written (it gets video time). For scrubbing to look right, compute state from the time (`x = f(t)`) rather than adding a little every frame. Or use `window.__seek = (t) => { … }`, called with the composition time on every frame.
 - **Assets** live in `assets/`. Reference them relatively (`assets/x.png`). Fonts: `@font-face` with files in `assets/`, or a Google Fonts `<link>`.
 - **Text** is real HTML text. Prefer large type, strong contrast, generous margins (safe area 5%).
 

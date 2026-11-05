@@ -28,9 +28,21 @@ subscription. No accounts, no credits.
 - **Timeline.** Lanes per track; drag a clip to move it, drag an edge to trim. Edits are written straight
   into `index.html` by element id. Layers panel and a numeric inspector for exact values. Files panel
   with an in-app editor for `index.html`, CSS and `BRIEF.md`.
-- **Renderer.** `lib/render.mjs` drives Chrome through Playwright: seek, settle, screenshot, one frame at
-  a time, piped into ffmpeg (H.264 + AAC, audio clips trimmed, delayed and mixed from the composition).
-  No dropped frames, ever; a slow machine just takes longer.
+- **Renderer.** `lib/render.mjs` drives Chrome through Playwright, frame-exact, no dropped frames:
+  - *Parallel*: the film is cut into chunks; several Chrome workers (one per spare core) take chunks from a
+    queue, capture them through CDP and encode them, and the chunks are joined without re-encoding, with
+    the composition's audio mixed in.
+  - *Virtual clock* (`engine/clock.js`): `performance.now`, `Date`, `requestAnimationFrame` and timers follow
+    the video's time, in the preview and in every worker, so JavaScript animation renders exactly.
+  - *Unchanged frames* (holds, end cards) reuse the previous capture: the runtime knows when no animation,
+    DOM change, video or script could have changed the picture.
+  - *Footage*: clips get a cached render copy with every frame a keyframe at the composition's frame rate,
+    so each seek costs ~30 ms instead of up to half a second; the frame is captured only once the browser
+    has presented it.
+  - Benchmarked against HyperFrames 0.9.15 on the same machine and compositions (1080p30, CRF 18): UI
+    motion 14.6 s vs 22.5 s, JavaScript animation 9.2 s vs 23.5 s, footage 16.3 s vs 24.3 s, with frame
+    positions identical to the pixel. `VD_PROFILE=1` logs where render time goes; `VD_NO_REUSE=1` turns
+    unchanged-frame reuse off for comparison.
 
 **Assets and media analysis**
 - Link any folder on your computer (**Studio → Assets**, or when creating a video). Videditor watches it:

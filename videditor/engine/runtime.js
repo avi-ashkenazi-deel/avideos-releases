@@ -18,6 +18,8 @@
  */
 (() => {
   if (window.__videditor) return;
+  // The runtime itself runs on the real clock; the composition's clock (engine/clock.js) follows the playhead.
+  const RT = window.__vdClock?.native || { now: () => performance.now(), raf: (f) => requestAnimationFrame(f), caf: (id) => cancelAnimationFrame(id), setTimeout: (f, d) => setTimeout(f, d) };
   const num = (v, d = null) => (v === undefined || v === null || v === '' || Number.isNaN(Number(v)) ? d : Number(v));
   const root = document.querySelector('[data-composition-id]') || document.body;
   const inRender = /[?&]render=1/.test(location.search);
@@ -42,9 +44,13 @@
     const iframe = document.createElement('iframe');
     iframe.src = url.toString(); iframe.setAttribute('allowtransparency', 'true');
     Object.assign(iframe.style, { position: 'absolute', inset: '0', width: '100%', height: '100%', border: '0', background: 'transparent', pointerEvents: inRender ? 'none' : 'auto' });
-    c.el.appendChild(iframe); nested.set(c.el, { iframe, ready: false });
+    iframe.setAttribute('data-vd-nested', ''); c.el.appendChild(iframe); nested.set(c.el, { iframe, ready: false });
   }
-  const childSeek = (c, t) => new Promise((resolve) => { const nz = nested.get(c.el); if (!nz?.iframe.contentWindow) return resolve(); const id = 'n' + (++nseq); settleWaits.set(id, resolve); nz.iframe.contentWindow.postMessage({ __videditor: true, type: 'seek', t, id }, '*'); setTimeout(() => { if (settleWaits.has(id)) { settleWaits.delete(id); resolve(); } }, 2000); });
+  const childSeek = (c, t) => new Promise((resolve) => { const nz = nested.get(c.el); if (!nz?.iframe.contentWindow) return resolve(); const id = 'n' + (++nseq); settleWaits.set(id, resolve); nz.iframe.contentWindow.postMessage({ __videditor: true, type: 'seek', t, id }, '*'); RT.setTimeout(() => { if (settleWaits.has(id)) { settleWaits.delete(id); resolve(); } }, 2000); });
+  if (inRender) {
+    const q = `vdrender=1&fps=${num(root.dataset.fps, 30)}&w=${num(root.dataset.width, 1920)}&h=${num(root.dataset.height, 1080)}`;
+    for (const v of document.querySelectorAll('video')) { const s = v.getAttribute('src'); if (!s || /^(data|blob):/.test(s) || /vdrender=1/.test(s)) continue; v.setAttribute('src', s + (s.includes('?') ? '&' : '?') + q); v.preload = 'auto'; try { v.load(); } catch {} }
+  }
   let clips = collectClips();
   for (const c of clips) { if (c.el.dataset.trackIndex !== undefined && !c.el.style.zIndex) c.el.style.zIndex = String(c.track); ensureNested(c); }
   const info = () => {
@@ -57,14 +63,21 @@
   const clipOf = (el) => { let n = el; while (n && n !== document.body) { if (n.dataset && n.dataset.start !== undefined && n !== root) return clips.find((c) => c.el === n) || null; n = n.parentElement; } return null; };
 
   // Deterministic seek: visibility, animations, media.
+  // Register for the next presented video frame BEFORE moving the video (registered after, the new frame is
+  // already out and the callback waits for one that never comes). settleWaits_ awaits it for visible clips.
+  function armFrame(c) {
+    c.framePending = true;
+    c.framePromise = typeof c.el.requestVideoFrameCallback === 'function' ? new Promise((res) => { try { c.el.requestVideoFrameCallback(() => res(true)); } catch { res(false); } }) : null;
+  }
   function seek(t) {
     state.t = t;
+    window.__vdClock?.advance(t * 1000);
     for (const c of clips) {
       const on = t >= c.start - 1e-6 && t < endOf(c);
       if (c.el.style.visibility !== (on ? 'visible' : 'hidden')) c.el.style.visibility = on ? 'visible' : 'hidden';
       if (c.isMedia) {
         const want = on ? c.mediaStart + (t - c.start) : c.mediaStart;
-        if (!state.playing) { if (Math.abs((c.el.currentTime || 0) - want) > 1 / 120) { c.el.currentTime = want; } if (!c.el.paused) c.el.pause(); }
+        if (!state.playing) { if (Math.abs((c.el.currentTime || 0) - want) > 1 / 120) { armFrame(c); c.el.currentTime = want; } if (!c.el.paused) c.el.pause(); }
         else if (on && c.el.paused) { c.el.currentTime = want; c.el.volume = Math.min(1, c.volume); c.el.play().catch(() => {}); }
         else if (!on && !c.el.paused) c.el.pause();
       }
@@ -89,32 +102,82 @@
   function seekAndSettle(t) {
     seek(t);
     const waits = [];
-    for (const c of clips) if (c.isMedia && c.el.readyState >= 1 && c.el.seeking) waits.push(new Promise((r) => { const done = () => { c.el.removeEventListener('seeked', done); r(); }; c.el.addEventListener('seeked', done); setTimeout(r, 1500); }));
+    for (const c of clips) if (c.isMedia && c.el.readyState >= 1 && c.el.seeking) waits.push(new Promise((r) => { const done = () => { c.el.removeEventListener('seeked', done); r(); }; c.el.addEventListener('seeked', done); RT.setTimeout(r, 1500); }));
     for (const c of clips) if (nested.has(c.el)) waits.push(childSeek(c, Math.max(0, t - c.start + num(c.el.dataset.playbackStart, 0))));
     if (document.fonts && document.fonts.status !== 'loaded') waits.push(document.fonts.ready.catch(() => {}));
-    for (const img of document.images) if (!img.complete) waits.push(new Promise((r) => { img.addEventListener('load', r, { once: true }); img.addEventListener('error', r, { once: true }); setTimeout(r, 3000); }));
-    return Promise.all(waits).then(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r(t)))));
+    for (const img of document.images) if (!img.complete) waits.push(new Promise((r) => { img.addEventListener('load', r, { once: true }); img.addEventListener('error', r, { once: true }); RT.setTimeout(r, 3000); }));
+    return Promise.all(waits).then(() => new Promise((r) => RT.raf(() => RT.raf(() => r(t)))));
   }
+  function settleWaits_(t) {
+    const waits = [];
+    // A visible video whose position changed: wait until the seek finished AND the new frame reached the
+    // compositor (requestVideoFrameCallback), so the capture never shows the previous frame.
+    for (const c of clips) {
+      if (!c.isMedia) continue;
+      const visible = c.tag === 'video' && t >= c.start - 1e-6 && t < endOf(c);
+      if (visible && c.framePending && c.el.readyState >= 1) {
+        const timeout = (ms) => new Promise((res) => RT.setTimeout(() => res(false), ms));
+        waits.push((async () => {
+          let ok = c.framePromise ? await Promise.race([c.framePromise, timeout(400)]) : (await new Promise((res) => RT.raf(() => RT.raf(res))), true);
+          if (!ok) { // e.g. it was seeked while hidden: nudge it once so the current frame is presented again
+            const want = c.el.currentTime; armFrame(c); c.el.currentTime = want + 1e-4;
+            ok = c.framePromise ? await Promise.race([c.framePromise, timeout(1200)]) : true;
+          }
+          c.framePending = false;
+        })());
+      } else if (c.el.readyState >= 1 && c.el.seeking) waits.push(new Promise((r) => { const done = () => { c.el.removeEventListener('seeked', done); r(); }; c.el.addEventListener('seeked', done); RT.setTimeout(r, 3000); }));
+    }
+    for (const c of clips) if (nested.has(c.el)) waits.push(childSeek(c, Math.max(0, t - c.start + num(c.el.dataset.playbackStart, 0))));
+    if (document.fonts && document.fonts.status !== 'loaded') waits.push(document.fonts.ready.catch(() => {}));
+    for (const img of document.images) if (!img.complete) waits.push(new Promise((r) => { img.addEventListener('load', r, { once: true }); img.addEventListener('error', r, { once: true }); RT.setTimeout(r, 3000); }));
+    return Promise.all(waits);
+  }
+  // Static-frame detection for the renderer: a frame can reuse the previous capture when nothing that paints
+  // changed since then: no DOM mutation, no animation in its active phase, no visible video or nested
+  // composition, no frame callback or timer ran, and nothing was still loading.
+  let domDirty = true; // set by the observer (changes are delivered to it, not left for takeRecords)
+  const mo = new MutationObserver(() => { domDirty = true; }); mo.observe(document.documentElement, { subtree: true, childList: true, attributes: true, characterData: true });
+  const lastProgress = new WeakMap(); // animation -> progress key at the previous call
+  function frameIsStatic() {
+    let changed = domDirty || mo.takeRecords().length > 0; domDirty = false;
+    if (window.__vdClock && window.__vdClock.takeActivity() > 0) changed = true;
+    // Compare every animation with where it was at the previous frame (always update, so the next call is right).
+    for (const a of document.getAnimations()) {
+      let key; try { const ct = a.effect ? a.effect.getComputedTiming() : null; key = ct ? `${ct.progress}|${ct.currentIteration}` : `${a.currentTime}`; } catch { key = Math.random(); }
+      if (lastProgress.get(a) !== key) { changed = true; lastProgress.set(a, key); }
+    }
+    if (!changed) for (const c of clips) { if ((c.isMedia && c.tag === 'video' || nested.has(c.el)) && state.t >= c.start - 1e-6 && state.t < endOf(c)) { changed = true; break; } }
+    if (!changed) for (const el of document.querySelectorAll('canvas, iframe:not([data-vd-nested])')) { if (el.getClientRects().length) { changed = true; break; } }
+    return !changed;
+  }
+  /** Renderer path: seek, wait for media/fonts/images, report whether the frame can reuse the previous capture. */
+  function seekForCapture(t) {
+    seek(t);
+    let loading = (document.fonts && document.fonts.status !== 'loaded') || [...document.images].some((i) => !i.complete);
+    return settleWaits_(t).then(() => ({ t, same: !loading && frameIsStatic() }));
+  }
+  /** Render workers that start mid-film first walk the composition clock from 0, so stateful scripts match. */
+  function warmup(t, fps) { if (window.__vdClock) window.__vdClock.warmup(t * 1000, fps || num(root.dataset.fps, 30)); seek(t); }
   function play(from) {
     if (state.playing) return;
     const dur = info().duration;
     if (from !== undefined) seek(from);
     if (state.t >= dur - 1e-3) seek(0); // play at the end starts over
-    state.playing = true; state.clock0 = performance.now(); state.t0 = state.t;
+    state.playing = true; state.clock0 = RT.now(); state.t0 = state.t;
     for (const a of document.getAnimations()) a.play();
     const tick = () => {
       if (!state.playing) return;
-      const t = state.t0 + (performance.now() - state.clock0) / 1000;
+      const t = state.t0 + (RT.now() - state.clock0) / 1000;
       if (t >= dur) { pause(); seek(dur); post({ type: 'ended', t: dur }); return; }
       seek(t); post({ type: 'timeupdate', t });
-      state.raf = requestAnimationFrame(tick);
+      state.raf = RT.raf(tick);
     };
-    state.raf = requestAnimationFrame(tick);
+    state.raf = RT.raf(tick);
     post({ type: 'play', t: state.t });
   }
   function pause() {
     if (!state.playing) return;
-    state.playing = false; cancelAnimationFrame(state.raf);
+    state.playing = false; RT.caf(state.raf);
     for (const c of clips) if (c.isMedia && !c.el.paused) c.el.pause();
     for (const nz of nested.values()) { nz.playing = false; nz.iframe.contentWindow?.postMessage({ __videditor: true, type: 'pause' }, '*'); }
     seek(state.t); post({ type: 'pause', t: state.t });
@@ -148,7 +211,7 @@
       case 'reload': location.reload(); break;
     }
   });
-  window.__videditor = { info, seek, seekAndSettle, play, pause, select, get time() { return state.t; }, get playing() { return state.playing; } };
+  window.__videditor = { info, seek, seekAndSettle, seekForCapture, warmup, play, pause, select, get time() { return state.t; }, get playing() { return state.playing; } };
   const ready = () => { clips = collectClips(); seek(0); post({ type: 'ready', ...info() }); };
   if (document.readyState === 'complete') ready(); else window.addEventListener('load', ready);
   // Media metadata can arrive after load: refresh durations.

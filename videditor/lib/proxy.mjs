@@ -65,3 +65,37 @@ export function ensureProxy(cacheDir, file, { onLog } = {}) {
   inflight.set(out, p);
   return p;
 }
+
+// Render copies: every frame a keyframe, at the composition's frame rate and no larger than its size.
+// Chrome seeks these in ~30 ms instead of up to half a second per frame for long-GOP camera or screen
+// recordings. Used only while rendering; cached, so later renders of the same footage start at once.
+const renderInflight = new Map();
+export function renderProxyPathFor(cacheDir, file, { fps = 30, w = 1920, h = 1080 } = {}) {
+  const key = keyOf(file); if (!key) return null;
+  return path.join(cacheDir, 'render', crypto.createHash('sha1').update(`${key}|${fps}|${w}x${h}|v1`).digest('hex').slice(0, 20) + '.mp4');
+}
+export function ensureRenderProxy(cacheDir, file, opts = {}, { onLog } = {}) {
+  if (!isVideoFile(file) || !videoInfo(file)) return Promise.resolve(null);
+  const fps = Math.max(1, Math.min(120, Number(opts.fps) || 30)); const w = Math.max(16, Number(opts.w) || 1920); const h = Math.max(16, Number(opts.h) || 1080);
+  const out = renderProxyPathFor(cacheDir, file, { fps, w, h }); if (!out) return Promise.resolve(null);
+  if (fs.existsSync(out)) return Promise.resolve(out);
+  if (renderInflight.has(out)) return renderInflight.get(out);
+  fs.mkdirSync(path.dirname(out), { recursive: true });
+  const tmp = out.replace(/\.mp4$/, `.part-${process.pid}.mp4`);
+  const t0 = Date.now();
+  const p = new Promise((resolve) => {
+    // Scale down to fit the composition (never up), keep even sizes, constant frame rate, all-intra.
+    const vf = `fps=${fps},scale='min(iw,${w})':'min(ih,${h})':force_original_aspect_ratio=decrease,scale=trunc(iw/2)*2:trunc(ih/2)*2`;
+    const ff = spawn('ffmpeg', ['-y', '-v', 'error', '-i', file, '-map', '0:v:0', '-an', '-vf', vf, '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '12', '-g', '1', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', tmp]);
+    let errText = ''; ff.stderr.on('data', (d) => { errText = (errText + d).slice(-2000); });
+    ff.on('error', () => resolve(null));
+    ff.on('close', (code) => {
+      if (code === 0) { try { fs.renameSync(tmp, out); onLog?.(`render copy of ${path.basename(file)} ready in ${((Date.now() - t0) / 1000).toFixed(1)}s`); return resolve(out); } catch {} }
+      try { fs.unlinkSync(tmp); } catch {}
+      onLog?.(`could not make a render copy of ${path.basename(file)}: ${errText.trim().split('\n').pop() || 'ffmpeg failed'}`);
+      resolve(null);
+    });
+  }).finally(() => renderInflight.delete(out));
+  renderInflight.set(out, p);
+  return p;
+}

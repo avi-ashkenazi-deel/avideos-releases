@@ -13,7 +13,7 @@ import { hasFfmpeg, probe, poster, frameAt, listEncoders } from './lib/media.mjs
 import { availableFormats, DEFAULT_FORMAT } from './lib/formats.mjs';
 import { buildPrompt } from './lib/prompt.mjs';
 import { renderProject, loadPlaywright, captureFrame } from './lib/render.mjs';
-import { ensureProxy, proxyReason, isVideoFile } from './lib/proxy.mjs';
+import { ensureProxy, proxyReason, isVideoFile, ensureRenderProxy } from './lib/proxy.mjs';
 import { revealFile } from './lib/reveal.mjs';
 import { runAgent, AGENTS, systemPrompt, diagnoseClaude } from './lib/agent.mjs';
 
@@ -24,7 +24,11 @@ const store = new Store(DATA);
 const FFMPEG = hasFfmpeg();
 const PROXIES = path.join(DATA, 'proxies'); // browser-safe copies of footage Chrome cannot decode
 // Serve a media file, swapping in its browser-safe proxy when the original's codec does not play in Chrome.
-async function serveMedia(req, res, file) {
+async function serveMedia(req, res, file, url = null) {
+  if (FFMPEG && url?.searchParams.get('vdrender') === '1' && isVideoFile(file) && fs.existsSync(file)) {
+    const q = url.searchParams; const px = await ensureRenderProxy(PROXIES, file, { fps: q.get('fps'), w: q.get('w'), h: q.get('h') }, { onLog: (t) => console.log(`[proxy] ${t}`) });
+    if (px) return serveFile(req, res, px);
+  }
   if (FFMPEG && isVideoFile(file) && fs.existsSync(file) && proxyReason(file)) { const px = await ensureProxy(PROXIES, file, { onLog: (t) => console.log(`[proxy] ${t}`) }); if (px) return serveFile(req, res, px); }
   return serveFile(req, res, file);
 }
@@ -155,7 +159,7 @@ function autoRenderIfChanged(prj, before, versionsBefore, reason = '') {
 }
 
 // One render item: the active composition (or a given entry), optionally a time range, in a format/size.
-async function renderItem(prj, job, { quality = 'looks', fps, notes, scale = 1, label = null, format = DEFAULT_FORMAT, crf, maxBitrate, audio = true, alpha = false, entry = null, range = null, name = null } = {}) {
+async function renderItem(prj, job, { quality = 'looks', fps, notes, scale = 1, label = null, format = DEFAULT_FORMAT, crf, maxBitrate, audio = true, alpha = false, entry = null, range = null, name = null, workers = 'auto' } = {}) {
   const fmts = availableFormats(ENCODERS); const fmt = fmts[format]?.available ? format : DEFAULT_FORMAT;
   const useEntry = entry && safePath(prj.dir, entry) && fs.existsSync(safePath(prj.dir, entry)) ? entry : entryOf(prj);
   const n = store.versions(prj.id).length + 1;
@@ -163,10 +167,13 @@ async function renderItem(prj, job, { quality = 'looks', fps, notes, scale = 1, 
   const tag = [name ? slug(name) : null, label ? slug(label) : null].filter(Boolean).join('-');
   const rel = `renders/v${n}${tag ? '-' + tag : ''}${fmt === 'png-seq' ? '-frames' : fmts[fmt].ext}`; const out = path.join(prj.dir, rel);
   if (FFMPEG) {
-    const vids = (parseProject(prj.dir, useEntry)?.clips || []).filter((c) => c.tag === 'video' && c.src).map((c) => resolveSrc(prj.dir, prj.assetsDir || null, c.src, c.fileAbs)).filter((f) => f && fs.existsSync(f));
-    for (const f of [...new Set(vids)]) await ensureProxy(PROXIES, f, { onLog: (text) => job.push({ type: 'log', text }) });
+    const comp = parseProject(prj.dir, useEntry);
+    const vids = [...new Set((comp?.clips || []).filter((c) => c.tag === 'video' && c.src).map((c) => resolveSrc(prj.dir, prj.assetsDir || null, c.src, c.fileAbs)).filter((f) => f && fs.existsSync(f)))];
+    const dims = { fps: fps ? Number(fps) : comp?.fps || 30, w: comp?.width || 1920, h: comp?.height || 1080 };
+    const onLog = (text) => job.push({ type: 'log', text });
+    for (let i = 0; i < vids.length; i += 2) await Promise.all(vids.slice(i, i + 2).map((f) => ensureRenderProxy(PROXIES, f, dims, { onLog })));
   }
-  const r = await renderProject({ pageUrl: pageUrlFor(prj.id, useEntry), dir: prj.dir, assetsDir: prj.assetsDir || null, out, quality, scale, fps: fps ? Number(fps) : undefined, format: fmt, crf: crf !== undefined && crf !== null && crf !== '' ? Number(crf) : undefined, maxBitrate: maxBitrate ? Number(maxBitrate) : undefined, audio: audio !== false && audio !== 'false', alpha: !!alpha, range: range && (range.start !== undefined || range.end !== undefined) ? range : null, onLog: (text) => job.push({ type: 'log', text }), onProgress: (p) => job.push({ type: 'progress', ...p, item: name || label || null }) });
+  const r = await renderProject({ workers, pageUrl: pageUrlFor(prj.id, useEntry), dir: prj.dir, assetsDir: prj.assetsDir || null, out, quality, scale, fps: fps ? Number(fps) : undefined, format: fmt, crf: crf !== undefined && crf !== null && crf !== '' ? Number(crf) : undefined, maxBitrate: maxBitrate ? Number(maxBitrate) : undefined, audio: audio !== false && audio !== 'false', alpha: !!alpha, range: range && (range.start !== undefined || range.end !== undefined) ? range : null, onLog: (text) => job.push({ type: 'log', text }), onProgress: (p) => job.push({ type: 'progress', ...p, item: name || label || null }) });
   if (r.folder) { job.push({ type: 'log', text: `PNG sequence written to ${out}` }); return { folder: out }; }
   const where = [useEntry !== 'index.html' ? `Variant: ${useEntry}` : null, r.range ? `Range: ${r.range.start}–${r.range.end}s` : null].filter(Boolean).join('\n');
   const v = registerVersion(prj, out, { notes: notes || `${name ? name + '\n' : ''}Rendered from Studio: ${r.label}, ${r.width}×${r.height}, ${r.frames} frames @ ${r.fps} fps${where ? '\n' + where : ''}`, source: 'render', originalName: path.basename(out), label: name || label ? `v${n} ${[name, label].filter(Boolean).join(' ')}` : null, renderPath: out, format: fmt, formatLabel: r.label, alpha: !!alpha, entry: useEntry, range: r.range });
@@ -664,16 +671,17 @@ const server = http.createServer(async (req, res) => {
     if (pf) {
       const prj = store.project(pf[1]); if (!prj?.dir) return err(res, 404, 'Not found');
       const relPath = decodeURIComponent(pf[2] || 'index.html');
-      if (/^library\//.test(relPath)) { if (!prj.assetsDir) return err(res, 404, 'No asset folder linked'); const la = safePath(prj.assetsDir, relPath.slice('library/'.length)); if (!la) return err(res, 403, 'Forbidden'); return serveMedia(req, res, la); }
+      if (/^library\//.test(relPath)) { if (!prj.assetsDir) return err(res, 404, 'No asset folder linked'); const la = safePath(prj.assetsDir, relPath.slice('library/'.length)); if (!la) return err(res, 403, 'Forbidden'); return serveMedia(req, res, la, url); }
       const abs = safePath(prj.dir, relPath); if (!abs) return err(res, 403, 'Forbidden');
       if (url.searchParams.get('runtime') === '1' && /\.html?$/i.test(abs)) {
         // Serve the composition with the seekable runtime injected (Studio preview and renderer).
         let html; try { html = fs.readFileSync(abs, 'utf8'); } catch { return err(res, 404, 'Not found'); }
         const tag = '<script src="/engine/runtime.js"></script>';
         html = /<\/body>/i.test(html) ? html.replace(/<\/body>/i, tag + '</body>') : html + tag;
+        if (!/data-real-time\b/.test(html)) { const clock = '<script src="/engine/clock.js"></script>'; html = /<head[^>]*>/i.test(html) ? html.replace(/<head[^>]*>/i, (m) => m + clock) : clock + html; }
         return send(res, 200, html, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
       }
-      return serveMedia(req, res, abs);
+      return serveMedia(req, res, abs, url);
     }
     let rel = decodeURIComponent(url.pathname); if (rel === '/' || rel === '') rel = '/index.html';
     const abs = path.resolve(ROOT, '.' + rel);
