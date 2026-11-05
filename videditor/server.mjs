@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 // Videditor server: static UI + JSON API + media. Zero dependencies.
 //   node videditor/server.mjs            → http://localhost:8787
-// Env: VIDEDITOR_PORT, VIDEDITOR_DATA (default videditor/data), VIDEDITOR_NO_DEMO=1
+// Env: VIDEDITOR_PORT, VIDEDITOR_HOME (default ~/Videditor; a checkout with data/ keeps using it), VIDEDITOR_DATA, VIDEDITOR_NO_DEMO=1
 import http from 'node:http';
+import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -19,7 +20,8 @@ import { runAgent, AGENTS, systemPrompt, diagnoseClaude } from './lib/agent.mjs'
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.VIDEDITOR_PORT || process.env.PORT || 8787);
-const DATA = path.resolve(process.env.VIDEDITOR_DATA || path.join(ROOT, 'data'));
+import { DATA, PROJECTS, HOME, INSTALLED, LOGS, readSettings, writeSettings } from './lib/paths.mjs';
+import { checkForUpdate, applyUpdate, currentVersion } from './lib/update.mjs';
 const store = new Store(DATA);
 const FFMPEG = hasFfmpeg();
 const PROXIES = path.join(DATA, 'proxies'); // browser-safe copies of footage Chrome cannot decode
@@ -258,7 +260,7 @@ const CLAUDE_BIN = process.env.VIDEDITOR_CLAUDE_BIN || 'claude';
 
 function seedDemo() {
   if (process.env.VIDEDITOR_NO_DEMO || store.db.projects.length) return;
-  const dir = path.join(ROOT, 'projects', 'launch-demo');
+  const dir = path.join(PROJECTS, 'launch-demo');
   if (!fs.existsSync(dir)) fs.cpSync(path.join(ROOT, 'examples', 'launch'), dir, { recursive: true });
   const project = store.addProject({ name: 'Launch day (demo)', dir, tags: ['demo'], chat: [{ role: 'agent', text: 'This is the demo project. Ask me to change the video ("make the title warmer and bring it in at 1s"), drag clips on the timeline, or press Render.', at: new Date().toISOString() }] });
   console.log('[videditor] seeded demo project');
@@ -285,12 +287,12 @@ async function api(req, res, url) {
 
   if (p === '/api/detect' || p === '/api/projects/detect' || p === '/api/hyperframes/detect') return send(res, 200, detectProject(q.path ? cleanDir(q.path) : q.path));
   if (p === '/api/state' && req.method === 'GET') {
-    return send(res, 200, { projects: store.projects().map(projectView), ffmpeg: FFMPEG, dataDir: DATA, port: PORT });
+    return send(res, 200, { projects: store.projects().map(projectView), ffmpeg: FFMPEG, dataDir: DATA, home: HOME, port: PORT, version: currentVersion(), installed: INSTALLED });
   }
   if (p === '/api/projects' && req.method === 'POST') {
     const b = await readJson(req);
     if (b.create) {
-      b.dir = createProject(b.name || 'Untitled', { template: String(b.template || 'blank').replace(/[^\w-]/g, ''), width: Number(b.width) || 1280, height: Number(b.height) || 720, fps: Number(b.fps) || 30, brand: b.brand || null });
+      b.dir = createProject(b.name || 'Untitled', { base: PROJECTS, template: String(b.template || 'blank').replace(/[^\w-]/g, ''), width: Number(b.width) || 1280, height: Number(b.height) || 720, fps: Number(b.fps) || 30, brand: b.brand || null });
       if (b.brief) fs.writeFileSync(path.join(b.dir, 'BRIEF.md'), `# ${b.name || 'Untitled'}\n\n${String(b.brief).trim()}\n`);
     } else if (b.dir) { const d = detectProject(cleanDir(b.dir)); if (!d.ok) return err(res, 400, `Not a composition folder: ${d.reason}`); b.dir = d.dir; }
     if (b.assetsDir) { const a = cleanDir(b.assetsDir); if (!fs.existsSync(a) || !fs.statSync(a).isDirectory()) return err(res, 400, `Asset folder does not exist: ${a}`); b.assetsDir = a; }
@@ -326,7 +328,7 @@ async function api(req, res, url) {
       for (const f of store.feedback({ projectId: prj.id })) for (const u of [...(f.frames || []).map((x) => x.url), f.audioUrl, ...(f.refs || [])].filter(Boolean)) { try { fs.unlinkSync(path.join(DATA, u.replace(/^\/media\//, ''))); } catch {} }
       // The composition folder is removed only when asked and only when it lives in Videditor's own projects folder.
       let folderDeleted = false;
-      const own = prj.dir && path.resolve(prj.dir).startsWith(path.join(ROOT, 'projects') + path.sep);
+      const own = prj.dir && path.resolve(prj.dir).startsWith(PROJECTS + path.sep);
       if (q.deleteFolder === '1' && own) { try { fs.rmSync(prj.dir, { recursive: true, force: true }); folderDeleted = true; } catch {} }
       store.removeProject(prj.id);
       return send(res, 200, { ok: true, folderDeleted, ownFolder: !!own });
@@ -640,6 +642,20 @@ async function api(req, res, url) {
   }
   if (p === '/api/projects/detect' || p === '/api/hyperframes/detect') return send(res, 200, detectProject(q.path));
   if (p === '/api/agent/diagnose') { const prj = q.projectId ? store.project(q.projectId) : null; return send(res, 200, diagnoseClaude(prj?.dir || ROOT)); }
+  // ---- updates (installed copies) and app settings
+  if (p === '/api/update' && req.method === 'GET') return send(res, 200, { ...(await checkForUpdate({ force: q.refresh === '1' })), settings: { autoUpdate: readSettings().autoUpdate !== false }, home: HOME });
+  if (p === '/api/settings' && req.method === 'PATCH') { const b = await readJson(req); const patch = {}; if ('autoUpdate' in b) patch.autoUpdate = !!b.autoUpdate; return send(res, 200, writeSettings(patch)); }
+  if (p === '/api/update/apply' && req.method === 'POST') {
+    const u = await checkForUpdate({ force: true });
+    if (!u.available) return err(res, 400, u.mode === 'dev' ? 'This is a developer checkout; update it with git pull.' : 'Already on the newest version.');
+    if ([...renderJobs.values()].some((j) => !j.done) || agents.size) return err(res, 409, 'A render or the agent is still running. Try again when it finishes.');
+    const r = await applyUpdate(u.tag);
+    if (!r.ok) return err(res, 500, r.log);
+    send(res, 200, { ok: true, version: r.version, restarting: true });
+    console.log(`[videditor] updated to ${r.version} (${r.log}); restarting`);
+    setTimeout(restartServer, 300);
+    return;
+  }
   if (p === '/api/capabilities') return send(res, 200, { ffmpeg: FFMPEG, playwright: !!loadPlaywright(), claude: findBin(CLAUDE_BIN), encoders: ENCODERS, formats: availableFormats(ENCODERS), defaultFormat: DEFAULT_FORMAT, agents: Object.fromEntries(Object.entries(AGENTS).map(([k, v]) => [k, { label: v.label, available: findBin(v.bin()), install: v.install }])) });
   if (p === '/api/guide') return send(res, 200, GUIDE, { 'Content-Type': 'text/markdown; charset=utf-8' });
   return err(res, 404, `No route ${req.method} ${p}`);
@@ -694,7 +710,18 @@ const server = http.createServer(async (req, res) => {
 
 seedDemo();
 for (const p of store.db.projects) if (p.dir && fs.existsSync(p.dir)) { watchAssets(p); if (FFMPEG) startAnalyze(p); }
+// Restart into the (updated) code: start a fresh server, which waits for this one to release the port.
+function restartServer() {
+  try { fs.mkdirSync(LOGS, { recursive: true }); } catch {}
+  const log = fs.openSync(path.join(LOGS, 'server.log'), 'a');
+  const child = spawn(process.execPath, [path.join(ROOT, 'server.mjs')], { cwd: ROOT, env: process.env, detached: true, stdio: ['ignore', log, log] });
+  try { fs.writeFileSync(path.join(LOGS, 'server.pid'), String(child.pid)); } catch {}
+  child.unref();
+  server.close(); setTimeout(() => process.exit(0), 200);
+}
+let listenTries = 0;
+server.on('error', (e) => { if (e.code === 'EADDRINUSE' && ++listenTries < 40) { setTimeout(() => server.listen(PORT), 250); return; } console.error(`[videditor] could not listen on port ${PORT}: ${e.message}`); process.exit(1); });
 server.listen(PORT, () => {
-  console.log(`[videditor] http://localhost:${PORT}  data: ${DATA}`);
+  console.log(`[videditor] v${currentVersion()} http://localhost:${PORT}  home: ${HOME}`);
   console.log(`[videditor] ffmpeg: ${FFMPEG ? 'yes' : 'NO (install ffmpeg)'}  renderer: ${loadPlaywright() ? 'yes' : 'NO (run npm install in videditor/)'}  claude code: ${findBin(CLAUDE_BIN) ? 'yes' : 'NO (install Claude Code for the Studio chat)'}`);
 });
