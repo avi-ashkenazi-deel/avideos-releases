@@ -1,0 +1,101 @@
+{
+  "name": "videditor-desktop",
+  "productName": "Videditor",
+  "version": "0.3.0",
+  "private": true,
+  "description": "Videditor for Mac: make videos with your agent, render them frame-exact, review them with timestamped notes.",
+  "main": "main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "vendor": "node scripts/fetch-vendor.mjs",
+    "dist:mac": "electron-builder --mac zip dmg --arm64 --x64",
+    "feed": "node scripts/make-feed.mjs"
+  },
+  "videditor": {
+    "updateFeed": ""
+  },
+  "devDependencies": {
+    "electron": "45.2.3",
+    "electron-builder": "26.0.12"
+  },
+  "build": {
+    "appId": "com.videditor.desktop",
+    "productName": "Videditor",
+    "copyright": "Videditor",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.cjs",
+      "preload.cjs",
+      "updater.cjs",
+      "package.json",
+      "build/icon.png"
+    ],
+    "extraResources": [
+      {
+        "from": "..",
+        "to": "server",
+        "filter": [
+          "server.mjs",
+          "cli.mjs",
+          "mcp.mjs",
+          "package.json",
+          "index.html",
+          "CHANGELOG.md",
+          "css/**",
+          "js/**",
+          "engine/**",
+          "lib/**",
+          "skills/**",
+          "templates/**",
+          "examples/**"
+        ]
+      },
+      {
+        "from": "../node_modules/playwright-core",
+        "to": "server/node_modules/playwright-core",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "vendor/${arch}",
+        "to": "vendor",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "vendor/models",
+        "to": "vendor/models",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "asar": true,
+    "mac": {
+      "category": "public.app-category.video",
+      "icon": "build/icon.png",
+      "target": [
+        "zip",
+        "dmg"
+      ],
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "Videditor records your voice while you review a video, so your spoken notes can be turned into edits.",
+        "LSMinimumSystemVersion": "12.0"
+      },
+      "artifactName": "Videditor-${version}-${arch}-mac.${ext}"
+    },
+    "dmg": {
+      "title": "Videditor ${version}"
+    },
+    "publish": null
+  }
+}

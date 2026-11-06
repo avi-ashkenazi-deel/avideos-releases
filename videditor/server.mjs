@@ -3,8 +3,9 @@
 //   node videditor/server.mjs            → http://localhost:8787
 // Env: VIDEDITOR_PORT, VIDEDITOR_HOME (default ~/Videditor; a checkout with data/ keeps using it), VIDEDITOR_DATA, VIDEDITOR_NO_DEMO=1
 import http from 'node:http';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Store } from './lib/store.mjs';
@@ -20,8 +21,7 @@ import { runAgent, AGENTS, systemPrompt, diagnoseClaude } from './lib/agent.mjs'
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.VIDEDITOR_PORT || process.env.PORT || 8787);
-import { DATA, PROJECTS, HOME, INSTALLED, LOGS, readSettings, writeSettings } from './lib/paths.mjs';
-import { checkForUpdate, applyUpdate, currentVersion } from './lib/update.mjs';
+import { DATA, PROJECTS, HOME, PACKAGED, LOGS, appVersion } from './lib/paths.mjs';
 const store = new Store(DATA);
 const FFMPEG = hasFfmpeg();
 const PROXIES = path.join(DATA, 'proxies'); // browser-safe copies of footage Chrome cannot decode
@@ -61,11 +61,16 @@ const readToFile = (req, file) => new Promise((resolve, reject) => {
   ws.on('finish', () => resolve(size)); ws.on('error', reject); req.on('error', reject);
 });
 const safeName = (s) => String(s || 'file').replace(/[^\w.\-]+/g, '_').slice(0, 120);
+// data:[<mime>][;param=value…][;base64],<data>, e.g. data:audio/webm;codecs=opus;base64,… from MediaRecorder.
+const parseDataUrl = (dataUrl) => {
+  const m = /^data:([^,]*),(.*)$/s.exec(dataUrl || ''); if (!m) return null;
+  const meta = m[1].split(';'); const base64 = meta[meta.length - 1] === 'base64';
+  return { mime: meta[0] || 'application/octet-stream', buffer: base64 ? Buffer.from(m[2], 'base64') : Buffer.from(decodeURIComponent(m[2])) };
+};
 const dataUrlToFile = (dataUrl, file) => {
-  const m = /^data:([^;,]+)?(;base64)?,(.*)$/s.exec(dataUrl || '');
-  if (!m) return null;
-  fs.writeFileSync(file, m[2] ? Buffer.from(m[3], 'base64') : decodeURIComponent(m[3]));
-  return m[1] || 'application/octet-stream';
+  const d = parseDataUrl(dataUrl); if (!d) return null;
+  fs.writeFileSync(file, d.buffer);
+  return d.mime;
 };
 const extFor = (mime) => ({ 'image/png': '.png', 'image/jpeg': '.jpg', 'image/webp': '.webp', 'image/gif': '.gif', 'audio/webm': '.webm', 'audio/ogg': '.ogg', 'audio/mp4': '.m4a', 'audio/mpeg': '.mp3', 'audio/wav': '.wav', 'video/webm': '.webm', 'video/mp4': '.mp4' }[String(mime).split(';')[0]] || '');
 const baseUrl = (req) => `http://${req.headers.host || `localhost:${PORT}`}`;
@@ -287,7 +292,7 @@ async function api(req, res, url) {
 
   if (p === '/api/detect' || p === '/api/projects/detect' || p === '/api/hyperframes/detect') return send(res, 200, detectProject(q.path ? cleanDir(q.path) : q.path));
   if (p === '/api/state' && req.method === 'GET') {
-    return send(res, 200, { projects: store.projects().map(projectView), ffmpeg: FFMPEG, dataDir: DATA, home: HOME, port: PORT, version: currentVersion(), installed: INSTALLED });
+    return send(res, 200, { projects: store.projects().map(projectView), ffmpeg: FFMPEG, dataDir: DATA, home: HOME, port: PORT, version: appVersion(), packaged: PACKAGED });
   }
   if (p === '/api/projects' && req.method === 'POST') {
     const b = await readJson(req);
@@ -642,21 +647,13 @@ async function api(req, res, url) {
   }
   if (p === '/api/projects/detect' || p === '/api/hyperframes/detect') return send(res, 200, detectProject(q.path));
   if (p === '/api/agent/diagnose') { const prj = q.projectId ? store.project(q.projectId) : null; return send(res, 200, diagnoseClaude(prj?.dir || ROOT)); }
-  // ---- updates (installed copies) and app settings
-  if (p === '/api/update' && req.method === 'GET') return send(res, 200, { ...(await checkForUpdate({ force: q.refresh === '1' })), settings: { autoUpdate: readSettings().autoUpdate !== false }, home: HOME });
-  if (p === '/api/settings' && req.method === 'PATCH') { const b = await readJson(req); const patch = {}; if ('autoUpdate' in b) patch.autoUpdate = !!b.autoUpdate; return send(res, 200, writeSettings(patch)); }
-  if (p === '/api/update/apply' && req.method === 'POST') {
-    const u = await checkForUpdate({ force: true });
-    if (!u.available) return err(res, 400, u.mode === 'dev' ? 'This is a developer checkout; update it with git pull.' : 'Already on the newest version.');
-    if ([...renderJobs.values()].some((j) => !j.done) || agents.size) return err(res, 409, 'A render or the agent is still running. Try again when it finishes.');
-    const r = await applyUpdate(u.tag);
-    if (!r.ok) return err(res, 500, r.log);
-    send(res, 200, { ok: true, version: r.version, restarting: true });
-    console.log(`[videditor] updated to ${r.version} (${r.log}); restarting`);
-    setTimeout(restartServer, 300);
-    return;
+  // Local speech-to-text for voice notes (the Mac app bundles whisper; voice never leaves the machine).
+  if (p === '/api/transcribe' && req.method === 'POST') {
+    const b = await readJson(req, 60 * 1024 * 1024);
+    if (!canTranscribe()) return err(res, 501, 'Transcription is not available here (no whisper).');
+    try { return send(res, 200, await transcribe(b.audio)); } catch (e) { return err(res, 500, e.message); }
   }
-  if (p === '/api/capabilities') return send(res, 200, { ffmpeg: FFMPEG, playwright: !!loadPlaywright(), claude: findBin(CLAUDE_BIN), encoders: ENCODERS, formats: availableFormats(ENCODERS), defaultFormat: DEFAULT_FORMAT, agents: Object.fromEntries(Object.entries(AGENTS).map(([k, v]) => [k, { label: v.label, available: findBin(v.bin()), install: v.install }])) });
+  if (p === '/api/capabilities') return send(res, 200, { transcribe: canTranscribe(), ffmpeg: FFMPEG, playwright: !!loadPlaywright(), claude: findBin(CLAUDE_BIN), encoders: ENCODERS, formats: availableFormats(ENCODERS), defaultFormat: DEFAULT_FORMAT, agents: Object.fromEntries(Object.entries(AGENTS).map(([k, v]) => [k, { label: v.label, available: findBin(v.bin()), install: v.install }])) });
   if (p === '/api/guide') return send(res, 200, GUIDE, { 'Content-Type': 'text/markdown; charset=utf-8' });
   return err(res, 404, `No route ${req.method} ${p}`);
 }
@@ -710,18 +707,27 @@ const server = http.createServer(async (req, res) => {
 
 seedDemo();
 for (const p of store.db.projects) if (p.dir && fs.existsSync(p.dir)) { watchAssets(p); if (FFMPEG) startAnalyze(p); }
-// Restart into the (updated) code: start a fresh server, which waits for this one to release the port.
-function restartServer() {
-  try { fs.mkdirSync(LOGS, { recursive: true }); } catch {}
-  const log = fs.openSync(path.join(LOGS, 'server.log'), 'a');
-  const child = spawn(process.execPath, [path.join(ROOT, 'server.mjs')], { cwd: ROOT, env: process.env, detached: true, stdio: ['ignore', log, log] });
-  try { fs.writeFileSync(path.join(LOGS, 'server.pid'), String(child.pid)); } catch {}
-  child.unref();
-  server.close(); setTimeout(() => process.exit(0), 200);
+const canTranscribe = () => !!(FFMPEG && process.env.VIDEDITOR_WHISPER && process.env.VIDEDITOR_WHISPER_MODEL && fs.existsSync(process.env.VIDEDITOR_WHISPER) && fs.existsSync(process.env.VIDEDITOR_WHISPER_MODEL));
+// audio: a data: URL (webm/opus, mp4, wav…). Returns { text, segments: [{ start, end, text }] } in seconds of audio.
+async function transcribe(audio) {
+  const d = parseDataUrl(audio); if (!d) throw new Error('send the recording as a data: URL');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'vd-tr-'));
+  try {
+    const src = path.join(dir, 'in'); fs.writeFileSync(src, d.buffer);
+    const wav = path.join(dir, 'in.wav');
+    const conv = spawnSync('ffmpeg', ['-v', 'error', '-y', '-i', src, '-ar', '16000', '-ac', '1', '-c:a', 'pcm_s16le', wav]);
+    if (conv.status !== 0) throw new Error(`could not read the recording: ${String(conv.stderr).trim().split('\n').pop()}`);
+    const base = path.join(dir, 'out');
+    const r = await new Promise((resolve) => { const p = spawn(process.env.VIDEDITOR_WHISPER, ['-m', process.env.VIDEDITOR_WHISPER_MODEL, '-f', wav, '-oj', '-of', base, '-np', '-t', String(Math.max(2, Math.min(8, os.cpus().length - 1)))]); let e = ''; p.stderr.on('data', (d) => { e = (e + d).slice(-2000); }); p.on('error', (x) => resolve({ code: -1, e: x.message })); p.on('close', (code) => resolve({ code, e })); });
+    if (r.code !== 0) throw new Error(`transcription failed: ${r.e.trim().split('\n').pop()}`);
+    const j = JSON.parse(fs.readFileSync(`${base}.json`, 'utf8'));
+    const segments = (j.transcription || []).map((x) => ({ start: (x.offsets?.from ?? 0) / 1000, end: (x.offsets?.to ?? 0) / 1000, text: String(x.text || '').replace(/\[[^\]]*\]|\([^)]*\)/g, '').trim() })).filter((x) => x.text);
+    return { text: segments.map((x) => x.text).join(' '), segments };
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 }
 let listenTries = 0;
 server.on('error', (e) => { if (e.code === 'EADDRINUSE' && ++listenTries < 40) { setTimeout(() => server.listen(PORT), 250); return; } console.error(`[videditor] could not listen on port ${PORT}: ${e.message}`); process.exit(1); });
 server.listen(PORT, () => {
-  console.log(`[videditor] v${currentVersion()} http://localhost:${PORT}  home: ${HOME}`);
+  console.log(`[videditor] v${appVersion()} http://localhost:${PORT}  home: ${HOME}`);
   console.log(`[videditor] ffmpeg: ${FFMPEG ? 'yes' : 'NO (install ffmpeg)'}  renderer: ${loadPlaywright() ? 'yes' : 'NO (run npm install in videditor/)'}  claude code: ${findBin(CLAUDE_BIN) ? 'yes' : 'NO (install Claude Code for the Studio chat)'}`);
 });

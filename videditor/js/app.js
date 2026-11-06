@@ -1,5 +1,4 @@
 import { h, svg, avatar, getAuthor, setAuthor, modal, toast, md } from './ui.js';
-import { api } from './api.js';
 import { renderLibrary } from './library.js';
 import { renderReview } from './review.js';
 import { renderCompare } from './compare.js';
@@ -11,36 +10,41 @@ const view = h('div', { style: { flex: 1, display: 'flex', flexDirection: 'colum
 app.append(bar, view);
 
 const navigate = (hash) => { if (location.hash === hash) route(); else location.hash = hash; };
-// ---- updates: one check per page load (the server caches it); a notice in the top bar when one is ready.
-let updateInfo = null;
-const updateBtn = h('button.btn.sm.update-pill.hidden', { title: 'A new version of Videditor is ready' }, svg('download'), h('span.up-text', 'Update'));
+// ---- the Mac app (window.videditorDesktop from desktop/preload.cjs): version, updates, videos folder.
+// In a plain browser (developer copy) none of this shows.
+const desk = window.videditorDesktop || null;
+let appInfo = null; let upd = null;
+const updateBtn = h('button.btn.sm.update-pill.hidden', { title: 'A new version of Videditor' }, svg('download'), h('span.up-text', 'Update'));
 updateBtn.addEventListener('click', () => showUpdate());
-async function refreshUpdate(force = false) {
-  try { updateInfo = await api.updateStatus(force); } catch { return null; }
-  updateBtn.classList.toggle('hidden', !updateInfo.available);
-  if (updateInfo.available) updateBtn.querySelector('.up-text').textContent = `Update to ${updateInfo.version}`;
-  return updateInfo;
+function paintUpdate(s) {
+  upd = s; if (!s) return;
+  const show = ['ready', 'downloading', 'available'].includes(s.status);
+  updateBtn.classList.toggle('hidden', !show);
+  updateBtn.classList.toggle('busy', s.status === 'downloading');
+  updateBtn.querySelector('.up-text').textContent = s.status === 'ready' ? `Restart to update to ${s.ready?.version || s.version}` : s.status === 'downloading' ? `Downloading ${s.version} · ${Math.round((s.progress || 0) * 100)}%` : `Update to ${s.version}`;
 }
+if (desk) {
+  desk.info().then((i) => { appInfo = i; }).catch(() => {});
+  desk.update.get().then(paintUpdate).catch(() => {});
+  desk.update.onState(paintUpdate);
+} else fetch('/api/state').then((r) => r.json()).then((s) => { appInfo = { version: s.version, packaged: false }; }).catch(() => {});
+
 async function showUpdate() {
-  const u = updateInfo || await refreshUpdate(true);
-  if (!u) return toast('Could not check for updates', 'err');
-  if (u.mode === 'dev') return modal('Updates', h('div', h('p', `You are running a developer copy (v${u.current}).`), h('p.muted', 'Installed copies update themselves. This one updates with git pull.')));
-  if (!u.available) return modal('Videditor is up to date', h('div', h('p', `You have the newest version, v${u.current}.`), u.error ? h('p.small.muted', `Last check could not reach GitHub: ${u.error}`) : null));
-  const body = h('div', h('p', `v${u.current} → `, h('b', `v${u.version}`)), u.notes ? h('div.update-notes', md(u.notes.replace(/^•\s*/gm, '- '))) : null, h('p.small.muted', 'Videditor restarts; this page reloads by itself. Your videos are not touched.'));
-  if (!(await modal("What's new", body, { actions: [{ label: 'Restart to update', cls: 'primary', value: true }] }))) return;
-  const wait = h('p', 'Updating… this takes a few seconds.');
-  const close = modal('Updating Videditor', wait, { actions: [] });
-  try {
-    const r = await api.applyUpdate();
-    for (let i = 0; i < 120; i++) {
-      await new Promise((res) => setTimeout(res, 1000));
-      try { const st = await fetch('/api/state').then((x) => x.json()); if (st.version === r.version) { location.reload(); return; } } catch {}
-    }
-    wait.textContent = 'Videditor did not come back. Open it again from the Videditor app.';
-  } catch (e) { wait.textContent = `Update failed: ${e.message}`; }
-  void close;
+  if (!desk) return;
+  const s = upd || await desk.update.get();
+  if (s.status === 'downloading') return toast(`Downloading ${s.version}… it will be ready in a moment`, 'ok');
+  const notes = s.notes ? h('div.update-notes', md(String(s.notes).replace(/^•\s*/gm, '- '))) : null;
+  if (s.status === 'ready') {
+    if (await modal("What's new", h('div', h('p', `${s.current} → `, h('b', s.ready?.version || s.version)), notes, h('p.small.muted', 'Videditor quits, updates and opens again. Your videos are not touched. If you keep working, it updates the next time you quit.')), { actions: [{ label: 'Later', value: false }, { label: 'Restart now', cls: 'primary', value: true }] })) desk.update.install();
+    return;
+  }
+  if (s.status === 'available') {
+    if (await modal(`Videditor ${s.version} is available`, h('div', notes, h('p.small.muted', 'It downloads in the background; you can keep working.')), { actions: [{ label: 'Download', cls: 'primary', value: true }] })) { await desk.update.check(); toast('Downloading the update…', 'ok'); }
+    return;
+  }
+  const r = await desk.update.check();
+  if (!['available', 'downloading', 'ready'].includes(r.status)) toast(r.error ? `Could not check: ${r.error}` : `Videditor ${r.current} is the newest version`, r.error ? 'err' : 'ok');
 }
-refreshUpdate();
 
 // Account: just the initials; the name and 'Change name' show when it opens.
 function accountMenu(who) {
@@ -53,8 +57,9 @@ function accountMenu(who) {
     h('div.menu-sep'),
     h('button.menu-item', { on: { click: changeName } }, svg('pen'), h('span.mi-text', h('span', who ? 'Change name' : 'Set your name'))),
     h('div.menu-sep'),
-    h('button.menu-item', { on: { click: () => { close(); showUpdate(); } } }, svg('download'), h('span.mi-text', h('span', updateInfo?.available ? `Update to v${updateInfo.version}` : 'Check for updates'), h('span.mi-hint', `Videditor v${updateInfo?.current || '…'}${updateInfo?.mode === 'dev' ? ' · developer copy' : ''}`))),
-    updateInfo?.mode === 'installed' ? h('label.menu-item.check', h('input', { type: 'checkbox', checked: updateInfo.settings?.autoUpdate !== false, on: { change: async (e) => { try { await api.saveSettings({ autoUpdate: e.target.checked }); updateInfo.settings = { autoUpdate: e.target.checked }; toast(e.target.checked ? 'Updates install when you open Videditor' : 'Auto-update off: you will see a notice instead', 'ok'); } catch (err) { toast(err.message, 'err'); } } } }), h('span.mi-text', h('span', 'Update automatically'), h('span.mi-hint', 'When you open Videditor'))) : null
+    h('button.menu-item', { on: { click: () => { close(); desk ? showUpdate() : null; } } }, svg('download'), h('span.mi-text', h('span', !desk ? 'Updates' : upd?.status === 'ready' ? `Restart to update to ${upd.ready?.version}` : 'Check for updates'), h('span.mi-hint', `Videditor ${appInfo?.version ? 'v' + appInfo.version : ''}${desk ? '' : ' · developer copy (git pull to update)'}`))),
+    desk ? h('label.menu-item.check', h('input', { type: 'checkbox', checked: upd?.auto !== false, on: { change: async (e) => { try { paintUpdate(await desk.update.setAuto(e.target.checked)); toast(e.target.checked ? 'Updates download by themselves and install when you restart' : 'Auto-update off: you will see a notice instead', 'ok'); } catch (err) { toast(err.message, 'err'); } } } }), h('span.mi-text', h('span', 'Update automatically'), h('span.mi-hint', 'Downloads in the background'))) : null,
+    desk ? h('button.menu-item', { on: { click: () => { close(); desk.openHome(); } } }, svg('folder'), h('span.mi-text', h('span', 'Open videos folder'), h('span.mi-hint', appInfo?.home || '~/Videditor'))) : null,
   ].flat().filter(Boolean));
   const wrap = h('div.menuwrap.accountwrap', trigger, pop);
   const onDoc = (e) => { if (!wrap.contains(e.target)) close(); };

@@ -1,0 +1,88 @@
+# Builds the Videditor Mac app when a release tag (videditor-v1.2.3) is pushed, or by hand from the
+# Actions tab. Signs and notarizes when the Apple secrets below exist; otherwise builds an unsigned app.
+#
+# Repository secrets (Settings → Secrets and variables → Actions):
+#   MAC_CERT_P12_BASE64          Developer ID Application certificate (.p12), base64
+#   MAC_CERT_PASSWORD            its password
+#   APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID   for notarization
+# Repository variable (optional):
+#   VIDEDITOR_UPDATE_FEED        where installed apps look for updates (default: this repo's latest release)
+name: Videditor Mac app
+on:
+  push:
+    tags: ['videditor-v*']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  mac:
+    runs-on: macos-14
+    timeout-minutes: 90
+    env:
+      UPDATE_FEED: ${{ vars.VIDEDITOR_UPDATE_FEED || format('https://github.com/{0}/releases/latest/download/latest.json', github.repository) }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Server dependencies
+        working-directory: videditor
+        run: npm install --omit=dev --no-audit --no-fund
+      - name: App dependencies
+        working-directory: videditor/desktop
+        run: npm install --no-audit --no-fund
+      - name: Build whisper (speech to text) for both chips
+        run: |
+          git clone -q --depth 1 --branch v1.7.6 https://github.com/ggml-org/whisper.cpp.git "$RUNNER_TEMP/whisper"
+          for a in arm64 x86_64; do
+            metal=OFF; [ "$a" = arm64 ] && metal=ON
+            cmake -S "$RUNNER_TEMP/whisper" -B "$RUNNER_TEMP/whisper/build-$a" -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF \
+              -DCMAKE_OSX_ARCHITECTURES=$a -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0 -DGGML_METAL=$metal -DGGML_METAL_EMBED_LIBRARY=ON \
+              -DGGML_NATIVE=OFF -DWHISPER_BUILD_TESTS=OFF
+            cmake --build "$RUNNER_TEMP/whisper/build-$a" -j 4 --target whisper-cli
+          done
+      - name: Bundle ffmpeg, headless Chrome, whisper and the speech model
+        working-directory: videditor/desktop
+        run: |
+          node scripts/fetch-vendor.mjs --arch arm64 --whisper "$RUNNER_TEMP/whisper/build-arm64/bin/whisper-cli"
+          node scripts/fetch-vendor.mjs --arch x64 --whisper "$RUNNER_TEMP/whisper/build-x86_64/bin/whisper-cli"
+      - name: Stamp version and update feed
+        working-directory: videditor/desktop
+        run: |
+          node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json'));p.version=JSON.parse(fs.readFileSync('../package.json')).version;p.videditor.updateFeed=process.env.UPDATE_FEED;fs.writeFileSync('package.json',JSON.stringify(p,null,2))"
+          echo "Building Videditor $(node -p "require('./package.json').version"), feed: $UPDATE_FEED"
+      - name: Build (sign and notarize when configured)
+        working-directory: videditor/desktop
+        env:
+          CSC_LINK: ${{ secrets.MAC_CERT_P12_BASE64 }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          if [ -z "$CSC_LINK" ]; then
+            export CSC_IDENTITY_AUTO_DISCOVERY=false
+            echo "::warning::No signing certificate: this build is unsigned. People must right-click Videditor > Open the first time, and updates are not signature-checked."
+          fi
+          notarize=false; [ -n "$APPLE_ID" ] && [ -n "$CSC_LINK" ] && notarize=true
+          npx electron-builder --mac zip dmg --arm64 --x64 -c.mac.notarize=$notarize
+      - name: Update feed
+        if: startsWith(github.ref, 'refs/tags/')
+        working-directory: videditor/desktop
+        run: node scripts/make-feed.mjs --base "https://github.com/${{ github.repository }}/releases/download/${GITHUB_REF_NAME}" --notes "$(git tag -l --format='%(contents)' "$GITHUB_REF_NAME")"
+      - name: Publish the release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd videditor/desktop/dist
+          gh release create "$GITHUB_REF_NAME" Videditor-*.zip Videditor-*.dmg latest.json \
+            --title "Videditor ${GITHUB_REF_NAME#videditor-v}" --notes "$(git tag -l --format='%(contents)' "$GITHUB_REF_NAME")"
+      - name: Keep the build (manual runs)
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: videditor-mac
+          path: |
+            videditor/desktop/dist/*.zip
+            videditor/desktop/dist/*.dmg

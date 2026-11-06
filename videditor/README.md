@@ -94,33 +94,46 @@ subscription. No accounts, no credits.
   link, or shows the file in Finder. **Copy prompt** builds a brief for any agent. The **MCP server** (`mcp.mjs`) lets Claude Code read
   feedback, fetch annotated frames, post replies, **render the next version** and wait for new notes.
 
-## Share it (install and updates)
+## Mac app (how people get it, and updates)
 
-**For the people you share it with** (Mac). They need read access to this GitHub repository and Git signed
-in to GitHub once (`brew install gh && gh auth login && gh auth setup-git`). Then one command:
+Videditor ships as a Mac app: download, drag to Applications, open. It runs in its own window and carries
+everything it needs: its own engine, ffmpeg, a headless Chrome for rendering, and whisper for turning voice
+notes into text on the Mac (voice never leaves the machine). The one thing people install themselves is
+**Claude Code** (`npm i -g @anthropic-ai/claude-code`, then `claude` once to sign in), because the agent
+runs on their own account. Their videos, renders and notes live in **`~/Videditor`**; updates never touch it.
 
-```bash
-gh api -H "Accept: application/vnd.github.raw" "repos/avi-ashkenazi-deel/avideos-releases/contents/videditor/install.sh?ref=Videditor" | bash
-```
+**Updates.** The app checks for a new version when it opens and every few hours, downloads it in the
+background, checks its checksum (and, on signed builds, that it is signed by the same developer), then shows
+**Restart to update** in the top bar. If they keep working, it installs when they quit. Auto-update can be
+turned off in the account menu; the app menu has **Check for Updates…**.
 
-The installer adds what is missing (Node 22+, ffmpeg, Chrome, Claude Code; it needs Homebrew), downloads the
-newest release into `~/.videditor`, and creates a **Videditor** app in `~/Applications` (Spotlight finds it)
-plus a `videditor` command. Their videos, renders and notes live in **`~/Videditor`**, which updates never
-touch. Opening Videditor installs a newer release first (they can turn that off in the account menu); a
-green **Update** button also appears in the top bar when a release comes out while it is open.
-
-**For you: publishing an update.** Commit your work, then:
+**Publishing a release** (from your Mac, after committing):
 
 ```bash
 node videditor/tools/release.mjs 0.4.0 "What changed, in one line" "Another line" --push
 ```
 
-That bumps the version, adds the notes to `CHANGELOG.md`, tags `videditor-v0.4.0` and pushes. Everyone gets
-it the next time they open Videditor, with your notes in the update dialog. Only tagged releases ship;
-day-to-day commits on the branch do not. To roll back, release the previous code under a newer number.
+The tag `videditor-v0.4.0` triggers `.github/workflows/videditor-mac.yml`, which builds the app for Apple
+Silicon and Intel on a GitHub Mac runner (bundling ffmpeg, headless Chrome, whisper and its model), signs and
+notarizes it, and publishes a GitHub release with the `.dmg` (for first installs), the `.zip` files and
+`latest.json` (the update feed). Installed apps pick it up from there. Only tagged releases ship.
 
-Your own checkout (with `data/` next to the code) is a developer copy: it never updates itself, and you
-keep using `git pull`.
+**One-time setup** (repository → Settings → Secrets and variables → Actions):
+
+| Secret | What |
+|---|---|
+| `MAC_CERT_P12_BASE64` | Developer ID Application certificate (.p12), base64 |
+| `MAC_CERT_PASSWORD` | its password |
+| `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` | for notarization |
+
+Without them the workflow still builds, but the app is unsigned: people must right-click → Open the first
+time, and updates are checked by checksum only. Installed apps read the feed from this repository's latest
+release; a private repository's release files need a login to download, so either publish releases where
+your team can reach them (set the `VIDEDITOR_UPDATE_FEED` variable to that `latest.json`) or make the
+repository internal/public. Building locally on a Mac: `cd videditor/desktop && npm install && node
+scripts/fetch-vendor.mjs --arch arm64 && npm run dist:mac`.
+
+Your own checkout stays a developer copy (browser at localhost:8787, `git pull` to update).
 
 ## Run it
 

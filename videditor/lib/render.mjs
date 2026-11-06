@@ -18,6 +18,8 @@ export function loadPlaywright() {
 }
 
 export async function launchBrowser(pw) {
+  // The Mac app ships its own headless Chrome (VIDEDITOR_CHROME); a developer checkout uses installed Chrome/Edge.
+  if (process.env.VIDEDITOR_CHROME) return pw.chromium.launch({ executablePath: process.env.VIDEDITOR_CHROME });
   try { return await pw.chromium.launch({ channel: 'chrome' }); } catch {}
   try { return await pw.chromium.launch({ channel: 'msedge' }); } catch {}
   return pw.chromium.launch();

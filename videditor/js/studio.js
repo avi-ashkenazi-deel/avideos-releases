@@ -128,7 +128,7 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
       stage.pause(); noteLayer.clear(); N.anchor = null;
       await stage.seek(IO.in ?? 0);
       const rec = new VoiceRecorder({ getTime: () => stage.time, snapshot: () => null });
-      await rec.start((r) => { liveTranscript.classList.remove('hidden'); liveTranscript.innerHTML = `<span class="runtag">● Run-through · ${r.segments.length} remark${r.segments.length === 1 ? '' : 's'}</span> ` + (r.interim ? `<span class="muted">${r.interim.replace(/[&<>]/g, '')}</span>` : (r.segments.length ? highlightPointing(r.segments[r.segments.length - 1].text.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]))) : '<span class="muted">Talk as it plays. Draw if you like. It stops by itself at the end.</span>')); });
+      await rec.start((r) => { liveTranscript.classList.remove('hidden'); liveTranscript.innerHTML = `<span class="runtag">● Run-through · ${r.segments.length} remark${r.segments.length === 1 ? '' : 's'}</span> ` + (r.interim ? `<span class="muted">${r.interim.replace(/[&<>]/g, '')}</span>` : (r.segments.length ? highlightPointing(r.segments[r.segments.length - 1].text.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]))) : ('<span class="muted">' + (r.serverMode ? 'Recording. Talk as it plays, draw if you like; your words are transcribed on this Mac when the video ends.' : 'Talk as it plays. Draw if you like. It stops by itself at the end.') + '</span>'))); });
       N.run = { rec, off: stage.on('ended', () => finishRun()) };
       runBtn.replaceChildren(svg('stop'), 'Stop run'); runBtn.classList.add('danger'); stageWrap.classList.add('rec'); recBtn.disabled = true;
       setNoteTool('pen');
@@ -139,9 +139,10 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
     const run = N.run; if (!run) return; N.run = null; run.off();
     stage.pause();
     runBtn.replaceChildren(svg('mic'), 'Run-through'); runBtn.classList.remove('danger'); stageWrap.classList.remove('rec'); recBtn.disabled = false; runBtn.disabled = true;
-    liveTranscript.classList.remove('hidden'); liveTranscript.innerHTML = '<span class="muted">Building notes from your run…</span>';
+    liveTranscript.classList.remove('hidden'); liveTranscript.innerHTML = '<span class="muted">Transcribing and building notes from your run…</span>';
     try {
       const voice = await run.rec.stop();
+      if (voice.transcribeError) toast(`Could not transcribe: ${voice.transcribeError}. Your recording is kept with the notes.`, 'err');
       const segs = (voice.segments || []).filter((s) => s.text.trim()).map((s) => ({ ...s, strokes: [] }));
       const strokes = noteLayer.strokes.slice(); const strokeT = (s) => s.points[0]?.[2] ?? 0;
       const loose = [];
