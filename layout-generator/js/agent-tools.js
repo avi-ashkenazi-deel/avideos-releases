@@ -36,6 +36,10 @@ const AgentTools = (() => {
     if (b.radius) o.radius = b.radius; if (b.kind === 'field' && b.alpha === 0) o.fill = 'none';
     if (b.align && b.align !== 'left') o.align = b.align;
     if (b.kind === 'image') { o.image = b.asset ? 'set' : 'empty'; if (b.crop) o.crop_zoom = Canvas.cropZoom(b, (env.getAssets().images || []).find(a => a.id === b.asset)); if (Canvas.adjustActive(b)) o.adjust = Canvas.adjustOf(b); }
+    if (b.kind === 'sticky' || ((b.kind === 'field' || b.kind === 'shape') && b.text != null)) { o.text = String(b.text || '').slice(0, MAX_TEXT); if (b.votes) o.votes = Object.values(b.votes).reduce((t, x) => t + (Number(x) || 0), 0); if (b.author) o.by = b.authorName || 'someone'; }
+    if (b.kind === 'box' && b.section) o.section = b.section.title || 'Section';
+    if (b.kind === 'connector') { o.from_id = b.from && b.from.id; o.to_id = b.to && b.to.id; if (b.text) o.label = b.text; o.arrow = b.arrow || 'end'; }
+    if (b.kind === 'stamp') o.emoji = b.text;
     if (b.kind === 'video') { const v = (env.getAssets().videos || []).find(a => a.id === b.asset); o.video = v ? { duration: Math.round((v.duration || 0) * 10) / 10, poster_at: v.posterTime || 0 } : 'empty'; }
     if (b.kind === 'icon') o.icon = b.name;
     if (b.code) o.code = { component: b.code.name, from: b.code.pkg, props: b.code.props || {} };
@@ -59,7 +63,11 @@ const AgentTools = (() => {
     if (!p || typeof p !== 'object') throw new Error('props must be an object');
     const num = (k, min = -1e6, max = 1e6) => { const v = Number(p[k]); if (!Number.isFinite(v)) throw new Error(`${k} must be a number`); return Math.max(min, Math.min(max, v)); };
     let refit = false;
-    if ('text' in p) { if (b.kind === 'button') b.text = String(p.text).slice(0, 80); else if (b.kind === 'text') { Canvas.setText(b, String(p.text)); refit = true; } }
+    if ('text' in p) { if (b.kind === 'button' || b.kind === 'connector' || b.kind === 'stamp') b.text = String(p.text).slice(0, b.kind === 'stamp' ? 4 : 80); else if (b.kind === 'text') { Canvas.setText(b, String(p.text)); refit = true; } else if (b.kind === 'sticky' || b.kind === 'field' || b.kind === 'shape') { b.text = String(p.text).slice(0, 600); refit = true; } }
+    if ('color' in p && (b.kind === 'sticky' || b.kind === 'field' || b.kind === 'shape' || (b.kind === 'box' && b.section))) { const hx = /^#[0-9a-f]{6}$/i.test(String(p.color)) ? String(p.color).toUpperCase() : null; if (hx) b.fill = hx; }
+    if ('title' in p && b.kind === 'box') { b.section = { ...(b.section || {}), title: String(p.title).slice(0, 80) }; }
+    if ('emoji' in p && b.kind === 'stamp') b.text = String(p.emoji).slice(0, 4);
+    if (b.kind === 'connector') { if ('from_id' in p) b.from = { id: String(p.from_id) }; if ('to_id' in p) b.to = { id: String(p.to_id) }; if ('arrow' in p && ['none', 'end', 'both', 'start'].includes(p.arrow)) b.arrow = p.arrow; if ('route' in p && ['elbow', 'straight'].includes(p.route)) b.route = p.route; if ('label' in p) b.text = String(p.label).slice(0, 80); }
     if ('items' in p && b.kind === 'list') { b.items = arr(p.items).map(String).slice(0, 20); refit = true; }
     for (const k of ['x', 'y']) if (k in p) b[k] = Math.round(num(k));
     for (const k of ['w', 'h']) if (k in p) { b[k] = Math.round(num(k, 4, 20000)); refit = true; }
@@ -215,7 +223,7 @@ const AgentTools = (() => {
     },
     add_blocks({ frame_id, blocks }) {
       const f = F(frame_id); const ids = []; const errors = [];
-      write(() => { for (const spec of arr(blocks).slice(0, 50)) { try { const b = Canvas.newBlock(spec.kind, f, kit(), null); if (!b) throw new Error(`unknown kind ${spec.kind}`); applyProps(b, spec.props || {}); f.layout.blocks.push(b); ids.push(b.id);
+      write(() => { for (const spec of arr(blocks).slice(0, 80)) { try { const pp = spec.props || {}; const b = Canvas.newBlock(spec.kind, f, kit(), spec.kind === 'shape' || spec.kind === 'sticky' || spec.kind === 'section' || spec.kind === 'stamp' || spec.kind === 'connector' ? { x: Number(pp.x) || 0, y: Number(pp.y) || 0, color: pp.color, title: pp.title, emoji: pp.emoji, shape: pp.shape, radius: pp.radius, from: pp.from_id ? { id: String(pp.from_id) } : undefined, to: pp.to_id ? { id: String(pp.to_id) } : undefined } : null); if (!b) throw new Error(`unknown kind ${spec.kind}`); if (b.kind === 'sticky' && CanvasUI.who) { const m = CanvasUI.who(); b.author = m.id; b.authorName = m.name; } applyProps(b, pp); if (b.kind === 'sticky' || b.text != null) Canvas.refit(b); f.layout.blocks.push(b); ids.push(b.id); if (b.kind !== 'box' && b.kind !== 'connector' && !pp.box_id) { const sec = Canvas.sectionAt(f, b); if (sec) b.parent = sec.id; }
         // straight into a box: in a stack it joins the flow (before before_id, or at the end)
         if (spec.box_id) { const box = Bk(f, spec.box_id); if (box.kind !== 'box') throw new Error(`${spec.box_id} is not a box`); if (Auto.on(Auto.settingsOf(f, box))) Auto.moveInList(f, b, box.id, spec.before_id || null); else b.parent = box.id; } } catch (e) { errors.push(e.message); } } if (f.autoLayout.mode !== 'none') Canvas.applyAutoLayout(f); }, [f.id]);
       note(`Added ${ids.length} block${ids.length === 1 ? '' : 's'} to ${f.name}`);

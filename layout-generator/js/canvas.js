@@ -89,6 +89,13 @@ const Canvas = (() => {
       b.lines = lines; b.indent = indent; b.itemGap = itemGap;
       b.h = Math.round(lines.length * f.size * (f.lineHeight || 1.3) + Math.max(0, (b.items || []).length - 1) * itemGap);
       b.inkW = Math.min(b.w, inkW); b.overflow = overflow;
+    } else if (b.kind === 'sticky' || ((b.kind === 'field' || b.kind === 'shape') && b.text != null)) {
+      // words inside a box: shrink the size until they fit, down to 11px, then let them overflow
+      const f = b.font || (b.font = { family: 'Inter, system-ui, sans-serif', weight: 500, size: 18, lineHeight: 1.3 }); const pad = b.kind === 'sticky' ? 14 : 10;
+      const text = Text.transform(String(b.text || ''), f.transform); const maxW = Math.max(8, b.w - pad * 2), maxH = Math.max(8, b.h - pad * 2);
+      const base = b.fontSizeMax || f.size || 18; let size = base; let lines = null;
+      while (size >= 11) { lines = Text.wrap(text, { ...f, size }, maxW); if (lines && lines.length * size * (f.lineHeight || 1.3) <= maxH) break; size -= 1; if (size < 11) { size = 11; lines = Text.wrap(text, { ...f, size }, maxW) || text.split(/\s+/); break; } }
+      b.fontSizeMax = base; f.size = size; b.lines = lines || ['']; b.inkW = Math.min(maxW, Math.max(0, ...b.lines.map(l => Text.width(l, { ...f, size })))); b.overflow = b.lines.length * size * (f.lineHeight || 1.3) > maxH + 1;
     } else if (b.kind === 'button') {
       const tw = Text.width(b.text || '', b.font); b.overflow = tw + b.font.size > b.w;
     }
@@ -107,6 +114,13 @@ const Canvas = (() => {
     if (kind === 'button') return { id: uid(), kind: 'button', role: 'cta', path: 'cta_' + uid(), text: 'Learn more', x, y, w: Math.round(body * 9), h: Math.round(body * 2.7), font: { family: Brand.fontCss(kit.fonts.body), weight: 600, size: body, lineHeight: 1.2 }, fill: pal.accent, color: Color.contrast(pal.accent, '#FFFFFF') >= Color.contrast(pal.accent, '#000000') ? '#FFFFFF' : '#000000', radius: Math.round(body * 1.35), decorative: false };
     if (kind === 'image') return { id: uid(), kind: 'image', x, y, w: 40 * u, h: 30 * u, asset: null, focal: 'xMidYMid', radius: 0, decorative: false, path: 'image_' + uid() };
     if (kind === 'video') return { id: uid(), kind: 'video', x, y, w: 48 * u, h: 27 * u, asset: null, focal: 'xMidYMid', radius: 0, decorative: false, path: 'video_' + uid() };
+    // board things (DeelJam): a sticky note, a shape with words in it, a section, a stamp, a connector
+    if (kind === 'sticky') return { id: uid(), kind: 'sticky', x, y, w: 200, h: 200, text: '', fill: (at && at.color) || '#FFE066', font: { family: Brand.fontCss(kit.fonts.body), weight: 500, size: 20, lineHeight: 1.3 }, path: 'sticky_' + uid() };
+    if ((kind === 'shape' || kind === 'jamshape') && at && (at.shape === 'ellipse' || at.shape === 'diamond')) return { id: uid(), kind: 'shape', shape: at.shape, x, y, w: at.shape === 'diamond' ? 200 : 220, h: at.shape === 'diamond' ? 140 : 120, text: '', fill: at.color || '#FFFFFF', stroke: { color: '#C9C8D1', width: 1.5 }, font: { family: Brand.fontCss(kit.fonts.body), weight: 500, size: 18, lineHeight: 1.3 }, color: '#1E1C1A', decorative: false, path: 'shape_' + uid() };
+    if (kind === 'shape' || kind === 'jamshape') return { id: uid(), kind: 'field', x, y, w: 220, h: 120, text: '', fill: (at && at.color) || '#FFFFFF', stroke: { color: '#C9C8D1', width: 1.5 }, radius: (at && at.radius) ?? 12, font: { family: Brand.fontCss(kit.fonts.body), weight: 500, size: 18, lineHeight: 1.3 }, color: '#1E1C1A', decorative: false, path: 'shape_' + uid() };
+    if (kind === 'section') return { id: uid(), kind: 'box', x, y, w: 800, h: 520, fill: (at && at.color) || '#F3F2FA', fillAlpha: 0.85, radius: 16, clip: false, section: { title: (at && at.title) || 'Section' }, decorative: true, path: 'section_' + uid() };
+    if (kind === 'stamp') return { id: uid(), kind: 'stamp', x, y, w: 56, h: 56, text: (at && at.emoji) || '👍', decorative: true, path: 'stamp_' + uid() };
+    if (kind === 'connector') return { id: uid(), kind: 'connector', x, y, w: 10, h: 10, from: (at && at.from) || { x, y }, to: (at && at.to) || { x: x + 200, y }, arrow: 'end', route: 'elbow', text: '', stroke: { color: '#5E5A56', width: 2 }, font: { family: Brand.fontCss(kit.fonts.body), weight: 500, size: 14, lineHeight: 1.3 }, path: 'connector_' + uid() };
     if (kind === 'icon') return { id: uid(), kind: 'icon', name: 'sparkle', x, y, w: 8 * u, h: 8 * u, fill: pal.accent, decorative: true };
     if (kind === 'logo') return { id: uid(), kind: 'logo', x, y, w: Math.round(5 * u * Engine.logoAspect(kit, Engine.typeSet(kit, Grid.compute(Grid.byId[L.format.id] || Grid.FORMATS[0], kit.grid), 2))), h: 5 * u, fill: Brand.logoColorFor(kit, pal.bg)[0], decorative: true };
     return null;
@@ -202,6 +216,52 @@ const Canvas = (() => {
 
   // ---- Auto layout: see autolayout.js. Full-bleed images and fields count as backgrounds (absolute when a screen's
   // auto layout is switched on). ---------------------------------------------------------------------------------------
+  // ---- Connectors (board arrows): a line between two blocks that follows them -------------------------------------
+  // An end is {id} (a block in the frame, with an optional side t/r/b/l) or a free point {x, y}.
+  const endRect = (frame, e) => { if (!e) return null; if (e.id) { const b = blockById(frame, e.id); return b ? { x: b.x, y: b.y, w: b.w, h: b.h } : null; } return Number.isFinite(e.x) && Number.isFinite(e.y) ? { x: e.x, y: e.y, w: 0, h: 0 } : null; };
+  const sideOf = (ra, rb, pref) => {
+    if (pref && /^[trbl]$/.test(pref)) return pref;
+    const ax = ra.x + ra.w / 2, ay = ra.y + ra.h / 2, bx = rb.x + rb.w / 2, by = rb.y + rb.h / 2; const dx = bx - ax, dy = by - ay;
+    if (Math.abs(dx) * (ra.h || 1) > Math.abs(dy) * (ra.w || 1)) return dx >= 0 ? 'r' : 'l'; return dy >= 0 ? 'b' : 't';
+  };
+  const anchor = (r, side) => side === 't' ? { x: r.x + r.w / 2, y: r.y } : side === 'b' ? { x: r.x + r.w / 2, y: r.y + r.h } : side === 'l' ? { x: r.x, y: r.y + r.h / 2 } : { x: r.x + r.w, y: r.y + r.h / 2 };
+  // The points of a connector, its box and where its label sits. Straight: two points. Elbow: one or two right-angle
+  // bends, leaving each block squarely from the side that faces the other.
+  function connectorGeometry(frame, b) {
+    const ra = endRect(frame, b.from), rb = endRect(frame, b.to); if (!ra || !rb) return null;
+    const sa = ra.w ? sideOf(ra, rb, b.from.side) : null, sb = rb.w ? sideOf(rb, ra, b.to.side) : null;
+    const A = sa ? anchor(ra, sa) : { x: ra.x, y: ra.y }, B = sb ? anchor(rb, sb) : { x: rb.x, y: rb.y };
+    let pts;
+    if (b.route === 'straight' || (!sa && !sb)) pts = [A, B];
+    else {
+      const horizA = sa === 'l' || sa === 'r', horizB = sb === 'l' || sb === 'r';
+      if (sa && sb && horizA === horizB) { // same axis out of both: two bends through the midpoint
+        if (horizA) { const mx = (A.x + B.x) / 2; pts = [A, { x: mx, y: A.y }, { x: mx, y: B.y }, B]; } else { const my = (A.y + B.y) / 2; pts = [A, { x: A.x, y: my }, { x: B.x, y: my }, B]; }
+      } else { // one bend
+        const h = sa ? horizA : !horizB; pts = h ? [A, { x: B.x, y: A.y }, B] : [A, { x: A.x, y: B.y }, B];
+      }
+      pts = pts.filter((p, i, a) => i === 0 || Math.abs(p.x - a[i - 1].x) > 0.01 || Math.abs(p.y - a[i - 1].y) > 0.01);
+    }
+    const xs = pts.map(p => p.x), ys = pts.map(p => p.y); const box = { x: Math.min(...xs), y: Math.min(...ys), w: Math.max(1, Math.max(...xs) - Math.min(...xs)), h: Math.max(1, Math.max(...ys) - Math.min(...ys)) };
+    // label at the middle of the path
+    let total = 0; const segs = []; for (let i = 1; i < pts.length; i++) { const l = Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y); segs.push(l); total += l; }
+    let mid = { x: A.x, y: A.y }; let acc = 0; for (let i = 0; i < segs.length; i++) { if (acc + segs[i] >= total / 2) { const t = segs[i] ? (total / 2 - acc) / segs[i] : 0; mid = { x: pts[i].x + (pts[i + 1].x - pts[i].x) * t, y: pts[i].y + (pts[i + 1].y - pts[i].y) * t }; break; } acc += segs[i]; }
+    return { pts, box, mid, sides: [sa, sb] };
+  }
+  // Connectors keep their box where their line is, so selection, layers and hit testing see them.
+  function syncConnectors(frame) {
+    let changed = false;
+    for (const b of frame.layout.blocks) { if (b.kind !== 'connector') continue; const g = connectorGeometry(frame, b); if (!g) continue; const bx = Math.round(g.box.x * 10) / 10, by = Math.round(g.box.y * 10) / 10, bw = Math.round(g.box.w * 10) / 10, bh = Math.round(g.box.h * 10) / 10; if (b.x !== bx || b.y !== by || b.w !== bw || b.h !== bh) { b.x = bx; b.y = by; b.w = bw; b.h = bh; changed = true; } }
+    return changed;
+  }
+  // Distance from a point to a connector's line (for picking it).
+  function connectorDistance(frame, b, p) {
+    const g = connectorGeometry(frame, b); if (!g) return Infinity; let best = Infinity;
+    for (let i = 1; i < g.pts.length; i++) { const a = g.pts[i - 1], c = g.pts[i]; const dx = c.x - a.x, dy = c.y - a.y; const l2 = dx * dx + dy * dy; const t = l2 ? Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / l2)) : 0; best = Math.min(best, Math.hypot(p.x - (a.x + dx * t), p.y - (a.y + dy * t))); }
+    return best;
+  }
+  // The section (a box with a title) whose area holds a block's centre, if any.
+  function sectionAt(frame, b) { const cx = b.x + b.w / 2, cy = b.y + b.h / 2; const secs = frame.layout.blocks.filter(s => s.kind === 'box' && s.section && s.id !== b.id && !s.hidden); let best = null; for (const s of secs) if (cx >= s.x && cx <= s.x + s.w && cy >= s.y && cy <= s.y + s.h && (!best || s.w * s.h < best.w * best.h)) best = s; return best; }
   // ---- Pictures: the crop shown and the adjustments on it --------------------------------------------------------
   // The part of a picture a block shows, in source pixels. Without a crop it is the cover crop at the focal point
   // (what the renderer drew all along); with one, crop {x, y, w, h} is a fraction of the source, kept at the block's
@@ -624,7 +684,7 @@ const Canvas = (() => {
     const re = new RegExp(find.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), opts.caseSensitive ? 'g' : 'gi');
     for (const f of frames) for (const b of f.layout.blocks) {
       if (b.kind === 'text') { const t = sourceText(b); const nt = t.replace(re, () => { n++; return repl; }); if (nt !== t) { if (typeof Rich !== 'undefined' && Rich.isRich(b)) { const c = { n: 0 }; b.runs = Rich.replace(b.runs, re, repl, c); b.text = Rich.plain(b.runs); } else b.text = nt; refit(b); } }
-      else if (b.kind === 'button') { const nt = String(b.text || '').replace(re, () => { n++; return repl; }); if (nt !== b.text) { b.text = nt; refit(b); } }
+      else if (b.kind === 'button' || b.kind === 'sticky' || b.kind === 'connector' || ((b.kind === 'field' || b.kind === 'shape') && b.text != null)) { const nt = String(b.text || '').replace(re, () => { n++; return repl; }); if (nt !== b.text) { b.text = nt; refit(b); } }
       else if (b.kind === 'list') { const items = (b.items || []).map(i => String(i).replace(re, () => { n++; return repl; })); if (items.join('\n') !== (b.items || []).join('\n')) { b.items = items; refit(b); } }
     }
     return n;
@@ -695,5 +755,5 @@ const Canvas = (() => {
     };
   }
 
-  return { create, addFrame, blankFrame, migrate, defaultAuto, frameById, blockById, refit, sourceText, newBlock, moveBlock, resizeBlock, reorder, duplicateBlock, removeBlocks, transferBlocks, pasteBlocks, customFormat, align, distribute, bounds, applyAutoLayout, isBackground, serialize, deserialize, toLink, fromHash, toHTML, toReact, codeTree, codeNodes, recolor, extractContent, scaleFrame, clusters, mainCluster, applyFrameTokens, tokenizeFrame, applyTokens, group, ungroup, groupMembers, tidy, compact, penD, penFit, maskShape, maskedBy, replaceText, setFonts, pasteFrames, framesBounds, cssGradient, setText, richText, cropRect, cropFrom, cropZoom, setCropZoom, adjustOf, adjustActive, adjustCss, ADJUST_DEFAULT, history, snap, uid, clone };
+  return { create, addFrame, blankFrame, migrate, defaultAuto, frameById, blockById, refit, sourceText, newBlock, moveBlock, resizeBlock, reorder, duplicateBlock, removeBlocks, transferBlocks, pasteBlocks, customFormat, align, distribute, bounds, applyAutoLayout, isBackground, serialize, deserialize, toLink, fromHash, toHTML, toReact, codeTree, codeNodes, recolor, extractContent, scaleFrame, clusters, mainCluster, applyFrameTokens, tokenizeFrame, applyTokens, group, ungroup, groupMembers, tidy, compact, penD, penFit, maskShape, maskedBy, replaceText, setFonts, pasteFrames, framesBounds, cssGradient, setText, richText, connectorGeometry, syncConnectors, connectorDistance, sectionAt, cropRect, cropFrom, cropZoom, setCropZoom, adjustOf, adjustActive, adjustCss, ADJUST_DEFAULT, history, snap, uid, clone };
 })();

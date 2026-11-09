@@ -30,7 +30,7 @@ const Sync = (() => {
   // change must not cost a pass over every block. Library records come along only on a full pass or when asked.
   function toRecords(doc, scope = null) {
     const out = new Map();
-    out.set('meta', { name: doc.name || 'Untitled canvas' });
+    out.set('meta', { name: doc.name || 'Untitled canvas', ...(doc.jam ? { jam: doc.jam } : {}) });
     if (!scope || scope.library) for (const it of doc.library || []) if (it && it.id) out.set('L~' + it.id, it);
     if (!scope || scope.comments) for (const c of doc.comments || []) if (c && c.id) out.set('C~' + c.id, c);
     doc.frames.forEach((f, i) => {
@@ -65,7 +65,7 @@ const Sync = (() => {
   }
   function docFrom(map, base) {
     const doc = { ...(base || Canvas.create()), frames: [] };
-    const meta = map.get('meta'); if (meta && !meta._del && meta.name) doc.name = meta.name;
+    const meta = map.get('meta'); if (meta && !meta._del && meta.name) doc.name = meta.name; if (meta && !meta._del && meta.jam && typeof meta.jam === 'object') doc.jam = meta.jam;
     doc.library = libraryFrom(map); doc.comments = commentsFrom(map);
     const fids = [...map.entries()].filter(([k, r]) => k.startsWith('f~') && !r._del).sort((a, b) => (a[1].z ?? 0) - (b[1].z ?? 0) || a[0].localeCompare(b[0])).map(([k]) => k.slice(2));
     for (const fid of fids) { const f = frameFrom(map, fid); if (f) doc.frames.push(f); }
@@ -152,7 +152,7 @@ const Sync = (() => {
     applying = true;
     try {
       const doc = ui.doc;
-      if (meta) { const m = recs.get('meta'); if (m && m.name) doc.name = m.name; }
+      if (meta) { const m = recs.get('meta'); if (m && m.name) doc.name = m.name; if (m && m.jam && typeof m.jam === 'object') doc.jam = m.jam; }
       for (const fid of frames) {
         const f = frameFrom(recs, fid); const i = doc.frames.findIndex(x => x.id === fid);
         if (!f) { if (i >= 0) { doc.frames.splice(i, 1); structural = true; } }
@@ -408,6 +408,7 @@ const Sync = (() => {
     p = p || {}; const out = {};
     if (p.cursor && Number.isFinite(p.cursor.x) && Number.isFinite(p.cursor.y)) out.cursor = { x: p.cursor.x, y: p.cursor.y }; else out.cursor = null;
     if (p.sel && Array.isArray(p.sel.frameIds)) out.sel = { frameIds: p.sel.frameIds.filter(x => typeof x === 'string').slice(0, 40), blockIds: Array.isArray(p.sel.blockIds) ? p.sel.blockIds.filter(x => typeof x === 'string').slice(0, 40) : [] };
+    if (p.view && Number.isFinite(p.view.cx) && Number.isFinite(p.view.cy) && Number.isFinite(p.view.zoom)) out.view = { cx: p.view.cx, cy: p.view.cy, zoom: p.view.zoom };
     if (typeof p.name === 'string') out.name = p.name.replace(/[\u0000-\u001f<>]/g, '').slice(0, 40);
     if (typeof p.color === 'string' && /^#[0-9a-fA-F]{6}$/.test(p.color)) out.color = p.color;
     return out;
@@ -419,6 +420,7 @@ const Sync = (() => {
     ui.on('change', (doc, opts) => onChange(doc, opts));
     ui.on('live', ids => onLive(ids));
     ui.on('pointer', p => cursor(p));
+    let viewT = 0; ui.on('view', v => { const t = performance.now(); if (t - viewT < 150 || !adapter) return; viewT = t; adapter.presence({ view: { cx: Math.round(v.cx), cy: Math.round(v.cy), zoom: Math.round(v.zoom * 1000) / 1000 } }); });
     ui.on('select', s => selection(s));
     ui.setUndoMerge((cur, target) => undoMerge(cur, target));
   }

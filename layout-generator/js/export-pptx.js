@@ -74,10 +74,20 @@ const ExportPptx = (() => {
         if (b.radius) { o.rectRadius = inch(b.radius); slide.addShape(pptx.ShapeType.roundRect, o); } else slide.addShape(pptx.ShapeType.rect, o);
       } else if (b.kind === 'rule') {
         slide.addShape(pptx.ShapeType.rect, { ...box, fill: { color: hex(b.fill) }, line: { color: hex(b.fill), transparency: 100 } });
+        if (b.text) slide.addText(String(b.text), { ...box, fontFace: fontName(b.font && b.font.family), fontSize: pt((b.font && b.font.size) || 18), color: hex(b.color || '#1E1C1A'), align: 'center', valign: 'middle', margin: 8, fit: 'shrink', wrap: true });
+      } else if (b.kind === 'sticky') {
+        slide.addShape(pptx.ShapeType.rect, { ...box, fill: { color: hex(b.fill) }, line: { color: hex(b.fill), transparency: 100 }, shadow: { type: 'outer', blur: 4, offset: 2, angle: 90, color: '111110', opacity: 0.2 } });
+        if (b.text) slide.addText(String(b.text), { ...box, fontFace: fontName(b.font && b.font.family), fontSize: pt((b.font && b.font.size) || 18), color: hex(b.color || '#1E1C1A'), align: 'center', valign: 'middle', margin: 8, fit: 'shrink', wrap: true });
+      } else if (b.kind === 'stamp') {
+        slide.addText(String(b.text || ''), { ...box, fontSize: pt(Math.min(b.w, b.h) * 0.8), align: 'center', valign: 'middle', margin: 0 });
+      } else if (b.kind === 'connector') {
+        const g = Canvas.connectorGeometry({ layout }, b); if (g) for (let i = 1; i < g.pts.length; i++) { const a = g.pts[i - 1], c = g.pts[i]; const last = i === g.pts.length - 1; slide.addShape(pptx.ShapeType.line, { x: inch(Math.min(a.x, c.x)), y: inch(Math.min(a.y, c.y)), w: inch(Math.abs(c.x - a.x)), h: inch(Math.abs(c.y - a.y)), flipH: c.x < a.x, flipV: c.y < a.y, line: { color: hex(b.stroke && b.stroke.color || '#5E5A56'), width: pt((b.stroke && b.stroke.width) || 2), endArrowType: last && (b.arrow || 'end') !== 'none' ? 'triangle' : undefined, beginArrowType: i === 1 && (b.arrow === 'both' || b.arrow === 'start') ? 'triangle' : undefined, dashType: b.dash ? 'dash' : 'solid' } }); }
+        if (g && b.text) slide.addText(String(b.text), { x: inch(g.mid.x - 60), y: inch(g.mid.y - 12), w: inch(120), h: inch(24), fontSize: pt((b.font && b.font.size) || 14), align: 'center', valign: 'middle', fill: { color: 'FFFFFF' }, margin: 0 });
       } else if (b.kind === 'shape') {
         const o = { ...box, fill: { color: hex(b.fill) }, line: { color: hex(b.fill), transparency: 100 } };
-        if (b.shape === 'circle' || b.shape === 'ellipse') slide.addShape(pptx.ShapeType.ellipse, o);
+        if (b.shape === 'circle' || b.shape === 'ellipse') slide.addShape(pptx.ShapeType.ellipse, o); else if (b.shape === 'diamond') slide.addShape(pptx.ShapeType.diamond, o);
         else { o.rectRadius = inch(Math.min(b.w, b.h) / 2); slide.addShape(pptx.ShapeType.roundRect, o); }
+        if (b.text) slide.addText(String(b.text), { ...box, fontFace: fontName(b.font && b.font.family), fontSize: pt((b.font && b.font.size) || 18), color: hex(b.color || '#1E1C1A'), align: 'center', valign: 'middle', margin: 8, fit: 'shrink', wrap: true });
       } else if (b.kind === 'image') {
         const a = opts.assets.images.find(i => i.id === b.asset);
         if (a && (b.crop || Canvas.adjustActive(b))) { const baked = await bakePicture(a, b).catch(() => null); if (baked) slide.addImage({ data: stripData(baked), ...box }); else slide.addImage({ data: stripData(a.dataUrl), ...box, sizing: { type: 'cover', w: box.w, h: box.h } }); }

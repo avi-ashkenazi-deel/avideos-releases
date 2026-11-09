@@ -753,7 +753,7 @@
     $('canvasView').hidden = !canvas; $('homeView').hidden = !home;
     $('promptForm').querySelector('#prompt').disabled = canvas || home; $('generateBtn').disabled = canvas || home;
     if (home) { CanvasUI.close(); for (const id of ['outlinePanel', 'deckBar', 'deckView', 'gallery', 'empty']) $(id).hidden = true; LS.set('lg.mode', 'home'); renderHome(); return; }
-    if (canvas) { CanvasUI.open(); $('outlinePanel').hidden = true; $('deckBar').hidden = true; $('deckView').hidden = true; $('gallery').hidden = true; $('empty').hidden = true; LS.set('lg.mode', mode); return; }
+    if (canvas) { CanvasUI.open(); if (typeof Jam !== 'undefined') Jam.onOpen(); $('outlinePanel').hidden = true; $('deckBar').hidden = true; $('deckView').hidden = true; $('gallery').hidden = true; $('empty').hidden = true; LS.set('lg.mode', mode); return; }
     CanvasUI.close();
     const deck = mode === 'deck';
     $('outlinePanel').hidden = !deck; $('deckBar').hidden = !deck; $('deckView').hidden = !deck;
@@ -1416,6 +1416,13 @@
   // The open project: its canvas is backed up in this browser under its own key.
   const PROJ = { id: null, ready: false };
   function backupKey() { return PROJ.id ? `lg.canvas.${PROJ.id}` : 'lg.canvas'; }
+  const JAM_APP = window.LG_APP === 'jam';
+  if (JAM_APP) {
+    document.title = 'DeelJam'; document.body.classList.add('jam-app');
+    const nm = document.querySelector('.brandmark .name'); if (nm) nm.textContent = 'DeelJam';
+    const ph = $('homeSearch'); if (ph) ph.placeholder = 'Search boards'; const nn = $('homeNewName'); if (nn) nn.placeholder = 'Board name, e.g. Q1 planning retro';
+    const op = $('homeOpenInput'); if (op) op.placeholder = 'Paste a board link';
+  }
   CanvasUI.init({
     getKit: () => state.kit, getAssets: () => state.assets, toast, backupKey,
     addImage: async file => addImage(await readAsDataURL(file), file.name),
@@ -1470,6 +1477,7 @@
     variations: opts => makeVariations(opts),
     onExternal: name => { toast(`Outside agent: ${name.replace(/_/g, ' ')}`); Stats.track('agent.tool', { detail: name }); },
   });
+  if (typeof Jam !== 'undefined') Jam.init({ getKit: () => state.kit, toast, addVideo: (file, name) => addVideo(file, name), addImage: async file => addImage(await readAsDataURL(file), file.name) });
   Agent.init({ getKit: () => state.kit, toast, openSettings: () => { $('settings').hidden = false; renderGuides(); }, onRun: text => Stats.track('agent.run', { detail: String(text).slice(0, 60) }) });
 
   // ---- Multiplayer ------------------------------------------------------------------------------------------------
@@ -1620,7 +1628,7 @@
       <button type="button" class="home-f ${homeFolder === '_none' && !homeArchived ? 'on' : ''}" data-folder="_none">Unfiled <span>${all.filter(p => !p.folder).length}</span></button>
       <div class="home-newf"><input type="text" class="input" id="homeFolderNew" placeholder="New folder" maxlength="60" aria-label="New folder name"><button type="button" class="btn small" id="homeAddFolder">Add</button></div>
       ${sharing() ? `<select class="input home-newacc" id="homeFolderAccess" aria-label="Who sees the new folder"><option value="all">Everyone sees it</option><option value="people">Specific people…</option><option value="me">Only me</option></select>` : ''}`;
-    $('homeTitle').textContent = homeArchived ? 'Archived projects' : homeFolder === '' ? 'All projects' : homeFolder === '_none' ? 'Unfiled' : homeFolder === '_shared' ? 'Shared with you' : fname(homeFolder);
+    $('homeTitle').textContent = window.LG_APP === 'jam' ? (homeArchived ? 'Archived boards' : homeFolder === '' ? 'All boards' : homeFolder === '_none' ? 'Unfiled boards' : homeFolder === '_shared' ? 'Shared with you' : fname(homeFolder)) : homeArchived ? 'Archived projects' : homeFolder === '' ? 'All projects' : homeFolder === '_none' ? 'Unfiled' : homeFolder === '_shared' ? 'Shared with you' : fname(homeFolder);
     const acc = $('homeAccess'); acc.hidden = !(cur && sharing() && !homeArchived);
     if (!acc.hidden) acc.innerHTML = `${accIcon(cur.access)}${escapeHtml(accWords(cur))}${Projects.canShare(cur) ? ` · <button type="button" class="linkish" data-folder-share="${escapeHtml(cur.id)}">Share</button>` : ''}`;
     $('homeGrid').innerHTML = list.map(p => { const a = Projects.accessOf(p); const link = Projects.linkFor(p.id); return `<div class="home-card${p.archived ? ' home-archived' : ''}${p.id === PROJ.id ? ' current' : ''}" data-open="${escapeHtml(p.id)}" tabindex="0" role="button" aria-label="Open ${escapeHtml(p.name)}">

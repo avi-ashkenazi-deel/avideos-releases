@@ -15,12 +15,13 @@ const CanvasUI = (() => {
   let pinsVisible = true, showResolved = false, thread = null, commentDraft = null; const names = new Map();
   // Simple editing (default) hides auto layout, sizing and code, and treats stacks as tidy containers; Advanced is
   // Figma-style. Per person, kept in this browser.
-  let editMode = (() => { try { return localStorage.getItem('lg.editMode') === 'advanced' ? 'advanced' : 'simple'; } catch { return 'simple'; } })();
+  let editMode = (() => { try { const m = localStorage.getItem('lg.editMode'); return m === 'advanced' ? 'advanced' : m === 'jam' ? 'jam' : (window.LG_APP === 'jam' ? 'jam' : 'simple'); } catch { return window.LG_APP === 'jam' ? 'jam' : 'simple'; } })();
+  const jam = () => editMode === 'jam';
   const advanced = () => editMode === 'advanced';
   let layoutHold = null; // a frame whose layout pass waits while a block in one of its stacks is dragged
   let dropHint = null;   // where a dragged block would land: {frame, container, index, before, line, free, flatten}
   const folded = new Set(); // boxes collapsed in the layers panel
-  const hooks = { change: [], live: [], select: [], pointer: [], action: [] };
+  const hooks = { change: [], live: [], select: [], pointer: [], action: [], view: [] };
   const HANDLE = 7;
   const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const emit = (k, ...a) => { for (const fn of hooks[k]) { try { fn(...a); } catch (e) { console.error(e); } } };
@@ -126,6 +127,7 @@ const CanvasUI = (() => {
     const gone = new Set(); for (const b of order) { const pid = I.par.get(b.id); if (b.hidden || (pid && gone.has(pid))) gone.add(b.id); }
     for (let i = order.length - 1; i >= 0; i--) {
       const b = order[i]; if (gone.has(b.id)) continue;
+      if (b.kind === 'connector') { if (Canvas.connectorDistance(f, b, { x: lx, y: ly }) <= Math.max(6, 8 / doc.view.zoom)) return [b]; continue; }
       const w = (b.kind === 'text' && b.align !== 'center' && b.align !== 'right') ? Math.max(b.inkW || b.w, 24) : b.w;
       if (!(lx >= b.x && ly >= b.y && lx <= b.x + w && ly <= b.y + b.h)) continue;
       const anc = Auto.ancestors(f, b, I);
@@ -190,6 +192,7 @@ const CanvasUI = (() => {
     const fs = Math.max(11, 12 / v.zoom) + 'px', off = Math.max(16, 18 / v.zoom);
     $('world').querySelectorAll('.cv-frame-label').forEach(lb => { lb.style.fontSize = fs; const f = Canvas.frameById(doc, lb.dataset.label); if (f) lb.style.top = (f.y - off) + 'px'; });
     positionEditor(); positionPlayer(); drawOverlay();
+    if (hooks.view) { const r = stage().getBoundingClientRect(); emit('view', { cx: (r.width / 2 - v.x) / v.zoom, cy: (r.height / 2 - v.y) / v.zoom, zoom: v.zoom }); }
   }
 
   // ---- Rendering ----------------------------------------------------------------------------------------
@@ -202,6 +205,7 @@ const CanvasUI = (() => {
   }
   function frameSVG(f) {
     if (layoutHold !== f.id && Auto.needs(f)) Auto.layout(f);
+    if (f.layout.blocks.some(b => b.kind === 'connector')) Canvas.syncConnectors(f);
     const L = editing && editing.frameId === f.id && editing.hide ? { ...f.layout, blocks: f.layout.blocks.filter(b => b.id !== editing.blockId) } : f.layout;
     // ids inside the drawing (clips, gradients) are namespaced by screen: copies of one layout share its id
     return env.renderSVG({ ...L, id: 'fr' + f.id }, { showGrid: !!f.showGrid });
@@ -295,6 +299,7 @@ const CanvasUI = (() => {
     }
     parts.push(penOverlay());
     if (drag && drag.type === 'line') { const a = toScreen(drag.start.x, drag.start.y), b = toScreen(drag.cur.x, drag.cur.y); parts.push(`<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="var(--accent)" stroke-width="2" stroke-linecap="round"/>`); }
+    if (drag && drag.type === 'connect') { const a = toScreen(drag.start.x, drag.start.y), c = toScreen(drag.cur.x, drag.cur.y); parts.push(`<line x1="${a.x}" y1="${a.y}" x2="${c.x}" y2="${c.y}" stroke="var(--accent)" stroke-width="2" stroke-dasharray="6 4"/>`); if (drag.over) parts.push(rect(drag.f.x + drag.over.x, drag.f.y + drag.over.y, drag.over.w, drag.over.h, 'fill="none" stroke="var(--accent)" stroke-width="2"')); }
     if (cropping) { const t = cropTarget(); if (t) { const r = Canvas.cropRect(t.b, t.a); const scale = t.b.w / Math.max(1e-6, r.w); const q = toScreen(t.f.x + t.b.x - r.x * scale, t.f.y + t.b.y - r.y * scale); const bq = toScreen(t.f.x + t.b.x, t.f.y + t.b.y);
       parts.push(`<image href="${esc(t.a.url || t.a.dataUrl || '')}" x="${q.x}" y="${q.y}" width="${t.a.w * scale * Z}" height="${t.a.h * scale * Z}" opacity="0.38" preserveAspectRatio="none" pointer-events="none"/><rect x="${q.x}" y="${q.y}" width="${t.a.w * scale * Z}" height="${t.a.h * scale * Z}" fill="none" stroke="var(--accent)" stroke-dasharray="4 4" stroke-width="1"/><rect x="${bq.x}" y="${bq.y}" width="${t.b.w * Z}" height="${t.b.h * Z}" fill="none" stroke="var(--accent)" stroke-width="2"/>`); } }
     ov.innerHTML = parts.join('');
@@ -470,6 +475,9 @@ const CanvasUI = (() => {
     mutate(() => { nf.layout.blocks.push({ id: Canvas.uid(), kind: 'video', x: 0, y: 0, w: fmt.w, h: fmt.h, asset: asset.id, focal: 'xMidYMid', radius: 0, decorative: false, path: 'video_1', label }); nf.layout.meta = { ...(nf.layout.meta || {}), source: 'video' }; }, { history: false, frames: [nf.id] });
     return nf;
   }
+  function placePicture(asset, at) { const was = lastPointer; lastPointer = at || lastPointer; const f = frameAt(lastPointer) || (jam() ? jamBoard() : null); const w = asset.w || 800, h = asset.h || 600;
+    if (f) { hist.push(doc); const sc = Math.min(1, (FW(f) * 0.5) / w, (FH(f) * 0.5) / h, 640 / w); const b = { id: Canvas.uid(), kind: 'image', x: Math.round(lastPointer.x - f.x - w * sc / 2), y: Math.round(lastPointer.y - f.y - h * sc / 2), w: Math.round(w * sc), h: Math.round(h * sc), asset: asset.id, focal: 'xMidYMid', radius: 0, decorative: false, path: 'image_' + Canvas.uid() }; f.layout.blocks.push(b); if (f.board) growBoard(f, b); select(f.id, [b.id]); rerenderFrame(f); renderLayers(); persist(); updateUndo(); lastPointer = was; return b; }
+    const nf = screenFromImage(asset, asset.name || 'Picture', lastPointer); lastPointer = was; return nf; }
   async function dropVideo(file) { const asset = await env.addVideo(file, file.name); placeVideo(asset, file.name, lastPointer || { x: 0, y: 0 }); }
   function onDblClick(e) {
     if (e.target.closest && e.target.closest('.cv-editor')) return;
@@ -501,6 +509,7 @@ const CanvasUI = (() => {
     if (thread || commentDraft) closeThread();
     if (tool === 'frame') { drag = { type: 'draw-frame', start: p, cur: p, moved: false }; stage().setPointerCapture(e.pointerId); return; }
     if (tool === 'pen') { penDown(e, p); return; }
+    if (tool === 'connector') { const f = frameAt(p) || (jam() ? jamBoard() : null); if (!f) { env.toast('Drag from one thing to another to connect them'); return; } const hb = blockAt(f, p, e); drag = { type: 'connect', f, from: hb && hb.kind !== 'connector' ? hb : null, start: p, cur: p }; stage().setPointerCapture(e.pointerId); return; }
     if (tool === 'line') { const f = frameAt(p); if (!f) { env.toast('Drag inside a screen to draw a line'); return; } drag = { type: 'line', f, start: p, cur: p }; stage().setPointerCapture(e.pointerId); return; }
     if (tool === 'comment') { const f = frameAt(p); if (!f) { env.toast('Click on a screen to leave a comment there'); return; } openCommentDraft(f, { x: p.x - f.x, y: p.y - f.y }); return; }
     if (tool !== 'select') { placeTool(frameAt(p), p); return; }
@@ -534,7 +543,8 @@ const CanvasUI = (() => {
     } else {
       if (e.shiftKey && sel.frameId === f.id && sel.frameIds.length <= 1) { const ids = Canvas.groupMembers(f, b).map(x => x.id); const has = sel.blockIds.includes(b.id); select(f.id, has ? sel.blockIds.filter(i => !ids.includes(i)) : [...sel.blockIds, ...ids], { keepGroupFocus: true }); }
       else if (!(sel.frameId === f.id && sel.blockIds.includes(b.id))) select(f.id, [b.id]);
-      const blocks = Auto.topmost(f, selBlocks().filter(x => !x.locked)); if (!blocks.length) return;
+      let blocks = Auto.topmost(f, selBlocks().filter(x => !x.locked)); if (!blocks.length) return;
+      if (blocks.some(x => x.section)) blocks = Auto.withDescendants(f, blocks).filter(x => !x.locked);
       drag = { type: 'move', f, blocks, start: p, orig: blocks.map(x => ({ x: x.x, y: x.y })), moved: false, flow: flowDrag(f, blocks) };
     }
     stage().setPointerCapture(e.pointerId);
@@ -606,6 +616,7 @@ const CanvasUI = (() => {
     if (drag.type === 'pan') { doc.view.x = drag.vx + (e.clientX - drag.sx); doc.view.y = drag.vy + (e.clientY - drag.sy); applyView(); return; }
     if (drag.type === 'marquee') { drag.cur = p; drawOverlay(); return; }
     if (drag.type === 'line') { drag.cur = e.shiftKey ? constrain(drag.start, p) : p; drawOverlay(); return; }
+    if (drag.type === 'connect') { drag.cur = p; const hb = blockAt(drag.f, p); drag.over = hb && hb.kind !== 'connector' && hb !== drag.from ? hb : null; drawOverlay(); return; }
     if (drag.type === 'crop') {
       const r = drag.orig; const scale = drag.b.w / Math.max(1e-6, r.w);
       drag.b.crop = Canvas.cropFrom({ x: r.x - (p.x - drag.start.x) / scale, y: r.y - (p.y - drag.start.y) / scale, w: r.w, h: r.h }, drag.a);
@@ -633,7 +644,7 @@ const CanvasUI = (() => {
       drag.blocks.forEach((b, i) => { b.x = Math.round(drag.orig[i].x + s.dx); b.y = Math.round(drag.orig[i].y + s.dy); });
       guides = s.guides;
       const over = frameAt(p); dropTarget = over && over !== drag.f && !over.locked ? over : null; if (dropTarget) guides = [];
-      dropHint = dropTarget ? null : dropTargetIn(drag.f, drag.blocks, { x: p.x - drag.f.x, y: p.y - drag.f.y }, drag.flow);
+      dropHint = dropTarget || jam() ? null : dropTargetIn(drag.f, drag.blocks, { x: p.x - drag.f.x, y: p.y - drag.f.y }, drag.flow);
       if (dropHint) { dropHint.frame = drag.f; if (dropHint.line) guides = []; }
       rerenderFrame(drag.f); drawOverlay(); liveProps(); emitLive([drag.f.id]);
     } else if (drag.type === 'move-frames') {
@@ -659,6 +670,14 @@ const CanvasUI = (() => {
     const hadGuides = guides.length; guides = [];
     if (d.type === 'pan') { persist({ silent: true }); return; }
     if (d.type === 'crop') { stage().style.cursor = 'move'; persist(); updateUndo(); renderProps(); return; }
+    if (d.type === 'connect') {
+      const f = d.f; const to = blockAt(f, d.cur); const far = Math.hypot(d.cur.x - d.start.x, d.cur.y - d.start.y) * doc.view.zoom > 8;
+      if (!far || (!d.from && !(to && to.kind !== 'connector'))) { setTool('select'); drawOverlay(); return; }
+      hist.push(doc);
+      const from = d.from ? { id: d.from.id } : { x: d.start.x - f.x, y: d.start.y - f.y }; const dest = to && to.kind !== 'connector' && to !== d.from ? { id: to.id } : { x: d.cur.x - f.x, y: d.cur.y - f.y };
+      const b = Canvas.newBlock('connector', f, env.getKit(), { x: d.start.x - f.x, y: d.start.y - f.y, from, to: dest }); f.layout.blocks.push(b); Canvas.syncConnectors(f);
+      select(f.id, [b.id]); setTool('select'); rerenderFrame(f); renderLayers(); renderProps(); drawOverlay(); persist(); updateUndo(); return;
+    }
     if (d.type === 'line') { lineFinish(d); return; }
     if (d.type === 'pen-point') { drag = null; drawOverlay(); return; }
     if (d.type === 'pen-anchor' || d.type === 'pen-handle') { if (d.moved) { persist(); updateUndo(); renderProps(); } drawOverlay(); return; }
@@ -706,6 +725,13 @@ const CanvasUI = (() => {
       rerenderFrame(d.f);
     }
     if (d.type === 'resize-frame' && d.moved) { regrid(d.f); rerenderFrame(d.f); }
+    if (d.moved && d.type === 'move' && d.f) {
+      // a thing dropped on a section belongs to it (and leaves one it was dragged out of); the board makes room
+      const f = d.f; let changed = false;
+      for (const b of d.blocks) { if (b.section || b.kind === 'connector') continue; const cur = b.parent ? Canvas.blockById(f, b.parent) : null; if (cur && !cur.section) continue; const sec = Canvas.sectionAt(f, b); const want = sec ? sec.id : undefined; if ((b.parent || undefined) !== want) { if (want) b.parent = want; else delete b.parent; changed = true; } }
+      if (f.board) { const xs = d.blocks.map(b => b.x), ys = d.blocks.map(b => b.y); if (growBoard(f, { x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...d.blocks.map(b => b.x + b.w)) - Math.min(...xs), h: Math.max(...d.blocks.map(b => b.y + b.h)) - Math.min(...ys) })) changed = true; }
+      if (changed) rerenderFrame(f);
+    }
     if (d.moved) {
       if (d.f && d.type === 'move' && (d.flow || Auto.needs(d.f))) rerenderFrame(d.f);
       persist(); updateUndo(); renderLayers(); renderProps(); drawOverlay();
@@ -745,7 +771,44 @@ const CanvasUI = (() => {
     if (phone) env.toast('Phone screenshot placed as a phone screen. Select it and use ✦ Rebuild as layers, or add a device frame from Library → Devices.');
     return nf;
   }
+  // ---- Board (DeelJam): the frame everything lands on, growing as it is used ---------------------------------------
+  function jamBoard() {
+    let f = doc.frames.find(x => x.board) || null;
+    if (!f && doc.frames.length === 1 && doc.frames[0].layout.blocks.every(b => /^(sticky|connector|stamp|box|field|shape|text|image|video|vector|line)$/.test(b.kind))) { f = doc.frames[0]; f.board = true; }
+    if (!f) { f = createFrame({ x: 0, y: 0, format: Canvas.customFormat(3200, 2000), name: 'Board', bg: '#FFFFFF', history: false }); f.board = true; f.clip = false; persist({ silent: true }); }
+    return f;
+  }
+  // Make room: the board grows so rect (frame space) sits at least `pad` inside it; blocks shift when it grows up or left.
+  function growBoard(f, rect, pad = 400) {
+    if (!f || !rect) return false; let dx = 0, dy = 0; let W = f.layout.format.w, H = f.layout.format.h;
+    if (rect.x < pad) dx = Math.ceil((pad - rect.x) / 400) * 400; if (rect.y < pad) dy = Math.ceil((pad - rect.y) / 400) * 400;
+    if (rect.x + rect.w + pad > W) W = Math.ceil((rect.x + rect.w + pad) / 400) * 400; if (rect.y + rect.h + pad > H) H = Math.ceil((rect.y + rect.h + pad) / 400) * 400;
+    if (!dx && !dy && W === f.layout.format.w && H === f.layout.format.h) return false;
+    if (dx || dy) { for (const b of f.layout.blocks) { b.x += dx; b.y += dy; if (b.kind === 'connector') { if (b.from && !b.from.id) { b.from.x += dx; b.from.y += dy; } if (b.to && !b.to.id) { b.to.x += dx; b.to.y += dy; } } } f.x -= dx; f.y -= dy; }
+    f.layout.format = Canvas.customFormat(W + dx, H + dy); rerenderFrame(f); return true;
+  }
+  const BOARD_KINDS = { sticky: 'sticky', shape: 'shape', section: 'section', stamp: 'stamp' };
+  // A board thing at a point of the canvas (world space), on the board or on the screen under the point.
+  function placeAt(kind, p, props = {}) {
+    let f = frameAt(p); if (!f || jam()) f = jam() ? (frameAt(p) || jamBoard()) : f; if (!f) { env.toast('Click inside a frame to add it there'); return null; }
+    hist.push(doc);
+    const b = Canvas.newBlock(kind, f, env.getKit(), { x: p.x - f.x, y: p.y - f.y, ...props }); if (!b) return null;
+    if (b.kind === 'sticky' || b.kind === 'stamp' || b.kind === 'field') { b.x = Math.round(p.x - f.x - b.w / 2); b.y = Math.round(p.y - f.y - b.h / 2); }
+    if (b.kind === 'sticky') { const me = who(); b.author = me.id; b.authorName = me.name; }
+    Object.assign(b, props.block || {});
+    if (b.section) { // a section goes behind everything and takes in what already sits inside it
+      f.layout.blocks.unshift(b);
+      for (const o of f.layout.blocks) { if (o === b || o.parent || o.section || o.kind === 'connector') continue; const cx = o.x + o.w / 2, cy = o.y + o.h / 2; if (cx >= b.x && cx <= b.x + b.w && cy >= b.y && cy <= b.y + b.h) o.parent = b.id; }
+    } else { f.layout.blocks.push(b); const sec = Canvas.sectionAt(f, b); if (sec) b.parent = sec.id; }
+    if (f.board) growBoard(f, { x: b.x, y: b.y, w: b.w, h: b.h });
+    if (b.kind === 'sticky' || b.kind === 'field') Canvas.refit(b);
+    select(f.id, [b.id]); rerenderFrame(f); renderLayers(); renderProps(); drawOverlay(); persist(); updateUndo();
+    return { f, b };
+  }
+  let lastStickyColor = '#FFE066';
   function placeTool(f, p) {
+    if (BOARD_KINDS[tool]) { const picks = typeof Jam !== 'undefined' ? Jam.pickFor(tool) : (tool === 'sticky' ? { color: lastStickyColor } : {}); const r = placeAt(BOARD_KINDS[tool], p, picks); setTool('select'); if (r && (r.b.kind === 'sticky' || r.b.kind === 'field' || (r.b.kind === 'shape' && r.b.text != null))) setTimeout(() => startEdit(r.f, r.b, { noHistory: true }), 0); return; }
+    if (!f && jam()) f = jamBoard();
     if (!f) { env.toast('Click inside a frame to add it there'); return; }
     hist.push(doc);
     const kindMap = { text: 'text', body: 'body', rect: 'rect', ellipse: 'ellipse', button: 'button', image: 'image', icon: 'icon', logo: 'logo' };
@@ -1007,7 +1070,8 @@ const CanvasUI = (() => {
 
   // ---- On-canvas text editing -------------------------------------------------------------------------------
   function startEdit(f, b, opts = {}) {
-    if (!f || !b || b.locked || !(b.kind === 'text' || b.kind === 'button' || b.kind === 'list')) return false;
+    const wordy = b && (b.kind === 'sticky' || b.kind === 'connector' || ((b.kind === 'field' || b.kind === 'shape') && b.text != null));
+    if (!f || !b || b.locked || !(b.kind === 'text' || b.kind === 'button' || b.kind === 'list' || wordy)) return false;
     if (editing) endEdit();
     if (!opts.noHistory) { hist.push(doc); updateUndo(); }
     select(f.id, [b.id], { keepGroupFocus: true });
@@ -1018,7 +1082,7 @@ const CanvasUI = (() => {
     const Z0 = doc.view.zoom;
     if (rich) ed.innerHTML = Rich.toHTML(Rich.isRich(b) ? b.runs : [{ text: Canvas.sourceText(b) }], { sizeScale: Z0, resolveToken: tk => Brand.tokenHex(env.getKit(), tk, f.theme || 'light') });
     else ed.textContent = b.kind === 'list' ? (b.items || []).join('\n') : b.kind === 'button' ? String(b.text || '') : Canvas.sourceText(b);
-    editing = { frameId: f.id, blockId: b.id, el: ed, hide: b.kind !== 'button', rich, scale: Z0 };
+    editing = { frameId: f.id, blockId: b.id, el: ed, hide: b.kind === 'text' || b.kind === 'list', rich, scale: Z0, wordy };
     stage().appendChild(ed);
     if (rich) { const bar = document.createElement('div'); bar.className = 'cv-richbar'; bar.innerHTML = `<button type="button" data-rt="bold" title="Bold ⌘B"><b>B</b></button><button type="button" data-rt="italic" title="Italic ⌘I"><i>I</i></button><button type="button" data-rt="underline" title="Underline ⌘U"><u>U</u></button><button type="button" data-rt="strikeThrough" title="Strike ⌘⇧X"><s>S</s></button><button type="button" data-rt="link" title="Link ⌘K">⛓</button><span class="sep"></span>${env.getKit().colors.slice(0, 10).map(c => `<button type="button" class="sw" data-rt="color" data-hex="${toHex(c.hex)}" title="${esc(c.name || c.hex)}" style="background:${toHex(c.hex)}"></button>`).join('')}<span class="sep"></span><button type="button" data-rt="clear" title="Clear formatting">⌫</button>`;
       bar.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); });
@@ -1033,7 +1097,7 @@ const CanvasUI = (() => {
       const fr = Canvas.frameById(doc, f.id); const bl = fr && Canvas.blockById(fr, b.id); if (!bl) return;
       const t = ed.innerText.replace(/ /g, ' ');
       if (editing.rich) { const r = Rich.fromDOM(ed, { weight: bl.font && bl.font.weight, sizeScale: editing.scale }); bl.text = r.text.replace(/\n{3,}/g, '\n\n'); if (r.runs && r.text === bl.text) bl.runs = r.runs; else delete bl.runs; }
-      else if (bl.kind === 'list') bl.items = t.split('\n').map(x => x.trim()).filter(Boolean); else if (bl.kind === 'button') bl.text = t.replace(/\s*\n+\s*/g, ' '); else bl.text = t.replace(/\n{3,}/g, '\n\n');
+      else if (bl.kind === 'list') bl.items = t.split('\n').map(x => x.trim()).filter(Boolean); else if (bl.kind === 'button' || bl.kind === 'connector') bl.text = t.replace(/\s*\n+\s*/g, ' '); else bl.text = t.replace(/\n{3,}/g, '\n\n');
       Canvas.refit(bl); positionEditor(); if (!editing.hide) rerenderFrame(fr); drawOverlay(); emitLive([fr.id]);
     });
     ed.addEventListener('keydown', e => {
@@ -1057,6 +1121,8 @@ const CanvasUI = (() => {
       paddingLeft: b.kind === 'list' ? (b.indent || 0) * Z + 'px' : '0',
     });
     if (b.kind === 'button') Object.assign(ed.style, { height: b.h * Z + 'px', minHeight: '0', display: 'flex', alignItems: 'center', justifyContent: 'center', background: Render.col(b.fill), borderRadius: (b.radius || 0) * Z + 'px' });
+    if (b.kind === 'sticky' || ((b.kind === 'field' || b.kind === 'shape') && b.text != null)) { const pad = (b.kind === 'sticky' ? 14 : 10) * Z; Object.assign(ed.style, { height: b.h * Z + 'px', minHeight: '0', display: 'flex', flexDirection: 'column', alignItems: 'stretch', justifyContent: 'center', textAlign: 'center', padding: pad + 'px', boxSizing: 'border-box', background: Render.col(b.fill), borderRadius: (b.radius ?? (b.kind === 'sticky' ? 4 : 0)) * Z + 'px', color: Render.col(b.color || '#1E1C1A'), fontSize: (font.size || 18) * Z + 'px', overflow: 'hidden' }); }
+    if (b.kind === 'connector') { const g = Canvas.connectorGeometry(f, b); if (g) { const q = toScreen(f.x + g.mid.x, f.y + g.mid.y); const w = Math.max(120, (Text.width(String(b.text || 'label'), font) + 24) * Z); Object.assign(ed.style, { left: (q.x - w / 2) + 'px', top: (q.y - (font.size || 14) * Z) + 'px', width: w + 'px', minHeight: '0', textAlign: 'center', background: '#FFFFFF', borderRadius: '999px', padding: '2px 8px', fontSize: (font.size || 14) * Z + 'px', whiteSpace: 'nowrap' }); } }
     if (editing.bar) Object.assign(editing.bar.style, { left: p.x + 'px', top: (p.y - 36) + 'px' });
   }
   function endEdit(cancel) {
@@ -1182,7 +1248,7 @@ const CanvasUI = (() => {
       try { const j = JSON.parse(text); if (j && j.lgClip && /^(blocks|frame|frames)$/.test(j.lgClip.type)) { e.preventDefault(); pasteClipboard(j.lgClip); } } catch { }
     });
   }
-  function setTool(t) { if (tool === 'pen' && t !== 'pen' && penDraft) penFinish(); tool = t; document.querySelectorAll('#cvTools [data-tool]').forEach(b => b.classList.toggle('on', b.dataset.tool === t)); stage().style.cursor = t === 'hand' ? 'grab' : t === 'select' ? 'default' : t === 'comment' ? 'copy' : 'crosshair'; if (t !== 'select' && penEdit) penEditEnd(); }
+  function setTool(t) { if (tool === 'pen' && t !== 'pen' && penDraft) penFinish(); tool = t; emit('action', 'tool'); document.querySelectorAll('#cvTools [data-tool]').forEach(b => b.classList.toggle('on', b.dataset.tool === t)); stage().style.cursor = t === 'hand' ? 'grab' : t === 'select' ? 'default' : t === 'comment' ? 'copy' : 'crosshair'; if (t !== 'select' && penEdit) penEditEnd(); }
   function undo() { if (editing) endEdit(); hover = null; penDraft = null; penEdit = null; const d = hist.undo(doc); if (d) { const keep = doc.comments; doc = undoMerge ? undoMerge(doc, d) : d; doc.comments = keep; validateSelection(); persist(); renderAll(); } }
   function redo() { if (editing) endEdit(); hover = null; penDraft = null; penEdit = null; const d = hist.redo(doc); if (d) { const keep = doc.comments; doc = undoMerge ? undoMerge(doc, d) : d; doc.comments = keep; validateSelection(); persist(); renderAll(); } }
   function deleteSelection() {
@@ -1214,9 +1280,11 @@ const CanvasUI = (() => {
 
   // ---- Auto layout commands ------------------------------------------------------------------------------------
   function setEditMode(m) {
-    editMode = m === 'advanced' ? 'advanced' : 'simple';
+    editMode = m === 'advanced' ? 'advanced' : m === 'jam' ? 'jam' : 'simple';
     try { localStorage.setItem('lg.editMode', editMode); } catch { }
-    document.body.classList.toggle('cv-simple', editMode === 'simple');
+    document.body.classList.toggle('cv-simple', editMode !== 'advanced'); document.body.classList.toggle('cv-jam', editMode === 'jam');
+    if (editMode === 'jam' && active) { jamBoard(); } if (tool !== 'select' && tool !== 'hand') setTool('select');
+    emit('action', 'editmode.' + editMode);
     document.querySelectorAll('#cvMode [data-edit]').forEach(b => b.classList.toggle('on', b.dataset.edit === editMode));
     if (active) { renderLayers(); renderProps(); drawOverlay(); }
   }
@@ -2274,6 +2342,9 @@ const CanvasUI = (() => {
     get doc() { return doc; }, get active() { return active; },
     select, selectFrames, selection, setTool, createFrame, placeRow, placeFrames, insertBlocks, insertComponent, screenFromImage, placeVideo, togglePlay, cropStart, mutate, remoteApplied, replaceDoc, renderAll, rerender: ids => ids.forEach(id => { const f = Canvas.frameById(doc, id); if (f) rerenderFrame(f); }),
     centerOn: (x, y) => { const r = stage().getBoundingClientRect(); doc.view.x = r.width / 2 - x * doc.view.zoom; doc.view.y = r.height / 2 - y * doc.view.zoom; applyView(); },
+    setView: ({ cx, cy, zoom }) => { const r = stage().getBoundingClientRect(); if (zoom > 0) doc.view.zoom = Math.min(8, Math.max(0.02, zoom)); doc.view.x = r.width / 2 - cx * doc.view.zoom; doc.view.y = r.height / 2 - cy * doc.view.zoom; applyView(); },
+    viewCenter: () => { const r = stage().getBoundingClientRect(); const v = doc.view; return { cx: (r.width / 2 - v.x) / v.zoom, cy: (r.height / 2 - v.y) / v.zoom, zoom: v.zoom }; },
+    jamBoard, growBoard, placeAt, placePicture, setEditMode, get editMode() { return editMode; }, get peers() { return peers; }, get tool() { return tool; }, setStickyColor: c => { lastStickyColor = c; }, who,
     regrid, exportAction, makeVariations, resizeScreens, copySelection, pasteClipboard, startEdit: (fid, bid) => { const f = Canvas.frameById(doc, fid); return startEdit(f, f && Canvas.blockById(f, bid)); },
     on: (k, fn) => { hooks[k].push(fn); return () => { hooks[k] = hooks[k].filter(x => x !== fn); }; },
     setPeers: list => { peers = Array.isArray(list) ? list : []; if (active) drawOverlay(); },

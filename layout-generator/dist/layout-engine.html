@@ -840,6 +840,52 @@ input[disabled] { opacity: .5; cursor: not-allowed; }
 .cv-richbar .sw { width: 16px; height: 16px; border-radius: 50%; margin: 0 2px; border: 1px solid rgba(127,127,127,.4); }
 .cv-richbar .sep { width: 1px; height: 16px; background: var(--line-2); margin: 0 4px; }
 
+/* ---- DeelJam: the board mode ------------------------------------------------------------------------------------- */
+.cv-jam .cv-tools, .cv-jam .cv-newframe, .cv-jam .cv-layers, .cv-jam .cv-props, .cv-jam #cvSnap, .cv-jam .cv-frame-label, .cv-jam #cvAddDiagram { display: none !important; }
+.cv-jam .cv-frame { box-shadow: 0 0 0 1px var(--line-2); }
+.cv-jam .cv-stage { background-image: radial-gradient(var(--line-2) 1px, transparent 1px); }
+.jam-bar { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 8; display: flex; align-items: center; gap: 6px; padding: 6px; background: var(--panel, #1b1b22); border: 1px solid var(--line-2); border-radius: 14px; box-shadow: 0 12px 36px rgba(0,0,0,.28); }
+.jam-tools { display: flex; align-items: center; gap: 2px; }
+.jam-bar button { height: 40px; min-width: 40px; padding: 0 10px; border: 0; border-radius: 10px; background: transparent; color: var(--fg); font: inherit; font-size: 17px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.jam-bar button:hover { background: var(--bg-2, rgba(127,127,127,.15)); }
+.jam-bar button.on { background: var(--accent); color: #fff; }
+.jam-bar button.jam-ai { font-size: 13px; font-weight: 600; color: var(--accent); }
+.jam-bar button.jam-ai:hover { background: var(--accent-faint, rgba(89,56,184,.12)); }
+.jam-bar [data-jt="templates"] { font-size: 13px; font-weight: 500; }
+.jam-stk { width: 20px; height: 20px; border-radius: 3px; box-shadow: 1px 2px 0 rgba(0,0,0,.25); display: inline-block; }
+.jam-sep { width: 1px; height: 26px; background: var(--line-2); margin: 0 4px; }
+.jam-sep-v { width: 1px; height: 20px; background: var(--line-2); margin: 0 2px; }
+.jam-pop { position: absolute; z-index: 9; width: 440px; max-width: calc(100% - 16px); padding: 10px; background: var(--panel, #1b1b22); border: 1px solid var(--line-2); border-radius: 12px; box-shadow: 0 12px 36px rgba(0,0,0,.28); font-size: 13px; }
+.jam-pop .hint { margin: 8px 2px 0; }
+.jam-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.jam-sw { width: 26px; height: 26px; border-radius: 6px; border: 2px solid transparent; cursor: pointer; box-shadow: inset 0 0 0 1px rgba(0,0,0,.12); }
+.jam-sw.on { border-color: var(--accent); }
+.jam-shape, .jam-stamp { width: 40px; height: 40px; border-radius: 8px; border: 1px solid var(--line-2); background: var(--bg); color: var(--fg); font-size: 20px; cursor: pointer; }
+.jam-shape.on, .jam-stamp.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.jam-ai-list, .jam-tpl { display: grid; gap: 4px; }
+.jam-tpl { grid-template-columns: 1fr 1fr; }
+.jam-ai-list button, .jam-tpl button { text-align: left; display: grid; gap: 2px; padding: 8px 10px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--fg); font: inherit; cursor: pointer; }
+.jam-ai-list button:hover, .jam-tpl button:hover { background: var(--bg-2, rgba(127,127,127,.12)); border-color: var(--line-2); }
+.jam-ai-list button span, .jam-tpl button span { font-size: 11.5px; color: var(--fg-3); }
+.jam-ctx { position: absolute; z-index: 8; display: flex; align-items: center; gap: 4px; padding: 4px 6px; background: var(--panel, #1b1b22); border: 1px solid var(--line-2); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.25); font-size: 12px; }
+.jam-ctx button { height: 28px; min-width: 28px; padding: 0 8px; border: 0; border-radius: 6px; background: transparent; color: var(--fg); font: inherit; font-size: 12.5px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; }
+.jam-ctx button:hover { background: var(--bg-2, rgba(127,127,127,.15)); }
+.jam-ctx button.on { background: var(--accent); color: #fff; }
+.jam-ctx .jam-sw { width: 20px; height: 20px; min-width: 0; padding: 0; border-radius: 5px; }
+.jam-ctx input[type=text], .jam-ctx select { height: 28px; border: 1px solid var(--line-2); border-radius: 6px; background: var(--bg); color: var(--fg); font: inherit; font-size: 12.5px; padding: 0 8px; min-width: 120px; }
+.jam-top { position: absolute; z-index: 8; left: 12px; right: 12px; top: 10px; display: flex; align-items: center; justify-content: space-between; gap: 10px; pointer-events: none; }
+.jam-top > * { pointer-events: auto; }
+.jam-people { display: flex; align-items: center; gap: 6px; padding: 4px 8px; background: var(--panel, #1b1b22); border: 1px solid var(--line-2); border-radius: 999px; }
+.jam-peer { width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--c, #888); background: color-mix(in srgb, var(--c, #888) 30%, var(--bg)); color: var(--fg); font: 600 12px/1 inherit; cursor: pointer; }
+.jam-peer.on { box-shadow: 0 0 0 3px var(--accent); }
+.jam-right { display: flex; align-items: center; gap: 6px; padding: 4px; background: var(--panel, #1b1b22); border: 1px solid var(--line-2); border-radius: 999px; }
+.jam-timer-on { color: var(--accent); font-variant-numeric: tabular-nums; }
+.jam-timer-menu { display: inline-flex; gap: 4px; }
+.jam-app .brandmark .dot { background: #FFE066; }
+.jam-app .promptbar, .jam-app #modeSeg { display: none !important; }
+.cv-jam .cv-body { grid-template-columns: 1fr; }
+.cv-jam .cv-body > .cv-stage { grid-column: 1; }
+
 </style>
 
 <div id="app" class="app">
@@ -3617,6 +3663,49 @@ const Render = (() => {
     if (!b.crop) return `<image x="${n(b.x)}" y="${n(b.y)}" width="${n(b.w)}" height="${n(b.h)}" href="${esc(href)}" preserveAspectRatio="${FOCAL.has(b.focal) ? b.focal : 'xMidYMid'} slice"${clip}${filter}/>`;
     return `<svg x="${n(b.x)}" y="${n(b.y)}" width="${n(b.w)}" height="${n(b.h)}" viewBox="${n(r.x)} ${n(r.y)} ${n(r.w)} ${n(r.h)}" preserveAspectRatio="none" overflow="hidden"${clip}><image x="0" y="0" width="${n(aw)}" height="${n(ah)}" href="${esc(href)}" preserveAspectRatio="none"${filter}/></svg>`;
   }
+  // ---- Board things: stickies, shapes with words, sections, stamps, connectors, votes ---------------------------
+  // Words centred in a box (a sticky, a shape): drawn through textEl on a temporary text block over the padding.
+  function wordsIn(b, ctx, pad, color) {
+    if (b.text == null || !String(b.text).trim() || !Array.isArray(b.lines)) return '';
+    const f = b.font || {}; const size = n(f.size || 18); const lh = size * (Number(f.lineHeight) || 1.3); const totalH = b.lines.length * lh;
+    const top = b.y + Math.max(pad, (b.h - totalH) / 2);
+    const t = { kind: 'text', x: b.x + pad, y: top, w: Math.max(8, b.w - pad * 2), h: totalH, lines: b.lines, font: f, fill: color || b.color || '#1E1C1A', align: b.align || 'center', runs: b.runs };
+    return textEl(t, ctx);
+  }
+  const VEIL = (b, ctx) => { const id = ctx.id('veil'); ctx.defs.push(`<filter id="${id}"><feGaussianBlur stdDeviation="6"/></filter>`); return ` filter="url(#${id})"`; };
+  function stickyEl(b, ctx, opts) {
+    const fill = paint(b, ctx); const shadow = `<rect x="${n(b.x + 2)}" y="${n(b.y + 4)}" width="${n(b.w)}" height="${n(b.h)}" rx="${n(b.radius ?? 4)}" fill="rgba(17,17,16,0.16)"/>`;
+    const veiled = b.veil && !(opts && opts.me && b.author === opts.me) && !opts.forExport;
+    const words = veiled ? `<g${VEIL(b, ctx)}>${wordsIn(b, ctx, 14)}</g>` : wordsIn(b, ctx, 14);
+    const who = b.authorName ? `<text x="${n(b.x + b.w - 10)}" y="${n(b.y + b.h - 9)}" font-family="Inter, system-ui, sans-serif" font-size="11" font-weight="600" fill="rgba(17,17,16,0.45)" text-anchor="end">${esc(String(b.authorName).split(/\s+/).map(w => w[0] || '').join('').slice(0, 3).toUpperCase())}</text>` : '';
+    return shadow + `<rect x="${n(b.x)}" y="${n(b.y)}" width="${n(b.w)}" height="${n(b.h)}" rx="${n(b.radius ?? 4)}" fill="${fill}"/>` + words + who + votesEl(b) + (veiled ? `<text x="${n(b.x + b.w / 2)}" y="${n(b.y + b.h / 2 + 5)}" font-family="Inter, system-ui, sans-serif" font-size="13" font-weight="600" fill="rgba(17,17,16,0.55)" text-anchor="middle">hidden until reveal</text>` : '');
+  }
+  function votesEl(b) {
+    const v = b.votes && typeof b.votes === 'object' ? Object.values(b.votes).reduce((t, x) => t + (Number(x) || 0), 0) : 0; if (!v) return '';
+    const r = 11; const cx = b.x + b.w - r - 6, cy = b.y + r + 6;
+    return `<g><circle cx="${n(cx)}" cy="${n(cy)}" r="${n(r)}" fill="#1E1C1A"/><text x="${n(cx)}" y="${n(cy + 4)}" font-family="Inter, system-ui, sans-serif" font-size="12" font-weight="700" fill="#FFFFFF" text-anchor="middle">${v}</text></g>`;
+  }
+  function stampEl(b) {
+    const size = Math.min(b.w, b.h) * 0.82;
+    return `<text x="${n(b.x + b.w / 2)}" y="${n(b.y + b.h / 2 + size * 0.36)}" font-size="${n(size)}" text-anchor="middle" font-family="Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji, sans-serif">${esc(String(b.text || '👍'))}</text>` + votesEl(b);
+  }
+  function sectionTitle(b, ctx) {
+    if (!b.section) return ''; const title = String(b.section.title || ''); if (!title) return '';
+    const size = b.section.size || 18;
+    return `<text x="${n(b.x + 16)}" y="${n(b.y + 16 + size * 0.9)}" font-family="Inter, system-ui, sans-serif" font-size="${n(size)}" font-weight="700" fill="${col(b.section.color || '#1E1C1A')}">${esc(title)}</text>`;
+  }
+  function connectorEl(b, ctx, layout) {
+    const frame = { layout }; const g = typeof Canvas !== 'undefined' ? Canvas.connectorGeometry(frame, b) : null; if (!g) return '';
+    const color = col((b.stroke && b.stroke.color) || '#5E5A56'); const w = n((b.stroke && b.stroke.width) || 2);
+    const mk = ctx.marker || (ctx.marker = {}); const key = color + '|' + w; let mid = mk[key];
+    if (!mid) { mid = mk[key] = ctx.id('arw'); ctx.defs.push(`<marker id="${mid}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="${n(Math.max(5, 10 / Math.max(1, w / 2)))}" markerHeight="${n(Math.max(5, 10 / Math.max(1, w / 2)))}" orient="auto-start-reverse" markerUnits="strokeWidth"><path d="M0 0 L10 5 L0 10 Z" fill="${color}"/></marker>`); }
+    const d = g.pts.map((p, i) => `${i ? 'L' : 'M'}${n(p.x)} ${n(p.y)}`).join(' ');
+    const arrow = b.arrow || 'end'; const me = arrow === 'end' || arrow === 'both' ? ` marker-end="url(#${mid})"` : ''; const ms = arrow === 'start' || arrow === 'both' ? ` marker-start="url(#${mid})"` : '';
+    const dash = b.dash ? ` stroke-dasharray="${n(w * 3)} ${n(w * 2)}"` : '';
+    let label = '';
+    if (b.text && String(b.text).trim()) { const f = b.font || { size: 14, weight: 500, family: 'Inter, system-ui, sans-serif' }; const tw = Text.width(String(b.text), f) + 16; const th = (f.size || 14) * 1.5; label = `<rect x="${n(g.mid.x - tw / 2)}" y="${n(g.mid.y - th / 2)}" width="${n(tw)}" height="${n(th)}" rx="${n(th / 2)}" fill="${col(b.labelFill || '#FFFFFF')}" stroke="${color}" stroke-width="1"/><text x="${n(g.mid.x)}" y="${n(g.mid.y + (f.size || 14) * 0.35)}" font-family='${fam(f)}' font-size="${n(f.size || 14)}" font-weight="${n(f.weight || 500)}" fill="${col(b.color || '#1E1C1A')}" text-anchor="middle">${esc(String(b.text))}</text>`; }
+    return `<path d="${d}" fill="none" stroke="${color}" stroke-width="${w}" stroke-linejoin="round" stroke-linecap="round"${dash}${me}${ms}/>` + label;
+  }
   function textEl(b, ctx) {
     const f = b.font || {};
     const anchor = b.align === 'center' ? 'middle' : b.align === 'right' ? 'end' : 'start';
@@ -3684,6 +3773,7 @@ const Render = (() => {
     const fill = paint(b, ctx); const st = strokeAttr(b);
     if (b.shape === 'ellipse') return `<ellipse cx="${n(b.x + b.w / 2)}" cy="${n(b.y + b.h / 2)}" rx="${n(b.w / 2)}" ry="${n(b.h / 2)}" fill="${fill}"${st}/>`;
     if (b.shape === 'circle' || b.shape === 'blob') return `<circle cx="${n(b.x + b.w / 2)}" cy="${n(b.y + b.h / 2)}" r="${n(Math.min(b.w, b.h) / 2)}" fill="${fill}"${st}/>`;
+    if (b.shape === 'diamond') return `<polygon points="${n(b.x + b.w / 2)},${n(b.y)} ${n(b.x + b.w)},${n(b.y + b.h / 2)} ${n(b.x + b.w / 2)},${n(b.y + b.h)} ${n(b.x)},${n(b.y + b.h / 2)}" fill="${fill}"${st} stroke-linejoin="round"/>`;
     if (b.shape === 'pill') return `<rect x="${n(b.x)}" y="${n(b.y)}" width="${n(b.w)}" height="${n(b.h)}" rx="${n(Math.min(b.w, b.h) / 2)}" fill="${fill}"${st}/>`;
     const r = Math.min(b.w, b.h); // quarter circle
     const d = `M ${n(b.x)} ${n(b.y + r)} A ${n(r)} ${n(r)} 0 0 1 ${n(b.x + r)} ${n(b.y)} L ${n(b.x + r)} ${n(b.y + r)} Z`;
@@ -3704,13 +3794,16 @@ const Render = (() => {
     const W = n(layout.format.w), H = n(layout.format.h);
     const prefix = String(layout.id || 'l').replace(/[^A-Za-z0-9_-]/g, '') || 'l';
     let seq = 0;
-    const ctx = { defs: [], id: k => `${prefix}-${k}${seq++}`, tag: !!opts.tag, tokenHex: name => kit && typeof Brand !== 'undefined' && Brand.tokenHex ? Brand.tokenHex(kit, name, opts.theme || 'light') : null };
+    const ctx = { defs: [], late: [], id: k => `${prefix}-${k}${seq++}`, tag: !!opts.tag, tokenHex: name => kit && typeof Brand !== 'undefined' && Brand.tokenHex ? Brand.tokenHex(kit, name, opts.theme || 'light') : null };
     const parts = [];
     if (!opts.transparent) parts.push(`<rect width="${W}" height="${H}" fill="${layout.palette && layout.palette.bgGradient ? (() => { const id = ctx.id('bg'); ctx.defs.push(gradientDef(layout.palette.bgGradient, id)); return `url(#${id})`; })() : col(layout.palette && layout.palette.bg, '#FFFFFF')}"/>`);
     // Boxes draw their fill, then their children (clipped when the box clips); siblings in list order.
     const blockEl = b => {
       let el = '';
-      if (b.kind === 'field') el = `<rect ${rectGeom(b)} fill="${paint(b, ctx)}"${b.alpha != null && b.alpha < 1 ? ` fill-opacity="${n(clamp01(b.alpha))}"` : ''}${strokeAttr(b)}/>`;
+      if (b.kind === 'field') el = `<rect ${rectGeom(b)} fill="${paint(b, ctx)}"${b.alpha != null && b.alpha < 1 ? ` fill-opacity="${n(clamp01(b.alpha))}"` : ''}${strokeAttr(b)}/>` + (b.text != null ? wordsIn(b, ctx, 10) : '') + votesEl(b);
+      else if (b.kind === 'sticky') el = stickyEl(b, ctx, opts);
+      else if (b.kind === 'stamp') el = stampEl(b);
+      else if (b.kind === 'connector') { ctx.late.push(fx(b, connectorEl(b, ctx, layout), ctx)); el = ''; }
       else if (b.kind === 'image' || b.kind === 'video') {
         const a = b.kind === 'video' ? (assets.videos || []).find(i => i.id === b.asset) : assets.images.find(i => i.id === b.asset);
         const href = !a ? '' : b.kind === 'video' ? (a.poster || '') : (opts.forExport ? a.dataUrl : a.url);
@@ -3728,7 +3821,7 @@ const Render = (() => {
         const al = n(clamp01(b.alpha || 0.7)); const fill = col(b.fill);
         ctx.defs.push(`<linearGradient id="${id}" x1="${c[0]}" y1="${c[1]}" x2="${c[2]}" y2="${c[3]}"><stop offset="0" stop-color="${fill}" stop-opacity="0"/><stop offset="0.55" stop-color="${fill}" stop-opacity="${n(al * 0.75)}"/><stop offset="1" stop-color="${fill}" stop-opacity="${al}"/></linearGradient>`);
         el = `<rect x="${n(b.x)}" y="${n(b.y)}" width="${n(b.w)}" height="${n(b.h)}" fill="url(#${id})"/>`;
-      } else if (b.kind === 'shape') el = shapeEl(b, ctx);
+      } else if (b.kind === 'shape') el = shapeEl(b, ctx) + (b.text != null ? wordsIn(b, ctx, 10) : '') + votesEl(b);
       else if (b.kind === 'rule') el = `<rect x="${n(b.x)}" y="${n(b.y)}" width="${n(b.w)}" height="${n(b.h)}" fill="${paint(b, ctx)}"/>`;
       else if (b.kind === 'button') {
         const f = b.font || {};
@@ -3773,9 +3866,10 @@ const Render = (() => {
       const over = st && kids ? `<rect ${rectGeom(b)} fill="none"${st}/>` : '';
       if (b.clip && kids) { const id = ctx.id('k'); ctx.defs.push(`<clipPath id="${id}"><rect x="${n(b.x)}" y="${n(b.y)}" width="${n(b.w)}" height="${n(b.h)}" rx="${n(b.radius || 0)}"/></clipPath>`); kids = `<g clip-path="url(#${id})">${kids}</g>`; }
       const bg = rect ? fx({ x: b.x, y: b.y, w: b.w, h: b.h, shadow: b.shadow, rotation: b.rotation }, rect, ctx) : '';
-      return fx({ x: b.x, y: b.y, w: b.w, h: b.h, opacity: b.opacity }, bg + kids + (over ? fx({ x: b.x, y: b.y, w: b.w, h: b.h, rotation: b.rotation }, over, ctx) : ''), ctx);
+      return fx({ x: b.x, y: b.y, w: b.w, h: b.h, opacity: b.opacity }, bg + sectionTitle(b, ctx) + kids + (over ? fx({ x: b.x, y: b.y, w: b.w, h: b.h, rotation: b.rotation }, over, ctx) : ''), ctx);
     };
     parts.push(drawList(''));
+    if (ctx.late.length) parts.push(ctx.late.join(''));
     if (opts.showGrid) parts.push(gridOverlay(layout));
     const attrs = opts.width ? ` width="${n(opts.width)}"` : ` width="${W}" height="${H}"`;
     return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}"${attrs} data-id="${esc(layout.id)}">${opts.fontStyle ? `<defs><style>${opts.fontStyle}</style></defs>` : ''}${ctx.defs.length ? `<defs>${ctx.defs.join('')}</defs>` : ''}${parts.join('')}</svg>`;
@@ -4016,10 +4110,20 @@ const ExportPptx = (() => {
         if (b.radius) { o.rectRadius = inch(b.radius); slide.addShape(pptx.ShapeType.roundRect, o); } else slide.addShape(pptx.ShapeType.rect, o);
       } else if (b.kind === 'rule') {
         slide.addShape(pptx.ShapeType.rect, { ...box, fill: { color: hex(b.fill) }, line: { color: hex(b.fill), transparency: 100 } });
+        if (b.text) slide.addText(String(b.text), { ...box, fontFace: fontName(b.font && b.font.family), fontSize: pt((b.font && b.font.size) || 18), color: hex(b.color || '#1E1C1A'), align: 'center', valign: 'middle', margin: 8, fit: 'shrink', wrap: true });
+      } else if (b.kind === 'sticky') {
+        slide.addShape(pptx.ShapeType.rect, { ...box, fill: { color: hex(b.fill) }, line: { color: hex(b.fill), transparency: 100 }, shadow: { type: 'outer', blur: 4, offset: 2, angle: 90, color: '111110', opacity: 0.2 } });
+        if (b.text) slide.addText(String(b.text), { ...box, fontFace: fontName(b.font && b.font.family), fontSize: pt((b.font && b.font.size) || 18), color: hex(b.color || '#1E1C1A'), align: 'center', valign: 'middle', margin: 8, fit: 'shrink', wrap: true });
+      } else if (b.kind === 'stamp') {
+        slide.addText(String(b.text || ''), { ...box, fontSize: pt(Math.min(b.w, b.h) * 0.8), align: 'center', valign: 'middle', margin: 0 });
+      } else if (b.kind === 'connector') {
+        const g = Canvas.connectorGeometry({ layout }, b); if (g) for (let i = 1; i < g.pts.length; i++) { const a = g.pts[i - 1], c = g.pts[i]; const last = i === g.pts.length - 1; slide.addShape(pptx.ShapeType.line, { x: inch(Math.min(a.x, c.x)), y: inch(Math.min(a.y, c.y)), w: inch(Math.abs(c.x - a.x)), h: inch(Math.abs(c.y - a.y)), flipH: c.x < a.x, flipV: c.y < a.y, line: { color: hex(b.stroke && b.stroke.color || '#5E5A56'), width: pt((b.stroke && b.stroke.width) || 2), endArrowType: last && (b.arrow || 'end') !== 'none' ? 'triangle' : undefined, beginArrowType: i === 1 && (b.arrow === 'both' || b.arrow === 'start') ? 'triangle' : undefined, dashType: b.dash ? 'dash' : 'solid' } }); }
+        if (g && b.text) slide.addText(String(b.text), { x: inch(g.mid.x - 60), y: inch(g.mid.y - 12), w: inch(120), h: inch(24), fontSize: pt((b.font && b.font.size) || 14), align: 'center', valign: 'middle', fill: { color: 'FFFFFF' }, margin: 0 });
       } else if (b.kind === 'shape') {
         const o = { ...box, fill: { color: hex(b.fill) }, line: { color: hex(b.fill), transparency: 100 } };
-        if (b.shape === 'circle' || b.shape === 'ellipse') slide.addShape(pptx.ShapeType.ellipse, o);
+        if (b.shape === 'circle' || b.shape === 'ellipse') slide.addShape(pptx.ShapeType.ellipse, o); else if (b.shape === 'diamond') slide.addShape(pptx.ShapeType.diamond, o);
         else { o.rectRadius = inch(Math.min(b.w, b.h) / 2); slide.addShape(pptx.ShapeType.roundRect, o); }
+        if (b.text) slide.addText(String(b.text), { ...box, fontFace: fontName(b.font && b.font.family), fontSize: pt((b.font && b.font.size) || 18), color: hex(b.color || '#1E1C1A'), align: 'center', valign: 'middle', margin: 8, fit: 'shrink', wrap: true });
       } else if (b.kind === 'image') {
         const a = opts.assets.images.find(i => i.id === b.asset);
         if (a && (b.crop || Canvas.adjustActive(b))) { const baked = await bakePicture(a, b).catch(() => null); if (baked) slide.addImage({ data: stripData(baked), ...box }); else slide.addImage({ data: stripData(a.dataUrl), ...box, sizing: { type: 'cover', w: box.w, h: box.h } }); }
@@ -7253,6 +7357,13 @@ const Canvas = (() => {
       b.lines = lines; b.indent = indent; b.itemGap = itemGap;
       b.h = Math.round(lines.length * f.size * (f.lineHeight || 1.3) + Math.max(0, (b.items || []).length - 1) * itemGap);
       b.inkW = Math.min(b.w, inkW); b.overflow = overflow;
+    } else if (b.kind === 'sticky' || ((b.kind === 'field' || b.kind === 'shape') && b.text != null)) {
+      // words inside a box: shrink the size until they fit, down to 11px, then let them overflow
+      const f = b.font || (b.font = { family: 'Inter, system-ui, sans-serif', weight: 500, size: 18, lineHeight: 1.3 }); const pad = b.kind === 'sticky' ? 14 : 10;
+      const text = Text.transform(String(b.text || ''), f.transform); const maxW = Math.max(8, b.w - pad * 2), maxH = Math.max(8, b.h - pad * 2);
+      const base = b.fontSizeMax || f.size || 18; let size = base; let lines = null;
+      while (size >= 11) { lines = Text.wrap(text, { ...f, size }, maxW); if (lines && lines.length * size * (f.lineHeight || 1.3) <= maxH) break; size -= 1; if (size < 11) { size = 11; lines = Text.wrap(text, { ...f, size }, maxW) || text.split(/\s+/); break; } }
+      b.fontSizeMax = base; f.size = size; b.lines = lines || ['']; b.inkW = Math.min(maxW, Math.max(0, ...b.lines.map(l => Text.width(l, { ...f, size })))); b.overflow = b.lines.length * size * (f.lineHeight || 1.3) > maxH + 1;
     } else if (b.kind === 'button') {
       const tw = Text.width(b.text || '', b.font); b.overflow = tw + b.font.size > b.w;
     }
@@ -7271,6 +7382,13 @@ const Canvas = (() => {
     if (kind === 'button') return { id: uid(), kind: 'button', role: 'cta', path: 'cta_' + uid(), text: 'Learn more', x, y, w: Math.round(body * 9), h: Math.round(body * 2.7), font: { family: Brand.fontCss(kit.fonts.body), weight: 600, size: body, lineHeight: 1.2 }, fill: pal.accent, color: Color.contrast(pal.accent, '#FFFFFF') >= Color.contrast(pal.accent, '#000000') ? '#FFFFFF' : '#000000', radius: Math.round(body * 1.35), decorative: false };
     if (kind === 'image') return { id: uid(), kind: 'image', x, y, w: 40 * u, h: 30 * u, asset: null, focal: 'xMidYMid', radius: 0, decorative: false, path: 'image_' + uid() };
     if (kind === 'video') return { id: uid(), kind: 'video', x, y, w: 48 * u, h: 27 * u, asset: null, focal: 'xMidYMid', radius: 0, decorative: false, path: 'video_' + uid() };
+    // board things (DeelJam): a sticky note, a shape with words in it, a section, a stamp, a connector
+    if (kind === 'sticky') return { id: uid(), kind: 'sticky', x, y, w: 200, h: 200, text: '', fill: (at && at.color) || '#FFE066', font: { family: Brand.fontCss(kit.fonts.body), weight: 500, size: 20, lineHeight: 1.3 }, path: 'sticky_' + uid() };
+    if ((kind === 'shape' || kind === 'jamshape') && at && (at.shape === 'ellipse' || at.shape === 'diamond')) return { id: uid(), kind: 'shape', shape: at.shape, x, y, w: at.shape === 'diamond' ? 200 : 220, h: at.shape === 'diamond' ? 140 : 120, text: '', fill: at.color || '#FFFFFF', stroke: { color: '#C9C8D1', width: 1.5 }, font: { family: Brand.fontCss(kit.fonts.body), weight: 500, size: 18, lineHeight: 1.3 }, color: '#1E1C1A', decorative: false, path: 'shape_' + uid() };
+    if (kind === 'shape' || kind === 'jamshape') return { id: uid(), kind: 'field', x, y, w: 220, h: 120, text: '', fill: (at && at.color) || '#FFFFFF', stroke: { color: '#C9C8D1', width: 1.5 }, radius: (at && at.radius) ?? 12, font: { family: Brand.fontCss(kit.fonts.body), weight: 500, size: 18, lineHeight: 1.3 }, color: '#1E1C1A', decorative: false, path: 'shape_' + uid() };
+    if (kind === 'section') return { id: uid(), kind: 'box', x, y, w: 800, h: 520, fill: (at && at.color) || '#F3F2FA', fillAlpha: 0.85, radius: 16, clip: false, section: { title: (at && at.title) || 'Section' }, decorative: true, path: 'section_' + uid() };
+    if (kind === 'stamp') return { id: uid(), kind: 'stamp', x, y, w: 56, h: 56, text: (at && at.emoji) || '👍', decorative: true, path: 'stamp_' + uid() };
+    if (kind === 'connector') return { id: uid(), kind: 'connector', x, y, w: 10, h: 10, from: (at && at.from) || { x, y }, to: (at && at.to) || { x: x + 200, y }, arrow: 'end', route: 'elbow', text: '', stroke: { color: '#5E5A56', width: 2 }, font: { family: Brand.fontCss(kit.fonts.body), weight: 500, size: 14, lineHeight: 1.3 }, path: 'connector_' + uid() };
     if (kind === 'icon') return { id: uid(), kind: 'icon', name: 'sparkle', x, y, w: 8 * u, h: 8 * u, fill: pal.accent, decorative: true };
     if (kind === 'logo') return { id: uid(), kind: 'logo', x, y, w: Math.round(5 * u * Engine.logoAspect(kit, Engine.typeSet(kit, Grid.compute(Grid.byId[L.format.id] || Grid.FORMATS[0], kit.grid), 2))), h: 5 * u, fill: Brand.logoColorFor(kit, pal.bg)[0], decorative: true };
     return null;
@@ -7366,6 +7484,52 @@ const Canvas = (() => {
 
   // ---- Auto layout: see autolayout.js. Full-bleed images and fields count as backgrounds (absolute when a screen's
   // auto layout is switched on). ---------------------------------------------------------------------------------------
+  // ---- Connectors (board arrows): a line between two blocks that follows them -------------------------------------
+  // An end is {id} (a block in the frame, with an optional side t/r/b/l) or a free point {x, y}.
+  const endRect = (frame, e) => { if (!e) return null; if (e.id) { const b = blockById(frame, e.id); return b ? { x: b.x, y: b.y, w: b.w, h: b.h } : null; } return Number.isFinite(e.x) && Number.isFinite(e.y) ? { x: e.x, y: e.y, w: 0, h: 0 } : null; };
+  const sideOf = (ra, rb, pref) => {
+    if (pref && /^[trbl]$/.test(pref)) return pref;
+    const ax = ra.x + ra.w / 2, ay = ra.y + ra.h / 2, bx = rb.x + rb.w / 2, by = rb.y + rb.h / 2; const dx = bx - ax, dy = by - ay;
+    if (Math.abs(dx) * (ra.h || 1) > Math.abs(dy) * (ra.w || 1)) return dx >= 0 ? 'r' : 'l'; return dy >= 0 ? 'b' : 't';
+  };
+  const anchor = (r, side) => side === 't' ? { x: r.x + r.w / 2, y: r.y } : side === 'b' ? { x: r.x + r.w / 2, y: r.y + r.h } : side === 'l' ? { x: r.x, y: r.y + r.h / 2 } : { x: r.x + r.w, y: r.y + r.h / 2 };
+  // The points of a connector, its box and where its label sits. Straight: two points. Elbow: one or two right-angle
+  // bends, leaving each block squarely from the side that faces the other.
+  function connectorGeometry(frame, b) {
+    const ra = endRect(frame, b.from), rb = endRect(frame, b.to); if (!ra || !rb) return null;
+    const sa = ra.w ? sideOf(ra, rb, b.from.side) : null, sb = rb.w ? sideOf(rb, ra, b.to.side) : null;
+    const A = sa ? anchor(ra, sa) : { x: ra.x, y: ra.y }, B = sb ? anchor(rb, sb) : { x: rb.x, y: rb.y };
+    let pts;
+    if (b.route === 'straight' || (!sa && !sb)) pts = [A, B];
+    else {
+      const horizA = sa === 'l' || sa === 'r', horizB = sb === 'l' || sb === 'r';
+      if (sa && sb && horizA === horizB) { // same axis out of both: two bends through the midpoint
+        if (horizA) { const mx = (A.x + B.x) / 2; pts = [A, { x: mx, y: A.y }, { x: mx, y: B.y }, B]; } else { const my = (A.y + B.y) / 2; pts = [A, { x: A.x, y: my }, { x: B.x, y: my }, B]; }
+      } else { // one bend
+        const h = sa ? horizA : !horizB; pts = h ? [A, { x: B.x, y: A.y }, B] : [A, { x: A.x, y: B.y }, B];
+      }
+      pts = pts.filter((p, i, a) => i === 0 || Math.abs(p.x - a[i - 1].x) > 0.01 || Math.abs(p.y - a[i - 1].y) > 0.01);
+    }
+    const xs = pts.map(p => p.x), ys = pts.map(p => p.y); const box = { x: Math.min(...xs), y: Math.min(...ys), w: Math.max(1, Math.max(...xs) - Math.min(...xs)), h: Math.max(1, Math.max(...ys) - Math.min(...ys)) };
+    // label at the middle of the path
+    let total = 0; const segs = []; for (let i = 1; i < pts.length; i++) { const l = Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y); segs.push(l); total += l; }
+    let mid = { x: A.x, y: A.y }; let acc = 0; for (let i = 0; i < segs.length; i++) { if (acc + segs[i] >= total / 2) { const t = segs[i] ? (total / 2 - acc) / segs[i] : 0; mid = { x: pts[i].x + (pts[i + 1].x - pts[i].x) * t, y: pts[i].y + (pts[i + 1].y - pts[i].y) * t }; break; } acc += segs[i]; }
+    return { pts, box, mid, sides: [sa, sb] };
+  }
+  // Connectors keep their box where their line is, so selection, layers and hit testing see them.
+  function syncConnectors(frame) {
+    let changed = false;
+    for (const b of frame.layout.blocks) { if (b.kind !== 'connector') continue; const g = connectorGeometry(frame, b); if (!g) continue; const bx = Math.round(g.box.x * 10) / 10, by = Math.round(g.box.y * 10) / 10, bw = Math.round(g.box.w * 10) / 10, bh = Math.round(g.box.h * 10) / 10; if (b.x !== bx || b.y !== by || b.w !== bw || b.h !== bh) { b.x = bx; b.y = by; b.w = bw; b.h = bh; changed = true; } }
+    return changed;
+  }
+  // Distance from a point to a connector's line (for picking it).
+  function connectorDistance(frame, b, p) {
+    const g = connectorGeometry(frame, b); if (!g) return Infinity; let best = Infinity;
+    for (let i = 1; i < g.pts.length; i++) { const a = g.pts[i - 1], c = g.pts[i]; const dx = c.x - a.x, dy = c.y - a.y; const l2 = dx * dx + dy * dy; const t = l2 ? Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / l2)) : 0; best = Math.min(best, Math.hypot(p.x - (a.x + dx * t), p.y - (a.y + dy * t))); }
+    return best;
+  }
+  // The section (a box with a title) whose area holds a block's centre, if any.
+  function sectionAt(frame, b) { const cx = b.x + b.w / 2, cy = b.y + b.h / 2; const secs = frame.layout.blocks.filter(s => s.kind === 'box' && s.section && s.id !== b.id && !s.hidden); let best = null; for (const s of secs) if (cx >= s.x && cx <= s.x + s.w && cy >= s.y && cy <= s.y + s.h && (!best || s.w * s.h < best.w * best.h)) best = s; return best; }
   // ---- Pictures: the crop shown and the adjustments on it --------------------------------------------------------
   // The part of a picture a block shows, in source pixels. Without a crop it is the cover crop at the focal point
   // (what the renderer drew all along); with one, crop {x, y, w, h} is a fraction of the source, kept at the block's
@@ -7788,7 +7952,7 @@ const Canvas = (() => {
     const re = new RegExp(find.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), opts.caseSensitive ? 'g' : 'gi');
     for (const f of frames) for (const b of f.layout.blocks) {
       if (b.kind === 'text') { const t = sourceText(b); const nt = t.replace(re, () => { n++; return repl; }); if (nt !== t) { if (typeof Rich !== 'undefined' && Rich.isRich(b)) { const c = { n: 0 }; b.runs = Rich.replace(b.runs, re, repl, c); b.text = Rich.plain(b.runs); } else b.text = nt; refit(b); } }
-      else if (b.kind === 'button') { const nt = String(b.text || '').replace(re, () => { n++; return repl; }); if (nt !== b.text) { b.text = nt; refit(b); } }
+      else if (b.kind === 'button' || b.kind === 'sticky' || b.kind === 'connector' || ((b.kind === 'field' || b.kind === 'shape') && b.text != null)) { const nt = String(b.text || '').replace(re, () => { n++; return repl; }); if (nt !== b.text) { b.text = nt; refit(b); } }
       else if (b.kind === 'list') { const items = (b.items || []).map(i => String(i).replace(re, () => { n++; return repl; })); if (items.join('\n') !== (b.items || []).join('\n')) { b.items = items; refit(b); } }
     }
     return n;
@@ -7859,7 +8023,7 @@ const Canvas = (() => {
     };
   }
 
-  return { create, addFrame, blankFrame, migrate, defaultAuto, frameById, blockById, refit, sourceText, newBlock, moveBlock, resizeBlock, reorder, duplicateBlock, removeBlocks, transferBlocks, pasteBlocks, customFormat, align, distribute, bounds, applyAutoLayout, isBackground, serialize, deserialize, toLink, fromHash, toHTML, toReact, codeTree, codeNodes, recolor, extractContent, scaleFrame, clusters, mainCluster, applyFrameTokens, tokenizeFrame, applyTokens, group, ungroup, groupMembers, tidy, compact, penD, penFit, maskShape, maskedBy, replaceText, setFonts, pasteFrames, framesBounds, cssGradient, setText, richText, cropRect, cropFrom, cropZoom, setCropZoom, adjustOf, adjustActive, adjustCss, ADJUST_DEFAULT, history, snap, uid, clone };
+  return { create, addFrame, blankFrame, migrate, defaultAuto, frameById, blockById, refit, sourceText, newBlock, moveBlock, resizeBlock, reorder, duplicateBlock, removeBlocks, transferBlocks, pasteBlocks, customFormat, align, distribute, bounds, applyAutoLayout, isBackground, serialize, deserialize, toLink, fromHash, toHTML, toReact, codeTree, codeNodes, recolor, extractContent, scaleFrame, clusters, mainCluster, applyFrameTokens, tokenizeFrame, applyTokens, group, ungroup, groupMembers, tidy, compact, penD, penFit, maskShape, maskedBy, replaceText, setFonts, pasteFrames, framesBounds, cssGradient, setText, richText, connectorGeometry, syncConnectors, connectorDistance, sectionAt, cropRect, cropFrom, cropZoom, setCropZoom, adjustOf, adjustActive, adjustCss, ADJUST_DEFAULT, history, snap, uid, clone };
 })();
 
 /* js/autolayout.js */
@@ -8267,12 +8431,13 @@ const CanvasUI = (() => {
   let pinsVisible = true, showResolved = false, thread = null, commentDraft = null; const names = new Map();
   // Simple editing (default) hides auto layout, sizing and code, and treats stacks as tidy containers; Advanced is
   // Figma-style. Per person, kept in this browser.
-  let editMode = (() => { try { return localStorage.getItem('lg.editMode') === 'advanced' ? 'advanced' : 'simple'; } catch { return 'simple'; } })();
+  let editMode = (() => { try { const m = localStorage.getItem('lg.editMode'); return m === 'advanced' ? 'advanced' : m === 'jam' ? 'jam' : (window.LG_APP === 'jam' ? 'jam' : 'simple'); } catch { return window.LG_APP === 'jam' ? 'jam' : 'simple'; } })();
+  const jam = () => editMode === 'jam';
   const advanced = () => editMode === 'advanced';
   let layoutHold = null; // a frame whose layout pass waits while a block in one of its stacks is dragged
   let dropHint = null;   // where a dragged block would land: {frame, container, index, before, line, free, flatten}
   const folded = new Set(); // boxes collapsed in the layers panel
-  const hooks = { change: [], live: [], select: [], pointer: [], action: [] };
+  const hooks = { change: [], live: [], select: [], pointer: [], action: [], view: [] };
   const HANDLE = 7;
   const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const emit = (k, ...a) => { for (const fn of hooks[k]) { try { fn(...a); } catch (e) { console.error(e); } } };
@@ -8378,6 +8543,7 @@ const CanvasUI = (() => {
     const gone = new Set(); for (const b of order) { const pid = I.par.get(b.id); if (b.hidden || (pid && gone.has(pid))) gone.add(b.id); }
     for (let i = order.length - 1; i >= 0; i--) {
       const b = order[i]; if (gone.has(b.id)) continue;
+      if (b.kind === 'connector') { if (Canvas.connectorDistance(f, b, { x: lx, y: ly }) <= Math.max(6, 8 / doc.view.zoom)) return [b]; continue; }
       const w = (b.kind === 'text' && b.align !== 'center' && b.align !== 'right') ? Math.max(b.inkW || b.w, 24) : b.w;
       if (!(lx >= b.x && ly >= b.y && lx <= b.x + w && ly <= b.y + b.h)) continue;
       const anc = Auto.ancestors(f, b, I);
@@ -8442,6 +8608,7 @@ const CanvasUI = (() => {
     const fs = Math.max(11, 12 / v.zoom) + 'px', off = Math.max(16, 18 / v.zoom);
     $('world').querySelectorAll('.cv-frame-label').forEach(lb => { lb.style.fontSize = fs; const f = Canvas.frameById(doc, lb.dataset.label); if (f) lb.style.top = (f.y - off) + 'px'; });
     positionEditor(); positionPlayer(); drawOverlay();
+    if (hooks.view) { const r = stage().getBoundingClientRect(); emit('view', { cx: (r.width / 2 - v.x) / v.zoom, cy: (r.height / 2 - v.y) / v.zoom, zoom: v.zoom }); }
   }
 
   // ---- Rendering ----------------------------------------------------------------------------------------
@@ -8454,6 +8621,7 @@ const CanvasUI = (() => {
   }
   function frameSVG(f) {
     if (layoutHold !== f.id && Auto.needs(f)) Auto.layout(f);
+    if (f.layout.blocks.some(b => b.kind === 'connector')) Canvas.syncConnectors(f);
     const L = editing && editing.frameId === f.id && editing.hide ? { ...f.layout, blocks: f.layout.blocks.filter(b => b.id !== editing.blockId) } : f.layout;
     // ids inside the drawing (clips, gradients) are namespaced by screen: copies of one layout share its id
     return env.renderSVG({ ...L, id: 'fr' + f.id }, { showGrid: !!f.showGrid });
@@ -8547,6 +8715,7 @@ const CanvasUI = (() => {
     }
     parts.push(penOverlay());
     if (drag && drag.type === 'line') { const a = toScreen(drag.start.x, drag.start.y), b = toScreen(drag.cur.x, drag.cur.y); parts.push(`<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="var(--accent)" stroke-width="2" stroke-linecap="round"/>`); }
+    if (drag && drag.type === 'connect') { const a = toScreen(drag.start.x, drag.start.y), c = toScreen(drag.cur.x, drag.cur.y); parts.push(`<line x1="${a.x}" y1="${a.y}" x2="${c.x}" y2="${c.y}" stroke="var(--accent)" stroke-width="2" stroke-dasharray="6 4"/>`); if (drag.over) parts.push(rect(drag.f.x + drag.over.x, drag.f.y + drag.over.y, drag.over.w, drag.over.h, 'fill="none" stroke="var(--accent)" stroke-width="2"')); }
     if (cropping) { const t = cropTarget(); if (t) { const r = Canvas.cropRect(t.b, t.a); const scale = t.b.w / Math.max(1e-6, r.w); const q = toScreen(t.f.x + t.b.x - r.x * scale, t.f.y + t.b.y - r.y * scale); const bq = toScreen(t.f.x + t.b.x, t.f.y + t.b.y);
       parts.push(`<image href="${esc(t.a.url || t.a.dataUrl || '')}" x="${q.x}" y="${q.y}" width="${t.a.w * scale * Z}" height="${t.a.h * scale * Z}" opacity="0.38" preserveAspectRatio="none" pointer-events="none"/><rect x="${q.x}" y="${q.y}" width="${t.a.w * scale * Z}" height="${t.a.h * scale * Z}" fill="none" stroke="var(--accent)" stroke-dasharray="4 4" stroke-width="1"/><rect x="${bq.x}" y="${bq.y}" width="${t.b.w * Z}" height="${t.b.h * Z}" fill="none" stroke="var(--accent)" stroke-width="2"/>`); } }
     ov.innerHTML = parts.join('');
@@ -8722,6 +8891,9 @@ const CanvasUI = (() => {
     mutate(() => { nf.layout.blocks.push({ id: Canvas.uid(), kind: 'video', x: 0, y: 0, w: fmt.w, h: fmt.h, asset: asset.id, focal: 'xMidYMid', radius: 0, decorative: false, path: 'video_1', label }); nf.layout.meta = { ...(nf.layout.meta || {}), source: 'video' }; }, { history: false, frames: [nf.id] });
     return nf;
   }
+  function placePicture(asset, at) { const was = lastPointer; lastPointer = at || lastPointer; const f = frameAt(lastPointer) || (jam() ? jamBoard() : null); const w = asset.w || 800, h = asset.h || 600;
+    if (f) { hist.push(doc); const sc = Math.min(1, (FW(f) * 0.5) / w, (FH(f) * 0.5) / h, 640 / w); const b = { id: Canvas.uid(), kind: 'image', x: Math.round(lastPointer.x - f.x - w * sc / 2), y: Math.round(lastPointer.y - f.y - h * sc / 2), w: Math.round(w * sc), h: Math.round(h * sc), asset: asset.id, focal: 'xMidYMid', radius: 0, decorative: false, path: 'image_' + Canvas.uid() }; f.layout.blocks.push(b); if (f.board) growBoard(f, b); select(f.id, [b.id]); rerenderFrame(f); renderLayers(); persist(); updateUndo(); lastPointer = was; return b; }
+    const nf = screenFromImage(asset, asset.name || 'Picture', lastPointer); lastPointer = was; return nf; }
   async function dropVideo(file) { const asset = await env.addVideo(file, file.name); placeVideo(asset, file.name, lastPointer || { x: 0, y: 0 }); }
   function onDblClick(e) {
     if (e.target.closest && e.target.closest('.cv-editor')) return;
@@ -8753,6 +8925,7 @@ const CanvasUI = (() => {
     if (thread || commentDraft) closeThread();
     if (tool === 'frame') { drag = { type: 'draw-frame', start: p, cur: p, moved: false }; stage().setPointerCapture(e.pointerId); return; }
     if (tool === 'pen') { penDown(e, p); return; }
+    if (tool === 'connector') { const f = frameAt(p) || (jam() ? jamBoard() : null); if (!f) { env.toast('Drag from one thing to another to connect them'); return; } const hb = blockAt(f, p, e); drag = { type: 'connect', f, from: hb && hb.kind !== 'connector' ? hb : null, start: p, cur: p }; stage().setPointerCapture(e.pointerId); return; }
     if (tool === 'line') { const f = frameAt(p); if (!f) { env.toast('Drag inside a screen to draw a line'); return; } drag = { type: 'line', f, start: p, cur: p }; stage().setPointerCapture(e.pointerId); return; }
     if (tool === 'comment') { const f = frameAt(p); if (!f) { env.toast('Click on a screen to leave a comment there'); return; } openCommentDraft(f, { x: p.x - f.x, y: p.y - f.y }); return; }
     if (tool !== 'select') { placeTool(frameAt(p), p); return; }
@@ -8786,7 +8959,8 @@ const CanvasUI = (() => {
     } else {
       if (e.shiftKey && sel.frameId === f.id && sel.frameIds.length <= 1) { const ids = Canvas.groupMembers(f, b).map(x => x.id); const has = sel.blockIds.includes(b.id); select(f.id, has ? sel.blockIds.filter(i => !ids.includes(i)) : [...sel.blockIds, ...ids], { keepGroupFocus: true }); }
       else if (!(sel.frameId === f.id && sel.blockIds.includes(b.id))) select(f.id, [b.id]);
-      const blocks = Auto.topmost(f, selBlocks().filter(x => !x.locked)); if (!blocks.length) return;
+      let blocks = Auto.topmost(f, selBlocks().filter(x => !x.locked)); if (!blocks.length) return;
+      if (blocks.some(x => x.section)) blocks = Auto.withDescendants(f, blocks).filter(x => !x.locked);
       drag = { type: 'move', f, blocks, start: p, orig: blocks.map(x => ({ x: x.x, y: x.y })), moved: false, flow: flowDrag(f, blocks) };
     }
     stage().setPointerCapture(e.pointerId);
@@ -8858,6 +9032,7 @@ const CanvasUI = (() => {
     if (drag.type === 'pan') { doc.view.x = drag.vx + (e.clientX - drag.sx); doc.view.y = drag.vy + (e.clientY - drag.sy); applyView(); return; }
     if (drag.type === 'marquee') { drag.cur = p; drawOverlay(); return; }
     if (drag.type === 'line') { drag.cur = e.shiftKey ? constrain(drag.start, p) : p; drawOverlay(); return; }
+    if (drag.type === 'connect') { drag.cur = p; const hb = blockAt(drag.f, p); drag.over = hb && hb.kind !== 'connector' && hb !== drag.from ? hb : null; drawOverlay(); return; }
     if (drag.type === 'crop') {
       const r = drag.orig; const scale = drag.b.w / Math.max(1e-6, r.w);
       drag.b.crop = Canvas.cropFrom({ x: r.x - (p.x - drag.start.x) / scale, y: r.y - (p.y - drag.start.y) / scale, w: r.w, h: r.h }, drag.a);
@@ -8885,7 +9060,7 @@ const CanvasUI = (() => {
       drag.blocks.forEach((b, i) => { b.x = Math.round(drag.orig[i].x + s.dx); b.y = Math.round(drag.orig[i].y + s.dy); });
       guides = s.guides;
       const over = frameAt(p); dropTarget = over && over !== drag.f && !over.locked ? over : null; if (dropTarget) guides = [];
-      dropHint = dropTarget ? null : dropTargetIn(drag.f, drag.blocks, { x: p.x - drag.f.x, y: p.y - drag.f.y }, drag.flow);
+      dropHint = dropTarget || jam() ? null : dropTargetIn(drag.f, drag.blocks, { x: p.x - drag.f.x, y: p.y - drag.f.y }, drag.flow);
       if (dropHint) { dropHint.frame = drag.f; if (dropHint.line) guides = []; }
       rerenderFrame(drag.f); drawOverlay(); liveProps(); emitLive([drag.f.id]);
     } else if (drag.type === 'move-frames') {
@@ -8911,6 +9086,14 @@ const CanvasUI = (() => {
     const hadGuides = guides.length; guides = [];
     if (d.type === 'pan') { persist({ silent: true }); return; }
     if (d.type === 'crop') { stage().style.cursor = 'move'; persist(); updateUndo(); renderProps(); return; }
+    if (d.type === 'connect') {
+      const f = d.f; const to = blockAt(f, d.cur); const far = Math.hypot(d.cur.x - d.start.x, d.cur.y - d.start.y) * doc.view.zoom > 8;
+      if (!far || (!d.from && !(to && to.kind !== 'connector'))) { setTool('select'); drawOverlay(); return; }
+      hist.push(doc);
+      const from = d.from ? { id: d.from.id } : { x: d.start.x - f.x, y: d.start.y - f.y }; const dest = to && to.kind !== 'connector' && to !== d.from ? { id: to.id } : { x: d.cur.x - f.x, y: d.cur.y - f.y };
+      const b = Canvas.newBlock('connector', f, env.getKit(), { x: d.start.x - f.x, y: d.start.y - f.y, from, to: dest }); f.layout.blocks.push(b); Canvas.syncConnectors(f);
+      select(f.id, [b.id]); setTool('select'); rerenderFrame(f); renderLayers(); renderProps(); drawOverlay(); persist(); updateUndo(); return;
+    }
     if (d.type === 'line') { lineFinish(d); return; }
     if (d.type === 'pen-point') { drag = null; drawOverlay(); return; }
     if (d.type === 'pen-anchor' || d.type === 'pen-handle') { if (d.moved) { persist(); updateUndo(); renderProps(); } drawOverlay(); return; }
@@ -8958,6 +9141,13 @@ const CanvasUI = (() => {
       rerenderFrame(d.f);
     }
     if (d.type === 'resize-frame' && d.moved) { regrid(d.f); rerenderFrame(d.f); }
+    if (d.moved && d.type === 'move' && d.f) {
+      // a thing dropped on a section belongs to it (and leaves one it was dragged out of); the board makes room
+      const f = d.f; let changed = false;
+      for (const b of d.blocks) { if (b.section || b.kind === 'connector') continue; const cur = b.parent ? Canvas.blockById(f, b.parent) : null; if (cur && !cur.section) continue; const sec = Canvas.sectionAt(f, b); const want = sec ? sec.id : undefined; if ((b.parent || undefined) !== want) { if (want) b.parent = want; else delete b.parent; changed = true; } }
+      if (f.board) { const xs = d.blocks.map(b => b.x), ys = d.blocks.map(b => b.y); if (growBoard(f, { x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...d.blocks.map(b => b.x + b.w)) - Math.min(...xs), h: Math.max(...d.blocks.map(b => b.y + b.h)) - Math.min(...ys) })) changed = true; }
+      if (changed) rerenderFrame(f);
+    }
     if (d.moved) {
       if (d.f && d.type === 'move' && (d.flow || Auto.needs(d.f))) rerenderFrame(d.f);
       persist(); updateUndo(); renderLayers(); renderProps(); drawOverlay();
@@ -8997,7 +9187,44 @@ const CanvasUI = (() => {
     if (phone) env.toast('Phone screenshot placed as a phone screen. Select it and use ✦ Rebuild as layers, or add a device frame from Library → Devices.');
     return nf;
   }
+  // ---- Board (DeelJam): the frame everything lands on, growing as it is used ---------------------------------------
+  function jamBoard() {
+    let f = doc.frames.find(x => x.board) || null;
+    if (!f && doc.frames.length === 1 && doc.frames[0].layout.blocks.every(b => /^(sticky|connector|stamp|box|field|shape|text|image|video|vector|line)$/.test(b.kind))) { f = doc.frames[0]; f.board = true; }
+    if (!f) { f = createFrame({ x: 0, y: 0, format: Canvas.customFormat(3200, 2000), name: 'Board', bg: '#FFFFFF', history: false }); f.board = true; f.clip = false; persist({ silent: true }); }
+    return f;
+  }
+  // Make room: the board grows so rect (frame space) sits at least `pad` inside it; blocks shift when it grows up or left.
+  function growBoard(f, rect, pad = 400) {
+    if (!f || !rect) return false; let dx = 0, dy = 0; let W = f.layout.format.w, H = f.layout.format.h;
+    if (rect.x < pad) dx = Math.ceil((pad - rect.x) / 400) * 400; if (rect.y < pad) dy = Math.ceil((pad - rect.y) / 400) * 400;
+    if (rect.x + rect.w + pad > W) W = Math.ceil((rect.x + rect.w + pad) / 400) * 400; if (rect.y + rect.h + pad > H) H = Math.ceil((rect.y + rect.h + pad) / 400) * 400;
+    if (!dx && !dy && W === f.layout.format.w && H === f.layout.format.h) return false;
+    if (dx || dy) { for (const b of f.layout.blocks) { b.x += dx; b.y += dy; if (b.kind === 'connector') { if (b.from && !b.from.id) { b.from.x += dx; b.from.y += dy; } if (b.to && !b.to.id) { b.to.x += dx; b.to.y += dy; } } } f.x -= dx; f.y -= dy; }
+    f.layout.format = Canvas.customFormat(W + dx, H + dy); rerenderFrame(f); return true;
+  }
+  const BOARD_KINDS = { sticky: 'sticky', shape: 'shape', section: 'section', stamp: 'stamp' };
+  // A board thing at a point of the canvas (world space), on the board or on the screen under the point.
+  function placeAt(kind, p, props = {}) {
+    let f = frameAt(p); if (!f || jam()) f = jam() ? (frameAt(p) || jamBoard()) : f; if (!f) { env.toast('Click inside a frame to add it there'); return null; }
+    hist.push(doc);
+    const b = Canvas.newBlock(kind, f, env.getKit(), { x: p.x - f.x, y: p.y - f.y, ...props }); if (!b) return null;
+    if (b.kind === 'sticky' || b.kind === 'stamp' || b.kind === 'field') { b.x = Math.round(p.x - f.x - b.w / 2); b.y = Math.round(p.y - f.y - b.h / 2); }
+    if (b.kind === 'sticky') { const me = who(); b.author = me.id; b.authorName = me.name; }
+    Object.assign(b, props.block || {});
+    if (b.section) { // a section goes behind everything and takes in what already sits inside it
+      f.layout.blocks.unshift(b);
+      for (const o of f.layout.blocks) { if (o === b || o.parent || o.section || o.kind === 'connector') continue; const cx = o.x + o.w / 2, cy = o.y + o.h / 2; if (cx >= b.x && cx <= b.x + b.w && cy >= b.y && cy <= b.y + b.h) o.parent = b.id; }
+    } else { f.layout.blocks.push(b); const sec = Canvas.sectionAt(f, b); if (sec) b.parent = sec.id; }
+    if (f.board) growBoard(f, { x: b.x, y: b.y, w: b.w, h: b.h });
+    if (b.kind === 'sticky' || b.kind === 'field') Canvas.refit(b);
+    select(f.id, [b.id]); rerenderFrame(f); renderLayers(); renderProps(); drawOverlay(); persist(); updateUndo();
+    return { f, b };
+  }
+  let lastStickyColor = '#FFE066';
   function placeTool(f, p) {
+    if (BOARD_KINDS[tool]) { const picks = typeof Jam !== 'undefined' ? Jam.pickFor(tool) : (tool === 'sticky' ? { color: lastStickyColor } : {}); const r = placeAt(BOARD_KINDS[tool], p, picks); setTool('select'); if (r && (r.b.kind === 'sticky' || r.b.kind === 'field' || (r.b.kind === 'shape' && r.b.text != null))) setTimeout(() => startEdit(r.f, r.b, { noHistory: true }), 0); return; }
+    if (!f && jam()) f = jamBoard();
     if (!f) { env.toast('Click inside a frame to add it there'); return; }
     hist.push(doc);
     const kindMap = { text: 'text', body: 'body', rect: 'rect', ellipse: 'ellipse', button: 'button', image: 'image', icon: 'icon', logo: 'logo' };
@@ -9259,7 +9486,8 @@ const CanvasUI = (() => {
 
   // ---- On-canvas text editing -------------------------------------------------------------------------------
   function startEdit(f, b, opts = {}) {
-    if (!f || !b || b.locked || !(b.kind === 'text' || b.kind === 'button' || b.kind === 'list')) return false;
+    const wordy = b && (b.kind === 'sticky' || b.kind === 'connector' || ((b.kind === 'field' || b.kind === 'shape') && b.text != null));
+    if (!f || !b || b.locked || !(b.kind === 'text' || b.kind === 'button' || b.kind === 'list' || wordy)) return false;
     if (editing) endEdit();
     if (!opts.noHistory) { hist.push(doc); updateUndo(); }
     select(f.id, [b.id], { keepGroupFocus: true });
@@ -9270,7 +9498,7 @@ const CanvasUI = (() => {
     const Z0 = doc.view.zoom;
     if (rich) ed.innerHTML = Rich.toHTML(Rich.isRich(b) ? b.runs : [{ text: Canvas.sourceText(b) }], { sizeScale: Z0, resolveToken: tk => Brand.tokenHex(env.getKit(), tk, f.theme || 'light') });
     else ed.textContent = b.kind === 'list' ? (b.items || []).join('\n') : b.kind === 'button' ? String(b.text || '') : Canvas.sourceText(b);
-    editing = { frameId: f.id, blockId: b.id, el: ed, hide: b.kind !== 'button', rich, scale: Z0 };
+    editing = { frameId: f.id, blockId: b.id, el: ed, hide: b.kind === 'text' || b.kind === 'list', rich, scale: Z0, wordy };
     stage().appendChild(ed);
     if (rich) { const bar = document.createElement('div'); bar.className = 'cv-richbar'; bar.innerHTML = `<button type="button" data-rt="bold" title="Bold ⌘B"><b>B</b></button><button type="button" data-rt="italic" title="Italic ⌘I"><i>I</i></button><button type="button" data-rt="underline" title="Underline ⌘U"><u>U</u></button><button type="button" data-rt="strikeThrough" title="Strike ⌘⇧X"><s>S</s></button><button type="button" data-rt="link" title="Link ⌘K">⛓</button><span class="sep"></span>${env.getKit().colors.slice(0, 10).map(c => `<button type="button" class="sw" data-rt="color" data-hex="${toHex(c.hex)}" title="${esc(c.name || c.hex)}" style="background:${toHex(c.hex)}"></button>`).join('')}<span class="sep"></span><button type="button" data-rt="clear" title="Clear formatting">⌫</button>`;
       bar.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); });
@@ -9285,7 +9513,7 @@ const CanvasUI = (() => {
       const fr = Canvas.frameById(doc, f.id); const bl = fr && Canvas.blockById(fr, b.id); if (!bl) return;
       const t = ed.innerText.replace(/ /g, ' ');
       if (editing.rich) { const r = Rich.fromDOM(ed, { weight: bl.font && bl.font.weight, sizeScale: editing.scale }); bl.text = r.text.replace(/\n{3,}/g, '\n\n'); if (r.runs && r.text === bl.text) bl.runs = r.runs; else delete bl.runs; }
-      else if (bl.kind === 'list') bl.items = t.split('\n').map(x => x.trim()).filter(Boolean); else if (bl.kind === 'button') bl.text = t.replace(/\s*\n+\s*/g, ' '); else bl.text = t.replace(/\n{3,}/g, '\n\n');
+      else if (bl.kind === 'list') bl.items = t.split('\n').map(x => x.trim()).filter(Boolean); else if (bl.kind === 'button' || bl.kind === 'connector') bl.text = t.replace(/\s*\n+\s*/g, ' '); else bl.text = t.replace(/\n{3,}/g, '\n\n');
       Canvas.refit(bl); positionEditor(); if (!editing.hide) rerenderFrame(fr); drawOverlay(); emitLive([fr.id]);
     });
     ed.addEventListener('keydown', e => {
@@ -9309,6 +9537,8 @@ const CanvasUI = (() => {
       paddingLeft: b.kind === 'list' ? (b.indent || 0) * Z + 'px' : '0',
     });
     if (b.kind === 'button') Object.assign(ed.style, { height: b.h * Z + 'px', minHeight: '0', display: 'flex', alignItems: 'center', justifyContent: 'center', background: Render.col(b.fill), borderRadius: (b.radius || 0) * Z + 'px' });
+    if (b.kind === 'sticky' || ((b.kind === 'field' || b.kind === 'shape') && b.text != null)) { const pad = (b.kind === 'sticky' ? 14 : 10) * Z; Object.assign(ed.style, { height: b.h * Z + 'px', minHeight: '0', display: 'flex', flexDirection: 'column', alignItems: 'stretch', justifyContent: 'center', textAlign: 'center', padding: pad + 'px', boxSizing: 'border-box', background: Render.col(b.fill), borderRadius: (b.radius ?? (b.kind === 'sticky' ? 4 : 0)) * Z + 'px', color: Render.col(b.color || '#1E1C1A'), fontSize: (font.size || 18) * Z + 'px', overflow: 'hidden' }); }
+    if (b.kind === 'connector') { const g = Canvas.connectorGeometry(f, b); if (g) { const q = toScreen(f.x + g.mid.x, f.y + g.mid.y); const w = Math.max(120, (Text.width(String(b.text || 'label'), font) + 24) * Z); Object.assign(ed.style, { left: (q.x - w / 2) + 'px', top: (q.y - (font.size || 14) * Z) + 'px', width: w + 'px', minHeight: '0', textAlign: 'center', background: '#FFFFFF', borderRadius: '999px', padding: '2px 8px', fontSize: (font.size || 14) * Z + 'px', whiteSpace: 'nowrap' }); } }
     if (editing.bar) Object.assign(editing.bar.style, { left: p.x + 'px', top: (p.y - 36) + 'px' });
   }
   function endEdit(cancel) {
@@ -9434,7 +9664,7 @@ const CanvasUI = (() => {
       try { const j = JSON.parse(text); if (j && j.lgClip && /^(blocks|frame|frames)$/.test(j.lgClip.type)) { e.preventDefault(); pasteClipboard(j.lgClip); } } catch { }
     });
   }
-  function setTool(t) { if (tool === 'pen' && t !== 'pen' && penDraft) penFinish(); tool = t; document.querySelectorAll('#cvTools [data-tool]').forEach(b => b.classList.toggle('on', b.dataset.tool === t)); stage().style.cursor = t === 'hand' ? 'grab' : t === 'select' ? 'default' : t === 'comment' ? 'copy' : 'crosshair'; if (t !== 'select' && penEdit) penEditEnd(); }
+  function setTool(t) { if (tool === 'pen' && t !== 'pen' && penDraft) penFinish(); tool = t; emit('action', 'tool'); document.querySelectorAll('#cvTools [data-tool]').forEach(b => b.classList.toggle('on', b.dataset.tool === t)); stage().style.cursor = t === 'hand' ? 'grab' : t === 'select' ? 'default' : t === 'comment' ? 'copy' : 'crosshair'; if (t !== 'select' && penEdit) penEditEnd(); }
   function undo() { if (editing) endEdit(); hover = null; penDraft = null; penEdit = null; const d = hist.undo(doc); if (d) { const keep = doc.comments; doc = undoMerge ? undoMerge(doc, d) : d; doc.comments = keep; validateSelection(); persist(); renderAll(); } }
   function redo() { if (editing) endEdit(); hover = null; penDraft = null; penEdit = null; const d = hist.redo(doc); if (d) { const keep = doc.comments; doc = undoMerge ? undoMerge(doc, d) : d; doc.comments = keep; validateSelection(); persist(); renderAll(); } }
   function deleteSelection() {
@@ -9466,9 +9696,11 @@ const CanvasUI = (() => {
 
   // ---- Auto layout commands ------------------------------------------------------------------------------------
   function setEditMode(m) {
-    editMode = m === 'advanced' ? 'advanced' : 'simple';
+    editMode = m === 'advanced' ? 'advanced' : m === 'jam' ? 'jam' : 'simple';
     try { localStorage.setItem('lg.editMode', editMode); } catch { }
-    document.body.classList.toggle('cv-simple', editMode === 'simple');
+    document.body.classList.toggle('cv-simple', editMode !== 'advanced'); document.body.classList.toggle('cv-jam', editMode === 'jam');
+    if (editMode === 'jam' && active) { jamBoard(); } if (tool !== 'select' && tool !== 'hand') setTool('select');
+    emit('action', 'editmode.' + editMode);
     document.querySelectorAll('#cvMode [data-edit]').forEach(b => b.classList.toggle('on', b.dataset.edit === editMode));
     if (active) { renderLayers(); renderProps(); drawOverlay(); }
   }
@@ -10526,6 +10758,9 @@ const CanvasUI = (() => {
     get doc() { return doc; }, get active() { return active; },
     select, selectFrames, selection, setTool, createFrame, placeRow, placeFrames, insertBlocks, insertComponent, screenFromImage, placeVideo, togglePlay, cropStart, mutate, remoteApplied, replaceDoc, renderAll, rerender: ids => ids.forEach(id => { const f = Canvas.frameById(doc, id); if (f) rerenderFrame(f); }),
     centerOn: (x, y) => { const r = stage().getBoundingClientRect(); doc.view.x = r.width / 2 - x * doc.view.zoom; doc.view.y = r.height / 2 - y * doc.view.zoom; applyView(); },
+    setView: ({ cx, cy, zoom }) => { const r = stage().getBoundingClientRect(); if (zoom > 0) doc.view.zoom = Math.min(8, Math.max(0.02, zoom)); doc.view.x = r.width / 2 - cx * doc.view.zoom; doc.view.y = r.height / 2 - cy * doc.view.zoom; applyView(); },
+    viewCenter: () => { const r = stage().getBoundingClientRect(); const v = doc.view; return { cx: (r.width / 2 - v.x) / v.zoom, cy: (r.height / 2 - v.y) / v.zoom, zoom: v.zoom }; },
+    jamBoard, growBoard, placeAt, placePicture, setEditMode, get editMode() { return editMode; }, get peers() { return peers; }, get tool() { return tool; }, setStickyColor: c => { lastStickyColor = c; }, who,
     regrid, exportAction, makeVariations, resizeScreens, copySelection, pasteClipboard, startEdit: (fid, bid) => { const f = Canvas.frameById(doc, fid); return startEdit(f, f && Canvas.blockById(f, bid)); },
     on: (k, fn) => { hooks[k].push(fn); return () => { hooks[k] = hooks[k].filter(x => x !== fn); }; },
     setPeers: list => { peers = Array.isArray(list) ? list : []; if (active) drawOverlay(); },
@@ -10537,6 +10772,223 @@ const CanvasUI = (() => {
     syncInstances, instanceOwner, slotsOf: fid => { const f = Canvas.frameById(doc, fid); return f ? slotsOf(f) : []; }, overridesOf: (fid, bid) => { const f = Canvas.frameById(doc, fid); const b = f && Canvas.blockById(f, bid); const root = b && instanceOwner(f, b); const it = root && Library.find(root.inst.of); return root && it ? overridesOf(f, root, it) : null; },
     _history: () => hist,
   };
+})();
+
+/* js/jam.js */
+/* DeelJam: the board for everyone. One big board, stickies, shapes with words, connectors, sections, stamps, votes, a
+   timer, follow a colleague, templates, and buttons that ask Claude to summarize or sort the board. It sits on the same
+   canvas as the design editor (Jam is an editing mode next to Simple and Advanced); Design mode is one click away. */
+const Jam = (() => {
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const COLORS = [['#FFE066', 'Yellow'], ['#FFB4A2', 'Coral'], ['#B5EAD7', 'Mint'], ['#C7CEEA', 'Periwinkle'], ['#FDE2FF', 'Pink'], ['#FFDAC1', 'Peach'], ['#E2F0CB', 'Lime'], ['#F0EFEA', 'Grey']];
+  const STAMPS = ['👍', '❤️', '🔥', '✅', '❓', '💡', '👀', '🎉', '⭐', '🚀', '⚠️', '➕'];
+  const SHAPES = [['rect', 'Rectangle', 12], ['square', 'Square', 0], ['pill', 'Pill', 999], ['ellipse', 'Ellipse', -1], ['diamond', 'Diamond', -2]];
+  let env = {}, following = null, followTimer = 0, timerTick = 0, stampPick = '👍', shapePick = 'rect', stickyColor = '#FFE066', aiBusy = false;
+  const isJam = () => typeof CanvasUI !== 'undefined' && CanvasUI.editMode === 'jam';
+  const board = () => CanvasUI.jamBoard();
+  const me = () => CanvasUI.who();
+
+  // ---- chrome -----------------------------------------------------------------------------------------------------
+  function init(e) {
+    env = e || {};
+    if (!$('jamBar')) {
+      const bar = document.createElement('div'); bar.id = 'jamBar'; bar.className = 'jam-bar'; bar.hidden = true; $('stage').parentElement.appendChild(bar);
+      const ctx = document.createElement('div'); ctx.id = 'jamCtx'; ctx.className = 'jam-ctx'; ctx.hidden = true; $('stage').appendChild(ctx);
+      const top = document.createElement('div'); top.id = 'jamTop'; top.className = 'jam-top'; top.hidden = true; $('stage').appendChild(top);
+      const pop = document.createElement('div'); pop.id = 'jamPop'; pop.className = 'jam-pop'; pop.hidden = true; $('stage').parentElement.appendChild(pop);
+    }
+    renderBar();
+    if (window.LG_APP === 'jam') { const seg = $('cvMode'); if (seg) seg.innerHTML = `<button type="button" data-edit="jam" data-tip="Jam: a board for everyone, stickies and arrows">Jam</button><button type="button" data-edit="advanced" data-tip="Design: the full editor, layers, auto layout and code">Design</button>`; }
+    for (const id of ['jamCtx', 'jamTop']) { const el = $(id); el.addEventListener('pointerdown', e => e.stopPropagation()); el.addEventListener('pointerup', e => e.stopPropagation()); el.addEventListener('dblclick', e => e.stopPropagation()); el.addEventListener('wheel', e => e.stopPropagation(), { passive: true }); }
+    $('jamBar').addEventListener('click', onBar); $('jamCtx').addEventListener('click', onCtx); $('jamCtx').addEventListener('input', onCtxInput); $('jamTop').addEventListener('click', onTop); $('jamPop').addEventListener('click', onPop);
+    document.addEventListener('pointerdown', e => { if (!e.target.closest('#jamPop') && !e.target.closest('[data-jt][data-pop]')) hidePop(); if (following && e.target.closest('#stage') && !e.target.closest('#jamTop')) stopFollow(); }, true);
+    $('stage').addEventListener('wheel', () => { if (following) stopFollow(); }, { passive: true, capture: true });
+    CanvasUI.on('select', renderCtx); CanvasUI.on('action', k => { if (String(k).startsWith('editmode.')) applyMode(); if (String(k) === 'tool') renderBar(); });
+    CanvasUI.on('view', v => { if (env.shareView) env.shareView(v); renderCtx(); });
+    document.addEventListener('keydown', onKeys);
+    timerTick = setInterval(renderTop, 500);
+    applyMode();
+  }
+  function onOpen() { if (isJam()) { board(); } applyMode(); }
+  function applyMode() {
+    const on = isJam() && CanvasUI.active; $('jamBar').hidden = !on; $('jamTop').hidden = !on; if (!on) { $('jamCtx').hidden = true; hidePop(); } else { renderBar(); renderTop(); renderCtx(); }
+    document.body.classList.toggle('jam-on', on);
+  }
+  const TOOLS = [['select', '↖', 'Select · V'], ['hand', '✋', 'Hand · H or hold space'], ['sticky', '▣', 'Sticky · S', 'sticky'], ['text', 'T', 'Text · T'], ['shape', '◻', 'Shape', 'shape'], ['connector', '↗', 'Connector · drag from one thing to another'], ['section', '⬚', 'Section: a titled area that carries what is in it'], ['stamp', '👍', 'Stamp or reaction', 'stamp'], ['pen', '✒', 'Pen · P'], ['image', '🖼', 'Picture or video']];
+  function renderBar() {
+    const bar = $('jamBar'); if (!bar) return; const t = CanvasUI.tool;
+    bar.innerHTML = `<div class="jam-tools">${TOOLS.map(([k, g, tip, pop]) => `<button type="button" data-jt="${k}" ${pop ? `data-pop="${pop}"` : ''} class="${t === k ? 'on' : ''}" data-tip="${esc(tip)}" aria-label="${esc(tip)}">${k === 'sticky' ? `<span class="jam-stk" style="background:${stickyColor}"></span>` : k === 'stamp' ? stampPick : g}</button>`).join('')}</div>
+      <div class="jam-sep"></div>
+      <div class="jam-tools"><button type="button" data-jt="templates" data-tip="Templates: retro, brainstorm, flowchart…">Templates</button><button type="button" data-jt="ai" data-pop="ai" class="jam-ai" data-tip="Ask Claude about this board">✦ Claude</button></div>`;
+  }
+  function onBar(e) {
+    const b = e.target.closest('[data-jt]'); if (!b) return; const k = b.dataset.jt;
+    if (b.dataset.pop) { if (!$('jamPop').hidden && $('jamPop').dataset.kind === b.dataset.pop) { hidePop(); } else showPop(b.dataset.pop, b); if (k === 'sticky' || k === 'shape' || k === 'stamp') CanvasUI.setTool(k); renderBar(); return; }
+    if (k === 'templates') { openTemplates(); return; }
+    if (k === 'image') { const inp = document.getElementById('cvLoad') || null; const fi = document.createElement('input'); fi.type = 'file'; fi.accept = 'image/*,video/*'; fi.hidden = true; document.body.appendChild(fi); fi.addEventListener('change', async () => { const f = fi.files[0]; fi.remove(); if (!f) return; const c = CanvasUI.viewCenter(); if (/^video\//.test(f.type) && env.addVideo) { const a = await env.addVideo(f, f.name); CanvasUI.placeVideo(a, f.name, { x: c.cx, y: c.cy }); } else if (env.addImage) { const a = await env.addImage(f); CanvasUI.placePicture(a, { x: c.cx, y: c.cy }); } }); fi.click(); return; }
+    CanvasUI.setTool(k); renderBar();
+  }
+  // ---- popovers: sticky colors, shapes, stamps, Claude ----------------------------------------------------------------
+  function showPop(kind, anchor) {
+    const pop = $('jamPop'); pop.dataset.kind = kind; pop.hidden = false;
+    if (kind === 'sticky') pop.innerHTML = `<div class="jam-row">${COLORS.map(([c, nme]) => `<button type="button" class="jam-sw ${c === stickyColor ? 'on' : ''}" data-color="${c}" title="${nme}" style="background:${c}"></button>`).join('')}</div><p class="hint">Click the board to place a sticky, or press S.</p>`;
+    else if (kind === 'shape') pop.innerHTML = `<div class="jam-row">${SHAPES.map(([k, nme]) => `<button type="button" class="jam-shape ${k === shapePick ? 'on' : ''}" data-shape="${k}" title="${nme}">${{ rect: '▭', square: '◻', pill: '⬭', ellipse: '◯', diamond: '◇' }[k]}</button>`).join('')}</div><p class="hint">Shapes hold words: double-click one to write in it.</p>`;
+    else if (kind === 'stamp') pop.innerHTML = `<div class="jam-row">${STAMPS.map(sm => `<button type="button" class="jam-stamp ${sm === stampPick ? 'on' : ''}" data-stamp="${sm}">${sm}</button>`).join('')}</div>`;
+    else if (kind === 'ai') pop.innerHTML = `<div class="jam-ai-list">
+        <button type="button" data-ai="summarize"><b>Summarize the board</b><span>What the group said, decisions, open questions, as a note on the board</span></button>
+        <button type="button" data-ai="cluster"><b>Cluster stickies into themes</b><span>Sorts the stickies into titled sections</span></button>
+        <button type="button" data-ai="actions"><b>Turn into action items</b><span>One sticky per task, with owners where named</span></button>
+        <button type="button" data-ai="flow"><b>Draw a flowchart from text</b><span>Paste steps or a process; shapes and arrows appear</span></button>
+        <button type="button" data-ai="tidy"><b>Tidy up</b><span>Grids inside sections, even spacing</span></button>
+        <button type="button" data-ai="ask"><b>Ask anything…</b><span>Open the agent and type</span></button></div>`;
+    const r = anchor.getBoundingClientRect(); const pr = pop.parentElement.getBoundingClientRect(); pop.style.left = Math.max(8, r.left - pr.left + r.width / 2 - 140) + 'px'; pop.style.bottom = (pr.bottom - r.top + 10) + 'px';
+  }
+  function hidePop() { const pop = $('jamPop'); if (pop) { pop.hidden = true; pop.dataset.kind = ''; } }
+  function onPop(e) {
+    const sw = e.target.closest('[data-color]'); if (sw) { stickyColor = sw.dataset.color; CanvasUI.setStickyColor(stickyColor); const bs = selBlocks().filter(b => b.kind === 'sticky'); if (bs.length) { CanvasUI.mutate(() => { for (const b of bs) b.fill = stickyColor; }, { frames: [CanvasUI.selection().frameId] }); } else CanvasUI.setTool('sticky'); renderBar(); showPop('sticky', $('jamBar').querySelector('[data-jt="sticky"]')); return; }
+    const sh = e.target.closest('[data-shape]'); if (sh) { shapePick = sh.dataset.shape; CanvasUI.setTool('shape'); hidePop(); renderBar(); return; }
+    const st = e.target.closest('[data-stamp]'); if (st) { stampPick = st.dataset.stamp; CanvasUI.setTool('stamp'); hidePop(); renderBar(); return; }
+    const ai = e.target.closest('[data-ai]'); if (ai) { hidePop(); runAI(ai.dataset.ai); return; }
+  }
+  // the tools read the picks when they place
+  function pickFor(kind) {
+    if (kind === 'sticky') return { color: stickyColor };
+    if (kind === 'stamp') return { emoji: stampPick };
+    if (kind === 'shape') { const sp = SHAPES.find(x => x[0] === shapePick) || SHAPES[0]; return { radius: sp[2] >= 0 ? sp[2] : 0, shape: sp[0] }; }
+    return {};
+  }
+
+  // ---- contextual bar above the selection -------------------------------------------------------------------------
+  const selBlocks = () => { const s = CanvasUI.selection(); const f = s.frameId && Canvas.frameById(CanvasUI.doc, s.frameId); return f ? s.blockIds.map(id => Canvas.blockById(f, id)).filter(Boolean) : []; };
+  function renderCtx() {
+    const el = $('jamCtx'); if (!el || !isJam() || !CanvasUI.active) { if (el) el.hidden = true; return; }
+    const s = CanvasUI.selection(); const f = s.frameId && Canvas.frameById(CanvasUI.doc, s.frameId); const bs = selBlocks();
+    if (!f || !bs.length) { el.hidden = true; return; }
+    const kinds = new Set(bs.map(b => b.kind)); const one = bs.length === 1 ? bs[0] : null;
+    const my = me().id; const myVotes = bs.reduce((t, b) => t + ((b.votes || {})[my] || 0), 0);
+    const colorable = bs.every(b => b.kind === 'sticky' || b.kind === 'field' || b.kind === 'shape' || (b.kind === 'box' && b.section));
+    const wordy = bs.every(b => b.kind === 'sticky' || b.kind === 'text' || ((b.kind === 'field' || b.kind === 'shape') && b.text != null));
+    const parts = [];
+    if (colorable) parts.push(`<div class="jam-row">${COLORS.map(([c, nme]) => `<button type="button" class="jam-sw ${bs.every(b => String(b.fill).toUpperCase() === c) ? 'on' : ''}" data-cx="color" data-color="${c}" title="${nme}" style="background:${c}"></button>`).join('')}</div>`);
+    if (wordy) parts.push(`<button type="button" data-cx="smaller" title="Smaller text">A−</button><button type="button" data-cx="bigger" title="Bigger text">A+</button><button type="button" data-cx="bold" class="${bs.every(b => b.font && b.font.weight >= 600) ? 'on' : ''}" title="Bold"><b>B</b></button>`);
+    if (one && one.kind === 'box' && one.section) parts.push(`<input type="text" data-cx="title" value="${esc(one.section.title || '')}" placeholder="Section title" aria-label="Section title">`);
+    if (one && one.kind === 'connector') parts.push(`<select data-cx="arrow" aria-label="Arrows"><option value="none" ${one.arrow === 'none' ? 'selected' : ''}>No arrow</option><option value="end" ${!one.arrow || one.arrow === 'end' ? 'selected' : ''}>Arrow →</option><option value="both" ${one.arrow === 'both' ? 'selected' : ''}>Both ↔</option></select><select data-cx="route" aria-label="Route"><option value="elbow" ${one.route !== 'straight' ? 'selected' : ''}>Elbow</option><option value="straight" ${one.route === 'straight' ? 'selected' : ''}>Straight</option></select><button type="button" data-cx="dash" class="${one.dash ? 'on' : ''}" title="Dashed">┈</button><button type="button" data-cx="label" title="Label">Label</button>`);
+    if (kinds.has('sticky') || kinds.has('field') || kinds.has('shape') || kinds.has('stamp') || kinds.has('text')) parts.push(`<button type="button" data-cx="vote" title="Vote (up to 3 each)">▲ Vote${myVotes ? ` <b>${myVotes}</b>` : ''}</button>`);
+    if (kinds.has('sticky')) parts.push(`<button type="button" data-cx="veil" class="${bs.every(b => b.veil) ? 'on' : ''}" title="Hide the words from others until reveal">${bs.every(b => b.veil) ? 'Hidden' : 'Hide'}</button>`);
+    parts.push(`<button type="button" data-cx="dup" title="Duplicate ⌘D">⧉</button><button type="button" data-cx="del" title="Delete">🗑</button>`);
+    el.innerHTML = parts.join('<span class="jam-sep-v"></span>');
+    // above the selection
+    const xs = bs.map(b => f.x + b.x), ys = bs.map(b => f.y + b.y); const x0 = Math.min(...xs), y0 = Math.min(...ys), x1 = Math.max(...bs.map(b => f.x + b.x + b.w));
+    const v = CanvasUI.doc.view; const sx = v.x + ((x0 + x1) / 2) * v.zoom, sy = v.y + y0 * v.zoom;
+    el.hidden = false; const w = el.offsetWidth || 320; const stage = $('stage').getBoundingClientRect();
+    el.style.left = Math.max(8, Math.min(stage.width - w - 8, sx - w / 2)) + 'px'; el.style.top = Math.max(8, sy - 52) + 'px';
+  }
+  function onCtx(e) {
+    const b = e.target.closest('[data-cx]'); if (!b || b.tagName === 'INPUT' || b.tagName === 'SELECT') return; const k = b.dataset.cx; const s = CanvasUI.selection(); const f = s.frameId && Canvas.frameById(CanvasUI.doc, s.frameId); const bs = selBlocks(); if (!f || !bs.length) return;
+    const M = fn => CanvasUI.mutate(() => { for (const x of bs) fn(x); }, { frames: [f.id] });
+    if (k === 'color') { stickyColor = b.dataset.color; CanvasUI.setStickyColor(stickyColor); M(x => { x.fill = b.dataset.color; }); }
+    else if (k === 'smaller' || k === 'bigger') M(x => { if (!x.font) return; const base = x.kind === 'sticky' || x.text != null ? (x.fontSizeMax || x.font.size) : x.font.size; const nz = Math.max(10, Math.min(96, Math.round(base * (k === 'bigger' ? 1.2 : 1 / 1.2)))); if (x.kind === 'sticky' || ((x.kind === 'field' || x.kind === 'shape') && x.text != null)) x.fontSizeMax = nz; x.font.size = nz; Canvas.refit(x); });
+    else if (k === 'bold') { const on = bs.every(x => x.font && x.font.weight >= 600); M(x => { if (x.font) { x.font.weight = on ? 400 : 700; Canvas.refit(x); } }); }
+    else if (k === 'dash') M(x => { x.dash = !x.dash; });
+    else if (k === 'label') { CanvasUI.startEdit(f.id, bs[0].id); return; }
+    else if (k === 'vote') { const my = me().id; M(x => { x.votes = x.votes || {}; const n = x.votes[my] || 0; if (n >= 3) { delete x.votes[my]; } else x.votes[my] = n + 1; }); }
+    else if (k === 'veil') { const on = bs.every(x => x.veil); M(x => { if (x.kind === 'sticky') { if (on) delete x.veil; else x.veil = true; } }); }
+    else if (k === 'dup') { CanvasUI.copySelection(); CanvasUI.pasteClipboard(); return; }
+    else if (k === 'del') { CanvasUI.mutate(() => Canvas.removeBlocks(f, bs.map(x => x.id)), { frames: [f.id] }); CanvasUI.select(f.id, []); return; }
+    renderCtx();
+  }
+  function onCtxInput(e) {
+    const t = e.target; const k = t.dataset.cx; const s = CanvasUI.selection(); const f = s.frameId && Canvas.frameById(CanvasUI.doc, s.frameId); const bs = selBlocks(); if (!f || !bs.length) return;
+    if (k === 'title') { const b = bs[0]; if (b.section) { b.section.title = t.value.slice(0, 80); CanvasUI.rerender([f.id]); CanvasUI.markDirty([f.id]); } }
+    if (k === 'arrow' || k === 'route') CanvasUI.mutate(() => { for (const x of bs) if (x.kind === 'connector') x[k] = t.value; }, { frames: [f.id] });
+  }
+  function onKeys(e) {
+    if (!isJam() || !CanvasUI.active) return; const tag = (e.target.tagName || '').toLowerCase(); if (tag === 'input' || tag === 'textarea' || tag === 'select' || e.target.isContentEditable || e.metaKey || e.ctrlKey || e.altKey) return;
+    const k = e.key.toLowerCase();
+    if (k === 's') { CanvasUI.setTool('sticky'); renderBar(); e.preventDefault(); } else if (k === 'x') { CanvasUI.setTool('connector'); renderBar(); e.preventDefault(); } else if (k === 'n') { CanvasUI.setTool('section'); renderBar(); e.preventDefault(); }
+  }
+
+  // ---- top strip: people, follow, timer, reveal, mode -----------------------------------------------------------------
+  let timerMenu = false;
+  function renderTop() {
+    const el = $('jamTop'); if (!el || el.hidden) return;
+    const d = CanvasUI.doc; const peers = CanvasUI.peers || []; const t = d && d.jam && d.jam.timer; const now = Date.now();
+    const left = t && t.endsAt ? Math.max(0, Math.ceil((t.endsAt - now) / 1000)) : 0; const mm = Math.floor(left / 60), ss = String(left % 60).padStart(2, '0');
+    const hidden = d ? d.frames.reduce((n, f) => n + f.layout.blocks.filter(b => b.kind === 'sticky' && b.veil).length, 0) : 0;
+    el.innerHTML = `<div class="jam-people">${peers.slice(0, 8).map(p => `<button type="button" class="jam-peer ${following === p.id ? 'on' : ''}" data-follow="${esc(p.id)}" style="--c:${esc(p.color || '#888')}" title="${following === p.id ? 'Following ' : 'Follow '}${esc(p.name || 'Someone')}">${esc((p.name || '?').trim()[0] || '?')}</button>`).join('')}${peers.length ? `<span class="hint">${peers.length} here</span>` : '<span class="hint">Only you here</span>'}${following ? `<button type="button" class="btn small" data-top="unfollow">Stop following</button>` : ''}</div>
+      <div class="jam-right">${hidden ? `<button type="button" class="btn small" data-top="reveal" title="Show every hidden sticky">Reveal ${hidden}</button>` : ''}
+        <button type="button" class="btn small ${t && t.endsAt && left > 0 ? 'jam-timer-on' : ''}" data-top="timer">${t && t.endsAt && left > 0 ? `⏱ ${mm}:${ss}` : '⏱ Timer'}</button>${timerMenu ? `<span class="jam-timer-menu">${[1, 2, 5, 10, 15].map(m => `<button type="button" class="btn small" data-timer="${m}">${m} min</button>`).join('')}${t && t.endsAt ? '<button type="button" class="btn small" data-timer="0">Stop</button>' : ''}</span>` : ''}
+        <button type="button" class="btn small" data-top="clearvotes" title="Clear every vote on the board">Clear votes</button>
+        <button type="button" class="btn small primary" data-top="design" title="Open the full design editor on this board">Design mode</button></div>`;
+    if (t && t.endsAt && left === 0 && !t.rang) { t.rang = true; if (env.toast) env.toast('⏱ Time is up'); }
+  }
+  function onTop(e) {
+    const fo = e.target.closest('[data-follow]'); if (fo) { if (following === fo.dataset.follow) stopFollow(); else startFollow(fo.dataset.follow); renderTop(); return; }
+    const tm = e.target.closest('[data-timer]'); if (tm) { const m = +tm.dataset.timer; const d = CanvasUI.doc; d.jam = d.jam || {}; d.jam.timer = m > 0 ? { endsAt: Date.now() + m * 60000, minutes: m, by: me().id } : null; timerMenu = false; CanvasUI.mutate(() => {}, { history: false, frames: [] }); renderTop(); return; }
+    const b = e.target.closest('[data-top]'); if (!b) return; const k = b.dataset.top;
+    if (k === 'timer') { timerMenu = !timerMenu; renderTop(); }
+    else if (k === 'unfollow') { stopFollow(); renderTop(); }
+    else if (k === 'reveal') { const d = CanvasUI.doc; CanvasUI.mutate(() => { for (const f of d.frames) for (const x of f.layout.blocks) if (x.veil) delete x.veil; }, { frames: d.frames.map(f => f.id) }); renderTop(); }
+    else if (k === 'clearvotes') { const d = CanvasUI.doc; CanvasUI.mutate(() => { for (const f of d.frames) for (const x of f.layout.blocks) if (x.votes) delete x.votes; }, { frames: d.frames.map(f => f.id) }); renderCtx(); }
+    else if (k === 'design') { CanvasUI.setEditMode('advanced'); if (env.toast) env.toast('Design mode: the full editor. Jam at the top left brings the board tools back.'); }
+  }
+  function startFollow(id) { following = id; clearInterval(followTimer); followTimer = setInterval(() => { const p = (CanvasUI.peers || []).find(x => x.id === following); if (!p) { stopFollow(); return; } if (p.view && Number.isFinite(p.view.cx)) CanvasUI.setView(p.view); }, 200); }
+  function stopFollow() { following = null; clearInterval(followTimer); followTimer = 0; renderTop(); }
+
+  // ---- templates ----------------------------------------------------------------------------------------------------
+  const sticky = (text, color, x, y) => ({ kind: 'sticky', x, y, w: 200, h: 200, text, fill: color });
+  const section = (title, x, y, w, h, color) => ({ kind: 'section', x, y, w, h, title, color });
+  const shape = (text, x, y, w = 220, h = 120, fill = '#FFFFFF', radius = 12) => ({ kind: 'shape', x, y, w, h, text, fill, radius });
+  const TEMPLATES = [
+    { id: 'retro', name: 'Retro', hint: 'Went well · To improve · Actions', make: () => [section('Went well 🟢', 0, 0, 520, 760, '#E2F0CB'), section('To improve 🟠', 560, 0, 520, 760, '#FFDAC1'), section('Actions ✅', 1120, 0, 520, 760, '#C7CEEA'), sticky('One thing that went well', '#FFE066', 40, 80), sticky('One thing to improve', '#FFE066', 600, 80), sticky('Owner · action', '#FFE066', 1160, 80)] },
+    { id: 'brainstorm', name: 'Brainstorm', hint: 'A question, a wall of ideas, a parking lot', make: () => [shape('How might we…?', 0, 0, 720, 120, '#1E1C1A', 16), section('Ideas', 0, 170, 1400, 700, '#FDE2FF'), section('Parking lot', 1440, 170, 420, 700, '#F0EFEA'), sticky('Idea', '#FFE066', 40, 250), sticky('Idea', '#B5EAD7', 280, 250), sticky('Idea', '#FFB4A2', 520, 250)] },
+    { id: 'prio', name: 'Prioritize 2×2', hint: 'Impact against effort', make: () => [section('Big impact · low effort → do first', 0, 0, 700, 500, '#E2F0CB'), section('Big impact · high effort → plan', 740, 0, 700, 500, '#C7CEEA'), section('Small impact · low effort → quick wins', 0, 540, 700, 500, '#FFE8A3'), section('Small impact · high effort → drop', 740, 540, 700, 500, '#F0EFEA'), sticky('Thing to prioritize', '#FFE066', 40, 80)] },
+    { id: 'journey', name: 'User journey', hint: 'Stages across, what happens below', make: () => { const st = ['Discover', 'Sign up', 'Set up', 'First value', 'Habit']; const rows = ['Doing', 'Thinking', 'Feeling', 'Pain points', 'Opportunities']; const out = []; st.forEach((s, i) => out.push(shape(s, 200 + i * 300, 0, 280, 80, '#1E1C1A', 10))); rows.forEach((r, j) => { out.push(shape(r, 0, 120 + j * 240, 180, 200, '#F0EFEA', 10)); st.forEach((s, i) => out.push(sticky('', ['#FFE066', '#B5EAD7', '#FDE2FF', '#FFB4A2', '#C7CEEA'][j], 240 + i * 300, 120 + j * 240))); }); return out; } },
+    { id: 'flow', name: 'Flowchart', hint: 'Start, steps, a decision, two ends', make: () => { const a = shape('Start', 0, 0, 200, 90, '#B5EAD7', 999), b = shape('Do the thing', 320, 0, 240, 90), c = shape('Worked?', 680, -15, 220, 120, '#FFE8A3', 12), d = shape('Done ✅', 1020, -120, 200, 90, '#B5EAD7', 999), e2 = shape('Fix and retry', 1020, 120, 220, 90, '#FFB4A2'); a.id = 'fa'; b.id = 'fb'; c.id = 'fc'; d.id = 'fd'; e2.id = 'fe'; return [a, b, c, d, e2, { kind: 'connector', from: 'fa', to: 'fb' }, { kind: 'connector', from: 'fb', to: 'fc' }, { kind: 'connector', from: 'fc', to: 'fd', text: 'yes' }, { kind: 'connector', from: 'fc', to: 'fe', text: 'no' }, { kind: 'connector', from: 'fe', to: 'fb', route: 'elbow' }]; } },
+    { id: 'sync', name: 'Team sync', hint: 'Updates, blockers, decisions, next week', make: () => [section('Updates', 0, 0, 520, 560, '#E2F0CB'), section('Blockers 🚧', 560, 0, 520, 560, '#FFDAC1'), section('Decisions', 0, 600, 520, 400, '#C7CEEA'), section('Next week', 560, 600, 520, 400, '#FDE2FF')] },
+    { id: 'okr', name: 'OKR tree', hint: 'One objective, three key results, initiatives', make: () => { const o = shape('Objective', 450, 0, 300, 100, '#1E1C1A', 14); o.id = 'o'; const krs = [0, 1, 2].map(i => { const k = shape(`Key result ${i + 1}`, i * 420, 220, 300, 100, '#C7CEEA', 12); k.id = 'k' + i; return k; }); const out = [o, ...krs]; krs.forEach(k => out.push({ kind: 'connector', from: 'o', to: k.id })); krs.forEach((k, i) => { out.push(sticky('Initiative', '#FFE066', i * 420, 400)); out.push(sticky('Initiative', '#FFE066', i * 420 + 220, 400)); }); return out; } },
+    { id: 'decision', name: 'Decision log', hint: 'Options, pros, cons, decision', make: () => [section('Option A', 0, 0, 440, 640, '#F0EFEA'), section('Option B', 480, 0, 440, 640, '#F0EFEA'), section('Option C', 960, 0, 440, 640, '#F0EFEA'), sticky('Pro', '#B5EAD7', 40, 80), sticky('Con', '#FFB4A2', 40, 320), sticky('Pro', '#B5EAD7', 520, 80), sticky('Con', '#FFB4A2', 520, 320), sticky('Pro', '#B5EAD7', 1000, 80), sticky('Con', '#FFB4A2', 1000, 320), shape('Decision: …', 0, 700, 1400, 100, '#1E1C1A', 16)] },
+  ];
+  function openTemplates() {
+    const pop = $('jamPop'); pop.dataset.kind = 'templates'; pop.hidden = false;
+    pop.innerHTML = `<div class="jam-tpl">${TEMPLATES.map(t => `<button type="button" data-tpl="${t.id}"><b>${esc(t.name)}</b><span>${esc(t.hint)}</span></button>`).join('')}</div>`;
+    const r = $('jamBar').querySelector('[data-jt="templates"]').getBoundingClientRect(); const pr = pop.parentElement.getBoundingClientRect(); pop.style.left = Math.max(8, r.left - pr.left + r.width / 2 - 220) + 'px'; pop.style.bottom = (pr.bottom - r.top + 10) + 'px';
+    pop.onclick = e => { const b = e.target.closest('[data-tpl]'); if (!b) return; const t = TEMPLATES.find(x => x.id === b.dataset.tpl); hidePop(); pop.onclick = null; if (t) insertTemplate(t); };
+  }
+  // Specs (relative to 0,0) become real blocks on the board around the middle of the view; connectors by spec id.
+  function insertTemplate(t) {
+    const f = board(); const kit = env.getKit ? env.getKit() : { fonts: {} }; const specs = t.make(); const c = CanvasUI.viewCenter();
+    const xs = specs.filter(s => s.kind !== 'connector').map(s => s.x), ys = specs.filter(s => s.kind !== 'connector').map(s => s.y); const x1 = Math.max(...specs.filter(s => s.kind !== 'connector').map(s => s.x + s.w)), y1 = Math.max(...specs.filter(s => s.kind !== 'connector').map(s => s.y + s.h));
+    const ox = Math.round(c.cx - f.x - (Math.min(...xs) + x1) / 2), oy = Math.round(c.cy - f.y - (Math.min(...ys) + y1) / 2);
+    const made = new Map(); const blocks = [];
+    for (const sp of specs) {
+      if (sp.kind === 'connector') continue;
+      const b = Canvas.newBlock(sp.kind, f, kit, { x: sp.x + ox, y: sp.y + oy, color: sp.fill || sp.color, title: sp.title, radius: sp.radius });
+      if (!b) continue; b.w = sp.w; b.h = sp.h; if (sp.text != null) b.text = sp.text; if (sp.fill) b.fill = sp.fill; if (sp.kind === 'shape' && sp.radius === 999) b.radius = Math.min(sp.w, sp.h) / 2; if (sp.kind === 'shape' && sp.fill === '#1E1C1A') b.color = '#FFFFFF';
+      if (b.kind === 'sticky') { const m = me(); b.author = m.id; b.authorName = m.name; }
+      if (sp.id) made.set(sp.id, b.id); blocks.push(b);
+    }
+    for (const sp of specs) { if (sp.kind !== 'connector') continue; const b = Canvas.newBlock('connector', f, kit, { x: 0, y: 0, from: { id: made.get(sp.from) }, to: { id: made.get(sp.to) } }); if (!made.get(sp.from) || !made.get(sp.to)) continue; if (sp.text) b.text = sp.text; if (sp.route) b.route = sp.route; blocks.push(b); }
+    CanvasUI.mutate(() => { for (const b of blocks) { f.layout.blocks.push(b); if (b.kind !== 'box' && b.kind !== 'connector') { const sec = Canvas.sectionAt(f, b); if (sec && blocks.includes(sec)) b.parent = sec.id; } if (b.kind === 'sticky' || b.kind === 'field') Canvas.refit(b); } Canvas.syncConnectors(f); CanvasUI.growBoard(f, { x: Math.min(...xs) + ox, y: Math.min(...ys) + oy, w: x1 - Math.min(...xs), h: y1 - Math.min(...ys) }); }, { frames: [f.id] });
+    CanvasUI.select(f.id, blocks.filter(b => b.kind !== 'connector').map(b => b.id)); if (env.toast) env.toast(`${t.name} added`);
+  }
+
+  // ---- Claude on the board -----------------------------------------------------------------------------------------
+  const AI = {
+    summarize: 'Read every sticky, shape and text on this board (get_frame on the board screen). Then add ONE text block (kind body, 520 wide, 18px) to the right of everything, titled "Summary", with 3–6 short bullets of what the group said, then "Decisions:" and "Open questions:" lines if there are any. Do not move or change anything that is already there.',
+    cluster: 'Group the stickies on this board into 3–6 themes by meaning. For each theme add a section (kind section, title = the theme in 2–4 words, a soft color) and move its stickies inside it with update_blocks x/y in a grid: stickies are 200×200, 24px apart, 40px inside the section edge, below the title. Put the sections side by side, 80px apart, starting where the stickies are now. Keep every sticky\'s words exactly as they are; set each moved sticky\'s parent to its section with move_into if available, else leave parent as is.',
+    actions: 'Turn this board into action items. Add a section titled "Action items" (kind section) to the right of everything, and inside it one sticky (kind sticky, color #C7CEEA) per item in a grid (200×200, 24px apart). An item reads "<verb phrase> — <owner>" when an owner is named, else just the action. Pull items from stickies and shapes that read like tasks, decisions or next steps. Do not change the existing stickies.',
+    tidy: 'Tidy this board without changing any words: inside each section, lay the stickies out in a grid (200×200, 24px apart, 40px from the section edges, below the title) and grow the section if they do not fit; line sections up left to right with 80px between them; put loose stickies in a grid to the right. Use update_blocks x/y (and w/h for sections). Keep connectors attached.',
+  };
+  async function runAI(kind) {
+    if (typeof Agent === 'undefined') return;
+    if (kind === 'ask') { Agent.show(); return; }
+    if (kind === 'flow') { const text = prompt('Paste the steps or describe the process (one step per line, decisions as questions):'); if (!text || !text.trim()) return; Agent.send(`Draw this as a flowchart on the board: shapes (kind shape, 220×120, rounded 12; decisions are questions and get fill #FFE8A3; start and end get fill #B5EAD7 with radius 45) connected with connectors (kind connector, from_id/to_id, labels "yes"/"no" on decision branches), laid out left to right, 100px between shapes, rows 60px apart, placed in empty space to the right of what is on the board. Keep each step\'s words short.\n\n${text.trim().slice(0, 3000)}`); return; }
+    const f = board(); CanvasUI.select(f.id, []); Agent.send(AI[kind]);
+  }
+
+  return { init, onOpen, applyMode, renderCtx, pickFor, TEMPLATES, insertTemplate, get stickyColor() { return stickyColor; }, isJam };
 })();
 
 /* js/libstore.js */
@@ -12029,7 +12481,7 @@ const Sync = (() => {
   // change must not cost a pass over every block. Library records come along only on a full pass or when asked.
   function toRecords(doc, scope = null) {
     const out = new Map();
-    out.set('meta', { name: doc.name || 'Untitled canvas' });
+    out.set('meta', { name: doc.name || 'Untitled canvas', ...(doc.jam ? { jam: doc.jam } : {}) });
     if (!scope || scope.library) for (const it of doc.library || []) if (it && it.id) out.set('L~' + it.id, it);
     if (!scope || scope.comments) for (const c of doc.comments || []) if (c && c.id) out.set('C~' + c.id, c);
     doc.frames.forEach((f, i) => {
@@ -12064,7 +12516,7 @@ const Sync = (() => {
   }
   function docFrom(map, base) {
     const doc = { ...(base || Canvas.create()), frames: [] };
-    const meta = map.get('meta'); if (meta && !meta._del && meta.name) doc.name = meta.name;
+    const meta = map.get('meta'); if (meta && !meta._del && meta.name) doc.name = meta.name; if (meta && !meta._del && meta.jam && typeof meta.jam === 'object') doc.jam = meta.jam;
     doc.library = libraryFrom(map); doc.comments = commentsFrom(map);
     const fids = [...map.entries()].filter(([k, r]) => k.startsWith('f~') && !r._del).sort((a, b) => (a[1].z ?? 0) - (b[1].z ?? 0) || a[0].localeCompare(b[0])).map(([k]) => k.slice(2));
     for (const fid of fids) { const f = frameFrom(map, fid); if (f) doc.frames.push(f); }
@@ -12151,7 +12603,7 @@ const Sync = (() => {
     applying = true;
     try {
       const doc = ui.doc;
-      if (meta) { const m = recs.get('meta'); if (m && m.name) doc.name = m.name; }
+      if (meta) { const m = recs.get('meta'); if (m && m.name) doc.name = m.name; if (m && m.jam && typeof m.jam === 'object') doc.jam = m.jam; }
       for (const fid of frames) {
         const f = frameFrom(recs, fid); const i = doc.frames.findIndex(x => x.id === fid);
         if (!f) { if (i >= 0) { doc.frames.splice(i, 1); structural = true; } }
@@ -12407,6 +12859,7 @@ const Sync = (() => {
     p = p || {}; const out = {};
     if (p.cursor && Number.isFinite(p.cursor.x) && Number.isFinite(p.cursor.y)) out.cursor = { x: p.cursor.x, y: p.cursor.y }; else out.cursor = null;
     if (p.sel && Array.isArray(p.sel.frameIds)) out.sel = { frameIds: p.sel.frameIds.filter(x => typeof x === 'string').slice(0, 40), blockIds: Array.isArray(p.sel.blockIds) ? p.sel.blockIds.filter(x => typeof x === 'string').slice(0, 40) : [] };
+    if (p.view && Number.isFinite(p.view.cx) && Number.isFinite(p.view.cy) && Number.isFinite(p.view.zoom)) out.view = { cx: p.view.cx, cy: p.view.cy, zoom: p.view.zoom };
     if (typeof p.name === 'string') out.name = p.name.replace(/[\u0000-\u001f<>]/g, '').slice(0, 40);
     if (typeof p.color === 'string' && /^#[0-9a-fA-F]{6}$/.test(p.color)) out.color = p.color;
     return out;
@@ -12418,6 +12871,7 @@ const Sync = (() => {
     ui.on('change', (doc, opts) => onChange(doc, opts));
     ui.on('live', ids => onLive(ids));
     ui.on('pointer', p => cursor(p));
+    let viewT = 0; ui.on('view', v => { const t = performance.now(); if (t - viewT < 150 || !adapter) return; viewT = t; adapter.presence({ view: { cx: Math.round(v.cx), cy: Math.round(v.cy), zoom: Math.round(v.zoom * 1000) / 1000 } }); });
     ui.on('select', s => selection(s));
     ui.setUndoMerge((cur, target) => undoMerge(cur, target));
   }
@@ -12475,8 +12929,8 @@ const TOOL_DEFS = [
   { name: 'select', description: 'Select screens, or blocks inside one screen, so the person sees what you mean.', inputSchema: { type: 'object', properties: { frame_ids: { type: 'array', items: { type: 'string' } }, block_ids: { type: 'array', items: { type: 'string' }, description: 'Only with exactly one frame id' } } } },
   { name: 'update_blocks', core: true, description: 'Change blocks. Each update names frame_id, block_id and the props to set: text (inline marks style words inside it: **bold**, *italic*, __underline__, ~~strike~~, [words](https://…), <c=#hex>color</c>, <c=token.name>token</c>, <g=#A,#B>gradient</g>, <size=32>size</size>; get_frame returns the same marks), items, x, y, w, h, fill (hex or brand color name; \"none\" for no fill on boxes and rectangles), stroke ({width, color}; width 0 removes it), padding (stacks: a number or {top,right,bottom,left}), color (button label), font_size, font_weight, font_family, line_height (multiple of the size, e.g. 1.2), letter_spacing (in em, e.g. 0.02; 0.1 is already wide), align, case, opacity, radius, rotation, hidden, label, shadow, stroke, gradient, z, size_w / size_h (fixed, hug, fill: sizing inside a stack), absolute (true: ignore the stack), variant and product (logo: wordmark, symbol, appicon, lockup). Moving a box moves everything inside it. Returns overflow ids when text no longer fits its box.',
     inputSchema: { type: 'object', properties: { updates: { type: 'array', items: { type: 'object', properties: { frame_id: { type: 'string' }, block_id: { type: 'string' }, props: { type: 'object', description: 'e.g. {"text":"New headline","font_size":72} or {"fill":"Acai"} or {"shadow":{"y":8,"blur":24,"alpha":0.2}} or {"gradient":{"type":"linear","angle":180,"stops":["#5938B8","#191A25"]}} or {"z":"front"}' } }, required: ['frame_id', 'block_id', 'props'] } } }, required: ['updates'] } },
-  { name: 'add_blocks', core: true, description: 'Add blocks to a screen. kind is text, body, button, rect, ellipse, image, icon or logo; then any props update_blocks takes. box_id puts a block straight into a box (in a stack it joins the flow, before before_id or at the end). Returns the new block ids.',
-    inputSchema: { type: 'object', properties: { frame_id: { type: 'string' }, blocks: { type: 'array', items: { type: 'object', properties: { kind: { type: 'string', enum: ['text', 'body', 'button', 'rect', 'ellipse', 'image', 'icon', 'logo'] }, props: { type: 'object' }, box_id: { type: 'string' }, before_id: { type: 'string' } }, required: ['kind'] } } }, required: ['frame_id', 'blocks'] } },
+  { name: 'add_blocks', core: true, description: 'Add blocks to a screen. kind is text, body, button, rect, ellipse, image, icon or logo, or on a board: sticky (text, color), shape (text, shape rect|ellipse|diamond, color, radius), section (title, color, w, h: a titled area that carries what sits in it), stamp (emoji), connector (from_id, to_id, label, arrow none|end|both, route elbow|straight: an arrow that follows the two blocks); then any props update_blocks takes. box_id puts a block straight into a box (in a stack it joins the flow, before before_id or at the end). Returns the new block ids.',
+    inputSchema: { type: 'object', properties: { frame_id: { type: 'string' }, blocks: { type: 'array', items: { type: 'object', properties: { kind: { type: 'string', enum: ['text', 'body', 'button', 'rect', 'ellipse', 'image', 'icon', 'logo', 'sticky', 'shape', 'section', 'stamp', 'connector'] }, props: { type: 'object' }, box_id: { type: 'string' }, before_id: { type: 'string' } }, required: ['kind'] } } }, required: ['frame_id', 'blocks'] } },
   { name: 'delete_blocks', core: true, description: 'Remove blocks from a screen.', inputSchema: { type: 'object', properties: { frame_id: { type: 'string' }, block_ids: { type: 'array', items: { type: 'string' } } }, required: ['frame_id', 'block_ids'] } },
   { name: 'create_frame', description: 'Add a blank screen. format is one of square, story, linkedin, x, slide, portrait, poster, banner; or give width and height. Returns its id.', inputSchema: { type: 'object', properties: { format: { type: 'string' }, width: { type: 'number' }, height: { type: 'number' }, name: { type: 'string' }, background: { type: 'string', description: 'hex or brand color name' } } } },
   { name: 'update_frames', core: true, description: 'Rename, move or recolor the background of screens. Each update: frame_id plus name, x, y, background (hex or brand color name).', inputSchema: { type: 'object', properties: { updates: { type: 'array', items: { type: 'object', properties: { frame_id: { type: 'string' }, name: { type: 'string' }, x: { type: 'number' }, y: { type: 'number' }, background: { type: 'string' } }, required: ['frame_id'] } } }, required: ['updates'] } },
@@ -12543,6 +12997,10 @@ const AgentTools = (() => {
     if (b.radius) o.radius = b.radius; if (b.kind === 'field' && b.alpha === 0) o.fill = 'none';
     if (b.align && b.align !== 'left') o.align = b.align;
     if (b.kind === 'image') { o.image = b.asset ? 'set' : 'empty'; if (b.crop) o.crop_zoom = Canvas.cropZoom(b, (env.getAssets().images || []).find(a => a.id === b.asset)); if (Canvas.adjustActive(b)) o.adjust = Canvas.adjustOf(b); }
+    if (b.kind === 'sticky' || ((b.kind === 'field' || b.kind === 'shape') && b.text != null)) { o.text = String(b.text || '').slice(0, MAX_TEXT); if (b.votes) o.votes = Object.values(b.votes).reduce((t, x) => t + (Number(x) || 0), 0); if (b.author) o.by = b.authorName || 'someone'; }
+    if (b.kind === 'box' && b.section) o.section = b.section.title || 'Section';
+    if (b.kind === 'connector') { o.from_id = b.from && b.from.id; o.to_id = b.to && b.to.id; if (b.text) o.label = b.text; o.arrow = b.arrow || 'end'; }
+    if (b.kind === 'stamp') o.emoji = b.text;
     if (b.kind === 'video') { const v = (env.getAssets().videos || []).find(a => a.id === b.asset); o.video = v ? { duration: Math.round((v.duration || 0) * 10) / 10, poster_at: v.posterTime || 0 } : 'empty'; }
     if (b.kind === 'icon') o.icon = b.name;
     if (b.code) o.code = { component: b.code.name, from: b.code.pkg, props: b.code.props || {} };
@@ -12566,7 +13024,11 @@ const AgentTools = (() => {
     if (!p || typeof p !== 'object') throw new Error('props must be an object');
     const num = (k, min = -1e6, max = 1e6) => { const v = Number(p[k]); if (!Number.isFinite(v)) throw new Error(`${k} must be a number`); return Math.max(min, Math.min(max, v)); };
     let refit = false;
-    if ('text' in p) { if (b.kind === 'button') b.text = String(p.text).slice(0, 80); else if (b.kind === 'text') { Canvas.setText(b, String(p.text)); refit = true; } }
+    if ('text' in p) { if (b.kind === 'button' || b.kind === 'connector' || b.kind === 'stamp') b.text = String(p.text).slice(0, b.kind === 'stamp' ? 4 : 80); else if (b.kind === 'text') { Canvas.setText(b, String(p.text)); refit = true; } else if (b.kind === 'sticky' || b.kind === 'field' || b.kind === 'shape') { b.text = String(p.text).slice(0, 600); refit = true; } }
+    if ('color' in p && (b.kind === 'sticky' || b.kind === 'field' || b.kind === 'shape' || (b.kind === 'box' && b.section))) { const hx = /^#[0-9a-f]{6}$/i.test(String(p.color)) ? String(p.color).toUpperCase() : null; if (hx) b.fill = hx; }
+    if ('title' in p && b.kind === 'box') { b.section = { ...(b.section || {}), title: String(p.title).slice(0, 80) }; }
+    if ('emoji' in p && b.kind === 'stamp') b.text = String(p.emoji).slice(0, 4);
+    if (b.kind === 'connector') { if ('from_id' in p) b.from = { id: String(p.from_id) }; if ('to_id' in p) b.to = { id: String(p.to_id) }; if ('arrow' in p && ['none', 'end', 'both', 'start'].includes(p.arrow)) b.arrow = p.arrow; if ('route' in p && ['elbow', 'straight'].includes(p.route)) b.route = p.route; if ('label' in p) b.text = String(p.label).slice(0, 80); }
     if ('items' in p && b.kind === 'list') { b.items = arr(p.items).map(String).slice(0, 20); refit = true; }
     for (const k of ['x', 'y']) if (k in p) b[k] = Math.round(num(k));
     for (const k of ['w', 'h']) if (k in p) { b[k] = Math.round(num(k, 4, 20000)); refit = true; }
@@ -12722,7 +13184,7 @@ const AgentTools = (() => {
     },
     add_blocks({ frame_id, blocks }) {
       const f = F(frame_id); const ids = []; const errors = [];
-      write(() => { for (const spec of arr(blocks).slice(0, 50)) { try { const b = Canvas.newBlock(spec.kind, f, kit(), null); if (!b) throw new Error(`unknown kind ${spec.kind}`); applyProps(b, spec.props || {}); f.layout.blocks.push(b); ids.push(b.id);
+      write(() => { for (const spec of arr(blocks).slice(0, 80)) { try { const pp = spec.props || {}; const b = Canvas.newBlock(spec.kind, f, kit(), spec.kind === 'shape' || spec.kind === 'sticky' || spec.kind === 'section' || spec.kind === 'stamp' || spec.kind === 'connector' ? { x: Number(pp.x) || 0, y: Number(pp.y) || 0, color: pp.color, title: pp.title, emoji: pp.emoji, shape: pp.shape, radius: pp.radius, from: pp.from_id ? { id: String(pp.from_id) } : undefined, to: pp.to_id ? { id: String(pp.to_id) } : undefined } : null); if (!b) throw new Error(`unknown kind ${spec.kind}`); if (b.kind === 'sticky' && CanvasUI.who) { const m = CanvasUI.who(); b.author = m.id; b.authorName = m.name; } applyProps(b, pp); if (b.kind === 'sticky' || b.text != null) Canvas.refit(b); f.layout.blocks.push(b); ids.push(b.id); if (b.kind !== 'box' && b.kind !== 'connector' && !pp.box_id) { const sec = Canvas.sectionAt(f, b); if (sec) b.parent = sec.id; }
         // straight into a box: in a stack it joins the flow (before before_id, or at the end)
         if (spec.box_id) { const box = Bk(f, spec.box_id); if (box.kind !== 'box') throw new Error(`${spec.box_id} is not a box`); if (Auto.on(Auto.settingsOf(f, box))) Auto.moveInList(f, b, box.id, spec.before_id || null); else b.parent = box.id; } } catch (e) { errors.push(e.message); } } if (f.autoLayout.mode !== 'none') Canvas.applyAutoLayout(f); }, [f.id]);
       note(`Added ${ids.length} block${ids.length === 1 ? '' : 's'} to ${f.name}`);
@@ -12862,6 +13324,7 @@ Change the canvas with the tools; the person sees each change live and can undo 
     if (Array.isArray(kit.textStyles) && kit.textStyles.length) lines.push('Text styles (use these for product UI, never other sizes): ' + kit.textStyles.map(st => `${st.name} ${st.family} ${st.size}/${Math.round(st.size * (st.lineHeight || 1.2))} ${st.weight}${st.color ? ' ' + st.color : ''}`).join('; ') + '.');
     { const th = Brand.themesOf(kit); if (th.length > 1) lines.push(`Themes: ${th.join(', ')} (set_theme per screen). Tokens, usable as colors in update_blocks fill/color (the block then follows the theme): ${Object.keys(kit.tokens.light).join(', ')}.`); }
     { const ds = Icons.sets().filter(st => st.id); if (ds.length) lines.push(`Icons: ${ds.map(st => `${st.name} (${st.names.length}, names like "${st.id}:${st.names[0]}")`).join(', ')} plus the basic set. Find names with search_icons; add with add_blocks kind icon.`); }
+    if (typeof Jam !== 'undefined' && Jam.isJam()) lines.push('This is a DeelJam board: one big screen (the board) for a team that is not designers. Things on it: stickies (kind sticky: text, color, votes, by), shapes with words (kind shape), sections (boxes with a section title that carry what sits inside them), stamps (emoji) and connectors (arrows between two blocks: from_id, to_id, label). Add with add_blocks, move with update_blocks x/y, group with sections. Stickies are 200×200; lay them in grids 24px apart. Keep words short and friendly. Never redesign the board; do what was asked and leave the rest.');
     lines.push('Words inside one text block can be styled with inline marks in its text (update_blocks, add_blocks, write_layout): **bold**, *italic*, __underline__, ~~strike~~, [words](https://…), <c=#hex> or <c=token.name> for a color, <g=#A,#B> for a gradient, <size=32> for a size. get_frame returns text with the same marks. Use them for a figure or a phrase that should stand out inside a sentence, a link, a label in another color; keep whole-block styling in font props.');
     lines.push('For an app screen, start from list_components (shared libraries such as a design system: real components, and Screens such as an app shell), insert_component into the screen, then change text and props; add only what the library lacks.');
     if (!sel.frameIds.length) lines.push('Nothing is selected; act on the whole canvas or ask which screen.');
@@ -13916,7 +14379,7 @@ Layer kinds:
     $('canvasView').hidden = !canvas; $('homeView').hidden = !home;
     $('promptForm').querySelector('#prompt').disabled = canvas || home; $('generateBtn').disabled = canvas || home;
     if (home) { CanvasUI.close(); for (const id of ['outlinePanel', 'deckBar', 'deckView', 'gallery', 'empty']) $(id).hidden = true; LS.set('lg.mode', 'home'); renderHome(); return; }
-    if (canvas) { CanvasUI.open(); $('outlinePanel').hidden = true; $('deckBar').hidden = true; $('deckView').hidden = true; $('gallery').hidden = true; $('empty').hidden = true; LS.set('lg.mode', mode); return; }
+    if (canvas) { CanvasUI.open(); if (typeof Jam !== 'undefined') Jam.onOpen(); $('outlinePanel').hidden = true; $('deckBar').hidden = true; $('deckView').hidden = true; $('gallery').hidden = true; $('empty').hidden = true; LS.set('lg.mode', mode); return; }
     CanvasUI.close();
     const deck = mode === 'deck';
     $('outlinePanel').hidden = !deck; $('deckBar').hidden = !deck; $('deckView').hidden = !deck;
@@ -14579,6 +15042,13 @@ Layer kinds:
   // The open project: its canvas is backed up in this browser under its own key.
   const PROJ = { id: null, ready: false };
   function backupKey() { return PROJ.id ? `lg.canvas.${PROJ.id}` : 'lg.canvas'; }
+  const JAM_APP = window.LG_APP === 'jam';
+  if (JAM_APP) {
+    document.title = 'DeelJam'; document.body.classList.add('jam-app');
+    const nm = document.querySelector('.brandmark .name'); if (nm) nm.textContent = 'DeelJam';
+    const ph = $('homeSearch'); if (ph) ph.placeholder = 'Search boards'; const nn = $('homeNewName'); if (nn) nn.placeholder = 'Board name, e.g. Q1 planning retro';
+    const op = $('homeOpenInput'); if (op) op.placeholder = 'Paste a board link';
+  }
   CanvasUI.init({
     getKit: () => state.kit, getAssets: () => state.assets, toast, backupKey,
     addImage: async file => addImage(await readAsDataURL(file), file.name),
@@ -14633,6 +15103,7 @@ Layer kinds:
     variations: opts => makeVariations(opts),
     onExternal: name => { toast(`Outside agent: ${name.replace(/_/g, ' ')}`); Stats.track('agent.tool', { detail: name }); },
   });
+  if (typeof Jam !== 'undefined') Jam.init({ getKit: () => state.kit, toast, addVideo: (file, name) => addVideo(file, name), addImage: async file => addImage(await readAsDataURL(file), file.name) });
   Agent.init({ getKit: () => state.kit, toast, openSettings: () => { $('settings').hidden = false; renderGuides(); }, onRun: text => Stats.track('agent.run', { detail: String(text).slice(0, 60) }) });
 
   // ---- Multiplayer ------------------------------------------------------------------------------------------------
@@ -14783,7 +15254,7 @@ Layer kinds:
       <button type="button" class="home-f ${homeFolder === '_none' && !homeArchived ? 'on' : ''}" data-folder="_none">Unfiled <span>${all.filter(p => !p.folder).length}</span></button>
       <div class="home-newf"><input type="text" class="input" id="homeFolderNew" placeholder="New folder" maxlength="60" aria-label="New folder name"><button type="button" class="btn small" id="homeAddFolder">Add</button></div>
       ${sharing() ? `<select class="input home-newacc" id="homeFolderAccess" aria-label="Who sees the new folder"><option value="all">Everyone sees it</option><option value="people">Specific people…</option><option value="me">Only me</option></select>` : ''}`;
-    $('homeTitle').textContent = homeArchived ? 'Archived projects' : homeFolder === '' ? 'All projects' : homeFolder === '_none' ? 'Unfiled' : homeFolder === '_shared' ? 'Shared with you' : fname(homeFolder);
+    $('homeTitle').textContent = window.LG_APP === 'jam' ? (homeArchived ? 'Archived boards' : homeFolder === '' ? 'All boards' : homeFolder === '_none' ? 'Unfiled boards' : homeFolder === '_shared' ? 'Shared with you' : fname(homeFolder)) : homeArchived ? 'Archived projects' : homeFolder === '' ? 'All projects' : homeFolder === '_none' ? 'Unfiled' : homeFolder === '_shared' ? 'Shared with you' : fname(homeFolder);
     const acc = $('homeAccess'); acc.hidden = !(cur && sharing() && !homeArchived);
     if (!acc.hidden) acc.innerHTML = `${accIcon(cur.access)}${escapeHtml(accWords(cur))}${Projects.canShare(cur) ? ` · <button type="button" class="linkish" data-folder-share="${escapeHtml(cur.id)}">Share</button>` : ''}`;
     $('homeGrid').innerHTML = list.map(p => { const a = Projects.accessOf(p); const link = Projects.linkFor(p.id); return `<div class="home-card${p.archived ? ' home-archived' : ''}${p.id === PROJ.id ? ' current' : ''}" data-open="${escapeHtml(p.id)}" tabindex="0" role="button" aria-label="Open ${escapeHtml(p.name)}">

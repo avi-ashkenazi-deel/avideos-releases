@@ -23,6 +23,14 @@ console.log('built dist/layout-engine.html', (out.length / 1024).toFixed(0) + ' 
 // (<dir>/private.json: { presets: { id: kit }, fonts: [{ family, weight, file }], iconSets: [{ id, name, viewBox, file }] },
 // font and icon files beside it; an icon file is { Name: '<path …/>' }). They ride
 // in the page as window.__LG_PRIVATE; the output files are git-ignored.
+// DeelJam: the same code published as its own app (node build.mjs --app jam): a board for everyone, Design mode a click away.
+const ai = process.argv.indexOf('--app'); const APP = ai > 0 ? process.argv[ai + 1] : '';
+if (APP === 'jam') {
+  const jamTag = `<script>window.LG_APP = 'jam';</script>\n`;
+  const jam = s => s.replace('<title>Dugma</title>', '<title>DeelJam</title>').replace(/<meta name="description" content="[^"]*">/, '<meta name="description" content="DeelJam: a board for Deelers. Stickies, arrows, sections, votes and a timer, with Claude to summarize and sort, and the full design editor one click away.">').replace('<script>\n', jamTag + '<script>\n');
+  writeFileSync(join(root, 'dist/deeljam.html'), jam(out)); writeFileSync(join(root, 'dist/deeljam.standalone.html'), jam(full));
+  console.log('built dist/deeljam.html', (jam(out).length / 1024).toFixed(0) + ' KB');
+}
 const pi = process.argv.indexOf('--private');
 if (pi > 0 && process.argv[pi + 1]) {
   const dir = process.argv[pi + 1]; const priv = JSON.parse(readFileSync(join(dir, 'private.json'), 'utf8'));
@@ -32,5 +40,6 @@ if (pi > 0 && process.argv[pi + 1]) {
   const at = s => s.replace('<script>\n', tag + '<script>\n');
   writeFileSync(join(root, 'dist/layout-engine.private.html'), at(out));
   writeFileSync(join(root, 'dist/layout-engine.private.standalone.html'), at(full));
+  if (APP === 'jam') { const jamTag = `<script>window.LG_APP = 'jam';</script>\n`; const jam = s => s.replace('<title>Dugma</title>', '<title>DeelJam</title>').replace(/<meta name="description" content="[^"]*">/, '<meta name="description" content="DeelJam: a board for Deelers. Stickies, arrows, sections, votes and a timer, with Claude to summarize and sort, and the full design editor one click away.">').replace('<script>\n', jamTag + '<script>\n'); writeFileSync(join(root, 'dist/deeljam.private.html'), jam(at(out))); console.log('built dist/deeljam.private.html (private: not for the repo)'); }
   console.log('built dist/layout-engine.private.html', (at(out).length / 1024).toFixed(0) + ' KB', '(private: not for the repo)');
 }

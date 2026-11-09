@@ -46,6 +46,11 @@ Every block has `id` and `kind`, and its box `x`, `y`, `w`, `h` in px from the s
 | `logo`, `lockup`, `appicon` | the brand's marks | `variant`, `product` |
 | `vector`, `path` | SVG path data | `d`, `viewBox`, `keepAspect`, `fillRule`, `svg`; `pen` for paths drawn with the pen tool |
 | `scrim`, `badge`, `rule` | a gradient wash, a numbered dot, a thin rule | `alpha`, `fill` |
+| `sticky` | a board sticky note | `text`, `fill`, `font`, `author`, `authorName`, `votes` {personId: n}, `veil` |
+| `stamp` | an emoji stamp or reaction | `text` (the emoji), `votes` |
+| `connector` | an arrow between two blocks that follows them | `from`, `to` ({id, side?} or {x, y}), `arrow` (none, end, both), `route` (elbow, straight), `dash`, `text` (label), `stroke` |
+
+A `box` with `section: {title}` is a board section: blocks whose centre lies inside it belong to it (`parent`) and travel with it. A `field` or `shape` may carry `text`, words centred inside it that shrink to fit. A screen with `board: true` is a DeelJam board: one surface that grows as things are placed. `doc.jam` holds the board's shared state (`timer: {endsAt, minutes}`).
 
 Derived values (`lines`, `inkW`, `capacity`, `overflow`) are recomputed from text and font; they can be left out.
 

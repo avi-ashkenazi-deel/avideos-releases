@@ -835,3 +835,49 @@ input[disabled] { opacity: .5; cursor: not-allowed; }
 .cv-richbar button:hover { background: var(--bg-2, rgba(127,127,127,.15)); }
 .cv-richbar .sw { width: 16px; height: 16px; border-radius: 50%; margin: 0 2px; border: 1px solid rgba(127,127,127,.4); }
 .cv-richbar .sep { width: 1px; height: 16px; background: var(--line-2); margin: 0 4px; }
+
+/* ---- DeelJam: the board mode ------------------------------------------------------------------------------------- */
+.cv-jam .cv-tools, .cv-jam .cv-newframe, .cv-jam .cv-layers, .cv-jam .cv-props, .cv-jam #cvSnap, .cv-jam .cv-frame-label, .cv-jam #cvAddDiagram { display: none !important; }
+.cv-jam .cv-frame { box-shadow: 0 0 0 1px var(--line-2); }
+.cv-jam .cv-stage { background-image: radial-gradient(var(--line-2) 1px, transparent 1px); }
+.jam-bar { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 8; display: flex; align-items: center; gap: 6px; padding: 6px; background: var(--panel, #1b1b22); border: 1px solid var(--line-2); border-radius: 14px; box-shadow: 0 12px 36px rgba(0,0,0,.28); }
+.jam-tools { display: flex; align-items: center; gap: 2px; }
+.jam-bar button { height: 40px; min-width: 40px; padding: 0 10px; border: 0; border-radius: 10px; background: transparent; color: var(--fg); font: inherit; font-size: 17px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.jam-bar button:hover { background: var(--bg-2, rgba(127,127,127,.15)); }
+.jam-bar button.on { background: var(--accent); color: #fff; }
+.jam-bar button.jam-ai { font-size: 13px; font-weight: 600; color: var(--accent); }
+.jam-bar button.jam-ai:hover { background: var(--accent-faint, rgba(89,56,184,.12)); }
+.jam-bar [data-jt="templates"] { font-size: 13px; font-weight: 500; }
+.jam-stk { width: 20px; height: 20px; border-radius: 3px; box-shadow: 1px 2px 0 rgba(0,0,0,.25); display: inline-block; }
+.jam-sep { width: 1px; height: 26px; background: var(--line-2); margin: 0 4px; }
+.jam-sep-v { width: 1px; height: 20px; background: var(--line-2); margin: 0 2px; }
+.jam-pop { position: absolute; z-index: 9; width: 440px; max-width: calc(100% - 16px); padding: 10px; background: var(--panel, #1b1b22); border: 1px solid var(--line-2); border-radius: 12px; box-shadow: 0 12px 36px rgba(0,0,0,.28); font-size: 13px; }
+.jam-pop .hint { margin: 8px 2px 0; }
+.jam-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.jam-sw { width: 26px; height: 26px; border-radius: 6px; border: 2px solid transparent; cursor: pointer; box-shadow: inset 0 0 0 1px rgba(0,0,0,.12); }
+.jam-sw.on { border-color: var(--accent); }
+.jam-shape, .jam-stamp { width: 40px; height: 40px; border-radius: 8px; border: 1px solid var(--line-2); background: var(--bg); color: var(--fg); font-size: 20px; cursor: pointer; }
+.jam-shape.on, .jam-stamp.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.jam-ai-list, .jam-tpl { display: grid; gap: 4px; }
+.jam-tpl { grid-template-columns: 1fr 1fr; }
+.jam-ai-list button, .jam-tpl button { text-align: left; display: grid; gap: 2px; padding: 8px 10px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--fg); font: inherit; cursor: pointer; }
+.jam-ai-list button:hover, .jam-tpl button:hover { background: var(--bg-2, rgba(127,127,127,.12)); border-color: var(--line-2); }
+.jam-ai-list button span, .jam-tpl button span { font-size: 11.5px; color: var(--fg-3); }
+.jam-ctx { position: absolute; z-index: 8; display: flex; align-items: center; gap: 4px; padding: 4px 6px; background: var(--panel, #1b1b22); border: 1px solid var(--line-2); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.25); font-size: 12px; }
+.jam-ctx button { height: 28px; min-width: 28px; padding: 0 8px; border: 0; border-radius: 6px; background: transparent; color: var(--fg); font: inherit; font-size: 12.5px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; }
+.jam-ctx button:hover { background: var(--bg-2, rgba(127,127,127,.15)); }
+.jam-ctx button.on { background: var(--accent); color: #fff; }
+.jam-ctx .jam-sw { width: 20px; height: 20px; min-width: 0; padding: 0; border-radius: 5px; }
+.jam-ctx input[type=text], .jam-ctx select { height: 28px; border: 1px solid var(--line-2); border-radius: 6px; background: var(--bg); color: var(--fg); font: inherit; font-size: 12.5px; padding: 0 8px; min-width: 120px; }
+.jam-top { position: absolute; z-index: 8; left: 12px; right: 12px; top: 10px; display: flex; align-items: center; justify-content: space-between; gap: 10px; pointer-events: none; }
+.jam-top > * { pointer-events: auto; }
+.jam-people { display: flex; align-items: center; gap: 6px; padding: 4px 8px; background: var(--panel, #1b1b22); border: 1px solid var(--line-2); border-radius: 999px; }
+.jam-peer { width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--c, #888); background: color-mix(in srgb, var(--c, #888) 30%, var(--bg)); color: var(--fg); font: 600 12px/1 inherit; cursor: pointer; }
+.jam-peer.on { box-shadow: 0 0 0 3px var(--accent); }
+.jam-right { display: flex; align-items: center; gap: 6px; padding: 4px; background: var(--panel, #1b1b22); border: 1px solid var(--line-2); border-radius: 999px; }
+.jam-timer-on { color: var(--accent); font-variant-numeric: tabular-nums; }
+.jam-timer-menu { display: inline-flex; gap: 4px; }
+.jam-app .brandmark .dot { background: #FFE066; }
+.jam-app .promptbar, .jam-app #modeSeg { display: none !important; }
+.cv-jam .cv-body { grid-template-columns: 1fr; }
+.cv-jam .cv-body > .cv-stage { grid-column: 1; }

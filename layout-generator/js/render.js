@@ -103,6 +103,49 @@ const Render = (() => {
     if (!b.crop) return `<image x="${n(b.x)}" y="${n(b.y)}" width="${n(b.w)}" height="${n(b.h)}" href="${esc(href)}" preserveAspectRatio="${FOCAL.has(b.focal) ? b.focal : 'xMidYMid'} slice"${clip}${filter}/>`;
     return `<svg x="${n(b.x)}" y="${n(b.y)}" width="${n(b.w)}" height="${n(b.h)}" viewBox="${n(r.x)} ${n(r.y)} ${n(r.w)} ${n(r.h)}" preserveAspectRatio="none" overflow="hidden"${clip}><image x="0" y="0" width="${n(aw)}" height="${n(ah)}" href="${esc(href)}" preserveAspectRatio="none"${filter}/></svg>`;
   }
+  // ---- Board things: stickies, shapes with words, sections, stamps, connectors, votes ---------------------------
+  // Words centred in a box (a sticky, a shape): drawn through textEl on a temporary text block over the padding.
+  function wordsIn(b, ctx, pad, color) {
+    if (b.text == null || !String(b.text).trim() || !Array.isArray(b.lines)) return '';
+    const f = b.font || {}; const size = n(f.size || 18); const lh = size * (Number(f.lineHeight) || 1.3); const totalH = b.lines.length * lh;
+    const top = b.y + Math.max(pad, (b.h - totalH) / 2);
+    const t = { kind: 'text', x: b.x + pad, y: top, w: Math.max(8, b.w - pad * 2), h: totalH, lines: b.lines, font: f, fill: color || b.color || '#1E1C1A', align: b.align || 'center', runs: b.runs };
+    return textEl(t, ctx);
+  }
+  const VEIL = (b, ctx) => { const id = ctx.id('veil'); ctx.defs.push(`<filter id="${id}"><feGaussianBlur stdDeviation="6"/></filter>`); return ` filter="url(#${id})"`; };
+  function stickyEl(b, ctx, opts) {
+    const fill = paint(b, ctx); const shadow = `<rect x="${n(b.x + 2)}" y="${n(b.y + 4)}" width="${n(b.w)}" height="${n(b.h)}" rx="${n(b.radius ?? 4)}" fill="rgba(17,17,16,0.16)"/>`;
+    const veiled = b.veil && !(opts && opts.me && b.author === opts.me) && !opts.forExport;
+    const words = veiled ? `<g${VEIL(b, ctx)}>${wordsIn(b, ctx, 14)}</g>` : wordsIn(b, ctx, 14);
+    const who = b.authorName ? `<text x="${n(b.x + b.w - 10)}" y="${n(b.y + b.h - 9)}" font-family="Inter, system-ui, sans-serif" font-size="11" font-weight="600" fill="rgba(17,17,16,0.45)" text-anchor="end">${esc(String(b.authorName).split(/\s+/).map(w => w[0] || '').join('').slice(0, 3).toUpperCase())}</text>` : '';
+    return shadow + `<rect x="${n(b.x)}" y="${n(b.y)}" width="${n(b.w)}" height="${n(b.h)}" rx="${n(b.radius ?? 4)}" fill="${fill}"/>` + words + who + votesEl(b) + (veiled ? `<text x="${n(b.x + b.w / 2)}" y="${n(b.y + b.h / 2 + 5)}" font-family="Inter, system-ui, sans-serif" font-size="13" font-weight="600" fill="rgba(17,17,16,0.55)" text-anchor="middle">hidden until reveal</text>` : '');
+  }
+  function votesEl(b) {
+    const v = b.votes && typeof b.votes === 'object' ? Object.values(b.votes).reduce((t, x) => t + (Number(x) || 0), 0) : 0; if (!v) return '';
+    const r = 11; const cx = b.x + b.w - r - 6, cy = b.y + r + 6;
+    return `<g><circle cx="${n(cx)}" cy="${n(cy)}" r="${n(r)}" fill="#1E1C1A"/><text x="${n(cx)}" y="${n(cy + 4)}" font-family="Inter, system-ui, sans-serif" font-size="12" font-weight="700" fill="#FFFFFF" text-anchor="middle">${v}</text></g>`;
+  }
+  function stampEl(b) {
+    const size = Math.min(b.w, b.h) * 0.82;
+    return `<text x="${n(b.x + b.w / 2)}" y="${n(b.y + b.h / 2 + size * 0.36)}" font-size="${n(size)}" text-anchor="middle" font-family="Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji, sans-serif">${esc(String(b.text || '👍'))}</text>` + votesEl(b);
+  }
+  function sectionTitle(b, ctx) {
+    if (!b.section) return ''; const title = String(b.section.title || ''); if (!title) return '';
+    const size = b.section.size || 18;
+    return `<text x="${n(b.x + 16)}" y="${n(b.y + 16 + size * 0.9)}" font-family="Inter, system-ui, sans-serif" font-size="${n(size)}" font-weight="700" fill="${col(b.section.color || '#1E1C1A')}">${esc(title)}</text>`;
+  }
+  function connectorEl(b, ctx, layout) {
+    const frame = { layout }; const g = typeof Canvas !== 'undefined' ? Canvas.connectorGeometry(frame, b) : null; if (!g) return '';
+    const color = col((b.stroke && b.stroke.color) || '#5E5A56'); const w = n((b.stroke && b.stroke.width) || 2);
+    const mk = ctx.marker || (ctx.marker = {}); const key = color + '|' + w; let mid = mk[key];
+    if (!mid) { mid = mk[key] = ctx.id('arw'); ctx.defs.push(`<marker id="${mid}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="${n(Math.max(5, 10 / Math.max(1, w / 2)))}" markerHeight="${n(Math.max(5, 10 / Math.max(1, w / 2)))}" orient="auto-start-reverse" markerUnits="strokeWidth"><path d="M0 0 L10 5 L0 10 Z" fill="${color}"/></marker>`); }
+    const d = g.pts.map((p, i) => `${i ? 'L' : 'M'}${n(p.x)} ${n(p.y)}`).join(' ');
+    const arrow = b.arrow || 'end'; const me = arrow === 'end' || arrow === 'both' ? ` marker-end="url(#${mid})"` : ''; const ms = arrow === 'start' || arrow === 'both' ? ` marker-start="url(#${mid})"` : '';
+    const dash = b.dash ? ` stroke-dasharray="${n(w * 3)} ${n(w * 2)}"` : '';
+    let label = '';
+    if (b.text && String(b.text).trim()) { const f = b.font || { size: 14, weight: 500, family: 'Inter, system-ui, sans-serif' }; const tw = Text.width(String(b.text), f) + 16; const th = (f.size || 14) * 1.5; label = `<rect x="${n(g.mid.x - tw / 2)}" y="${n(g.mid.y - th / 2)}" width="${n(tw)}" height="${n(th)}" rx="${n(th / 2)}" fill="${col(b.labelFill || '#FFFFFF')}" stroke="${color}" stroke-width="1"/><text x="${n(g.mid.x)}" y="${n(g.mid.y + (f.size || 14) * 0.35)}" font-family='${fam(f)}' font-size="${n(f.size || 14)}" font-weight="${n(f.weight || 500)}" fill="${col(b.color || '#1E1C1A')}" text-anchor="middle">${esc(String(b.text))}</text>`; }
+    return `<path d="${d}" fill="none" stroke="${color}" stroke-width="${w}" stroke-linejoin="round" stroke-linecap="round"${dash}${me}${ms}/>` + label;
+  }
   function textEl(b, ctx) {
     const f = b.font || {};
     const anchor = b.align === 'center' ? 'middle' : b.align === 'right' ? 'end' : 'start';
@@ -170,6 +213,7 @@ const Render = (() => {
     const fill = paint(b, ctx); const st = strokeAttr(b);
     if (b.shape === 'ellipse') return `<ellipse cx="${n(b.x + b.w / 2)}" cy="${n(b.y + b.h / 2)}" rx="${n(b.w / 2)}" ry="${n(b.h / 2)}" fill="${fill}"${st}/>`;
     if (b.shape === 'circle' || b.shape === 'blob') return `<circle cx="${n(b.x + b.w / 2)}" cy="${n(b.y + b.h / 2)}" r="${n(Math.min(b.w, b.h) / 2)}" fill="${fill}"${st}/>`;
+    if (b.shape === 'diamond') return `<polygon points="${n(b.x + b.w / 2)},${n(b.y)} ${n(b.x + b.w)},${n(b.y + b.h / 2)} ${n(b.x + b.w / 2)},${n(b.y + b.h)} ${n(b.x)},${n(b.y + b.h / 2)}" fill="${fill}"${st} stroke-linejoin="round"/>`;
     if (b.shape === 'pill') return `<rect x="${n(b.x)}" y="${n(b.y)}" width="${n(b.w)}" height="${n(b.h)}" rx="${n(Math.min(b.w, b.h) / 2)}" fill="${fill}"${st}/>`;
     const r = Math.min(b.w, b.h); // quarter circle
     const d = `M ${n(b.x)} ${n(b.y + r)} A ${n(r)} ${n(r)} 0 0 1 ${n(b.x + r)} ${n(b.y)} L ${n(b.x + r)} ${n(b.y + r)} Z`;
@@ -190,13 +234,16 @@ const Render = (() => {
     const W = n(layout.format.w), H = n(layout.format.h);
     const prefix = String(layout.id || 'l').replace(/[^A-Za-z0-9_-]/g, '') || 'l';
     let seq = 0;
-    const ctx = { defs: [], id: k => `${prefix}-${k}${seq++}`, tag: !!opts.tag, tokenHex: name => kit && typeof Brand !== 'undefined' && Brand.tokenHex ? Brand.tokenHex(kit, name, opts.theme || 'light') : null };
+    const ctx = { defs: [], late: [], id: k => `${prefix}-${k}${seq++}`, tag: !!opts.tag, tokenHex: name => kit && typeof Brand !== 'undefined' && Brand.tokenHex ? Brand.tokenHex(kit, name, opts.theme || 'light') : null };
     const parts = [];
     if (!opts.transparent) parts.push(`<rect width="${W}" height="${H}" fill="${layout.palette && layout.palette.bgGradient ? (() => { const id = ctx.id('bg'); ctx.defs.push(gradientDef(layout.palette.bgGradient, id)); return `url(#${id})`; })() : col(layout.palette && layout.palette.bg, '#FFFFFF')}"/>`);
     // Boxes draw their fill, then their children (clipped when the box clips); siblings in list order.
     const blockEl = b => {
       let el = '';
-      if (b.kind === 'field') el = `<rect ${rectGeom(b)} fill="${paint(b, ctx)}"${b.alpha != null && b.alpha < 1 ? ` fill-opacity="${n(clamp01(b.alpha))}"` : ''}${strokeAttr(b)}/>`;
+      if (b.kind === 'field') el = `<rect ${rectGeom(b)} fill="${paint(b, ctx)}"${b.alpha != null && b.alpha < 1 ? ` fill-opacity="${n(clamp01(b.alpha))}"` : ''}${strokeAttr(b)}/>` + (b.text != null ? wordsIn(b, ctx, 10) : '') + votesEl(b);
+      else if (b.kind === 'sticky') el = stickyEl(b, ctx, opts);
+      else if (b.kind === 'stamp') el = stampEl(b);
+      else if (b.kind === 'connector') { ctx.late.push(fx(b, connectorEl(b, ctx, layout), ctx)); el = ''; }
       else if (b.kind === 'image' || b.kind === 'video') {
         const a = b.kind === 'video' ? (assets.videos || []).find(i => i.id === b.asset) : assets.images.find(i => i.id === b.asset);
         const href = !a ? '' : b.kind === 'video' ? (a.poster || '') : (opts.forExport ? a.dataUrl : a.url);
@@ -214,7 +261,7 @@ const Render = (() => {
         const al = n(clamp01(b.alpha || 0.7)); const fill = col(b.fill);
         ctx.defs.push(`<linearGradient id="${id}" x1="${c[0]}" y1="${c[1]}" x2="${c[2]}" y2="${c[3]}"><stop offset="0" stop-color="${fill}" stop-opacity="0"/><stop offset="0.55" stop-color="${fill}" stop-opacity="${n(al * 0.75)}"/><stop offset="1" stop-color="${fill}" stop-opacity="${al}"/></linearGradient>`);
         el = `<rect x="${n(b.x)}" y="${n(b.y)}" width="${n(b.w)}" height="${n(b.h)}" fill="url(#${id})"/>`;
-      } else if (b.kind === 'shape') el = shapeEl(b, ctx);
+      } else if (b.kind === 'shape') el = shapeEl(b, ctx) + (b.text != null ? wordsIn(b, ctx, 10) : '') + votesEl(b);
       else if (b.kind === 'rule') el = `<rect x="${n(b.x)}" y="${n(b.y)}" width="${n(b.w)}" height="${n(b.h)}" fill="${paint(b, ctx)}"/>`;
       else if (b.kind === 'button') {
         const f = b.font || {};
@@ -259,9 +306,10 @@ const Render = (() => {
       const over = st && kids ? `<rect ${rectGeom(b)} fill="none"${st}/>` : '';
       if (b.clip && kids) { const id = ctx.id('k'); ctx.defs.push(`<clipPath id="${id}"><rect x="${n(b.x)}" y="${n(b.y)}" width="${n(b.w)}" height="${n(b.h)}" rx="${n(b.radius || 0)}"/></clipPath>`); kids = `<g clip-path="url(#${id})">${kids}</g>`; }
       const bg = rect ? fx({ x: b.x, y: b.y, w: b.w, h: b.h, shadow: b.shadow, rotation: b.rotation }, rect, ctx) : '';
-      return fx({ x: b.x, y: b.y, w: b.w, h: b.h, opacity: b.opacity }, bg + kids + (over ? fx({ x: b.x, y: b.y, w: b.w, h: b.h, rotation: b.rotation }, over, ctx) : ''), ctx);
+      return fx({ x: b.x, y: b.y, w: b.w, h: b.h, opacity: b.opacity }, bg + sectionTitle(b, ctx) + kids + (over ? fx({ x: b.x, y: b.y, w: b.w, h: b.h, rotation: b.rotation }, over, ctx) : ''), ctx);
     };
     parts.push(drawList(''));
+    if (ctx.late.length) parts.push(ctx.late.join(''));
     if (opts.showGrid) parts.push(gridOverlay(layout));
     const attrs = opts.width ? ` width="${n(opts.width)}"` : ` width="${W}" height="${H}"`;
     return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}"${attrs} data-id="${esc(layout.id)}">${opts.fontStyle ? `<defs><style>${opts.fontStyle}</style></defs>` : ''}${ctx.defs.length ? `<defs>${ctx.defs.join('')}</defs>` : ''}${parts.join('')}</svg>`;
