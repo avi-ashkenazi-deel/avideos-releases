@@ -11,7 +11,9 @@
 
   // ---- Toast ---------------------------------------------------------------------
   let toastT;
-  function toast(msg) { const t = $('toast'); t.textContent = msg; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => t.hidden = true, 2600); }
+  // DeelJam says board where Dugma says project (outside “quoted names”, which are what people typed).
+  const toastWords = msg => window.LG_APP !== 'jam' ? msg : String(msg).split(/(“[^”]*”)/).map((part, i) => i % 2 ? part : part.replace(/\bprojects\b/g, 'boards').replace(/\bProjects\b/g, 'Boards').replace(/\bproject\b/g, 'board').replace(/\bProject\b/g, 'Board')).join('');
+  function toast(msg) { const t = $('toast'); t.textContent = toastWords(msg); t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => t.hidden = true, 2600); }
 
   // ---- Brand kit form -------------------------------------------------------------
   function fillFontSelects() {
@@ -745,7 +747,8 @@
 
   // ---- Deck mode -----------------------------------------------------------------------------------
   function setMode(mode) {
-    if (mode === 'canvas' && PROJ.ready && !PROJ.id && Projects.mode !== 'local') { toast('Pick a project, or make a new one'); mode = 'home'; }
+    if (JAM_APP && mode !== 'canvas' && mode !== 'home') mode = 'canvas';
+    if (mode === 'canvas' && PROJ.ready && !PROJ.id && Projects.mode !== 'local') { toast(JAM_APP ? 'Pick a board, or make a new one' : 'Pick a project, or make a new one'); mode = 'home'; }
     state.mode = mode;
     document.querySelectorAll('#modeSeg button').forEach(b => b.classList.toggle('on', b.dataset.mode === mode));
     const canvas = mode === 'canvas'; const home = mode === 'home';
@@ -1276,7 +1279,61 @@
     $('importLayoutHint').textContent = v === 'auto' ? 'Stacks from Figma, web pages and slides stay stacks: edit text and the rest moves along. Simple mode keeps them tidy for anyone.' : 'Every layer stays exactly where it was drawn, with no stacks. Easiest to drag around.';
   }
   $('importLayout').addEventListener('click', e => { const b = e.target.closest('[data-il]'); if (!b) return; LS.set('lg.importLayout', b.dataset.il); renderImportLayout(); });
+  // A FigJam board (a .jam file or a paste from FigJam): its stickies, shapes, connectors and sections land on the
+  // board in Jam mode, or on a board of their own in the design editor.
+  async function importBoardData(data, how, opts = {}) {
+    Stats.track('import.figjam');
+    const res = await FigmaImport.convert(data, { addImage: (url, name) => addImage(url, name) }, { board: true });
+    if (!res.board || !res.board.blocks.length) { toast('Nothing visible to import from this board'); return false; }
+    if (state.mode !== 'canvas') setMode('canvas');
+    const B = res.board; const count = k => B.blocks.filter(b => b.kind === k).length;
+    const placed = CanvasUI.placeBoardBlocks(B.blocks, { w: B.w, h: B.h }, { at: opts.at, name: B.name });
+    updateCanvasBadge();
+    const parts = [[count('sticky'), 'sticky', 'stickies'], [B.blocks.filter(b => (b.kind === 'field' || b.kind === 'shape') && b.text != null).length, 'shape', 'shapes'], [count('connector'), 'connector', 'connectors'], [B.blocks.filter(b => b.section).length, 'section', 'sections'], [count('stamp'), 'stamp', 'stamps'], [count('image'), 'picture', 'pictures']].filter(q => q[0]).map(q => `${q[0]} ${q[0] === 1 ? q[1] : q[2]}`);
+    const skipped = Object.entries(res.stats.skipped).map(([k, v]) => `${v} ${k.toLowerCase().replace(/_/g, ' ')}`).join(', ');
+    toast(`${how}: ${parts.join(', ') || B.blocks.length + ' things'}${res.stats.missingImages ? `, ${res.stats.missingImages} pictures not included` : ''}${skipped ? ` · left out ${skipped}` : ''}`);
+    if (placed && await ensureFonts([placed.frame])) CanvasUI.mutate(() => { }, { history: false, frames: [placed.frame.id] });
+    return true;
+  }
+  // Stickies from a sheet: FigJam's "export selection as CSV" for stickies or a table, or any CSV with one idea per
+  // row. Columns are found by name (text, created by, colour, section); without names the first column is the text.
+  function parseCsv(text) {
+    const rows = []; let row = [], cell = '', q = false; const s = String(text).replace(/^\uFEFF/, ''); const sep = (s.split('\n')[0].match(/\t/g) || []).length > (s.split('\n')[0].match(/,/g) || []).length ? '\t' : (s.split('\n')[0].match(/;/g) || []).length > (s.split('\n')[0].match(/,/g) || []).length ? ';' : ',';
+    for (let i = 0; i < s.length; i++) { const c = s[i];
+      if (q) { if (c === '"') { if (s[i + 1] === '"') { cell += '"'; i++; } else q = false; } else cell += c; }
+      else if (c === '"') q = true; else if (c === sep) { row.push(cell); cell = ''; } else if (c === '\n' || c === '\r') { if (c === '\r' && s[i + 1] === '\n') i++; row.push(cell); cell = ''; if (row.some(x => x.trim())) rows.push(row); row = []; } else cell += c; }
+    row.push(cell); if (row.some(x => x.trim())) rows.push(row);
+    return rows;
+  }
+  const STICKY_NAMES = { yellow: '#FFE066', orange: '#FFDAC1', peach: '#FFDAC1', red: '#FFB4A2', coral: '#FFB4A2', pink: '#FDE2FF', violet: '#C7CEEA', purple: '#C7CEEA', blue: '#C7CEEA', periwinkle: '#C7CEEA', teal: '#B5EAD7', green: '#B5EAD7', mint: '#B5EAD7', lime: '#E2F0CB', gray: '#F0EFEA', grey: '#F0EFEA', white: '#FFFFFF' };
+  function stickiesFromCsv(text) {
+    const rows = parseCsv(text); if (!rows.length) return null;
+    const head = rows[0].map(h => h.trim().toLowerCase()); const find = re => head.findIndex(h => re.test(h));
+    let ti = find(/^(text|content|sticky|sticky note|note|idea|title|name|description)s?$/), ai = find(/created by|author|owner|^by$|^who$/), ci = find(/^colou?r$/), si = find(/^(section|group|category|theme|column|cluster|topic)s?$/);
+    const named = ti >= 0 || ai >= 0 || ci >= 0 || si >= 0; if (ti < 0) ti = 0; const data = named ? rows.slice(1) : rows;
+    const items = data.map(r => ({ text: String(r[ti] || '').trim().slice(0, 2000), author: ai >= 0 ? String(r[ai] || '').trim().slice(0, 60) : '', color: ci >= 0 ? String(r[ci] || '').trim() : '', section: si >= 0 ? String(r[si] || '').trim().slice(0, 80) : '' })).filter(x => x.text).slice(0, 1500);
+    if (!items.length) return null;
+    const colorOf = c => /^#[0-9a-f]{6}$/i.test(c) ? c.toUpperCase() : STICKY_NAMES[c.toLowerCase().replace(/^light |^dark /, '')] || '#FFE066';
+    const kit = state.kit; const blocks = []; const S = 200, G = 24, P = 40; const ground = { layout: { grid: { unit: 1, mx: 0, my: 0 }, palette: {}, type: {}, format: { w: 1e5, h: 1e5 } } };
+    const groups = new Map(); for (const it of items) { if (!groups.has(it.section)) groups.set(it.section, []); groups.get(it.section).push(it); }
+    let x = 0, H = 0;
+    for (const [name, list] of groups) {
+      const cols = Math.max(1, Math.min(6, Math.ceil(Math.sqrt(list.length)))); const rowsN = Math.ceil(list.length / cols); const inSec = groups.size > 1 || !!name;
+      const w = cols * S + (cols - 1) * G + (inSec ? P * 2 : 0), h = rowsN * S + (rowsN - 1) * G + (inSec ? P + 64 : 0);
+      let sec = null; if (inSec) { sec = Canvas.newBlock('section', ground, kit, { x, y: 0, title: name || 'Other' }); sec.w = w; sec.h = h; blocks.push(sec); }
+      list.forEach((it, i) => { const b = Canvas.newBlock('sticky', ground, kit, { x: x + (inSec ? P : 0) + (i % cols) * (S + G), y: (inSec ? 64 : 0) + Math.floor(i / cols) * (S + G), color: colorOf(it.color) }); b.text = it.text; if (it.author) b.authorName = it.author; if (sec) b.parent = sec.id; Canvas.refit(b); blocks.push(b); });
+      x += w + 80; H = Math.max(H, h);
+    }
+    return { blocks, w: x - 80, h: H, n: items.length, sections: [...groups.keys()].filter(Boolean).length };
+  }
+  async function importStickySheet(text, name, opts = {}) {
+    const r = stickiesFromCsv(text); if (!r) { toast('No rows with text in this sheet'); return false; }
+    Stats.track('import.csv'); if (state.mode !== 'canvas') setMode('canvas');
+    CanvasUI.placeBoardBlocks(r.blocks, { w: r.w, h: r.h }, { at: opts.at, name: name || 'Stickies' }); updateCanvasBadge();
+    toast(`${r.n} ${r.n === 1 ? 'sticky' : 'stickies'} from ${name || 'the sheet'}${r.sections ? ` in ${r.sections} section${r.sections === 1 ? '' : 's'}` : ''}`); return true;
+  }
   async function importFigmaData(data, how) {
+    if (FigmaImport.isBoard(data)) return importBoardData(data, /paste/i.test(how) ? 'Pasted from FigJam' : 'FigJam board', { at: /paste/i.test(how) && CanvasUI.editMode === 'jam' ? CanvasUI.viewCenter && (c => ({ x: c.cx, y: c.cy }))(CanvasUI.viewCenter()) : null });
     Stats.track('import.figma');
     const res = await FigmaImport.convert(data, { addImage: (url, name) => addImage(url, name) }, { layout: importLayout() });
     const items = FigmaImport.toLayouts(res.frames, state.kit);
@@ -1339,9 +1396,10 @@
   async function importFile(file) {
     if (/\.pptx$/i.test(file.name) || file.type === GSlides.PPTX) { await importPptxBytes(new Uint8Array(await file.arrayBuffer()), file.name); return true; }
     const head = new Uint8Array(await file.slice(0, 8).arrayBuffer()); const sig = String.fromCharCode(...head);
-    if (/\.fig$/i.test(file.name) || sig === 'fig-kiwi' || (sig.startsWith('PK') && /\.fig$/i.test(file.name))) {
+    if (/\.csv$/i.test(file.name) || file.type === 'text/csv') { return importStickySheet(await file.text(), file.name.replace(/\.csv$/i, '')); }
+    if (/\.(fig|jam)$/i.test(file.name) || sig === 'fig-kiwi' || sig === 'fig-jam.') {
       toast(`Reading ${file.name}…`);
-      try { await importFigmaData(await FigmaImport.readFile(file), 'Figma file'); } catch (err) { console.error(err); toast('Could not read this Figma file: ' + err.message); }
+      try { await importFigmaData(await FigmaImport.readFile(file), 'Figma file'); } catch (err) { console.error(err); toast(`Could not read this ${/\.jam$/i.test(file.name) ? 'FigJam' : 'Figma'} file: ` + err.message); }
       return true;
     }
     if (/\.json$/i.test(file.name) || file.type === 'application/json') {
@@ -1417,11 +1475,17 @@
   const PROJ = { id: null, ready: false };
   function backupKey() { return PROJ.id ? `lg.canvas.${PROJ.id}` : 'lg.canvas'; }
   const JAM_APP = window.LG_APP === 'jam';
+  // In DeelJam a project is a board. Fixed interface text goes through this; names people typed never do.
+  const jw = s => !JAM_APP ? s : String(s).replace(/\bprojects\b/g, 'boards').replace(/\bProjects\b/g, 'Boards').replace(/\bproject\b/g, 'board').replace(/\bProject\b/g, 'Board').replace(/\bShared canvas\b/g, 'Shared board');
+  const jamWords = root => { if (!JAM_APP || !root) return; const skip = n => n.parentElement && n.parentElement.closest('.home-name, .home-f b, option, .home-meta, input, textarea');
+    const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT); let n; while ((n = w.nextNode())) { if (/project|Shared canvas/i.test(n.nodeValue) && !skip(n)) n.nodeValue = jw(n.nodeValue); }
+    root.querySelectorAll('[placeholder], [title], [aria-label], [data-tip]').forEach(el => { for (const a of ['placeholder', 'title', 'aria-label', 'data-tip']) { const v = el.getAttribute(a); if (v && /project/i.test(v) && !(a === 'aria-label' && el.classList.contains('home-card'))) el.setAttribute(a, jw(v)); } }); };
   if (JAM_APP) {
     document.title = 'DeelJam'; document.body.classList.add('jam-app');
     const nm = document.querySelector('.brandmark .name'); if (nm) nm.textContent = 'DeelJam';
     const ph = $('homeSearch'); if (ph) ph.placeholder = 'Search boards'; const nn = $('homeNewName'); if (nn) nn.placeholder = 'Board name, e.g. Q1 planning retro';
     const op = $('homeOpenInput'); if (op) op.placeholder = 'Paste a board link';
+    jamWords($('homeView')); jamWords($('canvasView'));
   }
   CanvasUI.init({
     getKit: () => state.kit, getAssets: () => state.assets, toast, backupKey,
@@ -1436,7 +1500,7 @@
     resetColors: () => { const preset = Brand.PRESETS[state.kit.presetId]; if (!preset) return false; state.kit.colors = preset.colors.map(c => ({ ...c })); renderColors(); persistKit(); return true; },
     openSettings: () => { $('settings').hidden = false; renderGuides(); $('imgProvider').focus(); },
     download: (blob, name) => Render.download(blob, name),
-    renderSVG: (layout, opts) => Render.toSVG(layout, { kit: state.kit, assets: state.assets, showGrid: !!(opts && opts.showGrid) }),
+    renderSVG: (layout, opts) => Render.toSVG(layout, { kit: state.kit, assets: state.assets, showGrid: !!(opts && opts.showGrid), me: opts && opts.me }),
     exportPNG: (layout, scale) => Render.exportPNG(layout, { kit: state.kit, assets: state.assets }, scale || 1),
     exportPDF: layouts => Render.exportPDF(layouts, { kit: state.kit, assets: state.assets }),
     variations: async opts => makeVariations(opts),
@@ -1477,7 +1541,9 @@
     variations: opts => makeVariations(opts),
     onExternal: name => { toast(`Outside agent: ${name.replace(/_/g, ' ')}`); Stats.track('agent.tool', { detail: name }); },
   });
-  if (typeof Jam !== 'undefined') Jam.init({ getKit: () => state.kit, toast, addVideo: (file, name) => addVideo(file, name), addImage: async file => addImage(await readAsDataURL(file), file.name) });
+  // resolves once the project to open is known and opened (its shared canvas may still be answering: Sync.whenLoaded)
+  let docOpenedRes; const docOpened = new Promise(r => { docOpenedRes = r; });
+  if (typeof Jam !== 'undefined') Jam.init({ docReady: async () => { await docOpened; await Sync.whenLoaded(5000); }, getKit: () => state.kit, toast, addVideo: (file, name) => addVideo(file, name), addImage: async file => addImage(await readAsDataURL(file), file.name) });
   Agent.init({ getKit: () => state.kit, toast, openSettings: () => { $('settings').hidden = false; renderGuides(); }, onRun: text => Stats.track('agent.run', { detail: String(text).slice(0, 60) }) });
 
   // ---- Multiplayer ------------------------------------------------------------------------------------------------
@@ -1557,9 +1623,9 @@
   // Nothing yet: what this browser already holds becomes the first project (in claude.ai, the page's own canvas).
   async function firstProject() {
     const mode = Projects.mode;
-    if (mode === 'artifact') { try { await Projects.create({ id: '_root', name: 'Shared canvas' }); } catch { } return '_root'; }
-    if (mode === 'server') { try { const p = await Projects.create({ name: 'My first project' }); return p.id; } catch { return 'local'; } }
-    try { await Projects.create({ id: 'local', name: 'My first project' }); } catch { }
+    if (mode === 'artifact') { try { await Projects.create({ id: '_root', name: JAM_APP ? 'Shared board' : 'Shared canvas' }); } catch { } return '_root'; }
+    if (mode === 'server') { try { const p = await Projects.create({ name: jw('My first project') }); return p.id; } catch { return 'local'; } }
+    try { await Projects.create({ id: 'local', name: jw('My first project') }); } catch { }
     try { if (!localStorage.getItem('lg.canvas.local')) { const old = localStorage.getItem('lg.canvas'); if (old) localStorage.setItem('lg.canvas.local', old); } } catch { }
     return 'local';
   }
@@ -1588,7 +1654,7 @@
     if (!opts.quiet) { setMode('canvas'); Stats.track('project.open', { project: id, detail: p ? projLabel(p) : name }); }
     return true;
   }
-  function renderProjectName() { const p = Projects.get(PROJ.id); $('cvProject').textContent = '⌂ ' + (p ? p.name : PROJ.id === '_root' ? 'Shared canvas' : PROJ.id ? 'Project' : 'Projects'); }
+  function renderProjectName() { const p = Projects.get(PROJ.id); const shared = JAM_APP ? 'Shared board' : 'Shared canvas'; $('cvProject').textContent = '⌂ ' + (p ? (JAM_APP && p.id === '_root' && p.name === 'Shared canvas' ? shared : p.name) : PROJ.id === '_root' ? shared : PROJ.id ? jw('Project') : jw('Projects')); }
   $('cvProject').addEventListener('click', () => setMode('home'));
   // Project bookkeeping from the canvas: screen count and a small cover, at most every 20 s.
   let touchTimer = 0;
@@ -1634,13 +1700,14 @@
     $('homeGrid').innerHTML = list.map(p => { const a = Projects.accessOf(p); const link = Projects.linkFor(p.id); return `<div class="home-card${p.archived ? ' home-archived' : ''}${p.id === PROJ.id ? ' current' : ''}" data-open="${escapeHtml(p.id)}" tabindex="0" role="button" aria-label="Open ${escapeHtml(p.name)}">
         <div class="home-cover">${p.cover ? `<img src="${escapeHtml(p.cover)}" alt="">` : `<span>${escapeHtml((p.name || '?')[0].toUpperCase())}</span>`}</div>
         <div class="home-name">${a !== 'all' ? `<span title="${a === 'me' ? 'Only you' : 'Specific people'}">${accIcon(a)}</span>` : ''}${escapeHtml(p.name)}${p.id === PROJ.id ? ' <span class="cv-token">open</span>' : ''}</div>
-        <div class="home-meta">${p.frames ? p.frames + ' screen' + (p.frames === 1 ? '' : 's') + ' · ' : ''}${escapeHtml(ago(p.updated || p.created))}${p.byName ? ' · ' + escapeHtml(p.byName) : ''}${p.folder && homeFolder !== p.folder ? ' · ' + escapeHtml(fname(p.folder)) : ''}</div>
+        <div class="home-meta">${p.frames && !JAM_APP ? p.frames + ' screen' + (p.frames === 1 ? '' : 's') + ' · ' : ''}${escapeHtml(ago(p.updated || p.created))}${p.byName ? ' · ' + escapeHtml(p.byName) : ''}${p.folder && homeFolder !== p.folder ? ' · ' + escapeHtml(fname(p.folder)) : ''}</div>
         <button type="button" class="home-menu${homeMenu === p.id ? ' open' : ''}" data-menu="${escapeHtml(p.id)}" title="Rename, move, copy link, archive" aria-label="Project menu">⋯</button>
         ${homeMenu === p.id ? `<div class="home-pop" data-pop><input type="text" class="input" data-rename="${escapeHtml(p.id)}" value="${escapeHtml(p.name)}" maxlength="80" aria-label="Project name"><select class="input" data-move="${escapeHtml(p.id)}" aria-label="Folder"><option value="">No folder (everyone)</option>${folders.map(f => `<option value="${escapeHtml(f.id)}" ${p.folder === f.id ? 'selected' : ''}>${escapeHtml(f.name)}${f.access === 'me' ? ' (only me)' : f.access === 'people' ? ' (specific people)' : ''}</option>`).join('')}</select>${link && p.id !== '_root' ? `<button type="button" class="btn small" data-link="${escapeHtml(p.id)}">Copy link</button>` : ''}${Projects.canChange(p) ? (p.archived ? `<button type="button" class="btn small" data-restore="${escapeHtml(p.id)}">Restore</button>` : `<button type="button" class="btn small ghost" data-archive="${escapeHtml(p.id)}">Archive</button>`) : '<span class="hint">Made by someone else: open it, or ask them or an admin to change it.</span>'}</div>` : ''}
       </div>`; }).join('') || `<p class="hint">${homeArchived ? 'Nothing archived.' : homeFolder === '_shared' ? 'Nothing is shared with you by name yet.' : 'No projects here yet. Make one with “New project”.'}</p>`;
     $('homeArchived').textContent = homeArchived ? 'Back to projects' : `Show archived${arch.length ? ` (${arch.length})` : ''}`;
     $('homeNote').textContent = Projects.mode === 'artifact' ? 'Unfiled projects and Everyone folders are seen by everyone who opens this page. A folder’s ⋯ → Sharing limits it.' : Projects.mode === 'server' ? 'Unfiled projects and Everyone folders are seen by everyone on this server; each project is a live room. A folder’s ⋯ → Sharing limits it.' : 'Projects are kept in this browser.';
     $('homeOpenBtn').hidden = !sharing();
+    jamWords($('homeView'));
     $('homeNewFolder').innerHTML = `<option value="">No folder (everyone)</option>` + folders.map(f => `<option value="${escapeHtml(f.id)}" ${homeFolder === f.id ? 'selected' : ''}>${escapeHtml(f.name)}${f.access === 'me' ? ' (only me)' : f.access === 'people' ? ' (specific people)' : ''}</option>`).join('');
   }
   // The open project went away for this person (sharing changed, or it moved): back to Home.
@@ -1777,7 +1844,7 @@
     if (!Sync.canArtifact()) serverHere = await Sync.serverAvailable();
     await Promise.all([Projects.start(), Stats.start()]);
     await Projects.whenReady(5000);
-    await startProject();
+    try { await startProject(); } finally { docOpenedRes(); }
     renderPeers(Sync.status, Sync.peers); renderHome(); updateAdminButton();
   })();
 
@@ -1807,7 +1874,8 @@
     $('promptForm').addEventListener('submit', e => { e.preventDefault(); generate($('prompt').value); });
     await ensureDemoImages(false);
     // First frame: a working state, not an empty shell.
-    const savedMode = LS.get('lg.mode', 'single');
+    // DeelJam has two places, the board and Home: it never opens on the layout generator.
+    const savedMode = JAM_APP ? (LS.get('lg.mode', 'canvas') === 'home' ? 'home' : 'canvas') : LS.get('lg.mode', 'single');
     if (!$('prompt').value) $('prompt').value = savedMode === 'deck' ? '8-slide launch deck for Deel Payroll' : 'Launch posts for Deel Payroll, bold, image-led, square and story';
     $('promptClear').hidden = !$('prompt').value;
     if (savedMode === 'deck') setMode('deck');

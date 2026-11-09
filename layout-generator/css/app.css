@@ -838,7 +838,14 @@ input[disabled] { opacity: .5; cursor: not-allowed; }
 
 /* ---- DeelJam: the board mode ------------------------------------------------------------------------------------- */
 .cv-jam .cv-tools, .cv-jam .cv-newframe, .cv-jam .cv-layers, .cv-jam .cv-props, .cv-jam #cvSnap, .cv-jam .cv-frame-label, .cv-jam #cvAddDiagram { display: none !important; }
-.cv-jam .cv-frame { box-shadow: 0 0 0 1px var(--line-2); }
+/* Jam keeps the bar short: no grid snapping, screen count, raw files or Clear (a shared board is not cleared by one click) */
+.cv-jam label:has(> #cvSnap), .cv-jam #cvCount, .cv-jam #cvSave, .cv-jam label:has(> #cvLoad), .cv-jam #cvClear { display: none !important; }
+.cv-jam .cv-frame { box-shadow: none; }
+/* the toast clears the bottom bar; the export menu keeps to pictures and slides */
+.jam-on #toast { bottom: 104px; }
+.cv-jam #cvExport [data-export="react"], .cv-jam #cvExport [data-export="html"], .cv-jam #cvExport [data-export="all"], .cv-jam #cvExport [data-export="allpdf"], .cv-jam #cvExport [data-export="canvas"], .cv-jam #cvExport .cv-menu-h { display: none; }
+.jam-flow { display: grid; gap: 8px; width: 320px; }
+.jam-flow textarea { width: 100%; box-sizing: border-box; resize: vertical; min-height: 120px; padding: 8px 10px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--bg); color: var(--fg); font: 13px/1.45 var(--font-ui, Inter, system-ui, sans-serif); }
 .cv-jam .cv-stage { background-image: radial-gradient(var(--line-2) 1px, transparent 1px); }
 .jam-bar { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 8; display: flex; align-items: center; gap: 6px; padding: 6px; background: var(--panel, #1b1b22); border: 1px solid var(--line-2); border-radius: 14px; box-shadow: 0 12px 36px rgba(0,0,0,.28); }
 .jam-tools { display: flex; align-items: center; gap: 2px; }

@@ -132,6 +132,8 @@ const Render = (() => {
   function sectionTitle(b, ctx) {
     if (!b.section) return ''; const title = String(b.section.title || ''); if (!title) return '';
     const size = b.section.size || 18;
+    // outside: the title sits above the section (how FigJam draws it), so what fills the section's top is not covered
+    if (b.section.outside) return `<text x="${n(b.x + 2)}" y="${n(b.y - 10)}" font-family="Inter, system-ui, sans-serif" font-size="${n(size)}" font-weight="700" fill="${col(b.section.color || '#1E1C1A')}">${esc(title)}</text>`;
     return `<text x="${n(b.x + 16)}" y="${n(b.y + 16 + size * 0.9)}" font-family="Inter, system-ui, sans-serif" font-size="${n(size)}" font-weight="700" fill="${col(b.section.color || '#1E1C1A')}">${esc(title)}</text>`;
   }
   function connectorEl(b, ctx, layout) {

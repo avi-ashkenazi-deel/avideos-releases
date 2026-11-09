@@ -246,7 +246,7 @@
           <button id="cvLink" class="btn small" type="button" title="Copy a link that carries this canvas (⌘L)">Copy link</button>
           <button id="cvSave" class="btn small" type="button">Save JSON</button>
           <button id="cvImport" class="btn small" type="button" data-tip="Figma paste or file, a web page by its address, Slides or PowerPoint, canvas files">Import ▾</button>
-          <label class="btn small file">Load<input id="cvLoad" type="file" accept="application/json,.json,.fig" hidden></label>
+          <label class="btn small file">Load<input id="cvLoad" type="file" accept="application/json,.json,.fig,.jam,.csv" hidden></label>
           <details class="cv-menu" id="cvExport"><summary class="btn small primary">Export</summary>
             <div class="cv-menu-list">
               <span class="cv-menu-h">Selected screens (or all)</span>
@@ -415,8 +415,9 @@
         <ol>
           <li><b>Paste:</b> select frames or layers in Figma, press ⌘C, come back to the canvas and press ⌘V. Layers without a frame go into the selected frame.</li>
           <li><b>File:</b> in Figma choose File → Save local copy, then drop the .fig on the canvas or pick it here.</li>
+          <li><b>FigJam:</b> the same two ways. Copy things on a FigJam board and paste, or File → Save local copy and drop the .jam. Stickies, shapes with text, connectors, sections and stamps come in as board things you can edit. A CSV of stickies (select them in FigJam, right-click → Export selection → CSV) becomes stickies too, grouped by a Section column when there is one.</li>
         </ol>
-        <div class="cv-row"><label class="btn small file">Choose a .fig file<input id="figFile" type="file" accept=".fig,application/octet-stream" hidden></label><span class="hint" id="figStatus"></span></div>
+        <div class="cv-row"><label class="btn small file">Choose a .fig or .jam file<input id="figFile" type="file" accept=".fig,.jam,.csv,application/octet-stream,text/csv" hidden></label><span class="hint" id="figStatus"></span></div>
         <p class="hint">Frames, text, shapes, vectors, image fills, gradients, strokes, shadows and components from the same file come through; sections open into their frames, and frames copied from far apart are arranged in rows. Variables, constraints and prototypes do not. Fonts we don't ship load from Google Fonts when they exist there.</p>
         </div>
         <div data-itab-panel="web" hidden><div id="captureSection"></div></div>

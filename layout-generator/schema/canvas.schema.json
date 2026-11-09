@@ -33,6 +33,7 @@
         "autoLayout": { "$ref": "#/$defs/auto", "description": "Auto layout of the screen itself (its top-level blocks)." },
         "clip": { "type": "boolean", "description": "Clip content to the screen (default true)." },
         "hidden": { "type": "boolean" }, "locked": { "type": "boolean" }, "showGrid": { "type": "boolean" },
+        "board": { "type": "boolean", "description": "This screen is a board (DeelJam): one large surface for stickies, shapes, connectors and sections. In Jam mode it is the ground everything sits on and grows as things reach its edges." },
         "theme": { "type": "string", "description": "The kit theme this screen is on ('dark'); absent means light. Colors bound to tokens hold that theme's values." }
       }
     },
@@ -99,7 +100,7 @@
         "asset": { "type": ["string", "null"], "description": "image: asset id (shared images are a_ + 16 hex)." },
         "fit": { "type": "string", "enum": ["cover", "contain"] },
         "focal": { "type": "string", "description": "image, video: crop focus, SVG preserveAspectRatio style (xMidYMid…), when there is no crop." },
-        "section": { "type": "object", "description": "box: a board section with a title; blocks whose centre is inside belong to it (parent) and move with it.", "properties": { "title": { "type": "string" } } },
+        "section": { "type": "object", "description": "box: a board section with a title; blocks whose centre is inside belong to it (parent) and move with it.", "properties": { "title": { "type": "string" }, "outside": { "type": "boolean", "description": "Draw the title above the section instead of inside its top edge (sections that came from FigJam)." }, "size": { "type": "number" }, "color": { "type": "string" } } },
         "votes": { "type": "object", "description": "board: dot votes, person id to count.", "additionalProperties": { "type": "number" } },
         "veil": { "type": "boolean", "description": "sticky: words hidden from everyone but the author until revealed." },
         "author": { "type": "string" }, "authorName": { "type": "string" },

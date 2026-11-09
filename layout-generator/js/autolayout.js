@@ -356,7 +356,12 @@ const Auto = (() => {
   // Ids in a pasted or duplicated subtree are new; parents inside the set follow, others drop to `root`.
   function remap(blocks, root) {
     const map = new Map(blocks.map(b => [b.id, Canvas.uid()]));
-    for (const b of blocks) { b.id = map.get(b.id); if (b.parent && map.has(b.parent)) b.parent = map.get(b.parent); else if (root) b.parent = root; else delete b.parent; }
+    for (const b of blocks) {
+      b.id = map.get(b.id); if (b.parent && map.has(b.parent)) b.parent = map.get(b.parent); else if (root) b.parent = root; else delete b.parent;
+      // a copied connector joins the copies of what it joined (or stays on the original when that was not copied)
+      if (b.kind === 'connector') for (const k of ['from', 'to']) if (b[k] && b[k].id && map.has(b[k].id)) b[k] = { ...b[k], id: map.get(b[k].id) };
+      if (b.votes) delete b.votes;
+    }
     return map;
   }
   // A selection plus everything inside its boxes, in list order.

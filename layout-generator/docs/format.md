@@ -50,7 +50,7 @@ Every block has `id` and `kind`, and its box `x`, `y`, `w`, `h` in px from the s
 | `stamp` | an emoji stamp or reaction | `text` (the emoji), `votes` |
 | `connector` | an arrow between two blocks that follows them | `from`, `to` ({id, side?} or {x, y}), `arrow` (none, end, both), `route` (elbow, straight), `dash`, `text` (label), `stroke` |
 
-A `box` with `section: {title}` is a board section: blocks whose centre lies inside it belong to it (`parent`) and travel with it. A `field` or `shape` may carry `text`, words centred inside it that shrink to fit. A screen with `board: true` is a DeelJam board: one surface that grows as things are placed. `doc.jam` holds the board's shared state (`timer: {endsAt, minutes}`).
+A screen with `board: true` is a board: in Jam mode it is the ground, never selected or moved, and it grows when things reach its edges. A board made by DeelJam has the id `board`, so the same board made on two devices at once is one board. `section.outside: true` draws a section's title above it (sections that came from FigJam). A `box` with `section: {title}` is a board section: blocks whose centre lies inside it belong to it (`parent`) and travel with it. A `field` or `shape` may carry `text`, words centred inside it that shrink to fit. A screen with `board: true` is a DeelJam board: one surface that grows as things are placed. `doc.jam` holds the board's shared state (`timer: {endsAt, minutes}`).
 
 Derived values (`lines`, `inkW`, `capacity`, `overflow`) are recomputed from text and font; they can be left out.
 

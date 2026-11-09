@@ -27,13 +27,21 @@ const Jam = (() => {
     $('jamBar').addEventListener('click', onBar); $('jamCtx').addEventListener('click', onCtx); $('jamCtx').addEventListener('input', onCtxInput); $('jamTop').addEventListener('click', onTop); $('jamPop').addEventListener('click', onPop);
     document.addEventListener('pointerdown', e => { if (!e.target.closest('#jamPop') && !e.target.closest('[data-jt][data-pop]')) hidePop(); if (following && e.target.closest('#stage') && !e.target.closest('#jamTop')) stopFollow(); }, true);
     $('stage').addEventListener('wheel', () => { if (following) stopFollow(); }, { passive: true, capture: true });
-    CanvasUI.on('select', renderCtx); CanvasUI.on('action', k => { if (String(k).startsWith('editmode.')) applyMode(); if (String(k) === 'tool') renderBar(); });
+    CanvasUI.on('select', renderCtx); CanvasUI.on('action', k => { if (String(k).startsWith('editmode.')) onOpen(); if (String(k) === 'tool') renderBar(); });
     CanvasUI.on('view', v => { if (env.shareView) env.shareView(v); renderCtx(); });
     document.addEventListener('keydown', onKeys);
     timerTick = setInterval(renderTop, 500);
     applyMode();
   }
-  function onOpen() { if (isJam()) { board(); } applyMode(); }
+  // The board is made once the canvas that is opening has answered: someone joining a shared board must not add a
+  // second, empty one before the first arrives.
+  let opening = 0;
+  async function onOpen() {
+    applyMode(); if (!isJam()) return; const n = ++opening;
+    if (env.docReady) { try { await env.docReady(); } catch { } }
+    if (n !== opening || !isJam() || !CanvasUI.active) return;
+    board(); applyMode();
+  }
   function applyMode() {
     const on = isJam() && CanvasUI.active; $('jamBar').hidden = !on; $('jamTop').hidden = !on; if (!on) { $('jamCtx').hidden = true; hidePop(); } else { renderBar(); renderTop(); renderCtx(); }
     document.body.classList.toggle('jam-on', on);
@@ -73,6 +81,8 @@ const Jam = (() => {
     const sh = e.target.closest('[data-shape]'); if (sh) { shapePick = sh.dataset.shape; CanvasUI.setTool('shape'); hidePop(); renderBar(); return; }
     const st = e.target.closest('[data-stamp]'); if (st) { stampPick = st.dataset.stamp; CanvasUI.setTool('stamp'); hidePop(); renderBar(); return; }
     const ai = e.target.closest('[data-ai]'); if (ai) { hidePop(); runAI(ai.dataset.ai); return; }
+    if (e.target.closest('[data-flow-cancel]')) { hidePop(); return; }
+    if (e.target.closest('[data-flow-go]')) { const ta = $('jamPop').querySelector('textarea'); const text = ta ? ta.value : ''; if (!text.trim()) { if (ta) ta.focus(); return; } hidePop(); drawFlow(text); return; }
   }
   // the tools read the picks when they place
   function pickFor(kind) {
@@ -133,18 +143,28 @@ const Jam = (() => {
   }
 
   // ---- top strip: people, follow, timer, reveal, mode -----------------------------------------------------------------
-  let timerMenu = false;
+  let timerMenu = false, topKey = '', ranFor = 0, rangFor = 0;
+  // Rebuilt only when what it shows changes (people, hidden count, menu): the clock ticks in place, so a button is
+  // never replaced under a pointer that is about to click it.
   function renderTop() {
     const el = $('jamTop'); if (!el || el.hidden) return;
     const d = CanvasUI.doc; const peers = CanvasUI.peers || []; const t = d && d.jam && d.jam.timer; const now = Date.now();
     const left = t && t.endsAt ? Math.max(0, Math.ceil((t.endsAt - now) / 1000)) : 0; const mm = Math.floor(left / 60), ss = String(left % 60).padStart(2, '0');
+    const running = !!(t && t.endsAt && left > 0);
     const hidden = d ? d.frames.reduce((n, f) => n + f.layout.blocks.filter(b => b.kind === 'sticky' && b.veil).length, 0) : 0;
-    el.innerHTML = `<div class="jam-people">${peers.slice(0, 8).map(p => `<button type="button" class="jam-peer ${following === p.id ? 'on' : ''}" data-follow="${esc(p.id)}" style="--c:${esc(p.color || '#888')}" title="${following === p.id ? 'Following ' : 'Follow '}${esc(p.name || 'Someone')}">${esc((p.name || '?').trim()[0] || '?')}</button>`).join('')}${peers.length ? `<span class="hint">${peers.length} here</span>` : '<span class="hint">Only you here</span>'}${following ? `<button type="button" class="btn small" data-top="unfollow">Stop following</button>` : ''}</div>
+    const key = JSON.stringify([peers.slice(0, 8).map(p => [p.id, p.name, p.color]), peers.length, following, hidden, running, timerMenu, !!(t && t.endsAt)]);
+    if (key !== topKey) {
+      topKey = key;
+      el.innerHTML = `<div class="jam-people">${peers.slice(0, 8).map(p => `<button type="button" class="jam-peer ${following === p.id ? 'on' : ''}" data-follow="${esc(p.id)}" style="--c:${esc(p.color || '#888')}" title="${following === p.id ? 'Following ' : 'Follow '}${esc(p.name || 'Someone')}">${esc((p.name || '?').trim()[0] || '?')}</button>`).join('')}${peers.length ? `<span class="hint">${peers.length} here</span>` : '<span class="hint">Only you here</span>'}${following ? `<button type="button" class="btn small" data-top="unfollow">Stop following</button>` : ''}</div>
       <div class="jam-right">${hidden ? `<button type="button" class="btn small" data-top="reveal" title="Show every hidden sticky">Reveal ${hidden}</button>` : ''}
-        <button type="button" class="btn small ${t && t.endsAt && left > 0 ? 'jam-timer-on' : ''}" data-top="timer">${t && t.endsAt && left > 0 ? `⏱ ${mm}:${ss}` : '⏱ Timer'}</button>${timerMenu ? `<span class="jam-timer-menu">${[1, 2, 5, 10, 15].map(m => `<button type="button" class="btn small" data-timer="${m}">${m} min</button>`).join('')}${t && t.endsAt ? '<button type="button" class="btn small" data-timer="0">Stop</button>' : ''}</span>` : ''}
+        <button type="button" class="btn small ${running ? 'jam-timer-on' : ''}" data-top="timer" data-timer-label></button>${timerMenu ? `<span class="jam-timer-menu">${[1, 2, 5, 10, 15].map(m => `<button type="button" class="btn small" data-timer="${m}">${m} min</button>`).join('')}${running ? '<button type="button" class="btn small" data-timer="0">Stop</button>' : ''}</span>` : ''}
         <button type="button" class="btn small" data-top="clearvotes" title="Clear every vote on the board">Clear votes</button>
         <button type="button" class="btn small primary" data-top="design" title="Open the full design editor on this board">Design mode</button></div>`;
-    if (t && t.endsAt && left === 0 && !t.rang) { t.rang = true; if (env.toast) env.toast('⏱ Time is up'); }
+    }
+    const lbl = el.querySelector('[data-timer-label]'); const txt = running ? `⏱ ${mm}:${ss}` : '⏱ Timer'; if (lbl && lbl.textContent !== txt) lbl.textContent = txt;
+    // ring once, and only for a timer this person saw running (not one that ran out before they opened the board)
+    if (running) ranFor = t.endsAt;
+    if (t && t.endsAt && left === 0 && ranFor === t.endsAt && rangFor !== t.endsAt) { rangFor = t.endsAt; if (env.toast) env.toast('⏱ Time is up'); }
   }
   function onTop(e) {
     const fo = e.target.closest('[data-follow]'); if (fo) { if (following === fo.dataset.follow) stopFollow(); else startFollow(fo.dataset.follow); renderTop(); return; }
@@ -200,15 +220,25 @@ const Jam = (() => {
   // ---- Claude on the board -----------------------------------------------------------------------------------------
   const AI = {
     summarize: 'Read every sticky, shape and text on this board (get_frame on the board screen). Then add ONE text block (kind body, 520 wide, 18px) to the right of everything, titled "Summary", with 3–6 short bullets of what the group said, then "Decisions:" and "Open questions:" lines if there are any. Do not move or change anything that is already there.',
-    cluster: 'Group the stickies on this board into 3–6 themes by meaning. For each theme add a section (kind section, title = the theme in 2–4 words, a soft color) and move its stickies inside it with update_blocks x/y in a grid: stickies are 200×200, 24px apart, 40px inside the section edge, below the title. Put the sections side by side, 80px apart, starting where the stickies are now. Keep every sticky\'s words exactly as they are; set each moved sticky\'s parent to its section with move_into if available, else leave parent as is.',
+    cluster: 'Group the stickies on this board into 3–6 themes by meaning. For each theme add a section (kind section, title = the theme in 2–4 words, a soft color) and move its stickies inside it with update_blocks x/y in a grid: stickies are 200×200, 24px apart, 40px inside the section edge, below the title. Put the sections side by side, 80px apart, starting where the stickies are now. Keep every sticky\'s words exactly as they are. A sticky whose middle is inside a section belongs to it from then on (it moves when the section moves), so only x and y need setting.',
     actions: 'Turn this board into action items. Add a section titled "Action items" (kind section) to the right of everything, and inside it one sticky (kind sticky, color #C7CEEA) per item in a grid (200×200, 24px apart). An item reads "<verb phrase> — <owner>" when an owner is named, else just the action. Pull items from stickies and shapes that read like tasks, decisions or next steps. Do not change the existing stickies.',
     tidy: 'Tidy this board without changing any words: inside each section, lay the stickies out in a grid (200×200, 24px apart, 40px from the section edges, below the title) and grow the section if they do not fit; line sections up left to right with 80px between them; put loose stickies in a grid to the right. Use update_blocks x/y (and w/h for sections). Keep connectors attached.',
   };
   async function runAI(kind) {
     if (typeof Agent === 'undefined') return;
     if (kind === 'ask') { Agent.show(); return; }
-    if (kind === 'flow') { const text = prompt('Paste the steps or describe the process (one step per line, decisions as questions):'); if (!text || !text.trim()) return; Agent.send(`Draw this as a flowchart on the board: shapes (kind shape, 220×120, rounded 12; decisions are questions and get fill #FFE8A3; start and end get fill #B5EAD7 with radius 45) connected with connectors (kind connector, from_id/to_id, labels "yes"/"no" on decision branches), laid out left to right, 100px between shapes, rows 60px apart, placed in empty space to the right of what is on the board. Keep each step\'s words short.\n\n${text.trim().slice(0, 3000)}`); return; }
+    if (kind === 'flow') { showFlow(); return; }
     const f = board(); CanvasUI.select(f.id, []); Agent.send(AI[kind]);
+  }
+  function showFlow() {
+    const pop = $('jamPop'); pop.dataset.kind = 'flow'; pop.hidden = false;
+    pop.innerHTML = `<div class="jam-flow"><b>Draw a flowchart from text</b><textarea rows="7" aria-label="Steps" placeholder="One step per line, decisions as questions:&#10;Receive request&#10;Is it valid?&#10;Approve&#10;Reject"></textarea><div class="jam-row"><button type="button" class="btn small primary" data-flow-go>Draw it</button><button type="button" class="btn small" data-flow-cancel>Cancel</button></div></div>`;
+    const r = $('jamBar').querySelector('[data-jt="ai"]').getBoundingClientRect(); const pr = pop.parentElement.getBoundingClientRect(); pop.style.left = Math.max(8, Math.min(pr.width - 348, r.left - pr.left + r.width / 2 - 170)) + 'px'; pop.style.bottom = (pr.bottom - r.top + 10) + 'px';
+    setTimeout(() => { const ta = pop.querySelector('textarea'); if (ta) ta.focus(); }, 0);
+  }
+  function drawFlow(text) {
+    if (!text || !text.trim()) return;
+    Agent.send(`Draw this as a flowchart on the board: shapes (kind shape, 220×120, rounded 12; decisions are questions and get fill #FFE8A3; start and end get fill #B5EAD7 with radius 45) connected with connectors (kind connector, from_id/to_id, labels "yes"/"no" on decision branches), laid out left to right, 100px between shapes, rows 60px apart, placed in empty space to the right of what is on the board. Keep each step\'s words short.\n\n${text.trim().slice(0, 3000)}`);
   }
 
   return { init, onOpen, applyMode, renderCtx, pickFor, TEMPLATES, insertTemplate, get stickyColor() { return stickyColor; }, isJam };

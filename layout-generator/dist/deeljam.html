@@ -842,7 +842,14 @@ input[disabled] { opacity: .5; cursor: not-allowed; }
 
 /* ---- DeelJam: the board mode ------------------------------------------------------------------------------------- */
 .cv-jam .cv-tools, .cv-jam .cv-newframe, .cv-jam .cv-layers, .cv-jam .cv-props, .cv-jam #cvSnap, .cv-jam .cv-frame-label, .cv-jam #cvAddDiagram { display: none !important; }
-.cv-jam .cv-frame { box-shadow: 0 0 0 1px var(--line-2); }
+/* Jam keeps the bar short: no grid snapping, screen count, raw files or Clear (a shared board is not cleared by one click) */
+.cv-jam label:has(> #cvSnap), .cv-jam #cvCount, .cv-jam #cvSave, .cv-jam label:has(> #cvLoad), .cv-jam #cvClear { display: none !important; }
+.cv-jam .cv-frame { box-shadow: none; }
+/* the toast clears the bottom bar; the export menu keeps to pictures and slides */
+.jam-on #toast { bottom: 104px; }
+.cv-jam #cvExport [data-export="react"], .cv-jam #cvExport [data-export="html"], .cv-jam #cvExport [data-export="all"], .cv-jam #cvExport [data-export="allpdf"], .cv-jam #cvExport [data-export="canvas"], .cv-jam #cvExport .cv-menu-h { display: none; }
+.jam-flow { display: grid; gap: 8px; width: 320px; }
+.jam-flow textarea { width: 100%; box-sizing: border-box; resize: vertical; min-height: 120px; padding: 8px 10px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--bg); color: var(--fg); font: 13px/1.45 var(--font-ui, Inter, system-ui, sans-serif); }
 .cv-jam .cv-stage { background-image: radial-gradient(var(--line-2) 1px, transparent 1px); }
 .jam-bar { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 8; display: flex; align-items: center; gap: 6px; padding: 6px; background: var(--panel, #1b1b22); border: 1px solid var(--line-2); border-radius: 14px; box-shadow: 0 12px 36px rgba(0,0,0,.28); }
 .jam-tools { display: flex; align-items: center; gap: 2px; }
@@ -1122,7 +1129,7 @@ input[disabled] { opacity: .5; cursor: not-allowed; }
           <button id="cvLink" class="btn small" type="button" title="Copy a link that carries this canvas (⌘L)">Copy link</button>
           <button id="cvSave" class="btn small" type="button">Save JSON</button>
           <button id="cvImport" class="btn small" type="button" data-tip="Figma paste or file, a web page by its address, Slides or PowerPoint, canvas files">Import ▾</button>
-          <label class="btn small file">Load<input id="cvLoad" type="file" accept="application/json,.json,.fig" hidden></label>
+          <label class="btn small file">Load<input id="cvLoad" type="file" accept="application/json,.json,.fig,.jam,.csv" hidden></label>
           <details class="cv-menu" id="cvExport"><summary class="btn small primary">Export</summary>
             <div class="cv-menu-list">
               <span class="cv-menu-h">Selected screens (or all)</span>
@@ -1291,8 +1298,9 @@ input[disabled] { opacity: .5; cursor: not-allowed; }
         <ol>
           <li><b>Paste:</b> select frames or layers in Figma, press ⌘C, come back to the canvas and press ⌘V. Layers without a frame go into the selected frame.</li>
           <li><b>File:</b> in Figma choose File → Save local copy, then drop the .fig on the canvas or pick it here.</li>
+          <li><b>FigJam:</b> the same two ways. Copy things on a FigJam board and paste, or File → Save local copy and drop the .jam. Stickies, shapes with text, connectors, sections and stamps come in as board things you can edit. A CSV of stickies (select them in FigJam, right-click → Export selection → CSV) becomes stickies too, grouped by a Section column when there is one.</li>
         </ol>
-        <div class="cv-row"><label class="btn small file">Choose a .fig file<input id="figFile" type="file" accept=".fig,application/octet-stream" hidden></label><span class="hint" id="figStatus"></span></div>
+        <div class="cv-row"><label class="btn small file">Choose a .fig or .jam file<input id="figFile" type="file" accept=".fig,.jam,.csv,application/octet-stream,text/csv" hidden></label><span class="hint" id="figStatus"></span></div>
         <p class="hint">Frames, text, shapes, vectors, image fills, gradients, strokes, shadows and components from the same file come through; sections open into their frames, and frames copied from far apart are arranged in rows. Variables, constraints and prototypes do not. Fonts we don't ship load from Google Fonts when they exist there.</p>
         </div>
         <div data-itab-panel="web" hidden><div id="captureSection"></div></div>
@@ -3693,6 +3701,8 @@ const Render = (() => {
   function sectionTitle(b, ctx) {
     if (!b.section) return ''; const title = String(b.section.title || ''); if (!title) return '';
     const size = b.section.size || 18;
+    // outside: the title sits above the section (how FigJam draws it), so what fills the section's top is not covered
+    if (b.section.outside) return `<text x="${n(b.x + 2)}" y="${n(b.y - 10)}" font-family="Inter, system-ui, sans-serif" font-size="${n(size)}" font-weight="700" fill="${col(b.section.color || '#1E1C1A')}">${esc(title)}</text>`;
     return `<text x="${n(b.x + 16)}" y="${n(b.y + 16 + size * 0.9)}" font-family="Inter, system-ui, sans-serif" font-size="${n(size)}" font-weight="700" fill="${col(b.section.color || '#1E1C1A')}">${esc(title)}</text>`;
   }
   function connectorEl(b, ctx, layout) {
@@ -4869,7 +4879,8 @@ const ImageGen = (() => {
    Both carry the same binary: "fig-kiwi", a version, then a compressed kiwi schema and a compressed message (deflate-raw,
    or zstd in newer files). The schema travels with the data, so the decoder below knows nothing Figma-specific; only
    the conversion to frames and blocks reads Figma's node types. A .fig file is usually a zip around that binary
-   (canvas.fig) with the image fills in images/<hash>. Fidelity is best-effort: frames, rectangles, ellipses, text,
+   (canvas.fig) with the image fills in images/<hash>. A FigJam board (a .jam file, or a paste from FigJam) is the same
+   container with board node types: stickies, shapes with text, connectors, sections, stamps; they become a board. Fidelity is best-effort: frames, rectangles, ellipses, text,
    vectors, image fills, gradients, strokes, drop shadows, opacity and rotation come through; components are expanded
    from their main component when it is in the same data; variables, constraints and prototypes are not read. */
 const FigmaImport = (() => {
@@ -4959,14 +4970,14 @@ const FigmaImport = (() => {
     if (head !== 'fig-kiwi' && head !== 'fig-jam.') throw new Error('Not Figma data (no fig-kiwi header)');
     const dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength); let p = 8; const version = dv.getUint32(p, true); p += 4; const files = [];
     while (p + 4 <= u8.length) { const size = dv.getUint32(p, true); p += 4; if (p + size > u8.length) break; files.push(u8.subarray(p, p + size)); p += size; }
-    return { version, files };
+    return { version, files, jam: head === 'fig-jam.' };
   }
   async function decodeArchive(u8) {
-    const { version, files } = readArchive(u8);
+    const { version, files, jam } = readArchive(u8);
     if (files.length < 2) throw new Error('Figma data is missing its schema or content');
     const schema = decodeSchema(await unpack(files[0]));
     const message = compile(schema).decode(await unpack(files[1]));
-    return { version, message };
+    return { version, message, jam };
   }
   const hex = u8 => Array.from(u8 || [], b => b.toString(16).padStart(2, '0')).join('');
 
@@ -4976,7 +4987,9 @@ const FigmaImport = (() => {
     const images = new Map();
     if (u8[0] === 0x50 && u8[1] === 0x4B) {
       const zip = readZip(u8);
-      const main = zip.get('canvas.fig') || [...zip.entries()].find(([k]) => /\.fig$/.test(k))?.[1];
+      let main = zip.get('canvas.fig') || zip.get('canvas.jam') || [...zip.entries()].find(([k]) => /\.(fig|jam)$/.test(k))?.[1];
+      // whatever it is called: the entry that starts with the archive's signature
+      if (!main) for (const [k, e] of zip) { if (k.endsWith('/') || /^images\//.test(k)) continue; try { const head = new TextDecoder().decode((await zipEntry(e)).subarray(0, 8)); if (head === 'fig-kiwi' || head === 'fig-jam.') { main = e; break; } } catch { } }
       if (!main) throw new Error('This zip has no canvas.fig inside');
       for (const [k, e] of zip) if (/^images\//.test(k) && !k.endsWith('/')) images.set(k.slice(7).toLowerCase(), e);
       const res = await decodeArchive(await zipEntry(main));
@@ -5069,7 +5082,17 @@ const FigmaImport = (() => {
 
   // ---- conversion ----------------------------------------------------------------------------------------------------
   const CONTAINERS = new Set(['FRAME', 'GROUP', 'SYMBOL', 'INSTANCE', 'SECTION']);
-  const VECTORS = new Set(['VECTOR', 'STAR', 'LINE', 'REGULAR_POLYGON', 'BOOLEAN_OPERATION']);
+  const VECTORS = new Set(['VECTOR', 'STAR', 'LINE', 'REGULAR_POLYGON', 'BOOLEAN_OPERATION', 'HIGHLIGHT', 'WASHI_TAPE']);
+  // FigJam's own node types. Data that holds any of them (or says it is a .jam) is a board, not screens.
+  const BOARD_TYPES = new Set(['STICKY', 'SHAPE_WITH_TEXT', 'CONNECTOR', 'STAMP', 'CODE_BLOCK', 'WIDGET', 'TABLE', 'HIGHLIGHT', 'WASHI_TAPE', 'LINK_UNFURL']);
+  function isBoard(data) {
+    if (!data || !data.message) return false; if (data.jam) return true;
+    const nodes = data.message.nodeChanges || []; const doc = nodes.find(n => n && n.type === 'DOCUMENT');
+    if (doc && /figjam|whiteboard/i.test(String(doc.editorType || ''))) return true;
+    return nodes.some(n => n && n.phase !== 'REMOVED' && (n.type === 'STICKY' || n.type === 'SHAPE_WITH_TEXT' || n.type === 'CONNECTOR'));
+  }
+  const STAMPS = [[/thumbs?[ _-]?down|dislike|-1/i, '👎'], [/thumbs?[ _-]?up|like|\+1/i, '👍'], [/heart|love/i, '❤️'], [/star/i, '⭐'], [/question/i, '❓'], [/check|done|tick|yes/i, '✅'], [/cross|\bno\b|\bx\b/i, '❌'], [/plus/i, '➕'], [/minus/i, '➖'], [/fire|hot/i, '🔥'], [/eyes|look/i, '👀'], [/party|tada|celebrat|confetti/i, '🎉'], [/laugh|joy|haha|lol/i, '😂'], [/clap/i, '👏'], [/idea|bulb/i, '💡'], [/warn|alert|exclam/i, '⚠️'], [/rocket/i, '🚀'], [/smil|happy/i, '🙂'], [/sad/i, '🙁']];
+  const lum = hex => { const m = /^#?([0-9a-f]{6})$/i.exec(hex || ''); if (!m) return 1; const v = parseInt(m[1], 16); const c = [v >> 16 & 255, v >> 8 & 255, v & 255].map(x => { x /= 255; return x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4); }); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; };
   // Figma auto layout -> our stack settings (null when the node does not stack its children).
   const ALIGN = { MIN: 'start', CENTER: 'center', MAX: 'end' };
   function autoOf(n) {
@@ -5081,7 +5104,10 @@ const FigmaImport = (() => {
   // message -> { frames: [{name, x, y, layout, clip, autoLayout}], stats }. opts.layout: 'auto' keeps Figma's auto
   // layout (stacks reflow here too); 'fixed' keeps every position as drawn. Frames inside frames are boxes either way.
   async function convert(data, env, opts = {}) {
-    const AUTO = opts.layout !== 'fixed';
+    const BOARD = !!opts.board; const AUTO = opts.layout !== 'fixed' && !BOARD;
+    const made1 = new Map();   // node guid -> the block it became (what a connector holds on to)
+    const absM = new Map();    // node guid -> its transform into page space (for connector ends given relative to a node)
+    const pendingConnectors = [];
     const { message } = data; const blobs = message.blobs || [];
     const nodes = (message.nodeChanges || []).filter(n => n && n.guid && n.phase !== 'REMOVED');
     const byId = new Map(nodes.map(n => [idOf(n.guid), n]));
@@ -5130,18 +5156,33 @@ const FigmaImport = (() => {
       const ov = overrides && overrides.get(idOf(n.guid)); if (ov) n = { ...n, ...ov };
       n = inheritFromMain(n);
       if (n.visible === false) return;
-      const local = n.transform || I; const M = mul(m, local);
+      const local = n.transform || I; const M = mul(m, local); absM.set(idOf(n.guid), M);
       const w = n.size ? n.size.x : 0, h = n.size ? n.size.y : 0;
       const box = boxOf(M, w, h);
       const op = opacity * (n.opacity ?? 1);
       // The first block a node makes takes its place in the parent's stack; any extra layers ride along absolutely.
       let made = 0;
-      const common = b => { if (box.rotation) b.rotation = box.rotation; if (op < 0.999 && b.kind !== 'box') b.opacity = r2(op); else if (op < 0.999) b.opacity = r2(n.opacity ?? 1); const sh = shadowOf(n.effects); if (sh) b.shadow = sh; outsetStroke(b, n); if (n.name) b.label = String(n.name).slice(0, 80); if (parentId) b.parent = parentId; if (made++ === 0) applySizing(n, b, parentNode); else if (parentNode && AUTO && autoOf(parentNode)) b.absolute = true; stats.blocks++; out.push(b); return b; };
+      const common = b => { if (!made) made1.set(idOf(n.guid), b.id); if (box.rotation) b.rotation = box.rotation; if (op < 0.999 && b.kind !== 'box') b.opacity = r2(op); else if (op < 0.999) b.opacity = r2(n.opacity ?? 1); const sh = shadowOf(n.effects); if (sh) b.shadow = sh; outsetStroke(b, n); if (n.name) b.label = String(n.name).slice(0, 80); if (parentId) b.parent = parentId; if (made++ === 0) applySizing(n, b, parentNode); else if (parentNode && AUTO && autoOf(parentNode)) b.absolute = true; stats.blocks++; out.push(b); return b; };
       const t = n.type;
       if (t === 'TEXT') { textBlock(n, box, common); return; }
+      // board things
+      if (t === 'STICKY') { stickyBlock(n, box, common); return; }
+      if (t === 'SHAPE_WITH_TEXT') { shapeTextBlock(n, box, common, w, h); return; }
+      if (t === 'CONNECTOR') { pendingConnectors.push({ n, m, list: outList }); return; }
+      if (t === 'CODE_BLOCK') { codeBlock(n, box, common); return; }
+      if (t === 'LINK_UNFURL') { const d = n.linkPreviewData || {}; const label = String(d.title || d.url || n.name || 'Link').slice(0, 200); const b = { id: uid(), kind: 'field', x: box.x, y: box.y, w: Math.max(120, box.w), h: Math.max(48, box.h), radius: 12, fill: '#FFFFFF', stroke: { color: '#C9C8D1', width: 1.5 }, text: label, font: { family: fontFamilyCss('Inter'), weight: 500, size: 16, lineHeight: 1.3 }, color: '#1E1C1A', decorative: false, path: 'shape_' + uid() }; common(b); if (typeof Canvas !== 'undefined') Canvas.refit(b); return; }
+      if (t === 'STAMP') { const hit = STAMPS.find(([re]) => re.test(n.name || '')); if (hit || !childrenOf(n).length) { const sz = Math.max(32, Math.min(96, Math.max(box.w, box.h) || 56)); common({ id: uid(), kind: 'stamp', x: r2(box.x + box.w / 2 - sz / 2), y: r2(box.y + box.h / 2 - sz / 2), w: sz, h: sz, text: hit ? hit[1] : '📍', decorative: true, path: 'stamp_' + uid() }); return; } }
       let boxId = null;
-      if (CONTAINERS.has(t)) {
-        boxId = await containerBox(n, box, common, t, op);
+      if (BOARD && t === 'SECTION') {
+        const p = mainPaint(n.fillPaints); const a = p && p.type === 'SOLID' ? (p.color.a ?? 1) * (p.opacity ?? 1) : 1;
+        const b = { id: uid(), kind: 'box', x: box.x, y: box.y, w: Math.max(40, box.w), h: Math.max(40, box.h), fill: p && p.type === 'SOLID' ? colorHex(p.color) : '#F3F2FA', radius: 8, clip: false, section: { title: String(n.name || 'Section').slice(0, 80), outside: true }, decorative: true, path: 'section_' + uid() };
+        if (a < 0.999) b.fillAlpha = r2(a); const st = strokeOf(n); if (st) b.stroke = st;
+        common(b); delete b.shadow; delete b.rotation; boxId = b.id;
+        for (const c of childrenOf(n)) await walk(c, M, 1, out, overrides, depth + 1, boxId, null);
+        return;
+      }
+      if (t === 'STAMP' || CONTAINERS.has(t)) {
+        boxId = await containerBox(n, box, common, t === 'STAMP' ? 'GROUP' : t, op);
       } else if (t === 'RECTANGLE' || t === 'ROUNDED_RECTANGLE') {
         await fillBlocks(n, box, common, 'rect');
       } else if (t === 'ELLIPSE') {
@@ -5171,7 +5212,7 @@ const FigmaImport = (() => {
         }
         return;
       }
-      if (CONTAINERS.has(t)) for (const c of childrenOf(n)) await walk(c, M, kidOp, out, overrides, depth + 1, kidParent, kidNode);
+      if (t === 'STAMP' || CONTAINERS.has(t)) for (const c of childrenOf(n)) await walk(c, M, kidOp, out, overrides, depth + 1, kidParent, kidNode);
     }
     // A frame, component, instance or group inside a screen becomes a box: its first solid or gradient paint is the
     // box's fill, image paints become an image inside it, and (when kept) its auto layout drives its children.
@@ -5219,6 +5260,79 @@ const FigmaImport = (() => {
       if (!parts.length) { skip(n.type + ' (no geometry)'); return; }
       common({ id: uid(), kind: 'vector', x: box.x, y: box.y, w: Math.max(1, box.w), h: Math.max(1, box.h), viewBox: [0, 0, r2(Math.max(w, 0.01)), r2(Math.max(h, 0.01))], svg: parts.join(''), fill: fillCol || '#000000', decorative: true });
     }
+    // a board node's words: on the node itself, or (in data that keeps them apart) on a text layer inside it
+    const wordsOf = n => { let t = n.textData && n.textData.characters; if (!t) { const kid = childrenOf(n).find(c => c.type === 'TEXT' && c.textData && c.textData.characters); if (kid) t = kid.textData.characters; } return String(t || '').replace(/\u2028|\u2029/g, '\n').replace(/\s+$/, ''); };
+    const wordFont = (n, dflt) => ({ family: fontFamilyCss(n.fontName && n.fontName.family ? n.fontName.family : 'Inter'), weight: n.fontName ? weightOf(n.fontName.style) : 500, size: Math.max(11, Math.min(96, Math.round(n.fontSize || dflt))), lineHeight: 1.3 });
+    // A sticky: its colour, its words (the note sizes them to fit), who wrote it when the board says so.
+    function stickyBlock(n, box, common) {
+      const p = mainPaint(n.fillPaints);
+      const b = { id: uid(), kind: 'sticky', x: box.x, y: box.y, w: Math.max(40, box.w), h: Math.max(40, box.h), text: wordsOf(n), fill: p && p.type === 'SOLID' ? colorHex(p.color) : '#FFE066', font: wordFont(n, 20), path: 'sticky_' + uid() };
+      b.font.weight = Math.min(600, Math.max(400, b.font.weight)); b.fontSizeMax = b.font.size;
+      if (lum(b.fill) < 0.2) b.color = '#FFFFFF';
+      if (n.authorName && n.authorVisible !== false) b.authorName = String(n.authorName).slice(0, 60);
+      common(b); delete b.shadow; if (typeof Canvas !== 'undefined') Canvas.refit(b);
+    }
+    // A shape with words: rectangles, rounded rectangles, ellipses and diamonds are native; the rarer outlines
+    // (triangles, parallelograms, the engineering set) keep their drawn outline with the words on top.
+    function shapeTextBlock(n, box, common, w, h) {
+      const T = String(n.shapeWithTextType || 'SQUARE'); const p = mainPaint(n.fillPaints); const st = strokeOf(n); const text = wordsOf(n);
+      const fill = p && p.type === 'SOLID' ? colorHex(p.color) : p && /^GRADIENT/.test(p.type) ? (gradientOf(p, w, h) || { stops: [{ c: '#FFFFFF' }] }).stops[0].c : null;
+      const a = p && p.type === 'SOLID' ? (p.color.a ?? 1) * (p.opacity ?? 1) : 1;
+      // FigJam writes white on its strong fills (green, blue, purple, red) and dark on the light ones
+      const color = fill && a > 0.5 && lum(fill) < 0.36 ? '#FFFFFF' : '#1E1C1A';
+      const base = { x: box.x, y: box.y, w: Math.max(8, box.w), h: Math.max(8, box.h), text, font: wordFont(n, 16), color, decorative: false, path: 'shape_' + uid() };
+      base.fontSizeMax = base.font.size;
+      const native = T === 'ELLIPSE' || T === 'DIAMOND' || T === 'SQUARE' || T === 'ROUNDED_RECTANGLE';
+      const geo = (n.fillGeometry || []).some(g => blobs[g.commandsBlob] && blobs[g.commandsBlob].bytes && blobs[g.commandsBlob].bytes.length);
+      if (!native && geo) {
+        const before = out.length; vectorBlock(n, box, common, w, h); const drew = out.length > before; const g = 'g' + uid(); if (drew) out[out.length - 1].group = g;
+        if (text) { const tb = { id: uid(), kind: 'text', role: 'text', path: 'text_' + uid(), text, x: r2(box.x + box.w * 0.12), y: box.y, w: r2(box.w * 0.76), h: box.h, align: 'center', font: { ...base.font, letterSpacing: 0 }, fill: color, decorative: false }; if (drew) tb.group = g; if (typeof Canvas !== 'undefined') Canvas.refit(tb); tb.y = r2(box.y + (box.h - tb.h) / 2); common(tb); }
+        return;
+      }
+      const b = T === 'ELLIPSE' || T === 'DIAMOND' ? { id: uid(), kind: 'shape', shape: T === 'ELLIPSE' ? 'ellipse' : 'diamond', ...base, fill: fill || '#FFFFFF' }
+        : { id: uid(), kind: 'field', ...base, radius: T === 'SQUARE' ? r2(n.cornerRadius || 0) : r2(n.cornerRadius || Math.min(24, Math.min(box.w, box.h) / 5)), fill: fill || '#FFFFFF' };
+      if (!fill) { if (b.kind === 'field') { b.fill = 'none'; b.alpha = 0; } else b.fill = 'none'; } else if (a < 0.999) { if (b.kind === 'field') b.alpha = r2(a); else b.opacity = r2(a); }
+      if (st) b.stroke = st;
+      if (p && /^GRADIENT/.test(p.type)) { const g = gradientOf(p, w, h); if (g) b.gradient = g; }
+      common(b); if (typeof Canvas !== 'undefined') Canvas.refit(b);
+    }
+    // A code block: a dark card with its lines in a monospace face.
+    function codeBlock(n, box, common) {
+      const text = wordsOf(n).replace(/^[ \t]+/gm, m => '\u00A0'.repeat(m.replace(/\t/g, '  ').length)); const g = 'g' + uid(); // indentation survives line fitting
+      common({ id: uid(), kind: 'field', x: box.x, y: box.y, w: Math.max(40, box.w), h: Math.max(24, box.h), radius: 8, fill: '#1E1E1E', decorative: true, group: g });
+      if (!text) return;
+      const tb = { id: uid(), kind: 'text', role: 'text', path: 'text_' + uid(), text, x: box.x + 16, y: box.y + 12, w: Math.max(24, box.w - 32), h: Math.max(16, box.h - 24), align: 'left', font: { family: 'ui-monospace, "SF Mono", Menlo, Consolas, monospace', weight: 400, size: Math.max(10, Math.round(n.fontSize || 13)), lineHeight: 1.5, letterSpacing: 0 }, fill: '#EDEDED', decorative: false, group: g };
+      if (typeof Canvas !== 'undefined') Canvas.refit(tb); common(tb);
+    }
+    // Connectors come last: their ends name the blocks the other nodes became. An end is a node (with the side it
+    // leaves from when the board fixed one) or a loose point.
+    function connectorBlocks() {
+      const SIDE = { TOP: 't', RIGHT: 'r', BOTTOM: 'b', LEFT: 'l' }; const cap = c => !!c && c !== 'NONE' && c !== 'ROUND' && c !== 'SQUARE';
+      for (const c of pendingConnectors) {
+        const n = c.n; const M = mul(c.m, n.transform || I); const sz = n.size || { x: 0, y: 0 }; const own = boxOf(M, sz.x, sz.y);
+        const dist = q => Math.max(own.x - q.x, 0, q.x - (own.x + own.w)) + Math.max(own.y - q.y, 0, q.y - (own.y + own.h));
+        const end = e => {
+          if (!e) return null; const nid = e.endpointNodeID ? idOf(e.endpointNodeID) : ''; const bid = nid && made1.get(nid);
+          if (bid) return SIDE[e.magnet] ? { id: bid, side: SIDE[e.magnet] } : { id: bid };
+          const pos = e.position; if (!pos || !Number.isFinite(pos.x) || !Number.isFinite(pos.y)) return null;
+          // held by a node that did not come in: the point is given inside that node
+          if (nid && absM.has(nid)) { const q = ap(absM.get(nid), pos.x, pos.y); return { x: r2(q.x), y: r2(q.y) }; }
+          // a loose point: in the connector's parent space, or in its own; the one that lies on the connector's box
+          const inParent = ap(c.m, pos.x, pos.y), inOwn = ap(M, pos.x, pos.y); const q = (sz.x || sz.y) && dist(inOwn) + 0.5 < dist(inParent) ? inOwn : inParent;
+          return { x: r2(q.x), y: r2(q.y) };
+        };
+        const from = end(n.connectorStart) || { x: own.x, y: r2(own.y + own.h / 2) }, to = end(n.connectorEnd) || { x: r2(own.x + own.w), y: r2(own.y + own.h / 2) };
+        if (from.id && to.id && from.id === to.id) continue;
+        const sc = cap(n.connectorStartCap), ec = n.connectorEndCap === undefined && n.connectorStartCap === undefined ? true : cap(n.connectorEndCap);
+        const sp = mainPaint(n.strokePaints);
+        const b = { id: uid(), kind: 'connector', x: own.x, y: own.y, w: Math.max(1, own.w), h: Math.max(1, own.h), from, to, arrow: sc && ec ? 'both' : ec ? 'end' : sc ? 'start' : 'none', route: n.connectorLineStyle === 'STRAIGHT' ? 'straight' : 'elbow', text: wordsOf(n).replace(/\s*\n+\s*/g, ' ').slice(0, 200),
+          stroke: { color: sp && sp.type === 'SOLID' ? colorHex(sp.color) : '#5E5A56', width: Math.max(1, Math.min(12, r2(n.strokeWeight || 2))) }, font: { family: fontFamilyCss('Inter'), weight: 500, size: Math.max(11, Math.min(32, Math.round(n.fontSize || 14))), lineHeight: 1.3 }, path: 'connector_' + uid() };
+        if (Array.isArray(n.dashPattern) && n.dashPattern.some(v => v > 0)) b.dash = true;
+        if (n.name && !/^connector/i.test(n.name)) b.label = String(n.name).slice(0, 80);
+        stats.blocks++; c.list.push(b);
+      }
+      pendingConnectors.length = 0;
+    }
     function textBlock(n, box, common) {
       const chars = (n.textData && n.textData.characters) || ''; if (!chars.trim()) return;
       const size = r2(n.fontSize || 16); const fam = n.fontName ? n.fontName.family : 'Inter'; const style = n.fontName ? n.fontName.style : 'Regular';
@@ -5264,6 +5378,32 @@ const FigmaImport = (() => {
       return Object.keys(add).length ? { ...n, ...add } : n;
     }
 
+    // A board: every page's content becomes one list of blocks (pages side by side), sections stay sections.
+    if (BOARD) {
+      const top = nodes.filter(n => { if (n.type === 'DOCUMENT' || n.type === 'CANVAS' || n.visible === false) return false; const p = n.parentIndex && byId.get(idOf(n.parentIndex.guid)); return !p || p.type === 'CANVAS' || p.type === 'DOCUMENT'; });
+      top.sort((a, b) => (a.parentIndex && b.parentIndex && a.parentIndex.position < b.parentIndex.position ? -1 : 1));
+      const pageKey = n => { const p = n.parentIndex && byId.get(idOf(n.parentIndex.guid)); return p && p.type === 'CANVAS' ? idOf(p.guid) : ''; };
+      const pages = new Map(); for (const n of top) { const p = n.parentIndex && byId.get(idOf(n.parentIndex.guid)); if (p && p.internalOnly) continue; const k = pageKey(n); if (!pages.has(k)) pages.set(k, []); pages.get(k).push(n); }
+      const blocks = []; let offX = 0; const names = [];
+      for (const [k, list] of pages) {
+        // where this page's content sits, from its top nodes' boxes: pages go side by side
+        let x0 = Infinity, y0 = Infinity, x1 = -Infinity; for (const n of list) { const bx = boxOf(n.transform || I, n.size ? n.size.x : 0, n.size ? n.size.y : 0); x0 = Math.min(x0, bx.x); y0 = Math.min(y0, bx.y); x1 = Math.max(x1, bx.x + bx.w); }
+        if (!Number.isFinite(x0)) continue;
+        const T0 = { m00: 1, m01: 0, m02: offX - x0, m10: 0, m11: 1, m12: -y0 };
+        for (const n of list) await walk(n, T0, 1, blocks, null, 1, null, null);
+        offX += (x1 - x0) + 400; const pg = k && byId.get(k); if (pg && pg.name) names.push(String(pg.name));
+      }
+      connectorBlocks();
+      if (!blocks.length) return { frames: [], board: null, stats };
+      // from 0,0: blocks by their boxes, loose connector ends by their points
+      const pts = []; for (const b of blocks) { if (b.kind === 'connector') { for (const e of [b.from, b.to]) if (e && !e.id) pts.push([e.x, e.y, e.x, e.y]); } else pts.push([b.x, b.y, b.x + b.w, b.y + b.h]); }
+      if (!pts.length) return { frames: [], board: null, stats };
+      const bx0 = Math.min(...pts.map(q => q[0])), by0 = Math.min(...pts.map(q => q[1])), bx1 = Math.max(...pts.map(q => q[2])), by1 = Math.max(...pts.map(q => q[3]));
+      for (const b of blocks) { b.x = r2(b.x - bx0); b.y = r2(b.y - by0); if (b.kind === 'connector') for (const e of [b.from, b.to]) if (e && !e.id) { e.x = r2(e.x - bx0); e.y = r2(e.y - by0); } }
+      const doc = nodes.find(n => n.type === 'DOCUMENT');
+      return { frames: [], stats, board: { name: String((names.length === 1 && !/^page 1$/i.test(names[0]) ? names[0] : '') || (doc && doc.name && !/^document$/i.test(doc.name) ? doc.name : '') || 'FigJam board').slice(0, 80), blocks, w: Math.ceil(bx1 - bx0), h: Math.ceil(by1 - by0) } };
+    }
+
     // Top level: nodes that sit on a page (or have no parent in this data).
     const tops = nodes.filter(n => { if (n.type === 'DOCUMENT' || n.type === 'CANVAS') return false; const p = n.parentIndex && byId.get(idOf(n.parentIndex.guid)); return !p || p.type === 'CANVAS' || p.type === 'DOCUMENT'; });
     tops.sort((a, b) => (a.parentIndex && b.parentIndex && a.parentIndex.position < b.parentIndex.position ? -1 : 1));
@@ -5299,6 +5439,7 @@ const FigmaImport = (() => {
         frames.push({ name: loose.length === 1 ? String(loose[0].name || 'Figma layers') : 'Figma layers', x: Math.round(x0), y: Math.round(y0), w: Math.max(8, Math.ceil(x1 - x0)), h: Math.max(8, Math.ceil(y1 - y0)), bg: '#FFFFFF', clip: false, blocks, loose: true });
       }
     }
+    pendingConnectors.length = 0;
     return { frames, stats };
   }
   // Frames from convert() -> layouts the canvas can hold.
@@ -5370,7 +5511,7 @@ const FigmaImport = (() => {
     }
     return moved;
   }
-  return { readFile, readClipboardHTML, hasFigmaHTML, convert, toLayouts, boundsFromMetadata, alignCapture, _kiwi: { decodeSchema, compile, BB }, _pathOf: pathOf, _zip: { readZip, zipEntry }, readArchive };
+  return { readFile, readClipboardHTML, hasFigmaHTML, isBoard, convert, toLayouts, boundsFromMetadata, alignCapture, _kiwi: { decodeSchema, compile, BB }, _pathOf: pathOf, _zip: { readZip, zipEntry }, readArchive };
 })();
 
 /* js/pptx-import.js */
@@ -7424,7 +7565,16 @@ const Canvas = (() => {
     return c;
   }
   // Removing a box removes what is inside it.
-  function removeBlocks(frame, ids) { const gone = new Set(Auto.withDescendants(frame, frame.layout.blocks.filter(b => ids.includes(b.id))).map(b => b.id)); frame.layout.blocks = frame.layout.blocks.filter(b => !gone.has(b.id)); }
+  // An arrow that touched a removed block stays, its end loose where the block's edge was.
+  function removeBlocks(frame, ids) {
+    const gone = new Set(Auto.withDescendants(frame, frame.layout.blocks.filter(b => ids.includes(b.id))).map(b => b.id));
+    for (const c of frame.layout.blocks) {
+      if (c.kind !== 'connector' || gone.has(c.id) || !((c.from && gone.has(c.from.id)) || (c.to && gone.has(c.to.id)))) continue;
+      const g = connectorGeometry(frame, c); if (!g) continue; const a = g.pts[0], z = g.pts[g.pts.length - 1];
+      if (c.from && gone.has(c.from.id)) c.from = { x: Math.round(a.x), y: Math.round(a.y) }; if (c.to && gone.has(c.to.id)) c.to = { x: Math.round(z.x), y: Math.round(z.y) };
+    }
+    frame.layout.blocks = frame.layout.blocks.filter(b => !gone.has(b.id));
+  }
   // Move blocks (with what is inside them) into another frame and keep their place on the canvas. They land at the
   // top level of the other frame unless `into` names a box there.
   function transferBlocks(src, dst, blocks, u, into) {
@@ -7531,6 +7681,19 @@ const Canvas = (() => {
   }
   // The section (a box with a title) whose area holds a block's centre, if any.
   function sectionAt(frame, b) { const cx = b.x + b.w / 2, cy = b.y + b.h / 2; const secs = frame.layout.blocks.filter(s => s.kind === 'box' && s.section && s.id !== b.id && !s.hidden); let best = null; for (const s of secs) if (cx >= s.x && cx <= s.x + s.w && cy >= s.y && cy <= s.y + s.h && (!best || s.w * s.h < best.w * best.h)) best = s; return best; }
+  // A board after something moved or arrived by code (the agent, an import): sections sit behind what they hold,
+  // everything loose belongs to the section its centre is in (or to none), and arrows follow.
+  function settleBoard(frame) {
+    if (!frame || !frame.board) return false; const arr = frame.layout.blocks; let changed = false;
+    const secs = arr.filter(b => b.kind === 'box' && b.section && !b.parent);
+    if (secs.length && !secs.every((s, i) => arr[i] === s)) { const rest = arr.filter(b => !secs.includes(b)); frame.layout.blocks = [...secs, ...rest]; changed = true; }
+    for (const b of frame.layout.blocks) {
+      if (b.section || b.kind === 'connector') continue; const cur = b.parent ? blockById(frame, b.parent) : null; if (cur && !cur.section) continue;
+      const sec = sectionAt(frame, b); const want = sec ? sec.id : undefined;
+      if ((b.parent || undefined) !== want) { if (want) b.parent = want; else delete b.parent; changed = true; }
+    }
+    return syncConnectors(frame) || changed;
+  }
   // ---- Pictures: the crop shown and the adjustments on it --------------------------------------------------------
   // The part of a picture a block shows, in source pixels. Without a crop it is the cover crop at the focal point
   // (what the renderer drew all along); with one, crop {x, y, w, h} is a fraction of the source, kept at the block's
@@ -8024,7 +8187,7 @@ const Canvas = (() => {
     };
   }
 
-  return { create, addFrame, blankFrame, migrate, defaultAuto, frameById, blockById, refit, sourceText, newBlock, moveBlock, resizeBlock, reorder, duplicateBlock, removeBlocks, transferBlocks, pasteBlocks, customFormat, align, distribute, bounds, applyAutoLayout, isBackground, serialize, deserialize, toLink, fromHash, toHTML, toReact, codeTree, codeNodes, recolor, extractContent, scaleFrame, clusters, mainCluster, applyFrameTokens, tokenizeFrame, applyTokens, group, ungroup, groupMembers, tidy, compact, penD, penFit, maskShape, maskedBy, replaceText, setFonts, pasteFrames, framesBounds, cssGradient, setText, richText, connectorGeometry, syncConnectors, connectorDistance, sectionAt, cropRect, cropFrom, cropZoom, setCropZoom, adjustOf, adjustActive, adjustCss, ADJUST_DEFAULT, history, snap, uid, clone };
+  return { create, addFrame, blankFrame, migrate, defaultAuto, frameById, blockById, refit, sourceText, newBlock, moveBlock, resizeBlock, reorder, duplicateBlock, removeBlocks, transferBlocks, pasteBlocks, customFormat, align, distribute, bounds, applyAutoLayout, isBackground, serialize, deserialize, toLink, fromHash, toHTML, toReact, codeTree, codeNodes, recolor, extractContent, scaleFrame, clusters, mainCluster, applyFrameTokens, tokenizeFrame, applyTokens, group, ungroup, groupMembers, tidy, compact, penD, penFit, maskShape, maskedBy, replaceText, setFonts, pasteFrames, framesBounds, cssGradient, setText, richText, connectorGeometry, syncConnectors, settleBoard, connectorDistance, sectionAt, cropRect, cropFrom, cropZoom, setCropZoom, adjustOf, adjustActive, adjustCss, ADJUST_DEFAULT, history, snap, uid, clone };
 })();
 
 /* js/autolayout.js */
@@ -8386,7 +8549,12 @@ const Auto = (() => {
   // Ids in a pasted or duplicated subtree are new; parents inside the set follow, others drop to `root`.
   function remap(blocks, root) {
     const map = new Map(blocks.map(b => [b.id, Canvas.uid()]));
-    for (const b of blocks) { b.id = map.get(b.id); if (b.parent && map.has(b.parent)) b.parent = map.get(b.parent); else if (root) b.parent = root; else delete b.parent; }
+    for (const b of blocks) {
+      b.id = map.get(b.id); if (b.parent && map.has(b.parent)) b.parent = map.get(b.parent); else if (root) b.parent = root; else delete b.parent;
+      // a copied connector joins the copies of what it joined (or stays on the original when that was not copied)
+      if (b.kind === 'connector') for (const k of ['from', 'to']) if (b[k] && b[k].id && map.has(b[k].id)) b[k] = { ...b[k], id: map.get(b[k].id) };
+      if (b.votes) delete b.votes;
+    }
     return map;
   }
   // A selection plus everything inside its boxes, in list order.
@@ -8434,6 +8602,8 @@ const CanvasUI = (() => {
   // Figma-style. Per person, kept in this browser.
   let editMode = (() => { try { const m = localStorage.getItem('lg.editMode'); return m === 'advanced' ? 'advanced' : m === 'jam' ? 'jam' : (window.LG_APP === 'jam' ? 'jam' : 'simple'); } catch { return window.LG_APP === 'jam' ? 'jam' : 'simple'; } })();
   const jam = () => editMode === 'jam';
+  // In Jam mode the board is the ground, not a thing: it is never selected, outlined, moved, resized or deleted.
+  const ground = f => !!(f && f.board && jam());
   const advanced = () => editMode === 'advanced';
   let layoutHold = null; // a frame whose layout pass waits while a block in one of its stacks is dragged
   let dropHint = null;   // where a dragged block would land: {frame, container, index, before, line, free, flatten}
@@ -8536,7 +8706,7 @@ const CanvasUI = (() => {
   function toScreen(wx, wy) { const v = doc.view; return { x: wx * v.zoom + v.x, y: wy * v.zoom + v.y }; }
   const FW = f => f.layout.format.w, FH = f => f.layout.format.h;
   function frameAt(p) { for (let i = doc.frames.length - 1; i >= 0; i--) { const f = doc.frames[i]; if (f.hidden) continue; if (p.x >= f.x && p.y >= f.y && p.x <= f.x + FW(f) && p.y <= f.y + FH(f)) return f; } return null; }
-  function labelAt(p) { const off = Math.max(16, 18 / doc.view.zoom) + 2; for (let i = doc.frames.length - 1; i >= 0; i--) { const f = doc.frames[i]; if (f.hidden) continue; if (p.x >= f.x && p.x <= f.x + FW(f) && p.y >= f.y - off && p.y < f.y) return f; } return null; }
+  function labelAt(p) { const off = Math.max(16, 18 / doc.view.zoom) + 2; for (let i = doc.frames.length - 1; i >= 0; i--) { const f = doc.frames[i]; if (f.hidden || ground(f)) continue; if (p.x >= f.x && p.x <= f.x + FW(f) && p.y >= f.y - off && p.y < f.y) return f; } return null; }
   // The deepest visible block under a point and the boxes it sits in: [top level, ..., deepest]. Clipping boxes hide
   // what lies outside them.
   function hitChain(f, p) {
@@ -8569,13 +8739,13 @@ const CanvasUI = (() => {
   function selFrames() { return (sel.frameIds.length ? sel.frameIds : sel.frameId ? [sel.frameId] : []).map(id => Canvas.frameById(doc, id)).filter(Boolean); }
   function selBlocks() { const f = selFrame(); return f ? sel.blockIds.map(id => Canvas.blockById(f, id)).filter(Boolean) : []; }
 
-  function fit() { if (!doc.frames.length) { doc.view = { x: 60, y: 60, zoom: 0.5 }; applyView(); return; } fitTo(doc.frames.filter(f => !f.hidden).length ? doc.frames.filter(f => !f.hidden) : doc.frames); }
+  function fit() { if (jam() && doc.frames.some(f => f.board)) { fitBoard(); return; } if (!doc.frames.length) { doc.view = { x: 60, y: 60, zoom: 0.5 }; applyView(); return; } fitTo(doc.frames.filter(f => !f.hidden).length ? doc.frames.filter(f => !f.hidden) : doc.frames); }
   // Below this zoom "everything" is a speck: screens were left far apart (a stray import, a screen dragged away).
   const SPRAWL_ZOOM = 0.08; let sprawlSaid = false;
   function sprawlHint() { if (sprawlSaid) return; sprawlSaid = true; env.toast('Screens are spread far apart. "Gather screens" (canvas panel) brings them together in rows.'); }
   // Fit everything, unless that leaves a speck: then fit the main group of screens and say how to gather the rest.
   function fitSmart() {
-    const vis = doc.frames.filter(f => !f.hidden); if (vis.length < 2) { fit(); return; }
+    const vis = doc.frames.filter(f => !f.hidden); if (vis.length < 2 || (jam() && doc.frames.some(f => f.board))) { fit(); return; }
     const r = stage().getBoundingClientRect(); if (!r.width) return; const b = Canvas.framesBounds(vis);
     const z = Math.min((r.width - 80) / b.w, (r.height - 120) / b.h);
     if (z >= SPRAWL_ZOOM) { fitTo(vis); return; }
@@ -8625,7 +8795,7 @@ const CanvasUI = (() => {
     if (f.layout.blocks.some(b => b.kind === 'connector')) Canvas.syncConnectors(f);
     const L = editing && editing.frameId === f.id && editing.hide ? { ...f.layout, blocks: f.layout.blocks.filter(b => b.id !== editing.blockId) } : f.layout;
     // ids inside the drawing (clips, gradients) are namespaced by screen: copies of one layout share its id
-    return env.renderSVG({ ...L, id: 'fr' + f.id }, { showGrid: !!f.showGrid });
+    return env.renderSVG({ ...L, id: 'fr' + f.id }, { showGrid: !!f.showGrid, me: who().id });
   }
   function positionFrame(f) {
     const el = $('world').querySelector(`.cv-frame[data-id="${CSS.escape(f.id)}"]`); if (el) { el.style.left = f.x + 'px'; el.style.top = f.y + 'px'; }
@@ -8653,7 +8823,7 @@ const CanvasUI = (() => {
       for (const fid of s.frameIds.slice(0, 50)) {
         const f = Canvas.frameById(doc, fid); if (!f || f.hidden) continue;
         if (s.frameIds.length === 1 && Array.isArray(s.blockIds) && s.blockIds.length) { for (const bid of s.blockIds.slice(0, 50)) { const b = Canvas.blockById(f, bid); if (b) parts.push(rect(f.x + b.x, f.y + b.y, b.w, b.h, `fill="none" stroke="${c}" stroke-width="1.5"`)); } }
-        else parts.push(rect(f.x, f.y, FW(f), FH(f), `fill="none" stroke="${c}" stroke-width="2"`));
+        else if (!ground(f)) parts.push(rect(f.x, f.y, FW(f), FH(f), `fill="none" stroke="${c}" stroke-width="2"`));
       }
     }
     // empty slots: where a component goes (boxes marked as slots, nothing in them yet)
@@ -8668,10 +8838,10 @@ const CanvasUI = (() => {
     if (hover && hover.frame && !(drag && drag.type)) {
       const hf = hover.frame; const b = hover.block;
       const hs = hover.fromLayers ? 'fill="var(--accent-faint)" stroke="var(--accent)" stroke-opacity=".95" stroke-width="2"' : 'fill="none" stroke="var(--accent)" stroke-opacity=".6" stroke-width="1"';
-      parts.push(b ? rect(hf.x + b.x, hf.y + b.y, b.w, b.h, hs) : rect(hf.x, hf.y, FW(hf), FH(hf), hs));
+      if (b || !ground(hf)) parts.push(b ? rect(hf.x + b.x, hf.y + b.y, b.w, b.h, hs) : rect(hf.x, hf.y, FW(hf), FH(hf), hs));
     }
     const frames = selFrames(); const blocks = selBlocks();
-    for (const f of frames) parts.push(rect(f.x, f.y, FW(f), FH(f), `fill="none" stroke="var(--accent)" stroke-width="${blocks.length ? 1 : 2}" stroke-opacity="${blocks.length ? .45 : 1}"`));
+    for (const f of frames) if (!ground(f)) parts.push(rect(f.x, f.y, FW(f), FH(f), `fill="none" stroke="var(--accent)" stroke-width="${blocks.length ? 1 : 2}" stroke-opacity="${blocks.length ? .45 : 1}"`));
     const f = selFrame();
     if (f && frames.length === 1) {
       if (blocks.length) {
@@ -8684,11 +8854,11 @@ const CanvasUI = (() => {
           parts.push(`<rect x="${q.x}" y="${q.y}" width="${w}" height="${h}" fill="none" stroke="${b.overflow ? 'var(--danger)' : 'var(--accent)'}" stroke-width="1.5"/>`);
           if (blocks.length === 1) {
             if (!b.locked && !(editing && editing.blockId === b.id)) for (const hnd of handles(q.x, q.y, w, h)) parts.push(`<rect class="cv-handle" x="${hnd.x - HANDLE / 2}" y="${hnd.y - HANDLE / 2}" width="${HANDLE}" height="${HANDLE}" fill="#fff" stroke="var(--accent)" stroke-width="1.5"/>`);
-            parts.push(`<text x="${q.x}" y="${q.y - 6}" fill="var(--accent)" font-size="11" font-family="var(--font-mono)">${esc(b.group ? 'group · ' : '')}${esc(kindLabel(f, b))} ${Math.round(b.w)}×${Math.round(b.h)}${esc(sizeLabel(f, b))}</text>`);
+            if (!jam()) parts.push(`<text x="${q.x}" y="${q.y - 6}" fill="var(--accent)" font-size="11" font-family="var(--font-mono)">${esc(b.group ? 'group · ' : '')}${esc(kindLabel(f, b))} ${Math.round(b.w)}×${Math.round(b.h)}${esc(sizeLabel(f, b))}</text>`);
           }
         }
-        if (gb) { const q = toScreen(f.x + gb.x, f.y + gb.y); parts.push(`<rect x="${q.x - 3}" y="${q.y - 3}" width="${gb.w * Z + 6}" height="${gb.h * Z + 6}" fill="none" stroke="var(--accent)" stroke-dasharray="4 3" stroke-width="1"/><text x="${q.x}" y="${q.y - 8}" fill="var(--accent)" font-size="11" font-family="var(--font-mono)">${blocks[0].group && blocks.every(b => b.group === blocks[0].group) ? 'group' : blocks.length + ' blocks'} ${Math.round(gb.w)}×${Math.round(gb.h)}</text>`); }
-      } else {
+        if (gb) { const q = toScreen(f.x + gb.x, f.y + gb.y); parts.push(`<rect x="${q.x - 3}" y="${q.y - 3}" width="${gb.w * Z + 6}" height="${gb.h * Z + 6}" fill="none" stroke="var(--accent)" stroke-dasharray="4 3" stroke-width="1"/>${jam() ? '' : `<text x="${q.x}" y="${q.y - 8}" fill="var(--accent)" font-size="11" font-family="var(--font-mono)">${blocks[0].group && blocks.every(b => b.group === blocks[0].group) ? 'group' : blocks.length + ' blocks'} ${Math.round(gb.w)}×${Math.round(gb.h)}</text>`}`); }
+      } else if (!ground(f)) {
         const p = toScreen(f.x, f.y); const W = FW(f) * Z, H = FH(f) * Z;
         if (!f.locked) for (const hnd of handles(p.x, p.y, W, H)) parts.push(`<rect class="cv-handle" x="${hnd.x - HANDLE / 2}" y="${hnd.y - HANDLE / 2}" width="${HANDLE}" height="${HANDLE}" fill="#fff" stroke="var(--accent)" stroke-width="1.5"/>`);
         parts.push(`<text x="${p.x}" y="${p.y + H + 16}" fill="var(--fg-3)" font-size="11" font-family="var(--font-mono)">${FW(f)}×${FH(f)}</text>`);
@@ -8949,6 +9119,7 @@ const CanvasUI = (() => {
     if (!f) { if (!e.shiftKey) select(null, []); drag = { type: 'marquee', start: p, cur: p, add: e.shiftKey }; stage().setPointerCapture(e.pointerId); return; }
     if (sel.frameIds.length > 1 && sel.frameIds.includes(f.id) && !e.shiftKey) { startFrameDrag(selFrames().filter(x => !x.locked), p, e, f); return; }
     const b = blockAt(f, p, e);
+    if (!b && ground(f)) { if (!e.shiftKey) select(null, []); drag = { type: 'marquee', start: p, cur: p, add: e.shiftKey, board: f }; stage().setPointerCapture(e.pointerId); return; }
     if (!b) { frameClick(f, e, p); return; }
     if (e.altKey && !b.locked) {
       hist.push(doc);
@@ -9059,6 +9230,8 @@ const CanvasUI = (() => {
       if (drag.flow) layoutHold = drag.f.id;
       const s = snapBlocks(drag.f, drag.blocks, drag.orig, dx, dy, u, e.shiftKey || !!drag.flow);
       drag.blocks.forEach((b, i) => { b.x = Math.round(drag.orig[i].x + s.dx); b.y = Math.round(drag.orig[i].y + s.dy); });
+      // an arrow's loose ends move with it (ends that hold a block stay on the block)
+      for (const b of drag.blocks) { if (b.kind !== 'connector') continue; drag.ends = drag.ends || new Map(); if (!drag.ends.has(b.id)) drag.ends.set(b.id, { from: b.from && !b.from.id ? { ...b.from } : null, to: b.to && !b.to.id ? { ...b.to } : null }); const o = drag.ends.get(b.id); for (const k of ['from', 'to']) if (o[k]) { b[k].x = Math.round(o[k].x + s.dx); b[k].y = Math.round(o[k].y + s.dy); } }
       guides = s.guides;
       const over = frameAt(p); dropTarget = over && over !== drag.f && !over.locked ? over : null; if (dropTarget) guides = [];
       dropHint = dropTarget || jam() ? null : dropTargetIn(drag.f, drag.blocks, { x: p.x - drag.f.x, y: p.y - drag.f.y }, drag.flow);
@@ -9101,11 +9274,11 @@ const CanvasUI = (() => {
     if (d.type === 'marquee') {
       const x0 = Math.min(d.start.x, d.cur.x), y0 = Math.min(d.start.y, d.cur.y), x1 = Math.max(d.start.x, d.cur.x), y1 = Math.max(d.start.y, d.cur.y);
       if (x1 - x0 > 4 && y1 - y0 > 4) {
-        const inside = doc.frames.filter(f => !f.hidden && f.x >= x0 && f.y >= y0 && f.x + FW(f) <= x1 && f.y + FH(f) <= y1).map(f => f.id);
+        const inside = doc.frames.filter(f => !f.hidden && !ground(f) && f.x >= x0 && f.y >= y0 && f.x + FW(f) <= x1 && f.y + FH(f) <= y1).map(f => f.id);
         if (inside.length) { const base = d.add ? selFrames().map(f => f.id) : []; selectFrames([...new Set([...base, ...inside])]); }
         else {
           const f = frameAt({ x: x0, y: y0 }) || frameAt({ x: x1, y: y1 }) || doc.frames.find(fr => !fr.hidden && !(x1 < fr.x || x0 > fr.x + FW(fr) || y1 < fr.y || y0 > fr.y + FH(fr)));
-          if (f) { const inside = f.layout.blocks.filter(b => !b.hidden && !b.locked && f.x + b.x >= x0 && f.y + b.y >= y0 && f.x + b.x + b.w <= x1 && f.y + b.y + b.h <= y1); const ids = Auto.topmost(f, inside).map(b => b.id); if (ids.length) select(f.id, ids); }
+          if (f) { const inside = f.layout.blocks.filter(b => !b.hidden && !b.locked && f.x + b.x >= x0 && f.y + b.y >= y0 && f.x + b.x + b.w <= x1 && f.y + b.y + b.h <= y1); const ids = Auto.topmost(f, inside).map(b => b.id); if (ids.length) select(f.id, d.add && sel.frameId === f.id ? [...new Set([...sel.blockIds, ...ids])] : ids); }
         }
       }
       drawOverlay(); return;
@@ -9190,10 +9363,22 @@ const CanvasUI = (() => {
   }
   // ---- Board (DeelJam): the frame everything lands on, growing as it is used ---------------------------------------
   function jamBoard() {
+    // two boards (two people opened an empty canvas at the same moment, before boards had one id): an empty one goes
+    const boards = doc.frames.filter(x => x.board); if (boards.length > 1) { const keep = boards.find(x => x.layout.blocks.length) || boards[0]; const drop = boards.filter(x => x !== keep && !x.layout.blocks.length); if (drop.length) { doc.frames = doc.frames.filter(x => !drop.includes(x)); validateSelection(); if (active) renderAll(); persist(); } }
     let f = doc.frames.find(x => x.board) || null;
     if (!f && doc.frames.length === 1 && doc.frames[0].layout.blocks.every(b => /^(sticky|connector|stamp|box|field|shape|text|image|video|vector|line)$/.test(b.kind))) { f = doc.frames[0]; f.board = true; }
-    if (!f) { f = createFrame({ x: 0, y: 0, format: Canvas.customFormat(3200, 2000), name: 'Board', bg: '#FFFFFF', history: false }); f.board = true; f.clip = false; persist({ silent: true }); }
+    // The board has one id everywhere: two people who each make it at the same moment make the same screen, and
+    // what each put on it merges (two random ids would be two boards).
+    if (!f) { f = Canvas.blankFrame(doc, Canvas.customFormat(3200, 2000), env.getKit(), { x: 0, y: 0, bg: '#FFFFFF', name: 'Board' }); if (!doc.frames.some(x => x !== f && x.id === 'board')) f.id = 'board'; f.board = true; f.clip = false; select(null, []); if (active) { renderAll(); fitBoard(f); } persist(); updateUndo(); }
     return f;
+  }
+  // The board's view: what is on it (with room around, never closer than 100% nor a speck), or its middle when empty.
+  function fitBoard(f) {
+    f = f || doc.frames.find(x => x.board); const r = stage().getBoundingClientRect(); if (!f || !r.width) return;
+    const bs = f.layout.blocks.filter(b => !b.hidden);
+    if (!bs.length) { doc.view = { zoom: 1, x: r.width / 2 - (f.x + FW(f) / 2), y: r.height / 2 - (f.y + FH(f) / 2) }; applyView(); return; }
+    const b = Canvas.bounds(bs); const zoom = Math.min(1, Math.max(0.1, Math.min((r.width - 160) / b.w, (r.height - 260) / b.h)));
+    doc.view = { zoom, x: r.width / 2 - (f.x + b.x + b.w / 2) * zoom, y: r.height / 2 - (f.y + b.y + b.h / 2) * zoom + 10 }; applyView();
   }
   // Make room: the board grows so rect (frame space) sits at least `pad` inside it; blocks shift when it grows up or left.
   function growBoard(f, rect, pad = 400) {
@@ -9447,6 +9632,32 @@ const CanvasUI = (() => {
     return tops;
   }
   // Loose layers (no frame of their own) go into a frame, centred, keeping their arrangement.
+  // Board things that came from elsewhere (a FigJam file or paste, a sheet of stickies), laid out from 0,0 in a
+  // w×h area. In Jam mode they land on the board: around opts.at (a paste lands where you look), in the middle of an
+  // empty board, or to the right of what is already there. Otherwise (the design editor) they get a board of their own.
+  function placeBoardBlocks(blocks, size, opts = {}) {
+    if (!blocks || !blocks.length) return null; hist.push(doc);
+    const W = Math.max(1, size.w), H = Math.max(1, size.h); let f, ox, oy;
+    if (jam()) {
+      f = jamBoard(); const cur = f.layout.blocks.filter(b => !b.hidden);
+      if (opts.at) { ox = opts.at.x - f.x - W / 2; oy = opts.at.y - f.y - H / 2; }
+      else if (!cur.length) { ox = (FW(f) - W) / 2; oy = (FH(f) - H) / 2; }
+      else { const bb = Canvas.bounds(cur); ox = bb.x + bb.w + 240; oy = bb.y; }
+    } else {
+      const fmt = Canvas.customFormat(Math.max(1600, Math.ceil((W + 800) / 400) * 400), Math.max(1000, Math.ceil((H + 800) / 400) * 400));
+      f = createFrame({ center: true, format: fmt, name: opts.name || 'Board', bg: '#FFFFFF', history: false }); f.board = true; f.clip = false;
+      ox = (fmt.w - W) / 2; oy = (fmt.h - H) / 2;
+    }
+    ox = Math.round(ox); oy = Math.round(oy);
+    for (const b of blocks) { b.x += ox; b.y += oy; if (b.kind === 'connector') for (const k of ['from', 'to']) if (b[k] && !b[k].id) { b[k].x += ox; b[k].y += oy; } }
+    const inSet = new Set(blocks.map(b => b.id)); const tops = blocks.filter(b => b.kind !== 'connector' && (!b.parent || !inSet.has(b.parent)));
+    f.layout.blocks.push(...blocks);
+    growBoard(f, { x: ox, y: oy, w: W, h: H });
+    Canvas.settleBoard(f);
+    select(f.id, tops.map(b => b.id)); if (active) { renderAll(); const bb = Canvas.bounds(blocks.filter(b => b.kind !== 'connector').length ? blocks.filter(b => b.kind !== 'connector') : blocks); const r = stage().getBoundingClientRect(); if (r.width) { const zoom = Math.min(1, Math.max(0.05, Math.min((r.width - 160) / bb.w, (r.height - 260) / bb.h))); doc.view = { zoom, x: r.width / 2 - (f.x + bb.x + bb.w / 2) * zoom, y: r.height / 2 - (f.y + bb.y + bb.h / 2) * zoom + 10 }; applyView(); } }
+    persist(); updateUndo();
+    return { frame: f, ids: tops.map(b => b.id) };
+  }
   function insertBlocks(frameId, blocks) {
     const f = Canvas.frameById(doc, frameId); if (!f || !blocks.length) return [];
     hist.push(doc);
@@ -9469,7 +9680,7 @@ const CanvasUI = (() => {
     if (editing && !opts.keepEditing) endEdit();
     if (player && !(blockIds || []).includes(player.blockId)) stopPlay();
     if (cropping && !(blockIds || []).includes(cropping.blockId)) { cropping = null; stage().style.cursor = 'default'; }
-    const f = Canvas.frameById(doc, frameId);
+    let f = Canvas.frameById(doc, frameId); if (ground(f) && !(blockIds || []).length) f = null;
     if (!opts.keepGroupFocus) groupFocus = null;
     if (groupFocus && f && !(blockIds || []).some(id => { const b = Canvas.blockById(f, id); return b && b.group === groupFocus; })) groupFocus = null;
     sel.frameId = f ? f.id : null; sel.blockIds = f ? expandGroups(f, blockIds || []) : []; sel.frameIds = f ? [f.id] : [];
@@ -9478,7 +9689,7 @@ const CanvasUI = (() => {
   }
   function selectFrames(ids) {
     if (editing) endEdit();
-    ids = [...new Set(ids)].filter(id => Canvas.frameById(doc, id));
+    ids = [...new Set(ids)].filter(id => { const f = Canvas.frameById(doc, id); return f && !ground(f); });
     sel.frameIds = ids; sel.frameId = ids[0] || null; sel.blockIds = []; groupFocus = null;
     afterSelect();
   }
@@ -9609,7 +9820,7 @@ const CanvasUI = (() => {
       if (meta && e.altKey && k === 'g') { e.preventDefault(); frameSelection(); return; }
       if (meta && k === 'g') { e.preventDefault(); if (e.shiftKey) ungroupSelection(); else groupSelection(); return; }
       if (e.shiftKey && !meta && k === 'a') { e.preventDefault(); if (e.altKey) removeAutoLayout(); else addAutoLayout(); return; }
-      if (meta && k === 'a') { e.preventDefault(); const f = selFrame(); if (f && selFrames().length === 1) select(f.id, f.layout.blocks.filter(b => !b.hidden && !b.locked).map(b => b.id)); else selectFrames(doc.frames.filter(x => !x.hidden).map(x => x.id)); return; }
+      if (meta && k === 'a') { e.preventDefault(); const f = selFrame() || (jam() ? doc.frames.find(x => x.board) : null); if (f && (selFrames().length === 1 || ground(f))) select(f.id, f.layout.blocks.filter(b => !b.hidden && !b.locked).map(b => b.id)); else selectFrames(doc.frames.filter(x => !x.hidden).map(x => x.id)); return; }
       if (e.shiftKey && !meta && k === 'g') { e.preventDefault(); const fs = selFrames(); const on = !fs.every(f => f.showGrid); fs.forEach(f => { f.showGrid = on; rerenderFrame(f); }); persist(); return; }
       if (e.shiftKey && !meta && k === 'r') { e.preventDefault(); const fs = selFrames(); if (fs.length) { mutate(() => Canvas.tidy(fs, fs.length > 3 ? 'grid' : 'row')); env.toast('Tidied'); } return; }
       if (k === 'enter') {
@@ -9977,10 +10188,22 @@ const CanvasUI = (() => {
   }
   const slug = s => String(s || 'canvas').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'canvas';
   async function copyText(text) { try { await navigator.clipboard.writeText(text); } catch { const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); } finally { ta.remove(); } } }
+  // What a board exports: the part that has things on it (with a margin), not the whole surface. In Jam mode with
+  // things selected, just those.
+  function boardExport(f) {
+    if (!f.board) return f;
+    const pick = jam() && sel.frameId === f.id && sel.blockIds.length ? new Set(Auto.withDescendants(f, selBlocks()).map(b => b.id)) : null;
+    let bs = f.layout.blocks.filter(b => !b.hidden && (!pick || pick.has(b.id) || (b.kind === 'connector' && b.from && b.to && (!b.from.id || pick.has(b.from.id)) && (!b.to.id || pick.has(b.to.id)) && (pick.has(b.from.id) || pick.has(b.to.id)))));
+    if (!bs.length) return f;
+    const bb = Canvas.bounds(bs); const pad = 80; const ox = Math.round(pad - bb.x), oy = Math.round(pad - bb.y); const copies = Canvas.clone(bs); const ids = new Set(copies.map(b => b.id));
+    for (const b of copies) { b.x += ox; b.y += oy; if (b.parent && !ids.has(b.parent)) delete b.parent; if (b.kind === 'connector') for (const k of ['from', 'to']) if (b[k] && !b[k].id) { b[k].x += ox; b[k].y += oy; } }
+    const W = Math.ceil(bb.w + pad * 2), H = Math.ceil(bb.h + pad * 2);
+    return { ...f, layout: { ...f.layout, format: { ...f.layout.format, id: 'custom', name: 'Custom', w: W, h: H }, blocks: copies } };
+  }
   // Every export works on the selected screens; with nothing selected, on every visible frame.
   async function exportAction(what, framesArg) {
     const chosen = framesArg || selFrames(); const all = doc.frames.filter(x => !x.hidden);
-    const frames = chosen.length ? chosen : all;
+    const frames = (chosen.length ? chosen : all).map(boardExport);
     const needOne = ['react', 'html'];
     if (!frames.length) { env.toast('Nothing to export'); return; }
     if (needOne.includes(what)) {
@@ -9998,7 +10221,7 @@ const CanvasUI = (() => {
     }
     if (what === 'pdf') { env.toast(`Building a ${frames.length}-page PDF…`); const blob = await env.exportPDF(frames.map(f => f.layout)); if (blob && await env.download(blob, `${slug(frames.length === 1 ? frames[0].name : doc.name)}.pdf`)) env.toast(`PDF saved: ${frames.length} page${frames.length > 1 ? 's' : ''}`); return; }
     if (what === 'pptx') {
-      const groups = new Map(); for (const f of frames) { const k = `${FW(f)}x${FH(f)}`; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(f); }
+      const groups = new Map(); for (const f of frames) { const k = `${f.layout.format.w}x${f.layout.format.h}`; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(f); }
       let n = 0; for (const [k, list] of groups) { const blob = await env.buildPptx(list.map(x => x.layout)); if (!(await env.download(blob, `${slug(doc.name)}-${k}.pptx`))) break; n += list.length; }
       if (n) env.toast(`PPTX saved: ${n} slide${n > 1 ? 's' : ''}${groups.size > 1 ? `, one file per size` : ''}`); return;
     }
@@ -10761,7 +10984,7 @@ const CanvasUI = (() => {
     centerOn: (x, y) => { const r = stage().getBoundingClientRect(); doc.view.x = r.width / 2 - x * doc.view.zoom; doc.view.y = r.height / 2 - y * doc.view.zoom; applyView(); },
     setView: ({ cx, cy, zoom }) => { const r = stage().getBoundingClientRect(); if (zoom > 0) doc.view.zoom = Math.min(8, Math.max(0.02, zoom)); doc.view.x = r.width / 2 - cx * doc.view.zoom; doc.view.y = r.height / 2 - cy * doc.view.zoom; applyView(); },
     viewCenter: () => { const r = stage().getBoundingClientRect(); const v = doc.view; return { cx: (r.width / 2 - v.x) / v.zoom, cy: (r.height / 2 - v.y) / v.zoom, zoom: v.zoom }; },
-    jamBoard, growBoard, placeAt, placePicture, setEditMode, get editMode() { return editMode; }, get peers() { return peers; }, get tool() { return tool; }, setStickyColor: c => { lastStickyColor = c; }, who,
+    jamBoard, growBoard, fitBoard, placeBoardBlocks, get lastPointer() { return lastPointer; }, placeAt, placePicture, setEditMode, get editMode() { return editMode; }, get peers() { return peers; }, get tool() { return tool; }, setStickyColor: c => { lastStickyColor = c; }, who,
     regrid, exportAction, makeVariations, resizeScreens, copySelection, pasteClipboard, startEdit: (fid, bid) => { const f = Canvas.frameById(doc, fid); return startEdit(f, f && Canvas.blockById(f, bid)); },
     on: (k, fn) => { hooks[k].push(fn); return () => { hooks[k] = hooks[k].filter(x => x !== fn); }; },
     setPeers: list => { peers = Array.isArray(list) ? list : []; if (active) drawOverlay(); },
@@ -10805,13 +11028,21 @@ const Jam = (() => {
     $('jamBar').addEventListener('click', onBar); $('jamCtx').addEventListener('click', onCtx); $('jamCtx').addEventListener('input', onCtxInput); $('jamTop').addEventListener('click', onTop); $('jamPop').addEventListener('click', onPop);
     document.addEventListener('pointerdown', e => { if (!e.target.closest('#jamPop') && !e.target.closest('[data-jt][data-pop]')) hidePop(); if (following && e.target.closest('#stage') && !e.target.closest('#jamTop')) stopFollow(); }, true);
     $('stage').addEventListener('wheel', () => { if (following) stopFollow(); }, { passive: true, capture: true });
-    CanvasUI.on('select', renderCtx); CanvasUI.on('action', k => { if (String(k).startsWith('editmode.')) applyMode(); if (String(k) === 'tool') renderBar(); });
+    CanvasUI.on('select', renderCtx); CanvasUI.on('action', k => { if (String(k).startsWith('editmode.')) onOpen(); if (String(k) === 'tool') renderBar(); });
     CanvasUI.on('view', v => { if (env.shareView) env.shareView(v); renderCtx(); });
     document.addEventListener('keydown', onKeys);
     timerTick = setInterval(renderTop, 500);
     applyMode();
   }
-  function onOpen() { if (isJam()) { board(); } applyMode(); }
+  // The board is made once the canvas that is opening has answered: someone joining a shared board must not add a
+  // second, empty one before the first arrives.
+  let opening = 0;
+  async function onOpen() {
+    applyMode(); if (!isJam()) return; const n = ++opening;
+    if (env.docReady) { try { await env.docReady(); } catch { } }
+    if (n !== opening || !isJam() || !CanvasUI.active) return;
+    board(); applyMode();
+  }
   function applyMode() {
     const on = isJam() && CanvasUI.active; $('jamBar').hidden = !on; $('jamTop').hidden = !on; if (!on) { $('jamCtx').hidden = true; hidePop(); } else { renderBar(); renderTop(); renderCtx(); }
     document.body.classList.toggle('jam-on', on);
@@ -10851,6 +11082,8 @@ const Jam = (() => {
     const sh = e.target.closest('[data-shape]'); if (sh) { shapePick = sh.dataset.shape; CanvasUI.setTool('shape'); hidePop(); renderBar(); return; }
     const st = e.target.closest('[data-stamp]'); if (st) { stampPick = st.dataset.stamp; CanvasUI.setTool('stamp'); hidePop(); renderBar(); return; }
     const ai = e.target.closest('[data-ai]'); if (ai) { hidePop(); runAI(ai.dataset.ai); return; }
+    if (e.target.closest('[data-flow-cancel]')) { hidePop(); return; }
+    if (e.target.closest('[data-flow-go]')) { const ta = $('jamPop').querySelector('textarea'); const text = ta ? ta.value : ''; if (!text.trim()) { if (ta) ta.focus(); return; } hidePop(); drawFlow(text); return; }
   }
   // the tools read the picks when they place
   function pickFor(kind) {
@@ -10911,18 +11144,28 @@ const Jam = (() => {
   }
 
   // ---- top strip: people, follow, timer, reveal, mode -----------------------------------------------------------------
-  let timerMenu = false;
+  let timerMenu = false, topKey = '', ranFor = 0, rangFor = 0;
+  // Rebuilt only when what it shows changes (people, hidden count, menu): the clock ticks in place, so a button is
+  // never replaced under a pointer that is about to click it.
   function renderTop() {
     const el = $('jamTop'); if (!el || el.hidden) return;
     const d = CanvasUI.doc; const peers = CanvasUI.peers || []; const t = d && d.jam && d.jam.timer; const now = Date.now();
     const left = t && t.endsAt ? Math.max(0, Math.ceil((t.endsAt - now) / 1000)) : 0; const mm = Math.floor(left / 60), ss = String(left % 60).padStart(2, '0');
+    const running = !!(t && t.endsAt && left > 0);
     const hidden = d ? d.frames.reduce((n, f) => n + f.layout.blocks.filter(b => b.kind === 'sticky' && b.veil).length, 0) : 0;
-    el.innerHTML = `<div class="jam-people">${peers.slice(0, 8).map(p => `<button type="button" class="jam-peer ${following === p.id ? 'on' : ''}" data-follow="${esc(p.id)}" style="--c:${esc(p.color || '#888')}" title="${following === p.id ? 'Following ' : 'Follow '}${esc(p.name || 'Someone')}">${esc((p.name || '?').trim()[0] || '?')}</button>`).join('')}${peers.length ? `<span class="hint">${peers.length} here</span>` : '<span class="hint">Only you here</span>'}${following ? `<button type="button" class="btn small" data-top="unfollow">Stop following</button>` : ''}</div>
+    const key = JSON.stringify([peers.slice(0, 8).map(p => [p.id, p.name, p.color]), peers.length, following, hidden, running, timerMenu, !!(t && t.endsAt)]);
+    if (key !== topKey) {
+      topKey = key;
+      el.innerHTML = `<div class="jam-people">${peers.slice(0, 8).map(p => `<button type="button" class="jam-peer ${following === p.id ? 'on' : ''}" data-follow="${esc(p.id)}" style="--c:${esc(p.color || '#888')}" title="${following === p.id ? 'Following ' : 'Follow '}${esc(p.name || 'Someone')}">${esc((p.name || '?').trim()[0] || '?')}</button>`).join('')}${peers.length ? `<span class="hint">${peers.length} here</span>` : '<span class="hint">Only you here</span>'}${following ? `<button type="button" class="btn small" data-top="unfollow">Stop following</button>` : ''}</div>
       <div class="jam-right">${hidden ? `<button type="button" class="btn small" data-top="reveal" title="Show every hidden sticky">Reveal ${hidden}</button>` : ''}
-        <button type="button" class="btn small ${t && t.endsAt && left > 0 ? 'jam-timer-on' : ''}" data-top="timer">${t && t.endsAt && left > 0 ? `⏱ ${mm}:${ss}` : '⏱ Timer'}</button>${timerMenu ? `<span class="jam-timer-menu">${[1, 2, 5, 10, 15].map(m => `<button type="button" class="btn small" data-timer="${m}">${m} min</button>`).join('')}${t && t.endsAt ? '<button type="button" class="btn small" data-timer="0">Stop</button>' : ''}</span>` : ''}
+        <button type="button" class="btn small ${running ? 'jam-timer-on' : ''}" data-top="timer" data-timer-label></button>${timerMenu ? `<span class="jam-timer-menu">${[1, 2, 5, 10, 15].map(m => `<button type="button" class="btn small" data-timer="${m}">${m} min</button>`).join('')}${running ? '<button type="button" class="btn small" data-timer="0">Stop</button>' : ''}</span>` : ''}
         <button type="button" class="btn small" data-top="clearvotes" title="Clear every vote on the board">Clear votes</button>
         <button type="button" class="btn small primary" data-top="design" title="Open the full design editor on this board">Design mode</button></div>`;
-    if (t && t.endsAt && left === 0 && !t.rang) { t.rang = true; if (env.toast) env.toast('⏱ Time is up'); }
+    }
+    const lbl = el.querySelector('[data-timer-label]'); const txt = running ? `⏱ ${mm}:${ss}` : '⏱ Timer'; if (lbl && lbl.textContent !== txt) lbl.textContent = txt;
+    // ring once, and only for a timer this person saw running (not one that ran out before they opened the board)
+    if (running) ranFor = t.endsAt;
+    if (t && t.endsAt && left === 0 && ranFor === t.endsAt && rangFor !== t.endsAt) { rangFor = t.endsAt; if (env.toast) env.toast('⏱ Time is up'); }
   }
   function onTop(e) {
     const fo = e.target.closest('[data-follow]'); if (fo) { if (following === fo.dataset.follow) stopFollow(); else startFollow(fo.dataset.follow); renderTop(); return; }
@@ -10978,15 +11221,25 @@ const Jam = (() => {
   // ---- Claude on the board -----------------------------------------------------------------------------------------
   const AI = {
     summarize: 'Read every sticky, shape and text on this board (get_frame on the board screen). Then add ONE text block (kind body, 520 wide, 18px) to the right of everything, titled "Summary", with 3–6 short bullets of what the group said, then "Decisions:" and "Open questions:" lines if there are any. Do not move or change anything that is already there.',
-    cluster: 'Group the stickies on this board into 3–6 themes by meaning. For each theme add a section (kind section, title = the theme in 2–4 words, a soft color) and move its stickies inside it with update_blocks x/y in a grid: stickies are 200×200, 24px apart, 40px inside the section edge, below the title. Put the sections side by side, 80px apart, starting where the stickies are now. Keep every sticky\'s words exactly as they are; set each moved sticky\'s parent to its section with move_into if available, else leave parent as is.',
+    cluster: 'Group the stickies on this board into 3–6 themes by meaning. For each theme add a section (kind section, title = the theme in 2–4 words, a soft color) and move its stickies inside it with update_blocks x/y in a grid: stickies are 200×200, 24px apart, 40px inside the section edge, below the title. Put the sections side by side, 80px apart, starting where the stickies are now. Keep every sticky\'s words exactly as they are. A sticky whose middle is inside a section belongs to it from then on (it moves when the section moves), so only x and y need setting.',
     actions: 'Turn this board into action items. Add a section titled "Action items" (kind section) to the right of everything, and inside it one sticky (kind sticky, color #C7CEEA) per item in a grid (200×200, 24px apart). An item reads "<verb phrase> — <owner>" when an owner is named, else just the action. Pull items from stickies and shapes that read like tasks, decisions or next steps. Do not change the existing stickies.',
     tidy: 'Tidy this board without changing any words: inside each section, lay the stickies out in a grid (200×200, 24px apart, 40px from the section edges, below the title) and grow the section if they do not fit; line sections up left to right with 80px between them; put loose stickies in a grid to the right. Use update_blocks x/y (and w/h for sections). Keep connectors attached.',
   };
   async function runAI(kind) {
     if (typeof Agent === 'undefined') return;
     if (kind === 'ask') { Agent.show(); return; }
-    if (kind === 'flow') { const text = prompt('Paste the steps or describe the process (one step per line, decisions as questions):'); if (!text || !text.trim()) return; Agent.send(`Draw this as a flowchart on the board: shapes (kind shape, 220×120, rounded 12; decisions are questions and get fill #FFE8A3; start and end get fill #B5EAD7 with radius 45) connected with connectors (kind connector, from_id/to_id, labels "yes"/"no" on decision branches), laid out left to right, 100px between shapes, rows 60px apart, placed in empty space to the right of what is on the board. Keep each step\'s words short.\n\n${text.trim().slice(0, 3000)}`); return; }
+    if (kind === 'flow') { showFlow(); return; }
     const f = board(); CanvasUI.select(f.id, []); Agent.send(AI[kind]);
+  }
+  function showFlow() {
+    const pop = $('jamPop'); pop.dataset.kind = 'flow'; pop.hidden = false;
+    pop.innerHTML = `<div class="jam-flow"><b>Draw a flowchart from text</b><textarea rows="7" aria-label="Steps" placeholder="One step per line, decisions as questions:&#10;Receive request&#10;Is it valid?&#10;Approve&#10;Reject"></textarea><div class="jam-row"><button type="button" class="btn small primary" data-flow-go>Draw it</button><button type="button" class="btn small" data-flow-cancel>Cancel</button></div></div>`;
+    const r = $('jamBar').querySelector('[data-jt="ai"]').getBoundingClientRect(); const pr = pop.parentElement.getBoundingClientRect(); pop.style.left = Math.max(8, Math.min(pr.width - 348, r.left - pr.left + r.width / 2 - 170)) + 'px'; pop.style.bottom = (pr.bottom - r.top + 10) + 'px';
+    setTimeout(() => { const ta = pop.querySelector('textarea'); if (ta) ta.focus(); }, 0);
+  }
+  function drawFlow(text) {
+    if (!text || !text.trim()) return;
+    Agent.send(`Draw this as a flowchart on the board: shapes (kind shape, 220×120, rounded 12; decisions are questions and get fill #FFE8A3; start and end get fill #B5EAD7 with radius 45) connected with connectors (kind connector, from_id/to_id, labels "yes"/"no" on decision branches), laid out left to right, 100px between shapes, rows 60px apart, placed in empty space to the right of what is on the board. Keep each step\'s words short.\n\n${text.trim().slice(0, 3000)}`);
   }
 
   return { init, onOpen, applyMode, renderCtx, pickFor, TEMPLATES, insertTemplate, get stickyColor() { return stickyColor; }, isJam };
@@ -12472,12 +12725,17 @@ const Sync = (() => {
   const recs = new Map();    // key -> latest record known here (with _k, _v, _by, maybe _del)
   const synced = new Map();  // key -> canonical JSON of the shared value (what the local doc matched last time)
   let peers = []; const listeners = [];
-  const status = { mode: 'local', connected: false, readOnly: false, room: null, label: '' };
+  const status = { mode: 'local', connected: false, readOnly: false, room: null, label: '', loaded: true };
+  // loaded: the shared canvas has answered (its screens are here, or it was empty and this one was sent). Code that
+  // would add something of its own to an empty canvas (a board) waits for it, so two people do not each add one.
+  let loadWaiters = [];
+  const setLoaded = v => { status.loaded = v; if (v) { const w = loadWaiters; loadWaiters = []; for (const fn of w) fn(); } };
+  const whenLoaded = (ms = 5000) => status.loaded ? Promise.resolve(true) : new Promise(res => { const t = setTimeout(() => res(false), ms); loadWaiters.push(() => { clearTimeout(t); res(true); }); });
   const now = () => { clock = Math.max(clock + 1, Date.now() * 1000); return clock; };
   const notify = () => listeners.forEach(fn => { try { fn(status, peers); } catch (e) { console.error(e); } });
 
   // ---- document <-> records ----------------------------------------------------------------------------------------
-  const FRAME_KEYS = ['id', 'name', 'x', 'y', 'autoLayout', 'clip', 'hidden', 'locked', 'showGrid', 'theme'];
+  const FRAME_KEYS = ['id', 'name', 'x', 'y', 'autoLayout', 'clip', 'hidden', 'locked', 'showGrid', 'theme', 'board'];
   // Records for the whole canvas, or (scope = {frames: Set}) for some screens only: with many people editing, every
   // change must not cost a pass over every block. Library records come along only on a full pass or when asked.
   function toRecords(doc, scope = null) {
@@ -12757,6 +13015,8 @@ const Sync = (() => {
     if (!caps) caps = await Promise.all(['room', 'db', 'user', 'assets'].map(n => window.claude.use(n).catch(() => null)));
     const [lobby, db, user, assets] = caps;
     if (!db && !lobby) return null;
+    // the name others see (and the one on this person's stickies): their profile's, unless they chose one here
+    if (!me.name && user && user.me) { try { const m = await user.me(); if (m && m.name && !me.name) setName(m.name); } catch { } }
     const base = opts.base ? String(opts.base).replace(/\/?$/, '/') : '';
     // A private canvas (opts.solo) has no live room at all: the lobby is everyone's. Its pictures stay under it.
     const assetsAt = opts.solo ? base + 'assets' : 'assets';
@@ -12825,6 +13085,7 @@ const Sync = (() => {
           firstSnap = false;
           const list = []; for (const d of snap.docs) { const data = d.data(); if (data) { list.push(...unpack(data)); if (!d.id.includes('.c')) docVersions.set(d.id, data.chunks || 1); } }
           if (list.some(r => r._k && r._k.startsWith('f~') && !r._del)) loadAll(list); else pushAll();
+          setLoaded(true);
           return;
         }
         // after the first load only the changed documents are read (reading every screen on every change is what
@@ -12847,7 +13108,7 @@ const Sync = (() => {
       }
     }
     return {
-      kind: 'artifact', live: !!room,
+      kind: 'artifact', live: !!room, hasDb: !!db, firstLoaded: () => !firstSnap,
       send: sendRecs,
       presence: p => { if (room) room.presence(p).catch(() => { }); },
       uploadAsset: assets ? async blob => { const r = await assets.upload(blob); return { id: r.id, url: r.url }; } : null,
@@ -12872,13 +13133,16 @@ const Sync = (() => {
     ui.on('change', (doc, opts) => onChange(doc, opts));
     ui.on('live', ids => onLive(ids));
     ui.on('pointer', p => cursor(p));
-    let viewT = 0; ui.on('view', v => { const t = performance.now(); if (t - viewT < 150 || !adapter) return; viewT = t; adapter.presence({ view: { cx: Math.round(v.cx), cy: Math.round(v.cy), zoom: Math.round(v.zoom * 1000) / 1000 } }); });
+    // the view, for people following: at most every 150 ms, and always the last one of a burst
+    let viewT = 0, viewLast = null, viewTimer = 0; const sendView = () => { viewTimer = 0; if (!adapter || !viewLast) return; viewT = performance.now(); const v = viewLast; viewLast = null; adapter.presence({ view: { cx: Math.round(v.cx), cy: Math.round(v.cy), zoom: Math.round(v.zoom * 1000) / 1000 } }); };
+    ui.on('view', v => { viewLast = v; if (viewTimer) return; const wait = 150 - (performance.now() - viewT); if (wait <= 0) sendView(); else viewTimer = setTimeout(sendView, wait); });
     ui.on('select', s => selection(s));
     ui.setUndoMerge((cur, target) => undoMerge(cur, target));
   }
   function attach(a, info) {
     if (adapter && adapter.close) adapter.close();
     adapter = a; Object.assign(status, info, { connected: info.mode === 'artifact' ? status.connected : false });
+    setLoaded(!(a && a.kind === 'artifact' && a.hasDb && !a.firstLoaded()));
     if (a) a.presence({ name: me.name || '', color: me.color, cursor: null, sel: { frameIds: [], blockIds: [] } });
     notify();
   }
@@ -12907,7 +13171,7 @@ const Sync = (() => {
   function roomLink() { if (status.mode !== 'server' || !status.room) return null; const u = new URL(location.href); u.hash = ''; u.searchParams.set('room', status.room); return u.toString(); }
   function setName(n) { me.name = String(n || '').replace(/[\u0000-\u001f<>]/g, '').slice(0, 40); LS.set('lg.name', me.name); if (adapter) adapter.presence({ name: me.name }); notify(); }
   return {
-    init, startArtifact, canArtifact, serverAvailable, roomFromUrl, joinServer, newRoomId, roomLink, setName, flush: flushInbox, flushWrites, resetState, leave,
+    init, startArtifact, canArtifact, whenLoaded, serverAvailable, roomFromUrl, joinServer, newRoomId, roomLink, setName, flush: flushInbox, flushWrites, resetState, leave,
     get me() { return me; }, get status() { return status; }, get peers() { return peers; },
     onStatus: fn => { listeners.push(fn); fn(status, peers); },
     announceTools: list => { if (adapter && adapter.announceTools) adapter.announceTools(list); },
@@ -13179,7 +13443,14 @@ const AgentTools = (() => {
       const touched = new Set(); const overflow = []; const errors = [];
       // props nested ({frame_id, block_id, props: {...}}) or flat ({frame_id, block_id, fill: ...}) both work
       const propsOf = u => { if (u.props && typeof u.props === 'object') return u.props; const { frame_id, block_id, props, ...rest } = u; return Object.keys(rest).length ? rest : u.props; };
-      write(() => { for (const u of list) { try { const f = F(u.frame_id); const b = Bk(f, u.block_id); applyProps(b, propsOf(u)); touched.add(f.id); if (b.overflow) overflow.push(b.id); } catch (e) { errors.push(`${u.block_id}: ${e.message}`); } } }, null);
+      write(() => {
+        for (const u of list) { try {
+          const f = F(u.frame_id); const b = Bk(f, u.block_id); const ox = b.x, oy = b.y; applyProps(b, propsOf(u)); touched.add(f.id); if (b.overflow) overflow.push(b.id);
+          // a section moved on a board carries what is in it
+          if (f.board && b.section && (b.x !== ox || b.y !== oy)) for (const k of Auto.withDescendants(f, [b])) if (k !== b) { k.x += b.x - ox; k.y += b.y - oy; }
+        } catch (e) { errors.push(`${u.block_id}: ${e.message}`); } }
+        for (const id of touched) { const f = Canvas.frameById(CanvasUI.doc, id); if (f && f.board) Canvas.settleBoard(f); }
+      }, null);
       note(`Updated ${list.length - errors.length} block${list.length - errors.length === 1 ? '' : 's'}`);
       return { updated: list.length - errors.length, overflow, errors };
     },
@@ -13187,7 +13458,7 @@ const AgentTools = (() => {
       const f = F(frame_id); const ids = []; const errors = [];
       write(() => { for (const spec of arr(blocks).slice(0, 80)) { try { const pp = spec.props || {}; const b = Canvas.newBlock(spec.kind, f, kit(), spec.kind === 'shape' || spec.kind === 'sticky' || spec.kind === 'section' || spec.kind === 'stamp' || spec.kind === 'connector' ? { x: Number(pp.x) || 0, y: Number(pp.y) || 0, color: pp.color, title: pp.title, emoji: pp.emoji, shape: pp.shape, radius: pp.radius, from: pp.from_id ? { id: String(pp.from_id) } : undefined, to: pp.to_id ? { id: String(pp.to_id) } : undefined } : null); if (!b) throw new Error(`unknown kind ${spec.kind}`); if (b.kind === 'sticky' && CanvasUI.who) { const m = CanvasUI.who(); b.author = m.id; b.authorName = m.name; } applyProps(b, pp); if (b.kind === 'sticky' || b.text != null) Canvas.refit(b); f.layout.blocks.push(b); ids.push(b.id); if (b.kind !== 'box' && b.kind !== 'connector' && !pp.box_id) { const sec = Canvas.sectionAt(f, b); if (sec) b.parent = sec.id; }
         // straight into a box: in a stack it joins the flow (before before_id, or at the end)
-        if (spec.box_id) { const box = Bk(f, spec.box_id); if (box.kind !== 'box') throw new Error(`${spec.box_id} is not a box`); if (Auto.on(Auto.settingsOf(f, box))) Auto.moveInList(f, b, box.id, spec.before_id || null); else b.parent = box.id; } } catch (e) { errors.push(e.message); } } if (f.autoLayout.mode !== 'none') Canvas.applyAutoLayout(f); }, [f.id]);
+        if (spec.box_id) { const box = Bk(f, spec.box_id); if (box.kind !== 'box') throw new Error(`${spec.box_id} is not a box`); if (Auto.on(Auto.settingsOf(f, box))) Auto.moveInList(f, b, box.id, spec.before_id || null); else b.parent = box.id; } } catch (e) { errors.push(e.message); } } if (f.autoLayout.mode !== 'none') Canvas.applyAutoLayout(f); if (f.board) Canvas.settleBoard(f); }, [f.id]);
       note(`Added ${ids.length} block${ids.length === 1 ? '' : 's'} to ${f.name}`);
       return { block_ids: ids, errors };
     },
@@ -13638,7 +13909,9 @@ Layer kinds:
 
   // ---- Toast ---------------------------------------------------------------------
   let toastT;
-  function toast(msg) { const t = $('toast'); t.textContent = msg; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => t.hidden = true, 2600); }
+  // DeelJam says board where Dugma says project (outside “quoted names”, which are what people typed).
+  const toastWords = msg => window.LG_APP !== 'jam' ? msg : String(msg).split(/(“[^”]*”)/).map((part, i) => i % 2 ? part : part.replace(/\bprojects\b/g, 'boards').replace(/\bProjects\b/g, 'Boards').replace(/\bproject\b/g, 'board').replace(/\bProject\b/g, 'Board')).join('');
+  function toast(msg) { const t = $('toast'); t.textContent = toastWords(msg); t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => t.hidden = true, 2600); }
 
   // ---- Brand kit form -------------------------------------------------------------
   function fillFontSelects() {
@@ -14372,7 +14645,8 @@ Layer kinds:
 
   // ---- Deck mode -----------------------------------------------------------------------------------
   function setMode(mode) {
-    if (mode === 'canvas' && PROJ.ready && !PROJ.id && Projects.mode !== 'local') { toast('Pick a project, or make a new one'); mode = 'home'; }
+    if (JAM_APP && mode !== 'canvas' && mode !== 'home') mode = 'canvas';
+    if (mode === 'canvas' && PROJ.ready && !PROJ.id && Projects.mode !== 'local') { toast(JAM_APP ? 'Pick a board, or make a new one' : 'Pick a project, or make a new one'); mode = 'home'; }
     state.mode = mode;
     document.querySelectorAll('#modeSeg button').forEach(b => b.classList.toggle('on', b.dataset.mode === mode));
     const canvas = mode === 'canvas'; const home = mode === 'home';
@@ -14903,7 +15177,61 @@ Layer kinds:
     $('importLayoutHint').textContent = v === 'auto' ? 'Stacks from Figma, web pages and slides stay stacks: edit text and the rest moves along. Simple mode keeps them tidy for anyone.' : 'Every layer stays exactly where it was drawn, with no stacks. Easiest to drag around.';
   }
   $('importLayout').addEventListener('click', e => { const b = e.target.closest('[data-il]'); if (!b) return; LS.set('lg.importLayout', b.dataset.il); renderImportLayout(); });
+  // A FigJam board (a .jam file or a paste from FigJam): its stickies, shapes, connectors and sections land on the
+  // board in Jam mode, or on a board of their own in the design editor.
+  async function importBoardData(data, how, opts = {}) {
+    Stats.track('import.figjam');
+    const res = await FigmaImport.convert(data, { addImage: (url, name) => addImage(url, name) }, { board: true });
+    if (!res.board || !res.board.blocks.length) { toast('Nothing visible to import from this board'); return false; }
+    if (state.mode !== 'canvas') setMode('canvas');
+    const B = res.board; const count = k => B.blocks.filter(b => b.kind === k).length;
+    const placed = CanvasUI.placeBoardBlocks(B.blocks, { w: B.w, h: B.h }, { at: opts.at, name: B.name });
+    updateCanvasBadge();
+    const parts = [[count('sticky'), 'sticky', 'stickies'], [B.blocks.filter(b => (b.kind === 'field' || b.kind === 'shape') && b.text != null).length, 'shape', 'shapes'], [count('connector'), 'connector', 'connectors'], [B.blocks.filter(b => b.section).length, 'section', 'sections'], [count('stamp'), 'stamp', 'stamps'], [count('image'), 'picture', 'pictures']].filter(q => q[0]).map(q => `${q[0]} ${q[0] === 1 ? q[1] : q[2]}`);
+    const skipped = Object.entries(res.stats.skipped).map(([k, v]) => `${v} ${k.toLowerCase().replace(/_/g, ' ')}`).join(', ');
+    toast(`${how}: ${parts.join(', ') || B.blocks.length + ' things'}${res.stats.missingImages ? `, ${res.stats.missingImages} pictures not included` : ''}${skipped ? ` · left out ${skipped}` : ''}`);
+    if (placed && await ensureFonts([placed.frame])) CanvasUI.mutate(() => { }, { history: false, frames: [placed.frame.id] });
+    return true;
+  }
+  // Stickies from a sheet: FigJam's "export selection as CSV" for stickies or a table, or any CSV with one idea per
+  // row. Columns are found by name (text, created by, colour, section); without names the first column is the text.
+  function parseCsv(text) {
+    const rows = []; let row = [], cell = '', q = false; const s = String(text).replace(/^\uFEFF/, ''); const sep = (s.split('\n')[0].match(/\t/g) || []).length > (s.split('\n')[0].match(/,/g) || []).length ? '\t' : (s.split('\n')[0].match(/;/g) || []).length > (s.split('\n')[0].match(/,/g) || []).length ? ';' : ',';
+    for (let i = 0; i < s.length; i++) { const c = s[i];
+      if (q) { if (c === '"') { if (s[i + 1] === '"') { cell += '"'; i++; } else q = false; } else cell += c; }
+      else if (c === '"') q = true; else if (c === sep) { row.push(cell); cell = ''; } else if (c === '\n' || c === '\r') { if (c === '\r' && s[i + 1] === '\n') i++; row.push(cell); cell = ''; if (row.some(x => x.trim())) rows.push(row); row = []; } else cell += c; }
+    row.push(cell); if (row.some(x => x.trim())) rows.push(row);
+    return rows;
+  }
+  const STICKY_NAMES = { yellow: '#FFE066', orange: '#FFDAC1', peach: '#FFDAC1', red: '#FFB4A2', coral: '#FFB4A2', pink: '#FDE2FF', violet: '#C7CEEA', purple: '#C7CEEA', blue: '#C7CEEA', periwinkle: '#C7CEEA', teal: '#B5EAD7', green: '#B5EAD7', mint: '#B5EAD7', lime: '#E2F0CB', gray: '#F0EFEA', grey: '#F0EFEA', white: '#FFFFFF' };
+  function stickiesFromCsv(text) {
+    const rows = parseCsv(text); if (!rows.length) return null;
+    const head = rows[0].map(h => h.trim().toLowerCase()); const find = re => head.findIndex(h => re.test(h));
+    let ti = find(/^(text|content|sticky|sticky note|note|idea|title|name|description)s?$/), ai = find(/created by|author|owner|^by$|^who$/), ci = find(/^colou?r$/), si = find(/^(section|group|category|theme|column|cluster|topic)s?$/);
+    const named = ti >= 0 || ai >= 0 || ci >= 0 || si >= 0; if (ti < 0) ti = 0; const data = named ? rows.slice(1) : rows;
+    const items = data.map(r => ({ text: String(r[ti] || '').trim().slice(0, 2000), author: ai >= 0 ? String(r[ai] || '').trim().slice(0, 60) : '', color: ci >= 0 ? String(r[ci] || '').trim() : '', section: si >= 0 ? String(r[si] || '').trim().slice(0, 80) : '' })).filter(x => x.text).slice(0, 1500);
+    if (!items.length) return null;
+    const colorOf = c => /^#[0-9a-f]{6}$/i.test(c) ? c.toUpperCase() : STICKY_NAMES[c.toLowerCase().replace(/^light |^dark /, '')] || '#FFE066';
+    const kit = state.kit; const blocks = []; const S = 200, G = 24, P = 40; const ground = { layout: { grid: { unit: 1, mx: 0, my: 0 }, palette: {}, type: {}, format: { w: 1e5, h: 1e5 } } };
+    const groups = new Map(); for (const it of items) { if (!groups.has(it.section)) groups.set(it.section, []); groups.get(it.section).push(it); }
+    let x = 0, H = 0;
+    for (const [name, list] of groups) {
+      const cols = Math.max(1, Math.min(6, Math.ceil(Math.sqrt(list.length)))); const rowsN = Math.ceil(list.length / cols); const inSec = groups.size > 1 || !!name;
+      const w = cols * S + (cols - 1) * G + (inSec ? P * 2 : 0), h = rowsN * S + (rowsN - 1) * G + (inSec ? P + 64 : 0);
+      let sec = null; if (inSec) { sec = Canvas.newBlock('section', ground, kit, { x, y: 0, title: name || 'Other' }); sec.w = w; sec.h = h; blocks.push(sec); }
+      list.forEach((it, i) => { const b = Canvas.newBlock('sticky', ground, kit, { x: x + (inSec ? P : 0) + (i % cols) * (S + G), y: (inSec ? 64 : 0) + Math.floor(i / cols) * (S + G), color: colorOf(it.color) }); b.text = it.text; if (it.author) b.authorName = it.author; if (sec) b.parent = sec.id; Canvas.refit(b); blocks.push(b); });
+      x += w + 80; H = Math.max(H, h);
+    }
+    return { blocks, w: x - 80, h: H, n: items.length, sections: [...groups.keys()].filter(Boolean).length };
+  }
+  async function importStickySheet(text, name, opts = {}) {
+    const r = stickiesFromCsv(text); if (!r) { toast('No rows with text in this sheet'); return false; }
+    Stats.track('import.csv'); if (state.mode !== 'canvas') setMode('canvas');
+    CanvasUI.placeBoardBlocks(r.blocks, { w: r.w, h: r.h }, { at: opts.at, name: name || 'Stickies' }); updateCanvasBadge();
+    toast(`${r.n} ${r.n === 1 ? 'sticky' : 'stickies'} from ${name || 'the sheet'}${r.sections ? ` in ${r.sections} section${r.sections === 1 ? '' : 's'}` : ''}`); return true;
+  }
   async function importFigmaData(data, how) {
+    if (FigmaImport.isBoard(data)) return importBoardData(data, /paste/i.test(how) ? 'Pasted from FigJam' : 'FigJam board', { at: /paste/i.test(how) && CanvasUI.editMode === 'jam' ? CanvasUI.viewCenter && (c => ({ x: c.cx, y: c.cy }))(CanvasUI.viewCenter()) : null });
     Stats.track('import.figma');
     const res = await FigmaImport.convert(data, { addImage: (url, name) => addImage(url, name) }, { layout: importLayout() });
     const items = FigmaImport.toLayouts(res.frames, state.kit);
@@ -14966,9 +15294,10 @@ Layer kinds:
   async function importFile(file) {
     if (/\.pptx$/i.test(file.name) || file.type === GSlides.PPTX) { await importPptxBytes(new Uint8Array(await file.arrayBuffer()), file.name); return true; }
     const head = new Uint8Array(await file.slice(0, 8).arrayBuffer()); const sig = String.fromCharCode(...head);
-    if (/\.fig$/i.test(file.name) || sig === 'fig-kiwi' || (sig.startsWith('PK') && /\.fig$/i.test(file.name))) {
+    if (/\.csv$/i.test(file.name) || file.type === 'text/csv') { return importStickySheet(await file.text(), file.name.replace(/\.csv$/i, '')); }
+    if (/\.(fig|jam)$/i.test(file.name) || sig === 'fig-kiwi' || sig === 'fig-jam.') {
       toast(`Reading ${file.name}…`);
-      try { await importFigmaData(await FigmaImport.readFile(file), 'Figma file'); } catch (err) { console.error(err); toast('Could not read this Figma file: ' + err.message); }
+      try { await importFigmaData(await FigmaImport.readFile(file), 'Figma file'); } catch (err) { console.error(err); toast(`Could not read this ${/\.jam$/i.test(file.name) ? 'FigJam' : 'Figma'} file: ` + err.message); }
       return true;
     }
     if (/\.json$/i.test(file.name) || file.type === 'application/json') {
@@ -15044,11 +15373,17 @@ Layer kinds:
   const PROJ = { id: null, ready: false };
   function backupKey() { return PROJ.id ? `lg.canvas.${PROJ.id}` : 'lg.canvas'; }
   const JAM_APP = window.LG_APP === 'jam';
+  // In DeelJam a project is a board. Fixed interface text goes through this; names people typed never do.
+  const jw = s => !JAM_APP ? s : String(s).replace(/\bprojects\b/g, 'boards').replace(/\bProjects\b/g, 'Boards').replace(/\bproject\b/g, 'board').replace(/\bProject\b/g, 'Board').replace(/\bShared canvas\b/g, 'Shared board');
+  const jamWords = root => { if (!JAM_APP || !root) return; const skip = n => n.parentElement && n.parentElement.closest('.home-name, .home-f b, option, .home-meta, input, textarea');
+    const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT); let n; while ((n = w.nextNode())) { if (/project|Shared canvas/i.test(n.nodeValue) && !skip(n)) n.nodeValue = jw(n.nodeValue); }
+    root.querySelectorAll('[placeholder], [title], [aria-label], [data-tip]').forEach(el => { for (const a of ['placeholder', 'title', 'aria-label', 'data-tip']) { const v = el.getAttribute(a); if (v && /project/i.test(v) && !(a === 'aria-label' && el.classList.contains('home-card'))) el.setAttribute(a, jw(v)); } }); };
   if (JAM_APP) {
     document.title = 'DeelJam'; document.body.classList.add('jam-app');
     const nm = document.querySelector('.brandmark .name'); if (nm) nm.textContent = 'DeelJam';
     const ph = $('homeSearch'); if (ph) ph.placeholder = 'Search boards'; const nn = $('homeNewName'); if (nn) nn.placeholder = 'Board name, e.g. Q1 planning retro';
     const op = $('homeOpenInput'); if (op) op.placeholder = 'Paste a board link';
+    jamWords($('homeView')); jamWords($('canvasView'));
   }
   CanvasUI.init({
     getKit: () => state.kit, getAssets: () => state.assets, toast, backupKey,
@@ -15063,7 +15398,7 @@ Layer kinds:
     resetColors: () => { const preset = Brand.PRESETS[state.kit.presetId]; if (!preset) return false; state.kit.colors = preset.colors.map(c => ({ ...c })); renderColors(); persistKit(); return true; },
     openSettings: () => { $('settings').hidden = false; renderGuides(); $('imgProvider').focus(); },
     download: (blob, name) => Render.download(blob, name),
-    renderSVG: (layout, opts) => Render.toSVG(layout, { kit: state.kit, assets: state.assets, showGrid: !!(opts && opts.showGrid) }),
+    renderSVG: (layout, opts) => Render.toSVG(layout, { kit: state.kit, assets: state.assets, showGrid: !!(opts && opts.showGrid), me: opts && opts.me }),
     exportPNG: (layout, scale) => Render.exportPNG(layout, { kit: state.kit, assets: state.assets }, scale || 1),
     exportPDF: layouts => Render.exportPDF(layouts, { kit: state.kit, assets: state.assets }),
     variations: async opts => makeVariations(opts),
@@ -15104,7 +15439,9 @@ Layer kinds:
     variations: opts => makeVariations(opts),
     onExternal: name => { toast(`Outside agent: ${name.replace(/_/g, ' ')}`); Stats.track('agent.tool', { detail: name }); },
   });
-  if (typeof Jam !== 'undefined') Jam.init({ getKit: () => state.kit, toast, addVideo: (file, name) => addVideo(file, name), addImage: async file => addImage(await readAsDataURL(file), file.name) });
+  // resolves once the project to open is known and opened (its shared canvas may still be answering: Sync.whenLoaded)
+  let docOpenedRes; const docOpened = new Promise(r => { docOpenedRes = r; });
+  if (typeof Jam !== 'undefined') Jam.init({ docReady: async () => { await docOpened; await Sync.whenLoaded(5000); }, getKit: () => state.kit, toast, addVideo: (file, name) => addVideo(file, name), addImage: async file => addImage(await readAsDataURL(file), file.name) });
   Agent.init({ getKit: () => state.kit, toast, openSettings: () => { $('settings').hidden = false; renderGuides(); }, onRun: text => Stats.track('agent.run', { detail: String(text).slice(0, 60) }) });
 
   // ---- Multiplayer ------------------------------------------------------------------------------------------------
@@ -15184,9 +15521,9 @@ Layer kinds:
   // Nothing yet: what this browser already holds becomes the first project (in claude.ai, the page's own canvas).
   async function firstProject() {
     const mode = Projects.mode;
-    if (mode === 'artifact') { try { await Projects.create({ id: '_root', name: 'Shared canvas' }); } catch { } return '_root'; }
-    if (mode === 'server') { try { const p = await Projects.create({ name: 'My first project' }); return p.id; } catch { return 'local'; } }
-    try { await Projects.create({ id: 'local', name: 'My first project' }); } catch { }
+    if (mode === 'artifact') { try { await Projects.create({ id: '_root', name: JAM_APP ? 'Shared board' : 'Shared canvas' }); } catch { } return '_root'; }
+    if (mode === 'server') { try { const p = await Projects.create({ name: jw('My first project') }); return p.id; } catch { return 'local'; } }
+    try { await Projects.create({ id: 'local', name: jw('My first project') }); } catch { }
     try { if (!localStorage.getItem('lg.canvas.local')) { const old = localStorage.getItem('lg.canvas'); if (old) localStorage.setItem('lg.canvas.local', old); } } catch { }
     return 'local';
   }
@@ -15215,7 +15552,7 @@ Layer kinds:
     if (!opts.quiet) { setMode('canvas'); Stats.track('project.open', { project: id, detail: p ? projLabel(p) : name }); }
     return true;
   }
-  function renderProjectName() { const p = Projects.get(PROJ.id); $('cvProject').textContent = '⌂ ' + (p ? p.name : PROJ.id === '_root' ? 'Shared canvas' : PROJ.id ? 'Project' : 'Projects'); }
+  function renderProjectName() { const p = Projects.get(PROJ.id); const shared = JAM_APP ? 'Shared board' : 'Shared canvas'; $('cvProject').textContent = '⌂ ' + (p ? (JAM_APP && p.id === '_root' && p.name === 'Shared canvas' ? shared : p.name) : PROJ.id === '_root' ? shared : PROJ.id ? jw('Project') : jw('Projects')); }
   $('cvProject').addEventListener('click', () => setMode('home'));
   // Project bookkeeping from the canvas: screen count and a small cover, at most every 20 s.
   let touchTimer = 0;
@@ -15261,13 +15598,14 @@ Layer kinds:
     $('homeGrid').innerHTML = list.map(p => { const a = Projects.accessOf(p); const link = Projects.linkFor(p.id); return `<div class="home-card${p.archived ? ' home-archived' : ''}${p.id === PROJ.id ? ' current' : ''}" data-open="${escapeHtml(p.id)}" tabindex="0" role="button" aria-label="Open ${escapeHtml(p.name)}">
         <div class="home-cover">${p.cover ? `<img src="${escapeHtml(p.cover)}" alt="">` : `<span>${escapeHtml((p.name || '?')[0].toUpperCase())}</span>`}</div>
         <div class="home-name">${a !== 'all' ? `<span title="${a === 'me' ? 'Only you' : 'Specific people'}">${accIcon(a)}</span>` : ''}${escapeHtml(p.name)}${p.id === PROJ.id ? ' <span class="cv-token">open</span>' : ''}</div>
-        <div class="home-meta">${p.frames ? p.frames + ' screen' + (p.frames === 1 ? '' : 's') + ' · ' : ''}${escapeHtml(ago(p.updated || p.created))}${p.byName ? ' · ' + escapeHtml(p.byName) : ''}${p.folder && homeFolder !== p.folder ? ' · ' + escapeHtml(fname(p.folder)) : ''}</div>
+        <div class="home-meta">${p.frames && !JAM_APP ? p.frames + ' screen' + (p.frames === 1 ? '' : 's') + ' · ' : ''}${escapeHtml(ago(p.updated || p.created))}${p.byName ? ' · ' + escapeHtml(p.byName) : ''}${p.folder && homeFolder !== p.folder ? ' · ' + escapeHtml(fname(p.folder)) : ''}</div>
         <button type="button" class="home-menu${homeMenu === p.id ? ' open' : ''}" data-menu="${escapeHtml(p.id)}" title="Rename, move, copy link, archive" aria-label="Project menu">⋯</button>
         ${homeMenu === p.id ? `<div class="home-pop" data-pop><input type="text" class="input" data-rename="${escapeHtml(p.id)}" value="${escapeHtml(p.name)}" maxlength="80" aria-label="Project name"><select class="input" data-move="${escapeHtml(p.id)}" aria-label="Folder"><option value="">No folder (everyone)</option>${folders.map(f => `<option value="${escapeHtml(f.id)}" ${p.folder === f.id ? 'selected' : ''}>${escapeHtml(f.name)}${f.access === 'me' ? ' (only me)' : f.access === 'people' ? ' (specific people)' : ''}</option>`).join('')}</select>${link && p.id !== '_root' ? `<button type="button" class="btn small" data-link="${escapeHtml(p.id)}">Copy link</button>` : ''}${Projects.canChange(p) ? (p.archived ? `<button type="button" class="btn small" data-restore="${escapeHtml(p.id)}">Restore</button>` : `<button type="button" class="btn small ghost" data-archive="${escapeHtml(p.id)}">Archive</button>`) : '<span class="hint">Made by someone else: open it, or ask them or an admin to change it.</span>'}</div>` : ''}
       </div>`; }).join('') || `<p class="hint">${homeArchived ? 'Nothing archived.' : homeFolder === '_shared' ? 'Nothing is shared with you by name yet.' : 'No projects here yet. Make one with “New project”.'}</p>`;
     $('homeArchived').textContent = homeArchived ? 'Back to projects' : `Show archived${arch.length ? ` (${arch.length})` : ''}`;
     $('homeNote').textContent = Projects.mode === 'artifact' ? 'Unfiled projects and Everyone folders are seen by everyone who opens this page. A folder’s ⋯ → Sharing limits it.' : Projects.mode === 'server' ? 'Unfiled projects and Everyone folders are seen by everyone on this server; each project is a live room. A folder’s ⋯ → Sharing limits it.' : 'Projects are kept in this browser.';
     $('homeOpenBtn').hidden = !sharing();
+    jamWords($('homeView'));
     $('homeNewFolder').innerHTML = `<option value="">No folder (everyone)</option>` + folders.map(f => `<option value="${escapeHtml(f.id)}" ${homeFolder === f.id ? 'selected' : ''}>${escapeHtml(f.name)}${f.access === 'me' ? ' (only me)' : f.access === 'people' ? ' (specific people)' : ''}</option>`).join('');
   }
   // The open project went away for this person (sharing changed, or it moved): back to Home.
@@ -15404,7 +15742,7 @@ Layer kinds:
     if (!Sync.canArtifact()) serverHere = await Sync.serverAvailable();
     await Promise.all([Projects.start(), Stats.start()]);
     await Projects.whenReady(5000);
-    await startProject();
+    try { await startProject(); } finally { docOpenedRes(); }
     renderPeers(Sync.status, Sync.peers); renderHome(); updateAdminButton();
   })();
 
@@ -15434,7 +15772,8 @@ Layer kinds:
     $('promptForm').addEventListener('submit', e => { e.preventDefault(); generate($('prompt').value); });
     await ensureDemoImages(false);
     // First frame: a working state, not an empty shell.
-    const savedMode = LS.get('lg.mode', 'single');
+    // DeelJam has two places, the board and Home: it never opens on the layout generator.
+    const savedMode = JAM_APP ? (LS.get('lg.mode', 'canvas') === 'home' ? 'home' : 'canvas') : LS.get('lg.mode', 'single');
     if (!$('prompt').value) $('prompt').value = savedMode === 'deck' ? '8-slide launch deck for Deel Payroll' : 'Launch posts for Deel Payroll, bold, image-led, square and story';
     $('promptClear').hidden = !$('prompt').value;
     if (savedMode === 'deck') setMode('deck');

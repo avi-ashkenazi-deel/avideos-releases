@@ -155,7 +155,16 @@ const Canvas = (() => {
     return c;
   }
   // Removing a box removes what is inside it.
-  function removeBlocks(frame, ids) { const gone = new Set(Auto.withDescendants(frame, frame.layout.blocks.filter(b => ids.includes(b.id))).map(b => b.id)); frame.layout.blocks = frame.layout.blocks.filter(b => !gone.has(b.id)); }
+  // An arrow that touched a removed block stays, its end loose where the block's edge was.
+  function removeBlocks(frame, ids) {
+    const gone = new Set(Auto.withDescendants(frame, frame.layout.blocks.filter(b => ids.includes(b.id))).map(b => b.id));
+    for (const c of frame.layout.blocks) {
+      if (c.kind !== 'connector' || gone.has(c.id) || !((c.from && gone.has(c.from.id)) || (c.to && gone.has(c.to.id)))) continue;
+      const g = connectorGeometry(frame, c); if (!g) continue; const a = g.pts[0], z = g.pts[g.pts.length - 1];
+      if (c.from && gone.has(c.from.id)) c.from = { x: Math.round(a.x), y: Math.round(a.y) }; if (c.to && gone.has(c.to.id)) c.to = { x: Math.round(z.x), y: Math.round(z.y) };
+    }
+    frame.layout.blocks = frame.layout.blocks.filter(b => !gone.has(b.id));
+  }
   // Move blocks (with what is inside them) into another frame and keep their place on the canvas. They land at the
   // top level of the other frame unless `into` names a box there.
   function transferBlocks(src, dst, blocks, u, into) {
@@ -262,6 +271,19 @@ const Canvas = (() => {
   }
   // The section (a box with a title) whose area holds a block's centre, if any.
   function sectionAt(frame, b) { const cx = b.x + b.w / 2, cy = b.y + b.h / 2; const secs = frame.layout.blocks.filter(s => s.kind === 'box' && s.section && s.id !== b.id && !s.hidden); let best = null; for (const s of secs) if (cx >= s.x && cx <= s.x + s.w && cy >= s.y && cy <= s.y + s.h && (!best || s.w * s.h < best.w * best.h)) best = s; return best; }
+  // A board after something moved or arrived by code (the agent, an import): sections sit behind what they hold,
+  // everything loose belongs to the section its centre is in (or to none), and arrows follow.
+  function settleBoard(frame) {
+    if (!frame || !frame.board) return false; const arr = frame.layout.blocks; let changed = false;
+    const secs = arr.filter(b => b.kind === 'box' && b.section && !b.parent);
+    if (secs.length && !secs.every((s, i) => arr[i] === s)) { const rest = arr.filter(b => !secs.includes(b)); frame.layout.blocks = [...secs, ...rest]; changed = true; }
+    for (const b of frame.layout.blocks) {
+      if (b.section || b.kind === 'connector') continue; const cur = b.parent ? blockById(frame, b.parent) : null; if (cur && !cur.section) continue;
+      const sec = sectionAt(frame, b); const want = sec ? sec.id : undefined;
+      if ((b.parent || undefined) !== want) { if (want) b.parent = want; else delete b.parent; changed = true; }
+    }
+    return syncConnectors(frame) || changed;
+  }
   // ---- Pictures: the crop shown and the adjustments on it --------------------------------------------------------
   // The part of a picture a block shows, in source pixels. Without a crop it is the cover crop at the focal point
   // (what the renderer drew all along); with one, crop {x, y, w, h} is a fraction of the source, kept at the block's
@@ -755,5 +777,5 @@ const Canvas = (() => {
     };
   }
 
-  return { create, addFrame, blankFrame, migrate, defaultAuto, frameById, blockById, refit, sourceText, newBlock, moveBlock, resizeBlock, reorder, duplicateBlock, removeBlocks, transferBlocks, pasteBlocks, customFormat, align, distribute, bounds, applyAutoLayout, isBackground, serialize, deserialize, toLink, fromHash, toHTML, toReact, codeTree, codeNodes, recolor, extractContent, scaleFrame, clusters, mainCluster, applyFrameTokens, tokenizeFrame, applyTokens, group, ungroup, groupMembers, tidy, compact, penD, penFit, maskShape, maskedBy, replaceText, setFonts, pasteFrames, framesBounds, cssGradient, setText, richText, connectorGeometry, syncConnectors, connectorDistance, sectionAt, cropRect, cropFrom, cropZoom, setCropZoom, adjustOf, adjustActive, adjustCss, ADJUST_DEFAULT, history, snap, uid, clone };
+  return { create, addFrame, blankFrame, migrate, defaultAuto, frameById, blockById, refit, sourceText, newBlock, moveBlock, resizeBlock, reorder, duplicateBlock, removeBlocks, transferBlocks, pasteBlocks, customFormat, align, distribute, bounds, applyAutoLayout, isBackground, serialize, deserialize, toLink, fromHash, toHTML, toReact, codeTree, codeNodes, recolor, extractContent, scaleFrame, clusters, mainCluster, applyFrameTokens, tokenizeFrame, applyTokens, group, ungroup, groupMembers, tidy, compact, penD, penFit, maskShape, maskedBy, replaceText, setFonts, pasteFrames, framesBounds, cssGradient, setText, richText, connectorGeometry, syncConnectors, settleBoard, connectorDistance, sectionAt, cropRect, cropFrom, cropZoom, setCropZoom, adjustOf, adjustActive, adjustCss, ADJUST_DEFAULT, history, snap, uid, clone };
 })();

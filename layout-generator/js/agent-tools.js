@@ -217,7 +217,14 @@ const AgentTools = (() => {
       const touched = new Set(); const overflow = []; const errors = [];
       // props nested ({frame_id, block_id, props: {...}}) or flat ({frame_id, block_id, fill: ...}) both work
       const propsOf = u => { if (u.props && typeof u.props === 'object') return u.props; const { frame_id, block_id, props, ...rest } = u; return Object.keys(rest).length ? rest : u.props; };
-      write(() => { for (const u of list) { try { const f = F(u.frame_id); const b = Bk(f, u.block_id); applyProps(b, propsOf(u)); touched.add(f.id); if (b.overflow) overflow.push(b.id); } catch (e) { errors.push(`${u.block_id}: ${e.message}`); } } }, null);
+      write(() => {
+        for (const u of list) { try {
+          const f = F(u.frame_id); const b = Bk(f, u.block_id); const ox = b.x, oy = b.y; applyProps(b, propsOf(u)); touched.add(f.id); if (b.overflow) overflow.push(b.id);
+          // a section moved on a board carries what is in it
+          if (f.board && b.section && (b.x !== ox || b.y !== oy)) for (const k of Auto.withDescendants(f, [b])) if (k !== b) { k.x += b.x - ox; k.y += b.y - oy; }
+        } catch (e) { errors.push(`${u.block_id}: ${e.message}`); } }
+        for (const id of touched) { const f = Canvas.frameById(CanvasUI.doc, id); if (f && f.board) Canvas.settleBoard(f); }
+      }, null);
       note(`Updated ${list.length - errors.length} block${list.length - errors.length === 1 ? '' : 's'}`);
       return { updated: list.length - errors.length, overflow, errors };
     },
@@ -225,7 +232,7 @@ const AgentTools = (() => {
       const f = F(frame_id); const ids = []; const errors = [];
       write(() => { for (const spec of arr(blocks).slice(0, 80)) { try { const pp = spec.props || {}; const b = Canvas.newBlock(spec.kind, f, kit(), spec.kind === 'shape' || spec.kind === 'sticky' || spec.kind === 'section' || spec.kind === 'stamp' || spec.kind === 'connector' ? { x: Number(pp.x) || 0, y: Number(pp.y) || 0, color: pp.color, title: pp.title, emoji: pp.emoji, shape: pp.shape, radius: pp.radius, from: pp.from_id ? { id: String(pp.from_id) } : undefined, to: pp.to_id ? { id: String(pp.to_id) } : undefined } : null); if (!b) throw new Error(`unknown kind ${spec.kind}`); if (b.kind === 'sticky' && CanvasUI.who) { const m = CanvasUI.who(); b.author = m.id; b.authorName = m.name; } applyProps(b, pp); if (b.kind === 'sticky' || b.text != null) Canvas.refit(b); f.layout.blocks.push(b); ids.push(b.id); if (b.kind !== 'box' && b.kind !== 'connector' && !pp.box_id) { const sec = Canvas.sectionAt(f, b); if (sec) b.parent = sec.id; }
         // straight into a box: in a stack it joins the flow (before before_id, or at the end)
-        if (spec.box_id) { const box = Bk(f, spec.box_id); if (box.kind !== 'box') throw new Error(`${spec.box_id} is not a box`); if (Auto.on(Auto.settingsOf(f, box))) Auto.moveInList(f, b, box.id, spec.before_id || null); else b.parent = box.id; } } catch (e) { errors.push(e.message); } } if (f.autoLayout.mode !== 'none') Canvas.applyAutoLayout(f); }, [f.id]);
+        if (spec.box_id) { const box = Bk(f, spec.box_id); if (box.kind !== 'box') throw new Error(`${spec.box_id} is not a box`); if (Auto.on(Auto.settingsOf(f, box))) Auto.moveInList(f, b, box.id, spec.before_id || null); else b.parent = box.id; } } catch (e) { errors.push(e.message); } } if (f.autoLayout.mode !== 'none') Canvas.applyAutoLayout(f); if (f.board) Canvas.settleBoard(f); }, [f.id]);
       note(`Added ${ids.length} block${ids.length === 1 ? '' : 's'} to ${f.name}`);
       return { block_ids: ids, errors };
     },

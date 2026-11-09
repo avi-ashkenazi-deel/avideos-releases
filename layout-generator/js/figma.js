@@ -2,7 +2,8 @@
    Both carry the same binary: "fig-kiwi", a version, then a compressed kiwi schema and a compressed message (deflate-raw,
    or zstd in newer files). The schema travels with the data, so the decoder below knows nothing Figma-specific; only
    the conversion to frames and blocks reads Figma's node types. A .fig file is usually a zip around that binary
-   (canvas.fig) with the image fills in images/<hash>. Fidelity is best-effort: frames, rectangles, ellipses, text,
+   (canvas.fig) with the image fills in images/<hash>. A FigJam board (a .jam file, or a paste from FigJam) is the same
+   container with board node types: stickies, shapes with text, connectors, sections, stamps; they become a board. Fidelity is best-effort: frames, rectangles, ellipses, text,
    vectors, image fills, gradients, strokes, drop shadows, opacity and rotation come through; components are expanded
    from their main component when it is in the same data; variables, constraints and prototypes are not read. */
 const FigmaImport = (() => {
@@ -92,14 +93,14 @@ const FigmaImport = (() => {
     if (head !== 'fig-kiwi' && head !== 'fig-jam.') throw new Error('Not Figma data (no fig-kiwi header)');
     const dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength); let p = 8; const version = dv.getUint32(p, true); p += 4; const files = [];
     while (p + 4 <= u8.length) { const size = dv.getUint32(p, true); p += 4; if (p + size > u8.length) break; files.push(u8.subarray(p, p + size)); p += size; }
-    return { version, files };
+    return { version, files, jam: head === 'fig-jam.' };
   }
   async function decodeArchive(u8) {
-    const { version, files } = readArchive(u8);
+    const { version, files, jam } = readArchive(u8);
     if (files.length < 2) throw new Error('Figma data is missing its schema or content');
     const schema = decodeSchema(await unpack(files[0]));
     const message = compile(schema).decode(await unpack(files[1]));
-    return { version, message };
+    return { version, message, jam };
   }
   const hex = u8 => Array.from(u8 || [], b => b.toString(16).padStart(2, '0')).join('');
 
@@ -109,7 +110,9 @@ const FigmaImport = (() => {
     const images = new Map();
     if (u8[0] === 0x50 && u8[1] === 0x4B) {
       const zip = readZip(u8);
-      const main = zip.get('canvas.fig') || [...zip.entries()].find(([k]) => /\.fig$/.test(k))?.[1];
+      let main = zip.get('canvas.fig') || zip.get('canvas.jam') || [...zip.entries()].find(([k]) => /\.(fig|jam)$/.test(k))?.[1];
+      // whatever it is called: the entry that starts with the archive's signature
+      if (!main) for (const [k, e] of zip) { if (k.endsWith('/') || /^images\//.test(k)) continue; try { const head = new TextDecoder().decode((await zipEntry(e)).subarray(0, 8)); if (head === 'fig-kiwi' || head === 'fig-jam.') { main = e; break; } } catch { } }
       if (!main) throw new Error('This zip has no canvas.fig inside');
       for (const [k, e] of zip) if (/^images\//.test(k) && !k.endsWith('/')) images.set(k.slice(7).toLowerCase(), e);
       const res = await decodeArchive(await zipEntry(main));
@@ -202,7 +205,17 @@ const FigmaImport = (() => {
 
   // ---- conversion ----------------------------------------------------------------------------------------------------
   const CONTAINERS = new Set(['FRAME', 'GROUP', 'SYMBOL', 'INSTANCE', 'SECTION']);
-  const VECTORS = new Set(['VECTOR', 'STAR', 'LINE', 'REGULAR_POLYGON', 'BOOLEAN_OPERATION']);
+  const VECTORS = new Set(['VECTOR', 'STAR', 'LINE', 'REGULAR_POLYGON', 'BOOLEAN_OPERATION', 'HIGHLIGHT', 'WASHI_TAPE']);
+  // FigJam's own node types. Data that holds any of them (or says it is a .jam) is a board, not screens.
+  const BOARD_TYPES = new Set(['STICKY', 'SHAPE_WITH_TEXT', 'CONNECTOR', 'STAMP', 'CODE_BLOCK', 'WIDGET', 'TABLE', 'HIGHLIGHT', 'WASHI_TAPE', 'LINK_UNFURL']);
+  function isBoard(data) {
+    if (!data || !data.message) return false; if (data.jam) return true;
+    const nodes = data.message.nodeChanges || []; const doc = nodes.find(n => n && n.type === 'DOCUMENT');
+    if (doc && /figjam|whiteboard/i.test(String(doc.editorType || ''))) return true;
+    return nodes.some(n => n && n.phase !== 'REMOVED' && (n.type === 'STICKY' || n.type === 'SHAPE_WITH_TEXT' || n.type === 'CONNECTOR'));
+  }
+  const STAMPS = [[/thumbs?[ _-]?down|dislike|-1/i, '👎'], [/thumbs?[ _-]?up|like|\+1/i, '👍'], [/heart|love/i, '❤️'], [/star/i, '⭐'], [/question/i, '❓'], [/check|done|tick|yes/i, '✅'], [/cross|\bno\b|\bx\b/i, '❌'], [/plus/i, '➕'], [/minus/i, '➖'], [/fire|hot/i, '🔥'], [/eyes|look/i, '👀'], [/party|tada|celebrat|confetti/i, '🎉'], [/laugh|joy|haha|lol/i, '😂'], [/clap/i, '👏'], [/idea|bulb/i, '💡'], [/warn|alert|exclam/i, '⚠️'], [/rocket/i, '🚀'], [/smil|happy/i, '🙂'], [/sad/i, '🙁']];
+  const lum = hex => { const m = /^#?([0-9a-f]{6})$/i.exec(hex || ''); if (!m) return 1; const v = parseInt(m[1], 16); const c = [v >> 16 & 255, v >> 8 & 255, v & 255].map(x => { x /= 255; return x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4); }); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; };
   // Figma auto layout -> our stack settings (null when the node does not stack its children).
   const ALIGN = { MIN: 'start', CENTER: 'center', MAX: 'end' };
   function autoOf(n) {
@@ -214,7 +227,10 @@ const FigmaImport = (() => {
   // message -> { frames: [{name, x, y, layout, clip, autoLayout}], stats }. opts.layout: 'auto' keeps Figma's auto
   // layout (stacks reflow here too); 'fixed' keeps every position as drawn. Frames inside frames are boxes either way.
   async function convert(data, env, opts = {}) {
-    const AUTO = opts.layout !== 'fixed';
+    const BOARD = !!opts.board; const AUTO = opts.layout !== 'fixed' && !BOARD;
+    const made1 = new Map();   // node guid -> the block it became (what a connector holds on to)
+    const absM = new Map();    // node guid -> its transform into page space (for connector ends given relative to a node)
+    const pendingConnectors = [];
     const { message } = data; const blobs = message.blobs || [];
     const nodes = (message.nodeChanges || []).filter(n => n && n.guid && n.phase !== 'REMOVED');
     const byId = new Map(nodes.map(n => [idOf(n.guid), n]));
@@ -263,18 +279,33 @@ const FigmaImport = (() => {
       const ov = overrides && overrides.get(idOf(n.guid)); if (ov) n = { ...n, ...ov };
       n = inheritFromMain(n);
       if (n.visible === false) return;
-      const local = n.transform || I; const M = mul(m, local);
+      const local = n.transform || I; const M = mul(m, local); absM.set(idOf(n.guid), M);
       const w = n.size ? n.size.x : 0, h = n.size ? n.size.y : 0;
       const box = boxOf(M, w, h);
       const op = opacity * (n.opacity ?? 1);
       // The first block a node makes takes its place in the parent's stack; any extra layers ride along absolutely.
       let made = 0;
-      const common = b => { if (box.rotation) b.rotation = box.rotation; if (op < 0.999 && b.kind !== 'box') b.opacity = r2(op); else if (op < 0.999) b.opacity = r2(n.opacity ?? 1); const sh = shadowOf(n.effects); if (sh) b.shadow = sh; outsetStroke(b, n); if (n.name) b.label = String(n.name).slice(0, 80); if (parentId) b.parent = parentId; if (made++ === 0) applySizing(n, b, parentNode); else if (parentNode && AUTO && autoOf(parentNode)) b.absolute = true; stats.blocks++; out.push(b); return b; };
+      const common = b => { if (!made) made1.set(idOf(n.guid), b.id); if (box.rotation) b.rotation = box.rotation; if (op < 0.999 && b.kind !== 'box') b.opacity = r2(op); else if (op < 0.999) b.opacity = r2(n.opacity ?? 1); const sh = shadowOf(n.effects); if (sh) b.shadow = sh; outsetStroke(b, n); if (n.name) b.label = String(n.name).slice(0, 80); if (parentId) b.parent = parentId; if (made++ === 0) applySizing(n, b, parentNode); else if (parentNode && AUTO && autoOf(parentNode)) b.absolute = true; stats.blocks++; out.push(b); return b; };
       const t = n.type;
       if (t === 'TEXT') { textBlock(n, box, common); return; }
+      // board things
+      if (t === 'STICKY') { stickyBlock(n, box, common); return; }
+      if (t === 'SHAPE_WITH_TEXT') { shapeTextBlock(n, box, common, w, h); return; }
+      if (t === 'CONNECTOR') { pendingConnectors.push({ n, m, list: outList }); return; }
+      if (t === 'CODE_BLOCK') { codeBlock(n, box, common); return; }
+      if (t === 'LINK_UNFURL') { const d = n.linkPreviewData || {}; const label = String(d.title || d.url || n.name || 'Link').slice(0, 200); const b = { id: uid(), kind: 'field', x: box.x, y: box.y, w: Math.max(120, box.w), h: Math.max(48, box.h), radius: 12, fill: '#FFFFFF', stroke: { color: '#C9C8D1', width: 1.5 }, text: label, font: { family: fontFamilyCss('Inter'), weight: 500, size: 16, lineHeight: 1.3 }, color: '#1E1C1A', decorative: false, path: 'shape_' + uid() }; common(b); if (typeof Canvas !== 'undefined') Canvas.refit(b); return; }
+      if (t === 'STAMP') { const hit = STAMPS.find(([re]) => re.test(n.name || '')); if (hit || !childrenOf(n).length) { const sz = Math.max(32, Math.min(96, Math.max(box.w, box.h) || 56)); common({ id: uid(), kind: 'stamp', x: r2(box.x + box.w / 2 - sz / 2), y: r2(box.y + box.h / 2 - sz / 2), w: sz, h: sz, text: hit ? hit[1] : '📍', decorative: true, path: 'stamp_' + uid() }); return; } }
       let boxId = null;
-      if (CONTAINERS.has(t)) {
-        boxId = await containerBox(n, box, common, t, op);
+      if (BOARD && t === 'SECTION') {
+        const p = mainPaint(n.fillPaints); const a = p && p.type === 'SOLID' ? (p.color.a ?? 1) * (p.opacity ?? 1) : 1;
+        const b = { id: uid(), kind: 'box', x: box.x, y: box.y, w: Math.max(40, box.w), h: Math.max(40, box.h), fill: p && p.type === 'SOLID' ? colorHex(p.color) : '#F3F2FA', radius: 8, clip: false, section: { title: String(n.name || 'Section').slice(0, 80), outside: true }, decorative: true, path: 'section_' + uid() };
+        if (a < 0.999) b.fillAlpha = r2(a); const st = strokeOf(n); if (st) b.stroke = st;
+        common(b); delete b.shadow; delete b.rotation; boxId = b.id;
+        for (const c of childrenOf(n)) await walk(c, M, 1, out, overrides, depth + 1, boxId, null);
+        return;
+      }
+      if (t === 'STAMP' || CONTAINERS.has(t)) {
+        boxId = await containerBox(n, box, common, t === 'STAMP' ? 'GROUP' : t, op);
       } else if (t === 'RECTANGLE' || t === 'ROUNDED_RECTANGLE') {
         await fillBlocks(n, box, common, 'rect');
       } else if (t === 'ELLIPSE') {
@@ -304,7 +335,7 @@ const FigmaImport = (() => {
         }
         return;
       }
-      if (CONTAINERS.has(t)) for (const c of childrenOf(n)) await walk(c, M, kidOp, out, overrides, depth + 1, kidParent, kidNode);
+      if (t === 'STAMP' || CONTAINERS.has(t)) for (const c of childrenOf(n)) await walk(c, M, kidOp, out, overrides, depth + 1, kidParent, kidNode);
     }
     // A frame, component, instance or group inside a screen becomes a box: its first solid or gradient paint is the
     // box's fill, image paints become an image inside it, and (when kept) its auto layout drives its children.
@@ -352,6 +383,79 @@ const FigmaImport = (() => {
       if (!parts.length) { skip(n.type + ' (no geometry)'); return; }
       common({ id: uid(), kind: 'vector', x: box.x, y: box.y, w: Math.max(1, box.w), h: Math.max(1, box.h), viewBox: [0, 0, r2(Math.max(w, 0.01)), r2(Math.max(h, 0.01))], svg: parts.join(''), fill: fillCol || '#000000', decorative: true });
     }
+    // a board node's words: on the node itself, or (in data that keeps them apart) on a text layer inside it
+    const wordsOf = n => { let t = n.textData && n.textData.characters; if (!t) { const kid = childrenOf(n).find(c => c.type === 'TEXT' && c.textData && c.textData.characters); if (kid) t = kid.textData.characters; } return String(t || '').replace(/\u2028|\u2029/g, '\n').replace(/\s+$/, ''); };
+    const wordFont = (n, dflt) => ({ family: fontFamilyCss(n.fontName && n.fontName.family ? n.fontName.family : 'Inter'), weight: n.fontName ? weightOf(n.fontName.style) : 500, size: Math.max(11, Math.min(96, Math.round(n.fontSize || dflt))), lineHeight: 1.3 });
+    // A sticky: its colour, its words (the note sizes them to fit), who wrote it when the board says so.
+    function stickyBlock(n, box, common) {
+      const p = mainPaint(n.fillPaints);
+      const b = { id: uid(), kind: 'sticky', x: box.x, y: box.y, w: Math.max(40, box.w), h: Math.max(40, box.h), text: wordsOf(n), fill: p && p.type === 'SOLID' ? colorHex(p.color) : '#FFE066', font: wordFont(n, 20), path: 'sticky_' + uid() };
+      b.font.weight = Math.min(600, Math.max(400, b.font.weight)); b.fontSizeMax = b.font.size;
+      if (lum(b.fill) < 0.2) b.color = '#FFFFFF';
+      if (n.authorName && n.authorVisible !== false) b.authorName = String(n.authorName).slice(0, 60);
+      common(b); delete b.shadow; if (typeof Canvas !== 'undefined') Canvas.refit(b);
+    }
+    // A shape with words: rectangles, rounded rectangles, ellipses and diamonds are native; the rarer outlines
+    // (triangles, parallelograms, the engineering set) keep their drawn outline with the words on top.
+    function shapeTextBlock(n, box, common, w, h) {
+      const T = String(n.shapeWithTextType || 'SQUARE'); const p = mainPaint(n.fillPaints); const st = strokeOf(n); const text = wordsOf(n);
+      const fill = p && p.type === 'SOLID' ? colorHex(p.color) : p && /^GRADIENT/.test(p.type) ? (gradientOf(p, w, h) || { stops: [{ c: '#FFFFFF' }] }).stops[0].c : null;
+      const a = p && p.type === 'SOLID' ? (p.color.a ?? 1) * (p.opacity ?? 1) : 1;
+      // FigJam writes white on its strong fills (green, blue, purple, red) and dark on the light ones
+      const color = fill && a > 0.5 && lum(fill) < 0.36 ? '#FFFFFF' : '#1E1C1A';
+      const base = { x: box.x, y: box.y, w: Math.max(8, box.w), h: Math.max(8, box.h), text, font: wordFont(n, 16), color, decorative: false, path: 'shape_' + uid() };
+      base.fontSizeMax = base.font.size;
+      const native = T === 'ELLIPSE' || T === 'DIAMOND' || T === 'SQUARE' || T === 'ROUNDED_RECTANGLE';
+      const geo = (n.fillGeometry || []).some(g => blobs[g.commandsBlob] && blobs[g.commandsBlob].bytes && blobs[g.commandsBlob].bytes.length);
+      if (!native && geo) {
+        const before = out.length; vectorBlock(n, box, common, w, h); const drew = out.length > before; const g = 'g' + uid(); if (drew) out[out.length - 1].group = g;
+        if (text) { const tb = { id: uid(), kind: 'text', role: 'text', path: 'text_' + uid(), text, x: r2(box.x + box.w * 0.12), y: box.y, w: r2(box.w * 0.76), h: box.h, align: 'center', font: { ...base.font, letterSpacing: 0 }, fill: color, decorative: false }; if (drew) tb.group = g; if (typeof Canvas !== 'undefined') Canvas.refit(tb); tb.y = r2(box.y + (box.h - tb.h) / 2); common(tb); }
+        return;
+      }
+      const b = T === 'ELLIPSE' || T === 'DIAMOND' ? { id: uid(), kind: 'shape', shape: T === 'ELLIPSE' ? 'ellipse' : 'diamond', ...base, fill: fill || '#FFFFFF' }
+        : { id: uid(), kind: 'field', ...base, radius: T === 'SQUARE' ? r2(n.cornerRadius || 0) : r2(n.cornerRadius || Math.min(24, Math.min(box.w, box.h) / 5)), fill: fill || '#FFFFFF' };
+      if (!fill) { if (b.kind === 'field') { b.fill = 'none'; b.alpha = 0; } else b.fill = 'none'; } else if (a < 0.999) { if (b.kind === 'field') b.alpha = r2(a); else b.opacity = r2(a); }
+      if (st) b.stroke = st;
+      if (p && /^GRADIENT/.test(p.type)) { const g = gradientOf(p, w, h); if (g) b.gradient = g; }
+      common(b); if (typeof Canvas !== 'undefined') Canvas.refit(b);
+    }
+    // A code block: a dark card with its lines in a monospace face.
+    function codeBlock(n, box, common) {
+      const text = wordsOf(n).replace(/^[ \t]+/gm, m => '\u00A0'.repeat(m.replace(/\t/g, '  ').length)); const g = 'g' + uid(); // indentation survives line fitting
+      common({ id: uid(), kind: 'field', x: box.x, y: box.y, w: Math.max(40, box.w), h: Math.max(24, box.h), radius: 8, fill: '#1E1E1E', decorative: true, group: g });
+      if (!text) return;
+      const tb = { id: uid(), kind: 'text', role: 'text', path: 'text_' + uid(), text, x: box.x + 16, y: box.y + 12, w: Math.max(24, box.w - 32), h: Math.max(16, box.h - 24), align: 'left', font: { family: 'ui-monospace, "SF Mono", Menlo, Consolas, monospace', weight: 400, size: Math.max(10, Math.round(n.fontSize || 13)), lineHeight: 1.5, letterSpacing: 0 }, fill: '#EDEDED', decorative: false, group: g };
+      if (typeof Canvas !== 'undefined') Canvas.refit(tb); common(tb);
+    }
+    // Connectors come last: their ends name the blocks the other nodes became. An end is a node (with the side it
+    // leaves from when the board fixed one) or a loose point.
+    function connectorBlocks() {
+      const SIDE = { TOP: 't', RIGHT: 'r', BOTTOM: 'b', LEFT: 'l' }; const cap = c => !!c && c !== 'NONE' && c !== 'ROUND' && c !== 'SQUARE';
+      for (const c of pendingConnectors) {
+        const n = c.n; const M = mul(c.m, n.transform || I); const sz = n.size || { x: 0, y: 0 }; const own = boxOf(M, sz.x, sz.y);
+        const dist = q => Math.max(own.x - q.x, 0, q.x - (own.x + own.w)) + Math.max(own.y - q.y, 0, q.y - (own.y + own.h));
+        const end = e => {
+          if (!e) return null; const nid = e.endpointNodeID ? idOf(e.endpointNodeID) : ''; const bid = nid && made1.get(nid);
+          if (bid) return SIDE[e.magnet] ? { id: bid, side: SIDE[e.magnet] } : { id: bid };
+          const pos = e.position; if (!pos || !Number.isFinite(pos.x) || !Number.isFinite(pos.y)) return null;
+          // held by a node that did not come in: the point is given inside that node
+          if (nid && absM.has(nid)) { const q = ap(absM.get(nid), pos.x, pos.y); return { x: r2(q.x), y: r2(q.y) }; }
+          // a loose point: in the connector's parent space, or in its own; the one that lies on the connector's box
+          const inParent = ap(c.m, pos.x, pos.y), inOwn = ap(M, pos.x, pos.y); const q = (sz.x || sz.y) && dist(inOwn) + 0.5 < dist(inParent) ? inOwn : inParent;
+          return { x: r2(q.x), y: r2(q.y) };
+        };
+        const from = end(n.connectorStart) || { x: own.x, y: r2(own.y + own.h / 2) }, to = end(n.connectorEnd) || { x: r2(own.x + own.w), y: r2(own.y + own.h / 2) };
+        if (from.id && to.id && from.id === to.id) continue;
+        const sc = cap(n.connectorStartCap), ec = n.connectorEndCap === undefined && n.connectorStartCap === undefined ? true : cap(n.connectorEndCap);
+        const sp = mainPaint(n.strokePaints);
+        const b = { id: uid(), kind: 'connector', x: own.x, y: own.y, w: Math.max(1, own.w), h: Math.max(1, own.h), from, to, arrow: sc && ec ? 'both' : ec ? 'end' : sc ? 'start' : 'none', route: n.connectorLineStyle === 'STRAIGHT' ? 'straight' : 'elbow', text: wordsOf(n).replace(/\s*\n+\s*/g, ' ').slice(0, 200),
+          stroke: { color: sp && sp.type === 'SOLID' ? colorHex(sp.color) : '#5E5A56', width: Math.max(1, Math.min(12, r2(n.strokeWeight || 2))) }, font: { family: fontFamilyCss('Inter'), weight: 500, size: Math.max(11, Math.min(32, Math.round(n.fontSize || 14))), lineHeight: 1.3 }, path: 'connector_' + uid() };
+        if (Array.isArray(n.dashPattern) && n.dashPattern.some(v => v > 0)) b.dash = true;
+        if (n.name && !/^connector/i.test(n.name)) b.label = String(n.name).slice(0, 80);
+        stats.blocks++; c.list.push(b);
+      }
+      pendingConnectors.length = 0;
+    }
     function textBlock(n, box, common) {
       const chars = (n.textData && n.textData.characters) || ''; if (!chars.trim()) return;
       const size = r2(n.fontSize || 16); const fam = n.fontName ? n.fontName.family : 'Inter'; const style = n.fontName ? n.fontName.style : 'Regular';
@@ -397,6 +501,32 @@ const FigmaImport = (() => {
       return Object.keys(add).length ? { ...n, ...add } : n;
     }
 
+    // A board: every page's content becomes one list of blocks (pages side by side), sections stay sections.
+    if (BOARD) {
+      const top = nodes.filter(n => { if (n.type === 'DOCUMENT' || n.type === 'CANVAS' || n.visible === false) return false; const p = n.parentIndex && byId.get(idOf(n.parentIndex.guid)); return !p || p.type === 'CANVAS' || p.type === 'DOCUMENT'; });
+      top.sort((a, b) => (a.parentIndex && b.parentIndex && a.parentIndex.position < b.parentIndex.position ? -1 : 1));
+      const pageKey = n => { const p = n.parentIndex && byId.get(idOf(n.parentIndex.guid)); return p && p.type === 'CANVAS' ? idOf(p.guid) : ''; };
+      const pages = new Map(); for (const n of top) { const p = n.parentIndex && byId.get(idOf(n.parentIndex.guid)); if (p && p.internalOnly) continue; const k = pageKey(n); if (!pages.has(k)) pages.set(k, []); pages.get(k).push(n); }
+      const blocks = []; let offX = 0; const names = [];
+      for (const [k, list] of pages) {
+        // where this page's content sits, from its top nodes' boxes: pages go side by side
+        let x0 = Infinity, y0 = Infinity, x1 = -Infinity; for (const n of list) { const bx = boxOf(n.transform || I, n.size ? n.size.x : 0, n.size ? n.size.y : 0); x0 = Math.min(x0, bx.x); y0 = Math.min(y0, bx.y); x1 = Math.max(x1, bx.x + bx.w); }
+        if (!Number.isFinite(x0)) continue;
+        const T0 = { m00: 1, m01: 0, m02: offX - x0, m10: 0, m11: 1, m12: -y0 };
+        for (const n of list) await walk(n, T0, 1, blocks, null, 1, null, null);
+        offX += (x1 - x0) + 400; const pg = k && byId.get(k); if (pg && pg.name) names.push(String(pg.name));
+      }
+      connectorBlocks();
+      if (!blocks.length) return { frames: [], board: null, stats };
+      // from 0,0: blocks by their boxes, loose connector ends by their points
+      const pts = []; for (const b of blocks) { if (b.kind === 'connector') { for (const e of [b.from, b.to]) if (e && !e.id) pts.push([e.x, e.y, e.x, e.y]); } else pts.push([b.x, b.y, b.x + b.w, b.y + b.h]); }
+      if (!pts.length) return { frames: [], board: null, stats };
+      const bx0 = Math.min(...pts.map(q => q[0])), by0 = Math.min(...pts.map(q => q[1])), bx1 = Math.max(...pts.map(q => q[2])), by1 = Math.max(...pts.map(q => q[3]));
+      for (const b of blocks) { b.x = r2(b.x - bx0); b.y = r2(b.y - by0); if (b.kind === 'connector') for (const e of [b.from, b.to]) if (e && !e.id) { e.x = r2(e.x - bx0); e.y = r2(e.y - by0); } }
+      const doc = nodes.find(n => n.type === 'DOCUMENT');
+      return { frames: [], stats, board: { name: String((names.length === 1 && !/^page 1$/i.test(names[0]) ? names[0] : '') || (doc && doc.name && !/^document$/i.test(doc.name) ? doc.name : '') || 'FigJam board').slice(0, 80), blocks, w: Math.ceil(bx1 - bx0), h: Math.ceil(by1 - by0) } };
+    }
+
     // Top level: nodes that sit on a page (or have no parent in this data).
     const tops = nodes.filter(n => { if (n.type === 'DOCUMENT' || n.type === 'CANVAS') return false; const p = n.parentIndex && byId.get(idOf(n.parentIndex.guid)); return !p || p.type === 'CANVAS' || p.type === 'DOCUMENT'; });
     tops.sort((a, b) => (a.parentIndex && b.parentIndex && a.parentIndex.position < b.parentIndex.position ? -1 : 1));
@@ -432,6 +562,7 @@ const FigmaImport = (() => {
         frames.push({ name: loose.length === 1 ? String(loose[0].name || 'Figma layers') : 'Figma layers', x: Math.round(x0), y: Math.round(y0), w: Math.max(8, Math.ceil(x1 - x0)), h: Math.max(8, Math.ceil(y1 - y0)), bg: '#FFFFFF', clip: false, blocks, loose: true });
       }
     }
+    pendingConnectors.length = 0;
     return { frames, stats };
   }
   // Frames from convert() -> layouts the canvas can hold.
@@ -503,5 +634,5 @@ const FigmaImport = (() => {
     }
     return moved;
   }
-  return { readFile, readClipboardHTML, hasFigmaHTML, convert, toLayouts, boundsFromMetadata, alignCapture, _kiwi: { decodeSchema, compile, BB }, _pathOf: pathOf, _zip: { readZip, zipEntry }, readArchive };
+  return { readFile, readClipboardHTML, hasFigmaHTML, isBoard, convert, toLayouts, boundsFromMetadata, alignCapture, _kiwi: { decodeSchema, compile, BB }, _pathOf: pathOf, _zip: { readZip, zipEntry }, readArchive };
 })();

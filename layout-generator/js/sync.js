@@ -20,12 +20,17 @@ const Sync = (() => {
   const recs = new Map();    // key -> latest record known here (with _k, _v, _by, maybe _del)
   const synced = new Map();  // key -> canonical JSON of the shared value (what the local doc matched last time)
   let peers = []; const listeners = [];
-  const status = { mode: 'local', connected: false, readOnly: false, room: null, label: '' };
+  const status = { mode: 'local', connected: false, readOnly: false, room: null, label: '', loaded: true };
+  // loaded: the shared canvas has answered (its screens are here, or it was empty and this one was sent). Code that
+  // would add something of its own to an empty canvas (a board) waits for it, so two people do not each add one.
+  let loadWaiters = [];
+  const setLoaded = v => { status.loaded = v; if (v) { const w = loadWaiters; loadWaiters = []; for (const fn of w) fn(); } };
+  const whenLoaded = (ms = 5000) => status.loaded ? Promise.resolve(true) : new Promise(res => { const t = setTimeout(() => res(false), ms); loadWaiters.push(() => { clearTimeout(t); res(true); }); });
   const now = () => { clock = Math.max(clock + 1, Date.now() * 1000); return clock; };
   const notify = () => listeners.forEach(fn => { try { fn(status, peers); } catch (e) { console.error(e); } });
 
   // ---- document <-> records ----------------------------------------------------------------------------------------
-  const FRAME_KEYS = ['id', 'name', 'x', 'y', 'autoLayout', 'clip', 'hidden', 'locked', 'showGrid', 'theme'];
+  const FRAME_KEYS = ['id', 'name', 'x', 'y', 'autoLayout', 'clip', 'hidden', 'locked', 'showGrid', 'theme', 'board'];
   // Records for the whole canvas, or (scope = {frames: Set}) for some screens only: with many people editing, every
   // change must not cost a pass over every block. Library records come along only on a full pass or when asked.
   function toRecords(doc, scope = null) {
@@ -305,6 +310,8 @@ const Sync = (() => {
     if (!caps) caps = await Promise.all(['room', 'db', 'user', 'assets'].map(n => window.claude.use(n).catch(() => null)));
     const [lobby, db, user, assets] = caps;
     if (!db && !lobby) return null;
+    // the name others see (and the one on this person's stickies): their profile's, unless they chose one here
+    if (!me.name && user && user.me) { try { const m = await user.me(); if (m && m.name && !me.name) setName(m.name); } catch { } }
     const base = opts.base ? String(opts.base).replace(/\/?$/, '/') : '';
     // A private canvas (opts.solo) has no live room at all: the lobby is everyone's. Its pictures stay under it.
     const assetsAt = opts.solo ? base + 'assets' : 'assets';
@@ -373,6 +380,7 @@ const Sync = (() => {
           firstSnap = false;
           const list = []; for (const d of snap.docs) { const data = d.data(); if (data) { list.push(...unpack(data)); if (!d.id.includes('.c')) docVersions.set(d.id, data.chunks || 1); } }
           if (list.some(r => r._k && r._k.startsWith('f~') && !r._del)) loadAll(list); else pushAll();
+          setLoaded(true);
           return;
         }
         // after the first load only the changed documents are read (reading every screen on every change is what
@@ -395,7 +403,7 @@ const Sync = (() => {
       }
     }
     return {
-      kind: 'artifact', live: !!room,
+      kind: 'artifact', live: !!room, hasDb: !!db, firstLoaded: () => !firstSnap,
       send: sendRecs,
       presence: p => { if (room) room.presence(p).catch(() => { }); },
       uploadAsset: assets ? async blob => { const r = await assets.upload(blob); return { id: r.id, url: r.url }; } : null,
@@ -420,13 +428,16 @@ const Sync = (() => {
     ui.on('change', (doc, opts) => onChange(doc, opts));
     ui.on('live', ids => onLive(ids));
     ui.on('pointer', p => cursor(p));
-    let viewT = 0; ui.on('view', v => { const t = performance.now(); if (t - viewT < 150 || !adapter) return; viewT = t; adapter.presence({ view: { cx: Math.round(v.cx), cy: Math.round(v.cy), zoom: Math.round(v.zoom * 1000) / 1000 } }); });
+    // the view, for people following: at most every 150 ms, and always the last one of a burst
+    let viewT = 0, viewLast = null, viewTimer = 0; const sendView = () => { viewTimer = 0; if (!adapter || !viewLast) return; viewT = performance.now(); const v = viewLast; viewLast = null; adapter.presence({ view: { cx: Math.round(v.cx), cy: Math.round(v.cy), zoom: Math.round(v.zoom * 1000) / 1000 } }); };
+    ui.on('view', v => { viewLast = v; if (viewTimer) return; const wait = 150 - (performance.now() - viewT); if (wait <= 0) sendView(); else viewTimer = setTimeout(sendView, wait); });
     ui.on('select', s => selection(s));
     ui.setUndoMerge((cur, target) => undoMerge(cur, target));
   }
   function attach(a, info) {
     if (adapter && adapter.close) adapter.close();
     adapter = a; Object.assign(status, info, { connected: info.mode === 'artifact' ? status.connected : false });
+    setLoaded(!(a && a.kind === 'artifact' && a.hasDb && !a.firstLoaded()));
     if (a) a.presence({ name: me.name || '', color: me.color, cursor: null, sel: { frameIds: [], blockIds: [] } });
     notify();
   }
@@ -455,7 +466,7 @@ const Sync = (() => {
   function roomLink() { if (status.mode !== 'server' || !status.room) return null; const u = new URL(location.href); u.hash = ''; u.searchParams.set('room', status.room); return u.toString(); }
   function setName(n) { me.name = String(n || '').replace(/[\u0000-\u001f<>]/g, '').slice(0, 40); LS.set('lg.name', me.name); if (adapter) adapter.presence({ name: me.name }); notify(); }
   return {
-    init, startArtifact, canArtifact, serverAvailable, roomFromUrl, joinServer, newRoomId, roomLink, setName, flush: flushInbox, flushWrites, resetState, leave,
+    init, startArtifact, canArtifact, whenLoaded, serverAvailable, roomFromUrl, joinServer, newRoomId, roomLink, setName, flush: flushInbox, flushWrites, resetState, leave,
     get me() { return me; }, get status() { return status; }, get peers() { return peers; },
     onStatus: fn => { listeners.push(fn); fn(status, peers); },
     announceTools: list => { if (adapter && adapter.announceTools) adapter.announceTools(list); },

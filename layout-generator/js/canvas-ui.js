@@ -17,6 +17,8 @@ const CanvasUI = (() => {
   // Figma-style. Per person, kept in this browser.
   let editMode = (() => { try { const m = localStorage.getItem('lg.editMode'); return m === 'advanced' ? 'advanced' : m === 'jam' ? 'jam' : (window.LG_APP === 'jam' ? 'jam' : 'simple'); } catch { return window.LG_APP === 'jam' ? 'jam' : 'simple'; } })();
   const jam = () => editMode === 'jam';
+  // In Jam mode the board is the ground, not a thing: it is never selected, outlined, moved, resized or deleted.
+  const ground = f => !!(f && f.board && jam());
   const advanced = () => editMode === 'advanced';
   let layoutHold = null; // a frame whose layout pass waits while a block in one of its stacks is dragged
   let dropHint = null;   // where a dragged block would land: {frame, container, index, before, line, free, flatten}
@@ -119,7 +121,7 @@ const CanvasUI = (() => {
   function toScreen(wx, wy) { const v = doc.view; return { x: wx * v.zoom + v.x, y: wy * v.zoom + v.y }; }
   const FW = f => f.layout.format.w, FH = f => f.layout.format.h;
   function frameAt(p) { for (let i = doc.frames.length - 1; i >= 0; i--) { const f = doc.frames[i]; if (f.hidden) continue; if (p.x >= f.x && p.y >= f.y && p.x <= f.x + FW(f) && p.y <= f.y + FH(f)) return f; } return null; }
-  function labelAt(p) { const off = Math.max(16, 18 / doc.view.zoom) + 2; for (let i = doc.frames.length - 1; i >= 0; i--) { const f = doc.frames[i]; if (f.hidden) continue; if (p.x >= f.x && p.x <= f.x + FW(f) && p.y >= f.y - off && p.y < f.y) return f; } return null; }
+  function labelAt(p) { const off = Math.max(16, 18 / doc.view.zoom) + 2; for (let i = doc.frames.length - 1; i >= 0; i--) { const f = doc.frames[i]; if (f.hidden || ground(f)) continue; if (p.x >= f.x && p.x <= f.x + FW(f) && p.y >= f.y - off && p.y < f.y) return f; } return null; }
   // The deepest visible block under a point and the boxes it sits in: [top level, ..., deepest]. Clipping boxes hide
   // what lies outside them.
   function hitChain(f, p) {
@@ -152,13 +154,13 @@ const CanvasUI = (() => {
   function selFrames() { return (sel.frameIds.length ? sel.frameIds : sel.frameId ? [sel.frameId] : []).map(id => Canvas.frameById(doc, id)).filter(Boolean); }
   function selBlocks() { const f = selFrame(); return f ? sel.blockIds.map(id => Canvas.blockById(f, id)).filter(Boolean) : []; }
 
-  function fit() { if (!doc.frames.length) { doc.view = { x: 60, y: 60, zoom: 0.5 }; applyView(); return; } fitTo(doc.frames.filter(f => !f.hidden).length ? doc.frames.filter(f => !f.hidden) : doc.frames); }
+  function fit() { if (jam() && doc.frames.some(f => f.board)) { fitBoard(); return; } if (!doc.frames.length) { doc.view = { x: 60, y: 60, zoom: 0.5 }; applyView(); return; } fitTo(doc.frames.filter(f => !f.hidden).length ? doc.frames.filter(f => !f.hidden) : doc.frames); }
   // Below this zoom "everything" is a speck: screens were left far apart (a stray import, a screen dragged away).
   const SPRAWL_ZOOM = 0.08; let sprawlSaid = false;
   function sprawlHint() { if (sprawlSaid) return; sprawlSaid = true; env.toast('Screens are spread far apart. "Gather screens" (canvas panel) brings them together in rows.'); }
   // Fit everything, unless that leaves a speck: then fit the main group of screens and say how to gather the rest.
   function fitSmart() {
-    const vis = doc.frames.filter(f => !f.hidden); if (vis.length < 2) { fit(); return; }
+    const vis = doc.frames.filter(f => !f.hidden); if (vis.length < 2 || (jam() && doc.frames.some(f => f.board))) { fit(); return; }
     const r = stage().getBoundingClientRect(); if (!r.width) return; const b = Canvas.framesBounds(vis);
     const z = Math.min((r.width - 80) / b.w, (r.height - 120) / b.h);
     if (z >= SPRAWL_ZOOM) { fitTo(vis); return; }
@@ -208,7 +210,7 @@ const CanvasUI = (() => {
     if (f.layout.blocks.some(b => b.kind === 'connector')) Canvas.syncConnectors(f);
     const L = editing && editing.frameId === f.id && editing.hide ? { ...f.layout, blocks: f.layout.blocks.filter(b => b.id !== editing.blockId) } : f.layout;
     // ids inside the drawing (clips, gradients) are namespaced by screen: copies of one layout share its id
-    return env.renderSVG({ ...L, id: 'fr' + f.id }, { showGrid: !!f.showGrid });
+    return env.renderSVG({ ...L, id: 'fr' + f.id }, { showGrid: !!f.showGrid, me: who().id });
   }
   function positionFrame(f) {
     const el = $('world').querySelector(`.cv-frame[data-id="${CSS.escape(f.id)}"]`); if (el) { el.style.left = f.x + 'px'; el.style.top = f.y + 'px'; }
@@ -236,7 +238,7 @@ const CanvasUI = (() => {
       for (const fid of s.frameIds.slice(0, 50)) {
         const f = Canvas.frameById(doc, fid); if (!f || f.hidden) continue;
         if (s.frameIds.length === 1 && Array.isArray(s.blockIds) && s.blockIds.length) { for (const bid of s.blockIds.slice(0, 50)) { const b = Canvas.blockById(f, bid); if (b) parts.push(rect(f.x + b.x, f.y + b.y, b.w, b.h, `fill="none" stroke="${c}" stroke-width="1.5"`)); } }
-        else parts.push(rect(f.x, f.y, FW(f), FH(f), `fill="none" stroke="${c}" stroke-width="2"`));
+        else if (!ground(f)) parts.push(rect(f.x, f.y, FW(f), FH(f), `fill="none" stroke="${c}" stroke-width="2"`));
       }
     }
     // empty slots: where a component goes (boxes marked as slots, nothing in them yet)
@@ -251,10 +253,10 @@ const CanvasUI = (() => {
     if (hover && hover.frame && !(drag && drag.type)) {
       const hf = hover.frame; const b = hover.block;
       const hs = hover.fromLayers ? 'fill="var(--accent-faint)" stroke="var(--accent)" stroke-opacity=".95" stroke-width="2"' : 'fill="none" stroke="var(--accent)" stroke-opacity=".6" stroke-width="1"';
-      parts.push(b ? rect(hf.x + b.x, hf.y + b.y, b.w, b.h, hs) : rect(hf.x, hf.y, FW(hf), FH(hf), hs));
+      if (b || !ground(hf)) parts.push(b ? rect(hf.x + b.x, hf.y + b.y, b.w, b.h, hs) : rect(hf.x, hf.y, FW(hf), FH(hf), hs));
     }
     const frames = selFrames(); const blocks = selBlocks();
-    for (const f of frames) parts.push(rect(f.x, f.y, FW(f), FH(f), `fill="none" stroke="var(--accent)" stroke-width="${blocks.length ? 1 : 2}" stroke-opacity="${blocks.length ? .45 : 1}"`));
+    for (const f of frames) if (!ground(f)) parts.push(rect(f.x, f.y, FW(f), FH(f), `fill="none" stroke="var(--accent)" stroke-width="${blocks.length ? 1 : 2}" stroke-opacity="${blocks.length ? .45 : 1}"`));
     const f = selFrame();
     if (f && frames.length === 1) {
       if (blocks.length) {
@@ -267,11 +269,11 @@ const CanvasUI = (() => {
           parts.push(`<rect x="${q.x}" y="${q.y}" width="${w}" height="${h}" fill="none" stroke="${b.overflow ? 'var(--danger)' : 'var(--accent)'}" stroke-width="1.5"/>`);
           if (blocks.length === 1) {
             if (!b.locked && !(editing && editing.blockId === b.id)) for (const hnd of handles(q.x, q.y, w, h)) parts.push(`<rect class="cv-handle" x="${hnd.x - HANDLE / 2}" y="${hnd.y - HANDLE / 2}" width="${HANDLE}" height="${HANDLE}" fill="#fff" stroke="var(--accent)" stroke-width="1.5"/>`);
-            parts.push(`<text x="${q.x}" y="${q.y - 6}" fill="var(--accent)" font-size="11" font-family="var(--font-mono)">${esc(b.group ? 'group · ' : '')}${esc(kindLabel(f, b))} ${Math.round(b.w)}×${Math.round(b.h)}${esc(sizeLabel(f, b))}</text>`);
+            if (!jam()) parts.push(`<text x="${q.x}" y="${q.y - 6}" fill="var(--accent)" font-size="11" font-family="var(--font-mono)">${esc(b.group ? 'group · ' : '')}${esc(kindLabel(f, b))} ${Math.round(b.w)}×${Math.round(b.h)}${esc(sizeLabel(f, b))}</text>`);
           }
         }
-        if (gb) { const q = toScreen(f.x + gb.x, f.y + gb.y); parts.push(`<rect x="${q.x - 3}" y="${q.y - 3}" width="${gb.w * Z + 6}" height="${gb.h * Z + 6}" fill="none" stroke="var(--accent)" stroke-dasharray="4 3" stroke-width="1"/><text x="${q.x}" y="${q.y - 8}" fill="var(--accent)" font-size="11" font-family="var(--font-mono)">${blocks[0].group && blocks.every(b => b.group === blocks[0].group) ? 'group' : blocks.length + ' blocks'} ${Math.round(gb.w)}×${Math.round(gb.h)}</text>`); }
-      } else {
+        if (gb) { const q = toScreen(f.x + gb.x, f.y + gb.y); parts.push(`<rect x="${q.x - 3}" y="${q.y - 3}" width="${gb.w * Z + 6}" height="${gb.h * Z + 6}" fill="none" stroke="var(--accent)" stroke-dasharray="4 3" stroke-width="1"/>${jam() ? '' : `<text x="${q.x}" y="${q.y - 8}" fill="var(--accent)" font-size="11" font-family="var(--font-mono)">${blocks[0].group && blocks.every(b => b.group === blocks[0].group) ? 'group' : blocks.length + ' blocks'} ${Math.round(gb.w)}×${Math.round(gb.h)}</text>`}`); }
+      } else if (!ground(f)) {
         const p = toScreen(f.x, f.y); const W = FW(f) * Z, H = FH(f) * Z;
         if (!f.locked) for (const hnd of handles(p.x, p.y, W, H)) parts.push(`<rect class="cv-handle" x="${hnd.x - HANDLE / 2}" y="${hnd.y - HANDLE / 2}" width="${HANDLE}" height="${HANDLE}" fill="#fff" stroke="var(--accent)" stroke-width="1.5"/>`);
         parts.push(`<text x="${p.x}" y="${p.y + H + 16}" fill="var(--fg-3)" font-size="11" font-family="var(--font-mono)">${FW(f)}×${FH(f)}</text>`);
@@ -532,6 +534,7 @@ const CanvasUI = (() => {
     if (!f) { if (!e.shiftKey) select(null, []); drag = { type: 'marquee', start: p, cur: p, add: e.shiftKey }; stage().setPointerCapture(e.pointerId); return; }
     if (sel.frameIds.length > 1 && sel.frameIds.includes(f.id) && !e.shiftKey) { startFrameDrag(selFrames().filter(x => !x.locked), p, e, f); return; }
     const b = blockAt(f, p, e);
+    if (!b && ground(f)) { if (!e.shiftKey) select(null, []); drag = { type: 'marquee', start: p, cur: p, add: e.shiftKey, board: f }; stage().setPointerCapture(e.pointerId); return; }
     if (!b) { frameClick(f, e, p); return; }
     if (e.altKey && !b.locked) {
       hist.push(doc);
@@ -642,6 +645,8 @@ const CanvasUI = (() => {
       if (drag.flow) layoutHold = drag.f.id;
       const s = snapBlocks(drag.f, drag.blocks, drag.orig, dx, dy, u, e.shiftKey || !!drag.flow);
       drag.blocks.forEach((b, i) => { b.x = Math.round(drag.orig[i].x + s.dx); b.y = Math.round(drag.orig[i].y + s.dy); });
+      // an arrow's loose ends move with it (ends that hold a block stay on the block)
+      for (const b of drag.blocks) { if (b.kind !== 'connector') continue; drag.ends = drag.ends || new Map(); if (!drag.ends.has(b.id)) drag.ends.set(b.id, { from: b.from && !b.from.id ? { ...b.from } : null, to: b.to && !b.to.id ? { ...b.to } : null }); const o = drag.ends.get(b.id); for (const k of ['from', 'to']) if (o[k]) { b[k].x = Math.round(o[k].x + s.dx); b[k].y = Math.round(o[k].y + s.dy); } }
       guides = s.guides;
       const over = frameAt(p); dropTarget = over && over !== drag.f && !over.locked ? over : null; if (dropTarget) guides = [];
       dropHint = dropTarget || jam() ? null : dropTargetIn(drag.f, drag.blocks, { x: p.x - drag.f.x, y: p.y - drag.f.y }, drag.flow);
@@ -684,11 +689,11 @@ const CanvasUI = (() => {
     if (d.type === 'marquee') {
       const x0 = Math.min(d.start.x, d.cur.x), y0 = Math.min(d.start.y, d.cur.y), x1 = Math.max(d.start.x, d.cur.x), y1 = Math.max(d.start.y, d.cur.y);
       if (x1 - x0 > 4 && y1 - y0 > 4) {
-        const inside = doc.frames.filter(f => !f.hidden && f.x >= x0 && f.y >= y0 && f.x + FW(f) <= x1 && f.y + FH(f) <= y1).map(f => f.id);
+        const inside = doc.frames.filter(f => !f.hidden && !ground(f) && f.x >= x0 && f.y >= y0 && f.x + FW(f) <= x1 && f.y + FH(f) <= y1).map(f => f.id);
         if (inside.length) { const base = d.add ? selFrames().map(f => f.id) : []; selectFrames([...new Set([...base, ...inside])]); }
         else {
           const f = frameAt({ x: x0, y: y0 }) || frameAt({ x: x1, y: y1 }) || doc.frames.find(fr => !fr.hidden && !(x1 < fr.x || x0 > fr.x + FW(fr) || y1 < fr.y || y0 > fr.y + FH(fr)));
-          if (f) { const inside = f.layout.blocks.filter(b => !b.hidden && !b.locked && f.x + b.x >= x0 && f.y + b.y >= y0 && f.x + b.x + b.w <= x1 && f.y + b.y + b.h <= y1); const ids = Auto.topmost(f, inside).map(b => b.id); if (ids.length) select(f.id, ids); }
+          if (f) { const inside = f.layout.blocks.filter(b => !b.hidden && !b.locked && f.x + b.x >= x0 && f.y + b.y >= y0 && f.x + b.x + b.w <= x1 && f.y + b.y + b.h <= y1); const ids = Auto.topmost(f, inside).map(b => b.id); if (ids.length) select(f.id, d.add && sel.frameId === f.id ? [...new Set([...sel.blockIds, ...ids])] : ids); }
         }
       }
       drawOverlay(); return;
@@ -773,10 +778,22 @@ const CanvasUI = (() => {
   }
   // ---- Board (DeelJam): the frame everything lands on, growing as it is used ---------------------------------------
   function jamBoard() {
+    // two boards (two people opened an empty canvas at the same moment, before boards had one id): an empty one goes
+    const boards = doc.frames.filter(x => x.board); if (boards.length > 1) { const keep = boards.find(x => x.layout.blocks.length) || boards[0]; const drop = boards.filter(x => x !== keep && !x.layout.blocks.length); if (drop.length) { doc.frames = doc.frames.filter(x => !drop.includes(x)); validateSelection(); if (active) renderAll(); persist(); } }
     let f = doc.frames.find(x => x.board) || null;
     if (!f && doc.frames.length === 1 && doc.frames[0].layout.blocks.every(b => /^(sticky|connector|stamp|box|field|shape|text|image|video|vector|line)$/.test(b.kind))) { f = doc.frames[0]; f.board = true; }
-    if (!f) { f = createFrame({ x: 0, y: 0, format: Canvas.customFormat(3200, 2000), name: 'Board', bg: '#FFFFFF', history: false }); f.board = true; f.clip = false; persist({ silent: true }); }
+    // The board has one id everywhere: two people who each make it at the same moment make the same screen, and
+    // what each put on it merges (two random ids would be two boards).
+    if (!f) { f = Canvas.blankFrame(doc, Canvas.customFormat(3200, 2000), env.getKit(), { x: 0, y: 0, bg: '#FFFFFF', name: 'Board' }); if (!doc.frames.some(x => x !== f && x.id === 'board')) f.id = 'board'; f.board = true; f.clip = false; select(null, []); if (active) { renderAll(); fitBoard(f); } persist(); updateUndo(); }
     return f;
+  }
+  // The board's view: what is on it (with room around, never closer than 100% nor a speck), or its middle when empty.
+  function fitBoard(f) {
+    f = f || doc.frames.find(x => x.board); const r = stage().getBoundingClientRect(); if (!f || !r.width) return;
+    const bs = f.layout.blocks.filter(b => !b.hidden);
+    if (!bs.length) { doc.view = { zoom: 1, x: r.width / 2 - (f.x + FW(f) / 2), y: r.height / 2 - (f.y + FH(f) / 2) }; applyView(); return; }
+    const b = Canvas.bounds(bs); const zoom = Math.min(1, Math.max(0.1, Math.min((r.width - 160) / b.w, (r.height - 260) / b.h)));
+    doc.view = { zoom, x: r.width / 2 - (f.x + b.x + b.w / 2) * zoom, y: r.height / 2 - (f.y + b.y + b.h / 2) * zoom + 10 }; applyView();
   }
   // Make room: the board grows so rect (frame space) sits at least `pad` inside it; blocks shift when it grows up or left.
   function growBoard(f, rect, pad = 400) {
@@ -1030,6 +1047,32 @@ const CanvasUI = (() => {
     return tops;
   }
   // Loose layers (no frame of their own) go into a frame, centred, keeping their arrangement.
+  // Board things that came from elsewhere (a FigJam file or paste, a sheet of stickies), laid out from 0,0 in a
+  // w×h area. In Jam mode they land on the board: around opts.at (a paste lands where you look), in the middle of an
+  // empty board, or to the right of what is already there. Otherwise (the design editor) they get a board of their own.
+  function placeBoardBlocks(blocks, size, opts = {}) {
+    if (!blocks || !blocks.length) return null; hist.push(doc);
+    const W = Math.max(1, size.w), H = Math.max(1, size.h); let f, ox, oy;
+    if (jam()) {
+      f = jamBoard(); const cur = f.layout.blocks.filter(b => !b.hidden);
+      if (opts.at) { ox = opts.at.x - f.x - W / 2; oy = opts.at.y - f.y - H / 2; }
+      else if (!cur.length) { ox = (FW(f) - W) / 2; oy = (FH(f) - H) / 2; }
+      else { const bb = Canvas.bounds(cur); ox = bb.x + bb.w + 240; oy = bb.y; }
+    } else {
+      const fmt = Canvas.customFormat(Math.max(1600, Math.ceil((W + 800) / 400) * 400), Math.max(1000, Math.ceil((H + 800) / 400) * 400));
+      f = createFrame({ center: true, format: fmt, name: opts.name || 'Board', bg: '#FFFFFF', history: false }); f.board = true; f.clip = false;
+      ox = (fmt.w - W) / 2; oy = (fmt.h - H) / 2;
+    }
+    ox = Math.round(ox); oy = Math.round(oy);
+    for (const b of blocks) { b.x += ox; b.y += oy; if (b.kind === 'connector') for (const k of ['from', 'to']) if (b[k] && !b[k].id) { b[k].x += ox; b[k].y += oy; } }
+    const inSet = new Set(blocks.map(b => b.id)); const tops = blocks.filter(b => b.kind !== 'connector' && (!b.parent || !inSet.has(b.parent)));
+    f.layout.blocks.push(...blocks);
+    growBoard(f, { x: ox, y: oy, w: W, h: H });
+    Canvas.settleBoard(f);
+    select(f.id, tops.map(b => b.id)); if (active) { renderAll(); const bb = Canvas.bounds(blocks.filter(b => b.kind !== 'connector').length ? blocks.filter(b => b.kind !== 'connector') : blocks); const r = stage().getBoundingClientRect(); if (r.width) { const zoom = Math.min(1, Math.max(0.05, Math.min((r.width - 160) / bb.w, (r.height - 260) / bb.h))); doc.view = { zoom, x: r.width / 2 - (f.x + bb.x + bb.w / 2) * zoom, y: r.height / 2 - (f.y + bb.y + bb.h / 2) * zoom + 10 }; applyView(); } }
+    persist(); updateUndo();
+    return { frame: f, ids: tops.map(b => b.id) };
+  }
   function insertBlocks(frameId, blocks) {
     const f = Canvas.frameById(doc, frameId); if (!f || !blocks.length) return [];
     hist.push(doc);
@@ -1052,7 +1095,7 @@ const CanvasUI = (() => {
     if (editing && !opts.keepEditing) endEdit();
     if (player && !(blockIds || []).includes(player.blockId)) stopPlay();
     if (cropping && !(blockIds || []).includes(cropping.blockId)) { cropping = null; stage().style.cursor = 'default'; }
-    const f = Canvas.frameById(doc, frameId);
+    let f = Canvas.frameById(doc, frameId); if (ground(f) && !(blockIds || []).length) f = null;
     if (!opts.keepGroupFocus) groupFocus = null;
     if (groupFocus && f && !(blockIds || []).some(id => { const b = Canvas.blockById(f, id); return b && b.group === groupFocus; })) groupFocus = null;
     sel.frameId = f ? f.id : null; sel.blockIds = f ? expandGroups(f, blockIds || []) : []; sel.frameIds = f ? [f.id] : [];
@@ -1061,7 +1104,7 @@ const CanvasUI = (() => {
   }
   function selectFrames(ids) {
     if (editing) endEdit();
-    ids = [...new Set(ids)].filter(id => Canvas.frameById(doc, id));
+    ids = [...new Set(ids)].filter(id => { const f = Canvas.frameById(doc, id); return f && !ground(f); });
     sel.frameIds = ids; sel.frameId = ids[0] || null; sel.blockIds = []; groupFocus = null;
     afterSelect();
   }
@@ -1192,7 +1235,7 @@ const CanvasUI = (() => {
       if (meta && e.altKey && k === 'g') { e.preventDefault(); frameSelection(); return; }
       if (meta && k === 'g') { e.preventDefault(); if (e.shiftKey) ungroupSelection(); else groupSelection(); return; }
       if (e.shiftKey && !meta && k === 'a') { e.preventDefault(); if (e.altKey) removeAutoLayout(); else addAutoLayout(); return; }
-      if (meta && k === 'a') { e.preventDefault(); const f = selFrame(); if (f && selFrames().length === 1) select(f.id, f.layout.blocks.filter(b => !b.hidden && !b.locked).map(b => b.id)); else selectFrames(doc.frames.filter(x => !x.hidden).map(x => x.id)); return; }
+      if (meta && k === 'a') { e.preventDefault(); const f = selFrame() || (jam() ? doc.frames.find(x => x.board) : null); if (f && (selFrames().length === 1 || ground(f))) select(f.id, f.layout.blocks.filter(b => !b.hidden && !b.locked).map(b => b.id)); else selectFrames(doc.frames.filter(x => !x.hidden).map(x => x.id)); return; }
       if (e.shiftKey && !meta && k === 'g') { e.preventDefault(); const fs = selFrames(); const on = !fs.every(f => f.showGrid); fs.forEach(f => { f.showGrid = on; rerenderFrame(f); }); persist(); return; }
       if (e.shiftKey && !meta && k === 'r') { e.preventDefault(); const fs = selFrames(); if (fs.length) { mutate(() => Canvas.tidy(fs, fs.length > 3 ? 'grid' : 'row')); env.toast('Tidied'); } return; }
       if (k === 'enter') {
@@ -1560,10 +1603,22 @@ const CanvasUI = (() => {
   }
   const slug = s => String(s || 'canvas').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'canvas';
   async function copyText(text) { try { await navigator.clipboard.writeText(text); } catch { const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); } finally { ta.remove(); } } }
+  // What a board exports: the part that has things on it (with a margin), not the whole surface. In Jam mode with
+  // things selected, just those.
+  function boardExport(f) {
+    if (!f.board) return f;
+    const pick = jam() && sel.frameId === f.id && sel.blockIds.length ? new Set(Auto.withDescendants(f, selBlocks()).map(b => b.id)) : null;
+    let bs = f.layout.blocks.filter(b => !b.hidden && (!pick || pick.has(b.id) || (b.kind === 'connector' && b.from && b.to && (!b.from.id || pick.has(b.from.id)) && (!b.to.id || pick.has(b.to.id)) && (pick.has(b.from.id) || pick.has(b.to.id)))));
+    if (!bs.length) return f;
+    const bb = Canvas.bounds(bs); const pad = 80; const ox = Math.round(pad - bb.x), oy = Math.round(pad - bb.y); const copies = Canvas.clone(bs); const ids = new Set(copies.map(b => b.id));
+    for (const b of copies) { b.x += ox; b.y += oy; if (b.parent && !ids.has(b.parent)) delete b.parent; if (b.kind === 'connector') for (const k of ['from', 'to']) if (b[k] && !b[k].id) { b[k].x += ox; b[k].y += oy; } }
+    const W = Math.ceil(bb.w + pad * 2), H = Math.ceil(bb.h + pad * 2);
+    return { ...f, layout: { ...f.layout, format: { ...f.layout.format, id: 'custom', name: 'Custom', w: W, h: H }, blocks: copies } };
+  }
   // Every export works on the selected screens; with nothing selected, on every visible frame.
   async function exportAction(what, framesArg) {
     const chosen = framesArg || selFrames(); const all = doc.frames.filter(x => !x.hidden);
-    const frames = chosen.length ? chosen : all;
+    const frames = (chosen.length ? chosen : all).map(boardExport);
     const needOne = ['react', 'html'];
     if (!frames.length) { env.toast('Nothing to export'); return; }
     if (needOne.includes(what)) {
@@ -1581,7 +1636,7 @@ const CanvasUI = (() => {
     }
     if (what === 'pdf') { env.toast(`Building a ${frames.length}-page PDF…`); const blob = await env.exportPDF(frames.map(f => f.layout)); if (blob && await env.download(blob, `${slug(frames.length === 1 ? frames[0].name : doc.name)}.pdf`)) env.toast(`PDF saved: ${frames.length} page${frames.length > 1 ? 's' : ''}`); return; }
     if (what === 'pptx') {
-      const groups = new Map(); for (const f of frames) { const k = `${FW(f)}x${FH(f)}`; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(f); }
+      const groups = new Map(); for (const f of frames) { const k = `${f.layout.format.w}x${f.layout.format.h}`; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(f); }
       let n = 0; for (const [k, list] of groups) { const blob = await env.buildPptx(list.map(x => x.layout)); if (!(await env.download(blob, `${slug(doc.name)}-${k}.pptx`))) break; n += list.length; }
       if (n) env.toast(`PPTX saved: ${n} slide${n > 1 ? 's' : ''}${groups.size > 1 ? `, one file per size` : ''}`); return;
     }
@@ -2344,7 +2399,7 @@ const CanvasUI = (() => {
     centerOn: (x, y) => { const r = stage().getBoundingClientRect(); doc.view.x = r.width / 2 - x * doc.view.zoom; doc.view.y = r.height / 2 - y * doc.view.zoom; applyView(); },
     setView: ({ cx, cy, zoom }) => { const r = stage().getBoundingClientRect(); if (zoom > 0) doc.view.zoom = Math.min(8, Math.max(0.02, zoom)); doc.view.x = r.width / 2 - cx * doc.view.zoom; doc.view.y = r.height / 2 - cy * doc.view.zoom; applyView(); },
     viewCenter: () => { const r = stage().getBoundingClientRect(); const v = doc.view; return { cx: (r.width / 2 - v.x) / v.zoom, cy: (r.height / 2 - v.y) / v.zoom, zoom: v.zoom }; },
-    jamBoard, growBoard, placeAt, placePicture, setEditMode, get editMode() { return editMode; }, get peers() { return peers; }, get tool() { return tool; }, setStickyColor: c => { lastStickyColor = c; }, who,
+    jamBoard, growBoard, fitBoard, placeBoardBlocks, get lastPointer() { return lastPointer; }, placeAt, placePicture, setEditMode, get editMode() { return editMode; }, get peers() { return peers; }, get tool() { return tool; }, setStickyColor: c => { lastStickyColor = c; }, who,
     regrid, exportAction, makeVariations, resizeScreens, copySelection, pasteClipboard, startEdit: (fid, bid) => { const f = Canvas.frameById(doc, fid); return startEdit(f, f && Canvas.blockById(f, bid)); },
     on: (k, fn) => { hooks[k].push(fn); return () => { hooks[k] = hooks[k].filter(x => x !== fn); }; },
     setPeers: list => { peers = Array.isArray(list) ? list : []; if (active) drawOverlay(); },
