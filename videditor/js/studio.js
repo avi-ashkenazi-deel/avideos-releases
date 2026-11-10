@@ -121,7 +121,6 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
   async function toggleRun() {
     if (N.run) return finishRun();
     if (N.recording) return toast('Stop the current voice note first', 'err');
-    if (agentJob) return toast('The agent is still working. Wait for it to finish, then run through.', 'err');
     if (!VoiceRecorder.supported()) return toast('This browser cannot record audio. Use Chrome.', 'err');
     try {
       stage.pause(); noteLayer.clear(); N.anchor = null;
@@ -163,7 +162,10 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
     finally { runBtn.disabled = false; }
   }
   async function sendNotesToAgent(ids, summary) {
-    if (agentJob) { toast('The agent is still busy. The note is saved; send it when it finishes.', 'err'); return; }
+    if (agentJob) { // busy: the server queues it and starts it when the current run finishes
+      try { await api.agent(project.id, '', { author: getAuthor(), fromNotes: ids, agent: project.agent || 'claude' }); await syncChat(); toast('Queued: the agent picks it up when it finishes', 'ok'); } catch (e) { toast(e.message, 'err'); }
+      return;
+    }
     const live = { role: 'agent', text: '', tools: [], at: new Date().toISOString(), live: true, status: 'reading your note' };
     project.chat.push({ role: 'user', text: `🎙 ${summary || 'Voice note'}`, at: new Date().toISOString(), author: getAuthor() });
     renderChat([...project.chat, live]); setBusy(true);
@@ -477,7 +479,7 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
   ta.addEventListener('input', grow);
   const sendBtn = h('button.roundbtn.btn.primary', { title: 'Send (Enter)', 'aria-label': 'Send', on: { click: () => send() } }, svg('send'));
   const stopBtn = h('button.roundbtn.stop.hidden', { title: 'Stop the agent', 'aria-label': 'Stop', on: { click: async () => { try { await api.agentCancel(project.id); toast('Stopping…'); } catch (e) { toast(e.message, 'err'); } } } }, svg('stop'));
-  const setBusy = (on) => { sendBtn.classList.toggle('hidden', on); stopBtn.classList.toggle('hidden', !on); ta.placeholder = on ? 'Agent is working… (Stop to interrupt)' : 'Ask the agent to make or change something…'; };
+  const setBusy = (on) => { stopBtn.classList.toggle('hidden', !on); sendBtn.title = on ? 'Queue this message (Enter): it runs when the agent finishes' : 'Send (Enter)'; ta.placeholder = on ? 'Agent is working… type the next request and it will queue' : 'Ask the agent to make or change something…'; };
   const agentSel = h('select.pick', { title: 'Which coding agent edits the composition (runs on this computer, on your own account)', on: { change: async () => { try { project = await api.updateProject(project.id, { agent: agentSel.value }); toast(`Using ${caps.agents?.[agentSel.value]?.label || agentSel.value}`, 'ok'); } catch (e) { toast(e.message, 'err'); } } } },
     Object.entries(caps.agents || { claude: { label: 'Claude Code', available: caps.claude } }).map(([k, v]) => h('option', { value: k, selected: (project.agent || 'claude') === k }, `${v.label}${v.available ? '' : ' (not installed)'}`)));
   const fitPick = () => { const cv = fitPick.cv || (fitPick.cv = document.createElement('canvas').getContext('2d')); cv.font = getComputedStyle(agentSel).font || '12px sans-serif'; agentSel.style.width = `${Math.ceil(cv.measureText(agentSel.selectedOptions[0]?.textContent || '').width) + 30}px`; };
@@ -518,7 +520,10 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
   function msgEl(m) {
     const el = h('div.msg', { class: `msg ${m.role}` });
     if (m.system) { el.classList.add('sys'); el.append(h('div.sysline', h('span', m.text), m.versionId ? h('a', { href: `#/p/${project.id}?v=${m.versionId}` }, 'Review ↗') : null)); return el; }
-    if (m.role === 'user') { el.append(h('div.card', m.text), h('div.meta', [m.author || getAuthor() || 'You', relTime(m.at)].filter(Boolean).join(' · '))); return el; }
+    if (m.role === 'user') {
+      if (m.queued) { el.classList.add('queued'); el.append(h('div.card', m.text, h('div.qbar', h('span.qtag', 'Queued · runs when the agent finishes'), h('button.qremove', { title: 'Remove from the queue', on: { click: async () => { try { await api.unqueue(project.id, m.queueId); await syncChat(); } catch (e) { toast(e.message, 'err'); await syncChat(); } } } }, 'Remove')))); return el; }
+      el.append(h('div.card', m.text), h('div.meta', [m.author || getAuthor() || 'You', relTime(m.at)].filter(Boolean).join(' · '))); return el;
+    }
     if (m.tools?.length && (m.tools.some((t) => !t.note) || m.live)) el.append(stepsEl(m));
     if (m.text) {
       const { head, rest } = splitReply(m.text);
@@ -544,12 +549,15 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
   }
   async function send() {
     const text = ta.value.trim(); if (!text) return;
-    if (agentJob) return toast('The agent is still working on the previous message. Press Stop to interrupt it.', 'err');
     const kind = agentSel.value || project.agent || 'claude'; const cap = caps.agents?.[kind] || { label: 'Claude Code', available: caps.claude, install: 'npm install -g @anthropic-ai/claude-code' };
     if (!cap.available) { toast(`${cap.label} was not found on this computer`, 'err'); return msgs.append(h('div.msg.agent', h('div.errcard', `${cap.label} is not installed or not on PATH. Install it with: ${cap.install}   sign in once, then restart the Videditor server.`))); }
     const author = await ensureAuthor();
     const message = ctx._id ? `About the clip #${ctx._id}: ${text}` : text;
     ta.value = ''; grow(); ctx.classList.add('hidden'); ctx._id = null;
+    if (agentJob) { // busy: queue it on the server; it shows in the chat and runs next
+      try { await api.agent(project.id, message, { author, agent: kind }); await syncChat(); toast('Queued: runs when the agent finishes', 'ok'); } catch (e) { toast(e.message, 'err'); ta.value = text; grow(); }
+      return;
+    }
     project.chat = project.chat || []; project.chat.push({ role: 'user', text: message, at: new Date().toISOString(), author });
     const live = { role: 'agent', text: '', tools: [], at: new Date().toISOString(), live: true, status: 'starting the agent' };
     renderChat([...project.chat, live]);
@@ -559,8 +567,22 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
       followJob(jobId, live);
     } catch (e) { agentJob = null; setBusy(false); live.live = false; live.error = e.message; renderChat([...project.chat, live]); }
   }
+  let currentLive = null;
+  // Refresh the chat from the server, keeping the in-progress reply on screen.
+  async function syncChat() {
+    try { const st = await api.chat(project.id); project.chat = st.chat || []; renderChat(currentLive && agentJob ? [...project.chat, currentLive] : project.chat); return st; } catch { return null; }
+  }
+  // After a run ends, the server starts the next queued message by itself: follow it.
+  async function followNextQueued() {
+    for (let i = 0; i < 6; i++) {
+      const st = await api.chat(project.id).catch(() => null); if (!st) return;
+      if (st.running) { const live = { role: 'agent', text: '', tools: [], at: new Date().toISOString(), live: true, status: 'starting the next request' }; project.chat = st.chat || []; renderChat([...project.chat, live]); setBusy(true); followJob(st.running, live); return; }
+      if (!st.queued) return;
+      await new Promise((r) => setTimeout(r, 300));
+    }
+  }
   function followJob(jobId, live) {
-      agentJob = jobId;
+      agentJob = jobId; currentLive = live;
       const es = new EventSource(`/api/jobs/${jobId}/events`);
       const redraw = () => { renderChat([...project.chat, live]); };
       es.onmessage = (e) => {
@@ -577,6 +599,7 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
         project = await api.project(project.id); if (!Array.isArray(project.chat)) project.chat = []; renderChat(project.chat.length ? project.chat : [...project.chat, live]);
         await renderVariants(); await reloadComp();
         if (d.renderJobId) followRender(d.renderJobId, { quiet: true }); toast(d.ok ? 'Agent finished' : 'Agent stopped with an error', d.ok ? 'ok' : 'err');
+        currentLive = null; followNextQueued();
       });
       es.onerror = () => { es.close(); agentJob = null; setBusy(false); live.live = false; redraw(); };
   }
@@ -656,7 +679,7 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
     renderChat([...(project.chat || []), live]);
     const es = new EventSource(`/api/jobs/${chatState.running}/events`);
     es.onmessage = (e) => { const ev = JSON.parse(e.data); if (ev.type === 'text') { live.tools.push({ note: ev.text }); live.text = ev.text; } if (ev.type === 'tool') live.tools.push({ name: ev.name, detail: ev.detail }); if (ev.type === 'status') live.status = ev.message; if (ev.type === 'error') live.error = ev.message; renderChat([...(project.chat || []), live]); };
-    const finish = async () => { es.close(); agentJob = null; setBusy(false); project = await api.project(project.id); renderChat(project.chat || []); reloadComp(); };
+    const finish = async () => { es.close(); agentJob = null; setBusy(false); project = await api.project(project.id); renderChat(project.chat || []); reloadComp();  followNextQueued();};
     es.addEventListener('done', finish); es.onerror = finish;
   }
   if (prompt && !chatState?.running) { ta.value = prompt; history.replaceState(null, '', `#/studio/${project.id}`); setTimeout(send, 400); }

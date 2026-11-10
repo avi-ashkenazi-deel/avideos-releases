@@ -479,13 +479,12 @@ async function api(req, res, url) {
   }
   if ((x = m(/^\/api\/projects\/([^/]+)\/chat$/)) && req.method === 'GET') {
     const prj = store.project(x[1]); if (!prj) return err(res, 404, 'Project not found');
-    return send(res, 200, { chat: prj.chat || [], running: agents.get(prj.id)?.jobId || null, sessionId: prj.agentSessionId || null, claude: findBin(CLAUDE_BIN), agent: prj.agent || 'claude' });
+    return send(res, 200, { chat: prj.chat || [], running: agents.get(prj.id)?.jobId || null, queued: (agentQueues.get(prj.id) || []).length, sessionId: prj.agentSessionId || null, claude: findBin(CLAUDE_BIN), agent: prj.agent || 'claude' });
   }
   if ((x = m(/^\/api\/projects\/([^/]+)\/agent$/)) && req.method === 'POST') {
     // The Studio chat: hands the message to Claude Code running in the project folder.
     const prj = store.project(x[1]); if (!prj) return err(res, 404, 'Project not found');
     if (!prj.dir) return err(res, 400, 'Project has no composition folder');
-    if (agents.has(prj.id)) return err(res, 409, 'The agent is already working on this project');
     const b = await readJson(req);
     if (b.agent && AGENTS[b.agent] && b.agent !== prj.agent) { prj.agent = b.agent; prj.agentSessionId = null; store.save(); }
     const kind = AGENTS[prj.agent] ? prj.agent : 'claude';
@@ -501,54 +500,30 @@ async function api(req, res, url) {
       message = `Apply the review feedback below to the composition in this folder. Open the annotated frames (Read the image files) to see what each note points at. Change only what the notes ask for, keep everything else as it is, and follow MOTION.md. Do not render. When done, list what you changed per note (clip id, attribute, from → to).${b.message ? `\n\nExtra instruction from the reviewer: ${String(b.message).trim()}` : ''}\n\n${brief}`.slice(0, 60000);
     }
     if (!message) return err(res, 400, 'message is required');
-    const job = newJob('agent');
     // The chat shows a short line for note handoffs; the full brief goes only to the agent.
     let shown = message;
     if (b.fromNotes) { const ns = (Array.isArray(b.fromNotes) ? b.fromNotes : [b.fromNotes]).map((id) => store.feedbackItem(id)).filter(Boolean); shown = `🎙 ${ns.map((n) => n.body || n.transcript || 'drawing').join(' · ').slice(0, 400)}${b.message ? ` — ${String(b.message).trim()}` : ''}`; }
     else if (b.fromFeedback) { const v = store.version(b.fromFeedback); const k = store.feedback({ versionId: v?.id }).filter((f) => !f.replyTo && f.status !== 'done').length; shown = `📝 Review notes on ${v?.label || 'the latest version'} (${k} open)${b.message ? ` — ${String(b.message).trim()}` : ''}`; }
-    prj.chat = prj.chat || []; prj.chat.push({ role: 'user', text: shown, at: new Date().toISOString(), author: b.author || null }); store.save();
-    const entry = { role: 'agent', text: '', tools: [], at: new Date().toISOString() };
-    const activeEntry = entryOf(prj);
-    const hashBefore = compositionsHash(prj.dir); const versionsBefore = store.versions(prj.id).length;
-    snapshot(prj.dir, activeEntry, 'before agent run', 'you');
-    const system = systemPrompt({ dir: prj.dir, composition: parseProject(prj.dir, activeEntry), files: listFiles(prj.dir), assetsDir: prj.assetsDir || null, entry: activeEntry, variants: listVariants(prj.dir).map((v) => v.entry) });
-    const handle = { jobId: job.id, kill: null };
-    agents.set(prj.id, handle);
-    const onEvent = (ev) => {
-      if (ev.type === 'text') { entry.tools.push({ note: ev.text }); entry.text = ev.text; }
-      if (ev.type === 'tool') entry.tools.push({ name: ev.name, detail: ev.detail });
-      if (ev.type === 'done') return; // emitted below, once
-      job.push(ev);
-    };
-    (async () => {
-      const resumeId = b.fresh ? null : prj.agentSessionId || null;
-      let run = runAgent(kind, { dir: prj.dir, prompt: message, system, sessionId: resumeId, onEvent }); handle.kill = run.kill;
-      let out = await run;
-      if (out.error && resumeId && !handle.cancelled) {
-        // The stored conversation could not be resumed (or died): start a fresh one instead of failing forever.
-        job.push({ type: 'status', message: 'Previous conversation could not be resumed; starting a fresh one' });
-        entry.text = ''; entry.tools = [];
-        run = runAgent(kind, { dir: prj.dir, prompt: message, system, sessionId: null, onEvent }); handle.kill = run.kill;
-        out = await run;
-      }
-      const p = store.project(prj.id);
-      if (p) {
-        if (!entry.text && out.result) entry.text = out.result;
-        if (entry.tools.length && entry.tools[entry.tools.length - 1].note === entry.text) entry.tools.pop(); // the final reply is shown as the body, not as a step
-        if (out.error) entry.error = out.error;
-        p.chat.push(entry);
-        // Keep the session only when the run succeeded, so a broken session never blocks the chat.
-        p.agentSessionId = out.error ? null : (out.sessionId || p.agentSessionId || null);
-        store.save();
-      }
-      if (out.error) console.error(`[agent] ${prj.name}: ${out.error}`);
-      for (const v of listVariants(prj.dir)) snapshot(prj.dir, v.entry, (message.startsWith('Apply the review feedback') ? 'review notes' : message.replace(/^🎙 /, '')).slice(0, 40), 'agent');
-      agents.delete(prj.id);
-      const rj = out.error ? null : autoRenderIfChanged(prj, hashBefore, versionsBefore, shown);
-      job.push({ type: 'done', result: out.result, cost: out.cost, sessionId: out.sessionId, renderJobId: rj?.id || null });
-      job.finish(!out.error, { result: out.result, cost: out.cost, renderJobId: rj?.id || null });
-    })().catch((e) => { agents.delete(prj.id); job.push({ type: 'error', message: e.message }); job.finish(false); });
+    prj.chat = prj.chat || [];
+    const userLine = { role: 'user', text: shown, at: new Date().toISOString(), author: b.author || null };
+    // Busy? Queue it: it shows in the chat as queued and starts by itself when the current run finishes.
+    if (agents.has(prj.id)) {
+      const q = agentQueues.get(prj.id) || []; agentQueues.set(prj.id, q);
+      userLine.queued = true; userLine.queueId = store.id('q');
+      q.push({ queueId: userLine.queueId, message, shown, fresh: !!b.fresh, kind });
+      prj.chat.push(userLine); store.save();
+      return send(res, 202, { queued: true, queueId: userLine.queueId, position: q.length, running: agents.get(prj.id)?.jobId || null });
+    }
+    prj.chat.push(userLine); store.save();
+    const job = startAgentRun(prj, { message, shown, fresh: !!b.fresh, kind });
     return send(res, 202, { jobId: job.id });
+  }
+  if ((x = m(/^\/api\/projects\/([^/]+)\/agent\/queue\/([^/]+)$/)) && req.method === 'DELETE') {
+    const prj = store.project(x[1]); if (!prj) return err(res, 404, 'Project not found');
+    const q = agentQueues.get(prj.id) || []; const i = q.findIndex((it) => it.queueId === x[2]);
+    if (i < 0) return err(res, 404, 'That message already started or was removed');
+    q.splice(i, 1); prj.chat = (prj.chat || []).filter((c) => c.queueId !== x[2]); store.save();
+    return send(res, 200, { ok: true, queue: q.length });
   }
   if ((x = m(/^\/api\/projects\/([^/]+)\/agent\/cancel$/)) && req.method === 'POST') {
     const hnd = agents.get(x[1]); if (!hnd) return send(res, 200, { ok: false, running: false });
@@ -724,6 +699,65 @@ const server = http.createServer(async (req, res) => {
 
 seedDemo();
 for (const p of store.db.projects) if (p.dir && fs.existsSync(p.dir)) { watchAssets(p); if (FFMPEG) startAnalyze(p); }
+// ---- agent runs. One at a time per project; messages sent meanwhile wait in agentQueues and start in order.
+const agentQueues = new Map(); // projectId -> [{ queueId, message, shown, fresh, kind }]
+function startAgentRun(prj, { message, shown, fresh = false, kind = 'claude' }) {
+    const b = { fresh };
+    const job = newJob('agent');
+    const entry = { role: 'agent', text: '', tools: [], at: new Date().toISOString() };
+    const activeEntry = entryOf(prj);
+    const hashBefore = compositionsHash(prj.dir); const versionsBefore = store.versions(prj.id).length;
+    snapshot(prj.dir, activeEntry, 'before agent run', 'you');
+    const system = systemPrompt({ dir: prj.dir, composition: parseProject(prj.dir, activeEntry), files: listFiles(prj.dir), assetsDir: prj.assetsDir || null, entry: activeEntry, variants: listVariants(prj.dir).map((v) => v.entry) });
+    const handle = { jobId: job.id, kill: null };
+    agents.set(prj.id, handle);
+    const onEvent = (ev) => {
+      if (ev.type === 'text') { entry.tools.push({ note: ev.text }); entry.text = ev.text; }
+      if (ev.type === 'tool') entry.tools.push({ name: ev.name, detail: ev.detail });
+      if (ev.type === 'done') return; // emitted below, once
+      job.push(ev);
+    };
+    (async () => {
+      const resumeId = b.fresh ? null : prj.agentSessionId || null;
+      let run = runAgent(kind, { dir: prj.dir, prompt: message, system, sessionId: resumeId, onEvent }); handle.kill = run.kill;
+      let out = await run;
+      if (out.error && resumeId && !handle.cancelled) {
+        // The stored conversation could not be resumed (or died): start a fresh one instead of failing forever.
+        job.push({ type: 'status', message: 'Previous conversation could not be resumed; starting a fresh one' });
+        entry.text = ''; entry.tools = [];
+        run = runAgent(kind, { dir: prj.dir, prompt: message, system, sessionId: null, onEvent }); handle.kill = run.kill;
+        out = await run;
+      }
+      const p = store.project(prj.id);
+      if (p) {
+        if (!entry.text && out.result) entry.text = out.result;
+        if (entry.tools.length && entry.tools[entry.tools.length - 1].note === entry.text) entry.tools.pop(); // the final reply is shown as the body, not as a step
+        if (out.error) entry.error = out.error;
+        p.chat.push(entry);
+        // Keep the session only when the run succeeded, so a broken session never blocks the chat.
+        p.agentSessionId = out.error ? null : (out.sessionId || p.agentSessionId || null);
+        store.save();
+      }
+      if (out.error) console.error(`[agent] ${prj.name}: ${out.error}`);
+      for (const v of listVariants(prj.dir)) snapshot(prj.dir, v.entry, (message.startsWith('Apply the review feedback') ? 'review notes' : message.replace(/^🎙 /, '')).slice(0, 40), 'agent');
+      agents.delete(prj.id);
+      const rj = out.error ? null : autoRenderIfChanged(prj, hashBefore, versionsBefore, shown);
+      job.push({ type: 'done', result: out.result, cost: out.cost, sessionId: out.sessionId, renderJobId: rj?.id || null });
+      job.finish(!out.error, { result: out.result, cost: out.cost, renderJobId: rj?.id || null });
+      setImmediate(() => runNextQueued(prj.id));
+    })().catch((e) => { agents.delete(prj.id); job.push({ type: 'error', message: e.message }); job.finish(false); setImmediate(() => runNextQueued(prj.id)); });
+    return job;
+}
+function runNextQueued(projectId) {
+  if (agents.has(projectId)) return;
+  const q = agentQueues.get(projectId); const next = q?.shift(); if (!next) return;
+  const prj = store.project(projectId); if (!prj?.dir) return;
+  // Move the message down to where it actually starts, so each question sits right above its answer.
+  const i = (prj.chat || []).findIndex((c) => c.queueId === next.queueId);
+  if (i >= 0) { const [line] = prj.chat.splice(i, 1); delete line.queued; line.at = new Date().toISOString(); prj.chat.push(line); }
+  store.save();
+  startAgentRun(prj, next);
+}
 const canTranscribe = () => !!(FFMPEG && process.env.VIDEDITOR_WHISPER && process.env.VIDEDITOR_WHISPER_MODEL && fs.existsSync(process.env.VIDEDITOR_WHISPER) && fs.existsSync(process.env.VIDEDITOR_WHISPER_MODEL));
 // audio: a data: URL (webm/opus, mp4, wav…). Returns { text, segments: [{ start, end, text }] } in seconds of audio.
 async function transcribe(audio) {

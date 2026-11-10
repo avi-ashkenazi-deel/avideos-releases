@@ -19,6 +19,7 @@ export const api = {
   chat: (id) => req('GET', `/api/projects/${id}/chat`),
   agent: (id, message, extra) => req('POST', `/api/projects/${id}/agent`, { message, ...extra }),
   agentReset: (id) => req('POST', `/api/projects/${id}/agent/reset`, {}),
+  unqueue: (id, queueId) => req('DELETE', `/api/projects/${id}/agent/queue/${queueId}`),
   agentCancel: (id) => req('POST', `/api/projects/${id}/agent/cancel`, {}),
   job: (id) => req('GET', `/api/jobs/${id}`),
   assets: (id) => req('GET', `/api/projects/${id}/assets`),

@@ -486,3 +486,10 @@ html.desktop .topbar button, html.desktop .topbar a, html.desktop .topbar select
 .overlay-msg .spinner { width: 18px; height: 18px; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes fadein { from { opacity: 0; } }
+
+/* Queued chat messages */
+.msg.queued .card { border-style: dashed; opacity: .8; }
+.msg .qbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px; }
+.msg .qtag { font-size: 11px; color: var(--fg-2); }
+.msg .qremove { border: 0; background: transparent; color: var(--fg-2); font-size: 11px; cursor: pointer; padding: 0; }
+.msg .qremove:hover { color: var(--danger); }
