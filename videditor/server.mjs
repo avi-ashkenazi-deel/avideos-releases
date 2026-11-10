@@ -4,6 +4,7 @@
 // Env: VIDEDITOR_PORT, VIDEDITOR_HOME (default ~/Videditor; a checkout with data/ keeps using it), VIDEDITOR_DATA, VIDEDITOR_NO_DEMO=1
 import http from 'node:http';
 import { spawn, spawnSync } from 'node:child_process';
+import { Worker } from 'node:worker_threads';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -81,6 +82,9 @@ function serveFile(req, res, file, { download = false } = {}) {
   const type = MIME[path.extname(file).toLowerCase()] || 'application/octet-stream';
   const headers = { 'Content-Type': type, 'Accept-Ranges': 'bytes', 'Cache-Control': file.startsWith(DATA) ? 'public, max-age=31536000, immutable' : 'no-cache', 'Access-Control-Allow-Origin': '*' };
   if (download) headers['Content-Disposition'] = `attachment; filename="${path.basename(file)}"`;
+  // Let the browser keep files it already has: unchanged files answer 304 with no body (one quick round trip).
+  const etag = `W/"${st.size.toString(36)}-${Math.round(st.mtimeMs).toString(36)}"`; headers.ETag = etag;
+  if (!req.headers.range && req.headers['if-none-match'] === etag) { res.writeHead(304, headers); return res.end(); }
   const range = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || '');
   if (range && st.size > 0) {
     let start = range[1] ? Number(range[1]) : 0; let end = range[2] ? Number(range[2]) : st.size - 1;
@@ -220,6 +224,19 @@ function listAssets(prj) {
   return items.map((it) => { const a = manifest.find((m) => m.rel === it.rel); const fresh = a && a.size === it.size && Math.abs(a.mtime - it.mtime) < 1 && a.version === ANALYSIS_VERSION; return { ...it, analyzed: !!fresh, analysis: fresh ? { duration: a.duration, width: a.width, height: a.height, fps: a.fps, hasAudio: a.hasAudio, scenes: a.scenes?.length || 0, sheet: a.sheet, frames: a.frames, audio: a.audio ? { bpm: a.audio.bpm, offset: a.audio.offset, confidence: a.audio.confidence, beats: a.audio.beats.slice(0, 64), peaks: a.audio.peaks } : null } : null }; });
 }
 const analyzing = new Map(); // projectId -> job
+// One background worker does all media analysis, so the server keeps answering while clips are analysed.
+let analysisWorker = null; let analysisSeq = 0; const analysisWaits = new Map();
+function analyzeInWorker(entry, outDir, onLog) {
+  if (!analysisWorker) {
+    analysisWorker = new Worker(new URL('./lib/analyze-worker.mjs', import.meta.url));
+    analysisWorker.on('message', ({ id, log, rec, error }) => { const w = analysisWaits.get(id); if (!w) return; if (log) return w.onLog?.(log); analysisWaits.delete(id); error ? w.reject(new Error(error)) : w.resolve(rec); });
+    const fail = (e) => { for (const w of analysisWaits.values()) w.reject(e instanceof Error ? e : new Error(`analysis worker stopped (${e})`)); analysisWaits.clear(); analysisWorker = null; };
+    analysisWorker.on('error', fail); analysisWorker.on('exit', (code) => { if (code !== 0) fail(code); else analysisWorker = null; });
+    analysisWorker.unref();
+  }
+  const id = ++analysisSeq;
+  return new Promise((resolve, reject) => { analysisWaits.set(id, { resolve, reject, onLog }); analysisWorker.postMessage({ id, entry, outDir }); });
+}
 function startAnalyze(prj, { force = false } = {}) {
   if (analyzing.has(prj.id)) return analyzing.get(prj.id);
   const job = newJob('analyze'); analyzing.set(prj.id, job);
@@ -230,7 +247,7 @@ function startAnalyze(prj, { force = false } = {}) {
       job.push({ type: 'log', text: `${todo.length} file(s) to analyze` });
       for (const [i, it] of todo.entries()) {
         job.push({ type: 'progress', frame: i + 1, frames: todo.length, name: it.name });
-        const rec = await new Promise((r) => setTimeout(() => r(analyzeFile(it, analysisDirFor(prj.dir, it), { onLog: (t) => job.push({ type: 'log', text: t }) })), 0));
+        const rec = await analyzeInWorker(it, analysisDirFor(prj.dir, it), (t) => job.push({ type: 'log', text: t }));
         const idx = manifest.findIndex((m) => m.rel === rec.rel); if (idx >= 0) manifest[idx] = rec; else manifest.push(rec);
         writeManifest(prj.dir, manifest, { libraryDir: prj.assetsDir });
       }

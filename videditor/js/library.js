@@ -4,6 +4,7 @@ import { h, btn, svg, modal, toast, relTime, fmtTime, debounce, confirmDeletePro
 export async function renderLibrary(root, { navigate }) {
   root.replaceChildren(h('div.library', h('div.empty', 'Loading…')));
   const state = await api.state();
+  try { const { projectNames } = await import('./app.js'); for (const p of state.projects) projectNames.set(p.id, p.name); } catch {}
   const grid = h('div.cards');
   grid.append(h('div.card.new', { on: { click: () => newProject(navigate) } }, svg('plus'), h('b', 'New video'), h('span.small.muted', 'Describe it and build it with your agent, or review an existing render')));
   for (const p of state.projects) grid.append(projectCard(p, navigate));

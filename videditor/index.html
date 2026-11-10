@@ -7,9 +7,22 @@
 <meta name="description" content="Video review for people and their agents. Talk, draw and point at the frame; your agent reads it and ships the next version.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23111318'/%3E%3Cpath d='M9 10h14v12H9z' fill='none' stroke='%23ffd166' stroke-width='2.4'/%3E%3Cpath d='M14 13.5v5l4.5-2.5z' fill='%23ffd166'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="css/app.css">
+<!-- Fetch every module at once instead of discovering them import by import. -->
+<link rel="modulepreload" href="js/app.js">
+<link rel="modulepreload" href="js/ui.js">
+<link rel="modulepreload" href="js/icons.js">
+<link rel="modulepreload" href="js/api.js">
+<link rel="modulepreload" href="js/library.js">
+<link rel="modulepreload" href="js/review.js">
+<link rel="modulepreload" href="js/studio.js">
+<link rel="modulepreload" href="js/compare.js">
+<link rel="modulepreload" href="js/stage.js">
+<link rel="modulepreload" href="js/draw.js">
+<link rel="modulepreload" href="js/voice.js">
+<link rel="modulepreload" href="js/player.js">
 </head>
 <body>
-<div id="app" class="app" aria-live="polite"></div>
+<div id="app" class="app" aria-live="polite"><div class="loading-screen"><span class="spinner"></span><span>Loading Videditor…</span></div></div>
 <div id="toasts" class="toasts"></div>
 <script type="module" src="js/app.js"></script>
 </body>

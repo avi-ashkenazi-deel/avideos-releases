@@ -479,3 +479,10 @@ label.field > span { display: block; font-size: 12px; color: var(--fg-1); margin
 html.desktop.os-darwin .topbar { padding-left: 84px; }
 html.desktop .topbar { -webkit-app-region: drag; user-select: none; }
 html.desktop .topbar button, html.desktop .topbar a, html.desktop .topbar select, html.desktop .topbar input, html.desktop .topbar label, html.desktop .topbar .menuwrap, html.desktop .topbar .seg, html.desktop .topbar .title { -webkit-app-region: no-drag; }
+
+/* Loading states */
+.loading-screen { flex: 1; min-height: 60vh; display: grid; place-items: center; align-content: center; gap: 14px; color: var(--fg-2); font-size: 13px; animation: fadein .2s ease .15s both; }
+.spinner { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--line-2); border-top-color: var(--accent); animation: spin .8s linear infinite; display: inline-block; }
+.overlay-msg .spinner { width: 18px; height: 18px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes fadein { from { opacity: 0; } }

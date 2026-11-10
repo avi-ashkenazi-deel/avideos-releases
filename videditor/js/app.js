@@ -7,7 +7,7 @@ import { renderStudio } from './studio.js';
 const app = document.getElementById('app');
 const bar = h('div.topbar');
 const view = h('div', { style: { flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 } });
-app.append(bar, view);
+app.replaceChildren(bar, view); // replaces the "Loading Videditor…" placeholder from index.html
 
 const navigate = (hash) => { if (location.hash === hash) route(); else location.hash = hash; };
 // ---- the Mac app (window.videditorDesktop from desktop/preload.cjs): version, updates, videos folder.
@@ -79,9 +79,14 @@ function topbar(items = []) {
   ].filter(Boolean));
 }
 
+// Remember project names from the list, so "Opening <name>…" shows the moment you click.
+export const projectNames = new Map();
+function loading(text) { view.replaceChildren(h('div.loading-screen', h('span.spinner'), h('span', text))); }
 async function route() {
   view._cleanup?.(); view._cleanup = null;
   const [path, qs] = (location.hash || '#/').slice(1).split('?');
+  const pid = (/^\/(?:studio|p)\/([^/]+)/.exec(path) || [])[1];
+  loading(pid ? `Opening ${projectNames.get(pid) ? `“${projectNames.get(pid)}”` : 'video'}…` : 'Loading…');
   const q = new URLSearchParams(qs || '');
   try {
     let m;

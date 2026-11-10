@@ -5,6 +5,7 @@ async function req(method, url, body, headers = {}) {
   if (!r.ok) throw new Error(data?.error || data || r.statusText);
   return data;
 }
+let capsOnce = null;
 export const api = {
   state: () => req('GET', '/api/state'),
   project: (id) => req('GET', `/api/projects/${id}`),
@@ -12,7 +13,7 @@ export const api = {
   updateProject: (id, b) => req('PATCH', `/api/projects/${id}`, b),
   deleteProject: (id, deleteFolder) => req('DELETE', `/api/projects/${id}${deleteFolder ? '?deleteFolder=1' : ''}`),
   detect: (p) => req('GET', `/api/detect?path=${encodeURIComponent(p)}`),
-  capabilities: () => req('GET', '/api/capabilities'),
+  capabilities: () => (capsOnce ||= req('GET', '/api/capabilities').catch((e) => { capsOnce = null; throw e; })), // rarely changes: once per page
   saveFile: (id, p, text) => req('PUT', `/api/projects/${id}/files?path=${encodeURIComponent(p)}`, new Blob([text], { type: 'text/plain' })),
   updateClip: (id, clipId, b) => req('PATCH', `/api/projects/${id}/clips/${encodeURIComponent(clipId)}`, b),
   chat: (id) => req('GET', `/api/projects/${id}/chat`),

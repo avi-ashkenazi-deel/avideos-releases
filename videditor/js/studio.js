@@ -8,15 +8,14 @@ import { DrawLayer } from './draw.js';
 import { VoiceRecorder, highlightPointing } from './voice.js';
 
 export async function renderStudio(root, { projectId, prompt, navigate, topbar }) {
-  let project = await api.project(projectId);
+  // Everything Studio needs to draw, fetched together (one round trip instead of three).
+  let [project, composition, caps] = await Promise.all([api.project(projectId), api.composition(projectId).catch(() => null), api.capabilities().catch(() => ({}))]);
   if (!project.dir) { root.replaceChildren(h('div.empty', h('h2', 'This project has no composition'), h('p.muted', 'It was created for review only. Make a new video to use Studio.'), btn('Back', { onClick: () => navigate(`#/p/${project.id}`) }))); return; }
-  let composition = await api.composition(project.id).catch(() => null);
-  let caps = await api.capabilities().catch(() => ({}));
   let selected = null; let agentJob = null;
 
   // ---------- stage
   const stageWrap = h('div.stage-wrap');
-  const overlayMsg = h('div.overlay-msg', 'Loading composition…');
+  const overlayMsg = h('div.overlay-msg', h('span.spinner'), h('span', 'Loading preview…'));
   stageWrap.append(overlayMsg);
   const stage = new Stage(stageWrap);
   // Talk & draw on the preview: a drawing canvas sits exactly over the composition; a voice note records while you
