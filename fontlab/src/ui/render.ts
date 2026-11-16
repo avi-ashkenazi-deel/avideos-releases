@@ -41,13 +41,14 @@ export function drawStrokeRaw(ctx: CanvasRenderingContext2D, s: Stroke, v: View,
   }
 }
 
-export function drawGuides(ctx: CanvasRenderingContext2D, v: View, m: FontMetrics, advance: number, width: number): void {
+export function drawGuides(ctx: CanvasRenderingContext2D, v: View, m: FontMetrics, advance: number, width: number, opts: { values?: boolean } = {}): void {
   const line = (y: number, color: string, label: string) => {
     const cy = v.oy - y * v.s;
     ctx.strokeStyle = color; ctx.lineWidth = 1; ctx.setLineDash(y === 0 ? [] : [4, 4]);
     ctx.beginPath(); ctx.moveTo(0, cy); ctx.lineTo(width, cy); ctx.stroke();
     ctx.setLineDash([]);
     ctx.fillStyle = color; ctx.font = '10px ui-monospace, monospace'; ctx.fillText(label, 4, cy - 3);
+    if (opts.values) valuePill(ctx, String(Math.round(y)), width - 6, cy, color);
   };
   line(m.ascender, 'rgba(120,120,255,.5)', 'ascender');
   line(m.capHeight, 'rgba(255,140,0,.6)', 'cap');
@@ -58,6 +59,23 @@ export function drawGuides(ctx: CanvasRenderingContext2D, v: View, m: FontMetric
   ctx.strokeStyle = 'rgba(255,255,255,.25)'; ctx.setLineDash([2, 4]);
   for (const x of [0, advance]) { const cx = v.ox + x * v.s; ctx.beginPath(); ctx.moveTo(cx, 0); ctx.lineTo(cx, ctx.canvas.height); ctx.stroke(); }
   ctx.setLineDash([]);
+  if (opts.values) {
+    // advance width, centred between the sidebearing lines just under the descender
+    const y = v.oy - m.descender * v.s + 14, x0 = v.ox, x1 = v.ox + advance * v.s;
+    ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x1, y); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,.6)'; ctx.font = '10px ui-monospace, monospace';
+    const t = `width ${Math.round(advance)}`; ctx.fillText(t, (x0 + x1) / 2 - ctx.measureText(t).width / 2, y - 3);
+  }
+}
+
+/** Right-aligned value label in a small rounded pill (inspector metrics). */
+function valuePill(ctx: CanvasRenderingContext2D, text: string, right: number, cy: number, color: string): void {
+  ctx.font = '600 10px ui-monospace, monospace';
+  const w = ctx.measureText(text).width + 10, hgt = 15;
+  const x = right - w, y = cy - hgt / 2;
+  ctx.fillStyle = color;
+  ctx.beginPath(); (ctx as any).roundRect ? (ctx as any).roundRect(x, y, w, hgt, 7) : ctx.rect(x, y, w, hgt); ctx.fill();
+  ctx.fillStyle = '#111'; ctx.fillText(text, x + 5, cy + 3.5);
 }
 
 /** Render contours to a small thumbnail canvas (used by the glyph grid). */

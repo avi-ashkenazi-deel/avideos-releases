@@ -125,6 +125,8 @@ export interface FontProject {
   blocks: string[];
   /** extra hand-drawn characters, any script */
   customChars: string;
+  /** stylistic alternates per char: index 0 = ss01, 1 = ss02, 2 = ss03 */
+  alternates: Record<string, Glyph[]>;
 }
 
 export const DEFAULT_METRICS: FontMetrics = {
@@ -173,6 +175,7 @@ export function newProject(name = 'Untitled'): FontProject {
     previewText: 'The quick brown fox jumps over the lazy dog 0123456789',
     blocks: ['latin'],
     customChars: '',
+    alternates: {},
   };
 }
 

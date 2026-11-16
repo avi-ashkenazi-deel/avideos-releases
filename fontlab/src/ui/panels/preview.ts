@@ -3,6 +3,7 @@ import { store } from '../state';
 import { PREVIEW_FAMILY } from '../preview';
 import { samplePreview } from '../../core/charsets';
 import { scheduleBuild } from '../buildClient';
+import { availableFeatures, featureCss } from '../alternates';
 
 export function previewPanel(): HTMLElement {
   const text = h('textarea', { class: 'preview-input', rows: 2, value: store.project.previewText, placeholder: 'Type to preview…' });
@@ -31,6 +32,23 @@ export function previewPanel(): HTMLElement {
     store.project.fx.time = Math.round((store.project.fx.time + 0.03) * 1000) / 1000;
     scheduleBuild(0, { previewOnly: true });
   };
+  // OpenType feature chips (stylistic sets, tabular figures)
+  const chips = h('div', { class: 'featchips', 'data-testid': 'feature-chips' });
+  const FEAT_LABEL: Record<string, string> = { ss01: 'Stylistic set 1', ss02: 'Stylistic set 2', ss03: 'Stylistic set 3', tnum: 'Tabular figures' };
+  const renderChips = () => {
+    const avail = availableFeatures();
+    store.features = store.features.filter((f) => avail.includes(f));
+    chips.replaceChildren(...avail.map((f) => {
+      const on = store.features.includes(f);
+      const b = h('button', { type: 'button', class: 'chip' + (on ? ' on' : ''), 'aria-pressed': String(on), title: FEAT_LABEL[f] ?? f, 'data-feature': f }, f);
+      b.addEventListener('click', () => { store.features = on ? store.features.filter((x) => x !== f) : [...store.features, f]; renderChips(); store.emit('features'); });
+      return b;
+    }));
+    chips.style.display = avail.length ? '' : 'none';
+    out.style.fontFeatureSettings = featureCss();
+  };
+  store.subscribe((ev) => { if (ev === 'glyph' || ev === 'project:loaded' || ev === 'features') renderChips(); });
+  renderChips();
   const status = h('div', { class: 'status' });
   store.subscribe((ev) => {
     if (ev === 'font:preview' && living) {
@@ -46,6 +64,6 @@ export function previewPanel(): HTMLElement {
   });
   return h('section', { class: 'panel preview' },
     h('h2', {}, 'Preview', help('A real font built from your letters, rendered by the browser. Click the text to edit it.')),
-    out, h('div', { class: 'row' }, size, sample, livingBtn), h('details', { class: 'plain', 'data-testid': 'preview-plain' }, h('summary', {}, 'Edit as plain text'), text), status,
+    out, chips, h('div', { class: 'row' }, size, sample, livingBtn), h('details', { class: 'plain', 'data-testid': 'preview-plain' }, h('summary', {}, 'Edit as plain text'), text), status,
   );
 }

@@ -17,6 +17,10 @@ export function parseProject(raw: unknown): FontProject {
   p.blocks = Array.isArray(r.blocks) ? ['latin', ...r.blocks.filter((b: unknown) => typeof b === 'string' && b !== 'latin')] : ['latin'];
   p.customChars = typeof r.customChars === 'string' ? r.customChars : '';
   p.seeds = Array.isArray(r.seeds) ? r.seeds.filter(isGlyph) : [];
+  p.alternates = {};
+  if (r.alternates && typeof r.alternates === 'object') {
+    for (const [k, v] of Object.entries(r.alternates)) if (Array.isArray(v)) { const list = v.filter(isGlyph).slice(0, 3) as Glyph[]; if (list.length) p.alternates[k] = list; }
+  }
   p.glyphs = {};
   if (r.glyphs && typeof r.glyphs === 'object') {
     for (const [k, v] of Object.entries(r.glyphs)) if (isGlyph(v)) p.glyphs[k] = v as Glyph;

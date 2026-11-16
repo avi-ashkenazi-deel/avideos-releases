@@ -5,6 +5,7 @@ import { scheduleBuild } from '../buildClient';
 import { DrawCanvas } from '../../inputs/draw/canvas';
 import { PointEditor } from '../../inputs/draw/editor';
 import { history } from '../history';
+import { keepAlternate } from '../alternates';
 import type { Glyph, Stroke, CapStyle } from '../../core/glyph';
 import { DEFAULT_STATS } from '../../core/glyph';
 import { projectCharset, groupCharset, BLOCK_BY_ID } from '../../core/charsets';
@@ -90,6 +91,9 @@ export function seedsPanel(): HTMLElement {
   const info = h('div', { class: 'info' });
   const dc = new DrawCanvas(canvasEl, store.project.metrics);
   let editMode = false;
+  const pointsCb = h('input', { type: 'checkbox', 'data-testid': 'chk-points' });
+  pointsCb.addEventListener('change', () => { dc.showPoints = pointsCb.checked; dc.draw(); });
+  const pointsToggle = h('label', { class: 'toggle pointstoggle', title: 'Show the outline points of the built letter' }, pointsCb, ' Points');
   let editChar: string | null = null;
   const editor = new PointEditor(canvasEl, () => dc.getView(), {
     onChange: (g: Glyph) => {
@@ -119,7 +123,9 @@ export function seedsPanel(): HTMLElement {
     const src = g ? ({ drawn: 'drawn by hand', traced: 'traced from a photo', imported: 'from a font file', generated: 'generated' } as const)[g.source] : 'empty';
     const ns = g?.strokes?.length ?? 0, nc = g?.contours?.length ?? 0;
     const parts = !g ? 'draw to create' : g.kind === 'stroke' ? `${ns} strokes` : `${nc} contours${ns ? ` + ${ns} stroke${ns === 1 ? '' : 's'}` : ''}`;
-    title.replaceChildren(h('span', { class: 'big' }, ch), h('small', {}, `${src}${g?.locked ? ' · locked' : ''} · ${parts}`));
+    const code = 'U+' + (ch.codePointAt(0) ?? 0).toString(16).toUpperCase().padStart(4, '0');
+    const alts = store.project.alternates?.[ch]?.length ?? 0;
+    title.replaceChildren(h('span', { class: 'big' }, ch), h('span', { class: 'ucode' }, code), h('small', {}, `${src}${g?.locked ? ' · locked' : ''} · ${parts}${alts ? ` · ${alts} alternate${alts > 1 ? 's' : ''}` : ''}`), pointsToggle);
     info.textContent = editMode
       ? 'Edit points: drag nodes and handles. Double-click a segment to add a point, Delete removes, Alt+drag a node changes its width, Ctrl/Cmd+Z undoes.'
       : g?.source === 'generated' ? 'Generated from your seeds. Draw over it to replace it, re-roll for another take, or switch to Edit points.' : 'Draw with mouse, pen or finger. Pressure and speed change the width. Edit points lets you adjust what is there.';
@@ -191,6 +197,7 @@ export function seedsPanel(): HTMLElement {
   });
   const clear = iconButton('trash', 'Clear', () => { store.update((p) => { delete p.glyphs[store.selected]; }, 'glyph'); recomposeDependents(store.selected); scheduleBuild(0); }, { title: 'Remove this letter (it can be regenerated)' });
   const lock = iconButton('lock', 'Lock', () => { store.update((p) => { const g = p.glyphs[store.selected]; if (g) g.locked = !g.locked; }, 'glyph'); }, { title: 'Locked letters are never regenerated' });
+  const keepAltBtn = iconButton('copy', 'Keep as alternate', () => keepAlternate(store.selected), { title: 'Save this version of the letter as a stylistic set (ss01–ss03), then re-roll or redraw for a new main version', testid: 'btn-keep-alt' });
   const reroll = iconButton('dice', 'Re-roll', () => {
     const ch = store.selected, g = store.project.glyphs[ch];
     if (!g || g.source !== 'generated') { toast('Re-roll works on generated letters'); return; }
@@ -264,7 +271,7 @@ export function seedsPanel(): HTMLElement {
   // ---------- draw tab body
   const drawTab = h('div', { class: 'tab-body draw' },
     strip, title, canvasEl, info,
-    h('div', { class: 'row' }, undoBtn, redoBtn, clear, lock, reroll, toStrokesBtn, editBtn),
+    h('div', { class: 'row' }, undoBtn, redoBtn, clear, lock, reroll, keepAltBtn, toStrokesBtn, editBtn),
     editTools,
     h('details', { class: 'brush' }, h('summary', {}, 'Brush'), widthRow, pressureRow, velRow, smoothRow,
       h('div', { class: 'row' }, h('label', {}, 'Cap ', capSel), h('label', {}, mirror, ' Mirror')), advRow),

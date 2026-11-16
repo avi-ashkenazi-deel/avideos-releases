@@ -39,6 +39,8 @@ export class DrawCanvas {
   mode: 'draw' | 'edit' = 'draw';
   /** extra overlay drawn after the glyph (the point editor's nodes) */
   overlay: ((ctx: CanvasRenderingContext2D, view: View) => void) | null = null;
+  /** show the built outline's points (inspector) */
+  showPoints = false;
   getView(): View { return this.view; }
 
   constructor(canvas: HTMLCanvasElement, metrics: FontMetrics) {
@@ -153,9 +155,17 @@ export class DrawCanvas {
     const w = this.canvas.clientWidth, h = this.canvas.clientHeight;
     ctx.clearRect(0, 0, w, h);
     if (!this.glyph) return;
-    drawGuides(ctx, view, this.metrics, this.glyph.advance, w);
+    drawGuides(ctx, view, this.metrics, this.glyph.advance, w, { values: true });
     // finished ink
     drawContours(ctx, this.contours, view, 'rgba(255,255,255,.92)');
+    if (this.showPoints && this.mode === 'draw') {
+      const total = this.contours.reduce((n, c) => n + c.points.length, 0);
+      const every = Math.max(1, Math.ceil(total / 400));
+      ctx.strokeStyle = 'rgba(255,59,107,.8)'; ctx.lineWidth = 1;
+      for (const c of this.contours) { ctx.beginPath(); c.points.forEach(([x, y], i) => { const cx = view.ox + x * view.s, cy = view.oy - y * view.s; i ? ctx.lineTo(cx, cy) : ctx.moveTo(cx, cy); }); ctx.closePath(); ctx.stroke(); }
+      ctx.fillStyle = '#ff3b6b'; let i = 0;
+      for (const c of this.contours) for (const [x, y] of c.points) { if (i++ % every) continue; ctx.fillRect(view.ox + x * view.s - 2.5, view.oy - y * view.s - 2.5, 5, 5); }
+    }
     // centrelines of stroke glyphs (subtle)
     if (this.glyph.strokes) {
       ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.lineWidth = 1;

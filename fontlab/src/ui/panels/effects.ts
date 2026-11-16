@@ -5,6 +5,7 @@ import { scheduleBuild } from '../buildClient';
 import { FX, FX_ORDER } from '../../fx/registry';
 import { newGroup, newLayer, mutateStack, newStack, randomStack } from '../../fx/stack';
 import type { FxStack } from '../../fx/types';
+import { xyPad } from './pad';
 import { PRESETS } from '../../fx/presets';
 import type { FxGroup, FxLayer, GroupOp } from '../../fx/types';
 
@@ -97,6 +98,7 @@ export function effectsPanel(): HTMLElement {
         return h('label', { class: 'toggle' }, cb, ' ', p.label);
       }
       const r = slider(p.label, { min: p.min, max: p.max, step: p.step, value: l.params[p.key] ?? p.default, onInput: (v) => { l.params[p.key] = v; changed(impl.def.slow ? 250 : 60); }, format: (v) => (p.step < 0.01 ? v.toFixed(3) : p.step < 1 ? v.toFixed(2) : v.toFixed(0)) });
+      r.dataset.key = p.key;
       if (p.hint) r.title = p.hint;
       return r;
     }));
@@ -139,9 +141,23 @@ export function effectsPanel(): HTMLElement {
   }, { title: 'Throw the dice: 2 to 4 random effects with random settings. Back undoes it.', testid: 'btn-randomize' });
   const addGroupBtn = iconButton('layers', 'Add a set', () => { store.project.fx.groups.push(newGroup('subtract')); render(); changed(0); toast('New set: starts from the original letter and is cut from the result. Change “cut from” to combine differently.'); }, { testid: 'btn-add-group' });
 
+  // two-axis drag pad
+  const pad = xyPad((layerId, key, v) => {
+    const r = list.querySelector<HTMLElement>(`.fxlayer[data-layer="${CSS.escape(layerId)}"] .slider[data-key="${CSS.escape(key)}"]`);
+    (r as any)?.setValue?.(v);
+  });
+  pad.style.display = 'none';
+  const padBtn = iconButton('sliders', 'XY pad', () => {
+    const on = pad.style.display === 'none';
+    pad.style.display = on ? '' : 'none';
+    padBtn.classList.toggle('primary', on);
+    padBtn.setAttribute('aria-pressed', String(on));
+    if (on) (pad as any).refresh();
+  }, { title: 'Drag on a pad to change two effect settings at once', testid: 'btn-pad' });
   const panel = h('section', { class: 'panel effects' },
     h('h2', {}, 'Effects', help('Effects run top to bottom on every letter. Reorder by dragging. Crisp effects keep corners sharp; textures go through a bitmap.')),
-    h('div', { class: 'row' }, presetSel, h('label', { class: 'toggle', for: 'bypassfx' }, bypass, ' Show original', help('Preview and export the letters exactly as drawn or imported, ignoring every effect. Turns on by itself after a font import.'))),
+    h('div', { class: 'row' }, presetSel, padBtn, h('label', { class: 'toggle', for: 'bypassfx' }, bypass, ' Show original', help('Preview and export the letters exactly as drawn or imported, ignoring every effect. Turns on by itself after a font import.'))),
+    pad,
     list,
     h('div', { class: 'row' },
       h('label', {}, 'Seed ', seedInput),

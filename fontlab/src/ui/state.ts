@@ -16,6 +16,8 @@ export class Store {
   /** axes of the variable font built this session (FontFace 'FunkyVarPreview'), if any */
   variableAxes: { tag: string; name: string; min: number; default: number; max: number }[] | null = null;
   lastBuildMs = 0;
+  /** OpenType features switched on in the preview and tester (ss01, tnum, …) */
+  features: string[] = [];
   status = '';
   private listeners = new Set<Listener>();
 

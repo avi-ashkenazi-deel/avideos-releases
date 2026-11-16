@@ -6,6 +6,7 @@ import { renderThumb } from '../render';
 import { hasInk, recomposeDependents } from './seeds';
 import { regenerateOne } from '../../generate/compose';
 import { downloadGlyphSvg } from './exportMore';
+import { keepAlternate, useAlternate, clearAlternates } from '../alternates';
 import { scheduleBuild } from '../buildClient';
 
 const SOURCE_COLOR: Record<string, string> = { drawn: '#ffd166', traced: '#06d6a0', imported: '#8ecae6', generated: '#e0e0e0' };
@@ -60,6 +61,11 @@ export function gridPanel(onSelect: (ch: string) => void): HTMLElement {
       { label: g?.locked ? (many ? 'Unlock selected' : 'Unlock') : (many ? 'Lock selected' : 'Lock'), icon: g?.locked ? 'unlock' : 'lock', onClick: () => setLocked(sel, !g?.locked), hint: 'Locked letters are never regenerated' },
       { label: many ? 'Re-roll selected' : 'Re-roll', icon: 'dice', onClick: () => reroll(sel), hint: 'Generate again with a new seed (generated letters only)' },
       { label: 'Edit this letter', icon: 'pen', onClick: () => { multi.clear(); onSelect(ch); } },
+      ...(many ? [] : [
+        { label: 'Keep as alternate (stylistic set)', icon: 'copy' as const, onClick: () => keepAlternate(ch), hint: 'Save this version as ss01–ss03', testid: 'ctx-keep-alt' },
+        ...(store.project.alternates?.[ch] ?? []).map((_, i) => ({ label: `Use ss0${i + 1} as main`, icon: 'shuffle' as const, onClick: () => useAlternate(ch, i) })),
+        ...((store.project.alternates?.[ch]?.length ?? 0) ? [{ label: 'Remove alternates', icon: 'x' as const, onClick: () => clearAlternates(ch) }] : []),
+      ]),
       { label: `Download “${ch}” as SVG`, icon: 'image', onClick: () => downloadGlyphSvg(ch), hint: 'This letter alone, as a vector file' },
       { label: 'Remove all lowercase', icon: 'trash', danger: true, separatorBefore: true, onClick: () => removeChars(current.filter(isLower), 'lowercase'), testid: 'ctx-remove-lower' },
       { label: 'Remove all uppercase', icon: 'trash', danger: true, onClick: () => removeChars(current.filter(isUpper), 'uppercase') },
@@ -108,6 +114,9 @@ export function gridPanel(onSelect: (ch: string) => void): HTMLElement {
       const b = store.built[ch];
       c.root.classList.toggle('selected', ch === store.selected);
       c.root.classList.toggle('multi', multi.has(ch));
+      const na = store.project.alternates?.[ch]?.length ?? 0;
+      c.root.classList.toggle('hasalts', na > 0);
+      if (na) c.root.dataset.alts = `ss×${na}`; else delete c.root.dataset.alts;
       c.root.classList.toggle('empty', !hasInk(g));
       const srcIcon = g ? (g.locked ? 'lock' : g.source === 'generated' ? 'sparkle' : g.source === 'drawn' ? 'pen' : g.source === 'traced' ? 'image' : 'upload') : null;
       c.badge.replaceChildren(...(srcIcon ? [icon(srcIcon as any, 11)] : []));

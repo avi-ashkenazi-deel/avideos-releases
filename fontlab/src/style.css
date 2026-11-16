@@ -202,3 +202,19 @@ details.plain summary { color: var(--muted); font-size: 12px; cursor: pointer; m
 .wstep p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.45; }
 .welcome-foot { color: var(--muted); font-size: 12px; margin: 22px 0 6px; }
 .welcome-tap { color: var(--accent); font-weight: 600; margin: 0; }
+
+/* two-axis drag pad */
+.xypad { background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 8px; margin: 6px 0 8px; }
+.xypad .padaxes { margin: 0 0 6px; }
+.xypad .padaxes select { max-width: 160px; }
+.padbody { display: grid; grid-template-columns: 1.35fr 1fr; gap: 8px; }
+.padcanvas { width: 100%; height: 190px; background: #0d0e11; border-radius: 8px; cursor: crosshair; touch-action: none; display: block; }
+.padcanvas:focus-visible { outline: 2px solid var(--accent); }
+.padglyph { width: 100%; height: 190px; background: #0d0e11; border-radius: 8px; display: block; }
+.padread { font: 11px ui-monospace, monospace; color: var(--muted); margin-top: 6px; min-height: 1.2em; }
+.drawtitle .ucode { font: 11px ui-monospace, monospace; color: var(--muted); background: var(--panel-2); padding: 1px 6px; border-radius: 999px; }
+.drawtitle .pointstoggle { margin-left: auto; font-size: 12px; color: var(--muted); }
+.featchips { display: flex; gap: 6px; flex-wrap: wrap; margin: 6px 0 0; }
+.chip { font: 600 11px ui-monospace, monospace; text-transform: uppercase; padding: 3px 9px; border-radius: 999px; background: var(--panel-2); border: 1px solid var(--line); color: var(--muted); }
+.chip.on { background: var(--text); color: var(--bg, #111); border-color: var(--text); }
+.cell.hasalts::after { content: attr(data-alts); position: absolute; bottom: 2px; right: 4px; font: 600 9px ui-monospace, monospace; color: var(--accent); }

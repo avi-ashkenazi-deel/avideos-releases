@@ -2,6 +2,7 @@ import { h, button, slider } from '../dom';
 import { store } from '../state';
 import { PREVIEW_FAMILY } from '../preview';
 import { BLOCKS } from '../../core/charsets';
+import { featureCss } from '../alternates';
 
 /** In-app type tester: edit live text set in the current font, waterfall, axes. */
 export function openTypeTester(): void {
@@ -19,6 +20,7 @@ export function openTypeTester(): void {
     sheet.style.setProperty('--tls', ls + 'em');
     sheet.style.fontFamily = `'${useVar && vf ? 'FunkyVarPreview' : PREVIEW_FAMILY}', monospace`;
     sheet.style.fontVariationSettings = useVar && vf ? vf.map((a) => `'${a.tag}' ${axisValues[a.tag]}`).join(', ') : 'normal';
+    sheet.style.fontFeatureSettings = featureCss();
     dlg.classList.toggle('dark', dark);
   };
   const block = (text: string, rtl: boolean, title: string, onEdit?: (t: string) => void) => {

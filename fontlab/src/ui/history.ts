@@ -4,6 +4,7 @@ interface Snapshot {
   glyphs: Record<string, Glyph>;
   blocks: FontProject['blocks'];
   customChars: FontProject['customChars'];
+  alternates: FontProject['alternates'];
 }
 
 /**
@@ -52,12 +53,13 @@ export class History {
 }
 
 function snap(p: FontProject): Snapshot {
-  return structuredClone({ glyphs: p.glyphs, blocks: p.blocks, customChars: p.customChars });
+  return structuredClone({ glyphs: p.glyphs, blocks: p.blocks, customChars: p.customChars, alternates: p.alternates ?? {} });
 }
 function apply(p: FontProject, s: Snapshot): void {
   p.glyphs = structuredClone(s.glyphs);
   p.blocks = structuredClone(s.blocks);
   p.customChars = structuredClone(s.customChars);
+  p.alternates = structuredClone(s.alternates ?? {});
 }
 
 export const history = new History();
