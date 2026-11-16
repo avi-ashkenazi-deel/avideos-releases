@@ -111,3 +111,12 @@ test('remix a .woff2 font (decoded in the browser)', async ({ page }) => {
   await expect(page.locator('.cell[data-char="z"] .badge')).toHaveAttribute('data-source', 'imported');
   await expect(page.locator('.fontname')).toHaveValue(/Sample Funk/);
 });
+
+test('Interface symbols block: arrows and UI symbols are generated in the font style', async ({ page }) => {
+  await page.locator('.chbtn[data-ch="o"]').click();
+  await drawStroke(page, [[0.3, 0.55], [0.45, 0.45], [0.6, 0.55], [0.45, 0.72], [0.3, 0.55]]);
+  await page.locator('.charset label', { hasText: 'Interface symbols' }).locator('input').check();
+  await expect(page.locator('.grid-group', { hasText: 'Interface symbols' })).toBeVisible();
+  await page.getByRole('button', { name: /Generate the rest/ }).click();
+  for (const ch of ['→', '✓', '★', '⌘']) await expect(page.locator(`.cell[data-char="${ch}"]`)).not.toHaveClass(/empty/, { timeout: 60000 });
+});

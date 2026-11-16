@@ -20,7 +20,7 @@ export function charsetPanel(onChange: () => void): HTMLElement {
     boxes.set(b.id, cb);
     blocks.append(h('label', { title: b.sample }, cb, b.name, h('small', {}, `(${[...b.chars].length})`)));
   }
-  const input = h('input', { type: 'text', placeholder: 'Add any characters, e.g. ★ ñ 日本 عربى', autocomplete: 'off', spellcheck: false });
+  const input = h('input', { type: 'text', placeholder: 'Add any characters, e.g. ♪ ñ 日本 عربى', autocomplete: 'off', spellcheck: false });
   const chips = h('div', { class: 'custom-chips', style: { display: 'contents' } });
   const renderChips = () => {
     chips.replaceChildren(...[...store.project.customChars].map((ch) => h('span', { class: 'chipx' }, ch, button('×', () => {

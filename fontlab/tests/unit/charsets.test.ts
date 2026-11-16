@@ -3,7 +3,8 @@ import { BLOCKS, projectCharset, groupCharset, blockOf, samplePreview } from '..
 import { parseProject } from '../../src/project/schema';
 import { newProject, DEFAULT_STATS, type Glyph } from '../../src/core/glyph';
 import { decompose, dependsOn, dependencyChain, deriveGlyph } from '../../src/generate/derive';
-import { generateGlyphs, dependentsOf, regenerateOne } from '../../src/generate/compose';
+import { generateGlyphs, dependentsOf, regenerateOne, buildGlyph } from '../../src/generate/compose';
+import { missingRecipes } from '../../src/core/recipes';
 import { glyphToContours } from '../../src/outline';
 import { bboxStrokes, signedArea } from '../../src/core/geometry';
 import { makeRng } from '../../src/core/prng';
@@ -24,11 +25,11 @@ const i: Glyph = { char: 'i', unicode: 105, advance: 220, source: 'drawn', kind:
 
 describe('charsets', () => {
   it('projectCharset orders by block, dedupes, and appends custom chars', () => {
-    const cs = projectCharset({ blocks: ['latin', 'hebrew', 'punct'], customChars: '★A★ ב' });
+    const cs = projectCharset({ blocks: ['latin', 'hebrew', 'punct'], customChars: '♪A♪ ב' });
     expect(cs.slice(0, 3)).toEqual(['A', 'B', 'C']);
     expect(cs.indexOf('.')).toBeLessThan(cs.indexOf('א'));
     expect(cs.filter((c) => c === 'A')).toHaveLength(1);
-    expect(cs[cs.length - 1]).toBe('★');
+    expect(cs[cs.length - 1]).toBe('♪');
     expect(groupCharset(cs).map(([b]) => b)).toEqual(['latin', 'punct', 'hebrew', 'custom']);
     expect(blockOf('€')).toBe('symbols');
     expect(samplePreview({ blocks: ['latin', 'cyrillic'] }).split('\n')).toHaveLength(2);
@@ -141,5 +142,56 @@ describe('derivation', () => {
     expect(glyphName('€', 0x20ac)).toBe('Euro');
     expect(glyphName('א', 0x5d0)).toBe('uni05D0');
     expect(glyphName('Ж', 0x416)).toBe('uni0416');
+  });
+});
+
+describe('interface symbols block', () => {
+  const UI = '←→↑↓↔⇒⌘⌥⇧⏎⌫✓✗★♥⚠●○■□▲▼';
+  it('exists after symbols with its own characters', () => {
+    const ids = BLOCKS.map((b) => b.id);
+    expect(ids.indexOf('ui')).toBe(ids.indexOf('symbols') + 1);
+    const ui = BLOCKS.find((b) => b.id === 'ui')!;
+    expect(ui.name).toBe('Interface symbols');
+    expect(ui.chars).toBe(UI);
+    for (const ch of UI) {
+      expect(blockOf(ch), ch).toBe('ui');
+      expect(BLOCKS.filter((b) => b.chars.includes(ch)).map((b) => b.id), ch).toEqual(['ui']);
+    }
+    expect(samplePreview({ blocks: ['ui'] }).split('\n')).toEqual([BLOCKS[0].sample, ui.sample]);
+    expect(groupCharset(projectCharset({ blocks: ['ui'], customChars: '' })).map(([b]) => b)).toEqual(['latin', 'ui']);
+  });
+  it('every symbol has a recipe that builds solid ink in several styles', () => {
+    expect(missingRecipes(UI)).toEqual([]);
+    const styles = [DEFAULT_STATS, { ...DEFAULT_STATS, strokeWidth: 20 }, { ...DEFAULT_STATS, strokeWidth: 200, terminal: 'flat' as const }];
+    for (const stats of styles) {
+      for (const ch of UI) {
+        const g = buildGlyph(ch, { ...stats }, 0.3, 7);
+        expect(g.recipe?.id, ch).toBe(ch);
+        expect(g.strokes!.length, ch).toBeGreaterThan(0);
+        expect(g.advance, ch).toBeGreaterThan(0);
+        const cs = glyphToContours(g);
+        expect(cs.length, ch).toBeGreaterThanOrEqual(1);
+        expect(cs.reduce((a, c) => a + signedArea(c.points), 0), ch).toBeGreaterThan(0);
+        const bb = bboxStrokes(g.strokes!);
+        expect(bb.minY, ch).toBeGreaterThan(-stats.strokeWidth);
+        expect(bb.maxY, ch).toBeLessThan(stats.capHeight + stats.strokeWidth);
+      }
+    }
+  });
+  it('filled shapes are solid, outlines are not', () => {
+    const area = (ch: string) => glyphToContours(buildGlyph(ch, { ...DEFAULT_STATS }, 0.3, 7)).reduce((a, c) => a + signedArea(c.points), 0);
+    expect(area('■')).toBeGreaterThan(area('□') * 1.8);
+    expect(area('●')).toBeGreaterThan(area('○') * 1.8);
+    // a solid square: one contour, no counter
+    expect(glyphToContours(buildGlyph('■', { ...DEFAULT_STATS }, 0.3, 7)).length).toBe(1);
+  });
+  it('arrows get AGL glyph names', () => {
+    expect(glyphName('←', 0x2190)).toBe('arrowleft');
+    expect(glyphName('↑', 0x2191)).toBe('arrowup');
+    expect(glyphName('→', 0x2192)).toBe('arrowright');
+    expect(glyphName('↓', 0x2193)).toBe('arrowdown');
+    expect(glyphName('↔', 0x2194)).toBe('arrowboth');
+    expect(glyphName('⇒', 0x21d2)).toBe('arrowdblright');
+    expect(glyphName('✓', 0x2713)).toBe('uni2713');
   });
 });

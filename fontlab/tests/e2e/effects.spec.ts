@@ -118,6 +118,8 @@ test('import a font as strokes, then HTML type tester downloads', async ({ page 
   const text = fs.readFileSync(await html.path() as string, 'utf8');
   expect(text).toContain('@font-face');
   expect(text).toContain('font/otf;base64,');
+  // Allo-style specimen site sections
+  for (const id of ['hero', 'tester', 'glyphs', 'download']) expect(text).toContain(`id="${id}"`);
 });
 
 test('import shows the original; crisp preset keeps corners; in-app type tester edits live', async ({ page }) => {
@@ -165,4 +167,52 @@ test('Randomize fills the stack, Back restores it, SVG glyphs export one group p
   const text = fs.readFileSync(await svg.path() as string, 'utf8');
   expect(text).toContain('id="glyph-H"');
   expect(text).toContain('<g ');
+});
+
+test('XY pad: dragging changes two effect settings and keeps the sliders in sync', async ({ page }) => {
+  await seedH(page);
+  await preset(page, 'Twisted');
+  await page.locator('.fxlayer[data-type="twist"]').waitFor();
+  await page.locator('#preset').selectOption('');
+  // add a second slider effect so Y has something to drive
+  await page.locator('.addsel').first().selectOption('pinch');
+  await page.locator('[data-testid=btn-pad]').click();
+  await expect(page.locator('[data-testid=xypad]')).toBeVisible();
+  await expect(page.locator('[data-testid=pad-x] option')).toHaveCount(2);
+  const before = await page.evaluate(() => JSON.stringify((window as any).__fontlab.project.fx.groups[0].layers.map((l: any) => l.params)));
+  const pad = page.locator('[data-testid=pad]');
+  const box = (await pad.boundingBox())!;
+  await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.5);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width * 0.9, box.y + box.height * 0.1, { steps: 12 });
+  await page.mouse.up();
+  const after = await page.evaluate(() => (window as any).__fontlab.project.fx.groups[0].layers.map((l: any) => l.params));
+  expect(JSON.stringify(after)).not.toBe(before);
+  expect(after[0].degrees).toBeGreaterThan(100); // x at 90 % of −180..180
+  expect(after[1].amount).toBeGreaterThan(0.5); // y at 90 % of −1..1
+  await expect(page.locator('.fxlayer[data-type="twist"] .slider[data-key="degrees"] .val')).toHaveText(String(after[0].degrees));
+  await builtStatus(page);
+});
+
+test('Keep as alternate adds ss01 to the font; the preview chip toggles it; inspector shows U+ code', async ({ page }) => {
+  await seedH(page);
+  await expect(page.locator('.drawtitle .ucode')).toHaveText('U+0048');
+  await page.locator('[data-testid=chk-points]').check();
+  await page.locator('[data-testid=btn-keep-alt]').click();
+  await expect(page.locator('.cell[data-char="H"]')).toHaveClass(/hasalts/);
+  await expect(page.locator('.drawtitle')).toContainText('1 alternate');
+  const chip = page.locator('[data-testid=feature-chips] .chip[data-feature="ss01"]');
+  await expect(chip).toBeVisible();
+  await chip.click();
+  await expect(chip).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('.preview-out')).toHaveCSS('font-feature-settings', /ss01/);
+  await builtStatus(page);
+  const download = await exportOtf(page);
+  const buf = fs.readFileSync(await download.path() as string);
+  expect(buf.includes(Buffer.from('GSUB'))).toBe(true);
+  expect(buf.includes(Buffer.from('ss01'))).toBe(true);
+  // undo removes the alternate again
+  await page.mouse.click(5, 500);
+  await page.keyboard.press('Control+z');
+  await expect(page.locator('.cell[data-char="H"]')).not.toHaveClass(/hasalts/);
 });

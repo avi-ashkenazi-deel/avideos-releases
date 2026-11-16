@@ -25,6 +25,7 @@ export const BLOCKS: Block[] = [
   { id: 'latin', name: 'Latin', chars: CHARSET, sample: 'The quick brown fox jumps over the lazy dog 0123456789', always: true },
   { id: 'punct', name: 'Punctuation', chars: `.,;:!?¡¿'"‘’“”«»-–—_()[]{}/\\|@#&*+=<>~^%`, sample: 'Hello, world! (Really?) “Yes” — 100% #1 @home; a+b=c <ok> [x] {y} ~fin~' },
   { id: 'symbols', name: 'Symbols', chars: '$€£¥¢©®™°±×÷•…§¶†‡µ¬', sample: '$9 €8 £7 ¥6 ¢5 ©®™ 20° ±3 ×÷ • … §¶ †‡ µ¬' },
+  { id: 'ui', name: 'Interface symbols', chars: '←→↑↓↔⇒⌘⌥⇧⏎⌫✓✗★♥⚠●○■□▲▼', sample: 'Press ⌘ ⇧ → ✓ ★ ♥' },
   { id: 'accents', name: 'Latin accents', chars: ACCENTS, sample: 'Zürich café façade naïve crème brûlée Ærø Łódź Ñandú Þór Ştefan Ğül Őrség' },
   { id: 'cyrillic', name: 'Cyrillic', chars: range('А', 'я') + 'ЁёЄєІіЇїҐґЈј', sample: 'Съешь же ещё этих мягких французских булок, да выпей чаю' },
   { id: 'hebrew', name: 'Hebrew', chars: 'אבגדהוזחטיכךלםמןנסעףפץצקרשת', sample: 'דג סקרן שט בים מאוכזב ולפתע מצא חברה', rtl: true },

@@ -9,6 +9,8 @@ import { buildVarPayload, AXIS_DEFS, type VarAxisTag } from '../../export/variab
 import { buildVariableFont, buildStaticTtf } from '../../export/variable';
 import { contoursToPathD } from '../../export/specimen/svg';
 import { typeTesterHtml } from '../../export/specimen/html';
+import { specimenSiteHtml } from '../../export/specimen/site';
+import { projectCharset } from '../../core/charsets';
 import { openTypeTester } from './tester';
 import { BLOCKS } from '../../core/charsets';
 import { buildAll } from '../../pipeline/build';
@@ -86,6 +88,25 @@ export function downloadTesterHtml(): void {
   samples.unshift({ title: 'Preview', text: store.project.previewText, rtl: false });
   const html = typeTesterHtml({ name: store.project.name, otf: new Uint8Array(store.otf.slice(0)), variable: lastVariable ?? undefined, samples, metrics: store.project.metrics });
   downloadBlob(html, `${slug(store.project.name)}-type-tester.html`, 'text/html');
+}
+
+/** Allo-style one-page specimen site: hero, axes, features, tester, character set, download. */
+export function downloadSpecimenSite(): void {
+  if (!store.otf) { toast('Nothing built yet.'); return; }
+  const enabled = new Set([...store.project.blocks, 'latin']);
+  const samples = BLOCKS.filter((b) => enabled.has(b.id)).map((b) => ({ title: b.name, text: b.sample, rtl: !!b.rtl }));
+  const chars = projectCharset(store.project).filter((ch) => store.built[ch]?.contours.length);
+  const alts = store.project.alternates ?? {};
+  const alternateChars: Record<string, string> = {};
+  for (const [ch, list] of Object.entries(alts)) if (store.built[ch]?.contours.length) list.forEach((_, i) => { const t = `ss0${i + 1}`; alternateChars[t] = (alternateChars[t] ?? '') + ch; });
+  const features = [...Object.keys(alternateChars).sort()];
+  if ('0123456789'.split('').some((d) => chars.includes(d))) features.push('tnum');
+  if (chars.includes('-') && chars.includes('>') && chars.includes('→')) features.push('liga');
+  const html = specimenSiteHtml({
+    name: store.project.name, otf: new Uint8Array(store.otf.slice(0)), variable: lastVariable ?? undefined,
+    metrics: store.project.metrics, chars, samples, features, alternateChars, previewText: store.project.previewText,
+  });
+  downloadBlob(html, `${slug(store.project.name)}-specimen.html`, 'text/html');
 }
 
 export function openTester(): void {

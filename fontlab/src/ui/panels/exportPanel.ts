@@ -4,7 +4,7 @@ import { downloadProject, readProjectFile, saveLocal } from '../../project/stora
 import { newProject } from '../../core/glyph';
 import { showWelcome } from './welcome';
 import { scheduleBuild } from '../buildClient';
-import { downloadOtf, downloadSvgSpecimen, downloadTesterHtml, openTester, openAnimateDialog, openVariableDialog, downloadTtf, downloadSvgGlyphs } from './exportMore';
+import { downloadOtf, downloadSvgSpecimen, downloadSpecimenSite, openTester, openAnimateDialog, openVariableDialog, downloadTtf, downloadSvgGlyphs } from './exportMore';
 import { openLibrary, saveCurrent } from './libraryDialog';
 import { fingerprint, getCurrentId, setCurrentId, loadFont } from '../../project/library';
 
@@ -64,7 +64,7 @@ export function headerBar(): HTMLElement {
     { label: 'Animation (GIF / video)…', icon: 'film', onClick: openAnimateDialog, testid: 'menu-animate' },
     { label: 'SVG glyphs (one group per letter)', icon: 'image', onClick: downloadSvgGlyphs, hint: 'Every letter as a separate vector group, for Illustrator or Figma', separatorBefore: true, testid: 'menu-svg-glyphs' },
     { label: 'SVG specimen', icon: 'image', onClick: downloadSvgSpecimen, hint: 'A poster of your text as vector shapes', testid: 'menu-svg' },
-    { label: 'Type tester web page (.html)', icon: 'code', onClick: downloadTesterHtml, hint: 'Standalone page with the font embedded', testid: 'menu-html' },
+    { label: 'Specimen site (.html)', icon: 'code', onClick: downloadSpecimenSite, hint: 'A one-page site for your font: hero, features, type tester, every glyph and a download button', testid: 'menu-html' },
   ], { icon: 'download', testid: 'menu-export' });
 
   const bar = h('header', { class: 'topbar' },

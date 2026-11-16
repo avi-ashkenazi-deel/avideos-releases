@@ -77,6 +77,16 @@ tabs: **Draw**, **Photo or video**, **Font file**.
    and builds the missing letters from parametric recipes. Letters related to a
    seed are borrowed from it (`n → h m u`, `b → d p q`). **Mutation** adds
    randomness; **Re-roll** redraws one glyph; **Lock** protects a glyph.
+   **Keep as alternate** saves the current version of a letter as a
+   stylistic set (up to three: ss01, ss02, ss03) before you re-roll or
+   redraw it; the grid's right-click menu can swap an alternate in as the
+   main letter or remove them. The exported font carries them as real
+   OpenType stylistic sets, plus tabular figures (`tnum`) and arrow
+   ligatures (`->` `=>` `<-` `<->` become arrows when the Interface
+   symbols block is on); the chips under the preview switch them on.
+   The draw canvas doubles as an inspector: metric lines show their
+   values, the title shows the Unicode code, and **Points** shows the
+   built outline's points.
 4. **Stack effects.** Pick a **Preset** from the dropdown or add effects one
    by one from the menu, which is grouped with a playful name first and the
    plain one after it:
@@ -103,14 +113,18 @@ tabs: **Draw**, **Photo or video**, **Font file**.
    [LivingPath](https://github.com/ivangrozny/LivingPath). Every effect is
    seeded, so the same seed always gives the same font; **Mutate** nudges
    every slider; **Randomize** throws the dice (2 to 4 random effects, random
-   settings; **Back** returns to what you had).
+   settings; **Back** returns to what you had). **XY pad** (after
+   [Allo](https://allo.joshpuckett.me/)'s weight × roundness pad) maps any
+   two effect sliders to a square you drag in; the letter and its points
+   update as you drag.
    **Show original** turns every effect off for preview and export; it
    switches on by itself after a font import so you see the font as it is.
    **Advanced: sets** reveals effect sets: a second set starts again from the
    original glyph and is added to, cut from, intersected or xor'd with the
    result (the Halo preset is "inflated minus original").
 5. **Pick your scripts.** The **Character set** panel switches blocks on:
-   Latin (always), Punctuation, Symbols, Latin accents (Zürich, façade,
+   Latin (always), Punctuation, Symbols, Interface symbols (← → ↑ ↓ ↔ ⇒ ⌘ ⌥
+   ⇧ ⏎ ⌫ ✓ ✗ ★ ♥ ⚠ ● ○ ■ □ ▲ ▼, drawn in your font's stroke), Latin accents (Zürich, façade,
    Łódź…), Cyrillic and Hebrew. Accented letters are composed from *your*
    base letter plus a mark; Cyrillic look-alikes (А В Е К М Н О Р С Т Х …)
    are clones of your Latin glyphs and lowercase Cyrillic is small-capped from
@@ -132,8 +146,11 @@ tabs: **Draw**, **Photo or video**, **Font file**.
    on first use), `Animate…` (GIF / WebM sweeping one axis), `SVG glyphs`
    (every letter as its own vector group, for Illustrator or Figma; a
    single letter is available from the grid's right-click menu), `SVG
-   specimen` (an animated poster of your font) and `Tester .html` (a
-   self-contained HTML type tester with the font embedded).
+   specimen` (an animated poster of your font) and `Specimen site (.html)`
+   (an Allo-style one-page site with the font embedded: a colourful
+   multilingual hero, axis rows when a variable font was built, the
+   stylistic sets and other features, a type tester, every glyph with an
+   inspector, and a download button; host it anywhere).
    The first time FontLab opens with an empty font it shows a four-step
    intro; the info button in the header brings it back. Left and right
    arrow keys move between letters.

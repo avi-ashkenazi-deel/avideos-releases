@@ -11,12 +11,13 @@ import { cyrillic } from './cyrillic';
 import { punct } from './punct';
 import { symbols } from './symbols';
 import { hebrew } from './hebrew';
+import { ui } from './ui';
 
 export type { Recipe, RecipeCtx, RecipeResult, Frame } from './common';
 export { frame, finish, param, rec } from './common';
-export { upper, lower, digits, latinExtra, cyrillic, punct, symbols, hebrew };
+export { upper, lower, digits, latinExtra, cyrillic, punct, symbols, hebrew, ui };
 
-export const recipes: Record<string, Recipe> = { ...upper, ...lower, ...digits, ...latinExtra, ...cyrillic, ...punct, ...symbols, ...hebrew };
+export const recipes: Record<string, Recipe> = { ...upper, ...lower, ...digits, ...latinExtra, ...cyrillic, ...punct, ...symbols, ...hebrew, ...ui };
 
 export function getRecipe(char: string): Recipe | undefined {
   return recipes[char];
