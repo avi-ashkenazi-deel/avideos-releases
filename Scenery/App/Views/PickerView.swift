@@ -68,24 +68,31 @@ struct PickerView: View {
             DisplayMapView(
                 displays: model.displays,
                 previews: displayPreviews,
+                spannedPreview: spannedPreview,
                 highlighted: highlightedDisplays,
-                isInteractive: !model.selection.sameOnAllDisplays && model.lock == nil
+                isInteractive: model.selection.layout == .individual && model.lock == nil
             ) { display in
                 model.focusedDisplayID = display.id
             }
 
-            Toggle("Same wallpaper on every display", isOn: Binding(
-                get: { model.selection.sameOnAllDisplays },
-                set: { model.setSameOnAllDisplays($0) }
-            ))
-            .toggleStyle(.switch)
+            Picker("Displays", selection: Binding(
+                get: { model.selection.layout },
+                set: { model.setLayout($0) }
+            )) {
+                Text("Same on each").tag(DisplayLayout.same)
+                Text("Span across").tag(DisplayLayout.span)
+                Text("One per display").tag(DisplayLayout.individual)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
             .controlSize(.small)
             .disabled(model.lock != nil)
 
-            if !model.selection.sameOnAllDisplays, model.lock == nil, let name = focusedDisplayName {
-                Text("Choosing for \(name)")
+            if let hint = layoutHint {
+                Text(hint)
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
@@ -133,6 +140,24 @@ struct PickerView: View {
     private var focusedDisplayName: String? {
         let id = model.focusedDisplayID ?? model.displays.first?.id
         return model.displays.first { $0.id == id }?.name
+    }
+
+    private var layoutHint: String? {
+        switch model.selection.layout {
+        case .same:
+            return nil
+        case .span:
+            return "One wallpaper flows across your displays, following their arrangement in System Settings."
+        case .individual:
+            guard model.lock == nil, let name = focusedDisplayName else { return nil }
+            return "Choosing for \(name)"
+        }
+    }
+
+    /// The single wallpaper drawn across the whole map, when spanning.
+    private var spannedPreview: NSImage? {
+        guard model.spanCanvas != nil, let id = model.resolutions.values.first?.wallpaper.id else { return nil }
+        return model.thumbnails[id]
     }
 
     private var highlightedDisplays: Set<String> {

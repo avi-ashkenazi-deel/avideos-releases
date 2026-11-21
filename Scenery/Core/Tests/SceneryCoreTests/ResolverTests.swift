@@ -134,6 +134,33 @@ final class ResolverTests: XCTestCase {
         XCTAssertEqual(decoded, selection)
     }
 
+    func testSpanLayoutSharesOneChoiceAcrossDisplays() {
+        var selection = SelectionState()
+        selection.select("a", forDisplay: nil)
+        selection.layout = .span
+        XCTAssertTrue(selection.sameOnAllDisplays)
+        XCTAssertEqual(selection.layout, .span)
+
+        let result = resolve(catalog(), selection)
+        XCTAssertEqual(result[left]?.wallpaper.id, "a")
+        XCTAssertEqual(result[right]?.wallpaper.id, "a")
+
+        selection.layout = .individual
+        XCTAssertFalse(selection.spanAcrossDisplays)
+        XCTAssertEqual(selection.layout, .individual)
+        selection.layout = .same
+        XCTAssertEqual(selection.layout, .same)
+    }
+
+    func testChoicesSavedByAnOlderVersionStillLoad() throws {
+        let saved = Data(#"{"sameOnAllDisplays":false,"sharedWallpaperID":"a","perDisplay":{"display-right":"c"}}"#.utf8)
+        let decoded = try JSONDecoder().decode(SelectionState.self, from: saved)
+        XCTAssertEqual(decoded.layout, .individual)
+        XCTAssertFalse(decoded.spanAcrossDisplays)
+        XCTAssertEqual(decoded.wallpaperID(forDisplay: right), "c")
+        XCTAssertEqual(try JSONDecoder().decode(SelectionState.self, from: Data("{}".utf8)), SelectionState())
+    }
+
     func testEmptyCatalogResolvesNothing() {
         XCTAssertTrue(resolve(.empty).isEmpty)
     }

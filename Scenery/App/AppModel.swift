@@ -137,16 +137,11 @@ final class AppModel: ObservableObject {
         recompute()
     }
 
-    func setSameOnAllDisplays(_ same: Bool) {
-        guard selection.sameOnAllDisplays != same else { return }
-        if same {
-            // Keep what is on the display being looked at.
-            let keepFrom = focusedDisplayID ?? displays.first?.id
-            if let keepFrom, let id = selection.wallpaperID(forDisplay: keepFrom) {
-                selection.sharedWallpaperID = id
-            }
-            selection.perDisplay.removeAll()
-        } else {
+    func setLayout(_ layout: DisplayLayout) {
+        let previous = selection.layout
+        guard previous != layout, lock == nil else { return }
+
+        if layout == .individual {
             // Start from what each display is showing right now.
             for display in displays {
                 if let id = resolutions[display.id]?.wallpaper.id {
@@ -154,10 +149,23 @@ final class AppModel: ObservableObject {
                 }
             }
             focusedDisplayID = focusedDisplayID ?? displays.first?.id
+        } else if previous == .individual {
+            // Keep what is on the display being looked at.
+            let keepFrom = focusedDisplayID ?? displays.first?.id
+            if let keepFrom, let id = selection.wallpaperID(forDisplay: keepFrom) {
+                selection.sharedWallpaperID = id
+            }
+            selection.perDisplay.removeAll()
         }
-        selection.sameOnAllDisplays = same
+        selection.layout = layout
         Prefs.selection = selection
         recompute()
+    }
+
+    /// The area one wallpaper is stretched over, when it spans the displays.
+    var spanCanvas: CGRect? {
+        guard selection.layout == .span else { return nil }
+        return SpanGeometry.canvas(for: displays.map(\.frame))
     }
 
     /// The wallpaper to highlight in the grid.
@@ -271,26 +279,45 @@ final class AppModel: ObservableObject {
 
         scheduleBoundaryTimer(after: now)
 
+        let canvas = spanCanvas
+        var frames: [String: CGRect] = [:]
+        for display in displays {
+            frames[display.id] = display.frame
+        }
+
         applyTask?.cancel()
         applyTask = Task { [weak self] in
-            await self?.materializeAndApply(resolved)
+            await self?.materializeAndApply(resolved, canvas: canvas, frames: frames)
         }
     }
 
     /// Makes sure the needed files are on disk, then hands them to the engine.
-    private func materializeAndApply(_ resolved: [String: Resolution]) async {
+    ///
+    /// `canvas` is set when one wallpaper spans the displays; each display
+    /// then gets its own slice of the still, and its own part of the video.
+    private func materializeAndApply(
+        _ resolved: [String: Resolution],
+        canvas: CGRect?,
+        frames: [String: CGRect]
+    ) async {
         let videoDisabled = Prefs.disableVideo
         var assignments: [String: WallpaperEngine.Assignment] = [:]
 
         for (displayID, resolution) in resolved {
             let wallpaper = resolution.wallpaper
             do {
-                let still = try await assets.still(for: wallpaper)
+                var still = try await assets.still(for: wallpaper)
                 var video: URL?
                 if wallpaper.kind == .video, !videoDisabled {
                     video = try await assets.file(for: wallpaper)
                 }
-                assignments[displayID] = WallpaperEngine.Assignment(stillURL: still, videoURL: video)
+                if let canvas, let frame = frames[displayID],
+                   let slice = try? await assets.slice(of: still, canvas: canvas, display: frame) {
+                    // If slicing fails the whole still is used, which is
+                    // still an approved picture, just not a continuous one.
+                    still = slice
+                }
+                assignments[displayID] = WallpaperEngine.Assignment(stillURL: still, videoURL: video, canvas: canvas)
             } catch {
                 // Leave this display as it is rather than blanking it.
                 assignments[displayID] = engine.assignment(forDisplay: displayID)

@@ -10,7 +10,7 @@ HearIt app in the rest of this repository, so it can move to its own repository
 unchanged.
 
 > **Status:** first iteration, written without access to a Mac. The rules
-> engine in `Core/` is unit-tested (`swift test`, 19 tests). The app layer in
+> engine in `Core/` is unit-tested (`swift test`, 29 tests). The app layer in
 > `App/` has only been syntax-checked, **not compiled or run** — expect a few
 > small fixes on the first build in Xcode.
 
@@ -19,8 +19,11 @@ unchanged.
 - **Short approved list.** People pick from at most 10 wallpapers. Nothing else
   can be chosen.
 - **Images and videos.** Videos loop silently behind the desktop icons.
-- **Per monitor.** A miniature of the real desk layout shows every display;
-  use one wallpaper everywhere or a different one on each.
+- **Multi-monitor aware.** A miniature of the real desk layout shows every
+  display. Three layouts: the same wallpaper on each display, a different one
+  per display, or **one wallpaper spanning all of them** as a single picture.
+  Spanning works for images and for video, and follows the arrangement set in
+  System Settings, including displays of different sizes or stacked vertically.
 - **IT stays in control.** IT publishes the list, can schedule takeovers for
   seasons and events ahead of time, and can pin a wallpaper on every Mac on
   demand. When a takeover ends, each person's own choice comes back.
@@ -51,6 +54,17 @@ Requires macOS 14 or later.
 3. List them in `DemoCatalog/manifest.json`.
 4. Run `swift test` in `Core/` — it fails if the manifest has a mistake or
    points at a missing file.
+
+## Artwork that spans well
+
+With two displays side by side the canvas is roughly twice as wide as it is
+tall, and the wallpaper is scaled to fill it, cropping what does not fit.
+
+- A normal 16:10 wallpaper works, but loses about a third of its height to
+  cropping and is enlarged. Wide artwork looks far better: around 7680×2160
+  for images and 3840×1080 or larger for video.
+- Keep the important part of the picture away from the centre line, where the
+  gap between two monitors falls.
 
 ## Demo the IT controls
 
@@ -97,6 +111,14 @@ Who decides the wallpaper, strongest first:
 - **Video is a window, not a system wallpaper.** macOS has no public video
   wallpaper setting, so the lock screen and Mission Control show the video's
   still frame.
+- **Spanned video sync is unproven on real hardware.** Each display has its
+  own player; all of them follow one clock and start at the same instant, which
+  should keep them frame-aligned, but this has not been watched on a real
+  multi-monitor desk yet. If a seam is visible, that is the first place to look
+  (`WallpaperEngine.startTogether`).
+- **Spanning ignores bezels.** The picture continues from the edge of one panel
+  to the edge of the next, as macOS itself does; the physical gap between
+  monitors is not compensated for.
 - **Other Spaces update when visited.** macOS keeps one wallpaper per Space and
   only lets an app set the visible one.
 - **Distribution.** For other people's Macs the app must be signed with a

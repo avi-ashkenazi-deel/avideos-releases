@@ -47,6 +47,11 @@ Start from [`manifest.example.json`](manifest.example.json).
 At most 10 wallpapers are shown in the picker. Extra selectable entries are
 hidden, in manifest order.
 
+People with more than one display can choose to span a wallpaper across all of
+them. Any wallpaper can be spanned; wide artwork (about 7680×2160 for images,
+3840×1080 or larger for video) looks best. A takeover follows each person's
+layout, so it spans for the people who have chosen spanning.
+
 To replace artwork, publish it under a **new file name** and update the `url`.
 Macs keep a downloaded file for as long as its URL stays the same.
 

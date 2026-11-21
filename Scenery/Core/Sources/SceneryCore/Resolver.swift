@@ -1,17 +1,61 @@
 import Foundation
 
+/// How wallpapers are laid out when more than one display is connected.
+public enum DisplayLayout: String, CaseIterable, Sendable {
+    /// Every display shows the whole wallpaper.
+    case same
+    /// One wallpaper stretches across all displays as a single canvas.
+    case span
+    /// Each display has its own wallpaper.
+    case individual
+}
+
 /// What a person picked. Stored on their Mac.
 public struct SelectionState: Codable, Equatable, Sendable {
     /// When `true`, one choice drives every display.
     public var sameOnAllDisplays: Bool
+    /// When `true` (and one choice drives every display), that wallpaper is
+    /// stretched across the displays instead of repeated on each.
+    public var spanAcrossDisplays: Bool
     public var sharedWallpaperID: String?
     /// Display identifier -> wallpaper id, used when displays differ.
     public var perDisplay: [String: String]
 
-    public init(sameOnAllDisplays: Bool = true, sharedWallpaperID: String? = nil, perDisplay: [String: String] = [:]) {
+    public init(
+        sameOnAllDisplays: Bool = true,
+        spanAcrossDisplays: Bool = false,
+        sharedWallpaperID: String? = nil,
+        perDisplay: [String: String] = [:]
+    ) {
         self.sameOnAllDisplays = sameOnAllDisplays
+        self.spanAcrossDisplays = spanAcrossDisplays
         self.sharedWallpaperID = sharedWallpaperID
         self.perDisplay = perDisplay
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case sameOnAllDisplays, spanAcrossDisplays, sharedWallpaperID, perDisplay
+    }
+
+    /// Every field is optional on disk, so choices saved by an older version
+    /// of the app keep working when a new field is added.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        sameOnAllDisplays = try container.decodeIfPresent(Bool.self, forKey: .sameOnAllDisplays) ?? true
+        spanAcrossDisplays = try container.decodeIfPresent(Bool.self, forKey: .spanAcrossDisplays) ?? false
+        sharedWallpaperID = try container.decodeIfPresent(String.self, forKey: .sharedWallpaperID)
+        perDisplay = try container.decodeIfPresent([String: String].self, forKey: .perDisplay) ?? [:]
+    }
+
+    public var layout: DisplayLayout {
+        get {
+            guard sameOnAllDisplays else { return .individual }
+            return spanAcrossDisplays ? .span : .same
+        }
+        set {
+            sameOnAllDisplays = newValue != .individual
+            spanAcrossDisplays = newValue == .span
+        }
     }
 
     /// The wallpaper id this person wants on `displayID`, if they chose one.

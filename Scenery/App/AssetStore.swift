@@ -18,6 +18,7 @@ actor AssetStore {
         case tooLarge
         case checksumMismatch(String)
         case posterFailed
+        case sliceFailed
 
         var errorDescription: String? {
             switch self {
@@ -31,6 +32,8 @@ actor AssetStore {
                 return "The wallpaper \"\(id)\" does not match its approved checksum and was not used."
             case .posterFailed:
                 return "A still frame could not be created for a video wallpaper."
+            case .sliceFailed:
+                return "A wallpaper could not be split across the displays."
             }
         }
     }
@@ -40,13 +43,16 @@ actor AssetStore {
 
     private let assetsDirectory: URL
     private let postersDirectory: URL
+    private let slicesDirectory: URL
     private var downloads: [URL: Task<URL, Error>] = [:]
 
     init(supportDirectory: URL) {
         assetsDirectory = supportDirectory.appendingPathComponent("Assets", isDirectory: true)
         postersDirectory = supportDirectory.appendingPathComponent("Posters", isDirectory: true)
+        slicesDirectory = supportDirectory.appendingPathComponent("Slices", isDirectory: true)
         try? FileManager.default.createDirectory(at: assetsDirectory, withIntermediateDirectories: true)
         try? FileManager.default.createDirectory(at: postersDirectory, withIntermediateDirectories: true)
+        try? FileManager.default.createDirectory(at: slicesDirectory, withIntermediateDirectories: true)
     }
 
     // MARK: - Public
@@ -71,6 +77,39 @@ actor AssetStore {
         }
     }
 
+    /// One display's part of a still that is stretched across `canvas`.
+    ///
+    /// macOS sets wallpapers one display at a time, so spanning a picture
+    /// means giving each display its own cropped copy. The copies are cached
+    /// by what they were cut from and how the displays were arranged.
+    func slice(of still: URL, canvas: CGRect, display: CGRect) throws -> URL {
+        let recipe = "\(still.path)|\(canvas.debugDescription)|\(display.debugDescription)"
+        let digest = SHA256.hash(data: Data(recipe.utf8))
+        let name = digest.prefix(12).map { String(format: "%02x", $0) }.joined()
+        let slice = slicesDirectory.appendingPathComponent(name + ".jpg")
+
+        if FileManager.default.fileExists(atPath: slice.path) {
+            // Marks the slice as still in use, so `prune` leaves it alone.
+            try? FileManager.default.setAttributes([.modificationDate: Date()], ofItemAtPath: slice.path)
+            return slice
+        }
+
+        guard let source = CGImageSourceCreateWithURL(still as CFURL, nil),
+              let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
+            throw AssetError.sliceFailed
+        }
+        let crop = SpanGeometry.cropRect(
+            imageSize: CGSize(width: image.width, height: image.height),
+            canvas: canvas,
+            display: display
+        )
+        guard crop.width >= 1, crop.height >= 1, let cropped = image.cropping(to: crop) else {
+            throw AssetError.sliceFailed
+        }
+        try writeJPEG(cropped, to: slice, in: slicesDirectory, failure: .sliceFailed)
+        return slice
+    }
+
     /// Deletes downloaded files that the current catalog no longer mentions.
     func prune(keeping catalog: Catalog) {
         var keep: Set<String> = []
@@ -91,6 +130,16 @@ actor AssetStore {
             // tiny, so only posters of removed downloads are cleaned up.
             if stem.hasPrefix("dl-"), !keptStems.contains(String(stem.dropFirst(3))) {
                 try? fileManager.removeItem(at: postersDirectory.appendingPathComponent(name))
+            }
+        }
+        // Slices are touched every time they are used, so anything untouched
+        // for a month belongs to a retired wallpaper or an old desk setup.
+        let cutoff = Date().addingTimeInterval(-30 * 24 * 60 * 60)
+        for name in (try? fileManager.contentsOfDirectory(atPath: slicesDirectory.path)) ?? [] {
+            let path = slicesDirectory.appendingPathComponent(name).path
+            let modified = (try? fileManager.attributesOfItem(atPath: path))?[.modificationDate] as? Date
+            if let modified, modified < cutoff {
+                try? fileManager.removeItem(atPath: path)
             }
         }
     }
@@ -179,24 +228,30 @@ actor AssetStore {
         generator.requestedTimeToleranceAfter = .zero
         let frame = try await generator.image(at: .zero).image
 
-        // Written to a scratch file first and then moved into place, so a
-        // half-written poster can never be picked up as a wallpaper.
-        let scratch = postersDirectory.appendingPathComponent(UUID().uuidString + ".tmp")
+        try writeJPEG(frame, to: poster, in: postersDirectory, failure: .posterFailed)
+        return poster
+    }
+
+    // MARK: - Writing images
+
+    /// Written to a scratch file first and then moved into place, so a
+    /// half-written image can never be picked up as a wallpaper.
+    private func writeJPEG(_ image: CGImage, to file: URL, in directory: URL, failure: AssetError) throws {
+        let scratch = directory.appendingPathComponent(UUID().uuidString + ".tmp")
         defer { try? FileManager.default.removeItem(at: scratch) }
         guard let destination = CGImageDestinationCreateWithURL(
             scratch as CFURL, UTType.jpeg.identifier as CFString, 1, nil
         ) else {
-            throw AssetError.posterFailed
+            throw failure
         }
         let options = [kCGImageDestinationLossyCompressionQuality: 0.92] as CFDictionary
-        CGImageDestinationAddImage(destination, frame, options)
+        CGImageDestinationAddImage(destination, image, options)
         guard CGImageDestinationFinalize(destination) else {
-            throw AssetError.posterFailed
+            throw failure
         }
-        if !FileManager.default.fileExists(atPath: poster.path) {
-            try FileManager.default.moveItem(at: scratch, to: poster)
+        if !FileManager.default.fileExists(atPath: file.path) {
+            try FileManager.default.moveItem(at: scratch, to: file)
         }
-        return poster
     }
 }
 
