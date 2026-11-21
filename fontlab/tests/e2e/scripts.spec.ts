@@ -57,7 +57,7 @@ test('accented letters follow the drawn base letter', async ({ page }) => {
   await drawStroke(page, [[0.3, 0.58], [0.6, 0.58], [0.58, 0.45], [0.45, 0.42], [0.32, 0.5], [0.33, 0.66], [0.45, 0.72], [0.6, 0.68]]);
   await page.getByRole('button', { name: /Generate the rest/ }).click();
   await expect(page.locator('.cell[data-char="é"]')).not.toHaveClass(/empty/, { timeout: 60000 });
-  await expect.poll(() => page.locator('.status').textContent(), { timeout: 60000 }).toMatch(/built \d+ glyphs/);
+  await expect.poll(() => page.locator('.status').textContent(), { timeout: 60000 }).toMatch(/built [1-9]\d* glyphs/);
   const before = await page.locator('.cell[data-char="é"] canvas').screenshot();
   // draw over e again: é must update
   await page.locator('.chbtn[data-ch="e"]').click();

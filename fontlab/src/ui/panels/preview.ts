@@ -4,6 +4,7 @@ import { PREVIEW_FAMILY } from '../preview';
 import { samplePreview } from '../../core/charsets';
 import { scheduleBuild } from '../buildClient';
 import { availableFeatures, featureCss } from '../alternates';
+import { writeOnPlan, drawWriteOnFrame } from '../../export/specimen/writeOn';
 
 export function previewPanel(): HTMLElement {
   const text = h('textarea', { class: 'preview-input', rows: 2, value: store.project.previewText, placeholder: 'Type to preview…' });
@@ -31,6 +32,54 @@ export function previewPanel(): HTMLElement {
     waiting = true;
     store.project.fx.time = Math.round((store.project.fx.time + 0.03) * 1000) / 1000;
     scheduleBuild(0, { previewOnly: true });
+  };
+  // Write on: the preview text draws itself stroke by stroke on a canvas laid over `out`
+  const stage = h('div', { class: 'preview-stage' });
+  let woStop: (() => void) | null = null;
+  const hasBuilt = () => Object.values(store.built).some((b) => b.contours.length);
+  const WO_TITLE = 'Watch your letters write themselves, stroke by stroke';
+  const writeOnBtn = iconButton('play', 'Write on', () => { if (woStop) woStop(); else startWriteOn(); }, { title: WO_TITLE, testid: 'btn-writeon' });
+  writeOnBtn.setAttribute('aria-pressed', 'false');
+  const syncWriteOn = () => { const ok = hasBuilt(); writeOnBtn.disabled = !ok && !woStop; writeOnBtn.title = ok ? WO_TITLE : 'Draw or import some letters first, then watch them write themselves'; };
+  store.subscribe((ev) => { if (ev === 'built' || ev === 'project:loaded') syncWriteOn(); });
+  syncWriteOn();
+  const startWriteOn = () => {
+    if (!hasBuilt()) return;
+    const fontPx = parseFloat(out.style.fontSize) || 64;
+    const plan = writeOnPlan(store.project.previewText, { metrics: store.project.metrics, glyphs: store.project.glyphs, built: store.built, lineGap: 1.15, maxDurationMs: 9000 });
+    if (!plan.items.length) return;
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const cssW = out.offsetWidth, cssH = out.offsetHeight;
+    const canvas = h('canvas', { class: 'writeon-canvas', width: Math.max(1, Math.round(cssW * dpr)), height: Math.max(1, Math.round(cssH * dpr)), 'aria-hidden': 'true',
+      style: { left: out.offsetLeft + 'px', top: out.offsetTop + 'px', width: cssW + 'px', height: cssH + 'px' } });
+    stage.append(canvas);
+    out.style.visibility = 'hidden';
+    const ctx = canvas.getContext('2d')!;
+    const opts = { pad: 14 * dpr, maxScale: (fontPx / 1000) * dpr, align: 'start' as const };
+    const HOLD = 800;
+    let raf = 0;
+    const t0 = performance.now();
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') woStop?.(); };
+    woStop = () => {
+      cancelAnimationFrame(raf);
+      document.removeEventListener('keydown', onKey);
+      canvas.remove();
+      out.style.visibility = '';
+      woStop = null;
+      writeOnBtn.classList.remove('primary');
+      writeOnBtn.setAttribute('aria-pressed', 'false');
+      syncWriteOn();
+    };
+    document.addEventListener('keydown', onKey);
+    writeOnBtn.classList.add('primary');
+    writeOnBtn.setAttribute('aria-pressed', 'true');
+    const frame = () => {
+      const t = performance.now() - t0;
+      drawWriteOnFrame(ctx, plan, t, opts);
+      if (t >= plan.durationMs + HOLD) { woStop?.(); return; }
+      raf = requestAnimationFrame(frame);
+    };
+    frame();
   };
   // OpenType feature chips (stylistic sets, tabular figures)
   const chips = h('div', { class: 'featchips', 'data-testid': 'feature-chips' });
@@ -64,6 +113,6 @@ export function previewPanel(): HTMLElement {
   });
   return h('section', { class: 'panel preview' },
     h('h2', {}, 'Preview', help('A real font built from your letters, rendered by the browser. Click the text to edit it.')),
-    out, chips, h('div', { class: 'row' }, size, sample, livingBtn), h('details', { class: 'plain', 'data-testid': 'preview-plain' }, h('summary', {}, 'Edit as plain text'), text), status,
+    (stage.append(out), stage), chips, h('div', { class: 'row' }, size, sample, livingBtn, writeOnBtn), h('details', { class: 'plain', 'data-testid': 'preview-plain' }, h('summary', {}, 'Edit as plain text'), text), status,
   );
 }

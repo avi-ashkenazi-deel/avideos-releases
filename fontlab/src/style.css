@@ -231,3 +231,7 @@ details.plain summary { color: var(--muted); font-size: 12px; cursor: pointer; m
 
 /* pen tool (draw tab) */
 canvas.editor.pen { cursor: crosshair; outline: 2px solid var(--accent); outline-offset: -1px; }
+
+/* write-on animation overlay (preview panel) */
+.preview-stage { position: relative; }
+.writeon-canvas { position: absolute; display: block; border-radius: 10px; pointer-events: none; }

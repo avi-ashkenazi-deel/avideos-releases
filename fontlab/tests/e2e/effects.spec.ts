@@ -15,7 +15,7 @@ async function drawStroke(page: Page, pts: [number, number][]) {
   for (const [x, y] of pts.slice(1)) await page.mouse.move(box.x + box.width * x, box.y + box.height * y, { steps: 8 });
   await page.mouse.up();
 }
-const builtStatus = (page: Page) => expect.poll(() => page.locator('.status').textContent(), { timeout: 60000 }).toMatch(/built \d+ glyphs/);
+const builtStatus = (page: Page) => expect.poll(() => page.locator('.status').textContent(), { timeout: 60000 }).toMatch(/built [1-9]\d* glyphs/);
 const thumb = (page: Page, ch: string) => page.locator(`.cell[data-char="${ch}"] canvas`).screenshot();
 
 async function seedH(page: Page) {
@@ -215,4 +215,45 @@ test('Keep as alternate adds ss01 to the font; the preview chip toggles it; insp
   await page.mouse.click(5, 500);
   await page.keyboard.press('Control+z');
   await expect(page.locator('.cell[data-char="H"]')).not.toHaveClass(/hasalts/);
+});
+
+test('Write on: the preview writes itself on a canvas overlay, then hands back the text', async ({ page }) => {
+  await seedH(page);
+  await openPlain(page);
+  await page.locator('.preview-input').fill('HH');
+  const btn = page.locator('[data-testid=btn-writeon]');
+  await expect(btn).toBeEnabled();
+  await btn.click();
+  await expect(page.locator('canvas.writeon-canvas')).toBeVisible();
+  await expect(btn).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('.preview-out')).toHaveCSS('visibility', 'hidden');
+  await expect(page.locator('canvas.writeon-canvas')).toHaveCount(0, { timeout: 10000 });
+  await expect(btn).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.locator('.preview-out')).toHaveCSS('visibility', 'visible');
+  // Escape stops early
+  await btn.click();
+  await expect(page.locator('canvas.writeon-canvas')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('canvas.writeon-canvas')).toHaveCount(0);
+});
+
+test('Animate dialog defaults to Write on and exports an animated SVG', async ({ page }) => {
+  await seedH(page);
+  await page.locator('[data-testid=menu-export]').click();
+  await page.locator('[data-testid=menu-animate]').click();
+  const sel = page.locator('[data-testid=animate-sweep]');
+  await expect(sel).toHaveValue('writeon');
+  await page.locator('.modal input.labels').fill('HH');
+  await page.getByRole('button', { name: 'Preview frames' }).click();
+  await expect(page.locator('.modal .status')).toContainText('frames');
+  const [svg] = await Promise.all([page.waitForEvent('download'), page.locator('[data-testid=btn-writeon-svg]').click()]);
+  expect(svg.suggestedFilename()).toMatch(/-write-on\.svg$/);
+  const text = fs.readFileSync(await svg.path() as string, 'utf8');
+  expect(text).toContain('stroke-dashoffset');
+  expect(text).toContain('<mask');
+  // other sweep modes still work and hide the SVG button
+  await sel.selectOption('seed');
+  await expect(page.locator('[data-testid=btn-writeon-svg]')).toBeHidden();
+  await page.getByRole('button', { name: 'Preview frames' }).click();
+  await expect(page.locator('.modal .status')).toHaveText('Previewed last frame', { timeout: 30000 });
 });

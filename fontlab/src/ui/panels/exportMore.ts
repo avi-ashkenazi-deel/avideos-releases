@@ -17,6 +17,7 @@ import { buildAll } from '../../pipeline/build';
 import type { FontProject } from '../../core/glyph';
 import { ensureLayer } from '../../fx/stack';
 import { FX } from '../../fx/registry';
+import { writeOnPlan, drawWriteOnFrame, writeOnSvg } from '../../export/specimen/writeOn';
 
 let lastVariable: { bytes: Uint8Array; axes: { tag: string; name: string; min: number; default: number; max: number }[] } | null = null;
 
@@ -116,16 +117,41 @@ export function openTester(): void {
 
 export { openAnimateDialog, openVariableDialog };
 
-/** Frames = a sweep through DNA space (seed + axis) rendered to canvas, encoded as GIF or WebM. */
+/** Frames = a write-on reveal (stroke by stroke) or a sweep through DNA space (seed + axis), rendered to canvas, encoded as GIF or WebM. */
 function openAnimateDialog() {
   const dlg = h('dialog', { class: 'modal' });
   const text = h('input', { type: 'text', value: store.project.previewText.split('\n')[0].slice(0, 24) || 'Funky', class: 'labels' });
-  const axisSel = h('select', {}, h('option', { value: 'time' }, 'time (living drift, seamless)'), h('option', { value: 'seed' }, 'seed'), ...['wobble', 'melt', 'weight', 'glitch', 'erode', 'bounce', 'jitter', 'inflate', 'blob', 'inkNoise', 'morph', 'pixel'].map((a) => h('option', { value: a }, FX[a]?.def.label ?? a)));
-  let frames = 18;
+  const axisSel = h('select', {}, h('option', { value: 'writeon' }, 'Write on (stroke by stroke)'), h('option', { value: 'time' }, 'time (living drift, seamless)'), h('option', { value: 'seed' }, 'seed'), ...['wobble', 'melt', 'weight', 'glitch', 'erode', 'bounce', 'jitter', 'inflate', 'blob', 'inkNoise', 'morph', 'pixel'].map((a) => h('option', { value: a }, FX[a]?.def.label ?? a)));
+  axisSel.value = 'writeon';
+  axisSel.dataset.testid = 'animate-sweep';
+  let frames = 18, woFrames = 48;
+  const WO_HOLD = 1200;
+  const isWriteOn = () => axisSel.value === 'writeon';
   const framesRow = slider('Frames', { min: 6, max: 48, step: 1, value: frames, onInput: (v) => (frames = v), format: (v) => String(v) });
+  const woFramesRow = slider('Frames', { min: 6, max: 120, step: 1, value: woFrames, onInput: (v) => (woFrames = v), format: (v) => String(v) });
   const canvas = h('canvas', { width: 960, height: 360, style: { width: '100%', background: '#fff', borderRadius: '8px' } });
   const status = h('div', { class: 'status' });
+  const intro = h('p', {});
+  const plan = () => writeOnPlan(text.value, { metrics: store.project.metrics, glyphs: store.project.glyphs, built: store.built });
+  /** write-on: total cycle (animation + hold) for the current text */
+  let woCycle = 0;
+  let playTimer = 0;
+  const stopPlay = () => { if (playTimer) { clearInterval(playTimer); playTimer = 0; } };
+  const renderWriteOn = (): HTMLCanvasElement[] => {
+    const pl = plan();
+    woCycle = pl.durationMs + WO_HOLD;
+    const out: HTMLCanvasElement[] = [];
+    for (let i = 0; i < woFrames; i++) {
+      const c = document.createElement('canvas'); c.width = canvas.width; c.height = canvas.height;
+      drawWriteOnFrame(c.getContext('2d')!, pl, (i * woCycle) / woFrames);
+      out.push(c);
+    }
+    canvas.getContext('2d')!.drawImage(out[out.length - 1], 0, 0);
+    return out;
+  };
   const renderFrames = (): HTMLCanvasElement[] => {
+    stopPlay();
+    if (isWriteOn()) return renderWriteOn();
     const out: HTMLCanvasElement[] = [];
     const chars = [...new Set(text.value.replace(/\s/g, ''))];
     for (let i = 0; i < frames; i++) {
@@ -148,14 +174,16 @@ function openAnimateDialog() {
     }
     return out;
   };
+  /** delay per frame: write-on plays in real time, sweeps at the fixed 70 ms */
+  const frameDelay = (n: number) => (isWriteOn() ? Math.max(20, Math.round(woCycle / Math.max(1, n))) : 70);
   const gifBtn = button('Download GIF', async () => {
     status.textContent = 'Rendering frames…';
     await new Promise((r) => setTimeout(r, 20));
     try {
       const fr = renderFrames();
       status.textContent = 'Encoding GIF…';
-      const blob = await encodeGif(fr, 70, (p) => (status.textContent = `Encoding GIF… ${(p * 100).toFixed(0)}%`));
-      downloadBlob(blob, `${slug(store.project.name)}.gif`, 'image/gif');
+      const blob = await encodeGif(fr, frameDelay(fr.length), (p) => (status.textContent = `Encoding GIF… ${(p * 100).toFixed(0)}%`));
+      downloadBlob(blob, `${slug(store.project.name)}${isWriteOn() ? '-write-on' : ''}.gif`, 'image/gif');
       status.textContent = `GIF ready (${(blob.size / 1024).toFixed(0)} KB)`;
     } catch (e) { status.textContent = 'GIF failed: ' + (e as Error).message; }
   }, 'primary');
@@ -166,17 +194,48 @@ function openAnimateDialog() {
       const fr = renderFrames();
       status.textContent = 'Recording…';
       const ctx = canvas.getContext('2d')!;
-      const blob = await recordWebm(canvas, (i) => ctx.drawImage(fr[i % fr.length], 0, 0), fr.length * 2, 14);
-      downloadBlob(blob, `${slug(store.project.name)}.webm`, 'video/webm');
+      const wo = isWriteOn();
+      const blob = wo
+        ? await recordWebm(canvas, (i) => ctx.drawImage(fr[i % fr.length], 0, 0), fr.length, Math.max(1, Math.round(1000 / frameDelay(fr.length))))
+        : await recordWebm(canvas, (i) => ctx.drawImage(fr[i % fr.length], 0, 0), fr.length * 2, 14);
+      downloadBlob(blob, `${slug(store.project.name)}${wo ? '-write-on' : ''}.webm`, 'video/webm');
       status.textContent = `WebM ready (${(blob.size / 1024).toFixed(0)} KB)`;
     } catch (e) { status.textContent = 'WebM failed: ' + (e as Error).message; }
   });
+  const svgBtn = button('Download animated SVG', () => {
+    const pl = plan();
+    if (!pl.items.length) { toast('Nothing to write yet. Type letters that are in your font.'); return; }
+    downloadBlob(writeOnSvg(pl, { fill: '#111', bg: '#fff', holdMs: WO_HOLD }), `${slug(store.project.name)}-write-on.svg`, 'image/svg+xml');
+    status.textContent = 'Animated SVG downloaded (loops; plays in any browser).';
+  });
+  svgBtn.dataset.testid = 'btn-writeon-svg';
+  const previewBtn = button('Preview frames', () => {
+    const fr = renderFrames();
+    if (!isWriteOn()) { status.textContent = 'Previewed last frame'; return; }
+    // play the frames once at their real speed, ending on the finished text
+    const ctx = canvas.getContext('2d')!;
+    let i = 0;
+    status.textContent = `${fr.length} frames · ${(woCycle / 1000).toFixed(1)} s`;
+    playTimer = window.setInterval(() => { ctx.drawImage(fr[i], 0, 0); if (++i >= fr.length) stopPlay(); }, frameDelay(fr.length));
+  });
+  previewBtn.dataset.testid = 'btn-animate-preview';
+  const syncMode = () => {
+    const wo = isWriteOn();
+    framesRow.style.display = wo ? 'none' : '';
+    woFramesRow.style.display = wo ? '' : 'none';
+    svgBtn.style.display = wo ? '' : 'none';
+    intro.textContent = wo
+      ? 'Your letters write themselves, stroke by stroke, in the order they were drawn. Imported letters follow their traced centrelines.'
+      : 'Sweeps one DNA axis back and forth across the frames, so the loop is seamless.';
+  };
+  axisSel.addEventListener('change', () => { stopPlay(); syncMode(); });
+  syncMode();
   dlg.append(h('h2', {}, 'Animated specimen'),
-    h('p', {}, 'Sweeps one DNA axis back and forth across the frames, so the loop is seamless.'),
-    h('div', { class: 'row' }, h('label', {}, 'Text ', text)), h('div', { class: 'row' }, h('label', {}, 'Sweep ', axisSel), framesRow),
+    intro,
+    h('div', { class: 'row' }, h('label', {}, 'Text ', text)), h('div', { class: 'row' }, h('label', {}, 'Sweep ', axisSel), framesRow, woFramesRow),
     canvas, status,
-    h('div', { class: 'row' }, button('Preview frames', () => { renderFrames(); status.textContent = 'Previewed last frame'; }), gifBtn, webmBtn, button('Close', () => dlg.close())));
-  document.body.append(dlg); dlg.showModal(); dlg.addEventListener('close', () => dlg.remove());
+    h('div', { class: 'row' }, previewBtn, gifBtn, webmBtn, svgBtn, button('Close', () => dlg.close())));
+  document.body.append(dlg); dlg.showModal(); dlg.addEventListener('close', () => { stopPlay(); dlg.remove(); });
 }
 
 function openVariableDialog() {

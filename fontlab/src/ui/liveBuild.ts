@@ -10,18 +10,27 @@ import { scheduleBuild } from './buildClient';
 let waiting = false;
 let pending = false;
 let guard: number | null = null;
+let frame: number | null = null;
 
 export function liveRequest(): void {
+  frame = null;
   if (waiting) { pending = true; return; }
   waiting = true;
   scheduleBuild(0, { previewOnly: true });
   if (guard) clearTimeout(guard);
-  guard = window.setTimeout(() => { waiting = false; if (pending) { pending = false; liveRequest(); } }, 3000);
+  guard = window.setTimeout(() => { guard = null; waiting = false; if (pending) { pending = false; liveRequest(); } }, 3000);
 }
 
-/** End of the gesture: one full build of every glyph. */
+/**
+ * End of the gesture: one full build of every glyph. Anything still queued
+ * from the gesture is cancelled first, because a late preview request would
+ * replace (debounce away) this full build.
+ */
 export function liveFinish(): void {
   pending = false;
+  if (frame != null) { cancelAnimationFrame(frame); frame = null; }
+  if (guard) { clearTimeout(guard); guard = null; }
+  waiting = false; // an in-flight preview result is now stale and is dropped
   scheduleBuild(0);
 }
 
@@ -29,5 +38,5 @@ store.subscribe((ev) => {
   if (ev !== 'font:preview' || !waiting) return;
   waiting = false;
   if (guard) { clearTimeout(guard); guard = null; }
-  if (pending) { pending = false; requestAnimationFrame(liveRequest); }
+  if (pending) { pending = false; frame = requestAnimationFrame(liveRequest); }
 });

@@ -149,7 +149,11 @@ tabs: **Draw**, **Photo or video**, **Font file**.
    `font-variation-settings`; Rust, Glitch and Inflate change point counts,
    so they are static-only), `TrueType font (.ttf)` (the same font with
    quadratic outlines for apps that reject CFF; the converter is downloaded
-   on first use), `Animate…` (GIF / WebM sweeping one axis), `SVG glyphs`
+   on first use), `Animate…` (defaults to **Write on**, after
+   [Tegaki](https://tegaki.ink): your text writes itself stroke by stroke in
+   the order you drew it, imported letters skeletonised first, as a GIF, a
+   WebM or a looping animated SVG; it can also sweep one effect; the
+   preview's **Write on** button plays it in place), `SVG glyphs`
    (every letter as its own vector group, for Illustrator or Figma; a
    single letter is available from the grid's right-click menu), `SVG
    specimen` (an animated poster of your font) and `Specimen site (.html)`
