@@ -6,5 +6,6 @@ export default defineConfig({
   retries: 0,
   use: { baseURL: 'http://localhost:5173', viewport: { width: 1400, height: 1000 } },
   webServer: { command: 'npm run dev -- --port 5173 --strictPort', url: 'http://localhost:5173', reuseExistingServer: true, timeout: 60_000 },
-  projects: [{ name: 'chromium', use: { browserName: 'chromium' } }],
+  // PW_CHROMIUM: path to a pre-installed Chromium when it doesn't match this Playwright version
+  projects: [{ name: 'chromium', use: { browserName: 'chromium', ...(process.env.PW_CHROMIUM ? { launchOptions: { executablePath: process.env.PW_CHROMIUM } } : {}) } }],
 });

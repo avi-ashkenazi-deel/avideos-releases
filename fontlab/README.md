@@ -151,6 +151,15 @@ tabs: **Draw**, **Photo or video**, **Font file**.
    multilingual hero, axis rows when a variable font was built, the
    stylistic sets and other features, a type tester, every glyph with an
    inspector, and a download button; host it anywhere).
+   **Combine weights into a variable font…** (also in Export, after
+   [Static to Variable](https://blode.co/static-to-variable)) works on any
+   family, not just yours: add Thin, Regular, Bold (or any set of weights)
+   as .ttf, .otf, .woff or .woff2 files, check the weights it read from each
+   file, and get one variable font with a `wght` axis and named instances,
+   built in the browser with fontTools. Glyphs whose outlines differ between
+   the files cannot be interpolated and are left out (the dialog lists
+   them); kerning that cannot be merged is dropped with a note. All files
+   must be TrueType or all CFF.
    The first time FontLab opens with an empty font it shows a four-step
    intro; the info button in the header brings it back. Left and right
    arrow keys move between letters.

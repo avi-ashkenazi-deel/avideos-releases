@@ -3,6 +3,7 @@ import { store } from '../state';
 import { downloadProject, readProjectFile, saveLocal } from '../../project/storage';
 import { newProject } from '../../core/glyph';
 import { showWelcome } from './welcome';
+import { openCombineDialog } from './combineDialog';
 import { scheduleBuild } from '../buildClient';
 import { downloadOtf, downloadSvgSpecimen, downloadSpecimenSite, openTester, openAnimateDialog, openVariableDialog, downloadTtf, downloadSvgGlyphs } from './exportMore';
 import { openLibrary, saveCurrent } from './libraryDialog';
@@ -61,6 +62,7 @@ export function headerBar(): HTMLElement {
     { label: 'Font file (.otf)', icon: 'download', onClick: downloadOtf, hint: 'Install it anywhere', testid: 'menu-otf' },
     { label: 'TrueType font (.ttf)', icon: 'download', onClick: () => void downloadTtf(), hint: 'For apps that reject CFF fonts. The first use downloads a 12 MB converter.', testid: 'menu-ttf' },
     { label: 'Variable font…', icon: 'sliders', onClick: openVariableDialog, hint: 'Real axes you can animate in CSS', testid: 'menu-variable' },
+    { label: 'Combine weights into a variable font…', icon: 'layers', onClick: openCombineDialog, hint: 'Turn Thin, Regular and Bold files of any family into one variable font', testid: 'menu-combine' },
     { label: 'Animation (GIF / video)…', icon: 'film', onClick: openAnimateDialog, testid: 'menu-animate' },
     { label: 'SVG glyphs (one group per letter)', icon: 'image', onClick: downloadSvgGlyphs, hint: 'Every letter as a separate vector group, for Illustrator or Figma', separatorBefore: true, testid: 'menu-svg-glyphs' },
     { label: 'SVG specimen', icon: 'image', onClick: downloadSvgSpecimen, hint: 'A poster of your text as vector shapes', testid: 'menu-svg' },
