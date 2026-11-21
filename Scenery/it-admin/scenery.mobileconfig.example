@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Example device-management profile for Scenery.
+
+  Every key in the inner dictionary is optional. The payload type must match
+  the app's bundle identifier (PRODUCT_BUNDLE_IDENTIFIER in project.yml).
+  Generate fresh UUIDs (run `uuidgen` twice) before using this for real.
+-->
+<plist version="1.0">
+<dict>
+	<key>PayloadType</key>
+	<string>Configuration</string>
+	<key>PayloadVersion</key>
+	<integer>1</integer>
+	<key>PayloadScope</key>
+	<string>System</string>
+	<key>PayloadIdentifier</key>
+	<string>com.example.scenery.settings</string>
+	<key>PayloadUUID</key>
+	<string>00000000-0000-0000-0000-000000000001</string>
+	<key>PayloadDisplayName</key>
+	<string>Scenery wallpaper settings</string>
+	<key>PayloadContent</key>
+	<array>
+		<dict>
+			<key>PayloadType</key>
+			<string>com.aviashkenazi.scenery</string>
+			<key>PayloadVersion</key>
+			<integer>1</integer>
+			<key>PayloadIdentifier</key>
+			<string>com.example.scenery.settings.app</string>
+			<key>PayloadUUID</key>
+			<string>00000000-0000-0000-0000-000000000002</string>
+
+			<!-- Where the approved catalog lives. Must be https. -->
+			<key>ManifestURL</key>
+			<string>https://wallpapers.example.com/scenery/manifest.json</string>
+
+			<!-- How often each Mac checks the manifest (minimum 5). -->
+			<key>RefreshIntervalMinutes</key>
+			<integer>30</integer>
+
+			<!-- Remove the comment markers to pin one wallpaper on every
+			     display right away, without touching the manifest:
+			<key>ForcedWallpaperID</key>
+			<string>holidays-2026</string>
+			-->
+
+			<!-- Freeze video wallpapers on battery. Setting it here also
+			     locks the checkbox in the app. -->
+			<key>PauseVideoOnBattery</key>
+			<true/>
+
+			<!-- Set to true to show video wallpapers as still images only. -->
+			<key>DisableVideo</key>
+			<false/>
+		</dict>
+	</array>
+</dict>
+</plist>

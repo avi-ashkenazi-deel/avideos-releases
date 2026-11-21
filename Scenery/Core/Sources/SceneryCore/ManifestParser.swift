@@ -1,0 +1,255 @@
+import Foundation
+
+public enum ManifestError: Error, Equatable, LocalizedError {
+    case malformed(String)
+    case unsupportedVersion(Int)
+    case noUsableWallpapers
+
+    public var errorDescription: String? {
+        switch self {
+        case .malformed(let detail):
+            return "The wallpaper manifest could not be read (\(detail))."
+        case .unsupportedVersion(let version):
+            return "The wallpaper manifest uses version \(version), which this app does not understand yet."
+        case .noUsableWallpapers:
+            return "The wallpaper manifest does not contain any usable wallpapers."
+        }
+    }
+}
+
+/// Turns manifest JSON into a validated `Catalog`.
+///
+/// The parser is deliberately forgiving about single bad entries (they are
+/// dropped and reported in `Catalog.issues`) and strict about anything that
+/// would be unsafe: plain `http`, unknown file types, unknown versions.
+public enum ManifestParser {
+    public static let supportedVersion = 1
+
+    static let imageExtensions: Set<String> = ["jpg", "jpeg", "png", "heic"]
+    static let videoExtensions: Set<String> = ["mp4", "mov", "m4v"]
+
+    public static func parse(_ data: Data, baseURL: URL) throws -> Catalog {
+        let raw: RawManifest
+        do {
+            raw = try JSONDecoder().decode(RawManifest.self, from: data)
+        } catch {
+            throw ManifestError.malformed(String(describing: error))
+        }
+        guard raw.version == supportedVersion else {
+            throw ManifestError.unsupportedVersion(raw.version)
+        }
+
+        var issues: [String] = []
+        var wallpapers: [Wallpaper] = []
+        var seenIDs: Set<String> = []
+        var selectableCount = 0
+
+        for (index, entry) in raw.wallpapers.enumerated() {
+            guard let item = entry.value else {
+                issues.append("Wallpaper #\(index + 1) is missing an id or url and was skipped.")
+                continue
+            }
+            let id = item.id.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !id.isEmpty else {
+                issues.append("Wallpaper #\(index + 1) has an empty id and was skipped.")
+                continue
+            }
+            guard !seenIDs.contains(id) else {
+                issues.append("Wallpaper id \"\(id)\" is used more than once; only the first is kept.")
+                continue
+            }
+            guard let url = resolve(item.url, baseURL: baseURL) else {
+                issues.append("Wallpaper \"\(id)\" has a url that is not allowed (use https) and was skipped.")
+                continue
+            }
+            guard let kind = kind(declared: item.kind, url: url) else {
+                issues.append("Wallpaper \"\(id)\" is not a supported image or video file and was skipped.")
+                continue
+            }
+
+            var posterURL: URL?
+            if let poster = item.posterURL {
+                if let resolved = resolve(poster, baseURL: baseURL),
+                   imageExtensions.contains(resolved.pathExtension.lowercased()) {
+                    posterURL = resolved
+                } else {
+                    issues.append("Wallpaper \"\(id)\" has a posterURL that is not allowed; the first video frame is used instead.")
+                }
+            }
+
+            var selectable = item.selectable ?? true
+            if selectable {
+                if selectableCount >= Catalog.maxSelectable {
+                    selectable = false
+                    issues.append("Wallpaper \"\(id)\" is over the limit of \(Catalog.maxSelectable) selectable wallpapers and is hidden from the picker.")
+                } else {
+                    selectableCount += 1
+                }
+            }
+
+            seenIDs.insert(id)
+            let title = item.title?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let sha256 = item.sha256?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            wallpapers.append(
+                Wallpaper(
+                    id: id,
+                    title: (title?.isEmpty == false ? title : nil) ?? id,
+                    kind: kind,
+                    url: url,
+                    posterURL: posterURL,
+                    sha256: (sha256?.isEmpty == false) ? sha256 : nil,
+                    selectable: selectable
+                )
+            )
+        }
+
+        guard !wallpapers.isEmpty else {
+            throw ManifestError.noUsableWallpapers
+        }
+
+        var takeovers: [Takeover] = []
+        for (index, entry) in (raw.takeovers ?? []).enumerated() {
+            let label = "Takeover #\(index + 1)"
+            guard let item = entry.value else {
+                issues.append("\(label) is missing a wallpaperID and was skipped.")
+                continue
+            }
+            guard seenIDs.contains(item.wallpaperID) else {
+                issues.append("\(label) points at unknown wallpaper \"\(item.wallpaperID)\" and was skipped.")
+                continue
+            }
+            // A date that is present but unreadable must never silently turn
+            // into "no limit", so the whole takeover is dropped instead.
+            var startsAt: Date?
+            if let text = item.startsAt {
+                guard let date = parseDate(text) else {
+                    issues.append("\(label) has an unreadable startsAt (\"\(text)\") and was skipped.")
+                    continue
+                }
+                startsAt = date
+            }
+            var endsAt: Date?
+            if let text = item.endsAt {
+                guard let date = parseDate(text) else {
+                    issues.append("\(label) has an unreadable endsAt (\"\(text)\") and was skipped.")
+                    continue
+                }
+                endsAt = date
+            }
+            if let startsAt, let endsAt, endsAt <= startsAt {
+                issues.append("\(label) ends before it starts and was skipped.")
+                continue
+            }
+            takeovers.append(
+                Takeover(wallpaperID: item.wallpaperID, startsAt: startsAt, endsAt: endsAt, message: item.message)
+            )
+        }
+
+        var defaultID = raw.defaultWallpaperID
+        if let id = defaultID, !seenIDs.contains(id) {
+            issues.append("defaultWallpaperID \"\(id)\" is not in the list; the first wallpaper is used instead.")
+            defaultID = nil
+        }
+
+        return Catalog(wallpapers: wallpapers, defaultWallpaperID: defaultID, takeovers: takeovers, issues: issues)
+    }
+
+    // MARK: - Helpers
+
+    /// Resolves `text` against the manifest's own URL, so IT can use short
+    /// relative paths. Remote manifests may only point at `https` files. Local
+    /// files are only allowed when the manifest itself is a local file (the
+    /// bundled demo catalog, or a designer testing on their own Mac).
+    static func resolve(_ text: String, baseURL: URL) -> URL? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, let url = URL(string: trimmed, relativeTo: baseURL)?.absoluteURL else {
+            return nil
+        }
+        switch url.scheme?.lowercased() {
+        case "https":
+            return url.host?.isEmpty == false ? url : nil
+        case "file":
+            return baseURL.isFileURL ? url : nil
+        default:
+            return nil
+        }
+    }
+
+    static func kind(declared: String?, url: URL) -> Wallpaper.Kind? {
+        let ext = url.pathExtension.lowercased()
+        let inferred: Wallpaper.Kind?
+        if imageExtensions.contains(ext) {
+            inferred = .image
+        } else if videoExtensions.contains(ext) {
+            inferred = .video
+        } else {
+            inferred = nil
+        }
+        guard let inferred else { return nil }
+        if let declared, let declaredKind = Wallpaper.Kind(rawValue: declared.lowercased()), declaredKind != inferred {
+            // The file extension decides how the file is opened, so a
+            // mismatch means the entry is wrong.
+            return nil
+        }
+        return inferred
+    }
+
+    /// Accepts `2026-12-01T09:00:00Z`, the same with fractional seconds or a
+    /// UTC offset, and a bare `2026-12-01` (midnight UTC).
+    static func parseDate(_ text: String) -> Date? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let formatter = ISO8601DateFormatter()
+        for options: ISO8601DateFormatter.Options in [
+            [.withInternetDateTime],
+            [.withInternetDateTime, .withFractionalSeconds],
+        ] {
+            formatter.formatOptions = options
+            if let date = formatter.date(from: trimmed) { return date }
+        }
+        // Bare dates are checked by shape first so that odd strings are not
+        // half-parsed into a date.
+        let parts = trimmed.split(separator: "-", omittingEmptySubsequences: false)
+        guard parts.count == 3, parts[0].count == 4, parts[1].count == 2, parts[2].count == 2,
+              parts.allSatisfy({ $0.allSatisfy(\.isNumber) }) else {
+            return nil
+        }
+        formatter.formatOptions = [.withFullDate]
+        return formatter.date(from: trimmed)
+    }
+}
+
+// MARK: - Raw JSON shapes
+
+private struct RawManifest: Decodable {
+    let version: Int
+    let wallpapers: [Lossy<RawWallpaper>]
+    let defaultWallpaperID: String?
+    let takeovers: [Lossy<RawTakeover>]?
+}
+
+private struct RawWallpaper: Decodable {
+    let id: String
+    let title: String?
+    let kind: String?
+    let url: String
+    let posterURL: String?
+    let sha256: String?
+    let selectable: Bool?
+}
+
+private struct RawTakeover: Decodable {
+    let wallpaperID: String
+    let startsAt: String?
+    let endsAt: String?
+    let message: String?
+}
+
+/// Lets one malformed array element fail on its own instead of taking the
+/// whole manifest down with it.
+private struct Lossy<Value: Decodable>: Decodable {
+    let value: Value?
+
+    init(from decoder: Decoder) throws {
+        value = try? Value(from: decoder)
+    }
+}

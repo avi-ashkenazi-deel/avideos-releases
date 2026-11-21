@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "defaultWallpaperID": "dawn",
+  "wallpapers": [
+    { "id": "dawn", "title": "Dawn", "url": "images/dawn.jpg" },
+    { "id": "tide", "title": "Tide", "url": "images/tide.jpg" },
+    { "id": "ember", "title": "Ember", "url": "images/ember.jpg" },
+    { "id": "meadow", "title": "Meadow", "url": "images/meadow.jpg" },
+    { "id": "dusk", "title": "Dusk", "url": "images/dusk.jpg" },
+    { "id": "slate", "title": "Slate", "url": "images/slate.jpg" },
+    { "id": "drift", "title": "Drift", "url": "videos/drift.mp4" },
+    { "id": "glow", "title": "Glow", "url": "videos/glow.mp4" }
+  ],
+  "takeovers": []
+}

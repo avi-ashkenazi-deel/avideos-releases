@@ -13,6 +13,7 @@ xcuserdata/
 # XcodeGen generates the project; keep it out of source control.
 HearIt.xcodeproj/
 VoiceInbox.xcodeproj/
+Scenery/Scenery.xcodeproj/
 
 # Swift Package Manager
 .build/

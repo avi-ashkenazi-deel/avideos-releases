@@ -1,0 +1,64 @@
+# XcodeGen project definition for Scenery (macOS menu bar wallpaper app).
+#
+# Same approach as the HearIt project in the repository root: this file is the
+# source of truth and the generated Scenery.xcodeproj is not committed.
+#
+#     brew install xcodegen   # one time
+#     cd Scenery
+#     xcodegen generate
+#     open Scenery.xcodeproj
+
+name: Scenery
+
+options:
+  bundleIdPrefix: com.aviashkenazi
+  createIntermediateGroups: true
+  deploymentTarget:
+    macOS: "14.0"
+  groupSortPosition: top
+
+packages:
+  SceneryCore:
+    path: Core
+
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    DEVELOPMENT_TEAM: "" # <- set your team id here or in Xcode signing.
+
+targets:
+  Scenery:
+    type: application
+    platform: macOS
+    sources:
+      - path: App
+      # A folder reference, so the demo catalog keeps its folder layout inside
+      # the app (manifest.json next to images/ and videos/).
+      - path: DemoCatalog
+        type: folder
+        buildPhase: resources
+    dependencies:
+      - package: SceneryCore
+    settings:
+      base:
+        # The bundle id is also the preferences domain that device management
+        # targets, so change it here before IT writes a profile against it.
+        PRODUCT_BUNDLE_IDENTIFIER: com.aviashkenazi.scenery
+        INFOPLIST_FILE: App/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        CODE_SIGN_STYLE: Automatic
+        ENABLE_HARDENED_RUNTIME: YES
+        ENABLE_PREVIEWS: YES
+        COMBINE_HIDPI_IMAGES: YES
+
+schemes:
+  Scenery:
+    build:
+      targets:
+        Scenery: all
+    run:
+      config: Debug
+    archive:
+      config: Release
