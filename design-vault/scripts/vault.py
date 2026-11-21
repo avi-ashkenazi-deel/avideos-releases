@@ -262,6 +262,10 @@ def cmd_browse(args) -> int:
         collection = catalog_path.parent.name
         if (only and collection not in only) or collection in exclude:
             continue
+        if args.tag:  # keep only entries carrying this tag (e.g. a source like "pitchfork")
+            catalog = [e for e in catalog if args.tag in e.get("tags", [])]
+            if not catalog:
+                continue
         cards = []
         for entry in sorted(catalog, key=lambda e: (e.get("year") or 9999, e["file"])):
             total += 1
@@ -498,6 +502,7 @@ def main() -> int:
     bp.add_argument("--exclude", default="", help="comma-separated collections to leave out")
     bp.add_argument("--out", default="browse.html", help="output file name")
     bp.add_argument("--title", default="", help="page title")
+    bp.add_argument("--tag", default="", help="only include entries carrying this tag")
     bp.add_argument("--thumb-px", type=int, default=400, help="embedded thumbnail max size")
     bp.add_argument("--thumb-q", type=int, default=68, help="embedded thumbnail JPEG quality")
     sub.add_parser("db")
