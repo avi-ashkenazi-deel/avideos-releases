@@ -228,3 +228,6 @@ details.plain summary { color: var(--muted); font-size: 12px; cursor: pointer; m
 .combine .warn { color: var(--danger); }
 .combine-demo { margin-top: 10px; }
 .combine-word { font-size: 64px; line-height: 1.1; outline: none; overflow-wrap: anywhere; }
+
+/* pen tool (draw tab) */
+canvas.editor.pen { cursor: crosshair; outline: 2px solid var(--accent); outline-offset: -1px; }

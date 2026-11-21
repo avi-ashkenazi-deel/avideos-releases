@@ -4,9 +4,10 @@ import { store } from '../state';
 import { scheduleBuild } from '../buildClient';
 import { DrawCanvas } from '../../inputs/draw/canvas';
 import { PointEditor } from '../../inputs/draw/editor';
+import { PenTool, applyPenContour } from '../../inputs/draw/pen';
 import { history } from '../history';
 import { keepAlternate } from '../alternates';
-import type { Glyph, Stroke, CapStyle } from '../../core/glyph';
+import type { Glyph, Stroke, CapStyle, CurveContour } from '../../core/glyph';
 import { DEFAULT_STATS } from '../../core/glyph';
 import { projectCharset, groupCharset, BLOCK_BY_ID } from '../../core/charsets';
 import { charsetPanel } from './charset';
@@ -22,6 +23,9 @@ function blankGlyph(ch: string): Glyph {
 }
 
 const SIDEBEARING = 60;
+
+/** Pen tool icon: a Bézier curve with its two end points and a pulled-out handle (24×24, stroked). */
+const PEN_TOOL_ICON = '<path d="M5 19C6 10 12 6 19 5"/><rect x="3" y="17" width="4" height="4"/><rect x="17" y="3" width="4" height="4"/><path d="M5 17 9 7"/><circle cx="9.5" cy="6" r="1.6" fill="currentColor"/>';
 
 export function hasInk(g: Glyph | undefined | null): boolean {
   if (!g) return false;
@@ -90,7 +94,8 @@ export function seedsPanel(): HTMLElement {
   const title = h('div', { class: 'drawtitle' });
   const info = h('div', { class: 'info' });
   const dc = new DrawCanvas(canvasEl, store.project.metrics);
-  let editMode = false;
+  /** what the pointer does on the canvas: freehand strokes, the point editor, or the pen */
+  let mode: 'draw' | 'edit' | 'pen' = 'draw';
   const pointsCb = h('input', { type: 'checkbox', 'data-testid': 'chk-points' });
   pointsCb.addEventListener('change', () => { dc.showPoints = pointsCb.checked; dc.draw(); });
   const pointsToggle = h('label', { class: 'toggle pointstoggle', title: 'Show the outline points of the built letter' }, pointsCb, ' Points');
@@ -105,7 +110,12 @@ export function seedsPanel(): HTMLElement {
     onSelect: () => syncEditTools(),
     redraw: () => dc.draw(),
   });
-  dc.overlay = (ctx, view) => { if (editMode) editor.draw(ctx, view); };
+  let penChar: string | null = null;
+  const pen = new PenTool(canvasEl, () => dc.getView(), {
+    onCommit: (c: CurveContour) => commitPen(c),
+    redraw: () => dc.draw(),
+  });
+  dc.overlay = (ctx, view) => { if (mode === 'edit') editor.draw(ctx, view); else if (mode === 'pen') pen.draw(ctx, view); };
 
   const select = (ch: string) => { store.selected = ch; store.emit('select'); syncEditor(); };
   const syncEditor = () => {
@@ -113,12 +123,13 @@ export function seedsPanel(): HTMLElement {
     const g = store.project.glyphs[ch] ?? null;
     dc.metrics = store.project.metrics;
     dc.setGlyph(g ?? blankGlyph(ch), store.built[ch]?.contours ?? []);
-    if (editMode) {
+    if (mode === 'edit') {
       if (g && hasInk(g)) {
         // same letter still open: feed the latest glyph back (keeps undo history); new letter: start fresh
         if (editor.enabled && editChar === ch) editor.setGlyph(g); else { editor.enable(g); editChar = ch; }
-      } else { editMode = false; applyMode(); }
+      } else { mode = 'draw'; applyMode(); }
     }
+    if (mode === 'pen' && penChar !== ch) { pen.cancel(); penChar = ch; } // a half-drawn path belongs to the letter it was started on
     for (const b of strip.children) b.classList.toggle('selected', (b as HTMLElement).dataset.ch === ch);
     const src = g ? ({ drawn: 'drawn by hand', traced: 'traced from a photo', imported: 'from a font file', generated: 'generated' } as const)[g.source] : 'empty';
     const ns = g?.strokes?.length ?? 0, nc = g?.contours?.length ?? 0;
@@ -126,8 +137,10 @@ export function seedsPanel(): HTMLElement {
     const code = 'U+' + (ch.codePointAt(0) ?? 0).toString(16).toUpperCase().padStart(4, '0');
     const alts = store.project.alternates?.[ch]?.length ?? 0;
     title.replaceChildren(h('span', { class: 'big' }, ch), h('span', { class: 'ucode' }, code), h('small', {}, `${src}${g?.locked ? ' · locked' : ''} · ${parts}${alts ? ` · ${alts} alternate${alts > 1 ? 's' : ''}` : ''}`), pointsToggle);
-    info.textContent = editMode
+    info.textContent = mode === 'edit'
       ? 'Edit points: drag nodes and handles. Double-click a segment to add a point, Delete removes, Alt+drag a node changes its width, Ctrl/Cmd+Z undoes.'
+      : mode === 'pen'
+      ? 'Pen: click for corners, click and drag for curves, click the first point or press Enter to close. Backspace removes the last point, Escape cancels. A shape drawn inside ink cuts a hole; inside a counter it fills.'
       : g?.source === 'generated' ? 'Generated from your seeds. Draw over it to replace it, re-roll for another take, or switch to Edit points.' : 'Draw with mouse, pen or finger. Pressure and speed change the width. Edit points lets you adjust what is there.';
   };
   const renderStrip = () => {
@@ -153,6 +166,15 @@ export function seedsPanel(): HTMLElement {
     scheduleBuild(40);
   };
 
+  /** A closed pen path becomes a contour of the current letter (one Undo step). */
+  const commitPen = (c: CurveContour) => {
+    const ch = store.selected;
+    store.update((p) => { p.glyphs[ch] = applyPenContour(p.glyphs[ch], ch, c, blankGlyph(ch)); }, 'glyph');
+    recomposeDependents(ch);
+    scheduleBuild(40);
+    dc.draw();
+  };
+
   // tools
   const brush = dc.brush;
   const widthRow = slider('Width', { min: 14, max: 220, step: 1, value: brush.width, onInput: (v) => (brush.width = v), format: (v) => v.toFixed(0) });
@@ -173,10 +195,11 @@ export function seedsPanel(): HTMLElement {
     if (!history.redo(store.project)) { toast('Nothing to redo'); return; }
     store.emit('glyph'); scheduleBuild(0);
   };
-  const undoBtn = iconButton('undo', 'Undo', () => { if (editMode) editor.undo(); else undoProject(); }, { title: 'Undo the last change to the font: stroke, delete, generate, import… (Ctrl/Cmd+Z)', testid: 'btn-undo' });
-  const redoBtn = iconButton('redo', 'Redo', () => { if (editMode) editor.redo(); else redoProject(); }, { iconOnly: true, title: 'Redo (Shift+Ctrl/Cmd+Z)', testid: 'btn-redo' });
+  const undoBtn = iconButton('undo', 'Undo', () => { if (mode === 'edit') editor.undo(); else if (mode === 'pen' && pen.inProgress) pen.undoLast(); else undoProject(); }, { title: 'Undo the last change to the font: stroke, delete, generate, import… (Ctrl/Cmd+Z)', testid: 'btn-undo' });
+  const redoBtn = iconButton('redo', 'Redo', () => { if (mode === 'edit') editor.redo(); else if (mode === 'pen' && pen.inProgress) return; else redoProject(); }, { iconOnly: true, title: 'Redo (Shift+Ctrl/Cmd+Z)', testid: 'btn-redo' });
   window.addEventListener('keydown', (e) => {
     if (editor.enabled) return; // the point editor has its own history while open
+    if (pen.enabled && pen.inProgress) return; // the pen owns the keyboard while a path is open (Ctrl/Cmd+Z removes its last point)
     const t = e.target as HTMLElement | null;
     if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
     const mod = e.ctrlKey || e.metaKey;
@@ -211,17 +234,24 @@ export function seedsPanel(): HTMLElement {
     store.update((p) => { p.glyphs[ch] = outlineToStrokes(g); }, 'glyph');
     recomposeDependents(ch); scheduleBuild(0);
   }, { title: 'Convert this outline letter into centreline strokes' });
-  const editBtn = iconButton('nodes', 'Edit points', () => { editMode = !editMode; applyMode(); }, { title: 'Move, add and delete points and curve handles', testid: 'btn-edit-points' });
+  const editBtn = iconButton('nodes', 'Edit points', () => { mode = mode === 'edit' ? 'draw' : 'edit'; applyMode(); }, { title: 'Move, add and delete points and curve handles', testid: 'btn-edit-points' });
+  const penBtn = iconButton('nodes', 'Pen', () => { mode = mode === 'pen' ? 'draw' : 'pen'; applyMode(); }, { title: 'Draw curves with points and handles, like a font editor', testid: 'btn-pen' });
+  penBtn.querySelector('svg')!.innerHTML = PEN_TOOL_ICON;
   const nodeWidth = slider('Point width', { min: 2, max: 200, step: 1, value: 40, onInput: (v) => editor.setSelectedWidth(v), format: (v) => v.toFixed(0) });
   const editTools = h('div', { class: 'row edittools' }, nodeWidth, h('small', { class: 'muted' }, 'Alt+drag a node also changes width'));
   const applyMode = () => {
     const g = store.project.glyphs[store.selected];
-    if (editMode && !(g && hasInk(g))) { editMode = false; toast('Nothing to edit yet. Draw or import this letter first.'); }
-    dc.mode = editMode ? 'edit' : 'draw';
-    editBtn.classList.toggle('primary', editMode);
-    editTools.style.display = editMode ? '' : 'none';
-    canvasEl.classList.toggle('editing', editMode);
-    if (editMode && g) { editor.enable(g); editChar = store.selected; } else { editor.disable(); editChar = null; }
+    if (mode === 'edit' && !(g && hasInk(g))) { mode = 'draw'; toast('Nothing to edit yet. Draw or import this letter first.'); }
+    dc.mode = mode;
+    editBtn.classList.toggle('primary', mode === 'edit');
+    penBtn.classList.toggle('primary', mode === 'pen');
+    editBtn.setAttribute('aria-pressed', String(mode === 'edit'));
+    penBtn.setAttribute('aria-pressed', String(mode === 'pen'));
+    editTools.style.display = mode === 'edit' ? '' : 'none';
+    canvasEl.classList.toggle('editing', mode === 'edit');
+    canvasEl.classList.toggle('pen', mode === 'pen');
+    if (mode === 'edit' && g) { editor.enable(g); editChar = store.selected; } else { editor.disable(); editChar = null; }
+    if (mode === 'pen') { pen.enable(); penChar = store.selected; } else { pen.disable(); penChar = null; }
     syncEditor();
     dc.draw();
   };
@@ -271,7 +301,7 @@ export function seedsPanel(): HTMLElement {
   // ---------- draw tab body
   const drawTab = h('div', { class: 'tab-body draw' },
     strip, title, canvasEl, info,
-    h('div', { class: 'row' }, undoBtn, redoBtn, clear, lock, reroll, keepAltBtn, toStrokesBtn, editBtn),
+    h('div', { class: 'row' }, undoBtn, redoBtn, clear, lock, reroll, keepAltBtn, toStrokesBtn, editBtn, penBtn),
     editTools,
     h('details', { class: 'brush' }, h('summary', {}, 'Brush'), widthRow, pressureRow, velRow, smoothRow,
       h('div', { class: 'row' }, h('label', {}, 'Cap ', capSel), h('label', {}, mirror, ' Mirror')), advRow),

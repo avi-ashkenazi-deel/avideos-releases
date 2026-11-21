@@ -72,6 +72,12 @@ tabs: **Draw**, **Photo or video**, **Font file**.
    keeps its own history while it is open). Imported outlines keep their real
    curves; strokes drawn on top of an outline are not editable as points
    until you press **To strokes**.
+   **Pen** (after [Shift](https://shift.graphics)) draws new shapes the way
+   font editors do: click for corners, click and drag for curves (Alt while
+   dragging breaks the handles into a cusp), click the first point or press
+   Enter to close, Backspace removes the last point, Escape cancels. The
+   closed shape is added to the letter; drawn inside ink it cuts a hole,
+   inside a counter it fills.
 3. **Generate the rest of the alphabet.** FontLab measures your seeds (stroke
    width, x-height, cap height, slant, overshoot, spacing, terminals, wobble)
    and builds the missing letters from parametric recipes. Letters related to a

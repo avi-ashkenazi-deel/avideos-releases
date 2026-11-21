@@ -204,3 +204,23 @@ test('arrow keys move between letters; the intro shows once on a fresh profile',
   await page.locator('[data-testid=btn-intro]').click();
   await expect(page.locator('[data-testid=welcome]')).toBeVisible();
 });
+
+test('pen: click points, close the path on the first point, undo removes it', async ({ page }) => {
+  await page.locator('.chbtn[data-ch="x"]').click();
+  await expect(page.locator('.cell[data-char="x"]')).toHaveClass(/empty/);
+  await page.locator('[data-testid=btn-pen]').click();
+  await expect(page.locator('[data-testid=btn-pen]')).toHaveClass(/primary/);
+  await expect(page.locator('canvas.editor')).toHaveClass(/pen/);
+  const canvas = page.locator('canvas.editor');
+  await canvas.scrollIntoViewIfNeeded();
+  const box = (await canvas.boundingBox())!;
+  const at = (x: number, y: number) => [box.x + box.width * x, box.y + box.height * y] as const;
+  for (const [x, y] of [[0.3, 0.7], [0.6, 0.7], [0.45, 0.4], [0.3, 0.7]] as const) await page.mouse.click(...at(x, y));
+  await expect(page.locator('.cell[data-char="x"]')).not.toHaveClass(/empty/);
+  const glyph = () => page.evaluate(() => { const g = (window as any).__fontlab.project.glyphs.x; return g ? { kind: g.kind, curves: g.curves?.length ?? 0 } : null; });
+  expect(await glyph()).toEqual({ kind: 'outline', curves: 1 });
+  await page.mouse.click(5, 500); // blur any input
+  await page.keyboard.press('Control+z');
+  await expect(page.locator('.cell[data-char="x"]')).toHaveClass(/empty/);
+  expect(await glyph()).toBeNull();
+});

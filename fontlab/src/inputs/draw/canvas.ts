@@ -35,8 +35,8 @@ export class DrawCanvas {
   metrics: FontMetrics;
   brush: BrushSettings = { ...DEFAULT_BRUSH };
   onStroke: (s: Stroke) => void = () => {};
-  /** 'draw' = freehand strokes; 'edit' = pointer events belong to the point editor */
-  mode: 'draw' | 'edit' = 'draw';
+  /** 'draw' = freehand strokes; 'edit' / 'pen' = pointer events belong to the point editor / pen tool */
+  mode: 'draw' | 'edit' | 'pen' = 'draw';
   /** extra overlay drawn after the glyph (the point editor's nodes) */
   overlay: ((ctx: CanvasRenderingContext2D, view: View) => void) | null = null;
   /** show the built outline's points (inspector) */
@@ -158,7 +158,7 @@ export class DrawCanvas {
     drawGuides(ctx, view, this.metrics, this.glyph.advance, w, { values: true });
     // finished ink
     drawContours(ctx, this.contours, view, 'rgba(255,255,255,.92)');
-    if (this.showPoints && this.mode === 'draw') {
+    if (this.showPoints && this.mode !== 'edit') {
       const total = this.contours.reduce((n, c) => n + c.points.length, 0);
       const every = Math.max(1, Math.ceil(total / 400));
       ctx.strokeStyle = 'rgba(255,59,107,.8)'; ctx.lineWidth = 1;
