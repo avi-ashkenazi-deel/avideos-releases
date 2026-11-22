@@ -1,5 +1,6 @@
 import AppKit
 import AVFoundation
+import SceneryCore
 
 /// Puts wallpapers on displays.
 ///
@@ -7,6 +8,8 @@ import AVFoundation
 /// - Videos get the still set the same way, plus a `VideoWallpaperWindow` on top.
 /// - A spanned video is one window per display, each showing its own part of
 ///   the picture, all started at the same instant so they move as one.
+/// - Live wallpapers get a `LiveWallpaperWindow`, coloured for the Sun's
+///   position (see `setSun`).
 @MainActor
 final class WallpaperEngine {
     struct Assignment: Equatable {
@@ -18,10 +21,15 @@ final class WallpaperEngine {
         /// Set when the wallpaper spans several displays: the area, in global
         /// desktop coordinates, that the whole picture covers.
         let canvas: CGRect?
+        /// Set for live wallpapers: the colours to draw through the day.
+        let palette: DayPalette?
     }
 
     private var assignments: [String: Assignment] = [:]
     private var windows: [String: VideoWallpaperWindow] = [:]
+    private var liveWindows: [String: LiveWallpaperWindow] = [:]
+    /// Where the Sun is, for colouring live wallpapers.
+    private var sun = SunPosition(elevation: 45, isRising: true)
     private var occlusionObserver: NSObjectProtocol?
     /// `true` while the windows of a spanned video are playing in step.
     private var isGroupPlaying = false
@@ -73,6 +81,16 @@ final class WallpaperEngine {
                 window.tearDown()
                 groupChanged = true
             }
+
+            if let palette = assignment.palette {
+                let window = liveWindows[displayID] ?? LiveWallpaperWindow(frame: screen.frame)
+                liveWindows[displayID] = window
+                window.setGeometry(screenFrame: screen.frame, canvas: assignment.canvas)
+                window.show(palette.colors(for: sun), transition: 0)
+                window.orderFrontRegardless()
+            } else {
+                liveWindows.removeValue(forKey: displayID)?.tearDown()
+            }
         }
 
         // Displays that were unplugged, or no longer have an assignment.
@@ -81,11 +99,26 @@ final class WallpaperEngine {
             groupChanged = true
         }
 
+        for displayID in Array(liveWindows.keys) where newAssignments[displayID] == nil || screens[displayID] == nil {
+            liveWindows.removeValue(forKey: displayID)?.tearDown()
+        }
+
         if groupChanged && isSpanning {
             // The set of players changed, so they have to be lined up again.
             pauseAll()
         }
         updatePlayback()
+    }
+
+    /// Recolours every live wallpaper for a new Sun position, fading over
+    /// `transition` seconds.
+    func setSun(_ newSun: SunPosition, transition: CFTimeInterval) {
+        guard newSun != sun else { return }
+        sun = newSun
+        for (displayID, window) in liveWindows {
+            guard let palette = assignments[displayID]?.palette else { continue }
+            window.show(palette.colors(for: newSun), transition: transition)
+        }
     }
 
     /// Sets the still wallpapers again. macOS keeps a separate wallpaper for

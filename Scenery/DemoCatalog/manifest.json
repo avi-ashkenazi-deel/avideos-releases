@@ -2,14 +2,73 @@
   "version": 1,
   "defaultWallpaperID": "dawn",
   "wallpapers": [
-    { "id": "dawn", "title": "Dawn", "url": "images/dawn.jpg" },
-    { "id": "tide", "title": "Tide", "url": "images/tide.jpg" },
-    { "id": "ember", "title": "Ember", "url": "images/ember.jpg" },
-    { "id": "meadow", "title": "Meadow", "url": "images/meadow.jpg" },
-    { "id": "dusk", "title": "Dusk", "url": "images/dusk.jpg" },
-    { "id": "slate", "title": "Slate", "url": "images/slate.jpg" },
-    { "id": "drift", "title": "Drift", "url": "videos/drift.mp4" },
-    { "id": "glow", "title": "Glow", "url": "videos/glow.mp4" }
+    {
+      "id": "dawn",
+      "title": "Dawn",
+      "url": "images/dawn.jpg"
+    },
+    {
+      "id": "tide",
+      "title": "Tide",
+      "url": "images/tide.jpg"
+    },
+    {
+      "id": "ember",
+      "title": "Ember",
+      "url": "images/ember.jpg"
+    },
+    {
+      "id": "meadow",
+      "title": "Meadow",
+      "url": "images/meadow.jpg"
+    },
+    {
+      "id": "dusk",
+      "title": "Dusk",
+      "url": "images/dusk.jpg"
+    },
+    {
+      "id": "slate",
+      "title": "Slate",
+      "url": "images/slate.jpg"
+    },
+    {
+      "id": "drift",
+      "title": "Drift",
+      "url": "videos/drift.mp4"
+    },
+    {
+      "id": "glow",
+      "title": "Glow",
+      "url": "videos/glow.mp4"
+    },
+    {
+      "id": "daylight",
+      "title": "Daylight",
+      "kind": "live",
+      "palette": {
+        "night": [
+          "#080C24",
+          "#161D4A",
+          "#2A2C66"
+        ],
+        "dawn": [
+          "#2E3A78",
+          "#C46F96",
+          "#FFB27A"
+        ],
+        "day": [
+          "#2F6FDB",
+          "#78AEEF",
+          "#DCEBFF"
+        ],
+        "dusk": [
+          "#26265E",
+          "#A44E7C",
+          "#FF8F57"
+        ]
+      }
+    }
   ],
   "takeovers": []
 }

@@ -55,6 +55,14 @@
 			<!-- Set to true to show video wallpapers as still images only. -->
 			<key>DisableVideo</key>
 			<false/>
+
+			<!-- Optional. The office location, for wallpapers that follow the
+			     day. Remove the comment markers to use it:
+			<key>Latitude</key>
+			<real>51.5</real>
+			<key>Longitude</key>
+			<real>-0.13</real>
+			-->
 		</dict>
 	</array>
 </dict>

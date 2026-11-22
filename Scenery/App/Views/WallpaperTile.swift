@@ -21,6 +21,10 @@ struct WallpaperTile: View {
                         Image(systemName: "play.circle.fill")
                             .foregroundStyle(.secondary)
                             .accessibilityLabel("Video")
+                    } else if wallpaper.kind == .live {
+                        Image(systemName: "sun.max.fill")
+                            .foregroundStyle(.secondary)
+                            .accessibilityLabel("Follows the day")
                     }
                     Text(wallpaper.title)
                         .lineLimit(1)

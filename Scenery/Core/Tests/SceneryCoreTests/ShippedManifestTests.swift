@@ -22,9 +22,14 @@ final class ShippedManifestTests: XCTestCase {
         XCTAssertLessThanOrEqual(catalog.selectable.count, Catalog.maxSelectable)
         XCTAssertNotNil(catalog.wallpaper(id: catalog.defaultWallpaperID))
         XCTAssertTrue(catalog.wallpapers.contains { $0.kind == .video })
+        XCTAssertTrue(catalog.wallpapers.contains { $0.kind == .live })
         for wallpaper in catalog.wallpapers {
+            guard let url = wallpaper.url else {
+                XCTAssertNotNil(wallpaper.palette, "\(wallpaper.id) has neither a file nor a palette")
+                continue
+            }
             XCTAssertTrue(
-                FileManager.default.fileExists(atPath: wallpaper.url.path),
+                FileManager.default.fileExists(atPath: url.path),
                 "\(wallpaper.id) points at a file that is not in DemoCatalog"
             )
         }
@@ -36,10 +41,11 @@ final class ShippedManifestTests: XCTestCase {
         let catalog = try ManifestParser.parse(try Data(contentsOf: manifest), baseURL: hosted)
 
         XCTAssertEqual(catalog.issues, [])
-        XCTAssertEqual(catalog.selectable.count, 7)
+        XCTAssertEqual(catalog.selectable.count, 8)
+        XCTAssertEqual(catalog.wallpaper(id: "brand-daylight")?.kind, .live)
         XCTAssertEqual(catalog.takeovers.count, 2)
         XCTAssertEqual(
-            catalog.wallpaper(id: "value-01")?.url.absoluteString,
+            catalog.wallpaper(id: "value-01")?.url?.absoluteString,
             "https://wallpapers.example.com/scenery/images/value-01.jpg"
         )
 

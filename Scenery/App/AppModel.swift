@@ -25,6 +25,15 @@ final class AppModel: ObservableObject {
     /// The display the picker is editing when displays differ.
     @Published var focusedDisplayID: String?
 
+    /// Set while someone drags the day slider: the hour (0 to 24) to show
+    /// instead of the real time. `nil` means "now".
+    @Published var previewHour: Double? {
+        didSet {
+            guard oldValue != previewHour else { return }
+            previewChanged()
+        }
+    }
+
     @Published var pauseVideoOnBattery: Bool = Prefs.pauseVideoOnBattery {
         didSet {
             guard oldValue != pauseVideoOnBattery else { return }
@@ -62,6 +71,8 @@ final class AppModel: ObservableObject {
     private var thumbnailTask: Task<Void, Never>?
     private var refreshTimer: Timer?
     private var boundaryTimer: Timer?
+    private var sunTimer: Timer?
+    private var previewExpiry: Task<Void, Never>?
     private var observers: [(NotificationCenter, NSObjectProtocol)] = []
 
     init() {
@@ -278,6 +289,8 @@ final class AppModel: ObservableObject {
         }
 
         scheduleBoundaryTimer(after: now)
+        updateSun(transition: 0)
+        scheduleSunTimer()
 
         let canvas = spanCanvas
         var frames: [String: CGRect] = [:]
@@ -317,7 +330,9 @@ final class AppModel: ObservableObject {
                     // still an approved picture, just not a continuous one.
                     still = slice
                 }
-                assignments[displayID] = WallpaperEngine.Assignment(stillURL: still, videoURL: video, canvas: canvas)
+                assignments[displayID] = WallpaperEngine.Assignment(
+                    stillURL: still, videoURL: video, canvas: canvas, palette: wallpaper.palette
+                )
             } catch {
                 // Leave this display as it is rather than blanking it.
                 assignments[displayID] = engine.assignment(forDisplay: displayID)
@@ -333,6 +348,68 @@ final class AppModel: ObservableObject {
             && power.isSessionActive
             && !power.isLowPowerMode
             && !(pauseVideoOnBattery && power.isOnBattery)
+    }
+
+    // MARK: - Following the day
+
+    /// `true` when a wallpaper that follows the day is on any display.
+    var hasLiveWallpaper: Bool {
+        resolutions.values.contains { $0.wallpaper.kind == .live }
+    }
+
+    /// The time right now as an hour of the day, for the day slider.
+    var currentHour: Double {
+        let parts = Calendar.current.dateComponents([.hour, .minute], from: Date())
+        return Double(parts.hour ?? 0) + Double(parts.minute ?? 0) / 60
+    }
+
+    /// Tells the engine where the Sun is, for the real time or for the hour
+    /// being previewed.
+    private func updateSun(transition: CFTimeInterval) {
+        var moment = Date()
+        if let previewHour {
+            moment = Calendar.current.startOfDay(for: moment).addingTimeInterval(previewHour * 3600)
+        }
+        let place = Prefs.coordinates ?? Sun.approximateCoordinates(for: .current, at: moment)
+        engine.setSun(
+            Sun.position(at: moment, latitude: place.latitude, longitude: place.longitude),
+            transition: transition
+        )
+    }
+
+    private func previewChanged() {
+        // Quick while dragging, gentle when going back to the real time.
+        updateSun(transition: previewHour == nil ? 1.2 : 0.2)
+
+        // A preview that is left alone goes back to the real time by itself,
+        // so the desktop can never stay stuck at the wrong hour.
+        previewExpiry?.cancel()
+        previewExpiry = nil
+        guard previewHour != nil else { return }
+        previewExpiry = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 20 * 1_000_000_000)
+            guard !Task.isCancelled else { return }
+            self?.previewHour = nil
+        }
+    }
+
+    /// The sky changes far too slowly to need animating: one small step a
+    /// minute is invisible, and the app sleeps in between.
+    private func scheduleSunTimer() {
+        guard hasLiveWallpaper else {
+            sunTimer?.invalidate()
+            sunTimer = nil
+            return
+        }
+        guard sunTimer == nil else { return }
+        let timer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                guard let self, self.previewHour == nil else { return }
+                self.updateSun(transition: 2)
+            }
+        }
+        timer.tolerance = 15
+        sunTimer = timer
     }
 
     // MARK: - Timers

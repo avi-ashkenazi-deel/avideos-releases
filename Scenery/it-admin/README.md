@@ -38,7 +38,9 @@ Start from [`manifest.example.json`](manifest.example.json).
 | Field | Required | Meaning |
 | --- | --- | --- |
 | `id` | yes | Stable identifier. People's choices are stored by id, so do not reuse an id for different artwork. |
-| `url` | yes | The file. `https` only. Images: `.jpg` `.jpeg` `.png` `.heic`. Videos: `.mp4` `.mov` `.m4v`. |
+| `url` | yes, except live | The file. `https` only. Images: `.jpg` `.jpeg` `.png` `.heic`. Videos: `.mp4` `.mov` `.m4v`. |
+| `kind` | no | Normally worked out from the file. Set it to `live` for a wallpaper that follows the day. |
+| `palette` | live only | The colours of a live wallpaper: `night`, `dawn`, `day` and `dusk`, each a list of the same number (2 to 4) of `#RRGGBB` colours, top to bottom. |
 | `title` | no | Name shown in the picker. |
 | `posterURL` | no | Still image for a video. If missing, the first frame is used. |
 | `sha256` | no | Checksum of the file. If present, a download that does not match is rejected. |
@@ -46,6 +48,10 @@ Start from [`manifest.example.json`](manifest.example.json).
 
 At most 10 wallpapers are shown in the picker. Extra selectable entries are
 hidden, in manifest order.
+
+A live wallpaper has no file to host. The app draws it from the palette and
+shifts the colours with the position of the Sun, calculated on each Mac. It
+uses no network and asks for no location permission.
 
 People with more than one display can choose to span a wallpaper across all of
 them. Any wallpaper can be spanned; wide artwork (about 7680×2160 for images,
@@ -81,6 +87,7 @@ from [`scenery.mobileconfig.example`](scenery.mobileconfig.example).
 | `ForcedWallpaperID` | String | none | Pins this wallpaper on every display. Overrides takeovers and personal choices. |
 | `PauseVideoOnBattery` | Boolean | true | Freeze videos on battery. Setting it locks the checkbox in the app. |
 | `DisableVideo` | Boolean | false | Show videos as still images only. |
+| `Latitude`, `Longitude` | Number | none | Where the Mac is, for live wallpapers. Optional. Without them the app assumes the middle of the Mac's time zone, which is fine for sunrise and sunset times but ignores the seasons. An office-level value is accurate enough. |
 
 To make Macs pick up a change without waiting for the next check, run this as
 the logged-in user from your management tool:

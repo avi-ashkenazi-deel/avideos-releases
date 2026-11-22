@@ -23,7 +23,7 @@ final class ManifestParserTests: XCTestCase {
         """)
 
         XCTAssertEqual(catalog.wallpapers.map(\.id), ["aurora", "dune", "tide"])
-        XCTAssertEqual(catalog.wallpapers[0].url.absoluteString, "https://wallpapers.example.com/scenery/images/aurora.jpg")
+        XCTAssertEqual(catalog.wallpapers[0].url?.absoluteString, "https://wallpapers.example.com/scenery/images/aurora.jpg")
         XCTAssertEqual(catalog.wallpapers[0].kind, .image)
         XCTAssertEqual(catalog.wallpapers[1].title, "dune", "a missing title falls back to the id")
         XCTAssertEqual(catalog.wallpapers[1].sha256, "abcdef")
@@ -58,10 +58,10 @@ final class ManifestParserTests: XCTestCase {
         """, base: localBase)
 
         XCTAssertEqual(
-            catalog.wallpapers.first?.url.path,
+            catalog.wallpapers.first?.url?.path,
             "/Applications/Scenery.app/Contents/Resources/DemoCatalog/images/aurora.jpg"
         )
-        XCTAssertTrue(catalog.wallpapers[0].url.isFileURL)
+        XCTAssertEqual(catalog.wallpapers[0].url?.isFileURL, true)
     }
 
     func testOneBrokenEntryDoesNotBreakTheManifest() throws {
@@ -78,7 +78,7 @@ final class ManifestParserTests: XCTestCase {
         }
         """)
 
-        XCTAssertEqual(catalog.wallpapers.map(\.url.lastPathComponent), ["a.jpg"])
+        XCTAssertEqual(catalog.wallpapers.map { $0.url?.lastPathComponent }, ["a.jpg"])
         XCTAssertEqual(catalog.issues.count, 4)
     }
 
@@ -127,6 +127,37 @@ final class ManifestParserTests: XCTestCase {
         XCTAssertNil(catalog.defaultWallpaperID)
         XCTAssertEqual(catalog.fallbackWallpaper?.id, "a")
         XCTAssertEqual(catalog.issues.count, 6)
+    }
+
+    func testLiveWallpapersNeedAPaletteAndNoFile() throws {
+        let catalog = try parse("""
+        {
+          "version": 1,
+          "wallpapers": [
+            { "id": "daylight", "title": "Daylight", "kind": "live", "palette": {
+                "night": ["#000010", "#101040"], "dawn": ["#402060", "#FF8040"],
+                "day": ["#2060E0", "#C0E0FF"], "dusk": ["202050", "#ff6030"] } },
+            { "id": "no-palette", "kind": "live" },
+            { "id": "uneven", "kind": "live", "palette": {
+                "night": ["#000010", "#101040"], "dawn": ["#402060"],
+                "day": ["#2060E0", "#C0E0FF"], "dusk": ["#202050", "#FF6030"] } },
+            { "id": "bad-colour", "kind": "live", "palette": {
+                "night": ["#000010", "navy"], "dawn": ["#402060", "#FF8040"],
+                "day": ["#2060E0", "#C0E0FF"], "dusk": ["#202050", "#FF6030"] } },
+            { "id": "missing-phase", "kind": "live", "palette": { "night": ["#000010", "#101040"] } },
+            { "id": "no-url" }
+          ]
+        }
+        """)
+
+        XCTAssertEqual(catalog.wallpapers.map(\.id), ["daylight"])
+        let daylight = try XCTUnwrap(catalog.wallpapers.first)
+        XCTAssertEqual(daylight.kind, .live)
+        XCTAssertNil(daylight.url)
+        XCTAssertEqual(daylight.palette?.day.first, RGB(hex: "#2060E0"))
+        XCTAssertEqual(daylight.palette?.dusk.count, 2)
+        XCTAssertTrue(daylight.selectable)
+        XCTAssertEqual(catalog.issues.count, 5)
     }
 
     func testRejectsWholeManifestWhenUnusable() {

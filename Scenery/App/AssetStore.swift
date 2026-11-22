@@ -59,7 +59,11 @@ actor AssetStore {
 
     /// The image or video file for a wallpaper, downloading it if needed.
     func file(for wallpaper: Wallpaper) async throws -> URL {
-        try await localCopy(of: wallpaper.url, id: wallpaper.id, sha256: wallpaper.sha256)
+        guard let url = wallpaper.url else {
+            // Live wallpapers are drawn, so they have no file to fetch.
+            throw AssetError.missingLocalFile(wallpaper.id)
+        }
+        return try await localCopy(of: url, id: wallpaper.id, sha256: wallpaper.sha256)
     }
 
     /// A still image for a wallpaper: the image itself, or a poster for a video.
@@ -74,6 +78,11 @@ actor AssetStore {
             }
             let video = try await file(for: wallpaper)
             return try await generatedPoster(for: video)
+        case .live:
+            guard let palette = wallpaper.palette else {
+                throw AssetError.posterFailed
+            }
+            return try liveStill(for: palette)
         }
     }
 
@@ -114,7 +123,9 @@ actor AssetStore {
     func prune(keeping catalog: Catalog) {
         var keep: Set<String> = []
         for wallpaper in catalog.wallpapers {
-            keep.insert(cachedFile(for: wallpaper.url, id: wallpaper.id).lastPathComponent)
+            if let url = wallpaper.url {
+                keep.insert(cachedFile(for: url, id: wallpaper.id).lastPathComponent)
+            }
             if let posterURL = wallpaper.posterURL {
                 keep.insert(cachedFile(for: posterURL, id: wallpaper.id + "-poster").lastPathComponent)
             }
@@ -230,6 +241,43 @@ actor AssetStore {
 
         try writeJPEG(frame, to: poster, in: postersDirectory, failure: .posterFailed)
         return poster
+    }
+
+    /// A still of a live wallpaper in its daytime colours. It is what macOS
+    /// shows where the live window cannot go (the lock screen, Mission
+    /// Control) and what the picker uses as the preview.
+    private func liveStill(for palette: DayPalette) throws -> URL {
+        let recipe = palette.day.map { "\($0.red),\($0.green),\($0.blue)" }.joined(separator: "|")
+        let digest = SHA256.hash(data: Data(recipe.utf8))
+        let name = "live-" + digest.prefix(8).map { String(format: "%02x", $0) }.joined()
+        let still = postersDirectory.appendingPathComponent(name + ".jpg")
+        if FileManager.default.fileExists(atPath: still.path) {
+            return still
+        }
+
+        let width = 1920
+        let height = 1200
+        let colors = palette.day.map {
+            CGColor(srgbRed: CGFloat($0.red), green: CGFloat($0.green), blue: CGFloat($0.blue), alpha: 1)
+        }
+        guard let space = CGColorSpace(name: CGColorSpace.sRGB),
+              let context = CGContext(
+                  data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+                  space: space, bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue
+              ),
+              let gradient = CGGradient(colorsSpace: space, colors: colors as CFArray, locations: nil) else {
+            throw AssetError.posterFailed
+        }
+        // Drawing coordinates start bottom-left, so the first colour goes at
+        // the top edge.
+        context.drawLinearGradient(
+            gradient, start: CGPoint(x: 0, y: CGFloat(height)), end: CGPoint(x: 0, y: 0), options: []
+        )
+        guard let image = context.makeImage() else {
+            throw AssetError.posterFailed
+        }
+        try writeJPEG(image, to: still, in: postersDirectory, failure: .posterFailed)
+        return still
     }
 
     // MARK: - Writing images

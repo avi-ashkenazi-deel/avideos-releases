@@ -46,7 +46,7 @@ public enum ManifestParser {
 
         for (index, entry) in raw.wallpapers.enumerated() {
             guard let item = entry.value else {
-                issues.append("Wallpaper #\(index + 1) is missing an id or url and was skipped.")
+                issues.append("Wallpaper #\(index + 1) is missing an id or is not written correctly and was skipped.")
                 continue
             }
             let id = item.id.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -58,17 +58,36 @@ public enum ManifestParser {
                 issues.append("Wallpaper id \"\(id)\" is used more than once; only the first is kept.")
                 continue
             }
-            guard let url = resolve(item.url, baseURL: baseURL) else {
-                issues.append("Wallpaper \"\(id)\" has a url that is not allowed (use https) and was skipped.")
-                continue
-            }
-            guard let kind = kind(declared: item.kind, url: url) else {
-                issues.append("Wallpaper \"\(id)\" is not a supported image or video file and was skipped.")
-                continue
+            let kind: Wallpaper.Kind
+            var url: URL?
+            var palette: DayPalette?
+            if item.kind?.lowercased() == Wallpaper.Kind.live.rawValue {
+                // A live wallpaper is drawn from colours, so it has no file.
+                guard let parsed = item.palette?.value?.palette else {
+                    issues.append("Live wallpaper \"\(id)\" needs a palette with night, dawn, day and dusk, each with the same number (2 to 4) of #RRGGBB colours, and was skipped.")
+                    continue
+                }
+                kind = .live
+                palette = parsed
+            } else {
+                guard let text = item.url else {
+                    issues.append("Wallpaper \"\(id)\" has no url and was skipped.")
+                    continue
+                }
+                guard let resolved = resolve(text, baseURL: baseURL) else {
+                    issues.append("Wallpaper \"\(id)\" has a url that is not allowed (use https) and was skipped.")
+                    continue
+                }
+                guard let fileKind = self.kind(declared: item.kind, url: resolved) else {
+                    issues.append("Wallpaper \"\(id)\" is not a supported image or video file and was skipped.")
+                    continue
+                }
+                kind = fileKind
+                url = resolved
             }
 
             var posterURL: URL?
-            if let poster = item.posterURL {
+            if kind == .video, let poster = item.posterURL {
                 if let resolved = resolve(poster, baseURL: baseURL),
                    imageExtensions.contains(resolved.pathExtension.lowercased()) {
                     posterURL = resolved
@@ -98,7 +117,8 @@ public enum ManifestParser {
                     url: url,
                     posterURL: posterURL,
                     sha256: (sha256?.isEmpty == false) ? sha256 : nil,
-                    selectable: selectable
+                    selectable: selectable,
+                    palette: palette
                 )
             )
         }
@@ -231,10 +251,30 @@ private struct RawWallpaper: Decodable {
     let id: String
     let title: String?
     let kind: String?
-    let url: String
+    let url: String?
     let posterURL: String?
     let sha256: String?
     let selectable: Bool?
+    let palette: Lossy<RawPalette>?
+}
+
+private struct RawPalette: Decodable {
+    let night: [String]
+    let dawn: [String]
+    let day: [String]
+    let dusk: [String]
+
+    /// `nil` if any colour is unreadable or the four lists differ in length.
+    var palette: DayPalette? {
+        func colors(_ list: [String]) -> [RGB]? {
+            let parsed = list.compactMap { RGB(hex: $0) }
+            return parsed.count == list.count ? parsed : nil
+        }
+        guard let night = colors(night), let dawn = colors(dawn), let day = colors(day), let dusk = colors(dusk) else {
+            return nil
+        }
+        return DayPalette(night: night, dawn: dawn, day: day, dusk: dusk)
+    }
 }
 
 private struct RawTakeover: Decodable {

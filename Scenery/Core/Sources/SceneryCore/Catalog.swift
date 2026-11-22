@@ -5,13 +5,15 @@ public struct Wallpaper: Identifiable, Hashable, Sendable {
     public enum Kind: String, Sendable {
         case image
         case video
+        /// Drawn by the app from a palette, and changing through the day.
+        case live
     }
 
     public let id: String
     public let title: String
     public let kind: Kind
-    /// The image or video file.
-    public let url: URL
+    /// The image or video file. `nil` for a live wallpaper, which has no file.
+    public let url: URL?
     /// Optional still for a video. If missing, the app grabs the first frame.
     public let posterURL: URL?
     /// Optional lowercase hex SHA-256 of the file at `url`.
@@ -19,15 +21,18 @@ public struct Wallpaper: Identifiable, Hashable, Sendable {
     /// `false` hides the wallpaper from the picker (e.g. a seasonal takeover
     /// that people should not be able to keep all year).
     public let selectable: Bool
+    /// The colours of a live wallpaper. `nil` for images and videos.
+    public let palette: DayPalette?
 
     public init(
         id: String,
         title: String,
         kind: Kind,
-        url: URL,
+        url: URL?,
         posterURL: URL? = nil,
         sha256: String? = nil,
-        selectable: Bool = true
+        selectable: Bool = true,
+        palette: DayPalette? = nil
     ) {
         self.id = id
         self.title = title
@@ -36,6 +41,7 @@ public struct Wallpaper: Identifiable, Hashable, Sendable {
         self.posterURL = posterURL
         self.sha256 = sha256
         self.selectable = selectable
+        self.palette = palette
     }
 }
 

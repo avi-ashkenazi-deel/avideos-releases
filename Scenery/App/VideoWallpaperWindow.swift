@@ -26,16 +26,7 @@ final class VideoWallpaperWindow: NSWindow {
     convenience init(frame: CGRect) {
         self.init(contentRect: frame, styleMask: .borderless, backing: .buffered, defer: false)
 
-        level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.desktopWindow)))
-        collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle, .fullScreenNone]
-        isReleasedWhenClosed = false
-        ignoresMouseEvents = true
-        isExcludedFromWindowsMenu = true
-        hidesOnDeactivate = false
-        hasShadow = false
-        isOpaque = false
-        backgroundColor = .clear
-        animationBehavior = .none
+        DesktopLayer.configure(self)
         // Invisible until the first frame is ready, so there is never a black flash.
         alphaValue = 0
 
@@ -98,15 +89,7 @@ final class VideoWallpaperWindow: NSWindow {
         if frame != screenFrame {
             setFrame(screenFrame, display: true)
         }
-        let target = canvas ?? screenFrame
-        // Desktop coordinates and layer coordinates both start bottom-left,
-        // so the canvas only has to be shifted into this window's space.
-        let videoFrame = CGRect(
-            x: target.minX - screenFrame.minX,
-            y: target.minY - screenFrame.minY,
-            width: target.width,
-            height: target.height
-        )
+        let videoFrame = DesktopLayer.pictureFrame(screenFrame: screenFrame, canvas: canvas)
         guard playerLayer.frame != videoFrame else { return }
         CATransaction.begin()
         CATransaction.setDisableActions(true)

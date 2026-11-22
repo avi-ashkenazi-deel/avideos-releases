@@ -21,6 +21,10 @@ struct PickerView: View {
 
             grid
 
+            if model.hasLiveWallpaper {
+                daySection
+            }
+
             if let problem = model.problem {
                 Label(problem, systemImage: "exclamationmark.triangle.fill")
                     .font(.caption)
@@ -112,6 +116,48 @@ struct PickerView: View {
         .disabled(model.lock != nil)
         .opacity(model.lock == nil ? 1 : 0.45)
         .animation(.easeInOut(duration: 0.2), value: model.lock)
+    }
+
+    /// Shown while a wallpaper that follows the day is on screen: drag
+    /// through the day and watch the desktop change.
+    private var daySection: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Label("Follows your day", systemImage: "sun.max")
+                Spacer()
+                if model.previewHour != nil {
+                    Button("Back to now") {
+                        model.previewHour = nil
+                    }
+                    .buttonStyle(.borderless)
+                }
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+
+            Slider(
+                value: Binding(
+                    get: { model.previewHour ?? model.currentHour },
+                    set: { model.previewHour = $0 }
+                ),
+                in: 0...24
+            )
+            .controlSize(.small)
+            .accessibilityLabel("Preview a time of day")
+
+            HStack {
+                Text("Midnight")
+                Spacer()
+                Text("Noon")
+                Spacer()
+                Text("Midnight")
+            }
+            .font(.caption2)
+            .foregroundStyle(.tertiary)
+        }
+        .onDisappear {
+            model.previewHour = nil
+        }
     }
 
     private var footer: some View {

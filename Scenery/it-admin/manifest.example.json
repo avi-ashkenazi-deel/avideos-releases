@@ -2,18 +2,65 @@
   "version": 1,
   "defaultWallpaperID": "value-01",
   "wallpapers": [
-    { "id": "value-01", "title": "Value one", "url": "images/value-01.jpg" },
-    { "id": "value-02", "title": "Value two", "url": "images/value-02.jpg" },
-    { "id": "value-03", "title": "Value three", "url": "images/value-03.jpg" },
-    { "id": "value-04", "title": "Value four", "url": "images/value-04.jpg" },
-    { "id": "value-05", "title": "Value five", "url": "images/value-05.jpg" },
-    { "id": "value-06", "title": "Value six", "url": "images/value-06.jpg" },
+    {
+      "id": "value-01",
+      "title": "Value one",
+      "url": "images/value-01.jpg"
+    },
+    {
+      "id": "value-02",
+      "title": "Value two",
+      "url": "images/value-02.jpg"
+    },
+    {
+      "id": "value-03",
+      "title": "Value three",
+      "url": "images/value-03.jpg"
+    },
+    {
+      "id": "value-04",
+      "title": "Value four",
+      "url": "images/value-04.jpg"
+    },
+    {
+      "id": "value-05",
+      "title": "Value five",
+      "url": "images/value-05.jpg"
+    },
+    {
+      "id": "value-06",
+      "title": "Value six",
+      "url": "images/value-06.jpg"
+    },
     {
       "id": "brand-loop",
       "title": "Brand loop",
       "url": "videos/brand-loop.mp4",
       "posterURL": "videos/brand-loop.jpg",
       "sha256": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
+    },
+    {
+      "id": "brand-daylight",
+      "title": "Brand daylight",
+      "kind": "live",
+      "palette": {
+        "night": [
+          "#080C24",
+          "#2A2C66"
+        ],
+        "dawn": [
+          "#2E3A78",
+          "#FFB27A"
+        ],
+        "day": [
+          "#2F6FDB",
+          "#DCEBFF"
+        ],
+        "dusk": [
+          "#26265E",
+          "#FF8F57"
+        ]
+      }
     },
     {
       "id": "holidays-2026",

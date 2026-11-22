@@ -19,6 +19,10 @@ enum Prefs {
         static let pauseVideoOnBattery = "PauseVideoOnBattery"
         /// Bool. Show the still frame instead of playing video at all.
         static let disableVideo = "DisableVideo"
+        /// Numbers. Where this Mac is, for wallpapers that follow the day.
+        /// Optional: without them the time zone gives a rough answer.
+        static let latitude = "Latitude"
+        static let longitude = "Longitude"
 
         // Private state, not meant to be managed.
         static let selection = "Selection"
@@ -72,6 +76,16 @@ enum Prefs {
 
     static var disableVideo: Bool {
         defaults.bool(forKey: Key.disableVideo)
+    }
+
+    /// The configured location, if both numbers are present and sensible.
+    static var coordinates: (latitude: Double, longitude: Double)? {
+        guard let latitude = (defaults.object(forKey: Key.latitude) as? NSNumber)?.doubleValue,
+              let longitude = (defaults.object(forKey: Key.longitude) as? NSNumber)?.doubleValue,
+              (-90...90).contains(latitude), (-180...180).contains(longitude) else {
+            return nil
+        }
+        return (latitude, longitude)
     }
 
     static var selection: SelectionState {

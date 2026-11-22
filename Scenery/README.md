@@ -10,7 +10,7 @@ HearIt app in the rest of this repository, so it can move to its own repository
 unchanged.
 
 > **Status:** first iteration, written without access to a Mac. The rules
-> engine in `Core/` is unit-tested (`swift test`, 29 tests). The app layer in
+> engine in `Core/` is unit-tested (`swift test`, 39 tests). The app layer in
 > `App/` has only been syntax-checked, **not compiled or run** — expect a few
 > small fixes on the first build in Xcode.
 
@@ -19,6 +19,11 @@ unchanged.
 - **Short approved list.** People pick from at most 10 wallpapers. Nothing else
   can be chosen.
 - **Images and videos.** Videos loop silently behind the desktop icons.
+- **Wallpapers that follow your day.** A third kind of wallpaper is drawn by
+  the app from a palette of brand colours and shifts continuously with the
+  real position of the Sun: night, dawn, day, dusk. A slider in the picker
+  lets you drag through the whole day and watch the desktop change. It needs
+  no file at all and is the lightest wallpaper there is.
 - **Multi-monitor aware.** A miniature of the real desk layout shows every
   display. Three layouts: the same wallpaper on each display, a different one
   per display, or **one wallpaper spanning all of them** as a single picture.
@@ -41,8 +46,9 @@ open Scenery.xcodeproj
 ```
 
 In Xcode, choose your team under **Signing & Capabilities** and run. A picture
-icon appears in the menu bar. With no configuration, the app uses the eight
-placeholder wallpapers in `DemoCatalog/`.
+icon appears in the menu bar. With no configuration, the app uses the nine
+placeholder wallpapers in `DemoCatalog/`: six images, two videos, and
+"Daylight", which follows the day.
 
 Requires macOS 14 or later.
 
@@ -54,6 +60,36 @@ Requires macOS 14 or later.
 3. List them in `DemoCatalog/manifest.json`.
 4. Run `swift test` in `Core/` — it fails if the manifest has a mistake or
    points at a missing file.
+
+## A wallpaper that follows the day
+
+Add an entry with `"kind": "live"` and a `palette` to the manifest. Each of the
+four moments is a vertical gradient, top to bottom, of two to four colours:
+
+```json
+{
+  "id": "daylight", "title": "Daylight", "kind": "live",
+  "palette": {
+    "night": ["#080C24", "#161D4A", "#2A2C66"],
+    "dawn":  ["#2E3A78", "#C46F96", "#FFB27A"],
+    "day":   ["#2F6FDB", "#78AEEF", "#DCEBFF"],
+    "dusk":  ["#26265E", "#A44E7C", "#FF8F57"]
+  }
+}
+```
+
+The app blends between them as the Sun moves: full night with the Sun 12°
+below the horizon, dawn or dusk at its strongest on the horizon, full day 12°
+above it. The Sun's position is calculated on the Mac; nothing is looked up
+online and no location permission is requested.
+
+- Without a configured location the app assumes the middle of the Mac's time
+  zone, which gives sensible sunrise and sunset times but a twelve-hour day all
+  year. Set `Latitude` and `Longitude` for real seasons:
+  `defaults write com.aviashkenazi.scenery Latitude -float 32.08` (and the
+  same for `Longitude`).
+- Spanning is seamless by construction: every display draws its part of the
+  same gradient, so there is nothing to keep in sync.
 
 ## Artwork that spans well
 
@@ -119,6 +155,10 @@ Who decides the wallpaper, strongest first:
 - **Spanning ignores bezels.** The picture continues from the edge of one panel
   to the edge of the next, as macOS itself does; the physical gap between
   monitors is not compensated for.
+- **Live wallpapers are a first step.** They are smooth gradients only (no
+  artwork, texture or motion yet), and large gradients can show faint banding
+  on some displays. The still used for the lock screen and the picker preview
+  is always the daytime colours.
 - **Other Spaces update when visited.** macOS keeps one wallpaper per Space and
   only lets an app set the visible one.
 - **Distribution.** For other people's Macs the app must be signed with a
