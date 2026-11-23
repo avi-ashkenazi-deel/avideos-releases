@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# ChopChop installer (Mac). The code is in a private GitHub repository, so you need read access to it and
-# Git signed in to GitHub once (brew install gh && gh auth login && gh auth setup-git). Then run:
-#   gh api -H "Accept: application/vnd.github.raw" "repos/avi-ashkenazi-deel/avideos-releases/contents/videditor/install.sh?ref=Videditor" | bash
+# ChopChop installer (Mac). Run:
+#   curl -fsSL https://raw.githubusercontent.com/avi-ashkenazi-deel/avideos-releases/Videditor/videditor/install.sh | bash
 #
 # Installs what is missing (Node 22+, ffmpeg, Google Chrome, Claude Code; needs Homebrew), downloads
 # ChopChop into ~/.chopchop and adds the `chopchop` command. `chopchop` gets the latest version each
@@ -56,7 +55,7 @@ if [ -d "$DIR/.git" ]; then
 else
   [ -e "$DIR" ] && die "$DIR already exists and is not a ChopChop download. Move it away and run this again."
   # The repository holds other projects too: download only ChopChop's folder (sparse, blobs on demand).
-  git clone --quiet --filter=blob:none --sparse --branch "$BRANCH" "$REPO" "$DIR" || die "Could not download from $REPO. You need read access to it (ask whoever shared ChopChop) and Git signed in to GitHub: brew install gh && gh auth login && gh auth setup-git"
+  git clone --quiet --filter=blob:none --sparse --branch "$BRANCH" "$REPO" "$DIR" || die "Could not download from $REPO. Check your internet connection and run this again."
   git -C "$DIR" sparse-checkout set videditor
   ok "downloaded"
 fi

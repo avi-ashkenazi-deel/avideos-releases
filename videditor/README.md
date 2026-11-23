@@ -96,17 +96,11 @@ subscription. No accounts, no credits.
 
 ## Install (command line, for now)
 
-ChopChop runs on your Mac and opens in your browser. The code is in this private repository, so each person
-needs **read access to `avi-ashkenazi-deel/avideos-releases`** and Git signed in to GitHub once:
+ChopChop runs on your Mac and opens in your browser. One command installs it (Node, ffmpeg, Chrome and
+Claude Code if missing; needs Homebrew). No GitHub account needed: the repository is public.
 
 ```bash
-brew install gh && gh auth login && gh auth setup-git
-```
-
-Then one command installs everything (Node, ffmpeg, Chrome and Claude Code if missing; needs Homebrew):
-
-```bash
-gh api -H "Accept: application/vnd.github.raw" "repos/avi-ashkenazi-deel/avideos-releases/contents/videditor/install.sh?ref=Videditor" | bash
+curl -fsSL https://raw.githubusercontent.com/avi-ashkenazi-deel/avideos-releases/Videditor/videditor/install.sh | bash
 ```
 
 It downloads only ChopChop's folder to `~/.chopchop` and adds the **`chopchop`** command:
