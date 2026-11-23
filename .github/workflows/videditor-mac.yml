@@ -1,4 +1,4 @@
-# Builds the Videditor Mac app when a release tag (videditor-v1.2.3) is pushed, or by hand from the
+# Builds the ChopChop Mac app when a release tag (videditor-v1.2.3) is pushed, or by hand from the
 # Actions tab. Signs and notarizes when the Apple secrets below exist; otherwise builds an unsigned app.
 #
 # Repository secrets (Settings → Secrets and variables → Actions):
@@ -7,7 +7,7 @@
 #   APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID   for notarization
 # Repository variable (optional):
 #   VIDEDITOR_UPDATE_FEED        where installed apps look for updates (default: this repo's latest release)
-name: Videditor Mac app
+name: ChopChop Mac app
 on:
   push:
     tags: ['videditor-v*']
@@ -50,7 +50,7 @@ jobs:
         working-directory: videditor/desktop
         run: |
           node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json'));p.version=JSON.parse(fs.readFileSync('../package.json')).version;p.videditor.updateFeed=process.env.UPDATE_FEED;fs.writeFileSync('package.json',JSON.stringify(p,null,2))"
-          echo "Building Videditor $(node -p "require('./package.json').version"), feed: $UPDATE_FEED"
+          echo "Building ChopChop $(node -p "require('./package.json').version"), feed: $UPDATE_FEED"
       - name: Build (sign and notarize when configured)
         working-directory: videditor/desktop
         env:
@@ -62,7 +62,7 @@ jobs:
         run: |
           if [ -z "$CSC_LINK" ]; then
             export CSC_IDENTITY_AUTO_DISCOVERY=false
-            echo "::warning::No signing certificate: this build is unsigned. People must right-click Videditor > Open the first time, and updates are not signature-checked."
+            echo "::warning::No signing certificate: this build is unsigned. People must right-click ChopChop > Open the first time, and updates are not signature-checked."
           fi
           notarize=false; [ -n "$APPLE_ID" ] && [ -n "$CSC_LINK" ] && notarize=true
           npx electron-builder --mac zip dmg --arm64 --x64 -c.mac.notarize=$notarize
@@ -76,8 +76,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           cd videditor/desktop/dist
-          gh release create "$GITHUB_REF_NAME" Videditor-*.zip Videditor-*.dmg latest.json \
-            --title "Videditor ${GITHUB_REF_NAME#videditor-v}" --notes "$(git tag -l --format='%(contents)' "$GITHUB_REF_NAME")"
+          gh release create "$GITHUB_REF_NAME" ChopChop-*.zip ChopChop-*.dmg latest.json \
+            --title "ChopChop ${GITHUB_REF_NAME#videditor-v}" --notes "$(git tag -l --format='%(contents)' "$GITHUB_REF_NAME")"
       - name: Keep the build (manual runs)
         if: ${{ !startsWith(github.ref, 'refs/tags/') }}
         uses: actions/upload-artifact@v4

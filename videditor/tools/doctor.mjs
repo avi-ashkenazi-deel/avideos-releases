@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Videditor doctor: checks the server, the agent and the Studio chat in a real browser,
+// ChopChop doctor: checks the server, the agent and the Studio chat in a real browser,
 // and prints a report you can paste to whoever is helping you.
 //   node videditor/tools/doctor.mjs            (uses the most recently updated project)
 //   node videditor/tools/doctor.mjs "VS"       (project by name)
@@ -15,7 +15,7 @@ const out = []; const log = (...a) => { const line = a.map((x) => (typeof x === 
 const j = async (p, init) => { const r = await fetch(BASE + p, init); const t = await r.text(); try { return { status: r.status, body: JSON.parse(t) }; } catch { return { status: r.status, body: t.slice(0, 400) }; } };
 
 (async () => {
-  log(`# Videditor doctor ${new Date().toISOString()}`);
+  log(`# ChopChop doctor ${new Date().toISOString()}`);
   log(`node ${process.version} on ${process.platform}; server ${BASE}`);
   let state; try { state = (await j('/api/state')).body; } catch (e) { log(`! Server not reachable at ${BASE}: ${e.message}. Start it with: node videditor/server.mjs`); process.exit(1); }
   log('capabilities:', (await j('/api/capabilities')).body);

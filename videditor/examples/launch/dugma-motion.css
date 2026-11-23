@@ -1,4 +1,4 @@
-/* Dugma motion for Videditor compositions. Put fx-<effect> on a clip (see MOTION.md).
+/* Dugma motion for ChopChop compositions. Put fx-<effect> on a clip (see MOTION.md).
    Animations run on the clip's local time; the runtime drives them to the exact frame. */
 :root {
   --ease-enter: cubic-bezier(0.22, 1, 0.36, 1);

@@ -9,9 +9,9 @@ export function buildPrompt({ project, version, feedback, composition, baseUrl, 
   lines.push(`# Video review brief: ${project.name} ${live ? '(live composition)' : version.label}`);
   lines.push('');
   const run = live && open.some((f) => f.tags?.includes('run-through'));
-  lines.push(live ? (run ? `You are revising a video. The reviewer played the live composition through in Videditor Studio and talked (and drew) as it ran. Each item below is timed to the moment it was said; "this" means what was on screen then. Apply all of them to the composition; the person renders.` : `You are revising a video. The reviewer paused the live composition in Videditor Studio, talked and drew on the frame. Apply the feedback to the composition; the person renders.`) : `You are revising a video. A reviewer left timestamped feedback on the current render in Videditor. Apply the feedback, render a new version, register it, then reply on each item and mark it done.`);
+  lines.push(live ? (run ? `You are revising a video. The reviewer played the live composition through in ChopChop Studio and talked (and drew) as it ran. Each item below is timed to the moment it was said; "this" means what was on screen then. Apply all of them to the composition; the person renders.` : `You are revising a video. The reviewer paused the live composition in ChopChop Studio, talked and drew on the frame. Apply the feedback to the composition; the person renders.`) : `You are revising a video. A reviewer left timestamped feedback on the current render in ChopChop. Apply the feedback, render a new version, register it, then reply on each item and mark it done.`);
   lines.push('');
-  lines.push(live ? `- Videditor Studio: ${baseUrl}/#/studio/${project.id}` : `- Videditor: ${baseUrl}/#/p/${project.id}?v=${version.id}`);
+  lines.push(live ? `- ChopChop Studio: ${baseUrl}/#/studio/${project.id}` : `- ChopChop: ${baseUrl}/#/p/${project.id}?v=${version.id}`);
   if (project.dir) lines.push(`- Composition folder: ${project.dir}`);
   if (!live) lines.push(`- Reviewed render: ${version.filePath || version.mediaUrl}${version.duration ? ` (${fmt(version.duration)}, ${version.width}×${version.height})` : ''}`);
   if (!live && version.notes) lines.push(`- Notes on this version: ${version.notes.split('\n')[0]}`);
@@ -45,7 +45,7 @@ export function buildPrompt({ project, version, feedback, composition, baseUrl, 
   const n = version.number + 1;
   if (project.dir) {
     lines.push(`1. Edit the composition in \`${project.dir}/index.html\` (the video is HTML; timing lives in \`data-start\` / \`data-duration\` attributes; the format is documented in \`videditor/skills/videditor/SKILL.md\`).`);
-    lines.push(`2. Render and register v${n}: with the Videditor MCP server call \`render_version\` with project_id \`${project.id}\` and notes describing the changes. Without MCP: \`node videditor/cli.mjs render ${project.id} --notes "..."\``);
+    lines.push(`2. Render and register v${n}: with the ChopChop MCP server call \`render_version\` with project_id \`${project.id}\` and notes describing the changes. Without MCP: \`node videditor/cli.mjs render ${project.id} --notes "..."\``);
     lines.push(`3. If you produced the MP4 some other way, register it with \`version_add\` or \`node videditor/cli.mjs add-version ${project.id} path.mp4\`.`);
   } else {
     lines.push(`1. Make the edits in your editing tool and export a new MP4.`);

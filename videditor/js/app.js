@@ -7,14 +7,14 @@ import { renderStudio } from './studio.js';
 const app = document.getElementById('app');
 const bar = h('div.topbar');
 const view = h('div', { style: { flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 } });
-app.replaceChildren(bar, view); // replaces the "Loading Videditor…" placeholder from index.html
+app.replaceChildren(bar, view); // replaces the "Loading ChopChop…" placeholder from index.html
 
 const navigate = (hash) => { if (location.hash === hash) route(); else location.hash = hash; };
 // ---- the Mac app (window.videditorDesktop from desktop/preload.cjs): version, updates, videos folder.
 // In a plain browser (developer copy) none of this shows.
 const desk = window.videditorDesktop || null;
 let appInfo = null; let upd = null;
-const updateBtn = h('button.btn.sm.update-pill.hidden', { title: 'A new version of Videditor' }, svg('download'), h('span.up-text', 'Update'));
+const updateBtn = h('button.btn.sm.update-pill.hidden', { title: 'A new version of ChopChop' }, svg('download'), h('span.up-text', 'Update'));
 updateBtn.addEventListener('click', () => showUpdate());
 function paintUpdate(s) {
   upd = s; if (!s) return;
@@ -35,15 +35,15 @@ async function showUpdate() {
   if (s.status === 'downloading') return toast(`Downloading ${s.version}… it will be ready in a moment`, 'ok');
   const notes = s.notes ? h('div.update-notes', md(String(s.notes).replace(/^•\s*/gm, '- '))) : null;
   if (s.status === 'ready') {
-    if (await modal("What's new", h('div', h('p', `${s.current} → `, h('b', s.ready?.version || s.version)), notes, h('p.small.muted', 'Videditor quits, updates and opens again. Your videos are not touched. If you keep working, it updates the next time you quit.')), { actions: [{ label: 'Later', value: false }, { label: 'Restart now', cls: 'primary', value: true }] })) desk.update.install();
+    if (await modal("What's new", h('div', h('p', `${s.current} → `, h('b', s.ready?.version || s.version)), notes, h('p.small.muted', 'ChopChop quits, updates and opens again. Your videos are not touched. If you keep working, it updates the next time you quit.')), { actions: [{ label: 'Later', value: false }, { label: 'Restart now', cls: 'primary', value: true }] })) desk.update.install();
     return;
   }
   if (s.status === 'available') {
-    if (await modal(`Videditor ${s.version} is available`, h('div', notes, h('p.small.muted', 'It downloads in the background; you can keep working.')), { actions: [{ label: 'Download', cls: 'primary', value: true }] })) { await desk.update.check(); toast('Downloading the update…', 'ok'); }
+    if (await modal(`ChopChop ${s.version} is available`, h('div', notes, h('p.small.muted', 'It downloads in the background; you can keep working.')), { actions: [{ label: 'Download', cls: 'primary', value: true }] })) { await desk.update.check(); toast('Downloading the update…', 'ok'); }
     return;
   }
   const r = await desk.update.check();
-  if (!['available', 'downloading', 'ready'].includes(r.status)) toast(r.error ? `Could not check: ${r.error}` : `Videditor ${r.current} is the newest version`, r.error ? 'err' : 'ok');
+  if (!['available', 'downloading', 'ready'].includes(r.status)) toast(r.error ? `Could not check: ${r.error}` : `ChopChop ${r.current} is the newest version`, r.error ? 'err' : 'ok');
 }
 
 // Account: just the initials; the name and 'Change name' show when it opens.
@@ -57,9 +57,9 @@ function accountMenu(who) {
     h('div.menu-sep'),
     h('button.menu-item', { on: { click: changeName } }, svg('pen'), h('span.mi-text', h('span', who ? 'Change name' : 'Set your name'))),
     h('div.menu-sep'),
-    h('button.menu-item', { on: { click: () => { close(); desk ? showUpdate() : null; } } }, svg('download'), h('span.mi-text', h('span', !desk ? 'Updates' : upd?.status === 'ready' ? `Restart to update to ${upd.ready?.version}` : 'Check for updates'), h('span.mi-hint', `Videditor ${appInfo?.version ? 'v' + appInfo.version : ''}${desk ? '' : ' · developer copy (git pull to update)'}`))),
+    h('button.menu-item', { on: { click: () => { close(); desk ? showUpdate() : null; } } }, svg('download'), h('span.mi-text', h('span', !desk ? 'Updates' : upd?.status === 'ready' ? `Restart to update to ${upd.ready?.version}` : 'Check for updates'), h('span.mi-hint', `ChopChop ${appInfo?.version ? 'v' + appInfo.version : ''}${desk ? '' : ' · developer copy (git pull to update)'}`))),
     desk ? h('label.menu-item.check', h('input', { type: 'checkbox', checked: upd?.auto !== false, on: { change: async (e) => { try { paintUpdate(await desk.update.setAuto(e.target.checked)); toast(e.target.checked ? 'Updates download by themselves and install when you restart' : 'Auto-update off: you will see a notice instead', 'ok'); } catch (err) { toast(err.message, 'err'); } } } }), h('span.mi-text', h('span', 'Update automatically'), h('span.mi-hint', 'Downloads in the background'))) : null,
-    desk ? h('button.menu-item', { on: { click: () => { close(); desk.openHome(); } } }, svg('folder'), h('span.mi-text', h('span', 'Open videos folder'), h('span.mi-hint', appInfo?.home || '~/Videditor'))) : null,
+    desk ? h('button.menu-item', { on: { click: () => { close(); desk.openHome(); } } }, svg('folder'), h('span.mi-text', h('span', 'Open videos folder'), h('span.mi-hint', appInfo?.home || '~/ChopChop'))) : null,
   ].flat().filter(Boolean));
   const wrap = h('div.menuwrap.accountwrap', trigger, pop);
   const onDoc = (e) => { if (!wrap.contains(e.target)) close(); };
@@ -71,7 +71,7 @@ function accountMenu(who) {
 function topbar(items = []) {
   const who = getAuthor();
   bar.replaceChildren(...[
-    h('a.brand', { href: '#/', title: 'Videditor' }, svg('logo'), 'Videditor'),
+    h('a.brand', { href: '#/', title: 'ChopChop' }, svg('logo'), 'ChopChop'),
     items.length ? h('span.crumb', '/') : null,
     ...items,
     items.length ? null : h('span.spacer'),

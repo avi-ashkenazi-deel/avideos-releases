@@ -1,7 +1,7 @@
-// Videditor for Mac. The window shows the Videditor web UI served by the bundled server, which this
+// ChopChop for Mac. The window shows the ChopChop web UI served by the bundled server, which this
 // process starts (Electron's own Node, ELECTRON_RUN_AS_NODE) with everything it needs inside the app:
 // ffmpeg/ffprobe, a headless Chrome for rendering, whisper for transcribing voice notes.
-// Your work lives in ~/Videditor; updates replace only the app.
+// Your work lives in ~/ChopChop; updates replace only the app.
 const { app, BrowserWindow, Menu, shell, session, ipcMain, dialog, nativeTheme } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
@@ -11,7 +11,7 @@ const http = require('node:http');
 const { spawn } = require('node:child_process');
 const updater = require('./updater.cjs');
 
-const HOME = process.env.VIDEDITOR_HOME || path.join(os.homedir(), 'Videditor');
+const HOME = process.env.VIDEDITOR_HOME || path.join(os.homedir(), 'ChopChop');
 const LOGS = path.join(HOME, 'logs');
 const SETTINGS = path.join(HOME, 'settings.json');
 const RES = app.isPackaged ? process.resourcesPath : path.join(__dirname, '.dev-resources');
@@ -56,7 +56,7 @@ async function startServer() {
   if (whisper) env.VIDEDITOR_WHISPER = whisper; if (fs.existsSync(model)) env.VIDEDITOR_WHISPER_MODEL = model;
   log(`starting server v${app.getVersion()} on ${port} (chrome ${chrome ? 'bundled' : 'system'}, whisper ${whisper ? 'bundled' : 'none'})`);
   server = spawn(process.execPath, [path.join(SERVER_DIR, 'server.mjs')], { cwd: SERVER_DIR, env, stdio: ['ignore', out, out] });
-  server.on('exit', (code) => { log(`server exited ${code}`); server = null; if (!quitting && win) showError(`The Videditor engine stopped (code ${code}).`); });
+  server.on('exit', (code) => { log(`server exited ${code}`); server = null; if (!quitting && win) showError(`The ChopChop engine stopped (code ${code}).`); });
   for (let i = 0; i < 120; i++) { if (await ping()) { writeSettings({ demoSeeded: true }); return true; } await new Promise((r) => setTimeout(r, 250)); }
   return false;
 }
@@ -69,14 +69,14 @@ function showError(msg) {
 function createWindow() {
   const mac = process.platform === 'darwin';
   win = new BrowserWindow({
-    width: 1440, height: 920, minWidth: 1024, minHeight: 640, show: false, backgroundColor: '#0e1014', title: 'Videditor',
+    width: 1440, height: 920, minWidth: 1024, minHeight: 640, show: false, backgroundColor: '#0e1014', title: 'ChopChop',
     ...(mac ? { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 14, y: 17 } } : {}),
     webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false, spellcheck: true },
   });
   win.once('ready-to-show', () => win.show());
   win.on('closed', () => { win = null; });
   const origin = () => `http://127.0.0.1:${port}`;
-  // Only Videditor itself opens inside the window; everything else goes to the default browser.
+  // Only ChopChop itself opens inside the window; everything else goes to the default browser.
   win.webContents.setWindowOpenHandler(({ url }) => { if (!url.startsWith(origin()) && !url.startsWith(`http://localhost:${port}`)) shell.openExternal(url); return { action: 'deny' }; });
   win.webContents.on('will-navigate', (e, url) => { if (!url.startsWith(origin()) && !url.startsWith(`http://localhost:${port}`) && !url.startsWith('data:')) { e.preventDefault(); shell.openExternal(url); } });
   return win;
@@ -118,9 +118,9 @@ ipcMain.handle('update:setAuto', (_e, on) => { writeSettings({ autoUpdate: !!on 
 app.whenReady().then(async () => {
   nativeTheme.themeSource = 'dark';
   setupSession(); buildMenu(); createWindow();
-  win.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent('<body style="background:#0e1014;color:#7c8395;font:13px -apple-system,system-ui;display:grid;place-items:center;height:100vh;margin:0;-webkit-app-region:drag">Starting Videditor…</body>'));
+  win.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent('<body style="background:#0e1014;color:#7c8395;font:13px -apple-system,system-ui;display:grid;place-items:center;height:100vh;margin:0;-webkit-app-region:drag">Starting ChopChop…</body>'));
   const ok = await startServer();
-  if (!ok) return showError('The Videditor engine did not start.');
+  if (!ok) return showError('The ChopChop engine did not start.');
   await win.loadURL(`http://127.0.0.1:${port}/`);
   updater.init({ app, log, getWindow: () => win, auto: readSettings().autoUpdate !== false, beforeInstall: stopServer });
 });

@@ -1,4 +1,4 @@
-/* Videditor virtual clock. Injected at the very top of <head>, before any composition script runs.
+/* ChopChop virtual clock. Injected at the very top of <head>, before any composition script runs.
  * The composition's notion of time becomes the video's time: performance.now(), Date, requestAnimationFrame,
  * setTimeout and setInterval all follow the playhead instead of the wall clock. So JavaScript animation,
  * GSAP, Lottie, canvas loops and timers render frame-exact, in the Studio preview and in every render

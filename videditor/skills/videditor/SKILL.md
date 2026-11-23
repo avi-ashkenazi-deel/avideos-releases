@@ -1,11 +1,11 @@
 ---
 name: videditor
-description: Make and edit videos as Videditor compositions (HTML that plays and renders as video). Use when asked to create, change or fix a video in a Videditor project folder.
+description: Make and edit videos as ChopChop compositions (HTML that plays and renders as video). Use when asked to create, change or fix a video in a ChopChop project folder.
 ---
 
-# Videditor compositions
+# ChopChop compositions
 
-A video is a folder. `index.html` is the video. Videditor plays it in the browser and renders it frame by frame to MP4 with Chrome and ffmpeg, so **everything follows the video's time**. CSS keyframe animations and Web Animations are driven to the exact frame by the runtime, media elements are seeked by it, and the page's clock is the video's clock: `performance.now()`, `Date`, `requestAnimationFrame`, `setTimeout` and `setInterval` all run on video time, so JS animation, GSAP, Lottie and canvas loops render frame-exact. Never use `autoplay` or `video.play()`; never read time from the network.
+A video is a folder. `index.html` is the video. ChopChop plays it in the browser and renders it frame by frame to MP4 with Chrome and ffmpeg, so **everything follows the video's time**. CSS keyframe animations and Web Animations are driven to the exact frame by the runtime, media elements are seeked by it, and the page's clock is the video's clock: `performance.now()`, `Date`, `requestAnimationFrame`, `setTimeout` and `setInterval` all run on video time, so JS animation, GSAP, Lottie and canvas loops render frame-exact. Never use `autoplay` or `video.play()`; never read time from the network.
 
 ## Format
 
@@ -34,7 +34,7 @@ A video is a folder. `index.html` is the video. Videditor plays it in the browse
 
 ## Assets, analysis and the asset library
 
-- `MEDIA.md` in the project lists every media file Videditor knows about: duration, size, **cut times**, a **contact sheet** and **keyframes** under `.analysis/`, and for anything with sound the **tempo (BPM), first beat and beat times** plus loud moments. Read it first when the request mentions footage, music, pace or "the clips".
+- `MEDIA.md` in the project lists every media file ChopChop knows about: duration, size, **cut times**, a **contact sheet** and **keyframes** under `.analysis/`, and for anything with sound the **tempo (BPM), first beat and beat times** plus loud moments. Read it first when the request mentions footage, music, pace or "the clips".
 - **Look before you cut.** Open the contact sheet (`Read .analysis/<file>/sheet.jpg`) and the keyframes to judge content: which segments show UI, which show text or people, where the action is. Choose segments by what you see, not by filename. Say in your reply which frames you looked at.
 - Files under `library/…` live in a folder the person linked; reference them exactly as `library/<name>` in `src`. Files under `assets/` are in the project.
 - Use `data-media-start` + `data-duration` to use a segment of a source clip. Several `<video>` elements can use the same file.
@@ -56,13 +56,13 @@ A video is a folder. `index.html` is the video. Videditor plays it in the browse
   `{ "name": "teaser-1", "entry": "index.html", "start": 0, "end": 60 }`.
 - Render preferences the person states in chat ("render without sound", "always 1080p", "AV1") go into the project's
   `videditor.json` under `"render"`, e.g. `{ "format": "videditor-composition", "version": 1, "render": { "audio": false, "scale": 1.5 } }`.
-  Videditor's automatic render after your edit uses them (keys: `audio`, `format`, `scale`, `quality`, `crf`, `fps`, `alpha`).
+  ChopChop's automatic render after your edit uses them (keys: `audio`, `format`, `scale`, `quality`, `crf`, `fps`, `alpha`).
   Do not strip a composition's audio clips to make a silent render; the setting does it.
 - Allowed keys per output: `name`, `entry`, `start`, `end`, `format` (mp4-h264, mp4-hevc, mp4-av1, webm-av1, webm-vp9, mov-prores, gif, png-seq), `scale`, `quality` (draft|looks|high), `crf`, `fps`, `alpha`, `audio`, `notes`.
 - Tell the person: "Press Render → Outputs from render.json". You do not render.
 
 ## Variants and history
-- "Make another version / an alternative / a vertical one" means a **variant**: copy the active composition to `variants/<short-name>.html` (keep the original untouched), change it there, and say which file you made. A variant one folder down references `../assets/…`, `../brand.css`, `../dugma-motion.css`. Videditor lists variants in Studio and the person switches between them.
+- "Make another version / an alternative / a vertical one" means a **variant**: copy the active composition to `variants/<short-name>.html` (keep the original untouched), change it there, and say which file you made. A variant one folder down references `../assets/…`, `../brand.css`, `../dugma-motion.css`. ChopChop lists variants in Studio and the person switches between them.
 - Every edit is snapshotted under `.history/` (restorable from Studio → History). Never write into `.history/`.
 
 ## Workflow
@@ -71,7 +71,7 @@ A video is a folder. `index.html` is the video. Videditor plays it in the browse
 2. Plan the sequence as a table: clip id, what it shows, start, duration, track. Keep total length to the brief.
 3. Write or edit `index.html`. Keep ids stable when editing; change timing via `data-start`/`data-duration` rather than restructuring.
 4. If assets are missing, build with CSS/SVG/gradients instead of placeholders. Never reference files that do not exist.
-5. Reply with what changed, by clip id and seconds. Do not render; Videditor renders and the person reviews.
+5. Reply with what changed, by clip id and seconds. Do not render; ChopChop renders and the person reviews.
 
 ## When the request is review feedback
 

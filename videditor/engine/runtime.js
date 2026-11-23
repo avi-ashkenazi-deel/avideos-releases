@@ -1,4 +1,4 @@
-/* Videditor composition runtime.
+/* ChopChop composition runtime.
  * Injected into a composition page by the server (?runtime=1). It makes the
  * page a deterministic, seekable video: given a time t, every clip's
  * visibility, every CSS/Web animation and every <video>/<audio> element is

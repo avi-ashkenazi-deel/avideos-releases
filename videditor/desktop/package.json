@@ -1,9 +1,9 @@
 {
   "name": "videditor-desktop",
-  "productName": "Videditor",
+  "productName": "ChopChop",
   "version": "0.3.0",
   "private": true,
-  "description": "Videditor for Mac: make videos with your agent, render them frame-exact, review them with timestamped notes.",
+  "description": "ChopChop for Mac: make videos with your agent, render them frame-exact, review them with timestamped notes.",
   "main": "main.cjs",
   "scripts": {
     "start": "electron .",
@@ -19,9 +19,9 @@
     "electron-builder": "26.0.12"
   },
   "build": {
-    "appId": "com.videditor.desktop",
-    "productName": "Videditor",
-    "copyright": "Videditor",
+    "appId": "com.chopchop.desktop",
+    "productName": "ChopChop",
+    "copyright": "ChopChop",
     "directories": {
       "output": "dist",
       "buildResources": "build"
@@ -88,13 +88,13 @@
       "entitlements": "build/entitlements.mac.plist",
       "entitlementsInherit": "build/entitlements.mac.plist",
       "extendInfo": {
-        "NSMicrophoneUsageDescription": "Videditor records your voice while you review a video, so your spoken notes can be turned into edits.",
+        "NSMicrophoneUsageDescription": "ChopChop records your voice while you review a video, so your spoken notes can be turned into edits.",
         "LSMinimumSystemVersion": "12.0"
       },
-      "artifactName": "Videditor-${version}-${arch}-mac.${ext}"
+      "artifactName": "ChopChop-${version}-${arch}-mac.${ext}"
     },
     "dmg": {
-      "title": "Videditor ${version}"
+      "title": "ChopChop ${version}"
     },
     "publish": null
   }

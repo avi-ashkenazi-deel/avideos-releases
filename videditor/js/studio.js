@@ -349,7 +349,7 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
     assetsHost.replaceChildren(h('div.section', h('div.muted.small', 'Loading…')));
     let data; try { data = await api.assets(project.id); } catch (e) { return assetsHost.replaceChildren(h('div.section', h('div.muted', e.message))); }
     const dirIn = h('input.text', { value: data.assetsDir || '', placeholder: '/Users/you/Movies/my-footage' });
-    const link = h('div.section', h('h3', 'Asset folder'), h('p.small.muted', 'Point Videditor at a folder on this computer. New files dropped there are picked up and analyzed automatically (cuts, keyframes, tempo), and the agent can use them as library/<name>.'), dirIn, h('div', { style: { display: 'flex', gap: '6px', marginTop: '8px' } }, btn(data.assetsDir ? 'Update' : 'Link folder', { cls: 'sm primary', onClick: async () => { try { project = await api.updateProject(project.id, { assetsDir: dirIn.value.trim() || null }); toast(dirIn.value.trim() ? 'Folder linked, analyzing…' : 'Unlinked', 'ok'); renderAssets(); } catch (e) { toast(e.message, 'err'); } } }), data.assetsDir ? btn('Unlink', { cls: 'sm ghost', onClick: async () => { project = await api.updateProject(project.id, { assetsDir: null }); renderAssets(); } }) : null, h('span', { style: { flex: 1 } }), btn('Re-analyze all', { cls: 'sm ghost', onClick: async () => { await api.analyze(project.id, true); toast('Analyzing…'); renderAssets(); } })));
+    const link = h('div.section', h('h3', 'Asset folder'), h('p.small.muted', 'Point ChopChop at a folder on this computer. New files dropped there are picked up and analyzed automatically (cuts, keyframes, tempo), and the agent can use them as library/<name>.'), dirIn, h('div', { style: { display: 'flex', gap: '6px', marginTop: '8px' } }, btn(data.assetsDir ? 'Update' : 'Link folder', { cls: 'sm primary', onClick: async () => { try { project = await api.updateProject(project.id, { assetsDir: dirIn.value.trim() || null }); toast(dirIn.value.trim() ? 'Folder linked, analyzing…' : 'Unlinked', 'ok'); renderAssets(); } catch (e) { toast(e.message, 'err'); } } }), data.assetsDir ? btn('Unlink', { cls: 'sm ghost', onClick: async () => { project = await api.updateProject(project.id, { assetsDir: null }); renderAssets(); } }) : null, h('span', { style: { flex: 1 } }), btn('Re-analyze all', { cls: 'sm ghost', onClick: async () => { await api.analyze(project.id, true); toast('Analyzing…'); renderAssets(); } })));
     const list = h('div', { style: { display: 'grid', gap: '8px', padding: '10px 12px' } });
     if (!data.items.length) list.append(h('div.empty', h('p', 'No media yet.'), h('p.small', 'Drop video, audio or images into the project\'s assets/ folder or link a folder above.')));
     for (const it of data.items) {
@@ -543,14 +543,14 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
   }
   async function runDiagnostics() {
     const pre = h('pre', 'Running claude --version and a one-line prompt in the project folder… (up to 90s)');
-    const close = modal('Claude Code diagnostics', h('div', h('p.small.muted', 'This is what the Videditor server sees when it runs Claude Code on this computer. Paste it to whoever is helping you.'), pre), { wide: true, actions: [{ label: 'Copy', icon: 'copy', onClick: async () => { await copyText(pre.textContent); toast('Copied', 'ok'); return false; } }] });
+    const close = modal('Claude Code diagnostics', h('div', h('p.small.muted', 'This is what the ChopChop server sees when it runs Claude Code on this computer. Paste it to whoever is helping you.'), pre), { wide: true, actions: [{ label: 'Copy', icon: 'copy', onClick: async () => { await copyText(pre.textContent); toast('Copied', 'ok'); return false; } }] });
     try { const d = await api.diagnose(project.id); pre.textContent = JSON.stringify(d, null, 2); } catch (e) { pre.textContent = e.message; }
     return close;
   }
   async function send() {
     const text = ta.value.trim(); if (!text) return;
     const kind = agentSel.value || project.agent || 'claude'; const cap = caps.agents?.[kind] || { label: 'Claude Code', available: caps.claude, install: 'npm install -g @anthropic-ai/claude-code' };
-    if (!cap.available) { toast(`${cap.label} was not found on this computer`, 'err'); return msgs.append(h('div.msg.agent', h('div.errcard', `${cap.label} is not installed or not on PATH. Install it with: ${cap.install}   sign in once, then restart the Videditor server.`))); }
+    if (!cap.available) { toast(`${cap.label} was not found on this computer`, 'err'); return msgs.append(h('div.msg.agent', h('div.errcard', `${cap.label} is not installed or not on PATH. Install it with: ${cap.install}   sign in once, then restart the ChopChop server.`))); }
     const author = await ensureAuthor();
     const message = ctx._id ? `About the clip #${ctx._id}: ${text}` : text;
     ta.value = ''; grow(); ctx.classList.add('hidden'); ctx._id = null;

@@ -1,5 +1,5 @@
 // Show a file in the computer's file manager (Finder on macOS), with the file selected.
-// Only ever called with paths Videditor itself wrote (render outputs); never with request input.
+// Only ever called with paths ChopChop itself wrote (render outputs); never with request input.
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';

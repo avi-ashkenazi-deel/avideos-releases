@@ -1,6 +1,6 @@
-// Where Videditor keeps things.
+// Where ChopChop keeps things.
 //  - App code: this folder (inside the Mac app it is read-only and replaced by updates).
-//  - Your work: VIDEDITOR_HOME, default ~/Videditor (data/ with renders, notes, db.json; projects/ with
+//  - Your work: VIDEDITOR_HOME, default ~/ChopChop (data/ with renders, notes, db.json; projects/ with
 //    compositions). The Mac app always uses it; updates never touch it.
 // A developer checkout that already has data/ next to the code keeps using it (nothing moves).
 import fs from 'node:fs';
@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const PACKAGED = process.env.VIDEDITOR_PACKAGED === '1'; // set by the Mac app
 const legacy = !PACKAGED && !process.env.VIDEDITOR_HOME && fs.existsSync(path.join(ROOT, 'data', 'db.json'));
-export const HOME = path.resolve(process.env.VIDEDITOR_HOME || (legacy ? ROOT : path.join(os.homedir(), 'Videditor')));
+export const HOME = path.resolve(process.env.VIDEDITOR_HOME || (legacy ? ROOT : path.join(os.homedir(), 'ChopChop')));
 export const DATA = path.resolve(process.env.VIDEDITOR_DATA || path.join(HOME, 'data'));
 export const PROJECTS = path.join(HOME, 'projects');
 export const LOGS = path.join(HOME, 'logs');

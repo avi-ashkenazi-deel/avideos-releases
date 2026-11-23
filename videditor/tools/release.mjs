@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Publish a Videditor release.
+// Publish a ChopChop release.
 //   node tools/release.mjs 0.4.0 "Run-through review" "Faster renders" [--push]
 // Bumps the version (server and Mac app), adds the notes to CHANGELOG.md, commits, and creates the tag
 // videditor-v0.4.0 whose message is the release notes. Pushing the tag (--push) makes GitHub build, sign

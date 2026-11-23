@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Videditor MCP server (stdio). Lets Claude Code / Cursor / Codex read review
+// ChopChop MCP server (stdio). Lets Claude Code / Cursor / Codex read review
 // feedback, fetch annotated frames, post replies, and register new versions.
 // Zero dependencies: speaks MCP JSON-RPC over newline-delimited stdio.
 //   claude mcp add videditor -- node /path/to/videditor/mcp.mjs
@@ -26,7 +26,7 @@ async function imageFromUrl(url) {
 }
 
 const TOOLS = [
-  { name: 'get_guide', description: 'Read the Videditor playbook first: how to read feedback, change the video, register a version, and close the loop.', inputSchema: { type: 'object', properties: {} } },
+  { name: 'get_guide', description: 'Read the ChopChop playbook first: how to read feedback, change the video, register a version, and close the loop.', inputSchema: { type: 'object', properties: {} } },
   { name: 'projects_list', description: 'List review projects with their versions and open-feedback counts.', inputSchema: { type: 'object', properties: {} } },
   { name: 'project_get', description: 'Get one project: versions, composition folder, stats.', inputSchema: { type: 'object', properties: { project_id: { type: 'string' } }, required: ['project_id'] } },
   { name: 'feedback_list', description: 'List feedback on a project or version. Each item has time (seconds), body, transcript, pointing phrases, drawing summary, annotated frame URLs, status and which clips were on screen.', inputSchema: { type: 'object', properties: { project_id: { type: 'string' }, version_id: { type: 'string', description: 'Defaults to the latest version' }, status: { type: 'string', enum: ['open', 'done'] }, include_replies: { type: 'boolean' } }, required: ['project_id'] } },
@@ -36,7 +36,7 @@ const TOOLS = [
   { name: 'feedback_post', description: 'Post a comment (Markdown) on a version, optionally anchored to a time, or reply in a thread with reply_to.', inputSchema: { type: 'object', properties: { version_id: { type: 'string' }, body: { type: 'string' }, time: { type: 'number' }, reply_to: { type: 'string' }, tags: { type: 'array', items: { type: 'string' } } }, required: ['body'] } },
   { name: 'feedback_update', description: 'Change a feedback item: status (open/done), tags, body.', inputSchema: { type: 'object', properties: { feedback_id: { type: 'string' }, status: { type: 'string', enum: ['open', 'done'] }, tags: { type: 'array', items: { type: 'string' } }, body: { type: 'string' } }, required: ['feedback_id'] } },
   { name: 'version_add', description: 'Register a rendered video file as the next version of a project, with Markdown release notes (what changed and which feedback it addresses).', inputSchema: { type: 'object', properties: { project_id: { type: 'string' }, file: { type: 'string', description: 'Path to the MP4; relative paths resolve against the project folder' }, notes: { type: 'string' }, label: { type: 'string' } }, required: ['project_id', 'file'] } },
-  { name: 'render_version', description: 'Render the project composition (index.html) to MP4 with Videditor and register it as the next version with Markdown notes. Blocks until the render finishes.', inputSchema: { type: 'object', properties: { project_id: { type: 'string' }, notes: { type: 'string' }, quality: { type: 'string', enum: ['draft', 'looks', 'high'] }, scale: { type: 'number', description: 'Output scale relative to the composition size, e.g. 1.5 for 1080p from a 720p composition, 3 for 4K' }, format: { type: 'string', enum: ['mp4-h264', 'mp4-hevc', 'mp4-av1', 'webm-av1', 'webm-vp9', 'mov-prores', 'gif'], description: 'Container and codec; default mp4-h264' }, crf: { type: 'number' }, fps: { type: 'number' }, alpha: { type: 'boolean', description: 'Transparent background (webm-vp9 / mov-prores)' }, audio: { type: 'boolean', description: 'false renders without sound' } }, required: ['project_id'] } },
+  { name: 'render_version', description: 'Render the project composition (index.html) to MP4 with ChopChop and register it as the next version with Markdown notes. Blocks until the render finishes.', inputSchema: { type: 'object', properties: { project_id: { type: 'string' }, notes: { type: 'string' }, quality: { type: 'string', enum: ['draft', 'looks', 'high'] }, scale: { type: 'number', description: 'Output scale relative to the composition size, e.g. 1.5 for 1080p from a 720p composition, 3 for 4K' }, format: { type: 'string', enum: ['mp4-h264', 'mp4-hevc', 'mp4-av1', 'webm-av1', 'webm-vp9', 'mov-prores', 'gif'], description: 'Container and codec; default mp4-h264' }, crf: { type: 'number' }, fps: { type: 'number' }, alpha: { type: 'boolean', description: 'Transparent background (webm-vp9 / mov-prores)' }, audio: { type: 'boolean', description: 'false renders without sound' } }, required: ['project_id'] } },
   { name: 'media_list', description: 'List the media files available to the project (assets/ and the linked library/ folder) with analysis: duration, cuts, keyframe paths, tempo and beats. Same content as MEDIA.md.', inputSchema: { type: 'object', properties: { project_id: { type: 'string' } }, required: ['project_id'] } },
   { name: 'version_notes_update', description: 'Edit the notes of a version.', inputSchema: { type: 'object', properties: { version_id: { type: 'string' }, notes: { type: 'string' } }, required: ['version_id', 'notes'] } },
   { name: 'wait_for_feedback', description: 'Block up to 45 seconds until a human posts new feedback on the project, then return it.', inputSchema: { type: 'object', properties: { project_id: { type: 'string' }, since: { type: 'string', description: 'ISO time; defaults to now' }, timeout_seconds: { type: 'number' } }, required: ['project_id'] } },
@@ -125,7 +125,7 @@ rl.on('line', async (line) => {
       case 'tools/call': {
         pending++;
         try { return reply(await call(params.name, params.arguments || {})); }
-        catch (e) { return reply({ content: [{ type: 'text', text: `Error: ${e.message}${/ECONNREFUSED|fetch failed/.test(e.message) ? ` — is the Videditor server running at ${BASE}? Start it with: node videditor/server.mjs` : ''}` }], isError: true }); }
+        catch (e) { return reply({ content: [{ type: 'text', text: `Error: ${e.message}${/ECONNREFUSED|fetch failed/.test(e.message) ? ` — is the ChopChop server running at ${BASE}? Start it with: node videditor/server.mjs` : ''}` }], isError: true }); }
         finally { pending--; maybeExit(); }
       }
       case 'resources/list': return reply({ resources: [] });

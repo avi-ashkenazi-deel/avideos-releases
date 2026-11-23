@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-// Videditor server: static UI + JSON API + media. Zero dependencies.
+// ChopChop server: static UI + JSON API + media. Zero dependencies.
 //   node videditor/server.mjs            → http://localhost:8787
-// Env: VIDEDITOR_PORT, VIDEDITOR_HOME (default ~/Videditor; a checkout with data/ keeps using it), VIDEDITOR_DATA, VIDEDITOR_NO_DEMO=1
+// Env: VIDEDITOR_PORT, VIDEDITOR_HOME (default ~/ChopChop; a checkout with data/ keeps using it), VIDEDITOR_DATA, VIDEDITOR_NO_DEMO=1
 import http from 'node:http';
 import { spawn, spawnSync } from 'node:child_process';
 import { Worker } from 'node:worker_threads';
@@ -348,7 +348,7 @@ async function api(req, res, url) {
       try { agents.get(prj.id)?.kill?.('Project deleted.'); } catch {}
       for (const v of store.versions(prj.id)) { try { fs.unlinkSync(v.filePath); } catch {} try { if (v.posterUrl) fs.unlinkSync(path.join(DATA, v.posterUrl.replace(/^\/media\//, ''))); } catch {} }
       for (const f of store.feedback({ projectId: prj.id })) for (const u of [...(f.frames || []).map((x) => x.url), f.audioUrl, ...(f.refs || [])].filter(Boolean)) { try { fs.unlinkSync(path.join(DATA, u.replace(/^\/media\//, ''))); } catch {} }
-      // The composition folder is removed only when asked and only when it lives in Videditor's own projects folder.
+      // The composition folder is removed only when asked and only when it lives in ChopChop's own projects folder.
       let folderDeleted = false;
       const own = prj.dir && path.resolve(prj.dir).startsWith(PROJECTS + path.sep);
       if (q.deleteFolder === '1' && own) { try { fs.rmSync(prj.dir, { recursive: true, force: true }); folderDeleted = true; } catch {} }
@@ -650,8 +650,8 @@ async function api(req, res, url) {
   return err(res, 404, `No route ${req.method} ${p}`);
 }
 
-export const GUIDE = `# Videditor agent playbook
-Videditor is a video studio and review workspace. A video is a project folder whose index.html is the composition (see videditor/skills/videditor/SKILL.md for the format). Humans leave timestamped notes (text, voice with pointing phrases, drawings over frames) on a rendered version. You read them, change the composition, render, and reply.
+export const GUIDE = `# ChopChop agent playbook
+ChopChop is a video studio and review workspace. A video is a project folder whose index.html is the composition (see videditor/skills/videditor/SKILL.md for the format). Humans leave timestamped notes (text, voice with pointing phrases, drawings over frames) on a rendered version. You read them, change the composition, render, and reply.
 
 Loop:
 1. feedback_list(project_id, status="open") → read every item. Use get_annotated_frame / get_frame when a note points at something ("this", "here") or has a drawing.

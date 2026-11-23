@@ -13,11 +13,11 @@ const dist = path.join(HERE, arg('--dist', 'dist')); const base = String(arg('--
 if (!base) { console.error('make-feed: --base <url where the zips will be downloadable> is required'); process.exit(1); }
 const files = {};
 for (const a of ['arm64', 'x64']) {
-  const name = `Videditor-${pkg.version}-${a}-mac.zip`; const f = path.join(dist, name);
+  const name = `ChopChop-${pkg.version}-${a}-mac.zip`; const f = path.join(dist, name);
   if (!fs.existsSync(f)) continue;
   files[a] = { url: `${base}/${encodeURIComponent(name)}`, sha256: crypto.createHash('sha256').update(fs.readFileSync(f)).digest('hex'), size: fs.statSync(f).size };
 }
-if (!Object.keys(files).length) { console.error(`make-feed: no Videditor-${pkg.version}-*-mac.zip in ${dist}`); process.exit(1); }
+if (!Object.keys(files).length) { console.error(`make-feed: no ChopChop-${pkg.version}-*-mac.zip in ${dist}`); process.exit(1); }
 const feed = { version: pkg.version, date: new Date().toISOString(), notes: String(arg('--notes', '')).replace(/\\n/g, '\n'), files };
 fs.writeFileSync(path.join(dist, 'latest.json'), JSON.stringify(feed, null, 2));
 console.log(`make-feed: dist/latest.json for ${pkg.version} (${Object.keys(files).join(', ')})`);

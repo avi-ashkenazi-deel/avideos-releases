@@ -144,7 +144,7 @@ export const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t);
 
 /** Shared confirm dialog for deleting a project. Returns true when deleted. */
 export async function confirmDeleteProject(api, p) {
-  const own = p.dir && /\/videditor\/projects\//.test(p.dir);
+  const own = p.dir && /\/projects\/[^/]+\/?$/.test(p.dir);
   const cb = h('input', { type: 'checkbox', checked: !!own });
   const r = await modal(`Delete “${p.name}”?`, h('div',
     h('p.muted', `${p.versions?.length || 0} version(s) and all notes are removed. This cannot be undone.`),

@@ -1,8 +1,8 @@
-# Videditor
+# ChopChop
 
 Make videos with your agent, render them frame-exact, review them with timestamped notes, repeat.
 
-Videditor is a self-hosted take on two tools: an agent-first video editor in the spirit of
+ChopChop is a self-hosted take on two tools: an agent-first video editor in the spirit of
 [HyperFrames Studio](https://hyperframes.studio) (the video *is* HTML; an agent writes it; a renderer
 turns it into MP4) and a review workspace in the spirit of [Flask](https://flask.do) (talk, draw and
 point at the frame; the agent reads the notes and ships the next version). Everything runs on your
@@ -45,7 +45,7 @@ subscription. No accounts, no credits.
     unchanged-frame reuse off for comparison.
 
 **Assets and media analysis**
-- Link any folder on your computer (**Studio → Assets**, or when creating a video). Videditor watches it:
+- Link any folder on your computer (**Studio → Assets**, or when creating a video). ChopChop watches it:
   anything you drop in is picked up and analyzed. Each video gets its **cut times**, a **contact sheet** and
   **keyframes** (the agent opens them to judge content: UI vs text vs people); anything with sound gets a
   **tempo estimate, first beat and beat grid**, plus loud moments. All of it is written to `MEDIA.md` in
@@ -96,11 +96,11 @@ subscription. No accounts, no credits.
 
 ## Mac app (how people get it, and updates)
 
-Videditor ships as a Mac app: download, drag to Applications, open. It runs in its own window and carries
+ChopChop ships as a Mac app: download, drag to Applications, open. It runs in its own window and carries
 everything it needs: its own engine, ffmpeg, a headless Chrome for rendering, and whisper for turning voice
 notes into text on the Mac (voice never leaves the machine). The one thing people install themselves is
 **Claude Code** (`npm i -g @anthropic-ai/claude-code`, then `claude` once to sign in), because the agent
-runs on their own account. Their videos, renders and notes live in **`~/Videditor`**; updates never touch it.
+runs on their own account. Their videos, renders and notes live in **`~/ChopChop`**; updates never touch it.
 
 **Updates.** The app checks for a new version when it opens and every few hours, downloads it in the
 background, checks its checksum (and, on signed builds, that it is signed by the same developer), then shows

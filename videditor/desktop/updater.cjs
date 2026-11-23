@@ -1,4 +1,4 @@
-// Videditor's updater. A release feed (latest.json) says which version is newest, with notes and, per
+// ChopChop's updater. A release feed (latest.json) says which version is newest, with notes and, per
 // chip, a zip URL + sha256:
 //   { "version": "0.4.0", "notes": "• …", "date": "…", "files": { "arm64": { "url": "…", "sha256": "…", "size": 1 }, "x64": { … } } }
 // Flow: check on launch and every 4 hours → download in the background (when auto-update is on) →
@@ -20,7 +20,7 @@ const feedUrl = () => process.env.VIDEDITOR_UPDATE_FEED || (() => { try { return
 const parse = (v) => (String(v).replace(/^v/, '').match(/^(\d+)\.(\d+)\.(\d+)$/) || []).slice(1).map(Number);
 const newer = (a, b) => { const x = parse(a), y = parse(b); if (x.length < 3 || y.length < 3) return false; for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return x[i] > y[i]; return false; };
 const arch = () => (process.arch === 'arm64' ? 'arm64' : 'x64');
-const cacheDir = () => path.join(os.homedir(), 'Library', 'Caches', 'Videditor', 'updates');
+const cacheDir = () => path.join(os.homedir(), 'Library', 'Caches', 'ChopChop', 'updates');
 function emit() { S.auto = auto; const w = A?.getWindow?.(); try { w?.webContents.send('update:state', state()); } catch {} }
 function state() { return { ...S, current: A?.app.getVersion(), feedConfigured: !!feedUrl(), ready: S.ready ? { version: S.ready.version } : null }; }
 function set(p) { Object.assign(S, p); emit(); }
@@ -31,7 +31,7 @@ function get(url, { json = false, to = null, onProgress } = {}, hops = 0) {
     if (!lib) { // file:// (local testing)
       try { const p = decodeURIComponent(new URL(url).pathname); if (to) { fs.copyFileSync(p, to); return resolve(to); } const b = fs.readFileSync(p); return resolve(json ? JSON.parse(b) : b); } catch (e) { return reject(e); }
     }
-    const req = lib.get(url, { headers: { 'User-Agent': 'Videditor-Updater', Accept: json ? 'application/json' : '*/*' }, timeout: 30000 }, (res) => {
+    const req = lib.get(url, { headers: { 'User-Agent': 'ChopChop-Updater', Accept: json ? 'application/json' : '*/*' }, timeout: 30000 }, (res) => {
       if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location && hops < 6) { res.resume(); return resolve(get(new URL(res.headers.location, url).toString(), { json, to, onProgress }, hops + 1)); }
       if (res.statusCode !== 200) { res.resume(); return reject(new Error(`HTTP ${res.statusCode} for ${url}`)); }
       const total = Number(res.headers['content-length']) || 0; let got = 0;
@@ -43,13 +43,13 @@ function get(url, { json = false, to = null, onProgress } = {}, hops = 0) {
 }
 const sha256 = (file) => new Promise((res, rej) => { const h = crypto.createHash('sha256'); fs.createReadStream(file).on('data', (c) => h.update(c)).on('end', () => res(h.digest('hex'))).on('error', rej); });
 
-// The running app bundle (…/Videditor.app) when packaged on macOS.
+// The running app bundle (…/ChopChop.app) when packaged on macOS.
 function appBundle() { const p = A.app.getPath('exe'); const i = p.indexOf('.app/'); return i > 0 ? p.slice(0, i + 4) : null; }
 function teamId(bundle) { if (process.platform !== 'darwin') return null; const r = spawnSync('codesign', ['-dv', '--verbose=2', bundle], { encoding: 'utf8' }); const m = /TeamIdentifier=(\S+)/.exec(r.stderr || ''); return m && m[1] !== 'not' ? m[1] : null; }
 
 async function check({ interactive = false } = {}) {
   const url = feedUrl();
-  if (!url) { set({ status: 'idle', error: null }); if (interactive) info('Updates are not set up for this build', 'This copy of Videditor was built without an update feed.'); return state(); }
+  if (!url) { set({ status: 'idle', error: null }); if (interactive) info('Updates are not set up for this build', 'This copy of ChopChop was built without an update feed.'); return state(); }
   if (S.status === 'downloading') return state();
   set({ status: 'checking', error: null });
   try {
@@ -58,7 +58,7 @@ async function check({ interactive = false } = {}) {
     S.checkedAt = new Date().toISOString();
     if (!feed.version || !newer(feed.version, A.app.getVersion()) || !file?.url || !/^[a-f0-9]{64}$/.test(file.sha256 || '')) {
       set({ status: S.ready ? 'ready' : 'idle', version: feed.version || null, notes: feed.notes || null, feed: null });
-      if (interactive) info('Videditor is up to date', `You have the newest version, ${A.app.getVersion()}.`);
+      if (interactive) info('ChopChop is up to date', `You have the newest version, ${A.app.getVersion()}.`);
       return state();
     }
     set({ status: S.ready?.version === feed.version ? 'ready' : 'available', version: feed.version, notes: feed.notes || '', feed });
@@ -72,7 +72,7 @@ async function download() {
   const file = feed.files[arch()];
   set({ status: 'downloading', progress: 0, error: null });
   const dir = path.join(cacheDir(), feed.version); fs.rmSync(dir, { recursive: true, force: true }); fs.mkdirSync(dir, { recursive: true });
-  const zip = path.join(dir, `Videditor-${feed.version}-${arch()}.zip`);
+  const zip = path.join(dir, `ChopChop-${feed.version}-${arch()}.zip`);
   try {
     await get(file.url, { to: zip, onProgress: (p) => { if (p - S.progress > 0.02 || p === 1) set({ progress: p }); } });
     const sum = await sha256(zip);
@@ -81,7 +81,7 @@ async function download() {
     const unzip = process.platform === 'darwin' ? spawnSync('ditto', ['-x', '-k', zip, out]) : spawnSync('unzip', ['-q', zip, '-d', out]);
     if (unzip.status !== 0) throw new Error(`could not unpack the update: ${(unzip.stderr || '').toString().trim()}`);
     const bundle = fs.readdirSync(out).find((n) => n.endsWith('.app'));
-    if (!bundle) throw new Error('the update does not contain Videditor.app');
+    if (!bundle) throw new Error('the update does not contain ChopChop.app');
     const newApp = path.join(out, bundle);
     // Locked down: a signed app only accepts an update signed by the same developer team.
     const cur = appBundle(); const mine = cur ? teamId(cur) : null;
@@ -103,7 +103,7 @@ function swap({ relaunch }) {
   if (!ready || !cur) return false;
   const script = path.join(cacheDir(), 'install.sh');
   fs.writeFileSync(script, `#!/bin/sh
-# Wait for Videditor (pid ${process.pid}) to quit, then swap in the new version.
+# Wait for ChopChop (pid ${process.pid}) to quit, then swap in the new version.
 while kill -0 ${process.pid} 2>/dev/null; do sleep 0.2; done
 old="${cur}.old-$$"
 mv "${cur}" "$old" || exit 1

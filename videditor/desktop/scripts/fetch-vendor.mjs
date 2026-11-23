@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Puts the tools Videditor bundles into desktop/vendor/<arch>/ before packaging:
+// Puts the tools ChopChop bundles into desktop/vendor/<arch>/ before packaging:
 //   bin/ffmpeg, bin/ffprobe   static builds (ffmpeg-static, ffprobe-static)
 //   chrome/…/chrome-headless-shell   Chrome for Testing headless shell (renders)
 //   whisper/whisper-cli       built by CI from whisper.cpp (pass --whisper <path> to copy it in)

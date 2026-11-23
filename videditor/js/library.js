@@ -32,13 +32,13 @@ export async function newProject(navigate) {
   const brief = h('textarea.text', { rows: 4, placeholder: 'Describe the video: what it must say, who it is for, tone, length. The agent starts from this.' });
   const size = h('select.text', { style: { width: 'auto' } }, [['1280x720', '16:9 · 1280×720'], ['1920x1080', '16:9 · 1920×1080'], ['1080x1920', '9:16 · 1080×1920 (vertical)'], ['1080x1080', '1:1 · 1080×1080']].map(([v, l]) => h('option', { value: v }, l)));
   const dir = h('input.text', { placeholder: '/path/to/folder with index.html (optional)' });
-  const status = h('div.hint', { style: { marginTop: '4px' } }, 'Link a folder that already holds a Videditor composition.');
+  const status = h('div.hint', { style: { marginTop: '4px' } }, 'Link a folder that already holds a ChopChop composition.');
   const file = h('input', { type: 'file', accept: 'video/*', style: { display: 'none' } });
   const drop = h('div.drop', { on: { click: () => file.click() } }, svg('upload'), ' Upload a rendered video as v1');
   file.addEventListener('change', () => { drop.textContent = file.files[0] ? `v1: ${file.files[0].name}` : 'Upload a rendered video as v1'; });
   let detected = null;
   const check = debounce(async () => {
-    if (!dir.value.trim()) { detected = null; status.textContent = 'Link a folder that already holds a Videditor composition.'; status.style.color = ''; return; }
+    if (!dir.value.trim()) { detected = null; status.textContent = 'Link a folder that already holds a ChopChop composition.'; status.style.color = ''; return; }
     try { detected = await api.detect(dir.value.trim()); status.textContent = detected.ok ? `Composition found${detected.renderFiles.length ? ` with ${detected.renderFiles.length} render(s) that will be imported as versions` : ''}.` : `Not detected: ${detected.reason}`; status.style.color = detected.ok ? 'var(--ok)' : 'var(--warn)'; }
     catch (e) { status.textContent = e.message; }
   }, 350);
