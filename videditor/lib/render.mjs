@@ -39,7 +39,7 @@ function hasAudioStream(file) {
  * forward to each chunk, captures it through CDP and encodes it with its own ffmpeg. The chunks are
  * joined without re-encoding and the composition's audio is mixed in at the end.
  */
-export async function renderProject({ pageUrl, dir, assetsDir = null, out, fps: fpsOpt, quality = 'looks', scale = 1, format = DEFAULT_FORMAT, crf, maxBitrate, audio = true, alpha = false, range = null, workers: workersOpt = 'auto', onProgress, onLog } = {}) {
+export async function renderProject({ pageUrl, dir, assetsDir = null, out, fps: fpsOpt, quality = 'looks', scale = 1, format = DEFAULT_FORMAT, crf, maxBitrate, audio = true, alpha = false, range = null, workers: workersOpt = 'auto', signal = null, onProgress, onLog } = {}) {
   const log = (m) => onLog?.(m);
   const pw = loadPlaywright();
   if (!pw) throw new Error('Playwright is not installed. Run: npm install   (inside the videditor folder)');
@@ -106,7 +106,7 @@ export async function renderProject({ pageUrl, dir, assetsDir = null, out, fps: 
     const chunks = []; for (let a = 0, k = 0; a < frames; a += chunk, k++) chunks.push({ k, a, b: Math.min(frames, a + chunk) });
     let nextChunk = 0; const take = () => (nextChunk < chunks.length ? chunks[nextChunk++] : null);
     const t0 = Date.now(); let done = 0; let reused = 0; const prof = { seek: 0, capture: 0, write: 0, encodeTail: 0 };
-    const tick = (t) => { done++; if (done % Math.max(1, Math.round(fps / 2)) === 0 || done === frames) onProgress?.({ frame: done, frames, t, elapsed: (Date.now() - t0) / 1000 }); };
+    const tick = (t) => { if (signal?.aborted) throw new Error('stopped'); done++; if (done % Math.max(1, Math.round(fps / 2)) === 0 || done === frames) onProgress?.({ frame: done, frames, t, elapsed: (Date.now() - t0) / 1000 }); };
 
     if (format === 'png-seq') {
       fs.mkdirSync(out, { recursive: true });
@@ -134,6 +134,7 @@ export async function renderProject({ pageUrl, dir, assetsDir = null, out, fps: 
       const ff = spawn('ffmpeg', sliceArgs(part)); ffs.push(ff);
       let ffErr = ''; ff.stderr.on('data', (d) => { ffErr = (ffErr + d).slice(-8000); });
       const ffDone = new Promise((resolve, reject) => { ff.on('close', (code) => (code === 0 ? resolve() : reject(new Error(`ffmpeg exited ${code}: ${ffErr.trim().split('\n').slice(-3).join(' | ')}`)))); ff.on('error', reject); });
+      ffDone.catch(() => {}); // awaited later; a chunk cut short (stop, page error) must not become an unhandled rejection
       const write = (buf) => new Promise((resolve, reject) => { if (!ff.stdin.writable) return reject(new Error('ffmpeg closed early: ' + ffErr.trim().split('\n').slice(-2).join(' | '))); if (ff.stdin.write(buf)) resolve(); else ff.stdin.once('drain', resolve); });
       if (r0 + a / fps > 0) await w.page.evaluate(([tt, f]) => window.__videditor.warmup(tt, f), [r0 + a / fps, fps]);
       let prev = null;

@@ -36,6 +36,7 @@ export const api = {
   renderPlan: (id) => req('GET', `/api/projects/${id}/render-plan`),
   revealVersion: (id) => req('POST', `/api/versions/${id}/reveal`),
   renderStatus: (id) => req('GET', `/api/projects/${id}/render-status`),
+  renderStop: (id) => req('POST', `/api/projects/${id}/render/stop`, {}),
   diagnose: (projectId) => req('GET', `/api/agent/diagnose${projectId ? `?projectId=${projectId}` : ''}`),
   saveBrand: (id, b) => req('PUT', `/api/projects/${id}/brand`, b),
   composition: (id, t) => req('GET', `/api/projects/${id}/composition${t !== undefined ? `?t=${t}` : ''}`),

@@ -51,19 +51,29 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
   // Background render status: a pill in the transport instead of a blocking dialog.
   const renderPill = h('button.btn.sm.renderpill.hidden', { title: 'Rendering in the background. Click for the log.' }, svg('render'), h('span.rp-text', 'Rendering…'), h('span.rp-bar', h('i')));
   let renderLog = ''; let renderLogEl = null;
-  renderPill.addEventListener('click', () => { renderLogEl = h('pre.log', { style: { maxHeight: '50vh' } }, renderLog); modal('Render log', renderLogEl, { wide: true }).then(() => { renderLogEl = null; }); });
+  renderPill.addEventListener('click', () => { renderLogEl = h('pre.log', { style: { maxHeight: '50vh' } }, renderLog); modal('Rendering', renderLogEl, { wide: true, actions: [{ label: 'Stop render', value: 'stop' }, { label: 'Close', cls: 'primary', value: false }] }).then((r) => { renderLogEl = null; if (r === 'stop') api.renderStop(project.id).catch((e) => toast(e.message, 'err')); }); });
   const followingRenders = new Set();
   function followRender(jobId, { quiet = false } = {}) {
     if (!jobId || followingRenders.has(jobId)) return; followingRenders.add(jobId);
     renderPill.classList.remove('hidden'); renderLog = ''; let batchTag = '';
     const es = new EventSource(`/api/jobs/${jobId}/events`);
     const setText = (t) => { renderPill.querySelector('.rp-text').textContent = t; };
-    es.onmessage = (e) => { const d = JSON.parse(e.data); if (d.type === 'batch') batchTag = `${d.index}/${d.total} `; else if (d.type === 'progress') { renderPill.querySelector('.rp-bar i').style.width = `${(d.frame / d.frames) * 100}%`; setText(`${batchTag}${Math.round((d.frame / d.frames) * 100)}%`); } else { renderLog += (d.text || '') + '\n'; if (renderLogEl) renderLogEl.textContent = renderLog; } };
+    // Time left, once there is enough progress to judge (long renders: "38% · 25 min left").
+    const eta = (d) => { const f = d.frame / d.frames; if (!d.elapsed || f < 0.02 || d.elapsed < 10) return ''; const s = (d.elapsed / f) * (1 - f); return s < 60 ? ' · <1 min left' : s < 3600 ? ` · ${Math.round(s / 60)} min left` : ` · ${(s / 3600).toFixed(1)} h left`; };
+    es.onmessage = (e) => { const d = JSON.parse(e.data); if (d.type === 'batch') batchTag = `${d.index}/${d.total} `; else if (d.type === 'progress') { const f = d.frame / d.frames; renderPill.querySelector('.rp-bar i').style.width = `${f * 100}%`; setText(`${batchTag}${Math.round(f * 100)}%${eta(d)}`); } else { renderLog += (d.text || '') + '\n'; if (renderLogEl) renderLogEl.textContent = renderLog; } };
     es.addEventListener('done', async (e) => {
       es.close(); followingRenders.delete(jobId); renderPill.classList.add('hidden'); renderPill.querySelector('.rp-bar i').style.width = '0';
       const d = JSON.parse(e.data); project = await api.project(project.id); if (!Array.isArray(project.chat)) project.chat = []; renderChat(project.chat); renderVariants();
+      if (d.stopped) { toast(`Render stopped: ${d.stopped}`); return; }
       if (d.ok && d.folder) { toast('PNG sequence ready', 'ok'); if (!quiet) modal('PNG sequence ready', h('div', h('p', 'The frames are in:'), h('pre.log', d.folder))); }
-      else if (d.ok) { const n = d.batch ? d.batch.length : 1; const t = h('div.toast.ok', { style: { cursor: 'pointer' } }, `${n > 1 ? `${n} files` : `v${project.versions.length}`} ready · click to review`); t.addEventListener('click', () => navigate(d.versionId ? `#/p/${project.id}?v=${d.versionId}` : `#/p/${project.id}`)); document.getElementById('toasts').append(t); setTimeout(() => t.remove(), 8000); }
+      else if (d.ok) {
+        const n = d.batch ? d.batch.length : 1; const name = n > 1 ? `${n} files` : `v${project.versions.length}`;
+        const review = () => navigate(d.versionId ? `#/p/${project.id}?v=${d.versionId}` : `#/p/${project.id}`);
+        // Warnings (footage that failed to load renders black) must not hide behind a green "ready".
+        const warns = [...new Set(renderLog.split('\n').filter((l) => l.startsWith('⚠')).map((l) => l.replace(/^⚠\s*/, '')))];
+        if (warns.length) { modal(`${name} rendered, with ${warns.length === 1 ? 'a problem' : `${warns.length} problems`}`, h('div', h('ul', ...warns.map((w) => h('li', w))), h('p.hint', 'The file is there, but these parts may be black or silent. Fix them (or ask the agent to) and render again.')), { actions: [{ label: 'Close', value: false }, { label: 'Review anyway', cls: 'primary', value: true }] }).then((go) => { if (go) review(); }); }
+        else { const t = h('div.toast.ok', { style: { cursor: 'pointer' } }, `${name} ready · click to review`); t.addEventListener('click', review); document.getElementById('toasts').append(t); setTimeout(() => t.remove(), 8000); }
+      }
       else { toast('Render failed', 'err'); modal('Render failed', h('pre.log', renderLog)); }
     });
     es.onerror = () => { es.close(); followingRenders.delete(jobId); renderPill.classList.add('hidden'); };
@@ -635,9 +645,18 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
     const planNote = plan.outputs.length ? h('p.hint', 'render.json outputs carry their own entry, range and format; the choices below are ignored for them.') : h('p.hint', 'Tip: ask the agent "make me 4 one-minute videos" and it writes a render.json with one output each; or set I / O points on the timeline to render a part.');
     const sync = () => { const f = fmts[format.value] || {}; note.textContent = f.note || ''; alphaRow.style.display = f.alpha ? 'flex' : 'none'; crfRow.style.display = f.crf ? 'grid' : 'none'; const auto = f.crf ? f.crf[quality.value] : null; crfRow.querySelector('.small').textContent = auto !== null ? `auto ${auto} for ${quality.options[quality.selectedIndex].text.toLowerCase()}` : ''; };
     format.addEventListener('change', sync); quality.addEventListener('change', sync); sync();
+    // Bigger than the composition costs time and does not sharpen footage: say so before a 2-hour render.
+    const sizeNote = h('p.hint', { style: { marginTop: '-4px' } });
+    const syncSize = () => {
+      const s = Number(preset.value) || 1; const long = dur > 5 * 60; const parts = [];
+      if (s > 1.01) parts.push(`Larger than the composition: takes about ${Math.max(2, Math.round(s * s * 0.75))}× as long. Text gets sharper; footage never looks sharper than its source.`);
+      if (long) parts.push(`This video is ${Math.round(dur / 60)} min long, so the render takes a while${s > 1.01 ? '. 1080p is much quicker' : ''}. You can keep working; the Render button shows the time left.`);
+      sizeNote.textContent = parts.join(' '); sizeNote.style.display = parts.length ? '' : 'none';
+    };
+    preset.addEventListener('change', syncSize); syncSize();
     const adv = h('details', { open: !!(saved.crf || saved.maxBitrate || saved.fps || saved.alpha) }, h('summary', { style: { cursor: 'pointer', color: 'var(--fg-1)', fontSize: '12.5px' } }, 'Advanced'),
       h('div.inspector', { style: { border: 0, padding: '8px 0 0' } }, crfRow, h('div.irow', h('span', 'Max bitrate'), h('div', { style: { display: 'flex', gap: '8px', alignItems: 'center' } }, maxBitrate, h('span.small.muted', 'Mbps'))), h('div.irow', h('span', 'Frame rate'), h('div', { style: { display: 'flex', gap: '8px', alignItems: 'center' } }, fpsIn, h('span.small.muted', 'fps'))), h('div.irow', h('span', 'Alpha'), alphaRow)));
-    const ok = await modal(`Render v${project.versions.length + 1}`, h('div', h('label.field', h('span', 'What'), what, planNote), h('label.field', h('span', 'Format'), format, note), h('div', { style: { display: 'flex', gap: '12px' } }, h('label.field', { style: { flex: 1 } }, h('span', 'Size'), preset), h('label.field', { style: { flex: '0 0 auto' } }, h('span', 'Sound'), h('label', { style: { display: 'flex', gap: '6px', alignItems: 'center', height: '30px', cursor: 'pointer' } }, audioCb, h('span.small', projRender.audio === false ? 'off (set by the agent in videditor.json)' : 'include audio'))), h('label.field', { style: { flex: 1 } }, h('span', 'Quality'), quality)), adv, h('label.field', { style: { marginTop: '10px' } }, h('span', 'Version notes'), notes)), { actions: [{ label: 'Render all sizes', cls: 'ghost', value: 'all' }, { label: 'Render', cls: 'primary', icon: 'render', value: true }] });
+    const ok = await modal(`Render v${project.versions.length + 1}`, h('div', h('label.field', h('span', 'What'), what, planNote), h('label.field', h('span', 'Format'), format, note), h('div', { style: { display: 'flex', gap: '12px' } }, h('label.field', { style: { flex: 1 } }, h('span', 'Size'), preset), h('label.field', { style: { flex: '0 0 auto' } }, h('span', 'Sound'), h('label', { style: { display: 'flex', gap: '6px', alignItems: 'center', height: '30px', cursor: 'pointer' } }, audioCb, h('span.small', projRender.audio === false ? 'off (set by the agent in videditor.json)' : 'include audio'))), h('label.field', { style: { flex: 1 } }, h('span', 'Quality'), quality)), sizeNote, adv, h('label.field', { style: { marginTop: '10px' } }, h('span', 'Version notes'), notes)), { actions: [{ label: 'Render all sizes', cls: 'ghost', value: 'all' }, { label: 'Render', cls: 'primary', icon: 'render', value: true }] });
     if (!ok) return;
     const opts = { format: format.value, quality: quality.value, crf: crf.value ? Number(crf.value) : undefined, maxBitrate: maxBitrate.value ? Number(maxBitrate.value) : undefined, fps: fpsIn.value ? Number(fpsIn.value) : undefined, audio: audioCb.checked, alpha: alphaCb.checked && !!fmts[format.value]?.alpha, notes: notes.value.trim() };
     if (what.value === 'range') opts.range = { start: IO.in ?? 0, end: IO.out ?? dur };

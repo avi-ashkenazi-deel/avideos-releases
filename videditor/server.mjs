@@ -21,6 +21,8 @@ import { revealFile } from './lib/reveal.mjs';
 import { runAgent, AGENTS, systemPrompt, diagnoseClaude } from './lib/agent.mjs';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
+// A failed background job must never take the whole app down: log it and keep serving.
+process.on('unhandledRejection', (e) => console.error(`[videditor] unhandled error: ${e?.stack || e}`));
 const PORT = Number(process.env.VIDEDITOR_PORT || process.env.PORT || 8787);
 import { DATA, PROJECTS, HOME, PACKAGED, LOGS, appVersion } from './lib/paths.mjs';
 const store = new Store(DATA);
@@ -128,10 +130,11 @@ function notifyWaiters() { for (const w of [...waiters]) w(); }
 
 // Jobs: long-running work (renders, agent runs) streamed to the UI as JSON events over SSE.
 function newJob(kind) {
-  const job = { id: store.id('job'), kind, lines: [], done: false, ok: null, listeners: new Set(), versionId: null, startedAt: Date.now(), result: null, cost: null };
+  const job = { id: store.id('job'), kind, lines: [], done: false, ok: null, listeners: new Set(), versionId: null, startedAt: Date.now(), result: null, cost: null, abort: new AbortController(), stopped: null };
   jobs.set(job.id, job);
-  job.push = (ev) => { const e = typeof ev === 'string' ? { type: 'log', text: ev } : ev; job.lines.push(e); for (const l of job.listeners) l(e); };
-  job.finish = (ok, extra = {}) => { job.ok = ok; Object.assign(job, extra); job.done = true; for (const l of job.listeners) l(null); setTimeout(() => jobs.delete(job.id), 30 * 60 * 1000).unref(); };
+  // Render logs also go to the server log, so `chopchop logs` shows what a render did (footage that failed to load, etc.).
+  job.push = (ev) => { const e = typeof ev === 'string' ? { type: 'log', text: ev } : ev; job.lines.push(e); if (kind === 'render' && e.type === 'log') console.log(`[render] ${e.text}`); for (const l of job.listeners) l(e); };
+  job.finish = (ok, extra = {}) => { if (kind === 'render') console.log(`[render] ${ok ? 'finished' : 'FAILED'}`); job.ok = ok; Object.assign(job, extra); job.done = true; for (const l of job.listeners) l(null); setTimeout(() => jobs.delete(job.id), 30 * 60 * 1000).unref(); };
   return job;
 }
 const entryOf = (prj) => (prj?.composition && safePath(prj.dir, prj.composition) && fs.existsSync(safePath(prj.dir, prj.composition)) ? prj.composition : 'index.html');
@@ -143,12 +146,12 @@ function compositionsHash(dir) {
 }
 const renderJobs = new Map(); // projectId -> job (the render currently running for that project)
 function trackRender(prj, job, source) {
-  renderJobs.set(prj.id, job);
+  renderJobs.set(prj.id, job); job.source = source;
   const l = (e) => { if (e !== null) return; job.listeners.delete(l); if (renderJobs.get(prj.id) === job) renderJobs.delete(prj.id);
     const p = store.project(prj.id); if (!p) return;
     const vs = store.versions(p.id); const made = job.batch ? job.batch.filter((x) => typeof x === 'string' && x.startsWith('ver_')).map((id) => vs.find((v) => v.id === id)?.label).filter(Boolean) : (job.versionId ? [vs.find((v) => v.id === job.versionId)?.label].filter(Boolean) : []);
     if (job.ok && p.revealOnRender !== false) { const ids = job.batch ? job.batch.filter((x) => typeof x === 'string' && x.startsWith('ver_')) : (job.versionId ? [job.versionId] : []); const v = ids.length ? vs.find((x) => x.id === ids[ids.length - 1]) : null; revealFile(v ? (v.renderPath && fs.existsSync(v.renderPath) ? v.renderPath : v.filePath) : job.folder); }
-    p.chat = p.chat || []; p.chat.push({ role: 'agent', system: true, text: job.ok ? `✅ ${source === 'auto' ? 'Auto-rendered' : 'Rendered'} ${made.length ? made.join(', ') : (job.folder ? 'PNG sequence' : 'nothing new')}${(() => { const w = job.lines.filter((x) => x.type === 'log' && x.text.startsWith('⚠')); return w.length ? ` · ⚠ ${w.map((x) => x.text.slice(2, 120)).join(' · ')}` : ''; })()}` : `⚠️ ${source === 'auto' ? 'Auto-render' : 'Render'} failed: ${(job.lines.filter((x) => x.type === 'log').slice(-1)[0]?.text || 'see the log').slice(0, 200)}`, at: new Date().toISOString(), renderJobId: job.id, versionId: job.versionId || null }); store.save();
+    p.chat = p.chat || []; p.chat.push({ role: 'agent', system: true, text: job.stopped ? `⏹ ${source === 'auto' ? 'Auto-render' : 'Render'} stopped: ${job.stopped}` : job.ok ? `✅ ${source === 'auto' ? 'Auto-rendered' : 'Rendered'} ${made.length ? made.join(', ') : (job.folder ? 'PNG sequence' : 'nothing new')}${(() => { const w = job.lines.filter((x) => x.type === 'log' && x.text.startsWith('⚠')); return w.length ? ` · ⚠ ${w.map((x) => x.text.slice(2, 120)).join(' · ')}` : ''; })()}` : `⚠️ ${source === 'auto' ? 'Auto-render' : 'Render'} failed: ${(job.lines.filter((x) => x.type === 'log').slice(-1)[0]?.text || 'see the log').slice(0, 200)}`, at: new Date().toISOString(), renderJobId: job.id, versionId: job.versionId || null }); store.save();
   };
   job.listeners.add(l);
   if (job.done) l(null);
@@ -156,12 +159,24 @@ function trackRender(prj, job, source) {
 // After the agent changed something: render in the background (render.json outputs if present, else the active composition with the last manual settings).
 // Render settings the agent (or the person) wrote into the project's videditor.json: { "render": { "audio": false, "scale": 1.5, ... } }
 function projectRenderConfig(dir) { try { const j = JSON.parse(fs.readFileSync(path.join(dir, 'videditor.json'), 'utf8')); return j && typeof j.render === 'object' && j.render ? j.render : {}; } catch { return {}; } }
+function stopRender(job, why) { if (!job || job.done) return false; job.stopped = why; job.abort.abort(); job.push({ type: 'log', text: `stopping: ${why}` }); return true; }
+// Length of a composition in seconds: the root's data-duration, else where its last clip ends.
+function compositionSeconds(prj) { const c = prj.dir ? parseProject(prj.dir, entryOf(prj)) : null; if (!c) return 0; return c.duration || Math.max(0, ...c.clips.filter((k) => k.start !== null && k.duration !== null).map((k) => k.start + k.duration)); }
+const AUTO_RENDER_MAX_SECONDS = 5 * 60; // longer videos take too long to re-render after every edit
 function autoRenderIfChanged(prj, before, versionsBefore, reason = '') {
   const p = store.project(prj.id); if (!p || p.autoRender === false) return null;
   if (compositionsHash(p.dir) === before) return null; // nothing changed
   if (store.versions(p.id).length > versionsBefore) return null; // the agent already rendered (MCP)
-  if (renderJobs.has(p.id)) return null; // a render is already running; it will pick up the newest state
+  const running = renderJobs.get(p.id);
+  if (running && !running.done && running.source !== 'auto') return null; // your own render is running; leave it alone
   const plan = readRenderPlan(p);
+  const secs = plan.length ? 0 : compositionSeconds(p);
+  if (secs > AUTO_RENDER_MAX_SECONDS) {
+    p.chat = p.chat || []; p.chat.push({ role: 'agent', system: true, text: `Auto-render skipped: this video is ${Math.round(secs / 60)} min long, and re-rendering it after every edit would keep your computer busy. Press Render when you're ready.`, at: new Date().toISOString() }); store.save();
+    return null;
+  }
+  // An auto-render of an older state is out of date now: replace it.
+  if (running && !running.done) stopRender(running, 'a newer edit came in');
   const defaults = { quality: 'looks', ...(p.renderDefaults || {}), ...projectRenderConfig(p.dir), notes: `Auto-rendered after: ${String(reason).replace(/\s+/g, ' ').slice(0, 160) || 'agent edit'}`, label: null };
   const { job } = plan.length ? startBatch(p, plan) : startRender(p, defaults);
   p.chat = p.chat || []; p.chat.push({ role: 'agent', system: true, text: plan.length ? `⏳ Auto-rendering ${plan.length} output${plan.length > 1 ? 's' : ''} from render.json…` : `⏳ Auto-rendering v${store.versions(p.id).length + 1}…`, at: new Date().toISOString(), renderJobId: job.id }); store.save();
@@ -184,7 +199,8 @@ async function renderItem(prj, job, { quality = 'looks', fps, notes, scale = 1, 
     const onLog = (text) => job.push({ type: 'log', text });
     for (let i = 0; i < vids.length; i += 2) await Promise.all(vids.slice(i, i + 2).map((f) => ensureRenderProxy(PROXIES, f, dims, { onLog })));
   }
-  const r = await renderProject({ workers, pageUrl: pageUrlFor(prj.id, useEntry), dir: prj.dir, assetsDir: prj.assetsDir || null, out, quality, scale, fps: fps ? Number(fps) : undefined, format: fmt, crf: crf !== undefined && crf !== null && crf !== '' ? Number(crf) : undefined, maxBitrate: maxBitrate ? Number(maxBitrate) : undefined, audio: audio !== false && audio !== 'false', alpha: !!alpha, range: range && (range.start !== undefined || range.end !== undefined) ? range : null, onLog: (text) => job.push({ type: 'log', text }), onProgress: (p) => job.push({ type: 'progress', ...p, item: name || label || null }) });
+  if (job.abort.signal.aborted) throw new Error('stopped');
+  const r = await renderProject({ workers, signal: job.abort.signal, pageUrl: pageUrlFor(prj.id, useEntry), dir: prj.dir, assetsDir: prj.assetsDir || null, out, quality, scale, fps: fps ? Number(fps) : undefined, format: fmt, crf: crf !== undefined && crf !== null && crf !== '' ? Number(crf) : undefined, maxBitrate: maxBitrate ? Number(maxBitrate) : undefined, audio: audio !== false && audio !== 'false', alpha: !!alpha, range: range && (range.start !== undefined || range.end !== undefined) ? range : null, onLog: (text) => job.push({ type: 'log', text }), onProgress: (p) => job.push({ type: 'progress', ...p, item: name || label || null }) });
   if (r.folder) { job.push({ type: 'log', text: `PNG sequence written to ${out}` }); return { folder: out }; }
   const where = [useEntry !== 'index.html' ? `Variant: ${useEntry}` : null, r.range ? `Range: ${r.range.start}–${r.range.end}s` : null].filter(Boolean).join('\n');
   const v = registerVersion(prj, out, { notes: notes || `${name ? name + '\n' : ''}Rendered from Studio: ${r.label}, ${r.width}×${r.height}, ${r.frames} frames @ ${r.fps} fps${where ? '\n' + where : ''}`, source: 'render', originalName: path.basename(out), label: name || label ? `v${n} ${[name, label].filter(Boolean).join(' ')}` : null, renderPath: out, format: fmt, formatLabel: r.label, alpha: !!alpha, entry: useEntry, range: r.range });
@@ -195,7 +211,7 @@ function startRender(prj, opts = {}) {
   const job = newJob('render');
   (async () => {
     try { const r = await renderItem(prj, job, opts); job.finish(true, r.folder ? { folder: r.folder } : { versionId: r.versionId }); }
-    catch (e) { job.push({ type: 'log', text: `failed: ${e.message}` }); job.finish(false); }
+    catch (e) { if (!job.stopped) job.push({ type: 'log', text: `failed: ${e.message}` }); job.finish(false); }
   })();
   return { job, out: null };
 }
@@ -205,9 +221,10 @@ function startBatch(prj, items) {
   (async () => {
     const done = [];
     for (const [i, it] of items.entries()) {
+      if (job.abort.signal.aborted) break;
       job.push({ type: 'log', text: `— ${i + 1}/${items.length}: ${it.name || it.label || it.entry || 'render'}` });
       job.push({ type: 'batch', index: i + 1, total: items.length, name: it.name || it.label || it.entry || null });
-      try { const r = await renderItem(prj, job, it); done.push(r.versionId || r.folder); } catch (e) { job.push({ type: 'log', text: `failed: ${e.message}` }); }
+      try { const r = await renderItem(prj, job, it); done.push(r.versionId || r.folder); } catch (e) { if (!job.stopped) job.push({ type: 'log', text: `failed: ${e.message}` }); }
     }
     job.finish(done.length === items.length, { versionId: done.filter((d) => typeof d === 'string' && d.startsWith('ver_')).slice(-1)[0] || null, batch: done });
   })();
@@ -383,6 +400,7 @@ async function api(req, res, url) {
     if (!loadPlaywright()) return err(res, 501, 'Rendering needs Playwright: run `npm install` inside the videditor folder (it uses your installed Chrome).');
     if (!FFMPEG) return err(res, 501, 'Rendering needs ffmpeg on PATH');
     const b = await readJson(req);
+    { const running = renderJobs.get(prj.id); if (running && !running.done && running.source === 'auto') stopRender(running, 'you started a render'); }
     let items = null;
     if (b.mode === 'plan') { items = readRenderPlan(prj); if (!items.length) return err(res, 400, 'No outputs in render.json'); items = items.map((it) => ({ ...it, format: b.format && !it.formatExplicit ? it.format : it.format })); }
     else if (b.mode === 'variants') items = listVariants(prj.dir).map((v) => ({ ...b, entry: v.entry, name: v.entry === 'index.html' ? 'main' : (v.title || v.name) }));
@@ -392,6 +410,7 @@ async function api(req, res, url) {
     const { job } = startRender(prj, b); trackRender(prj, job, 'manual');
     return send(res, 202, { jobId: job.id });
   }
+  if ((x = m(/^\/api\/projects\/([^/]+)\/render\/stop$/)) && req.method === 'POST') { const prj = store.project(x[1]); if (!prj) return err(res, 404, 'Project not found'); return send(res, 200, { stopped: stopRender(renderJobs.get(prj.id), 'you stopped it') }); }
   if ((x = m(/^\/api\/projects\/([^/]+)\/render-status$/))) { const prj = store.project(x[1]); if (!prj) return err(res, 404, 'Project not found'); const j = renderJobs.get(prj.id); return send(res, 200, { running: j && !j.done ? j.id : null, autoRender: prj.autoRender !== false, projectRender: projectRenderConfig(prj.dir), renderDefaults: prj.renderDefaults || null }); }
   if ((x = m(/^\/api\/projects\/([^/]+)\/render-plan$/))) {
     const prj = store.project(x[1]); if (!prj?.dir) return err(res, 404, 'Project not found');
@@ -534,7 +553,7 @@ async function api(req, res, url) {
   if ((x = m(/^\/api\/jobs\/([^/]+)\/events$/))) {
     const job = jobs.get(x[1]); if (!job) return err(res, 404, 'Job not found');
     res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive', 'Access-Control-Allow-Origin': '*' });
-    const write = (line) => { if (line === null) { res.write(`event: done\ndata: ${JSON.stringify({ ok: job.ok, versionId: job.versionId, result: job.result, cost: job.cost, folder: job.folder || null, batch: job.batch || null, renderJobId: job.renderJobId || null })}\n\n`); res.end(); } else res.write(`data: ${JSON.stringify(line)}\n\n`); };
+    const write = (line) => { if (line === null) { res.write(`event: done\ndata: ${JSON.stringify({ ok: job.ok, versionId: job.versionId, result: job.result, cost: job.cost, folder: job.folder || null, batch: job.batch || null, renderJobId: job.renderJobId || null, stopped: job.stopped || null })}\n\n`); res.end(); } else res.write(`data: ${JSON.stringify(line)}\n\n`); };
     for (const l of job.lines) write(l);
     if (job.done) return write(null);
     job.listeners.add(write); req.on('close', () => job.listeners.delete(write));
