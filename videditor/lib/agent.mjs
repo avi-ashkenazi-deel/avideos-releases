@@ -12,6 +12,7 @@ export const SKILL = fs.readFileSync(path.join(ROOT, 'skills', 'videditor', 'SKI
 export function systemPrompt({ dir, composition, files, assetsDir = null, entry = 'index.html', variants = ['index.html'] }) {
   let media = ''; try { media = fs.readFileSync(path.join(dir, 'MEDIA.md'), 'utf8'); if (media.length > 12000) media = media.slice(0, 12000) + '\n…(truncated; open MEDIA.md for the rest)'; } catch {}
   let brand = ''; try { brand = fs.readFileSync(path.join(dir, 'brand.json'), 'utf8'); } catch {}
+  let said = ''; try { const t = fs.readFileSync(path.join(dir, 'TRANSCRIPT.md'), 'utf8'); const n = (t.match(/^\[/gm) || []).length; said = `TRANSCRIPT.md has what is said in ${entry} (${n} lines, composition times, with clip ids and source times); transcripts/ has each source file. Read them when the request is about what someone says, a part to remove, or an audit.`; } catch {}
   let motion = ''; try { motion = fs.readFileSync(path.join(dir, 'MOTION.md'), 'utf8').slice(0, 6000); } catch {}
   const clips = (composition?.clips || []).slice(0, 60).map((c) => `  ${c.id ? '#' + c.id : '<' + c.tag + '>'} start=${c.start} dur=${c.duration ?? 'auto'} track=${c.track ?? 0}${c.text ? ` "${c.text}"` : ''}${c.src ? ` src=${c.src}` : ''}`).join('\n');
   return [
@@ -29,6 +30,7 @@ export function systemPrompt({ dir, composition, files, assetsDir = null, entry 
     brand ? `\n## Brand (brand.json → brand.css variables)\n${brand}` : '',
     motion ? `\n## Motion guidelines (MOTION.md, mandatory)\n${motion}` : '',
     media ? `\n## Media analysis (from MEDIA.md)\n${media}` : '',
+    said ? `\n## Transcript\n${said}` : '',
     '',
     '## How to reply',
     'Keep it tight. Your final reply is at most 3 short lines listing what changed (clip id, attribute, from → to), or the one-line answer. Lead with the changes, not with "Done" or "I have". No preamble, no restating the request, no explanations of how you worked, no offers of next steps.',

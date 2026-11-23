@@ -37,6 +37,8 @@ export const api = {
   revealVersion: (id) => req('POST', `/api/versions/${id}/reveal`),
   renderStatus: (id) => req('GET', `/api/projects/${id}/render-status`),
   renderStop: (id) => req('POST', `/api/projects/${id}/render/stop`, {}),
+  transcript: (id, entry) => req('GET', `/api/projects/${id}/transcript${entry ? `?entry=${encodeURIComponent(entry)}` : ''}`),
+  transcribeAgain: (id, rel) => req('POST', `/api/projects/${id}/transcribe`, { rel }),
   diagnose: (projectId) => req('GET', `/api/agent/diagnose${projectId ? `?projectId=${projectId}` : ''}`),
   saveBrand: (id, b) => req('PUT', `/api/projects/${id}/brand`, b),
   composition: (id, t) => req('GET', `/api/projects/${id}/composition${t !== undefined ? `?t=${t}` : ''}`),

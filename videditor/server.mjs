@@ -17,6 +17,7 @@ import { availableFormats, DEFAULT_FORMAT } from './lib/formats.mjs';
 import { buildPrompt } from './lib/prompt.mjs';
 import { renderProject, loadPlaywright, captureFrame } from './lib/render.mjs';
 import { ensureProxy, proxyReason, isVideoFile, ensureRenderProxy } from './lib/proxy.mjs';
+import { engineInfo, transcribeFile, readCached, writeCached, mapToComposition, fileMarkdown, compositionMarkdown } from './lib/transcribe.mjs';
 import { revealFile } from './lib/reveal.mjs';
 import { runAgent, AGENTS, systemPrompt, diagnoseClaude } from './lib/agent.mjs';
 
@@ -270,11 +271,82 @@ function startAnalyze(prj, { force = false } = {}) {
       }
       writeManifest(prj.dir, manifest, { libraryDir: prj.assetsDir });
       job.push({ type: 'log', text: 'MEDIA.md updated' }); job.finish(true);
+      startTranscripts(prj);
     } catch (e) { job.push({ type: 'log', text: `failed: ${e.message}` }); job.finish(false); }
     finally { analyzing.delete(prj.id); }
   })();
   return job;
 }
+// ---------- transcripts: what is said in the footage, for the agent (TRANSCRIPT.md, transcripts/) and the Transcript tab
+const txStates = new Map(); // projectId -> { current: { file, rel, name, progress } | null, errors: { rel: message } }
+const txQueue = []; let txBusy = false;
+const audioProbe = new Map(); // "path|mtime" -> { ok, dur }
+const txState = (prj) => { if (!txStates.has(prj.id)) txStates.set(prj.id, { current: null, errors: {} }); return txStates.get(prj.id); };
+function probeAudio(file, mtime) {
+  const k = `${file}|${mtime}`;
+  if (!audioProbe.has(k)) { const r = spawnSync('ffprobe', ['-v', 'error', '-select_streams', 'a:0', '-show_entries', 'stream=codec_type:format=duration', '-of', 'json', file], { encoding: 'utf8' }); let ok = false, dur = 0; try { const j = JSON.parse(r.stdout); ok = (j.streams || []).length > 0; dur = Number(j.format?.duration) || 0; } catch {} audioProbe.set(k, { ok, dur }); }
+  return audioProbe.get(k);
+}
+// Footage with sound: the asset folders plus every file the compositions use (at least 2 s long).
+function speechFiles(prj) {
+  if (!prj?.dir || !fs.existsSync(prj.dir)) return [];
+  const seen = new Map();
+  for (const it of listAssets(prj)) if (it.kind === 'video' || it.kind === 'audio') seen.set(path.resolve(it.path), { file: path.resolve(it.path), rel: it.rel, name: it.name });
+  for (const v of listVariants(prj.dir)) for (const c of parseProject(prj.dir, v.entry)?.clips || []) {
+    if ((c.tag !== 'video' && c.tag !== 'audio') || !c.src) continue;
+    const f = resolveSrc(prj.dir, prj.assetsDir || null, c.src, c.fileAbs); if (!f || !fs.existsSync(f) || seen.has(path.resolve(f))) continue;
+    seen.set(path.resolve(f), { file: path.resolve(f), rel: path.relative(prj.dir, f), name: path.basename(f) });
+  }
+  return [...seen.values()].filter((x) => { let st; try { st = fs.statSync(x.file); } catch { return false; } const a = probeAudio(x.file, st.mtimeMs); x.duration = a.dur; return a.ok && a.dur >= 2; });
+}
+function startTranscripts(prj, { force = false, rel = null } = {}) {
+  if (!prj?.dir || !FFMPEG || !engineInfo(DATA).ready) return;
+  const st = txState(prj);
+  for (const f of speechFiles(prj)) {
+    if (rel && f.rel !== rel) continue;
+    if (force) delete st.errors[f.rel];
+    if ((!force && readCached(DATA, f.file)) || st.errors[f.rel]) continue; // failed before: wait for "Try again"
+    if (st.current?.file === f.file || txQueue.some((q) => q.prjId === prj.id && q.file === f.file)) continue;
+    txQueue.push({ prjId: prj.id, ...f });
+  }
+  pumpTranscripts();
+}
+async function pumpTranscripts() {
+  if (txBusy) return; txBusy = true;
+  try {
+    while (txQueue.length) {
+      const it = txQueue.shift(); const prj = store.project(it.prjId); if (!prj) continue;
+      const st = txState(prj); st.current = { file: it.file, rel: it.rel, name: it.name, progress: 0 };
+      const t0 = Date.now(); console.log(`[transcribe] ${it.name} (${Math.round(it.duration || 0)}s)…`);
+      try {
+        const tr = await transcribeFile(it.file, { dataDir: DATA, locale: prj.transcriptLocale || null, onProgress: (p) => { if (st.current) st.current.progress = p; }, onLog: (t) => console.log(`[transcribe] ${t}`) });
+        writeCached(DATA, it.file, { ...tr, file: it.file, at: new Date().toISOString() });
+        console.log(`[transcribe] ${it.name}: ${tr.segments.length} lines in ${((Date.now() - t0) / 1000).toFixed(0)}s (${tr.engine}${tr.locale ? ', ' + tr.locale : ''})`);
+      } catch (e) { st.errors[it.rel] = e.message; console.log(`[transcribe] ${it.name} failed: ${e.message}`); }
+      st.current = null;
+      writeTranscriptFiles(prj);
+    }
+  } finally { txBusy = false; }
+}
+function compositionLines(prj, entry = entryOf(prj)) {
+  const comp = prj.dir ? parseProject(prj.dir, entry) : null; if (!comp) return [];
+  return mapToComposition(comp.clips, (c) => resolveSrc(prj.dir, prj.assetsDir || null, c.src, c.fileAbs), (f) => readCached(DATA, f));
+}
+const writeIfChanged = (file, text) => { try { if (fs.readFileSync(file, 'utf8') === text) return; } catch {} fs.writeFileSync(file, text); };
+// transcripts/<file>.md (source times) and TRANSCRIPT.md (the active composition, composition times) for the agent.
+function writeTranscriptFiles(prj) {
+  try {
+    const files = speechFiles(prj).map((f) => ({ ...f, tr: readCached(DATA, f.file) })).filter((f) => f.tr);
+    if (!files.length) return;
+    const dir = path.join(prj.dir, 'transcripts'); fs.mkdirSync(dir, { recursive: true });
+    const want = new Set();
+    for (const f of files) { const name = f.rel.replace(/^(\.\.\/)+/, '').replace(/[\/\\]+/g, '__') + '.md'; want.add(name); writeIfChanged(path.join(dir, name), fileMarkdown(f.rel, f.tr)); }
+    for (const old of fs.readdirSync(dir)) if (old.endsWith('.md') && !want.has(old)) fs.rmSync(path.join(dir, old), { force: true });
+    const entry = entryOf(prj);
+    writeIfChanged(path.join(prj.dir, 'TRANSCRIPT.md'), compositionMarkdown(entry, compositionLines(prj, entry)));
+  } catch (e) { console.log(`[transcribe] could not write transcript files: ${e.message}`); }
+}
+
 const watchers = new Map(); // projectId -> fs.FSWatcher[]
 function watchAssets(prj) {
   for (const w of watchers.get(prj.id) || []) w.close();
@@ -409,6 +481,19 @@ async function api(req, res, url) {
     if (items) { const { job } = startBatch(prj, items); trackRender(prj, job, 'manual'); return send(res, 202, { jobId: job.id, count: items.length }); }
     const { job } = startRender(prj, b); trackRender(prj, job, 'manual');
     return send(res, 202, { jobId: job.id });
+  }
+  if ((x = m(/^\/api\/projects\/([^/]+)\/transcript$/))) {
+    const prj = store.project(x[1]); if (!prj) return err(res, 404, 'Project not found');
+    const entry = q.entry && prj.dir && safePath(prj.dir, q.entry) && fs.existsSync(safePath(prj.dir, q.entry)) ? q.entry : entryOf(prj);
+    startTranscripts(prj);
+    const st = txState(prj);
+    const files = speechFiles(prj).map((f) => { const c = readCached(DATA, f.file); const running = st.current?.file === f.file; return { rel: f.rel, name: f.name, duration: Math.round(f.duration || 0), state: c ? 'done' : running ? 'running' : st.errors[f.rel] ? 'error' : txQueue.some((t) => t.prjId === prj.id && t.file === f.file) ? 'queued' : 'none', progress: running ? st.current.progress : null, error: st.errors[f.rel] || null, engine: c?.engine || null, locale: c?.locale || null, lines: c ? c.segments.length : null }; });
+    return send(res, 200, { engine: engineInfo(DATA), files, entry, lines: compositionLines(prj, entry) });
+  }
+  if ((x = m(/^\/api\/projects\/([^/]+)\/transcribe$/)) && req.method === 'POST') {
+    const prj = store.project(x[1]); if (!prj) return err(res, 404, 'Project not found');
+    const b = await readJson(req); const eng = engineInfo(DATA); if (!eng.ready) return err(res, 501, eng.reason || 'No transcription engine');
+    startTranscripts(prj, { force: true, rel: b.rel || null }); return send(res, 202, { ok: true });
   }
   if ((x = m(/^\/api\/projects\/([^/]+)\/render\/stop$/)) && req.method === 'POST') { const prj = store.project(x[1]); if (!prj) return err(res, 404, 'Project not found'); return send(res, 200, { stopped: stopRender(renderJobs.get(prj.id), 'you stopped it') }); }
   if ((x = m(/^\/api\/projects\/([^/]+)\/render-status$/))) { const prj = store.project(x[1]); if (!prj) return err(res, 404, 'Project not found'); const j = renderJobs.get(prj.id); return send(res, 200, { running: j && !j.done ? j.id : null, autoRender: prj.autoRender !== false, projectRender: projectRenderConfig(prj.dir), renderDefaults: prj.renderDefaults || null }); }
@@ -727,6 +812,7 @@ function startAgentRun(prj, { message, shown, fresh = false, kind = 'claude' }) 
     const activeEntry = entryOf(prj);
     const hashBefore = compositionsHash(prj.dir); const versionsBefore = store.versions(prj.id).length;
     snapshot(prj.dir, activeEntry, 'before agent run', 'you');
+    writeTranscriptFiles(prj); // the composition may have changed since the last run
     const system = systemPrompt({ dir: prj.dir, composition: parseProject(prj.dir, activeEntry), files: listFiles(prj.dir), assetsDir: prj.assetsDir || null, entry: activeEntry, variants: listVariants(prj.dir).map((v) => v.entry) });
     const handle = { jobId: job.id, kill: null };
     agents.set(prj.id, handle);

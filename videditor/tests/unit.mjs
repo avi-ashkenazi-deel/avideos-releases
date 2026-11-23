@@ -152,3 +152,14 @@ test('media analysis: scan, cuts, keyframes, tempo and manifest', { timeout: 120
   assert.equal(kindOf('x.webp'), 'image');
   fs.rmSync(dir, { recursive: true }); fs.rmSync(projectDir, { recursive: true });
 });
+
+test('transcripts: words become sentences; source times map to composition time', async () => {
+  const { toSentences, mapToComposition } = await import('../lib/transcribe.mjs');
+  const w = (start, end, text) => ({ start, end, text });
+  const segs = toSentences([{ start: 0, end: 20, text: 'x', words: [w(0, 0.5, 'Hello'), w(0.5, 1, 'there.'), w(1.1, 1.5, 'This'), w(1.5, 2, 'is'), w(2, 2.5, 'a'), w(3.6, 4, 'test,'), w(4, 4.5, 'ok?')] }]);
+  assert.deepEqual(segs.map((s) => s.text), ['Hello there.', 'This is a', 'test, ok?']); // split at "." and at the 1.1 s pause
+  const tr = { segments: segs };
+  // The clip plays source 1.5–20 s from composition 10 s: the first sentence is gone, the second is cut mid-way.
+  const lines = mapToComposition([{ id: 'a', tag: 'video', src: 'a.mp4', hasAudio: true, start: 10, duration: 18.5, mediaStart: 1.5 }, { id: 'm', tag: 'video', src: 'a.mp4', hasAudio: false, start: 0, duration: 5, mediaStart: 0 }], () => '/a.mp4', () => tr);
+  assert.deepEqual(lines.map((l) => [l.text, l.t0, l.partial]), [['is a', 10, true], ['test, ok?', 12.1, false]]);
+});

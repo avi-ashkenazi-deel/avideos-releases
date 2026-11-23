@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Embedded into chopchop-transcribe (linker section __TEXT,__info_plist) so macOS can ask for Speech Recognition access. -->
+<plist version="1.0">
+<dict>
+  <key>CFBundleIdentifier</key><string>com.chopchop.transcribe</string>
+  <key>CFBundleName</key><string>ChopChop transcribe</string>
+  <key>NSSpeechRecognitionUsageDescription</key><string>ChopChop transcribes your videos on this Mac so the agent can edit by what is said.</string>
+</dict>
+</plist>

@@ -44,6 +44,14 @@ A video is a folder. `index.html` is the video. ChopChop plays it in the browser
 - Brand: `brand.json` → `brand.css` exposes `--brand-primary`, `--brand-background`, `--brand-text`, `--brand-muted`, `--brand-accent`, `--brand-font`, `--brand-logo`. Link `brand.css` and use the variables instead of hard-coded colors so the person can rebrand without editing the composition.
 - Nested scenes: a clip with `data-composition-id="x" data-composition-src="compositions/x.html" data-start data-duration` plays another composition file inside it (same format, transparent body, same size). Use them for reusable scenes or long videos.
 
+## Editing by what is said (transcripts)
+
+- ChopChop transcribes footage with sound on this computer. `TRANSCRIPT.md` is what is said in the active composition, in order: `[composition time] #clip-id (file: seconds in the file) text`. `transcripts/<file>.md` has each whole source file (times = seconds in the file, which is what `data-media-start` counts). Read them whenever the request refers to what someone says.
+- **Removing a spoken part** ("cut the bit about pricing", "remove these lines"): find the lines, then cut that span out of the clip that plays it. Split the clip in two: the first part keeps its `data-start` and `data-media-start` and ends where the cut starts; the second part is a copy with a new id, `data-media-start` = the source time where the cut ends, `data-start` = the composition time where the cut started. Cut from the start of the first removed line to the start of the next kept line, so the pause goes too. Then move every later clip on every track earlier by the removed length (keep overlays that belong to the removed part out, shorten ones that span it) and shorten the root `data-duration`. Leave a gap only if asked.
+- Several cuts: work from the last one to the first, so earlier times stay valid.
+- **Audits** (legal, NDA, brand, "is this safe to post"): read `TRANSCRIPT.md` (and look at the frames for on-screen text) and list each risk with its composition time as `[mm:ss]`, the quote, why it is a risk, and cut or keep. Do not edit unless asked.
+- If a line looks wrong (names, product terms), it is the transcription, not the speaker: check the frames or ask before acting on one word.
+
 ## Several videos from one project
 - "Make me 4 one-minute videos" → make four **variants** (`variants/<name>.html`, each its own composition with `data-duration="60"`), then write `render.json` listing them so one click renders all:
   ```json

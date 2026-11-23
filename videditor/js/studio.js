@@ -302,11 +302,11 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
   }
 
   // ---------- side panel: layers / files
-  const layersEl = h('div.layers'); const filesHost = h('div'); const assetsHost = h('div'); const brandHost = h('div'); const historyHost = h('div');
+  const layersEl = h('div.layers'); const filesHost = h('div'); const assetsHost = h('div'); const brandHost = h('div'); const historyHost = h('div'); const transcriptHost = h('div.transcript');
   const inspector = h('div.inspector.hidden');
   let sideTab = 'layers';
-  const hosts = { layers: () => [inspector, layersEl], files: () => [filesHost], assets: () => [assetsHost], brand: () => [brandHost], history: () => [historyHost] };
-  const sideTabs = h('div.tabs', [['layers', 'Layers'], ['assets', 'Assets'], ['history', 'History'], ['files', 'Files'], ['brand', 'Brand']].map(([k, l]) => h('span.tab', { class: `tab ${k === sideTab ? 'active' : ''}`, 'data-tab': k, on: { click: (e) => { sideTab = k; sideTabs.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t === e.currentTarget)); sideBody.replaceChildren(...hosts[k]()); if (k === 'files') renderFiles(); if (k === 'assets') renderAssets(); if (k === 'brand') renderBrand(); if (k === 'history') renderHistory(); } } }, l)), h('span', { style: { flex: 1 } }), project.versions.length ? h('a.tab', { href: `#/p/${project.id}` }, 'Review ↗') : null);
+  const hosts = { layers: () => [inspector, layersEl], files: () => [filesHost], assets: () => [assetsHost], brand: () => [brandHost], history: () => [historyHost], transcript: () => [transcriptHost] };
+  const sideTabs = h('div.tabs', [['layers', 'Layers'], ['assets', 'Assets'], ['transcript', 'Transcript'], ['history', 'History'], ['files', 'Files'], ['brand', 'Brand']].map(([k, l]) => h('span.tab', { class: `tab ${k === sideTab ? 'active' : ''}`, 'data-tab': k, on: { click: (e) => { sideTab = k; sideTabs.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t === e.currentTarget)); sideBody.replaceChildren(...hosts[k]()); if (k === 'files') renderFiles(); if (k === 'assets') renderAssets(); if (k === 'brand') renderBrand(); if (k === 'history') renderHistory(); if (k === 'transcript') renderTranscript(); } } }, l)));
   const sideBody = h('div.body', inspector, layersEl);
   const side = h('div.side', sideTabs, sideBody);
   // Layers = what is on screen at the playhead, front to back (like Figma's layers for the current frame).
@@ -354,6 +354,92 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
 
   // ---------- assets
   let assetsPoll = null;
+  // ---------- Transcript: what is said, in composition time. Click a line to jump there; tick lines and
+  // "Remove" asks the agent to cut them; Audit asks the agent to review it for a public post.
+  let txPoll = null; let txLines = []; let txFilter = ''; let txAnchor = null; const txSel = new Set();
+  const txKey = (l) => `${l.clip}|${l.s0}`;
+  const txT = (s) => { const m = Math.floor(s / 60); return `${m}:${String(Math.floor(s - m * 60)).padStart(2, '0')}`; };
+  const txT1 = (s) => { const m = Math.floor(s / 60); return `${String(m).padStart(2, '0')}:${(s - m * 60).toFixed(1).padStart(4, '0')}`; };
+  // Times in the agent's replies ("[03:12]", "11:22.5") jump the playhead there. Not inside code.
+  function linkTimes(frag) {
+    const walk = document.createTreeWalker(frag, NodeFilter.SHOW_TEXT, { acceptNode: (n) => (n.parentElement?.closest?.('code, pre, a') ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT) });
+    const nodes = []; while (walk.nextNode()) nodes.push(walk.currentNode);
+    const re = /(?<![\d:.])(\d{1,2}):([0-5]\d)(\.\d{1,2})?(?![\d:])/g;
+    for (const n of nodes) {
+      const s = n.textContent; if (!re.test(s)) continue; re.lastIndex = 0;
+      const out = document.createDocumentFragment(); let last = 0;
+      for (const m of s.matchAll(re)) {
+        const t = Number(m[1]) * 60 + Number(m[2]) + (m[3] ? Number(m[3]) : 0);
+        if (stage.duration && t > stage.duration + 0.5) continue;
+        out.append(s.slice(last, m.index), h('a.tlink', { title: 'Jump to this moment', on: { click: (e) => { e.preventDefault(); stage.pause(); const near = txLines.find((l) => Math.abs(l.t0 - t) < 0.15); stage.seek(near ? near.t0 + 0.01 : t); } } }, m[0]));
+        last = m.index + m[0].length;
+      }
+      if (!last) continue;
+      out.append(s.slice(last)); n.replaceWith(out);
+    }
+    return frag;
+  }
+  async function sendText(text) { const draft = ta.value; ctx.classList.add('hidden'); ctx._id = null; ta.value = text; await send(); if (draft && draft !== text) { ta.value = draft; grow(); } }
+  async function renderTranscript() {
+    clearTimeout(txPoll); if (sideTab !== 'transcript') return;
+    if (!transcriptHost.childNodes.length) transcriptHost.append(h('div.section', h('div.muted.small', 'Loading…')));
+    let d; try { d = await api.transcript(project.id, activeEntry()); } catch (e) { return transcriptHost.replaceChildren(h('div.section', h('div.muted', e.message))); }
+    if (sideTab !== 'transcript') return;
+    txLines = d.lines || []; const keys = new Set(txLines.map(txKey)); for (const k of [...txSel]) if (!keys.has(k)) txSel.delete(k);
+    const busy = d.files.some((f) => f.state === 'running' || f.state === 'queued');
+    const status = h('div.tx-status');
+    if (!d.engine.ready) status.append(h('p.small', d.engine.reason || 'Transcription is not available on this computer.'));
+    else if (d.engine.note && busy) status.append(h('p.small.muted', d.engine.note));
+    if (!d.files.length) status.append(h('p.small.muted', 'No footage with sound yet. Add a video with sound in Assets; it is transcribed automatically.'));
+    for (const f of d.files) {
+      if (f.state === 'running') status.append(h('div.tx-file', h('span.spin'), h('span', `Transcribing ${f.name}${f.duration > 60 ? ` (${Math.round(f.duration / 60)} min)` : ''}… ${f.progress ? Math.round(f.progress * 100) + '%' : ''}`)));
+      else if (f.state === 'queued') status.append(h('div.tx-file.muted', `Waiting: ${f.name}`));
+      else if (f.state === 'error') status.append(h('div.tx-file.err', h('span', `${f.name}: ${String(f.error).split('\n')[0]}`), btn('Try again', { cls: 'sm', onClick: async () => { try { await api.transcribeAgain(project.id, f.rel); renderTranscript(); } catch (e) { toast(e.message, 'err'); } } }), String(f.error).includes('\n') ? h('pre.log', f.error) : null));
+    }
+    const filter = h('input.text.sm', { type: 'search', placeholder: 'Find words…', value: txFilter, on: { input: (e) => { txFilter = e.target.value; drawLines(); }, keydown: (e) => e.stopPropagation() } });
+    const removeBtn = btn('Remove', { cls: 'sm', icon: 'trash', title: 'Ask the agent to cut the ticked lines out of the video and close the gaps', onClick: () => {
+      const chosen = txLines.filter((l) => txSel.has(txKey(l))).sort((a, b) => a.t0 - b.t0); if (!chosen.length) return;
+      txSel.clear(); drawLines();
+      sendText(`Remove these spoken parts from the video: cut each one out and close the gap (TRANSCRIPT.md has the clip and source times):\n${chosen.map((l) => `- [${txT1(l.t0)}–${txT1(l.t1)}] ${l.clip ? '#' + l.clip + ' ' : ''}(${l.src.split('/').pop()} ${l.s0.toFixed(2)}–${l.s1.toFixed(2)}) "${l.text}"`).join('\n')}`);
+    } });
+    const auditBtn = btn('Audit', { cls: 'sm', icon: 'spark', title: 'Ask the agent to review what is said (and shown) for a public post: NDA, confidential, legal, personal data. It changes nothing.', onClick: () => sendText('Audit this video before it is posted publicly (LinkedIn, social). Read TRANSCRIPT.md, and look at the frames for on-screen text. Flag anything confidential or under NDA (customer names, deals, numbers, unreleased features, internal tools or data), personal data, legal or compliance claims, and anything off-brand. For each one: the time as [mm:ss], the quote, why it is a risk, and cut or keep. Change nothing.') });
+    const tools = h('div.tx-tools', filter, removeBtn, auditBtn);
+    const list = h('div.tx-lines');
+    function drawLines() {
+      removeBtn.disabled = !txSel.size; removeBtn.lastChild.textContent = txSel.size ? `Remove ${txSel.size}` : 'Remove';
+      auditBtn.disabled = !txLines.length;
+      const words = txFilter.trim().toLowerCase();
+      const shown = words ? txLines.filter((l) => l.text.toLowerCase().includes(words)) : txLines;
+      list.replaceChildren(...shown.map((l) => {
+        const k = txKey(l);
+        const cb = h('input', { type: 'checkbox', checked: txSel.has(k), title: 'Tick to remove (shift: a range)', on: { click: (e) => {
+          e.stopPropagation(); const on = e.target.checked;
+          if (e.shiftKey && txAnchor) { const a = txLines.findIndex((x) => txKey(x) === txAnchor), b = txLines.indexOf(l); for (let i = Math.min(a, b); i <= Math.max(a, b); i++) on ? txSel.add(txKey(txLines[i])) : txSel.delete(txKey(txLines[i])); }
+          else on ? txSel.add(k) : txSel.delete(k);
+          txAnchor = k; drawLines();
+        } } });
+        return h('div.tx-line', { class: `tx-line${txSel.has(k) ? ' sel' : ''}`, 'data-t0': l.t0, 'data-t1': l.t1, title: `${txT1(l.t0)}–${txT1(l.t1)} · ${l.clip ? '#' + l.clip + ' · ' : ''}${l.src.split('/').pop()} ${l.s0.toFixed(1)}s`, on: { click: () => { stage.pause(); stage.seek(Math.min(stage.duration, l.t0 + 0.01)); } } },
+          cb, h('span.tx-t', txT(l.t0)), h('span.tx-text', l.text), l.partial ? h('span.tx-cut', { title: 'Cut mid-sentence by the clip edge' }, '✂') : null);
+      }));
+      if (words && !shown.length) list.append(h('div.muted.small', { style: { padding: '8px 12px' } }, 'No line has those words.'));
+      markNowLine(true);
+    }
+    const foot = d.files.some((f) => f.state === 'done') ? h('p.hint.tx-foot', `Transcribed on this computer (${d.engine.kind === 'whisper' ? 'Whisper' : 'Apple speech recognition'}); nothing is uploaded. The agent reads it from TRANSCRIPT.md.`) : null;
+    const keep = sideBody.scrollTop;
+    transcriptHost.replaceChildren(status, txLines.length || d.files.length ? tools : '', list, foot || '');
+    drawLines(); sideBody.scrollTop = keep;
+    if (busy) txPoll = setTimeout(renderTranscript, 2000);
+  }
+  // Follow the playhead: highlight the line being spoken (and keep it in view while playing).
+  let txNow = null;
+  function markNowLine(force = false) {
+    if (sideTab !== 'transcript') return;
+    const t = stage.time; const el = [...transcriptHost.querySelectorAll('.tx-line')].filter((x) => t >= Number(x.dataset.t0) - 0.1 && t < Number(x.dataset.t1) + 0.05).pop() || null; // overlap: the later line
+    if (el === txNow && !force) return;
+    txNow?.classList.remove('now'); txNow = el; el?.classList.add('now');
+    if (el && stage.playing) el.scrollIntoView({ block: 'nearest' });
+  }
+  stage.on('time', () => markNowLine()); stage.on('ready', () => { if (sideTab === 'transcript') renderTranscript(); });
   async function renderAssets() {
     clearInterval(assetsPoll);
     assetsHost.replaceChildren(h('div.section', h('div.muted.small', 'Loading…')));
@@ -537,8 +623,8 @@ export async function renderStudio(root, { projectId, prompt, navigate, topbar }
     if (m.tools?.length && (m.tools.some((t) => !t.note) || m.live)) el.append(stepsEl(m));
     if (m.text) {
       const { head, rest } = splitReply(m.text);
-      const body = h('div.body', md(head));
-      if (rest) { const det = h('div.details.hidden', md(rest)); const tg = h('button.more', { on: { click: () => { m._more = det.classList.toggle('hidden') === false; tg.classList.toggle('open', m._more); } } }, svg('chevron'), 'Details'); if (m._more) { det.classList.remove('hidden'); tg.classList.add('open'); } body.append(tg, det); }
+      const body = h('div.body', linkTimes(md(head)));
+      if (rest) { const det = h('div.details.hidden', linkTimes(md(rest))); const tg = h('button.more', { on: { click: () => { m._more = det.classList.toggle('hidden') === false; tg.classList.toggle('open', m._more); } } }, svg('chevron'), 'Details'); if (m._more) { det.classList.remove('hidden'); tg.classList.add('open'); } body.append(tg, det); }
       el.append(body);
     }
     if (m.error) el.append(h('div.errcard', m.error, h('div.actions', btn('Copy error', { cls: 'sm ghost', icon: 'copy', onClick: async () => { await copyText(m.error); toast('Copied', 'ok'); } }), btn('Run diagnostics', { cls: 'sm ghost', onClick: runDiagnostics }))));
