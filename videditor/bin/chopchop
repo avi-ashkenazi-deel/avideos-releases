@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+# chopchop — start ChopChop and open it in your browser.
+#
+#   chopchop            get the latest version, start, open the browser (already running: just open it)
+#   chopchop stop       stop it
+#   chopchop update     get the latest version (restarts it if it was running)
+#   chopchop status     is it running, which version, where your work is
+#   chopchop logs       show the last lines of the log
+#
+# Your videos, renders and notes live in ~/ChopChop (CHOPCHOP_HOME); updates never touch them.
+# CHOPCHOP_PORT changes the port (default 8787). CHOPCHOP_NO_OPEN=1 skips opening the browser.
+set -euo pipefail
+
+# Resolve this script through symlinks (~/.local/bin/chopchop → <app>/bin/chopchop).
+src="${BASH_SOURCE[0]}"
+while [ -L "$src" ]; do dir="$(cd -P "$(dirname "$src")" && pwd)"; src="$(readlink "$src")"; [[ "$src" != /* ]] && src="$dir/$src"; done
+APP="$(cd -P "$(dirname "$src")/.." && pwd)"            # the folder with server.mjs
+REPO="$(git -C "$APP" rev-parse --show-toplevel 2>/dev/null || echo "$APP")"
+
+[ "$(uname -s)" = Darwin ] && export PATH="/opt/homebrew/bin:/usr/local/bin:$HOME/.local/bin:$PATH"
+export VIDEDITOR_HOME="${CHOPCHOP_HOME:-${VIDEDITOR_HOME:-$HOME/ChopChop}}"
+PORT="${CHOPCHOP_PORT:-${VIDEDITOR_PORT:-8787}}"; export VIDEDITOR_PORT="$PORT"
+URL="http://localhost:$PORT"
+LOGS="$VIDEDITOR_HOME/logs"; PIDFILE="$LOGS/chopchop.pid"; LOG="$LOGS/server.log"
+
+b=$'\033[1m'; d=$'\033[2m'; g=$'\033[32m'; y=$'\033[33m'; r=$'\033[31m'; n=$'\033[0m'
+say() { printf "%s\n" "$*"; }
+version() { node -p "require('$APP/package.json').version" 2>/dev/null || echo "?"; }
+running() { curl -s -o /dev/null -m 2 "$URL/api/state"; }
+open_browser() { [ "${CHOPCHOP_NO_OPEN:-}" = "1" ] && return 0; if command -v open >/dev/null; then open "$URL"; elif command -v xdg-open >/dev/null; then xdg-open "$URL" >/dev/null 2>&1 || true; fi; }
+
+update() {
+  [ -d "$REPO/.git" ] || { say "${d}not a git checkout; skipping update${n}"; return 0; }
+  local before after; before="$(git -C "$REPO" rev-parse HEAD)"
+  if ! git -C "$REPO" pull --ff-only --quiet 2>"$LOGS/update.err"; then
+    say "${y}!${n} could not get updates right now (offline, or local changes in $REPO); using the version you have"; return 0
+  fi
+  after="$(git -C "$REPO" rev-parse HEAD)"
+  if [ "$before" = "$after" ]; then say "${g}✓${n} up to date (v$(version))"; return 0; fi
+  say "${g}✓${n} updated to v$(version)"
+  git -C "$REPO" log --format='   • %s' "$before..$after" -- "$APP" | head -8
+  if ! git -C "$REPO" diff --quiet "$before" "$after" -- "$APP/package.json" "$APP/package-lock.json"; then
+    say "   installing new dependencies…"; (cd "$APP" && npm install --omit=dev --no-audit --no-fund >/dev/null)
+  fi
+}
+
+stop() {
+  local pid; pid="$(cat "$PIDFILE" 2>/dev/null || true)"
+  if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then kill "$pid"; for _ in $(seq 1 20); do kill -0 "$pid" 2>/dev/null || break; sleep 0.25; done; say "stopped"; else say "not running"; fi
+  rm -f "$PIDFILE"
+}
+
+start() {
+  if running; then say "ChopChop is already running at $URL"; open_browser; return 0; fi
+  [ "${1:-}" = "--no-update" ] || update
+  [ -d "$APP/node_modules/playwright-core" ] || { say "   installing dependencies…"; (cd "$APP" && npm install --omit=dev --no-audit --no-fund >/dev/null); }
+  say "starting ChopChop v$(version)…"
+  (cd "$APP" && nohup node server.mjs >>"$LOG" 2>&1 & echo $! >"$PIDFILE")
+  for _ in $(seq 1 60); do
+    if running; then say "${g}✓${n} ${b}ChopChop is running at $URL${n}  ${d}(your work: $VIDEDITOR_HOME · stop with: chopchop stop)${n}"; open_browser; return 0; fi
+    kill -0 "$(cat "$PIDFILE")" 2>/dev/null || break
+    sleep 0.5
+  done
+  say "${r}✗ ChopChop did not start.${n} Last lines of $LOG:"; tail -15 "$LOG"; exit 1
+}
+
+mkdir -p "$LOGS"
+case "${1:-start}" in
+  start|"") start "${2:-}";;
+  stop) stop;;
+  restart) stop; start --no-update;;
+  update) was=0; running && was=1; update; if [ "$was" = 1 ]; then stop; start --no-update; fi;;
+  status) if running; then say "running at $URL · v$(version)"; else say "not running · v$(version)"; fi; say "app: $APP"; say "your work: $VIDEDITOR_HOME";;
+  logs) tail -40 "$LOG";;
+  -h|--help|help) sed -n '2,11p' "$0" | sed 's/^# \{0,1\}//';;
+  *) say "unknown command: $1 (try: chopchop help)"; exit 1;;
+esac
