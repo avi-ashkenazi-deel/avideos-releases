@@ -6,7 +6,8 @@
 #   MAC_CERT_PASSWORD            its password
 #   APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID   for notarization
 # Repository variable (optional):
-#   VIDEDITOR_UPDATE_FEED        where installed apps look for updates (default: this repo's latest release)
+#   VIDEDITOR_UPDATE_FEED        overrides where installed apps look for updates (default: desktop/package.json
+#                                videditor.updateFeed, https://github.com/aviashke/chopchop/releases/latest/download/latest.json)
 name: ChopChop Mac app
 on:
   push:
@@ -19,7 +20,7 @@ jobs:
     runs-on: macos-14
     timeout-minutes: 90
     env:
-      UPDATE_FEED: ${{ vars.VIDEDITOR_UPDATE_FEED || format('https://github.com/{0}/releases/latest/download/latest.json', github.repository) }}
+      UPDATE_FEED: ${{ vars.VIDEDITOR_UPDATE_FEED }}
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
@@ -49,8 +50,8 @@ jobs:
       - name: Stamp version and update feed
         working-directory: videditor/desktop
         run: |
-          node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json'));p.version=JSON.parse(fs.readFileSync('../package.json')).version;p.videditor.updateFeed=process.env.UPDATE_FEED;fs.writeFileSync('package.json',JSON.stringify(p,null,2))"
-          echo "Building ChopChop $(node -p "require('./package.json').version"), feed: $UPDATE_FEED"
+          node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json'));p.version=JSON.parse(fs.readFileSync('../package.json')).version;if(process.env.UPDATE_FEED)p.videditor.updateFeed=process.env.UPDATE_FEED;fs.writeFileSync('package.json',JSON.stringify(p,null,2))"
+          echo "Building ChopChop $(node -p "require('./package.json').version"), feed: $(node -p "require('./package.json').videditor.updateFeed")"
       - name: Build (sign and notarize when configured)
         working-directory: videditor/desktop
         env:

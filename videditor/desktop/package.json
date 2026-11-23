@@ -12,7 +12,7 @@
     "feed": "node scripts/make-feed.mjs"
   },
   "videditor": {
-    "updateFeed": ""
+    "updateFeed": "https://github.com/aviashke/chopchop/releases/latest/download/latest.json"
   },
   "devDependencies": {
     "electron": "45.2.3",

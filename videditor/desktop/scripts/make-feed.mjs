@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 const HERE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const arg = (k, d) => { const i = process.argv.indexOf(k); return i > 0 ? process.argv[i + 1] : d; };
 const pkg = JSON.parse(fs.readFileSync(path.join(HERE, 'package.json'), 'utf8'));
-const dist = path.join(HERE, arg('--dist', 'dist')); const base = String(arg('--base', '')).replace(/\/$/, '');
+const dist = path.resolve(HERE, arg('--dist', 'dist')); const base = String(arg('--base', '')).replace(/\/$/, '');
 if (!base) { console.error('make-feed: --base <url where the zips will be downloadable> is required'); process.exit(1); }
 const files = {};
 for (const a of ['arm64', 'x64']) {
