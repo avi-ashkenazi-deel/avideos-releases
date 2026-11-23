@@ -55,7 +55,9 @@ start() {
   [ "${1:-}" = "--no-update" ] || update
   [ -d "$APP/node_modules/playwright-core" ] || { say "   installing dependencies…"; (cd "$APP" && npm install --omit=dev --no-audit --no-fund >/dev/null); }
   say "starting ChopChop v$(version)…"
-  (cd "$APP" && nohup node server.mjs >>"$LOG" 2>&1 & echo $! >"$PIDFILE")
+  # Fully detached: the server becomes its own process with no tie to this Terminal (closing it is fine).
+  ( cd "$APP" && exec nohup node server.mjs ) >>"$LOG" 2>&1 </dev/null &
+  echo $! >"$PIDFILE"
   for _ in $(seq 1 60); do
     if running; then say "${g}✓${n} ${b}ChopChop is running at $URL${n}  ${d}(your work: $VIDEDITOR_HOME · stop with: chopchop stop)${n}"; open_browser; return 0; fi
     kill -0 "$(cat "$PIDFILE")" 2>/dev/null || break

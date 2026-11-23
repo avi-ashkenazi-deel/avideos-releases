@@ -94,7 +94,35 @@ subscription. No accounts, no credits.
   link, or shows the file in Finder. **Copy prompt** builds a brief for any agent. The **MCP server** (`mcp.mjs`) lets Claude Code read
   feedback, fetch annotated frames, post replies, **render the next version** and wait for new notes.
 
-## Mac app (how people get it, and updates)
+## Install (command line, for now)
+
+ChopChop runs on your Mac and opens in your browser. The code is in this private repository, so each person
+needs **read access to `avi-ashkenazi-deel/avideos-releases`** and Git signed in to GitHub once:
+
+```bash
+brew install gh && gh auth login && gh auth setup-git
+```
+
+Then one command installs everything (Node, ffmpeg, Chrome and Claude Code if missing; needs Homebrew):
+
+```bash
+gh api -H "Accept: application/vnd.github.raw" "repos/avi-ashkenazi-deel/avideos-releases/contents/videditor/install.sh?ref=Videditor" | bash
+```
+
+It downloads only ChopChop's folder to `~/.chopchop` and adds the **`chopchop`** command:
+
+| Command | What it does |
+|---|---|
+| `chopchop` | gets the latest version, starts ChopChop and opens it (already running: just opens it) |
+| `chopchop stop` | stops it |
+| `chopchop update` | gets the latest version now (restarts it if running) |
+| `chopchop status` | running or not, version, where your work is |
+| `chopchop logs` | the last lines of the log |
+
+Your videos, renders and notes live in **`~/ChopChop`**; updates never touch it. Run `claude` once to sign in to
+Claude Code. Everything you push to the `Videditor` branch reaches people the next time they run `chopchop`.
+
+## Mac app (later: download, drag to Applications, updates itself)
 
 ChopChop ships as a Mac app: download, drag to Applications, open. It runs in its own window and carries
 everything it needs: its own engine, ffmpeg, a headless Chrome for rendering, and whisper for turning voice
