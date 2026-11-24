@@ -164,3 +164,23 @@ describe('specimenSiteHtml', () => {
     expect(new TextEncoder().encode(stripFonts(html)).length).toBeLessThan(40 * 1024);
   });
 });
+
+describe('review notes in the specimen site', () => {
+  it('shows a notes section and inspector pins only when there are notes, safely escaped', () => {
+    expect(specimenSiteHtml(base())).not.toContain('id="notes"');
+    const html = specimenSiteHtml(base({ notes: [
+      { ch: 'H', x: 120, y: 340, text: 'Crossbar <too> low & heavy </script>', author: 'Rae' },
+      { ch: 'e', x: 10, y: 20, text: 'fine now', done: true },
+      { ch: '中', x: 0, y: 0, text: 'letter not in the font' },
+    ] }));
+    expect(html).toContain('id="notes"');
+    expect(html).toContain('id="gnl"');
+    expect(html).toContain('Crossbar &lt;too&gt; low &amp; heavy');
+    expect(html).not.toContain('letter not in the font');
+    // the embedded JSON must not be able to close the script tag
+    const script = html.slice(html.lastIndexOf('<script>'));
+    expect(script.indexOf('</script>')).toBe(script.lastIndexOf('</script>'));
+    expect(script).toContain('"x":120,"y":340');
+    expect(html).toContain('class="dn"');
+  });
+});

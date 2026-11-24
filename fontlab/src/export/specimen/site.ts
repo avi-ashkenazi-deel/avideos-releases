@@ -23,6 +23,8 @@ export interface SpecimenSiteOptions {
   /** chars that have stylistic alternates, per set: { ss01: 'ag', ss02: 'a' } */
   alternateChars?: Record<string, string>;
   previewText?: string;
+  /** review notes pinned to letters (font units); shown as pins in the glyph inspector and as a list */
+  notes?: { ch: string; x: number; y: number; text: string; done?: boolean; author?: string }[];
 }
 
 /** Bright word colours, cycled through the hero, axes and features. */
@@ -139,6 +141,9 @@ input.rl::-moz-range-thumb{width:6px;height:40px;border-radius:3px;background:va
 .ml span{position:absolute;bottom:3px;left:0;right:0;display:flex;justify-content:space-between;align-items:center;font:500 11px/1 system-ui,sans-serif;color:var(--mute)}
 .ml em{font-style:normal;background:var(--bg);border:1px solid var(--line);border-radius:999px;padding:3px 7px;color:var(--fg)}
 .ml.b{border-top:1px solid var(--fg)}
+.pin{position:absolute;width:18px;height:18px;margin:-9px 0 0 -9px;border-radius:50%;background:#ff2d92;color:#fff;font:700 11px/18px system-ui,sans-serif;text-align:center;z-index:2;cursor:help}.pin.dn{background:var(--mute)}
+.nl{margin:12px 0 0;padding-left:20px;font-size:14px}.nl .dn,.rn .dn{opacity:.5;text-decoration:line-through}
+.rn{list-style:none;padding:0;margin:24px 0 0;display:grid;gap:10px}.rn li{display:flex;gap:14px;align-items:center}.rn .nb{flex:none;width:56px;height:56px;font-size:28px;border:1px solid var(--line);border-radius:14px;background:var(--bg);color:var(--fg);cursor:pointer}
 .gi{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:16px;padding-top:16px;border-top:1px solid var(--line);font-size:14px}
 .gi code{font:600 14px ui-monospace,SFMono-Regular,Menlo,monospace}
 .gi span{color:var(--mute);text-align:right}
@@ -269,6 +274,12 @@ export function specimenSiteHtml(o: SpecimenSiteOptions): string {
   const fonts = `@font-face{font-family:"FLStatic";src:url(data:font/otf;base64,${toBase64(bytesOf(o.otf))}) format("opentype");font-display:block}`
     + (hasVar ? `\n@font-face{font-family:"FLVar";src:url(data:font/ttf;base64,${toBase64(o.variable!.bytes)}) format("truetype");font-display:block}` : '');
 
+  const charSet = new Set(chars);
+  const notes = (o.notes ?? []).filter((n) => charSet.has(n.ch) && typeof n.text === 'string').slice(0, 300);
+  const notesJson = JSON.stringify(notes.map((n) => ({ ch: n.ch, x: Math.round(n.x), y: Math.round(n.y), text: n.text, done: !!n.done, author: n.author || '' }))).replace(/</g, '\\u003c').replace(/\u2028|\u2029/g, '');
+  const notesHtml = notes.length
+    ? `<section id="notes"><div class="w"><span class="pill">Review notes</span><ul class="rn">${notes.map((n) => `<li${n.done ? ' class="dn"' : ''}><button type="button" class="nb f">${escapeHtml(n.ch)}</button><span>${escapeHtml(n.text)}${n.author ? ` <i>— ${escapeHtml(n.author)}</i>` : ''}</span></li>`).join('')}</ul></div></section>`
+    : '';
   const script = `
 (function(){
 var R=document.documentElement,D=document,q=function(s,e){return(e||D).querySelector(s)},qa=function(s,e){return[].slice.call((e||D).querySelectorAll(s))};
@@ -287,9 +298,12 @@ var st=q('.stage'),gc=q('#gch'),gk=q('#gck'),mk=q('i',gc),bl=q('#gbl');
 var DG=['zero','one','two','three','four','five','six','seven','eight','nine'],NM={' ':'Space','.':'Full stop',',':'Comma','!':'Exclamation mark','?':'Question mark','-':'Hyphen-minus','&':'Ampersand','@':'Commercial at','#':'Number sign','$':'Dollar sign','%':'Percent sign','(':'Left parenthesis',')':'Right parenthesis',':':'Colon',';':'Semicolon','/':'Solidus','+':'Plus sign','=':'Equals sign','"':'Quotation mark',"'":'Apostrophe','*':'Asterisk','_':'Low line'};
 function nm(c){if(/^[A-Z]$/.test(c))return'Latin capital letter '+c;if(/^[a-z]$/.test(c))return'Latin small letter '+c.toUpperCase();if(/^[0-9]$/.test(c))return'Digit '+DG[+c];return NM[c]||''}
 function place(){var s=st.getBoundingClientRect(),cur=mk.getBoundingClientRect().top-s.top,want=bl.getBoundingClientRect().top-s.top;gc.style.top=(parseFloat(gc.style.top)||0)+want-cur+'px'}
-function pick(b){qa('.gc.on').forEach(function(x){x.classList.remove('on')});b.classList.add('on');var c=b.textContent;gk.textContent=c;q('#gcu').textContent='U+'+c.codePointAt(0).toString(16).toUpperCase().padStart(4,'0');q('#gcn').textContent=nm(c);place()}
+var N=${notesJson},CUR='';
+function pins(){qa('.pin',st).forEach(function(x){x.remove()});var l=q('#gnl');if(!l)return;l.innerHTML='';var fs=parseFloat(getComputedStyle(st).fontSize),s=st.getBoundingClientRect(),g=gk.getBoundingClientRect(),by=bl.getBoundingClientRect().top-s.top,k=0;N.forEach(function(n){if(n.ch!==CUR)return;k++;var p=D.createElement('b');p.className='pin'+(n.done?' dn':'');p.textContent=k;p.title=n.text;p.style.left=(g.left-s.left+n.x/${upm}*fs)+'px';p.style.top=(by-n.y/${upm}*fs)+'px';st.appendChild(p);var li=D.createElement('li');li.textContent=n.text+(n.author?' — '+n.author:'');if(n.done)li.className='dn';l.appendChild(li)})}
+function pick(b){qa('.gc.on').forEach(function(x){x.classList.remove('on')});b.classList.add('on');var c=b.textContent;CUR=c;gk.textContent=c;q('#gcu').textContent='U+'+c.codePointAt(0).toString(16).toUpperCase().padStart(4,'0');q('#gcn').textContent=nm(c);place();pins()}
+qa('.nb').forEach(function(b){b.onclick=function(){var t=qa('.grid .gc').filter(function(x){return x.textContent===b.textContent})[0];if(t){pick(t);q('#glyphs').scrollIntoView({behavior:'smooth'})}}});
 q('.grid').onclick=function(e){var b=e.target.closest('.gc');if(b)pick(b)};
-var s0=q('.gc.on');if(s0)pick(s0);addEventListener('resize',place);if(D.fonts)D.fonts.ready.then(place);
+var s0=q('.gc.on');if(s0)pick(s0);addEventListener('resize',function(){place();pins()});if(D.fonts)D.fonts.ready.then(function(){place();pins()});
 var FS=q('#fonts').textContent;
 qa('[data-dl]').forEach(function(b){b.onclick=function(){var m=FS.match(new RegExp('"'+b.dataset.dl+'";src:url\\\\(data:([^;]+);base64,([^)]+)'));if(!m)return;var s=atob(m[2]),a=new Uint8Array(s.length);for(var i=0;i<s.length;i++)a[i]=s.charCodeAt(i);
 var u=URL.createObjectURL(new Blob([a],{type:m[1]})),l=D.createElement('a');l.href=u;l.download=b.dataset.file;D.body.appendChild(l);l.click();l.remove();setTimeout(function(){URL.revokeObjectURL(u)},4000)}});
@@ -312,7 +326,8 @@ var u=URL.createObjectURL(new Blob([a],{type:m[1]})),l=D.createElement('a');l.hr
 ${axesHtml}
 ${featHtml}
 <section id="tester"><div class="w"><span class="pill">Type tester</span><div class="tabs" role="tablist">${tabBtns}</div><div class="tbox" id="tbox" style="--tf:${hasVar ? 'FLVar' : 'FLStatic'}"><div class="tctl" role="group" aria-label="Tester controls">${rng('Size', '--ts', 12, 200, 1, 96, 'px')}${rng('Line height', '--tl', 0.8, 2, 0.05, 1.15)}${rng('Letter spacing', '--tls', -0.1, 0.4, 0.01, 0, 'em')}${testerAxes}<button type="button" class="btn gh" id="tdark">Dark / light</button></div>${panels}</div></div></section>
-<section id="glyphs"><div class="w"><span class="pill">Glyphs</span><div class="gl"><div class="insp" aria-live="polite"><div class="stage f">${mlines}<div class="gch" id="gch"><span id="gck">${escapeHtml(sel)}</span><i></i></div></div><div class="gi"><code id="gcu"></code><span id="gcn"></span></div></div><div class="grid">${cells}</div></div></div></section>
+<section id="glyphs"><div class="w"><span class="pill">Glyphs</span><div class="gl"><div class="insp" aria-live="polite"><div class="stage f">${mlines}<div class="gch" id="gch"><span id="gck">${escapeHtml(sel)}</span><i></i></div></div><div class="gi"><code id="gcu"></code><span id="gcn"></span></div>${notes.length ? '<ol class="nl" id="gnl"></ol>' : ''}</div><div class="grid">${cells}</div></div></div></section>
+${notesHtml}
 <section id="download"><div class="w"><div class="dl"><span class="pill">Download</span><h2 class="f">${name}</h2><p>Install it, then set something big.</p><div class="btns"><button type="button" class="btn" data-dl="FLStatic" data-file="${file}.otf">Download ${name}.otf ↓</button>${hasVar ? `<button type="button" class="btn gh" data-dl="FLVar" data-file="${file}-Variable.ttf">Variable ${name}.ttf ↓</button>` : ''}</div></div></div></section>
 </main>
 <footer><div class="w"><span>Made with FontLab</span><span>${name}</span></div></footer>

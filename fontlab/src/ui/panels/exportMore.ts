@@ -122,7 +122,7 @@ export function downloadSpecimenSite(): void {
   if (chars.includes('-') && chars.includes('>') && chars.includes('→')) features.push('liga');
   const html = specimenSiteHtml({
     name: store.project.name, otf: new Uint8Array(store.otf.slice(0)), variable: lastVariable ?? undefined,
-    metrics: store.project.metrics, chars, samples, features, alternateChars, previewText: store.project.previewText,
+    metrics: store.project.metrics, chars, samples, features, alternateChars, previewText: store.project.previewText, notes: store.project.notes,
   });
   downloadBlob(html, `${slug(store.project.name)}-specimen.html`, 'text/html');
 }
