@@ -8,6 +8,11 @@ variable `.ttf` with custom axes, or an animated specimen.
 Everything runs in the browser. No server, no accounts. Fonts live in an
 in-browser **Fonts** list (Font menu): every change autosaves into the open
 font, **Reset** offers to save first, and any font can be exported as `.json`.
+**Font → Versions…** keeps named snapshots of a font: compare one with the
+font as it is now (letters added, removed or redrawn since), restore it, or
+open it as a separate font to try an alternative. FontLab also takes an
+automatic version before a reset, a font import, Generate, auto spacing and
+a restore.
 
 ## Live site
 
