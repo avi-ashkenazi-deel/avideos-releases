@@ -59,8 +59,14 @@ export function contourToCubics(contour: Contour, maxError = 1.5, cornerDeg = 55
     if (closing) run.push(rotated[0]);
     if (run.length < 2) return;
     if (run.length === 2) { segments.push(lineCubic(run[0], run[1])); return; }
-    const curves = fitCurve(run as [number, number][], maxError * maxError) as unknown as Cubic[];
-    for (const c of curves) segments.push(c.map((p) => [p[0], p[1]] as Vec) as Cubic);
+    const curves = (fitCurve(run as [number, number][], maxError * maxError) as unknown as Cubic[]).map((c) => c.map((p) => [p[0], p[1]] as Vec) as Cubic);
+    // The fitter only measures how far the run's points are from the curve. On nearly straight,
+    // slightly wobbly runs it can return handles thousands of units away, so the curve swings far
+    // off between the points. Sample each curve against the run; if any strays, keep the polygon.
+    const limit = Math.max(3 * maxError, 4.5);
+    const strays = curves.some((c) => !c.every((p) => Number.isFinite(p[0]) && Number.isFinite(p[1])) || sampleCubic(c, 12).some((p) => distToPolyline(p, run) > limit));
+    if (strays) { for (let i = 1; i < run.length; i++) segments.push(lineCubic(run[i - 1], run[i])); return; }
+    for (const c of curves) segments.push(c);
   };
   for (let i = 1; i < n; i++) {
     if (cornerSet.has(i)) { flush(runStart, i, false); runStart = i; }
@@ -104,4 +110,27 @@ export function flattenCubic(c: Cubic, steps = 8): Vec[] {
     ]);
   }
   return out;
+}
+
+function sampleCubic(c: Cubic, n: number): Vec[] {
+  const out: Vec[] = [];
+  for (let i = 1; i < n; i++) {
+    const t = i / n, u = 1 - t;
+    const a = u * u * u, b = 3 * u * u * t, d = 3 * u * t * t, e = t * t * t;
+    out.push([a * c[0][0] + b * c[1][0] + d * c[2][0] + e * c[3][0], a * c[0][1] + b * c[1][1] + d * c[2][1] + e * c[3][1]]);
+  }
+  return out;
+}
+
+function distToPolyline(p: Vec, run: Vec[]): number {
+  let best = Infinity;
+  for (let i = 1; i < run.length; i++) {
+    const a = run[i - 1], b = run[i];
+    const dx = b[0] - a[0], dy = b[1] - a[1];
+    const len2 = dx * dx + dy * dy;
+    const t = len2 ? Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / len2)) : 0;
+    const d = Math.hypot(p[0] - (a[0] + t * dx), p[1] - (a[1] + t * dy));
+    if (d < best) best = d;
+  }
+  return best;
 }

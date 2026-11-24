@@ -48,7 +48,8 @@ function contoursToPath(contours: Contour[], tol: number): any {
   }
   return path;
 }
-const r = (v: number) => Math.round(v * 10) / 10;
+// whole units: opentype.js rounds every relative delta when it writes CFF, so tenths add up to drift along a contour
+const r = (v: number) => Math.round(v);
 
 /** Adobe Glyph List names for ASCII punctuation / symbols so font editors show familiar names. */
 const AGL: Record<string, string> = {
