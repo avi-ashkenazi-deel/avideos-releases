@@ -7,7 +7,10 @@ import { openCombineDialog } from './combineDialog';
 import { scheduleBuild } from '../buildClient';
 import { downloadOtf, downloadSvgSpecimen, downloadSpecimenSite, openTester, openAnimateDialog, openVariableDialog, downloadTtf, downloadSvgGlyphs } from './exportMore';
 import { openLibrary, saveCurrent } from './libraryDialog';
-import { fingerprint, getCurrentId, setCurrentId, loadFont } from '../../project/library';
+import { fingerprint, getCurrentId, setCurrentId, loadFont, saveFont } from '../../project/library';
+import { openVersions } from './versionsDialog';
+import { autoVersion } from '../versions';
+import { moveVersions, SCRATCH } from '../../project/versions';
 
 let savedPrint = '';
 export function markSaved(): void { savedPrint = fingerprint(store.project); store.emit('dirty'); }
@@ -26,7 +29,9 @@ export function headerBar(): HTMLElement {
         if (n === null) return null;
         store.project.name = n.trim() || 'Untitled'; name.value = store.project.name;
       }
+      const hadId = !!getCurrentId();
       const meta = await saveCurrent(store, { asNew });
+      if (!hadId && !asNew) await moveVersions(SCRATCH, meta.id).catch(() => undefined);
       markSaved();
       toast(`Saved “${meta.name}”`);
       return meta;
@@ -41,6 +46,7 @@ export function headerBar(): HTMLElement {
       const choice = confirm('Save the current font before resetting? Press OK to save, Cancel to discard.');
       if (choice) { const m = await save(); if (!m) return; }
     }
+    await autoVersion('Before reset');
     setCurrentId(null);
     openProject(newProject('Untitled'));
     toast('Reset. Your saved fonts are in Font → My fonts.');
@@ -53,6 +59,10 @@ export function headerBar(): HTMLElement {
     { label: 'Save', icon: 'save', onClick: () => void save(false), hint: 'Save to this browser (Ctrl/Cmd+S)', testid: 'menu-save' },
     { label: 'Save as new…', icon: 'copy', onClick: () => void save(true) },
     { label: 'My fonts…', icon: 'folder', onClick: () => openLibrary({ onOpen: (p) => openProject(p), onSaveCurrent: () => save(true) }), testid: 'menu-library' },
+    { label: 'Versions…', icon: 'layers', onClick: () => openVersions({
+      onRestore: async (p) => { openProject(p); if (getCurrentId()) { await saveCurrent(store); markSaved(); } else saveLocal(store.project); },
+      onBranch: async (p) => { const meta = await saveFont(p); setCurrentId(meta.id); openProject(p); toast(`Opened as new font “${meta.name}”`); },
+    }), hint: 'Named snapshots: compare, go back, or branch off', testid: 'menu-versions' },
     { label: 'Export .json file', icon: 'download', onClick: () => downloadProject(store.project), hint: 'Move the font to another machine', separatorBefore: true, testid: 'menu-export-json' },
     { label: 'Import .json file', icon: 'upload', onClick: () => importJson.click(), testid: 'menu-import-json' },
     { label: 'Reset', icon: 'reset', onClick: () => void reset(), hint: 'Start a blank font (asks to save first)', danger: true, separatorBefore: true, testid: 'menu-reset' },

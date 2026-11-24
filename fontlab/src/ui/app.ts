@@ -9,6 +9,7 @@ import { scheduleBuild } from './buildClient';
 import { h } from './dom';
 import { migrateLegacyAutosave, getCurrentId, setCurrentId } from '../project/library';
 import { showWelcome } from './panels/welcome';
+import { moveVersions, SCRATCH } from '../project/versions';
 import { hasInk } from './panels/seeds';
 
 export async function mountApp(root: HTMLElement): Promise<void> {
@@ -17,6 +18,8 @@ export async function mountApp(root: HTMLElement): Promise<void> {
   try {
     const legacy = await migrateLegacyAutosave();
     if (legacy && !getCurrentId()) setCurrentId(legacy.id);
+    // the unsaved font just became a library font: its versions follow it
+    if (legacy) await moveVersions(SCRATCH, legacy.id).catch(() => undefined);
   } catch { /* ignore */ }
   if (!getCurrentId()) { const saved = loadLocal(); if (saved) store.project = saved; }
   root.replaceChildren(

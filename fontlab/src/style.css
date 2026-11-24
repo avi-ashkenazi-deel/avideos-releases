@@ -235,3 +235,15 @@ canvas.editor.pen { cursor: crosshair; outline: 2px solid var(--accent); outline
 /* write-on animation overlay (preview panel) */
 .preview-stage { position: relative; }
 .writeon-canvas { position: absolute; display: block; border-radius: 10px; pointer-events: none; }
+
+/* versions dialog */
+.versions .vername { flex: 1; min-width: 220px; }
+.verrow { grid-template-columns: 1fr auto auto auto auto; }
+.verrow .libinfo { display: flex; gap: 10px; align-items: center; min-width: 0; }
+.verthumb { width: 120px; height: 44px; object-fit: contain; background: #fff; border-radius: 6px; flex: none; }
+.vercompare { margin-top: 10px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 10px; }
+.verpair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.verfig { margin: 0; }
+.verfig figcaption { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+.verfig img { width: 100%; height: 110px; object-fit: contain; background: #fff; border-radius: 8px; display: block; }
+.verfacts { margin: 8px 0 0; padding-left: 18px; font-size: 13px; }
