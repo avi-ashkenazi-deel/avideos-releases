@@ -30,14 +30,16 @@ that will be clipped, letters wider than their space, width, height and
 weight outliers, heavy outlines, extreme kerning) and offers one-click fixes
 where it can; click a letter in the list to open it.
 
-## Live site
+## Hosting
 
-Every push deploys `fontlab/` to GitHub Pages at
-<https://avi-ashkenazi-deel.github.io/avideos-releases/> via
-`.github/workflows/fontlab-pages.yml` (unit tests must pass first). One-time
-setup in the GitHub repo: **Settings → Pages → Source: GitHub Actions**; if a
-run reports that the branch may not deploy, add it under **Settings →
-Environments → github-pages → Deployment branches**.
+FontLab is a static site: `npm run build` produces `dist/`, which can be
+served from any static host. It is **not** published from this repository's
+GitHub Pages: that address belongs to another project here, and a Pages
+deploy would replace it. `.github/workflows/fontlab-ci.yml` only tests and
+builds, and attaches the built site to each run. To put FontLab online, give
+it its own home (a separate repository's Pages, or Cloudflare Pages, Netlify
+or Vercel) and build with `FONTLAB_BASE=/<path>/` if it is not served from
+the root.
 
 ## Run it
 

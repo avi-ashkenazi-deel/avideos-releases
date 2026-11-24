@@ -1,0 +1,34 @@
+name: FontLab CI
+
+# Tests and builds FontLab. It does NOT deploy: this repository's GitHub Pages
+# site belongs to another project (deploy-web.yml), and a Pages deploy from here
+# would replace it. The built site is attached to each run as an artifact.
+on:
+  push:
+    branches: [fontlab-funky-font-maker, main, master]
+    paths: ['fontlab/**', '.github/workflows/fontlab-ci.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fontlab-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: fontlab } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm, cache-dependency-path: fontlab/package-lock.json }
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fontlab-site
+          path: fontlab/dist
+          retention-days: 14
