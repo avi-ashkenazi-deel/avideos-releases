@@ -247,3 +247,22 @@ canvas.editor.pen { cursor: crosshair; outline: 2px solid var(--accent); outline
 .verfig figcaption { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
 .verfig img { width: 100%; height: 110px; object-fit: contain; background: #fff; border-radius: 8px; display: block; }
 .verfacts { margin: 8px 0 0; padding-left: 18px; font-size: 13px; }
+
+/* check panel */
+.checkcount { display: none; min-width: 18px; padding: 0 5px; height: 18px; line-height: 18px; border-radius: 999px; background: var(--accent); color: #111; font: 700 11px ui-monospace, monospace; text-align: center; }
+.checkcount.on { display: inline-block; }
+.checkcount.err { background: var(--danger); color: #fff; }
+.checkbody { display: flex; flex-direction: column; gap: 8px; max-height: 56vh; overflow: auto; margin: 10px 0; }
+.checkitem { background: var(--panel-2); border: 1px solid var(--line); border-left: 4px solid var(--muted); border-radius: 8px; padding: 8px 10px; }
+.checkitem.sev-error { border-left-color: var(--danger); }
+.checkitem.sev-warn { border-left-color: var(--accent); }
+.checkitem.note { border-left-color: var(--accent-2); }
+.checkitem.done { opacity: .55; }
+.checkitem p { margin: 4px 0 6px; font-size: 13px; color: var(--muted); white-space: pre-wrap; }
+.checkhead { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.checkhead .sev { font: 600 10px ui-monospace, monospace; text-transform: uppercase; color: var(--muted); }
+.checkhead button.primary, .checkhead button:not(.chbtn) { margin-left: auto; }
+.checkhead button:not(.chbtn) + button:not(.chbtn) { margin-left: 0; }
+.checkchars { display: flex; flex-wrap: wrap; gap: 4px; }
+.checkchars .pair { width: auto; padding: 0 6px; cursor: default; }
+.checkok { display: flex; gap: 8px; align-items: center; padding: 16px; background: var(--panel-2); border-radius: 8px; flex-wrap: wrap; }

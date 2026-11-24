@@ -5,7 +5,8 @@ import { newProject } from '../../core/glyph';
 import { showWelcome } from './welcome';
 import { openCombineDialog } from './combineDialog';
 import { scheduleBuild } from '../buildClient';
-import { downloadOtf, downloadSvgSpecimen, downloadSpecimenSite, openTester, openAnimateDialog, openVariableDialog, downloadTtf, downloadSvgGlyphs } from './exportMore';
+import { downloadOtf, downloadSvgSpecimen, downloadSpecimenSite, openTester, openAnimateDialog, openVariableDialog, downloadTtf, downloadSvgGlyphs, downloadUfo } from './exportMore';
+import { checkButton, fixHandlers } from './checkPanel';
 import { openLibrary, saveCurrent } from './libraryDialog';
 import { fingerprint, getCurrentId, setCurrentId, loadFont, saveFont } from '../../project/library';
 import { openVersions } from './versionsDialog';
@@ -37,6 +38,7 @@ export function headerBar(): HTMLElement {
       return meta;
     } catch (e) { toast((e as Error).message); return null; }
   };
+  fixHandlers['name-font'] = () => { const n = prompt('Name your font', store.project.name === 'Untitled' ? '' : store.project.name); if (n && n.trim()) { store.project.name = n.trim(); name.value = store.project.name; store.emit('project'); scheduleBuild(0); } };
   const openProject = (p: typeof store.project) => {
     store.project = p; store.built = {}; store.otf = null; store.bypassFx = false;
     store.emit('project:loaded'); store.emit('bypass'); name.value = p.name; markSaved(); scheduleBuild(0);
@@ -74,7 +76,8 @@ export function headerBar(): HTMLElement {
     { label: 'Variable font…', icon: 'sliders', onClick: openVariableDialog, hint: 'Real axes you can animate in CSS', testid: 'menu-variable' },
     { label: 'Combine weights into a variable font…', icon: 'layers', onClick: openCombineDialog, hint: 'Turn Thin, Regular and Bold files of any family into one variable font', testid: 'menu-combine' },
     { label: 'Animation (GIF / video)…', icon: 'film', onClick: openAnimateDialog, testid: 'menu-animate' },
-    { label: 'SVG glyphs (one group per letter)', icon: 'image', onClick: downloadSvgGlyphs, hint: 'Every letter as a separate vector group, for Illustrator or Figma', separatorBefore: true, testid: 'menu-svg-glyphs' },
+    { label: 'UFO source (.ufo.zip)', icon: 'folder', onClick: () => void downloadUfo(), hint: 'An editable source for Glyphs, FontLab 8, RoboFont or Fontra', separatorBefore: true, testid: 'menu-ufo' },
+    { label: 'SVG glyphs (one group per letter)', icon: 'image', onClick: downloadSvgGlyphs, hint: 'Every letter as a separate vector group, for Illustrator or Figma', testid: 'menu-svg-glyphs' },
     { label: 'SVG specimen', icon: 'image', onClick: downloadSvgSpecimen, hint: 'A poster of your text as vector shapes', testid: 'menu-svg' },
     { label: 'Specimen site (.html)', icon: 'code', onClick: downloadSpecimenSite, hint: 'A one-page site for your font: hero, features, type tester, every glyph and a download button', testid: 'menu-html' },
   ], { icon: 'download', testid: 'menu-export' });
@@ -82,6 +85,7 @@ export function headerBar(): HTMLElement {
   const bar = h('header', { class: 'topbar' },
     h('div', { class: 'namewrap' }, name, dirtyDot),
     h('div', { class: 'actions' },
+      checkButton(),
       iconButton('info', 'Intro', () => showWelcome(true), { iconOnly: true, title: 'Show the four-step intro again', testid: 'btn-intro' }),
       iconButton('flask', 'Test', openTester, { title: 'Type with your font, waterfall, dark mode', testid: 'btn-test' }),
       exportMenu, fontMenu, importJson),

@@ -10,6 +10,7 @@ import { buildVariableFont, buildStaticTtf } from '../../export/variable';
 import { contoursToPathD } from '../../export/specimen/svg';
 import { typeTesterHtml } from '../../export/specimen/html';
 import { specimenSiteHtml } from '../../export/specimen/site';
+import { ufoZip, ufoInputFromBuild } from '../../export/ufo';
 import { projectCharset } from '../../core/charsets';
 import { openTypeTester } from './tester';
 import { BLOCKS } from '../../core/charsets';
@@ -90,6 +91,22 @@ export function downloadTesterHtml(): void {
   const html = typeTesterHtml({ name: store.project.name, otf: new Uint8Array(store.otf.slice(0)), variable: lastVariable ?? undefined, samples, metrics: store.project.metrics });
   downloadBlob(html, `${slug(store.project.name)}-type-tester.html`, 'text/html');
 }
+
+/** The font as a UFO 3 source in a zip: opens in Glyphs, FontLab 8, RoboFont and Fontra. */
+export async function downloadUfo(): Promise<void> {
+  if (!store.otf) { toast('Nothing built yet. Draw or import some letters first.'); return; }
+  toast('Preparing the UFO…');
+  await new Promise((r) => setTimeout(r, 30));
+  try {
+    const project = store.bypassFx ? { ...store.project, fx: { ...store.project.fx, groups: [] } } : store.project;
+    const res = buildAll(project, { otf: false });
+    const z = ufoZip(ufoInputFromBuild({ familyName: store.project.name || 'FontLab', metrics: store.project.metrics, glyphs: res.glyphs, alternates: res.alternates, kerning: exportKerning.get?.() }));
+    downloadBlob(z.bytes.buffer as ArrayBuffer, z.name, 'application/zip');
+    toast('UFO downloaded. Unzip it, then open the .ufo folder in your font editor.', 5000);
+  } catch (e) { toast('UFO export failed: ' + (e as Error).message, 5000); }
+}
+/** Set by the spacing module: the kerning pairs (by character pair) that the built font carries. */
+export const exportKerning: { get?: () => Record<string, number> | undefined } = {};
 
 /** Allo-style one-page specimen site: hero, axes, features, tester, character set, download. */
 export function downloadSpecimenSite(): void {
