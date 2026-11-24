@@ -1,6 +1,6 @@
 import { h, button, toast } from '../dom';
 import { store } from '../state';
-import { collab, startSession, joinSession, leaveSession, sessionLink, savedName, inSession, others } from '../collab';
+import { collab, startSession, joinSession, leaveSession, sessionLink, savedName, inSession, others, setGuestsCanEdit } from '../collab';
 
 const initials = (name: string) => (name.trim().split(/\s+/).map((w) => [...w][0] ?? '').join('').slice(0, 2) || '?').toUpperCase();
 
@@ -35,6 +35,10 @@ export function openShareDialog(): HTMLDialogElement {
 
   const render = () => {
     const s = collab.session;
+    if (!s && collab.status === 'connecting' && collab.detail) {
+      body.replaceChildren(h('p', {}, collab.detail), h('p', { class: 'muted' }, 'The connection dropped. FontLab keeps trying the same link for a short while.'), h('div', { class: 'row' }, button('Leave session', () => { leaveSession(); dlg.close(); }, 'danger')));
+      return;
+    }
     if (!s || collab.status !== 'open') {
       const name = h('input', { type: 'text', value: savedName(), placeholder: 'Your name', maxlength: 40, 'aria-label': 'Your name', 'data-testid': 'share-name' }) as HTMLInputElement;
       const status = h('div', { class: 'status' }, collab.status === 'error' ? `Could not start: ${collab.detail}` : '');
@@ -65,7 +69,7 @@ export function openShareDialog(): HTMLDialogElement {
       catch { link.select(); toast('Select the link and copy it.'); }
     }, 'primary');
     const canEdit = h('input', { type: 'checkbox', checked: s.guestsCanEdit, id: 'guestsedit', 'data-testid': 'share-canedit' }) as HTMLInputElement;
-    canEdit.addEventListener('change', () => s.setGuestsCanEdit(canEdit.checked));
+    canEdit.addEventListener('change', () => setGuestsCanEdit(canEdit.checked));
     const list = h('div', { class: 'sharepeople', 'data-testid': 'share-people' }, ...collab.peers.map((p) => h('div', { class: 'shareperson' },
       avatar(p, 30),
       h('div', {}, h('strong', {}, p.name), p.id === s.me.id ? h('span', { class: 'muted' }, ' (you)') : null,

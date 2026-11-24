@@ -1,6 +1,6 @@
 name: FontLab CI
 
-# Tests and builds FontLab. It does NOT deploy: this repository's GitHub Pages
+# Tests and builds FontLab, then tests the built site. It does NOT deploy: this repository's GitHub Pages
 # site belongs to another project (deploy-web.yml), and a Pages deploy from here
 # would replace it. The built site is attached to each run as an artifact.
 on:
@@ -27,6 +27,9 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
+      # the built site, served as plain files from / and from a sub-folder, in a real browser
+      - run: npx playwright install --with-deps chromium
+      - run: npx playwright test -c playwright.dist.config.ts
       - uses: actions/upload-artifact@v4
         with:
           name: fontlab-site

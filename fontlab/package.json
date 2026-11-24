@@ -9,7 +9,9 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:e2e": "playwright test",
-    "start": "git pull --no-rebase && npm install --no-audit --no-fund && vite --open --port 5173"
+    "start": "git pull --no-rebase && npm install --no-audit --no-fund && vite --open --port 5173",
+    "test:dist": "npm run build && playwright test -c playwright.dist.config.ts",
+    "serve:dist": "node scripts/serve-dist.mjs"
   },
   "dependencies": {
     "alea": "^1.0.1",

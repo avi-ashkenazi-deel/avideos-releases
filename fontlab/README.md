@@ -22,8 +22,11 @@ switch guests to watch-and-leave-notes only. Undo only takes back your own
 changes. The font travels straight between the browsers (WebRTC through
 [PeerJS](https://peerjs.com/)'s public matchmaking service; nothing is
 stored on a server), so the session lasts while the host's tab is open and
-may not connect on networks that block direct connections. Guests keep
-their own fonts; when the session ends they can keep a copy.
+may not connect on networks that block direct connections (a TURN server in
+`fontlab.config.json` fixes that). A reload keeps the session: the host keeps
+the same link and guests reconnect by themselves. Someone who has not
+touched anything for 45 seconds lets go of their letter. Guests keep their
+own fonts; when the session ends they can keep a copy.
 The **Check** button in the header runs automatic checks after every build
 (empty letters, lowercase that is a copy of the capitals, stray specks, ink
 that will be clipped, letters wider than their space, width, height and
@@ -32,14 +35,14 @@ where it can; click a letter in the list to open it.
 
 ## Hosting
 
-FontLab is a static site: `npm run build` produces `dist/`, which can be
-served from any static host. It is **not** published from this repository's
-GitHub Pages: that address belongs to another project here, and a Pages
-deploy would replace it. `.github/workflows/fontlab-ci.yml` only tests and
-builds, and attaches the built site to each run. To put FontLab online, give
-it its own home (a separate repository's Pages, or Cloudflare Pages, Netlify
-or Vercel) and build with `FONTLAB_BASE=/<path>/` if it is not served from
-the root.
+FontLab is a static site: `npm run build` produces `dist/`, which works from
+the root of any host or from any sub-folder without configuration, live
+sessions included. See [DEPLOY.md](DEPLOY.md) for host settings, the optional
+`fontlab.config.json` (own connection broker, TURN servers) and how to test a
+deployment. It is **not** published from this repository's GitHub Pages: that
+address belongs to another project here. `.github/workflows/fontlab-ci.yml`
+tests and builds on every push, tests the built site in a browser, and
+attaches it to the run as the `fontlab-site` artifact.
 
 ## Run it
 

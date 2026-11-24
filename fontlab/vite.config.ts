@@ -1,7 +1,8 @@
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-  base: process.env.FONTLAB_BASE ?? '/',
+  // relative by default, so the built site works from any address or sub-folder without configuration
+  base: process.env.FONTLAB_BASE ?? './',
   build: { target: 'es2022', outDir: 'dist' },
   worker: { format: 'es' },
   test: {

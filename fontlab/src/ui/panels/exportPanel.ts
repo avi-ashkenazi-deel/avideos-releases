@@ -9,7 +9,7 @@ import { downloadOtf, downloadSvgSpecimen, downloadSpecimenSite, openTester, ope
 import { checkButton, fixHandlers, checkExtras } from './checkPanel';
 import { openSpacingDialog, autoSpaceAll } from './spacingDialog';
 import { shareButton } from './shareDialog';
-import { collabHooks, isGuest } from '../collab';
+import { collabHooks, isGuest, ownFontId } from '../collab';
 import { loadLocal } from '../../project/storage';
 import { openLibrary, saveCurrent } from './libraryDialog';
 import { fingerprint, getCurrentId, setCurrentId, loadFont, saveFont } from '../../project/library';
@@ -43,13 +43,16 @@ export function headerBar(): HTMLElement {
     } catch (e) { toast((e as Error).message); return null; }
   };
   // shared sessions: a guest sees the host's font without touching their own saved fonts
-  let ownId: string | null = null;
-  collabHooks.openProject = (p) => { ownId = getCurrentId(); setCurrentId(null); openProject(p); };
+  collabHooks.openProject = (p) => { setCurrentId(null); openProject(p); };
   collabHooks.restoreOwnFont = async () => {
-    const p = ownId ? await loadFont(ownId) : loadLocal();
-    setCurrentId(ownId);
+    const ownId = ownAtJoin;
+    const p = ownId ? await loadFont(ownId).catch(() => null) : loadLocal();
+    setCurrentId(p && ownId ? ownId : null);
     openProject(p ?? newProject('Untitled'));
   };
+  // remember which font was mine before a session replaced it (the session record keeps it across reloads)
+  let ownAtJoin: string | null = ownFontId();
+  store.subscribe((ev) => { if (ev === 'collab' && isGuest()) ownAtJoin = ownFontId(); });
   collabHooks.saveCopy = async (p) => { const meta = await saveFont(p); setCurrentId(meta.id); markSaved(); toast(`Saved a copy as “${meta.name}” in My fonts`); };
   fixHandlers['auto-space'] = async () => { await autoSpaceAll(); };
   checkExtras.kerning = () => store.kerning;
@@ -140,6 +143,7 @@ export function headerBar(): HTMLElement {
   window.addEventListener('keydown', (e) => { if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') { e.preventDefault(); void save(false); } });
   // reopen the last font at start
   const cur = getCurrentId();
-  if (cur) loadFont(cur).then((p) => { if (p) openProject(p); }).catch(() => undefined);
+  const fontReady: Promise<void> = cur ? loadFont(cur).then((p) => { if (p) openProject(p); }).catch(() => undefined) : Promise.resolve();
+  collabHooks.ready = () => fontReady;
   return bar;
 }

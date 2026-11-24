@@ -11,9 +11,12 @@ import { migrateLegacyAutosave, getCurrentId, setCurrentId } from '../project/li
 import { showWelcome } from './panels/welcome';
 import { moveVersions, SCRATCH } from '../project/versions';
 import { openJoinDialog } from './panels/shareDialog';
+import { loadConfig } from './config';
+import { resumeSession } from './collab';
 import { hasInk } from './panels/seeds';
 
 export async function mountApp(root: HTMLElement): Promise<void> {
+  void loadConfig(); // optional fontlab.config.json next to index.html
   (window as unknown as { __fontlab: typeof store }).__fontlab = store; // debugging / e2e handle
   // one-time: move the old single autosave into the library
   try {
@@ -38,5 +41,8 @@ export async function mountApp(root: HTMLElement): Promise<void> {
   const params = new URLSearchParams(location.search);
   const room = params.get('join');
   if (room && /^[A-Za-z0-9_-]{4,40}$/.test(room)) { setTimeout(() => openJoinDialog(room, params.get('via') === 'local' ? 'local' : 'peer'), 500); return; }
+  // a reload keeps the session of this tab going (the host keeps the same link)
+  const resumed = await loadConfig().then(() => resumeSession()).catch(() => null);
+  if (resumed) return;
   setTimeout(() => { if (!Object.values(store.project.glyphs).some(hasInk)) showWelcome(); }, 400);
 }

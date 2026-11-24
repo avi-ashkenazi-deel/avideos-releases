@@ -7,7 +7,9 @@ import { toast } from './dom';
 import { history } from './history';
 import { scheduleBuild } from './buildClient';
 import type { FontProject } from '../core/glyph';
-import { Session, type Peer } from '../collab/session';
+import { Session, HOST_LOST, type Peer } from '../collab/session';
+import { getConfig, peerOptions, loadConfig } from './config';
+import { getCurrentId } from '../project/library';
 import { makeTransport, newRoomId } from '../collab/transport';
 import { diffProject, snapshotOf, applyOp, opKey, type Op, type Snapshot } from '../collab/protocol';
 
@@ -23,8 +25,24 @@ interface State {
 }
 export const collab: State = { session: null, peers: [], status: 'off', detail: '', via: 'peer' };
 
+/** What this tab was doing, kept for the tab's lifetime so a reload or a network blip picks it up again. */
+interface Resume { role: 'host' | 'guest'; room: string; name: string; via: 'peer' | 'local'; guestsCanEdit?: boolean; ownId?: string | null }
+const SS_KEY = 'fontlab:collab:session';
+function remember(r: Resume | null): void { try { if (r) sessionStorage.setItem(SS_KEY, JSON.stringify(r)); else sessionStorage.removeItem(SS_KEY); } catch { /* ignore */ } }
+function remembered(): Resume | null {
+  try {
+    const r = JSON.parse(sessionStorage.getItem(SS_KEY) ?? 'null');
+    return r && (r.role === 'host' || r.role === 'guest') && typeof r.room === 'string' && /^[A-Za-z0-9_-]{4,40}$/.test(r.room) && typeof r.name === 'string' ? { ...r, via: r.via === 'local' ? 'local' : 'peer' } : null;
+  } catch { return null; }
+}
+/** The guest's own font (library id, or null for the unsaved one) from before they joined. */
+export function ownFontId(): string | null { return remembered()?.ownId ?? null; }
+const transport = (via: 'peer' | 'local') => makeTransport(via, via === 'peer' ? peerOptions() : undefined);
+const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+let reconnecting = false;
+
 /** App-level actions the header provides (opening a project, going back to my own font). */
-export const collabHooks: { openProject?: (p: FontProject) => void; restoreOwnFont?: () => void | Promise<void>; saveCopy?: (p: FontProject) => Promise<void> } = {};
+export const collabHooks: { openProject?: (p: FontProject) => void; restoreOwnFont?: () => void | Promise<void>; saveCopy?: (p: FontProject) => Promise<void>; /** resolves once the font of this tab has been loaded at start-up */ ready?: () => Promise<void> } = {};
 
 let snap: Snapshot = new Map();
 let applying = false;
@@ -82,40 +100,65 @@ function events() {
       if ((status === 'closed' || status === 'error') && collab.session) {
         const guest = collab.session.role === 'guest';
         collab.session = null; collab.peers = []; rosterSig = '';
+        if (guest && was === 'open' && detail === HOST_LOST && remembered()) { void reconnect(); return; }
+        remember(null);
         if (was === 'open') toast(detail || (guest ? 'The session ended.' : 'Session ended.'), 5000);
         if (guest && was === 'open') void afterGuestSession();
       }
+      if (reconnecting && status !== 'open') return; // the reconnect loop reports its own progress
       store.emit('collab');
     },
   };
 }
 
-/** Host a session with the font that is open. Returns the link to send to others. */
-export async function startSession(name: string, via: 'peer' | 'local' = collab.via): Promise<string> {
+/** Host a session with the font that is open. Returns the link to send to others. `room` resumes an earlier link. */
+export async function startSession(name: string, via: 'peer' | 'local' = collab.via, room?: string, guestsCanEdit = true): Promise<string> {
   if (collab.session) return sessionLink();
   rememberName(name);
   collab.via = via; collab.status = 'connecting'; collab.detail = ''; store.emit('collab');
   try {
-    const s = await Session.host(makeTransport(via), newRoomId(), { name: name.trim() || 'Host' }, () => store.project, events());
+    await loadConfig();
+    let s: Session | null = null;
+    // after a reload the old connection may still hold the link for a few seconds
+    for (let attempt = 0; ; attempt++) {
+      try { s = await Session.host(transport(via), room ?? newRoomId(), { name: name.trim() || 'Host' }, () => store.project, events()); break; }
+      catch (e) { if (!room || attempt >= 6 || !/in use/i.test((e as Error).message)) throw e; await wait(2500); }
+    }
     collab.session = s; collab.status = 'open'; collab.peers = s.peers();
+    if (!guestsCanEdit) s.setGuestsCanEdit(false);
+    remember({ role: 'host', room: s.room, name, via, guestsCanEdit });
     snap = snapshotOf(store.project);
     s.setPresence({ ch: store.selected });
     store.emit('collab');
     return sessionLink();
   } catch (e) {
-    collab.session = null; collab.status = 'error'; collab.detail = (e as Error).message; store.emit('collab');
+    collab.session = null; collab.status = 'error'; collab.detail = (e as Error).message; remember(null); store.emit('collab');
     throw e;
   }
+}
+
+/** Host only: let guests edit, or only watch and leave notes. */
+export function setGuestsCanEdit(v: boolean): void {
+  const s = collab.session;
+  if (!s || s.role !== 'host') return;
+  s.setGuestsCanEdit(v);
+  const r = remembered(); if (r) remember({ ...r, guestsCanEdit: v });
 }
 
 /** Join someone's session; their font replaces what is on screen until I leave. */
 export async function joinSession(room: string, name: string, via: 'peer' | 'local' = 'peer'): Promise<void> {
   if (collab.session) leaveSession();
   rememberName(name);
+  const prior = remembered();
+  // my own font, to go back to afterwards (kept across reloads of this tab)
+  const ownId = prior && prior.role === 'guest' && prior.room === room ? prior.ownId ?? null : getCurrentId();
   collab.via = via; collab.status = 'connecting'; collab.detail = ''; store.emit('collab');
   try {
-    const s = await Session.join(makeTransport(via), room, { name: name.trim() || 'Guest' }, events());
+    await loadConfig();
+    const s = await Session.join(transport(via), room, { name: name.trim() || 'Guest' }, events());
     collab.session = s; collab.status = 'open'; collab.peers = s.peers();
+    remember({ role: 'guest', room, name, via, ownId });
+    idle = false; lastActive = Date.now();
     s.setPresence({ ch: store.selected });
     store.emit('collab');
   } catch (e) {
@@ -124,11 +167,57 @@ export async function joinSession(room: string, name: string, via: 'peer' | 'loc
   }
 }
 
+/** The connection to the host dropped: keep trying the same link for a while before giving up. */
+async function reconnect(): Promise<void> {
+  const r = remembered();
+  if (!r || reconnecting) return;
+  reconnecting = true;
+  collab.status = 'connecting'; collab.detail = 'Reconnecting…'; store.emit('collab');
+  toast('Lost the connection to the host. Trying to reconnect…', 4000);
+  const until = Date.now() + 45_000;
+  let ok = false;
+  while (Date.now() < until && remembered()) {
+    await wait(3000);
+    if (!remembered()) break; // I left meanwhile
+    try { await joinSession(r.room, r.name, r.via); ok = true; break; } catch { collab.status = 'connecting'; collab.detail = 'Reconnecting…'; }
+  }
+  reconnecting = false;
+  if (ok) { toast('Reconnected. You are back in the session.', 3500); store.emit('collab'); return; }
+  if (!remembered()) { store.emit('collab'); return; }
+  remember(null);
+  collab.status = 'closed'; collab.detail = 'The host is no longer reachable.'; store.emit('collab');
+  toast('The host is no longer reachable, so the session ended.', 5000);
+  void afterGuestSession();
+}
+
+/** After a reload: pick the session of this tab up again (the host keeps the same link). */
+export async function resumeSession(): Promise<'host' | 'guest' | null> {
+  const r = remembered();
+  if (!r || collab.session) return null;
+  try {
+    if (r.role === 'host') { await collabHooks.ready?.(); await startSession(r.name, r.via, r.room, r.guestsCanEdit !== false); toast('Your session is back on the same link.', 3500); return 'host'; }
+    for (let attempt = 0; ; attempt++) {
+      try { await joinSession(r.room, r.name, r.via); break; }
+      catch (e) { if (attempt >= 4) throw e; await wait(2500); }
+    }
+    toast('You are back in the session.', 3500);
+    return 'guest';
+  } catch {
+    const guest = r.role === 'guest';
+    remember(null);
+    collab.status = 'off'; collab.detail = ''; store.emit('collab');
+    toast(guest ? 'The session you were in has ended.' : 'Could not restart your session. Start a new one from Share.', 5000);
+    if (guest) await collabHooks.restoreOwnFont?.();
+    return null;
+  }
+}
+
 export function leaveSession(): void {
   const s = collab.session;
-  if (!s) return;
+  if (!s) { if (remembered()) { const guest = remembered()!.role === 'guest'; remember(null); collab.status = 'off'; collab.detail = ''; store.emit('collab'); if (guest) void afterGuestSession(); } return; }
   const guest = s.role === 'guest';
   flush();
+  remember(null);
   collab.session = null; collab.peers = []; collab.status = 'off'; collab.detail = ''; rosterSig = '';
   try { s.leave(); } catch { /* ignore */ }
   store.emit('collab');
@@ -142,6 +231,22 @@ async function afterGuestSession(): Promise<void> {
     if (keep && collabHooks.saveCopy) await collabHooks.saveCopy(store.project);
     else await collabHooks.restoreOwnFont?.();
   } catch (e) { toast((e as Error).message); }
+}
+
+// ---- idle: a letter is only held while its holder is actually around
+let idle = false;
+let lastActive = Date.now();
+function active(): void {
+  lastActive = Date.now();
+  if (idle && collab.session) { idle = false; collab.session.setPresence({ ch: store.selected }); }
+}
+if (typeof window !== 'undefined') {
+  for (const ev of ['pointerdown', 'keydown', 'pointermove', 'wheel'] as const) window.addEventListener(ev, active, { passive: true, capture: true });
+  setInterval(() => {
+    if (!collab.session || idle || collab.status !== 'open') return;
+    const limit = (getConfig().collab.maxIdleSeconds ?? 45) * 1000;
+    if (Date.now() - lastActive > limit) { flush(); idle = true; collab.session.setPresence({ ch: null, cursor: null }); }
+  }, 5000);
 }
 
 // ---- local → remote
@@ -183,7 +288,13 @@ function revert(rejected: Op[], prev: Snapshot): void {
 
 store.subscribe((ev) => {
   if (!collab.session || applying) return;
-  if (ev === 'select') { flush(); collab.session.setPresence({ ch: store.selected }); return; } // my last edit goes out before I let go of the letter
+  if (ev === 'select') { flush(); idle = false; lastActive = Date.now(); collab.session.setPresence({ ch: store.selected }); return; } // my last edit goes out before I let go of the letter
+  if (ev === 'project:loaded') {
+    // the host opened another font: that becomes the shared one. A guest who opens one of their own fonts has left.
+    if (collab.session.role === 'host') { if (flushTimer) clearTimeout(flushTimer); flushTimer = window.setTimeout(flush, 120); }
+    else { const s = collab.session; remember(null); collab.session = null; collab.peers = []; collab.status = 'off'; collab.detail = ''; rosterSig = ''; try { s.leave(); } catch { /* ignore */ } store.emit('collab'); toast('You opened another font, so you left the session.', 4000); }
+    return;
+  }
   if (!SYNC_EVENTS.has(ev)) return;
   if (flushTimer) clearTimeout(flushTimer);
   flushTimer = window.setTimeout(flush, 120);

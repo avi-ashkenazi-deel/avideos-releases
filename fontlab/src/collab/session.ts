@@ -40,7 +40,11 @@ const CURSOR_MS = 66;          // ~15 cursor updates a second
 const JOIN_TIMEOUT = 20000;
 /** changes to a letter I just left are still mine for a moment (the app sends edits a beat after they are made) */
 const LEAVE_GRACE_MS = 1000;
-const HOST_GONE = 'The host ended the session';
+/** the host chose to end the session */
+export const HOST_ENDED = 'The host ended the session';
+/** the connection to the host dropped (network, reload, closed tab): worth trying to rejoin */
+export const HOST_LOST = 'Lost the connection to the host';
+const HOST_GONE = HOST_ENDED;
 
 type Cursor = [number, number] | null;
 interface WirePeer { id: string; name: string; color: string; host: boolean; ch: string | null; st: number; cur: Cursor }
@@ -431,7 +435,7 @@ export class Session {
       if (this.state === 'starting') { this.backlog.push(() => this.peerClosed(id)); return; }
       if (this.role === 'host') { this.removeGuest(id); return; }
       if (this.hostId && id !== this.hostId) return;
-      this.hostGone();
+      this.hostGone(true); // the connection dropped without a goodbye
     } catch (e) { console.error('[collab] close ignored', e); }
   }
 
@@ -692,11 +696,11 @@ export class Session {
     for (const op of ops) { const key = opKey(op); if (this.pending.has(key)) this.reapply.add(key); }
   }
 
-  private hostGone(): void {
+  private hostGone(lost = false): void {
     if (this.state === 'closed') return;
-    if (this.joinDone) { this.joinDone(new Error(HOST_GONE)); return; }
+    if (this.joinDone) { this.joinDone(new Error(lost ? HOST_LOST : HOST_GONE)); return; }
     this.shut();
-    this.emitStatus('closed', HOST_GONE);
+    this.emitStatus('closed', lost ? HOST_LOST : HOST_GONE);
   }
 }
 

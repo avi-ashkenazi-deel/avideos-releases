@@ -978,7 +978,8 @@ describe('collab session: coming and going', () => {
       else (host.session as unknown as { transport: Transport }).transport.close();
       await settle(hub);
       for (const g of [a, b]) {
-        expect(g.status.at(-1)).toEqual(['closed', 'The host ended the session']);
+        // a goodbye means it is over; a silent drop is worth a rejoin attempt
+        expect(g.status.at(-1)).toEqual(['closed', how === 'leave' ? 'The host ended the session' : 'Lost the connection to the host']);
         expect(g.status.filter((s) => s[0] === 'closed')).toHaveLength(1);
         expect(g.session.sendOps([{ k: 'set', key: 'name', v: 'x' }])).toEqual([]);
       }
