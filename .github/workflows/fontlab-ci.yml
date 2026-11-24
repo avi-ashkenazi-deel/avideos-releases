@@ -18,7 +18,8 @@ concurrency:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    # pinned: Playwright 1.56 has no browser build for ubuntu-latest (26.04) yet
+    runs-on: ubuntu-24.04
     defaults: { run: { working-directory: fontlab } }
     steps:
       - uses: actions/checkout@v4
