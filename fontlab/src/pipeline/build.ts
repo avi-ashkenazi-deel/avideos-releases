@@ -6,8 +6,16 @@ import { hashString } from '../core/prng';
 import { autoKern, mergeKerning } from '../spacing';
 import { buildGposKern, kernToGlyphPairs } from '../export/gpos';
 import { injectTables } from '../export/sfnt';
+import { colorLayers, moveColorGlyph, type ColorGlyph, type ColorLayer } from '../color/layers';
+import { planColorGlyphs, colorTables, type ColorBinding } from '../export/colr';
 
-export interface BuiltGlyph { char: string; unicode: number; advance: number; contours: Contour[] }
+export interface BuiltGlyph {
+  char: string; unicode: number; advance: number;
+  /** the letter's shape; with colour on, the plain fallback (union of the layers) */
+  contours: Contour[];
+  /** colour layers, bottom first, when the colour font is on */
+  layers?: ColorLayer[];
+}
 export interface BuildResult {
   /** keyed by char only (consumers iterate this assuming char keys) */
   glyphs: Record<string, BuiltGlyph>;
@@ -44,10 +52,33 @@ export function buildGlyph(g: Glyph, p: FontProject, variant = ''): BuiltGlyph {
 
 const nameOf = (b: { char: string; unicode: number }) => glyphName(b.char, b.unicode);
 
+const colorCache = new WeakMap<BuiltGlyph, Map<string, BuiltGlyph>>();
+/** With the colour font on, split a built letter into layers; its contours become the fallback shape. */
+function colorize(b: BuiltGlyph, src: Glyph | undefined, p: FontProject): BuiltGlyph {
+  const c = p.color;
+  if (!c?.enabled || (c.palette?.length ?? 0) < 2 || !b.contours.length) return b;
+  const key = JSON.stringify(c) + '|' + JSON.stringify(p.metrics);
+  let m = colorCache.get(b);
+  if (!m) colorCache.set(b, (m = new Map()));
+  const hit = m.get(key);
+  if (hit) return hit;
+  let out = b;
+  try {
+    const cg = colorLayers(src, b, c, p.metrics, b.unicode);
+    if (cg && cg.layers.length) out = { ...b, contours: cg.fallback, advance: cg.advance, layers: cg.layers };
+  } catch (e) { console.warn('colour layers failed', b.char, e); }
+  if (m.size > 6) m.clear();
+  m.set(key, out);
+  return out;
+}
+const asColor = (b: BuiltGlyph): ColorGlyph => ({ layers: b.layers!, fallback: b.contours, advance: b.advance });
+
 /** Collect GSUB features for the built set: ss01–ss03 + salt from project alternates, tnum from
  *  the digits, and the default arrow ligatures. */
-function collectFeatures(glyphs: Record<string, BuiltGlyph>, alternates: Record<string, BuiltGlyph>): FontFeatures {
+function collectFeatures(glyphs: Record<string, BuiltGlyph>, alternates: Record<string, BuiltGlyph>): { features: FontFeatures; colorBindings: ColorBinding[] } {
   const extraGlyphs: FeatureGlyph[] = [];
+  const colored: { name: string; advance: number; color: ColorGlyph }[] = [];
+  for (const b of Object.values(glyphs)) if (b.layers?.length && b.contours.length) colored.push({ name: nameOf(b), advance: b.advance, color: asColor(b) });
   const singles: Record<string, [string, string][]> = {};
   const alts: Record<string, string[]> = {};
   const addSingle = (tag: string, a: string, b: string) => (singles[tag] ??= []).push([a, b]);
@@ -59,6 +90,7 @@ function collectFeatures(glyphs: Record<string, BuiltGlyph>, alternates: Record<
     const baseName = nameOf(base);
     const altName = `${baseName}.${tag}`;
     extraGlyphs.push({ name: altName, advance: alt.advance, contours: alt.contours });
+    if (alt.layers?.length) colored.push({ name: altName, advance: alt.advance, color: asColor(alt) });
     addSingle(tag, baseName, altName);
     (alts[baseName] ??= []).push(altName);
   }
@@ -75,9 +107,13 @@ function collectFeatures(glyphs: Record<string, BuiltGlyph>, alternates: Record<
         contours: dx ? b.contours.map((c) => ({ ...c, points: c.points.map(([x, y]) => [x + dx, y] as [number, number]) })) : b.contours,
       });
       addSingle('tnum', name, `${name}.tnum`);
+      if (b.layers?.length) colored.push({ name: `${name}.tnum`, advance: W, color: moveColorGlyph(asColor(b), dx, 0, W) });
     }
   }
-  return { extraGlyphs, singles, alternates: alts, ligatures: defaultLigatures() };
+  // colour layers ride along as extra unencoded glyphs; COLR/CPAL bind them to their base glyphs
+  const plan = colored.length ? planColorGlyphs(colored) : { extraGlyphs: [], bindings: [] };
+  extraGlyphs.push(...plan.extraGlyphs);
+  return { features: { extraGlyphs, singles, alternates: alts, ligatures: defaultLigatures() }, colorBindings: plan.bindings };
 }
 
 export function buildAll(p: FontProject, opts: { otf?: boolean; chars?: string[] } = {}): BuildResult {
@@ -87,7 +123,7 @@ export function buildAll(p: FontProject, opts: { otf?: boolean; chars?: string[]
   for (const ch of chars) {
     const g = p.glyphs[ch];
     if (!g) continue;
-    try { glyphs[ch] = buildGlyph(g, p); } catch (e) { console.warn('glyph build failed', ch, e); }
+    try { glyphs[ch] = colorize(buildGlyph(g, p), g, p); } catch (e) { console.warn('glyph build failed', ch, e); }
   }
   const alternates: Record<string, BuiltGlyph> = {};
   for (const [ch, list] of Object.entries(p.alternates ?? {})) {
@@ -95,7 +131,7 @@ export function buildAll(p: FontProject, opts: { otf?: boolean; chars?: string[]
     list.slice(0, 3).forEach((g, i) => {
       if (!g) return;
       const key = `${ch}#ss0${i + 1}`;
-      try { alternates[key] = buildGlyph(g, p, key); } catch (e) { console.warn('alternate build failed', key, e); }
+      try { alternates[key] = colorize(buildGlyph(g, p, key), g, p); } catch (e) { console.warn('alternate build failed', key, e); }
     });
   }
   const kerning = computeKerning(p, glyphs);
@@ -103,14 +139,20 @@ export function buildAll(p: FontProject, opts: { otf?: boolean; chars?: string[]
   if (opts.otf !== false) {
     const list: OutlineGlyph[] = Object.values(glyphs).filter((g) => g.contours.length);
     if (list.length) {
-      const features = collectFeatures(glyphs, alternates);
+      const { features, colorBindings } = collectFeatures(glyphs, alternates);
       const font = buildFont(list, { familyName: p.name || 'FontLab', metrics: p.metrics, features });
       otf = fontToArrayBuffer(font);
-      // kerning goes in as a binary GPOS table (opentype.js cannot write pair positioning)
+      // kerning (GPOS) and colour (COLR/CPAL) go in as binary tables: opentype.js cannot write pair positioning
+      const tables: Record<string, Uint8Array> = {};
       try {
         const gpos = buildGposKern(kernToGlyphPairs(kerning, (ch) => font.charToGlyphIndex(ch)));
-        if (gpos && otf) otf = injectTables(otf, { GPOS: gpos });
+        if (gpos) tables.GPOS = gpos;
       } catch (e) { console.warn('kerning table skipped', e); }
+      try {
+        const ct = colorBindings.length ? colorTables(font, colorBindings, p.color.palette) : null;
+        if (ct) { tables.COLR = ct.COLR; tables.CPAL = ct.CPAL; }
+      } catch (e) { console.warn('colour tables skipped', e); }
+      if (otf && Object.keys(tables).length) otf = injectTables(otf, tables);
     }
   }
   return { glyphs, alternates, otf, kerning, ms: performance.now() - t0 };

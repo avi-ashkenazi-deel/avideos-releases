@@ -123,7 +123,7 @@ export function gridPanel(onSelect: (ch: string) => void): HTMLElement {
       c.badge.dataset.source = g ? (g.locked ? 'locked' : g.source) : '';
       c.badge.title = g ? ({ drawn: 'drawn by hand', traced: 'traced from a photo', imported: 'from a font file', generated: 'generated' } as const)[g.source] + (g.locked ? ' (locked)' : '') : 'empty';
       c.root.dataset.source = g ? g.source : '';
-      renderThumb(c.canvas, b?.contours ?? [], store.project.metrics, b?.advance ?? g?.advance ?? 500, g ? SOURCE_COLOR[g.source] : '#444');
+      renderThumb(c.canvas, b?.contours ?? [], store.project.metrics, b?.advance ?? g?.advance ?? 500, g ? SOURCE_COLOR[g.source] : '#444', b?.layers?.length ? { layers: b.layers, palette: store.project.color.palette } : undefined);
     }
   };
   store.subscribe((ev) => { if (ev === 'charset' || ev === 'project:loaded') layout(); if (ev === 'built' || ev === 'select' || ev === 'project' || ev === 'project:loaded' || ev === 'glyph' || ev === 'charset') refresh(); });

@@ -311,3 +311,9 @@ canvas.editor.note.overpin { cursor: pointer; }
 .pairchip { text-transform: none; font-size: 12px; }
 .pairchip span { font-size: 16px; }
 .kernproof { background: #fff; color: #111; border-radius: 10px; padding: 8px 12px; font-size: 34px; line-height: 1.25; outline: none; max-height: 150px; overflow: auto; }
+
+/* colour font section (effects panel) */
+.colorbox { background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 6px 10px; margin: 8px 0; }
+.colorbox .row { margin: 4px 0; }
+.swatches { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+.swatches input[type=color] { width: 28px; height: 28px; padding: 0; border: 1px solid var(--line); border-radius: 6px; background: none; cursor: pointer; }

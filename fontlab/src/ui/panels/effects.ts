@@ -154,6 +154,35 @@ export function effectsPanel(): HTMLElement {
     padBtn.setAttribute('aria-pressed', String(on));
     if (on) (pad as any).refresh();
   }, { title: 'Drag on a pad to change two effect settings at once', testid: 'btn-pad' });
+  // colour font (COLR/CPAL layers)
+  const colorBox = h('div', { class: 'colorbox', 'data-testid': 'colorbox' });
+  const MODES: { id: 'strokes' | 'stripes' | 'shadow' | 'outline'; label: string; amount?: string; hint: string }[] = [
+    { id: 'strokes', label: 'Strokes', hint: 'Each stroke you drew gets its own colour; letters with one part take turns' },
+    { id: 'stripes', label: 'Stripes', amount: 'Bands', hint: 'Horizontal bands that line up across all letters' },
+    { id: 'shadow', label: 'Shadow', amount: 'Offset', hint: 'A shifted copy behind each letter in the second colour' },
+    { id: 'outline', label: 'Outline', amount: 'Thickness', hint: 'A rim around each letter in the second colour' },
+  ];
+  const renderColor = () => {
+    const c = store.project.color;
+    const on = h('input', { type: 'checkbox', checked: c.enabled, id: 'coloron', 'data-testid': 'chk-color' });
+    on.addEventListener('change', () => { c.enabled = on.checked; renderColor(); changed(0); });
+    const head = h('div', { class: 'row' }, h('label', { class: 'toggle', for: 'coloron' }, on, ' Colour font'), help('Splits every letter into coloured layers and exports a real colour font (COLR). Apps without colour-font support show the plain letter. Variable fonts stay one colour.'));
+    if (!c.enabled) { colorBox.replaceChildren(head); return; }
+    const mode = h('select', { 'aria-label': 'Colour mode', 'data-testid': 'color-mode' }, ...MODES.map((m) => h('option', { value: m.id, title: m.hint, selected: m.id === c.mode }, m.label)));
+    mode.addEventListener('change', () => { c.mode = mode.value as typeof c.mode; renderColor(); changed(0); });
+    const swatches = h('div', { class: 'swatches' }, ...c.palette.map((hex, i) => {
+      const inp = h('input', { type: 'color', value: hex, 'aria-label': `Colour ${i + 1}`, title: i === 0 ? 'Main colour' : `Colour ${i + 1}` });
+      inp.addEventListener('input', () => { c.palette[i] = inp.value; changed(150); });
+      return inp;
+    }));
+    if (c.palette.length < 8) swatches.append(iconButton('plus', 'Add colour', () => { c.palette.push(['#8e44ec', '#ff8a1f', '#00c2a8', '#ff2d92', '#a2845e', '#00b8d9'][c.palette.length % 6]); renderColor(); changed(0); }, { iconOnly: true, cls: 'icon' }));
+    if (c.palette.length > 2) swatches.append(iconButton('x', 'Remove last colour', () => { c.palette.pop(); renderColor(); changed(0); }, { iconOnly: true, cls: 'icon' }));
+    const def = MODES.find((m) => m.id === c.mode)!;
+    const amount = def.amount ? slider(def.amount, { min: 0, max: 1, step: 0.01, value: c.amount, onInput: (v) => { c.amount = v; changed(150); }, format: (v) => Math.round(v * 100) + '%' }) : null;
+    colorBox.replaceChildren(head, h('div', { class: 'row' }, h('label', {}, 'Mode ', mode), swatches), ...(amount ? [amount] : []), h('small', { class: 'muted' }, def.hint));
+  };
+  renderColor();
+  store.subscribe((ev) => { if (ev === 'project:loaded') renderColor(); });
   const panel = h('section', { class: 'panel effects' },
     h('h2', {}, 'Effects', help('Effects run top to bottom on every letter. Reorder by dragging. Crisp effects keep corners sharp; textures go through a bitmap.')),
     h('div', { class: 'row' }, presetSel, padBtn, h('label', { class: 'toggle', for: 'bypassfx' }, bypass, ' Show original', help('Preview and export the letters exactly as drawn or imported, ignoring every effect. Turns on by itself after a font import.'))),
@@ -166,6 +195,7 @@ export function effectsPanel(): HTMLElement {
       randomBtn, backBtn,
       iconButton('reset', 'Clear effects', () => { store.project.fx = newStack(store.project.fx.seed); render(); changed(0); }),
     ),
+    colorBox,
     h('div', { class: 'row advrow' }, h('label', { class: 'toggle', for: 'fxadv' }, advToggle, ' Advanced: sets', help('Sets let one stack of effects be cut from, added to, or intersected with another. Most looks do not need them.')), addGroupBtn),
   );
   store.subscribe((ev) => { if (ev === 'project:loaded' || ev === 'fx:external') { seedInput.value = String(store.project.fx.seed); render(); } });

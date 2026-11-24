@@ -142,6 +142,12 @@ tabs: **Draw**, **Photo or video**, **Font file**.
    [Allo](https://allo.joshpuckett.me/)'s weight × roundness pad) maps any
    two effect sliders to a square you drag in; the letter and its points
    update as you drag.
+   **Colour font** (bottom of the Effects panel) splits every letter into
+   coloured layers and exports a real colour font (COLR/CPAL): *Strokes*
+   gives each stroke you drew its own colour, *Stripes* cuts bands that line
+   up across letters, *Shadow* puts an offset copy behind, *Outline* a rim.
+   Pick two to eight colours. Apps without colour-font support show the
+   plain letter; variable fonts stay one colour.
    **Show original** turns every effect off for preview and export; it
    switches on by itself after a font import so you see the font as it is.
    **Advanced: sets** reveals effect sets: a second set starts again from the

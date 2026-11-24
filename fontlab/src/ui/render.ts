@@ -79,7 +79,7 @@ function valuePill(ctx: CanvasRenderingContext2D, text: string, right: number, c
 }
 
 /** Render contours to a small thumbnail canvas (used by the glyph grid). */
-export function renderThumb(canvas: HTMLCanvasElement, contours: Contour[], metrics: FontMetrics, advance: number, fill: string): void {
+export function renderThumb(canvas: HTMLCanvasElement, contours: Contour[], metrics: FontMetrics, advance: number, fill: string, color?: { layers: { contours: Contour[]; color: number }[]; palette: string[] }): void {
   const dpr = window.devicePixelRatio || 1;
   const w = canvas.clientWidth || 72, h = canvas.clientHeight || 80;
   if (canvas.width !== w * dpr || canvas.height !== h * dpr) { canvas.width = w * dpr; canvas.height = h * dpr; }
@@ -90,5 +90,6 @@ export function renderThumb(canvas: HTMLCanvasElement, contours: Contour[], metr
   const s = Math.min((h - 8) / (top - bottom), (w - 8) / Math.max(400, advance + 80));
   const v: View = { ox: (w - advance * s) / 2, oy: 4 + top * s, s };
   ctx.strokeStyle = 'rgba(255,255,255,.12)'; ctx.beginPath(); ctx.moveTo(0, v.oy); ctx.lineTo(w, v.oy); ctx.stroke();
-  drawContours(ctx, contours, v, fill);
+  if (color?.layers.length) { for (const l of color.layers) drawContours(ctx, l.contours, v, color.palette[l.color % color.palette.length] ?? fill); }
+  else drawContours(ctx, contours, v, fill);
 }
