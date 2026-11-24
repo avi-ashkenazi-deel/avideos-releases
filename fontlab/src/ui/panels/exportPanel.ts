@@ -6,7 +6,8 @@ import { showWelcome } from './welcome';
 import { openCombineDialog } from './combineDialog';
 import { scheduleBuild } from '../buildClient';
 import { downloadOtf, downloadSvgSpecimen, downloadSpecimenSite, openTester, openAnimateDialog, openVariableDialog, downloadTtf, downloadSvgGlyphs, downloadUfo } from './exportMore';
-import { checkButton, fixHandlers } from './checkPanel';
+import { checkButton, fixHandlers, checkExtras } from './checkPanel';
+import { openSpacingDialog, autoSpaceAll } from './spacingDialog';
 import { openLibrary, saveCurrent } from './libraryDialog';
 import { fingerprint, getCurrentId, setCurrentId, loadFont, saveFont } from '../../project/library';
 import { openVersions } from './versionsDialog';
@@ -38,6 +39,8 @@ export function headerBar(): HTMLElement {
       return meta;
     } catch (e) { toast((e as Error).message); return null; }
   };
+  fixHandlers['auto-space'] = async () => { await autoSpaceAll(); };
+  checkExtras.kerning = () => store.kerning;
   fixHandlers['name-font'] = () => { const n = prompt('Name your font', store.project.name === 'Untitled' ? '' : store.project.name); if (n && n.trim()) { store.project.name = n.trim(); name.value = store.project.name; store.emit('project'); scheduleBuild(0); } };
   const openProject = (p: typeof store.project) => {
     store.project = p; store.built = {}; store.otf = null; store.bypassFx = false;
@@ -100,6 +103,7 @@ export function headerBar(): HTMLElement {
   const bar = h('header', { class: 'topbar' },
     h('div', { class: 'namewrap' }, name, dirtyDot),
     h('div', { class: 'actions' },
+      iconButton('text', 'Spacing', () => openSpacingDialog(), { title: 'Letter spacing and kerning: auto space, auto kern, edit pairs', testid: 'btn-spacing' }),
       checkButton(),
       iconButton('info', 'Intro', () => showWelcome(true), { iconOnly: true, title: 'Show the four-step intro again', testid: 'btn-intro' }),
       iconButton('flask', 'Test', openTester, { title: 'Type with your font, waterfall, dark mode', testid: 'btn-test' }),

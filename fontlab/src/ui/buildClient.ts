@@ -15,6 +15,7 @@ function getWorker(): Worker {
     store.busy = false;
     if (msg.type === 'error') { store.status = 'Build error: ' + msg.message; store.emit('status'); return; }
     store.built = msg.partial ? { ...store.built, ...(msg.glyphs as any) } : (msg.glyphs as any);
+    store.kerning = msg.partial ? { ...store.kerning, ...(msg.kerning ?? {}) } : (msg.kerning ?? {});
     store.lastBuildMs = msg.ms;
     store.otf = msg.otf;
     store.busy = !!msg.partial && !msg.final;

@@ -88,6 +88,15 @@ tabs: **Draw**, **Photo or video**, **Font file**.
    Enter to close, Backspace removes the last point, Escape cancels. The
    closed shape is added to the letter; drawn inside ink it cuts a hole,
    inside a counter it fills.
+   All drawing tools sit in one strip above the canvas, with single-key
+   shortcuts: Brush (B), Edit points (V), Pen (P), **Rectangle** (R) and
+   **Ellipse** (O; Shift for a square or circle, Alt from the centre),
+   **Knife** (K: drag right through a stroke or shape to cut it in two, the
+   pieces then move separately in Edit points; Alt leaves a gap) and
+   **Note** (N: pin a review comment to a spot on a letter). Notes show as
+   numbered pins, are listed under Check → Review notes, travel in the
+   `.json` and the specimen site, and a reviewer's notes come back with
+   Font → Import review notes.
 3. **Generate the rest of the alphabet.** FontLab measures your seeds (stroke
    width, x-height, cap height, slant, overshoot, spacing, terminals, wobble)
    and builds the missing letters from parametric recipes. Letters related to a
@@ -138,6 +147,15 @@ tabs: **Draw**, **Photo or video**, **Font file**.
    **Advanced: sets** reveals effect sets: a second set starts again from the
    original glyph and is added to, cut from, intersected or xor'd with the
    result (the Halo preset is "inflated minus original").
+   **Spacing** (header) opens spacing and kerning, after
+   [Inkvar](https://www.inkvar.com/)'s idea of measuring the white between
+   letters. *Auto space all letters* sets the space on both sides of every
+   letter from its shape, so round letters sit closer than straight ones and
+   open ones (T, L, r) are pulled in; Tightness sets how much. Letters whose
+   width you set by hand are left alone. *Auto kerning* then adjusts single
+   pairs (AV, To, r.) on the final shapes, effects included; type any pair to
+   see it large and set its value by hand, which always wins. Kerning is
+   written into the exported fonts as a real `kern` feature and into the UFO.
 5. **Pick your scripts.** The **Character set** panel switches blocks on:
    Latin (always), Punctuation, Symbols, Interface symbols (← → ↑ ↓ ↔ ⇒ ⌘ ⌥
    ⇧ ⏎ ⌫ ✓ ✗ ★ ♥ ⚠ ● ○ ■ □ ▲ ▼, drawn in your font's stroke), Latin accents (Zürich, façade,

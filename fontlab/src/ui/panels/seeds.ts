@@ -9,6 +9,8 @@ import { ShapeTool, cssAccent } from '../../inputs/draw/shapes';
 import { KnifeTool, knifeCut } from '../../inputs/draw/knife';
 import { notesFor, openNoteCount, addNote, updateNote, removeNote, hitNote, drawNotePins, drawNoteLabel, buildNotePopover, placeNotePopover, NOTE_HIT_PX, type NotePopover } from '../../inputs/draw/notes';
 import { history } from '../history';
+import { autoVersion } from '../versions';
+import { fitVerticalMetrics } from '../../generate/metrics';
 import { keepAlternate } from '../alternates';
 import type { Glyph, Stroke, CapStyle, CurveContour, ReviewNote, Vec } from '../../core/glyph';
 import { DEFAULT_STATS } from '../../core/glyph';
@@ -91,6 +93,7 @@ export function recomposeDependents(base: string): void {
 }
 
 export function runGenerate(): void {
+  void autoVersion('Before Generate');
   for (const [ch, g] of Object.entries(store.project.glyphs)) if (!hasInk(g) && !g.locked) delete store.project.glyphs[ch];
   refreshStatsFromSeeds();
   const seedNumber = store.project.fx.seed;
@@ -101,6 +104,7 @@ export function runGenerate(): void {
     for (const ch of chars) keep[ch] = generated[ch] ?? p.glyphs[ch];
     for (const [ch, g] of Object.entries(p.glyphs)) if (!keep[ch] && g.source !== 'generated') keep[ch] = g;
     p.glyphs = keep;
+    fitVerticalMetrics(p);
   }, 'project');
   scheduleBuild(0);
   toast(`Generated ${Object.values(generated).filter((g) => g.source === 'generated').length} letters from ${store.project.seeds.length} seeds`);
@@ -312,7 +316,8 @@ export function seedsPanel(): HTMLElement {
   capSel.addEventListener('change', () => (brush.cap = capSel.value as CapStyle));
   const mirror = h('input', { type: 'checkbox' });
   mirror.addEventListener('change', () => (brush.mirror = mirror.checked));
-  const advRow = slider('Advance', { min: 100, max: 1400, step: 1, value: 520, onInput: (v) => { store.update((p) => { const g = p.glyphs[store.selected]; if (g) g.advance = v; }, 'glyph'); scheduleBuild(80); }, format: (v) => v.toFixed(0) });
+  const advRow = slider('Advance', { min: 100, max: 1400, step: 1, value: 520, onInput: (v) => { store.update((p) => { const g = p.glyphs[store.selected]; if (g) { g.advance = v; g.spacingLocked = true; } }, 'glyph'); scheduleBuild(80); }, format: (v) => v.toFixed(0) });
+  advRow.title = 'Width of this letter. Setting it by hand keeps auto spacing away from it.';
 
   const undoProject = () => {
     if (!history.undo(store.project)) { toast('Nothing to undo'); return; }
@@ -438,6 +443,7 @@ export function seedsPanel(): HTMLElement {
   const fontFile = fileInput('.ttf,.otf,.woff,.woff2', async (f) => {
     try {
       const imp = await importFontFile(await f.arrayBuffer(), projectCharset(store.project));
+      await autoVersion('Before font import');
       if (convertOnImport.checked) { toast(`Converting ${imp.glyphs.length} letters to strokes…`); await new Promise((r) => setTimeout(r, 30)); imp.glyphs = outlineToStrokes_all(imp.glyphs); }
       store.update((p) => {
         for (const g of imp.glyphs) p.glyphs[g.char] = g;

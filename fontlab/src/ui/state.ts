@@ -15,6 +15,8 @@ export class Store {
   bypassFx = false;
   /** axes of the variable font built this session (FontFace 'FunkyVarPreview'), if any */
   variableAxes: { tag: string; name: string; min: number; default: number; max: number }[] | null = null;
+  /** kerning pairs in the last built font ('AV': -55), automatic + manual */
+  kerning: Record<string, number> = {};
   lastBuildMs = 0;
   /** OpenType features switched on in the preview and tester (ss01, tnum, …) */
   features: string[] = [];

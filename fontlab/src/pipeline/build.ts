@@ -3,6 +3,9 @@ import { applyStack, isIdentityStack, advanceAfterStack } from '../fx/stack';
 import { glyphToContours } from '../outline';
 import { buildFont, fontToArrayBuffer, glyphName, defaultLigatures, type OutlineGlyph, type FeatureGlyph, type FontFeatures } from '../export/otf';
 import { hashString } from '../core/prng';
+import { autoKern, mergeKerning } from '../spacing';
+import { buildGposKern, kernToGlyphPairs } from '../export/gpos';
+import { injectTables } from '../export/sfnt';
 
 export interface BuiltGlyph { char: string; unicode: number; advance: number; contours: Contour[] }
 export interface BuildResult {
@@ -11,6 +14,8 @@ export interface BuildResult {
   /** built stylistic alternates, keyed `${char}#ss01` … `#ss03` (also written into the OTF as GSUB) */
   alternates: Record<string, BuiltGlyph>;
   otf: ArrayBuffer | null;
+  /** kerning pairs in the font, keyed by the two characters ('AV': -55): automatic pairs merged with manual ones */
+  kerning: Record<string, number>;
   ms: number;
 }
 
@@ -93,13 +98,37 @@ export function buildAll(p: FontProject, opts: { otf?: boolean; chars?: string[]
       try { alternates[key] = buildGlyph(g, p, key); } catch (e) { console.warn('alternate build failed', key, e); }
     });
   }
+  const kerning = computeKerning(p, glyphs);
   let otf: ArrayBuffer | null = null;
   if (opts.otf !== false) {
     const list: OutlineGlyph[] = Object.values(glyphs).filter((g) => g.contours.length);
     if (list.length) {
       const features = collectFeatures(glyphs, alternates);
-      otf = fontToArrayBuffer(buildFont(list, { familyName: p.name || 'FontLab', metrics: p.metrics, features }));
+      const font = buildFont(list, { familyName: p.name || 'FontLab', metrics: p.metrics, features });
+      otf = fontToArrayBuffer(font);
+      // kerning goes in as a binary GPOS table (opentype.js cannot write pair positioning)
+      try {
+        const gpos = buildGposKern(kernToGlyphPairs(kerning, (ch) => font.charToGlyphIndex(ch)));
+        if (gpos && otf) otf = injectTables(otf, { GPOS: gpos });
+      } catch (e) { console.warn('kerning table skipped', e); }
     }
   }
-  return { glyphs, alternates, otf, ms: performance.now() - t0 };
+  return { glyphs, alternates, otf, kerning, ms: performance.now() - t0 };
+}
+
+/** Automatic pairs (when switched on) measured on the built shapes, with manual pairs on top. Pairs for letters that are not built are dropped. */
+export function computeKerning(p: FontProject, glyphs: Record<string, BuiltGlyph>): Record<string, number> {
+  const k = p.kerning;
+  if (!k) return {};
+  let auto: Record<string, number> = {};
+  try {
+    if (k.auto) auto = autoKern(glyphs, { metrics: p.metrics, tightness: p.spacing?.tightness ?? 0.5, strength: k.strength ?? 1 });
+  } catch (e) { console.warn('auto kerning failed', e); }
+  const merged = mergeKerning(auto, k.pairs ?? {});
+  const out: Record<string, number> = {};
+  for (const [pair, v] of Object.entries(merged)) {
+    const [a, b] = [...pair];
+    if (v && glyphs[a]?.contours.length && glyphs[b]?.contours.length) out[pair] = v;
+  }
+  return out;
 }

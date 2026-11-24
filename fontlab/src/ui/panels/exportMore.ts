@@ -100,14 +100,11 @@ export async function downloadUfo(): Promise<void> {
   try {
     const project = store.bypassFx ? { ...store.project, fx: { ...store.project.fx, groups: [] } } : store.project;
     const res = buildAll(project, { otf: false });
-    const z = ufoZip(ufoInputFromBuild({ familyName: store.project.name || 'FontLab', metrics: store.project.metrics, glyphs: res.glyphs, alternates: res.alternates, kerning: exportKerning.get?.() }));
+    const z = ufoZip(ufoInputFromBuild({ familyName: store.project.name || 'FontLab', metrics: store.project.metrics, glyphs: res.glyphs, alternates: res.alternates, kerning: res.kerning }));
     downloadBlob(z.bytes.buffer as ArrayBuffer, z.name, 'application/zip');
     toast('UFO downloaded. Unzip it, then open the .ufo folder in your font editor.', 5000);
   } catch (e) { toast('UFO export failed: ' + (e as Error).message, 5000); }
 }
-/** Set by the spacing module: the kerning pairs (by character pair) that the built font carries. */
-export const exportKerning: { get?: () => Record<string, number> | undefined } = {};
-
 /** Allo-style one-page specimen site: hero, axes, features, tester, character set, download. */
 export function downloadSpecimenSite(): void {
   if (!store.otf) { toast('Nothing built yet.'); return; }

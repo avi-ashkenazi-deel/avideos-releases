@@ -297,3 +297,17 @@ canvas.editor.note.overpin { cursor: pointer; }
 .notepop-actions button { padding: 4px 10px; font-size: 12px; }
 .notepop-actions .ib.icon-only { padding: 5px; }
 .notepop-actions .ib.danger:hover { color: var(--danger); border-color: var(--danger); }
+
+/* spacing & kerning dialog */
+.spacing h3 { margin: 14px 0 4px; font-size: 14px; display: flex; gap: 6px; align-items: center; }
+.paired { display: grid; grid-template-columns: 1.1fr 1fr; gap: 12px; margin: 8px 0; }
+.pairbox { background: #fff; color: #111; border-radius: 10px; padding: 6px 10px; overflow: hidden; }
+.pairview { font-size: 96px; line-height: 1.15; text-align: center; white-space: nowrap; }
+.pairview.plain { font-size: 40px; opacity: .35; border-top: 1px dashed #bbb; }
+.pairctl { display: flex; flex-direction: column; gap: 4px; }
+.pairinput { width: 70px; font-size: 16px; text-align: center; }
+.pairval { width: 76px; text-align: center; }
+.pairchips { display: flex; gap: 6px; flex-wrap: wrap; }
+.pairchip { text-transform: none; font-size: 12px; }
+.pairchip span { font-size: 16px; }
+.kernproof { background: #fff; color: #111; border-radius: 10px; padding: 8px 12px; font-size: 34px; line-height: 1.25; outline: none; max-height: 150px; overflow: auto; }

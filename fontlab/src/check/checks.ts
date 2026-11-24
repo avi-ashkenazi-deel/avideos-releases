@@ -201,7 +201,8 @@ function checkSpecks(project: FontProject, shapes: Map<string, Shape>): Issue[] 
   let fixable = false;
   for (const [ch, g] of Object.entries(project.glyphs)) if (sourceSpecks(g)) { chars.add(ch); fixable = true; }
   for (const [ch, list] of Object.entries(project.alternates ?? {})) if (Array.isArray(list) && list.some(sourceSpecks)) { chars.add(ch); fixable = true; }
-  for (const [ch, s] of shapes) if (speckIndexes(s.contours).length) chars.add(ch);
+  // built shapes are unioned, so holes wind clockwise (negative area): a tiny counter, as in a bold 4 or e, is not dust
+  for (const [ch, s] of shapes) if (speckIndexes(s.contours).some((i) => signedArea(s.contours[i].points) > 0)) chars.add(ch);
   if (!chars.size) return [];
   const cs = [...chars];
   return [{
