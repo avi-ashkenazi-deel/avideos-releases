@@ -38,6 +38,13 @@ const P: Record<string, string> = {
   check: '<path d="M20 6L9 17l-5-5"/>',
   copy: '<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
   code: '<path d="M16 18l6-6-6-6M8 6l-6 6 6 6"/>',
+  // draw-tab tool strip
+  brush: '<path d="M9.06 11.9l8.07-8.06a2.85 2.85 0 1 1 4.03 4.03l-8.06 8.08"/><path d="M7.07 14.94c-1.66 0-3 1.35-3 3.02 0 1.33-2.5 1.52-2 2.02 1.08 1.1 2.49 2.02 4 2.02 2.2 0 4-1.8 4-4.04a3.01 3.01 0 0 0-3-3.02z"/>',
+  bezier: '<path d="M5 19C6 10 12 6 19 5"/><rect x="3" y="17" width="4" height="4"/><rect x="17" y="3" width="4" height="4"/><path d="M5 17 9 7"/><circle cx="9.5" cy="6" r="1.6" fill="currentColor"/>',
+  square: '<rect x="4" y="4" width="16" height="16" rx="1.5"/>',
+  circle: '<circle cx="12" cy="12" r="8.5"/>',
+  knife: '<path d="M11 16.586V19a1 1 0 0 1-1 1H2L18.37 3.63a1 1 0 1 1 3 3l-9.663 9.663a1 1 0 0 1-1.414 0L8 14"/>',
+  pin: '<path d="M12 22s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12z"/><circle cx="12" cy="10" r="2.5"/>',
 };
 
 export type IconName = keyof typeof P;

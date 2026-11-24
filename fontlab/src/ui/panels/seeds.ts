@@ -1,13 +1,16 @@
 import { h, slider, fileInput, toast, iconButton, help } from '../dom';
-import { icon } from '../icons';
+import { icon, type IconName } from '../icons';
 import { store } from '../state';
 import { scheduleBuild } from '../buildClient';
-import { DrawCanvas } from '../../inputs/draw/canvas';
+import { DrawCanvas, type CanvasMode } from '../../inputs/draw/canvas';
 import { PointEditor } from '../../inputs/draw/editor';
 import { PenTool, applyPenContour } from '../../inputs/draw/pen';
+import { ShapeTool, cssAccent } from '../../inputs/draw/shapes';
+import { KnifeTool, knifeCut } from '../../inputs/draw/knife';
+import { notesFor, openNoteCount, addNote, updateNote, removeNote, hitNote, drawNotePins, drawNoteLabel, buildNotePopover, placeNotePopover, NOTE_HIT_PX, type NotePopover } from '../../inputs/draw/notes';
 import { history } from '../history';
 import { keepAlternate } from '../alternates';
-import type { Glyph, Stroke, CapStyle, CurveContour } from '../../core/glyph';
+import type { Glyph, Stroke, CapStyle, CurveContour, ReviewNote, Vec } from '../../core/glyph';
 import { DEFAULT_STATS } from '../../core/glyph';
 import { projectCharset, groupCharset, BLOCK_BY_ID } from '../../core/charsets';
 import { charsetPanel } from './charset';
@@ -24,8 +27,25 @@ function blankGlyph(ch: string): Glyph {
 
 const SIDEBEARING = 60;
 
-/** Pen tool icon: a Bézier curve with its two end points and a pulled-out handle (24×24, stroked). */
-const PEN_TOOL_ICON = '<path d="M5 19C6 10 12 6 19 5"/><rect x="3" y="17" width="4" height="4"/><rect x="17" y="3" width="4" height="4"/><path d="M5 17 9 7"/><circle cx="9.5" cy="6" r="1.6" fill="currentColor"/>';
+/** The draw tab's tools, in tool-strip order. `id` is the canvas mode; `key` the single-letter shortcut. */
+const TOOLS: { id: CanvasMode; icon: IconName; label: string; key: string; hint: string; testid: string; sepBefore?: boolean }[] = [
+  { id: 'draw', icon: 'brush', label: 'Brush', key: 'B', hint: 'draw freehand strokes', testid: 'tool-brush' },
+  { id: 'edit', icon: 'nodes', label: 'Edit points', key: 'V', hint: 'move, add and delete points and curve handles', testid: 'btn-edit-points' },
+  { id: 'pen', icon: 'bezier', label: 'Pen', key: 'P', hint: 'draw curves with points and handles, like a font editor', testid: 'btn-pen', sepBefore: true },
+  { id: 'rect', icon: 'square', label: 'Rectangle', key: 'R', hint: 'drag out a rectangle. Shift = square, Alt = from the centre', testid: 'tool-rect' },
+  { id: 'ellipse', icon: 'circle', label: 'Ellipse', key: 'O', hint: 'drag out an ellipse. Shift = circle, Alt = from the centre', testid: 'tool-ellipse' },
+  { id: 'knife', icon: 'knife', label: 'Knife', key: 'K', hint: 'drag a line across the letter to cut it apart. Alt leaves a gap', testid: 'tool-knife', sepBefore: true },
+  { id: 'note', icon: 'pin', label: 'Note', key: 'N', hint: 'pin a review note to a spot on the letter', testid: 'tool-note', sepBefore: true },
+];
+
+const TOOL_INFO: Record<Exclude<CanvasMode, 'draw'>, string> = {
+  edit: 'Edit points: drag nodes and handles. Double-click a segment to add a point, Delete removes, Alt+drag a node changes its width, Ctrl/Cmd+Z undoes.',
+  pen: 'Pen: click for corners, click and drag for curves, click the first point or press Enter to close. Backspace removes the last point, Escape cancels. A shape drawn inside ink cuts a hole; inside a counter it fills.',
+  rect: 'Rectangle: drag from corner to corner. Hold Shift for a square, Alt to grow from the centre. Drawn inside ink it cuts a hole; inside a counter it fills.',
+  ellipse: 'Ellipse: drag out its box. Hold Shift for a circle, Alt to grow from the centre. Drawn inside ink it cuts a counter; inside a counter it fills.',
+  knife: 'Knife: drag a line right through a stroke or shape to cut it in two. The pieces stay in place and move separately in Edit points. Hold Alt to leave a visible gap.',
+  note: 'Note: click a spot on the letter to pin a comment for review. Click a pin to edit, resolve or delete it. Enter saves, Shift+Enter starts a new line.',
+};
 
 export function hasInk(g: Glyph | undefined | null): boolean {
   if (!g) return false;
@@ -94,8 +114,10 @@ export function seedsPanel(): HTMLElement {
   const title = h('div', { class: 'drawtitle' });
   const info = h('div', { class: 'info' });
   const dc = new DrawCanvas(canvasEl, store.project.metrics);
-  /** what the pointer does on the canvas: freehand strokes, the point editor, or the pen */
-  let mode: 'draw' | 'edit' | 'pen' = 'draw';
+  /** the canvas sits in a positioned wrapper so the note popover can be anchored to a spot on it */
+  const canvasWrap = h('div', { class: 'canvaswrap' }, canvasEl);
+  /** the active tool: what the pointer does on the canvas */
+  let mode: CanvasMode = 'draw';
   const pointsCb = h('input', { type: 'checkbox', 'data-testid': 'chk-points' });
   pointsCb.addEventListener('change', () => { dc.showPoints = pointsCb.checked; dc.draw(); });
   const pointsToggle = h('label', { class: 'toggle pointstoggle', title: 'Show the outline points of the built letter' }, pointsCb, ' Points');
@@ -115,7 +137,98 @@ export function seedsPanel(): HTMLElement {
     onCommit: (c: CurveContour) => commitPen(c),
     redraw: () => dc.draw(),
   });
-  dc.overlay = (ctx, view) => { if (mode === 'edit') editor.draw(ctx, view); else if (mode === 'pen') pen.draw(ctx, view); };
+  const shapeTool = new ShapeTool(canvasEl, () => dc.getView(), {
+    onCommit: (c: CurveContour) => commitPen(c),
+    redraw: () => dc.draw(),
+  });
+  const knife = new KnifeTool(canvasEl, () => dc.getView(), {
+    getGlyph: () => store.project.glyphs[store.selected],
+    onCut: (a, b, gap) => cutWithKnife(a, b, gap),
+    redraw: () => dc.draw(),
+  });
+
+  // ---------- review notes: pins on the canvas in every mode, a popover to write and edit them
+  const accent = cssAccent();
+  let notePop: { pop: NotePopover; noteId: string | null; at: Vec; ch: string } | null = null;
+  let hoverNote: string | null = null;
+  const letterNotes = () => notesFor(store.project, store.selected);
+  const closeNotePop = () => {
+    if (!notePop) return;
+    notePop.pop.el.remove();
+    notePop = null;
+    dc.draw();
+  };
+  /** note changes are part of the letter's undo history; other panels listen for 'notes' */
+  const changeNotes = (fn: (p: typeof store.project) => void) => { store.update(fn, 'glyph'); store.emit('notes'); };
+  const openNotePop = (note: ReviewNote | null, at: Vec) => {
+    closeNotePop();
+    const ch = store.selected;
+    const list = letterNotes();
+    const id = note?.id ?? null;
+    const pop = buildNotePopover({
+      note,
+      number: note ? list.indexOf(note) + 1 : list.length + 1,
+      onSave: (text) => {
+        const t = text.trim();
+        closeNotePop();
+        if (!t) return; // nothing written: same as Cancel
+        if (id) { if (t !== note!.text) changeNotes((p) => { updateNote(p, id, { text: t }); }); return; }
+        let added = false;
+        changeNotes((p) => { added = !!addNote(p, { ch, x: at[0], y: at[1], text: t }); });
+        if (!added) toast('This font already has the most notes it can hold. Delete some resolved ones first.');
+      },
+      onCancel: () => closeNotePop(),
+      onToggleDone: (text) => {
+        const t = text.trim(), done = !note!.done;
+        closeNotePop();
+        changeNotes((p) => { updateNote(p, id!, t ? { text: t, done } : { done }); });
+      },
+      onDelete: () => { closeNotePop(); changeNotes((p) => { removeNote(p, id!); }); },
+    });
+    canvasWrap.append(pop.el);
+    notePop = { pop, noteId: id, at, ch };
+    dc.draw(); // places the popover (see the overlay) and shows the pending pin
+    pop.focus();
+  };
+  const fontAt = (e: MouseEvent): Vec => {
+    const r = canvasEl.getBoundingClientRect(), v = dc.getView();
+    return [(e.clientX - r.left - v.ox) / v.s, (v.oy - (e.clientY - r.top)) / v.s];
+  };
+  const setHoverNote = (id: string | null) => {
+    if (id === hoverNote) return;
+    hoverNote = id;
+    canvasEl.classList.toggle('overpin', !!id);
+    dc.draw();
+  };
+  canvasEl.addEventListener('click', (e) => {
+    if (mode !== 'note') return;
+    if (notePop) { notePop.pop.submit(); return; } // a click away keeps what was typed and closes the popover
+    const [x, y] = fontAt(e);
+    const hit = hitNote(letterNotes(), x, y, NOTE_HIT_PX / dc.getView().s);
+    openNotePop(hit, hit ? [hit.x, hit.y] : [x, y]);
+  });
+  canvasEl.addEventListener('pointermove', (e) => {
+    const list = letterNotes();
+    if (!list.length || e.buttons) { setHoverNote(null); return; }
+    const [x, y] = fontAt(e);
+    setHoverNote(hitNote(list, x, y, NOTE_HIT_PX / dc.getView().s)?.id ?? null);
+  });
+  canvasEl.addEventListener('pointerleave', () => setHoverNote(null));
+
+  dc.overlay = (ctx, view) => {
+    if (mode === 'edit') editor.draw(ctx, view);
+    else if (mode === 'pen') pen.draw(ctx, view);
+    else if (mode === 'rect' || mode === 'ellipse') shapeTool.draw(ctx, view);
+    else if (mode === 'knife') knife.draw(ctx, view);
+    const list = letterNotes();
+    if (!list.length && !notePop) return;
+    drawNotePins(ctx, view, list, { accent, activeId: notePop?.noteId, hoverId: hoverNote, pending: notePop && !notePop.noteId ? { x: notePop.at[0], y: notePop.at[1] } : null });
+    if (notePop) placeNotePopover(notePop.pop.el, canvasWrap, view.ox + notePop.at[0] * view.s, view.oy - notePop.at[1] * view.s);
+    else if (hoverNote) {
+      const i = list.findIndex((n) => n.id === hoverNote);
+      if (i >= 0) drawNoteLabel(ctx, view, list[i], i + 1, canvasEl.clientWidth, canvasEl.clientHeight);
+    }
+  };
 
   const select = (ch: string) => { store.selected = ch; store.emit('select'); syncEditor(); };
   const syncEditor = () => {
@@ -130,17 +243,18 @@ export function seedsPanel(): HTMLElement {
       } else { mode = 'draw'; applyMode(); }
     }
     if (mode === 'pen' && penChar !== ch) { pen.cancel(); penChar = ch; } // a half-drawn path belongs to the letter it was started on
+    // an open note popover belongs to its letter (and to a note that still exists, e.g. after Undo)
+    if (notePop && (notePop.ch !== ch || (notePop.noteId && !store.project.notes?.some((n) => n.id === notePop!.noteId)))) closeNotePop();
     for (const b of strip.children) b.classList.toggle('selected', (b as HTMLElement).dataset.ch === ch);
     const src = g ? ({ drawn: 'drawn by hand', traced: 'traced from a photo', imported: 'from a font file', generated: 'generated' } as const)[g.source] : 'empty';
     const ns = g?.strokes?.length ?? 0, nc = g?.contours?.length ?? 0;
     const parts = !g ? 'draw to create' : g.kind === 'stroke' ? `${ns} strokes` : `${nc} contours${ns ? ` + ${ns} stroke${ns === 1 ? '' : 's'}` : ''}`;
     const code = 'U+' + (ch.codePointAt(0) ?? 0).toString(16).toUpperCase().padStart(4, '0');
     const alts = store.project.alternates?.[ch]?.length ?? 0;
-    title.replaceChildren(h('span', { class: 'big' }, ch), h('span', { class: 'ucode' }, code), h('small', {}, `${src}${g?.locked ? ' · locked' : ''} · ${parts}${alts ? ` · ${alts} alternate${alts > 1 ? 's' : ''}` : ''}`), pointsToggle);
-    info.textContent = mode === 'edit'
-      ? 'Edit points: drag nodes and handles. Double-click a segment to add a point, Delete removes, Alt+drag a node changes its width, Ctrl/Cmd+Z undoes.'
-      : mode === 'pen'
-      ? 'Pen: click for corners, click and drag for curves, click the first point or press Enter to close. Backspace removes the last point, Escape cancels. A shape drawn inside ink cuts a hole; inside a counter it fills.'
+    const nOpen = openNoteCount(store.project, ch);
+    const noteChip = nOpen ? h('button', { type: 'button', class: 'notechip', 'data-testid': 'note-count', title: 'Open review notes on this letter. Click to use the Note tool.', onClick: () => setTool('note') }, icon('pin', 12), `${nOpen} note${nOpen === 1 ? '' : 's'}`) : null;
+    title.replaceChildren(h('span', { class: 'big' }, ch), h('span', { class: 'ucode' }, code), h('small', {}, `${src}${g?.locked ? ' · locked' : ''} · ${parts}${alts ? ` · ${alts} alternate${alts > 1 ? 's' : ''}` : ''}`), ...(noteChip ? [noteChip] : []), pointsToggle);
+    info.textContent = mode !== 'draw' ? TOOL_INFO[mode]
       : g?.source === 'generated' ? 'Generated from your seeds. Draw over it to replace it, re-roll for another take, or switch to Edit points.' : 'Draw with mouse, pen or finger. Pressure and speed change the width. Edit points lets you adjust what is there.';
   };
   const renderStrip = () => {
@@ -166,7 +280,20 @@ export function seedsPanel(): HTMLElement {
     scheduleBuild(40);
   };
 
-  /** A closed pen path becomes a contour of the current letter (one Undo step). */
+  /** A drag with the knife: split the strokes and shapes it passes through (one Undo step). */
+  const cutWithKnife = (a: Vec, b: Vec, gap: number) => {
+    const ch = store.selected, g = store.project.glyphs[ch];
+    const res = g && hasInk(g) ? knifeCut(g, a, b, gap) : null;
+    if (!res) { toast('Nothing to cut there'); return; }
+    if (res.glyph.source === 'generated') res.glyph.source = 'drawn'; // a hand-cut letter is yours: generating again must not replace it
+    store.update((p) => { p.glyphs[ch] = res.glyph; }, 'glyph');
+    recomposeDependents(ch);
+    scheduleBuild(40);
+    const n = res.strokes + res.parts;
+    toast(`Cut ${n} part${n === 1 ? '' : 's'}${gap > 0 ? ', leaving a gap' : ''}`);
+  };
+
+  /** A closed pen path, rectangle or ellipse becomes a contour of the current letter (one Undo step). */
   const commitPen = (c: CurveContour) => {
     const ch = store.selected;
     store.update((p) => { p.glyphs[ch] = applyPenContour(p.glyphs[ch], ch, c, blankGlyph(ch)); }, 'glyph');
@@ -218,6 +345,28 @@ export function seedsPanel(): HTMLElement {
       strip.querySelector<HTMLElement>(`.chbtn[data-ch="${CSS.escape(next)}"]`)?.scrollIntoView({ block: 'nearest' });
     }
   });
+  // tool shortcuts: B V P R O K N pick a tool, Escape goes back to the brush
+  window.addEventListener('keydown', (e) => {
+    if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey) return;
+    const t = e.target as HTMLElement | null;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+    if (drawTab.style.display === 'none' || document.querySelector('dialog[open], .welcome')) return;
+    if (pen.enabled && pen.inProgress) return; // the pen owns the keyboard while a path is open (Escape cancels the path)
+    if (e.key === 'Escape') {
+      if (notePop) { closeNotePop(); return; }
+      if (shapeTool.dragging) { shapeTool.cancel(); return; }
+      if (knife.dragging) { knife.cancel(); return; }
+      const sel = mode === 'edit' ? editor.getSelection() : null;
+      if (sel && sel.nodes.length) return; // the point editor drops its selection first
+      if (mode !== 'draw') { e.preventDefault(); setTool('draw'); }
+      return;
+    }
+    if (e.shiftKey || e.repeat || e.key.length !== 1) return;
+    const tool = TOOLS.find((x) => x.key === e.key.toUpperCase());
+    if (!tool || shapeTool.dragging || knife.dragging) return;
+    e.preventDefault();
+    if (mode !== tool.id) setTool(tool.id);
+  });
   const clear = iconButton('trash', 'Clear', () => { store.update((p) => { delete p.glyphs[store.selected]; }, 'glyph'); recomposeDependents(store.selected); scheduleBuild(0); }, { title: 'Remove this letter (it can be regenerated)' });
   const lock = iconButton('lock', 'Lock', () => { store.update((p) => { const g = p.glyphs[store.selected]; if (g) g.locked = !g.locked; }, 'glyph'); }, { title: 'Locked letters are never regenerated' });
   const keepAltBtn = iconButton('copy', 'Keep as alternate', () => keepAlternate(store.selected), { title: 'Save this version of the letter as a stylistic set (ss01–ss03), then re-roll or redraw for a new main version', testid: 'btn-keep-alt' });
@@ -234,24 +383,39 @@ export function seedsPanel(): HTMLElement {
     store.update((p) => { p.glyphs[ch] = outlineToStrokes(g); }, 'glyph');
     recomposeDependents(ch); scheduleBuild(0);
   }, { title: 'Convert this outline letter into centreline strokes' });
-  const editBtn = iconButton('nodes', 'Edit points', () => { mode = mode === 'edit' ? 'draw' : 'edit'; applyMode(); }, { title: 'Move, add and delete points and curve handles', testid: 'btn-edit-points' });
-  const penBtn = iconButton('nodes', 'Pen', () => { mode = mode === 'pen' ? 'draw' : 'pen'; applyMode(); }, { title: 'Draw curves with points and handles, like a font editor', testid: 'btn-pen' });
-  penBtn.querySelector('svg')!.innerHTML = PEN_TOOL_ICON;
+  // tool strip: one tool is active at a time; clicking the active one (other than the brush) goes back to the brush
+  const setTool = (t: CanvasMode) => { mode = t; applyMode(); };
+  const toolName = h('span', { class: 'toolname', 'aria-live': 'polite' });
+  const toolStrip = h('div', { class: 'toolstrip', role: 'toolbar', 'aria-label': 'Drawing tools' });
+  const toolBtns = new Map<CanvasMode, HTMLButtonElement>();
+  for (const t of TOOLS) {
+    const b = iconButton(t.icon, t.label, () => setTool(mode === t.id && t.id !== 'draw' ? 'draw' : t.id), { iconOnly: true, title: `${t.label} (${t.key}): ${t.hint}`, testid: t.testid });
+    b.setAttribute('aria-pressed', 'false');
+    b.setAttribute('aria-keyshortcuts', t.key);
+    if (t.sepBefore) toolStrip.append(h('span', { class: 'toolsep', 'aria-hidden': 'true' }));
+    toolStrip.append(b);
+    toolBtns.set(t.id, b);
+  }
+  const toolRow = h('div', { class: 'toolrow' }, toolStrip, toolName);
   const nodeWidth = slider('Point width', { min: 2, max: 200, step: 1, value: 40, onInput: (v) => editor.setSelectedWidth(v), format: (v) => v.toFixed(0) });
   const editTools = h('div', { class: 'row edittools' }, nodeWidth, h('small', { class: 'muted' }, 'Alt+drag a node also changes width'));
   const applyMode = () => {
     const g = store.project.glyphs[store.selected];
     if (mode === 'edit' && !(g && hasInk(g))) { mode = 'draw'; toast('Nothing to edit yet. Draw or import this letter first.'); }
     dc.mode = mode;
-    editBtn.classList.toggle('primary', mode === 'edit');
-    penBtn.classList.toggle('primary', mode === 'pen');
-    editBtn.setAttribute('aria-pressed', String(mode === 'edit'));
-    penBtn.setAttribute('aria-pressed', String(mode === 'pen'));
+    for (const t of TOOLS) {
+      const b = toolBtns.get(t.id)!, on = mode === t.id;
+      b.classList.toggle('primary', on);
+      b.setAttribute('aria-pressed', String(on));
+      canvasEl.classList.toggle(t.id === 'edit' ? 'editing' : t.id, on && t.id !== 'draw');
+      if (on) toolName.replaceChildren(t.label, h('kbd', {}, t.key));
+    }
     editTools.style.display = mode === 'edit' ? '' : 'none';
-    canvasEl.classList.toggle('editing', mode === 'edit');
-    canvasEl.classList.toggle('pen', mode === 'pen');
     if (mode === 'edit' && g) { editor.enable(g); editChar = store.selected; } else { editor.disable(); editChar = null; }
     if (mode === 'pen') { pen.enable(); penChar = store.selected; } else { pen.disable(); penChar = null; }
+    if (mode === 'rect' || mode === 'ellipse') shapeTool.enable(mode); else shapeTool.disable();
+    if (mode === 'knife') knife.enable(); else knife.disable();
+    if (mode !== 'note') closeNotePop();
     syncEditor();
     dc.draw();
   };
@@ -300,13 +464,14 @@ export function seedsPanel(): HTMLElement {
 
   // ---------- draw tab body
   const drawTab = h('div', { class: 'tab-body draw' },
-    strip, title, canvasEl, info,
-    h('div', { class: 'row' }, undoBtn, redoBtn, clear, lock, reroll, keepAltBtn, toStrokesBtn, editBtn, penBtn),
+    strip, title, toolRow, canvasWrap, info,
+    h('div', { class: 'row' }, undoBtn, redoBtn, clear, lock, reroll, keepAltBtn, toStrokesBtn),
     editTools,
     h('details', { class: 'brush' }, h('summary', {}, 'Brush'), widthRow, pressureRow, velRow, smoothRow,
       h('div', { class: 'row' }, h('label', {}, 'Cap ', capSel), h('label', {}, mirror, ' Mirror')), advRow),
   );
   editTools.style.display = 'none';
+  applyMode(); // light up the brush in the tool strip
 
   // ---------- tabs
   const tabs: { id: string; label: string; icon: 'pen' | 'image' | 'type'; body: HTMLElement }[] = [
@@ -337,6 +502,7 @@ export function seedsPanel(): HTMLElement {
 
   store.subscribe((ev) => {
     if (ev === 'project:loaded' || ev === 'charset') renderStrip();
+    if (ev === 'notes') syncEditor(); // someone else changed the notes: refresh the pins and the count
     if (ev === 'built' || ev === 'glyph' || ev === 'select' || ev === 'project' || ev === 'project:loaded') {
       syncEditor();
       const g = store.project.glyphs[store.selected];

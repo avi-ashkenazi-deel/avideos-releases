@@ -19,6 +19,9 @@ export interface BrushSettings {
 
 export const DEFAULT_BRUSH: BrushSettings = { width: 90, cap: 'round', pressure: 0.6, velocity: 0.35, smooth: 0.5, mirror: false };
 
+/** What the pointer does on the draw canvas. Only 'draw' is handled by `DrawCanvas` itself. */
+export type CanvasMode = 'draw' | 'edit' | 'pen' | 'rect' | 'ellipse' | 'knife' | 'note';
+
 interface Live { pts: StrokePoint[]; lastT: number; lastX: number; lastY: number }
 
 /**
@@ -35,9 +38,9 @@ export class DrawCanvas {
   metrics: FontMetrics;
   brush: BrushSettings = { ...DEFAULT_BRUSH };
   onStroke: (s: Stroke) => void = () => {};
-  /** 'draw' = freehand strokes; 'edit' / 'pen' = pointer events belong to the point editor / pen tool */
-  mode: 'draw' | 'edit' | 'pen' = 'draw';
-  /** extra overlay drawn after the glyph (the point editor's nodes) */
+  /** 'draw' = freehand strokes (the brush); in every other mode the pointer belongs to that tool and the brush handlers stay inactive */
+  mode: CanvasMode = 'draw';
+  /** extra overlay drawn after the glyph (the point editor's nodes, tool previews, note pins) */
   overlay: ((ctx: CanvasRenderingContext2D, view: View) => void) | null = null;
   /** show the built outline's points (inspector) */
   showPoints = false;

@@ -266,3 +266,34 @@ canvas.editor.pen { cursor: crosshair; outline: 2px solid var(--accent); outline
 .checkchars { display: flex; flex-wrap: wrap; gap: 4px; }
 .checkchars .pair { width: auto; padding: 0 6px; cursor: default; }
 .checkok { display: flex; gap: 8px; align-items: center; padding: 16px; background: var(--panel-2); border-radius: 8px; flex-wrap: wrap; }
+
+/* draw tab: tool strip (brush, edit points, pen, rectangle, ellipse, knife, note) */
+.toolrow { display: flex; align-items: center; gap: 10px; margin: 6px 0; }
+.toolstrip { display: inline-flex; align-items: center; gap: 2px; padding: 3px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; flex: none; }
+.toolstrip .ib { border: 0; background: transparent; color: var(--muted); padding: 7px 9px; border-radius: 7px; }
+.toolstrip .ib:hover { background: var(--panel); color: var(--text); }
+.toolstrip .ib:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.toolstrip .ib.primary, .toolstrip .ib.primary:hover { background: var(--accent); color: #111; }
+.toolsep { width: 1px; align-self: stretch; margin: 5px 3px; background: var(--line); }
+.toolname { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.toolname kbd { font: 600 10px ui-monospace, monospace; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; margin-left: 6px; }
+.canvaswrap { position: relative; }
+canvas.editor.rect, canvas.editor.ellipse, canvas.editor.knife { outline: 2px solid var(--accent); outline-offset: -1px; }
+canvas.editor.rect, canvas.editor.ellipse { cursor: crosshair; }
+canvas.editor.knife { cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='%23ffd166' stroke='%23111' stroke-width='1.5' stroke-linejoin='round'%3E%3Cpath d='M2 22 11.5 5.5l7 7z'/%3E%3Cpath d='M14.5 2.5l7 7-3 3-7-7z' fill='%23e9e9ee'/%3E%3C/svg%3E") 2 22, crosshair; }
+canvas.editor.note { cursor: copy; outline: 2px solid var(--accent); outline-offset: -1px; }
+canvas.editor.note.overpin { cursor: pointer; }
+
+/* review notes: count chip in the draw title, popover next to a pin */
+.notechip { display: inline-flex; align-items: center; gap: 4px; align-self: center; padding: 1px 8px 1px 6px; border-radius: 999px; font-size: 11px; font-weight: 600; white-space: nowrap; background: rgba(255,209,102,.14); color: var(--accent); border-color: transparent; }
+.notechip:hover { border-color: var(--accent); }
+.notepop { position: absolute; z-index: 6; width: 250px; max-width: calc(100% - 8px); display: flex; flex-direction: column; gap: 6px; padding: 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 12px 32px rgba(0,0,0,.5); }
+.notepop-head { display: flex; align-items: baseline; gap: 8px; font-size: 12px; }
+.notepop-head small { color: var(--muted); margin-left: auto; }
+.notepop-text { width: 100%; resize: vertical; min-height: 58px; max-height: 180px; font-size: 13px; line-height: 1.35; }
+.notepop-text:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.notepop.done .notepop-text { color: var(--muted); }
+.notepop-actions { display: flex; align-items: center; gap: 6px; }
+.notepop-actions button { padding: 4px 10px; font-size: 12px; }
+.notepop-actions .ib.icon-only { padding: 5px; }
+.notepop-actions .ib.danger:hover { color: var(--danger); border-color: var(--danger); }

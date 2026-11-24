@@ -224,3 +224,87 @@ test('pen: click points, close the path on the first point, undo removes it', as
   await expect(page.locator('.cell[data-char="x"]')).toHaveClass(/empty/);
   expect(await glyph()).toBeNull();
 });
+
+test('tool strip: R drags out a rectangle on an empty letter, Escape returns to the brush', async ({ page }) => {
+  await page.locator('.chbtn[data-ch="x"]').click();
+  await expect(page.locator('.cell[data-char="x"]')).toHaveClass(/empty/);
+  await expect(page.locator('[data-testid=tool-brush]')).toHaveAttribute('aria-pressed', 'true');
+  await page.keyboard.press('r');
+  await expect(page.locator('[data-testid=tool-rect]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('[data-testid=tool-brush]')).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.locator('canvas.editor')).toHaveClass(/rect/);
+  await drawStroke(page, [[0.25, 0.3], [0.55, 0.7]]);
+  await expect(page.locator('.cell[data-char="x"]')).not.toHaveClass(/empty/);
+  const glyph = () => page.evaluate(() => { const g = (window as any).__fontlab.project.glyphs.x; return g ? { kind: g.kind, curves: g.curves?.length ?? 0, segments: g.curves?.[0]?.segments.length ?? 0, strokes: g.strokes?.length ?? 0 } : null; });
+  expect(await glyph()).toEqual({ kind: 'outline', curves: 1, segments: 4, strokes: 0 });
+  // the tool stays active for the next shape; O switches to the ellipse, a stray click adds nothing
+  await page.keyboard.press('o');
+  await expect(page.locator('[data-testid=tool-ellipse]')).toHaveAttribute('aria-pressed', 'true');
+  const box = (await page.locator('canvas.editor').boundingBox())!;
+  await page.mouse.click(box.x + box.width * 0.8, box.y + box.height * 0.2);
+  expect((await glyph())!.curves).toBe(1);
+  await page.keyboard.press('Escape');
+  await expect(page.locator('[data-testid=tool-brush]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('[data-testid=tool-ellipse]')).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.locator('canvas.editor')).not.toHaveClass(/rect|ellipse/);
+  // shortcuts stay out of the way while typing
+  await page.locator('.fontname').click();
+  await page.keyboard.press('k');
+  await expect(page.locator('[data-testid=tool-knife]')).toHaveAttribute('aria-pressed', 'false');
+});
+
+test('knife: a drag across a stroke cuts it in two, undo joins it again', async ({ page }) => {
+  await page.locator('.chbtn[data-ch="l"]').click();
+  await drawStroke(page, [[0.3, 0.8], [0.3, 0.2]]);
+  await expect(page.locator('.drawtitle')).toContainText('1 strokes');
+  await page.waitForTimeout(400); // changes within 300 ms of each other share one undo step
+  await page.keyboard.press('k');
+  await expect(page.locator('[data-testid=tool-knife]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('canvas.editor')).toHaveClass(/knife/);
+  // sidebearings were normalised after the stroke, so cut right across the canvas
+  await drawStroke(page, [[0.02, 0.5], [0.98, 0.5]]);
+  const strokes = () => page.evaluate(() => (window as any).__fontlab.project.glyphs.l?.strokes?.length ?? 0);
+  await expect.poll(strokes).toBe(2);
+  await expect(page.locator('.drawtitle')).toContainText('2 strokes');
+  await expect(page.locator('.toast').last()).toContainText('Cut 1 part');
+  await page.keyboard.press('Control+z');
+  await expect.poll(strokes).toBe(1);
+  // a cut that misses changes nothing
+  await drawStroke(page, [[0.7, 0.9], [0.9, 0.95]]);
+  await expect(page.locator('.toast').last()).toContainText('Nothing to cut');
+  expect(await strokes()).toBe(1);
+});
+
+test('note: N pins a review note to a spot on the letter', async ({ page }) => {
+  await page.locator('.chbtn[data-ch="g"]').click();
+  await page.keyboard.press('n');
+  await expect(page.locator('[data-testid=tool-note]')).toHaveAttribute('aria-pressed', 'true');
+  const canvas = page.locator('canvas.editor');
+  await canvas.scrollIntoViewIfNeeded();
+  const box = (await canvas.boundingBox())!;
+  await page.mouse.click(box.x + box.width * 0.4, box.y + box.height * 0.5);
+  await expect(page.locator('[data-testid=note-popover]')).toBeVisible();
+  await expect(page.locator('[data-testid=note-text]')).toBeFocused();
+  await page.keyboard.type('too heavy');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('[data-testid=note-popover]')).toHaveCount(0);
+  const notes = () => page.evaluate(() => (window as any).__fontlab.project.notes.map((n: any) => ({ ch: n.ch, text: n.text, done: !!n.done })));
+  expect(await notes()).toEqual([{ ch: 'g', text: 'too heavy', done: false }]);
+  expect(await page.evaluate(() => (window as any).__fontlab.project.notes.length)).toBe(1);
+  await expect(page.locator('.drawtitle')).toContainText('1 note');
+  // the letter N typed into the note did not switch tools; clicking the pin opens it again, Resolve clears the count
+  await page.mouse.click(box.x + box.width * 0.4, box.y + box.height * 0.5);
+  await expect(page.locator('[data-testid=note-text]')).toHaveValue('too heavy');
+  await page.locator('[data-testid=note-resolve]').click();
+  expect(await notes()).toEqual([{ ch: 'g', text: 'too heavy', done: true }]);
+  await expect(page.locator('[data-testid=note-count]')).toHaveCount(0);
+  // Escape closes an empty popover first, then leaves the tool
+  await page.mouse.click(box.x + box.width * 0.7, box.y + box.height * 0.3);
+  await expect(page.locator('[data-testid=note-popover]')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('[data-testid=note-popover]')).toHaveCount(0);
+  await expect(page.locator('[data-testid=tool-note]')).toHaveAttribute('aria-pressed', 'true');
+  await page.keyboard.press('Escape');
+  await expect(page.locator('[data-testid=tool-brush]')).toHaveAttribute('aria-pressed', 'true');
+  expect((await notes()).length).toBe(1);
+});
