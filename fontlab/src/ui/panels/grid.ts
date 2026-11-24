@@ -7,6 +7,7 @@ import { hasInk, recomposeDependents } from './seeds';
 import { regenerateOne } from '../../generate/compose';
 import { downloadGlyphSvg } from './exportMore';
 import { keepAlternate, useAlternate, clearAlternates } from '../alternates';
+import { peersOn } from '../collab';
 import { scheduleBuild } from '../buildClient';
 
 const SOURCE_COLOR: Record<string, string> = { drawn: '#ffd166', traced: '#06d6a0', imported: '#8ecae6', generated: '#e0e0e0' };
@@ -126,6 +127,16 @@ export function gridPanel(onSelect: (ch: string) => void): HTMLElement {
       renderThumb(c.canvas, b?.contours ?? [], store.project.metrics, b?.advance ?? g?.advance ?? 500, g ? SOURCE_COLOR[g.source] : '#444', b?.layers?.length ? { layers: b.layers, palette: store.project.color.palette } : undefined);
     }
   };
+  const peerDots = () => {
+    for (const ch of current) {
+      const c = cells.get(ch); if (!c) continue;
+      const on = peersOn(ch);
+      c.root.classList.toggle('peer', on.length > 0);
+      if (on.length) { c.root.style.setProperty('--peer', on[0].color); c.root.dataset.peers = on.map((p) => p.name).join(', '); c.root.title = `${on.map((p) => p.name).join(', ')} ${on.length > 1 ? 'are' : 'is'} on “${ch}”`; }
+      else { c.root.style.removeProperty('--peer'); delete c.root.dataset.peers; }
+    }
+  };
+  store.subscribe((ev) => { if (ev === 'collab' || ev === 'charset' || ev === 'project:loaded') peerDots(); });
   store.subscribe((ev) => { if (ev === 'charset' || ev === 'project:loaded') layout(); if (ev === 'built' || ev === 'select' || ev === 'project' || ev === 'project:loaded' || ev === 'glyph' || ev === 'charset') refresh(); });
   requestAnimationFrame(refresh);
   return h('section', { class: 'panel gridpanel' }, h('h2', {}, 'Letters ', help('Click a tile to edit it. Shift-click or Cmd/Ctrl-click to select several. Delete removes the selection. Right-click a tile for Lock, Re-roll and "remove all lowercase / uppercase / digits".'), ' ', h('small', { class: 'legend' }, icon('pen', 11), ' drawn ', icon('image', 11), ' traced ', icon('upload', 11), ' from font ', icon('sparkle', 11), ' generated ', icon('lock', 11), ' locked')), grid);

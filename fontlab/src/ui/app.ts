@@ -10,6 +10,7 @@ import { h } from './dom';
 import { migrateLegacyAutosave, getCurrentId, setCurrentId } from '../project/library';
 import { showWelcome } from './panels/welcome';
 import { moveVersions, SCRATCH } from '../project/versions';
+import { openJoinDialog } from './panels/shareDialog';
 import { hasInk } from './panels/seeds';
 
 export async function mountApp(root: HTMLElement): Promise<void> {
@@ -34,5 +35,8 @@ export async function mountApp(root: HTMLElement): Promise<void> {
   markSaved();
   scheduleBuild(0);
   // first run: a four-step intro when there is nothing in the font yet (the header may still be reopening the last font)
+  const params = new URLSearchParams(location.search);
+  const room = params.get('join');
+  if (room && /^[A-Za-z0-9_-]{4,40}$/.test(room)) { setTimeout(() => openJoinDialog(room, params.get('via') === 'local' ? 'local' : 'peer'), 500); return; }
   setTimeout(() => { if (!Object.values(store.project.glyphs).some(hasInk)) showWelcome(); }, 400);
 }

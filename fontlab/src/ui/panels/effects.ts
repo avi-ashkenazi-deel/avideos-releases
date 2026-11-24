@@ -182,7 +182,7 @@ export function effectsPanel(): HTMLElement {
     colorBox.replaceChildren(head, h('div', { class: 'row' }, h('label', {}, 'Mode ', mode), swatches), ...(amount ? [amount] : []), h('small', { class: 'muted' }, def.hint));
   };
   renderColor();
-  store.subscribe((ev) => { if (ev === 'project:loaded') renderColor(); });
+  store.subscribe((ev) => { if (ev === 'project:loaded' || ev === 'fx:external') renderColor(); });
   const panel = h('section', { class: 'panel effects' },
     h('h2', {}, 'Effects', help('Effects run top to bottom on every letter. Reorder by dragging. Crisp effects keep corners sharp; textures go through a bitmap.')),
     h('div', { class: 'row' }, presetSel, padBtn, h('label', { class: 'toggle', for: 'bypassfx' }, bypass, ' Show original', help('Preview and export the letters exactly as drawn or imported, ignoring every effect. Turns on by itself after a font import.'))),

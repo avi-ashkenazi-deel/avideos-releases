@@ -317,3 +317,22 @@ canvas.editor.note.overpin { cursor: pointer; }
 .colorbox .row { margin: 4px 0; }
 .swatches { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
 .swatches input[type=color] { width: 28px; height: 28px; padding: 0; border: 1px solid var(--line); border-radius: 6px; background: none; cursor: pointer; }
+
+/* shared sessions */
+.sharewrap { display: inline-flex; align-items: center; gap: 6px; }
+.avatars { display: inline-flex; }
+.avatar { display: inline-block; border-radius: 50%; color: #111; font-weight: 700; text-align: center; border: 2px solid var(--bg, #111); margin-left: -6px; flex: none; }
+.avatars .avatar:first-child { margin-left: 0; }
+.share .sharelink { flex: 1; min-width: 260px; font: 12px ui-monospace, monospace; }
+.share h3 { margin: 12px 0 6px; font-size: 14px; }
+.sharefacts { margin: 6px 0 10px; padding-left: 18px; color: var(--muted); font-size: 13px; }
+.sharepeople { display: flex; flex-direction: column; gap: 6px; }
+.shareperson { display: flex; gap: 10px; align-items: center; background: var(--panel-2); border-radius: 8px; padding: 6px 10px; }
+.shareperson .avatar { margin: 0; border: 0; }
+.shareperson .small { font-size: 12px; }
+button.danger { color: var(--danger); }
+.cell.peer::before { content: ''; position: absolute; top: 4px; left: 4px; width: 9px; height: 9px; border-radius: 50%; background: var(--peer, #0af); box-shadow: 0 0 0 2px var(--panel-2); z-index: 1; }
+.chbtn.peer { box-shadow: inset 0 -3px 0 var(--peer, #0af); }
+.holdbanner { display: flex; gap: 8px; align-items: center; background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; margin: 6px 0; font-size: 13px; }
+.holdbanner .avatar { margin: 0; border: 0; }
+canvas.editor.readonly { cursor: not-allowed; }

@@ -1,6 +1,6 @@
 import type { FontProject, Glyph } from '../core/glyph';
 
-interface Snapshot {
+export interface Snapshot {
   glyphs: Record<string, Glyph>;
   blocks: FontProject['blocks'];
   customChars: FontProject['customChars'];
@@ -52,6 +52,14 @@ export class History {
     return true;
   }
   clear(): void { this.past = []; this.future = []; this.lastEv = ''; }
+  /**
+   * Fold someone else's change into every stored state, so that undoing my own
+   * step never takes their edit back with it (shared sessions).
+   */
+  rebase(fn: (s: Snapshot) => void): void {
+    for (const s of this.past) fn(s);
+    for (const s of this.future) fn(s);
+  }
 }
 
 function snap(p: FontProject): Snapshot {

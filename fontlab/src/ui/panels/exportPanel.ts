@@ -8,6 +8,9 @@ import { scheduleBuild } from '../buildClient';
 import { downloadOtf, downloadSvgSpecimen, downloadSpecimenSite, openTester, openAnimateDialog, openVariableDialog, downloadTtf, downloadSvgGlyphs, downloadUfo } from './exportMore';
 import { checkButton, fixHandlers, checkExtras } from './checkPanel';
 import { openSpacingDialog, autoSpaceAll } from './spacingDialog';
+import { shareButton } from './shareDialog';
+import { collabHooks, isGuest } from '../collab';
+import { loadLocal } from '../../project/storage';
 import { openLibrary, saveCurrent } from './libraryDialog';
 import { fingerprint, getCurrentId, setCurrentId, loadFont, saveFont } from '../../project/library';
 import { openVersions } from './versionsDialog';
@@ -39,6 +42,15 @@ export function headerBar(): HTMLElement {
       return meta;
     } catch (e) { toast((e as Error).message); return null; }
   };
+  // shared sessions: a guest sees the host's font without touching their own saved fonts
+  let ownId: string | null = null;
+  collabHooks.openProject = (p) => { ownId = getCurrentId(); setCurrentId(null); openProject(p); };
+  collabHooks.restoreOwnFont = async () => {
+    const p = ownId ? await loadFont(ownId) : loadLocal();
+    setCurrentId(ownId);
+    openProject(p ?? newProject('Untitled'));
+  };
+  collabHooks.saveCopy = async (p) => { const meta = await saveFont(p); setCurrentId(meta.id); markSaved(); toast(`Saved a copy as “${meta.name}” in My fonts`); };
   fixHandlers['auto-space'] = async () => { await autoSpaceAll(); };
   checkExtras.kerning = () => store.kerning;
   fixHandlers['name-font'] = () => { const n = prompt('Name your font', store.project.name === 'Untitled' ? '' : store.project.name); if (n && n.trim()) { store.project.name = n.trim(); name.value = store.project.name; store.emit('project'); scheduleBuild(0); } };
@@ -103,6 +115,7 @@ export function headerBar(): HTMLElement {
   const bar = h('header', { class: 'topbar' },
     h('div', { class: 'namewrap' }, name, dirtyDot),
     h('div', { class: 'actions' },
+      shareButton(),
       iconButton('text', 'Spacing', () => openSpacingDialog(), { title: 'Letter spacing and kerning: auto space, auto kern, edit pairs', testid: 'btn-spacing' }),
       checkButton(),
       iconButton('info', 'Intro', () => showWelcome(true), { iconOnly: true, title: 'Show the four-step intro again', testid: 'btn-intro' }),
@@ -119,6 +132,7 @@ export function headerBar(): HTMLElement {
     if (!(ev === 'project' || ev === 'glyph' || ev === 'fx' || ev === 'charset')) return;
     if (t) clearTimeout(t);
     t = window.setTimeout(async () => {
+      if (isGuest()) return; // a shared font is the host's: guests keep a copy only if they ask
       if (getCurrentId()) { try { await saveCurrent(store); markSaved(); } catch { /* quota: user will see it on explicit save */ } }
       else saveLocal(store.project); // scratch slot so an unsaved font survives a reload
     }, 700);

@@ -13,6 +13,17 @@ font as it is now (letters added, removed or redrawn since), restore it, or
 open it as a separate font to try an alternative. FontLab also takes an
 automatic version before a reset, a font import, Generate, auto spacing and
 a restore.
+**Share** (header) starts a live session: you get a link, and anyone who
+opens it joins your font and edits it with you. Letters, alternates,
+effects, colours, spacing, kerning and notes sync as they change; one
+person works on a letter at a time, and you see who is where (a coloured
+dot on the tile, their pointer on the letter you share). The host can
+switch guests to watch-and-leave-notes only. Undo only takes back your own
+changes. The font travels straight between the browsers (WebRTC through
+[PeerJS](https://peerjs.com/)'s public matchmaking service; nothing is
+stored on a server), so the session lasts while the host's tab is open and
+may not connect on networks that block direct connections. Guests keep
+their own fonts; when the session ends they can keep a copy.
 The **Check** button in the header runs automatic checks after every build
 (empty letters, lowercase that is a copy of the capitals, stray specks, ink
 that will be clipped, letters wider than their space, width, height and

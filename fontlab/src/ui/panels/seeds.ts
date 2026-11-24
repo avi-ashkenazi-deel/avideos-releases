@@ -10,6 +10,8 @@ import { KnifeTool, knifeCut } from '../../inputs/draw/knife';
 import { notesFor, openNoteCount, addNote, updateNote, removeNote, hitNote, drawNotePins, drawNoteLabel, buildNotePopover, placeNotePopover, NOTE_HIT_PX, type NotePopover } from '../../inputs/draw/notes';
 import { history } from '../history';
 import { autoVersion } from '../versions';
+import { others, peersOn, holderOf, canEditLetter, setCursor, inSession, me as collabMe } from '../collab';
+import { avatar } from './shareDialog';
 import { fitVerticalMetrics } from '../../generate/metrics';
 import { keepAlternate } from '../alternates';
 import type { Glyph, Stroke, CapStyle, CurveContour, ReviewNote, Vec } from '../../core/glyph';
@@ -219,11 +221,53 @@ export function seedsPanel(): HTMLElement {
   });
   canvasEl.addEventListener('pointerleave', () => setHoverNote(null));
 
+  // shared session: pointers of the people looking at the same letter
+  const drawPeerCursors = (ctx: CanvasRenderingContext2D, view: { ox: number; oy: number; s: number }) => {
+    if (!inSession()) return;
+    for (const p of peersOn(store.selected)) {
+      if (!p.cursor) continue;
+      const x = view.ox + p.cursor[0] * view.s, y = view.oy - p.cursor[1] * view.s;
+      ctx.save();
+      ctx.fillStyle = p.color; ctx.strokeStyle = '#111'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 4, y + 15); ctx.lineTo(x + 8, y + 10); ctx.lineTo(x + 14, y + 10); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.font = '600 11px system-ui, sans-serif';
+      const w = ctx.measureText(p.name).width + 10;
+      ctx.beginPath(); (ctx as any).roundRect ? (ctx as any).roundRect(x + 12, y + 14, w, 17, 6) : ctx.rect(x + 12, y + 14, w, 17); ctx.fill();
+      ctx.fillStyle = '#111'; ctx.fillText(p.name, x + 17, y + 26.5);
+      ctx.restore();
+    }
+  };
+  const holdBanner = h('div', { class: 'holdbanner', 'data-testid': 'hold-banner', style: { display: 'none' } });
+  const syncCollab = () => {
+    const ch = store.selected;
+    const holder = holderOf(ch), mine = collabMe();
+    const watchOnly = inSession() && !!mine && !mine.canEdit;
+    if (holder) holdBanner.replaceChildren(avatar(holder, 22), `${holder.name} is working on “${ch}”. You can watch it change and leave notes; pick another letter to edit.`);
+    else if (watchOnly) holdBanner.replaceChildren('You are watching this session. Use the Note tool (N) to leave comments; only the host edits.');
+    holdBanner.style.display = holder || watchOnly ? '' : 'none';
+    canvasEl.classList.toggle('readonly', inSession() && !canEditLetter(ch));
+    for (const b of strip.children) {
+      const el = b as HTMLElement, c = el.dataset.ch;
+      if (!c) continue;
+      const on = peersOn(c);
+      el.classList.toggle('peer', on.length > 0);
+      if (on.length) el.style.setProperty('--peer', on[0].color); else el.style.removeProperty('--peer');
+    }
+    dc.draw();
+  };
+  store.subscribe((ev) => { if (ev === 'collab' || ev === 'select' || ev === 'charset' || ev === 'project:loaded') syncCollab(); else if (ev === 'collab:cursor' && others().some((p) => p.ch === store.selected)) dc.draw(); });
+  canvasWrap.addEventListener('pointermove', (e) => {
+    if (!inSession()) return;
+    const r = canvasEl.getBoundingClientRect(), v = dc.getView();
+    setCursor([Math.round((e.clientX - r.left - v.ox) / v.s), Math.round((v.oy - (e.clientY - r.top)) / v.s)]);
+  });
+  canvasWrap.addEventListener('pointerleave', () => setCursor(null));
   dc.overlay = (ctx, view) => {
     if (mode === 'edit') editor.draw(ctx, view);
     else if (mode === 'pen') pen.draw(ctx, view);
     else if (mode === 'rect' || mode === 'ellipse') shapeTool.draw(ctx, view);
     else if (mode === 'knife') knife.draw(ctx, view);
+    drawPeerCursors(ctx, view);
     const list = letterNotes();
     if (!list.length && !notePop) return;
     drawNotePins(ctx, view, list, { accent, activeId: notePop?.noteId, hoverId: hoverNote, pending: notePop && !notePop.noteId ? { x: notePop.at[0], y: notePop.at[1] } : null });
@@ -470,7 +514,7 @@ export function seedsPanel(): HTMLElement {
 
   // ---------- draw tab body
   const drawTab = h('div', { class: 'tab-body draw' },
-    strip, title, toolRow, canvasWrap, info,
+    strip, title, holdBanner, toolRow, canvasWrap, info,
     h('div', { class: 'row' }, undoBtn, redoBtn, clear, lock, reroll, keepAltBtn, toStrokesBtn),
     editTools,
     h('details', { class: 'brush' }, h('summary', {}, 'Brush'), widthRow, pressureRow, velRow, smoothRow,
