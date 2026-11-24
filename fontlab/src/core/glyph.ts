@@ -67,6 +67,8 @@ export interface Glyph {
   recipe?: RecipeInstance;
   /** user-edited: generator must not overwrite */
   locked?: boolean;
+  /** advance / sidebearings set by hand: auto spacing leaves this letter alone */
+  spacingLocked?: boolean;
 }
 
 export interface StyleStats {
@@ -127,7 +129,48 @@ export interface FontProject {
   customChars: string;
   /** stylistic alternates per char: index 0 = ss01, 1 = ss02, 2 = ss03 */
   alternates: Record<string, Glyph[]>;
+  /** letter spacing: 0 = tight … 1 = loose (target white between letters for auto spacing and kerning) */
+  spacing: SpacingSettings;
+  /** kerning: automatic pairs are computed at build time; `pairs` are manual values that always win */
+  kerning: KerningSettings;
+  /** colour font layers (COLR/CPAL) */
+  color: ColorSettings;
+  /** review notes pinned to a spot on a letter */
+  notes: ReviewNote[];
 }
+
+export interface SpacingSettings { tightness: number }
+export interface KerningSettings {
+  auto: boolean;
+  /** 0..1: how much of the measured correction is applied */
+  strength: number;
+  /** manual pairs keyed by the two characters, e.g. { 'AV': -80 } (font units) */
+  pairs: Record<string, number>;
+}
+export type ColorMode = 'strokes' | 'stripes' | 'shadow' | 'outline';
+export interface ColorSettings {
+  enabled: boolean;
+  mode: ColorMode;
+  /** CSS hex colours, 2..8 entries */
+  palette: string[];
+  /** 0..1: stripe count / shadow offset / rim thickness, depending on mode */
+  amount: number;
+}
+export interface ReviewNote {
+  id: string;
+  ch: string;
+  /** position in font units */
+  x: number;
+  y: number;
+  text: string;
+  author?: string;
+  done?: boolean;
+  createdAt: number;
+}
+
+export const DEFAULT_SPACING: SpacingSettings = { tightness: 0.5 };
+export const DEFAULT_KERNING: KerningSettings = { auto: false, strength: 1, pairs: {} };
+export const DEFAULT_COLOR: ColorSettings = { enabled: false, mode: 'strokes', palette: ['#ff3b3b', '#0a84ff', '#ffd166', '#34c759'], amount: 0.5 };
 
 export const DEFAULT_METRICS: FontMetrics = {
   upm: 1000,
@@ -176,6 +219,10 @@ export function newProject(name = 'Untitled'): FontProject {
     blocks: ['latin'],
     customChars: '',
     alternates: {},
+    spacing: { ...DEFAULT_SPACING },
+    kerning: { ...DEFAULT_KERNING, pairs: {} },
+    color: { ...DEFAULT_COLOR, palette: [...DEFAULT_COLOR.palette] },
+    notes: [],
   };
 }
 
