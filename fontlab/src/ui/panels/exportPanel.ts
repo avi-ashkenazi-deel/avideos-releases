@@ -57,6 +57,20 @@ export function headerBar(): HTMLElement {
     try { openProject(await readProjectFile(f)); toast('Font imported'); } catch (e) { toast('Not a FontLab file: ' + (e as Error).message); }
   });
 
+  // a reviewer sends back their copy of the .json: take only their notes, leave the letters alone
+  const importNotes = fileInput('.json,application/json', async (f) => {
+    try {
+      const theirs = (await readProjectFile(f)).notes ?? [];
+      const have = new Set((store.project.notes ?? []).map((n) => n.id));
+      const fresh = theirs.filter((n) => !have.has(n.id));
+      if (!theirs.length) { toast('That file has no review notes.'); return; }
+      if (!fresh.length) { toast('You already have all the notes from that file.'); return; }
+      store.update((p) => { p.notes = [...(p.notes ?? []), ...fresh]; }, 'glyph');
+      store.emit('notes');
+      toast(`Added ${fresh.length} review note${fresh.length === 1 ? '' : 's'}. See Check → Review notes.`, 4000);
+    } catch (e) { toast('Not a FontLab file: ' + (e as Error).message); }
+  });
+
   const fontMenu = menu('Font', [
     { label: 'Save', icon: 'save', onClick: () => void save(false), hint: 'Save to this browser (Ctrl/Cmd+S)', testid: 'menu-save' },
     { label: 'Save as new…', icon: 'copy', onClick: () => void save(true) },
@@ -67,6 +81,7 @@ export function headerBar(): HTMLElement {
     }), hint: 'Named snapshots: compare, go back, or branch off', testid: 'menu-versions' },
     { label: 'Export .json file', icon: 'download', onClick: () => downloadProject(store.project), hint: 'Move the font to another machine', separatorBefore: true, testid: 'menu-export-json' },
     { label: 'Import .json file', icon: 'upload', onClick: () => importJson.click(), testid: 'menu-import-json' },
+    { label: 'Import review notes…', icon: 'upload', onClick: () => importNotes.click(), hint: 'Take only the pinned notes from a reviewer’s copy of this font', testid: 'menu-import-notes' },
     { label: 'Reset', icon: 'reset', onClick: () => void reset(), hint: 'Start a blank font (asks to save first)', danger: true, separatorBefore: true, testid: 'menu-reset' },
   ], { icon: 'type', testid: 'menu-font' });
 
@@ -88,7 +103,7 @@ export function headerBar(): HTMLElement {
       checkButton(),
       iconButton('info', 'Intro', () => showWelcome(true), { iconOnly: true, title: 'Show the four-step intro again', testid: 'btn-intro' }),
       iconButton('flask', 'Test', openTester, { title: 'Type with your font, waterfall, dark mode', testid: 'btn-test' }),
-      exportMenu, fontMenu, importJson),
+      exportMenu, fontMenu, importJson, importNotes),
   );
   store.subscribe((ev) => {
     if ((ev === 'project:loaded' || ev === 'project') && name.value !== store.project.name && document.activeElement !== name) name.value = store.project.name;

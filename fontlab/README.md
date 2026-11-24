@@ -13,6 +13,11 @@ font as it is now (letters added, removed or redrawn since), restore it, or
 open it as a separate font to try an alternative. FontLab also takes an
 automatic version before a reset, a font import, Generate, auto spacing and
 a restore.
+The **Check** button in the header runs automatic checks after every build
+(empty letters, lowercase that is a copy of the capitals, stray specks, ink
+that will be clipped, letters wider than their space, width, height and
+weight outliers, heavy outlines, extreme kerning) and offers one-click fixes
+where it can; click a letter in the list to open it.
 
 ## Live site
 
@@ -158,7 +163,9 @@ tabs: **Draw**, **Photo or video**, **Font file**.
    [Tegaki](https://tegaki.ink): your text writes itself stroke by stroke in
    the order you drew it, imported letters skeletonised first, as a GIF, a
    WebM or a looping animated SVG; it can also sweep one effect; the
-   preview's **Write on** button plays it in place), `SVG glyphs`
+   preview's **Write on** button plays it in place), `UFO source (.ufo.zip)` (the font as a
+   standard UFO 3 source with kerning and features, for Glyphs, FontLab 8,
+   RoboFont or Fontra: no lock-in), `SVG glyphs`
    (every letter as its own vector group, for Illustrator or Figma; a
    single letter is available from the grid's right-click menu), `SVG
    specimen` (an animated poster of your font) and `Specimen site (.html)`
