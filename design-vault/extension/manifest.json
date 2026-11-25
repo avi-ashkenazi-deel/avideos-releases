@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "Save to Design Vault",
+  "version": "1.0",
+  "description": "Right-click any image, link or page to save it into your local Design Vault Inbox.",
+  "permissions": ["contextMenus", "storage", "activeTab", "notifications"],
+  "host_permissions": ["http://localhost:5177/*", "http://127.0.0.1:5177/*"],
+  "background": { "service_worker": "background.js" },
+  "action": { "default_popup": "popup.html", "default_title": "Design Vault" },
+  "icons": { "128": "icon128.png" },
+  "commands": {
+    "capture-visible": {
+      "suggested_key": { "default": "Alt+Shift+S", "mac": "Alt+Shift+S" },
+      "description": "Capture the visible area of this tab into the Vault"
+    },
+    "save-page": {
+      "suggested_key": { "default": "Alt+Shift+P", "mac": "Alt+Shift+P" },
+      "description": "Save this page (full-page capture) into the Vault"
+    }
+  }
+}

@@ -37,8 +37,36 @@
           border:1px solid var(--line); cursor:pointer; }
   .chip.on { background:var(--gold); color:var(--bg); border-color:var(--gold); font-weight:600; }
   .chip i { display:inline-block; width:.65em; height:.65em; border-radius:50%; margin-right:.4em; border:1px solid rgba(255,255,255,.2); }
-  #grid { columns: 5 210px; column-gap: 10px; }
-  #grid > figure { break-inside: avoid; margin: 0 0 10px; }
+  #grid { --tile: 210px; }
+  #grid.layout-waterfall { columns: 5 var(--tile); column-gap: 10px; }
+  #grid.layout-waterfall > figure { break-inside: avoid; margin: 0 0 10px; }
+  #grid.layout-grid { display:grid !important; grid-template-columns:repeat(auto-fill,minmax(var(--tile),1fr)); gap:10px; }
+  #grid.layout-grid > figure img, #grid.layout-grid > figure video { aspect-ratio:1; object-fit:contain; background:#0b0c0e; }
+  #grid.layout-list { display:grid !important; gap:6px; }
+  #grid.layout-list > figure { display:grid; grid-template-columns:96px 1fr; align-items:center; gap:1rem; padding:6px; }
+  #grid.layout-list > figure img, #grid.layout-list > figure video { width:96px; height:72px; min-height:0; object-fit:cover; border-radius:5px; }
+  #grid.layout-list > figure .ov { position:static; opacity:1; background:none; padding:0; font-size:.82rem; }
+  #grid.layout-list > figure .vid { top:10px; left:10px; }
+  .tools { display:flex; gap:.4rem; align-items:center; flex-wrap:wrap; }
+  .seg { display:flex; border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+  .seg button { all:unset; cursor:pointer; padding:.35rem .65rem; font-size:.8rem; color:var(--dim); }
+  .seg button.on { background:var(--card); color:var(--gold); }
+  .tools input[type=range] { width:90px; accent-color:var(--gold); }
+  .stars { display:inline-flex; gap:1px; color:var(--dim); cursor:pointer; user-select:none; }
+  .stars span.on { color:var(--gold); }
+  .rate-badge { position:absolute; bottom:8px; right:8px; background:rgba(15,16,18,.8); color:var(--gold); font-size:.66rem;
+                padding:1px 6px; border-radius:5px; }
+  figure.hovered { outline:2px solid rgba(216,201,106,.5); }
+  .alike { display:grid; grid-template-columns:repeat(4,1fr); gap:5px; }
+  .alike img { width:100%; aspect-ratio:1; object-fit:cover; border-radius:5px; cursor:pointer; background:#000; }
+  .dupe-group { border:1px solid var(--line); border-radius:10px; padding:.7rem; margin-bottom:.8rem; }
+  .dupe-group .row { display:flex; gap:10px; flex-wrap:wrap; }
+  .dupe-group figure { width:180px; cursor:default; }
+  .dupe-group figure img, .dupe-group figure video { aspect-ratio:1; object-fit:contain; background:#0b0c0e; }
+  .dupe-group .cap { font-size:.72rem; color:var(--dim); padding:.35rem .45rem; display:grid; gap:4px; }
+  .dupe-group .cap button { font:inherit; font-size:.72rem; cursor:pointer; background:var(--card); color:var(--ink);
+                            border:1px solid var(--line); border-radius:6px; padding:2px 6px; }
+  .dupe-group .cap button:hover { border-color:#d84a4a; }
   figure { margin:0; position:relative; border-radius:8px; overflow:hidden; background:var(--card); cursor:zoom-in; }
   figure img, figure video { width:100%; height:auto; display:block; min-height:80px; }
   .inbox-grid figure img, .inbox-grid figure video { aspect-ratio:1; object-fit:cover; }
@@ -112,8 +140,11 @@
   <button class="nav" data-view="inbox">Inbox <span class="n" id="nInbox"></span></button>
   <button class="nav" data-view="frames">Frames <span class="n" id="nFrames"></span></button>
   <button class="nav" data-view="favorites">Favorites <span class="n" id="nFav"></span></button>
+  <button class="nav" data-view="dupes">Duplicates <span class="n" id="nDupes"></span></button>
   <h4>Collections</h4>
   <div class="sub" id="collnav"></div>
+  <h4>Smart folders</h4>
+  <div class="sub" id="smartnav"></div>
   <h4>Boards</h4>
   <div class="sub" id="boardnav"></div>
   <div class="foot">
@@ -125,7 +156,16 @@
 <main>
   <div class="top">
     <h1 id="title">Library <span class="n" id="count"></span></h1>
-    <input id="q" type="search" placeholder="search: red logos · fabrizia motion · 1959" autocomplete="off">
+    <input id="q" type="search" placeholder="search: red logos · fabrizia motion · 1959 · pitchfork.com" autocomplete="off">
+    <div class="tools">
+      <div class="seg" id="layoutSeg" title="Layout">
+        <button data-layout="waterfall">Masonry</button><button data-layout="grid">Grid</button><button data-layout="list">List</button>
+      </div>
+      <input type="range" id="tileSize" min="120" max="420" step="10" title="Thumbnail size">
+      <div class="seg" id="rateSeg" title="Minimum rating"><button data-min="0">All</button><button data-min="3">★3+</button><button data-min="5">★5</button></div>
+      <button class="btn" id="shuffleBtn" title="Shuffle — rediscover the library">⤨ Shuffle</button>
+      <button class="btn" id="smartBtn" title="Save this search + filters as a live smart folder">Save search</button>
+    </div>
   </div>
   <div id="colors"></div>
   <div id="grid"></div>
@@ -162,6 +202,7 @@
     <div class="side">
       <label>Title <input id="lbTitle"></label>
       <div class="meta" id="lbMeta"></div>
+      <label>Rating <span class="stars" id="lbStars"></span></label>
       <label>Year <input id="lbYear" placeholder="e.g. 1957" inputmode="numeric"></label>
       <label>Tags <div class="tags" id="lbTags"></div><input id="lbTagAdd" placeholder="add tag, press Enter"></label>
       <label>Notes <textarea id="lbNotes" placeholder="What makes this work — type, grid, palette roles, motion…"></textarea></label>
@@ -171,6 +212,7 @@
         <a class="btn" id="lbSrc" target="_blank" rel="noopener" style="text-decoration:none">Source ↗</a>
         <button class="btn" id="lbClose">Close</button>
       </div>
+      <label>Looks alike <div class="alike" id="lbAlike"></div></label>
     </div>
   </div>
 </dialog>
@@ -187,8 +229,11 @@ const thumb = f => "/thumb/" + f.split("/").map(encodeURIComponent).join("/");
 const media = f => isVid(f)
   ? `<span class="vid">▶</span><video src="${src(f)}" poster="${thumb(f)}" preload="none" muted loop playsinline onmouseover="this.play()" onmouseout="this.pause()"></video>`
   : `<img src="${src(f)}" loading="lazy" alt="">`;
-let items=[], inboxItems=[], boards=[], colls=[], lastShown=[], lbIndex=-1, lbTags=[];
-let view="library", activeColl=null, activeColor=null, activeBoard=null;
+let items=[], inboxItems=[], boards=[], colls=[], lastShown=[], lbIndex=-1, lbTags=[], lbRating=0, dupes=[];
+let view="library", activeColl=null, activeColor=null, activeBoard=null, minRating=0, shuffled=false, hoverIdx=-1;
+const pref = (k, d) => { try { return localStorage.getItem("dv-"+k) ?? d; } catch { return d; } };
+const setPref = (k, v) => { try { localStorage.setItem("dv-"+k, v); } catch {} };
+let layout = pref("layout", "waterfall"), tile = +pref("tile", 210);
 const decisions = {};   // inbox: `${batch}#${id}` -> "keep" | "drop"
 
 const api = async (p, body) => (await fetch(p, body ? {method:"POST", body:JSON.stringify(body)} : {})).json();
@@ -197,6 +242,8 @@ const showLog = t => { $("log").style.display="block"; $("log").textContent=t; s
 async function load(){
   [items, inboxItems, colls] = await Promise.all([api("/api/library"), api("/api/inbox"), api("/api/collections")]);
   boards = (await api("/api/boards")).boards;
+  dupes = (await api("/api/duplicates")).groups || [];
+  $("nDupes").textContent = dupes.length || "";
   $("nLib").textContent = items.length; $("nInbox").textContent = inboxItems.length || "";
   $("nFrames").textContent = items.filter(i=>i.collection==="storyboards").length || "";
   $("addColl").innerHTML = colls.map(c=>`<option ${c==="inspiration"?"selected":""}>${c}</option>`).join("");
@@ -207,12 +254,15 @@ function renderNav(){
   const counts = {}; items.forEach(i=>counts[i.collection]=(counts[i.collection]||0)+1);
   $("collnav").innerHTML = colls.map(c=>`<button class="nav ${view==="library"&&activeColl===c?"on":""}" data-coll="${c}">
       ${c}<span class="n">${counts[c]||""}</span></button>`).join("");
-  $("boardnav").innerHTML = boards.map(b=>`<button class="nav ${view==="board"&&activeBoard===b.id?"on":""}" data-board="${b.id}">
-      ${b.name}<span class="n">${b.items.length}</span></button>`).join("");
+  const navBtn = b => `<button class="nav ${view==="board"&&activeBoard===b.id?"on":""}" data-board="${b.id}">
+      ${b.type==="smart"?"⚡ ":""}${b.name}<span class="n">${b.type==="smart" ? smartSet(b).length : b.items.length}</span></button>`;
+  $("smartnav").innerHTML = boards.filter(b=>b.type==="smart").map(navBtn).join("")
+    || `<p style="color:var(--dim);font-size:.75rem;margin:.1rem .7rem">Search, then “Save search”.</p>`;
+  $("boardnav").innerHTML = boards.filter(b=>b.type!=="smart").map(navBtn).join("");
   document.querySelectorAll("nav button[data-view]").forEach(b=>b.classList.toggle("on", b.dataset.view===view));
   const fav = boards.find(b=>b.name.toLowerCase()==="favorites");
   $("nFav").textContent = fav ? fav.items.length : "";
-  $("boardlist").innerHTML = boards.map(b=>`<div class="board ${b.id===activeBoard?"on":""}" data-b="${b.id}">
+  $("boardlist").innerHTML = boards.filter(b=>b.type!=="smart").map(b=>`<div class="board ${b.id===activeBoard?"on":""}" data-b="${b.id}">
       <span>${b.name}</span><span>${b.items.length}</span></div>`).join("") || `<p style="color:var(--dim)">No boards yet.</p>`;
 }
 
@@ -221,32 +271,70 @@ function renderColors(){
     `<button class="chip ${n===activeColor?"on":""}" data-k="${n}"><i style="background:${hex}"></i>${n}</button>`).join("");
 }
 
-function hay(it){ return norm([it.title,it.tags,it.artist,it.collection,it.year].join(" ")); }
+function hay(it){ return norm([it.title,it.tags,it.artist,it.collection,it.year,it.domain,it.notes].join(" ")); }
+const hasTag = (it, t) => (","+it.tags+",").includes(","+t+",");
+function matches(it, q){   // q: {q, color, collection, minRating}
+  const terms = norm(q.q).split(/\s+/).filter(Boolean);
+  return (!q.collection || it.collection===q.collection) && (!q.color || hasTag(it, q.color))
+      && (!q.minRating || (it.rating||0) >= q.minRating) && terms.every(t=>hay(it).includes(t));
+}
+function smartSet(b){ return items.filter(it=>matches(it, b.query||{})); }
+
+// Stable shuffle so the order doesn't jump on every keystroke
+let shuffleKey = {};
+function shuffledOrder(set){
+  set.forEach(it=>{ if(!(it.file in shuffleKey)) shuffleKey[it.file] = Math.random(); });
+  return [...set].sort((a,b)=>shuffleKey[a.file]-shuffleKey[b.file]);
+}
 
 function currentSet(){
   if(view==="inbox") return inboxItems;
   let set = items;
   if(view==="frames") set = items.filter(i=>i.collection==="storyboards");
   if(view==="favorites"){ const f = boards.find(b=>b.name.toLowerCase()==="favorites"); set = f ? items.filter(i=>f.items.some(r=>r.file===i.file)) : []; }
-  if(view==="board"){ const b = boards.find(b=>b.id===activeBoard); set = b ? items.filter(i=>b.items.some(r=>r.file===i.file)) : []; }
+  if(view==="board"){ const b = boards.find(b=>b.id===activeBoard);
+    set = !b ? [] : b.type==="smart" ? smartSet(b) : items.filter(i=>b.items.some(r=>r.file===i.file)); }
   if(view==="library" && activeColl) set = set.filter(i=>i.collection===activeColl);
   return set;
 }
 
+function renderDupes(){
+  const byFile = Object.fromEntries(items.map(i=>[i.file, i]));
+  const groups = dupes.map(g=>g.map(f=>byFile[f]).filter(Boolean)).filter(g=>g.length>1);
+  $("title").innerHTML = `Duplicates <span class="n">${groups.length} groups</span>`;
+  $("grid").className = ""; $("grid").style.display = "block";
+  if(!groups.length){ $("grid").innerHTML = `<p class="empty">No duplicates found. Run <code>vault.py dupes</code> after big imports.</p>`; return; }
+  $("grid").innerHTML = `<p style="color:var(--dim);margin:.2rem 0 1rem">Items that look identical (same art at a different size, or an edition variant).
+    Remove the copies you don't need — the file stays recoverable in git history.</p>` + groups.map(g=>`
+    <div class="dupe-group"><div class="row">${g.map(it=>`
+      <figure>${media(it.file)}
+        <div class="cap"><strong style="color:var(--ink)">${it.title||""}</strong>
+          <span>${it.collection}${it.domain?" · "+it.domain:""}</span>
+          <button data-del="${it.file}">Remove this copy</button></div></figure>`).join("")}
+    </div></div>`).join("");
+}
+
 function render(){
-  const terms = norm($("q").value).split(/\s+/).filter(Boolean);
-  const shown = currentSet().filter(it =>
-    (!activeColor || (","+it.tags+",").includes(","+activeColor+",")) && terms.every(t=>hay(it).includes(t)));
+  document.querySelectorAll("#layoutSeg button").forEach(b=>b.classList.toggle("on", b.dataset.layout===layout));
+  document.querySelectorAll("#rateSeg button").forEach(b=>b.classList.toggle("on", +b.dataset.min===minRating));
+  $("shuffleBtn").classList.toggle("primary", shuffled);
+  $("tileSize").value = tile; $("grid").style.setProperty("--tile", tile+"px");
+  $("colors").style.display = (view==="inbox"||view==="dupes") ? "none" : "flex";
+  if(view==="dupes") return renderDupes();
+  let shown = currentSet().filter(it => view==="inbox" ||
+    matches(it, {q:$("q").value, color:activeColor, minRating}));
+  if(view==="inbox"){ const terms = norm($("q").value).split(/\s+/).filter(Boolean);
+    shown = shown.filter(it=>terms.every(t=>hay(it).includes(t))); }
+  if(shuffled && view!=="inbox") shown = shuffledOrder(shown);
   const label = {library: activeColl || "Library", inbox:"Inbox", frames:"Frames", favorites:"Favorites",
                  board: (boards.find(b=>b.id===activeBoard)||{}).name}[view] || view;
   $("title").innerHTML = `${label} <span class="n" id="count">${shown.length}</span>`;
-  $("colors").style.display = view==="inbox" ? "none" : "flex";
   const pinBoard = boards.find(b=>b.id===activeBoard);
 
   if(view==="inbox"){
     if(!shown.length){ $("grid").innerHTML = `<p class="empty">Inbox is empty. Add a link, or hunt from a session.</p>`; return; }
     const groups = {}; shown.forEach(it=>(groups[it.batch]=groups[it.batch]||[]).push(it));
-    $("grid").style.display="block"; $("grid").style.columns="auto";
+    $("grid").className = ""; $("grid").style.display="block";
     $("grid").innerHTML = Object.entries(groups).map(([batch, its])=>`
       <div class="batchhead"><h3>${batch} <span style="color:var(--dim);font-weight:400">${its.length} pending</span></h3>
         <div class="r"><button class="btn" data-all="${batch}">Keep all</button>
@@ -261,15 +349,16 @@ function render(){
     return;
   }
 
-  $("grid").style.display="block"; $("grid").style.columns="";
+  $("grid").className = "layout-"+layout; $("grid").style.display="";
   lastShown = shown;
   $("grid").innerHTML = shown.slice(0,500).map((it,i)=>{
-    const pinned = pinBoard && pinBoard.items.some(r=>r.file===it.file);
+    const pinned = pinBoard && pinBoard.type!=="smart" && pinBoard.items.some(r=>r.file===it.file);
     return `<figure class="${pinned?"pinned":""}" data-c="${it.collection}" data-f="${it.file}" data-i="${i}">
       ${media(it.file)}
+      ${it.rating?`<span class="rate-badge">${"★".repeat(it.rating)}</span>`:""}
       <div class="act"><button class="pin" title="pin to board">＋</button></div>
       <div class="ov"><strong>${it.title||""}</strong>
-        <span>${it.collection}${it.year?" · "+it.year:""}${it.page_url?`<a href="${it.page_url}" target="_blank">source ↗</a>`:""}</span></div>
+        <span>${it.collection}${it.year?" · "+it.year:""}${layout==="list"&&it.domain?" · "+it.domain:""}${it.page_url?`<a href="${it.page_url}" target="_blank">source ↗</a>`:""}</span></div>
     </figure>`;}).join("") || `<p class="empty">Nothing here yet.</p>`;
   if(shown.length>500) $("grid").insertAdjacentHTML("beforeend", `<p class="empty">…${shown.length-500} more — narrow the search.</p>`);
 }
@@ -279,10 +368,17 @@ document.addEventListener("click", async e=>{
   const nv = t.closest("nav button[data-view]"); if(nv){ view=nv.dataset.view; activeColl=null; renderNav(); render(); return; }
   const nc = t.closest("nav button[data-coll]"); if(nc){ view="library"; activeColl = activeColl===nc.dataset.coll?null:nc.dataset.coll; renderNav(); render(); return; }
   const nb = t.closest("nav button[data-board]"); if(nb){ view="board"; activeBoard=nb.dataset.board; renderNav(); render(); return; }
+  const lay = t.closest("#layoutSeg button"); if(lay){ layout = lay.dataset.layout; setPref("layout", layout); render(); return; }
+  const rt = t.closest("#rateSeg button"); if(rt){ minRating = +rt.dataset.min; render(); return; }
+  if(t.dataset.del){
+    if(!confirm("Remove this copy from the library? (Recoverable from git history.)")) return;
+    const r = await api("/api/item/delete", {file:t.dataset.del}); showLog(r.log); await load(); return;
+  }
   const chip = t.closest(".chip"); if(chip){ activeColor = activeColor===chip.dataset.k?null:chip.dataset.k; renderColors(); render(); return; }
   const bd = t.closest(".board"); if(bd){ activeBoard = activeBoard===bd.dataset.b?null:bd.dataset.b; renderNav(); render(); return; }
   if(t.classList.contains("pin")){
-    if(!activeBoard){ $("panel").classList.add("open"); return; }
+    const ab = boards.find(b=>b.id===activeBoard);
+    if(!ab || ab.type==="smart"){ $("panel").classList.add("open"); showLog("Pick a board in the right panel, then ＋ pins to it. (Smart folders fill themselves.)"); return; }
     const f = t.closest("figure");
     await api("/api/boards/toggle", {board:activeBoard, collection:f.dataset.c, file:f.dataset.f});
     boards = (await api("/api/boards")).boards; renderNav(); render(); return;
@@ -318,10 +414,30 @@ function openLb(i){
   $("lbTitle").value = it.title||""; $("lbYear").value = it.year||"";
   $("lbNotes").value = it.notes||"";
   lbTags = (it.tags||"").split(",").filter(Boolean); renderLbTags();
+  lbRating = it.rating||0; renderStars();
+  $("lbAlike").innerHTML = "";
+  api("/api/similar?file="+encodeURIComponent(it.file)).then(sim=>{
+    if(lastShown[lbIndex]!==it) return;   // user already moved on
+    $("lbAlike").innerHTML = sim.slice(0,8).map(s=>`<img src="${isVid(s.file)?thumb(s.file):src(s.file)}" data-file="${s.file}"
+      title="${(s.title||"").replace(/"/g,"&quot;")}${s.distance<99?" · near-identical match":" · shares tags"}" loading="lazy">`).join("")
+      || `<span style="color:var(--dim);text-transform:none;letter-spacing:0">Nothing similar yet.</span>`;
+  });
   $("lbMeta").innerHTML = `<span>${it.collection}${it.artist?" · "+it.artist:""}</span><span>${it.license||""}</span><span style="word-break:break-all">${it.file.split("/").pop()}</span>`;
   $("lbSrc").href = it.page_url||"#"; $("lbSrc").style.display = it.page_url?"":"none";
   if(!$("lb").open) $("lb").showModal();
 }
+function renderStars(){
+  $("lbStars").innerHTML = [1,2,3,4,5].map(n=>`<span data-n="${n}" class="${n<=lbRating?"on":""}">★</span>`).join("")
+    + `<span style="margin-left:.5rem;font-size:.75rem;text-transform:none;letter-spacing:0">${lbRating?"":"not rated"}</span>`;
+}
+$("lbStars").addEventListener("click", e=>{ const s = e.target.closest("[data-n]"); if(!s) return;
+  lbRating = lbRating===+s.dataset.n ? 0 : +s.dataset.n; renderStars(); $("lbSave").click(); });
+$("lbAlike").addEventListener("click", e=>{
+  const img = e.target.closest("img[data-file]"); if(!img) return;
+  let i = lastShown.findIndex(x=>x.file===img.dataset.file);
+  if(i<0){ const it = items.find(x=>x.file===img.dataset.file); if(!it) return; lastShown = [...lastShown, it]; i = lastShown.length-1; }
+  openLb(i);
+});
 function renderLbTags(){ $("lbTags").innerHTML = lbTags.map(t=>`<span class="t" data-t="${t}" title="remove">${t}</span>`).join(""); }
 $("lbTags").addEventListener("click", e=>{ const t=e.target.closest(".t"); if(!t) return; lbTags = lbTags.filter(x=>x!==t.dataset.t); renderLbTags(); });
 $("lbTagAdd").addEventListener("keydown", e=>{ if(e.key==="Enter"){ e.preventDefault(); const v=$("lbTagAdd").value.trim().toLowerCase().replace(/\s+/g,"-");
@@ -329,9 +445,11 @@ $("lbTagAdd").addEventListener("keydown", e=>{ if(e.key==="Enter"){ e.preventDef
 $("lbSave").onclick = async ()=>{
   const it = lastShown[lbIndex]; if(!it) return;
   $("lbSave").textContent="Saving…";
-  const r = await api("/api/item/update", {file:it.file, tags:lbTags, year:$("lbYear").value, notes:$("lbNotes").value, title:$("lbTitle").value});
+  const r = await api("/api/item/update", {file:it.file, tags:lbTags, year:$("lbYear").value, notes:$("lbNotes").value,
+                                           title:$("lbTitle").value, rating:lbRating});
   $("lbSave").textContent="Save";
-  if(r.ok){ Object.assign(it, {tags:lbTags.join(","), year:r.item.year, notes:r.item.notes, title:r.item.title}); showLog(`Saved ${it.file.split("/").pop()}`); render(); }
+  if(r.ok){ Object.assign(it, {tags:lbTags.join(","), year:r.item.year, notes:r.item.notes, title:r.item.title, rating:r.item.rating||0});
+            showLog(`Saved ${it.file.split("/").pop()}`); render(); }
   else showLog(r.log||"save failed");
 };
 $("lbPin").onclick = async ()=>{ const it = lastShown[lbIndex]; if(!it) return;
@@ -343,9 +461,31 @@ $("lbPrev").onclick = ()=> openLb((lbIndex-1+lastShown.length)%lastShown.length)
 $("lbNext").onclick = ()=> openLb((lbIndex+1)%lastShown.length);
 document.addEventListener("keydown", e=>{
   if((e.metaKey||e.ctrlKey) && e.key.toLowerCase()==="k"){ e.preventDefault(); $("q").focus(); $("q").select(); return; }
-  if(!$("lb").open || ["INPUT","TEXTAREA"].includes(document.activeElement.tagName)) return;
+  const typing = ["INPUT","TEXTAREA","SELECT"].includes(document.activeElement.tagName);
+  // Space = quick preview (Eagle-style): opens the hovered card, closes the item view again
+  if(e.code==="Space" && !typing){
+    if($("lb").open){ e.preventDefault(); $("lb").close(); return; }
+    if(hoverIdx>=0 && view!=="inbox" && view!=="dupes"){ e.preventDefault(); openLb(hoverIdx); return; }
+  }
+  if(!$("lb").open || typing) return;
   if(e.key==="ArrowLeft") $("lbPrev").click(); if(e.key==="ArrowRight") $("lbNext").click();
+  if(/^[0-5]$/.test(e.key)){ lbRating = +e.key; renderStars(); $("lbSave").click(); }   // 1-5 rates, 0 clears
 });
+$("grid").addEventListener("mouseover", e=>{ const f = e.target.closest("figure[data-i]");
+  document.querySelectorAll("figure.hovered").forEach(x=>x.classList.remove("hovered"));
+  if(f){ f.classList.add("hovered"); hoverIdx = +f.dataset.i; } });
+$("grid").addEventListener("mouseleave", ()=>{ hoverIdx = -1; document.querySelectorAll("figure.hovered").forEach(x=>x.classList.remove("hovered")); });
+$("tileSize").addEventListener("input", e=>{ tile = +e.target.value; setPref("tile", tile); $("grid").style.setProperty("--tile", tile+"px"); });
+$("shuffleBtn").onclick = ()=>{ shuffled = !shuffled; shuffleKey = {}; render(); };
+$("smartBtn").onclick = async ()=>{
+  const query = {q:$("q").value.trim(), color:activeColor, collection:view==="library"?activeColl:null, minRating};
+  if(!query.q && !query.color && !query.collection && !query.minRating){ showLog("Type a search or pick a filter first — a smart folder saves those."); return; }
+  const name = prompt("Name this smart folder", [query.color, query.q, query.collection].filter(Boolean).join(" ") || "smart folder");
+  if(!name) return;
+  const b = await api("/api/boards/create", {name, query});
+  boards = (await api("/api/boards")).boards; view="board"; activeBoard=b.id; $("q").value=""; activeColor=null; minRating=0;
+  renderNav(); renderColors(); render();
+};
 $("grid").addEventListener("click", e=>{
   if(view==="inbox" || e.target.closest(".act") || e.target.closest("a")) return;
   const f = e.target.closest("figure[data-i]"); if(f) openLb(+f.dataset.i);

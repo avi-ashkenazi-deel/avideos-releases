@@ -1,1 +1,14 @@
-{"boards": []}
+{
+  "boards": [
+    {
+      "id": "c8de99bf",
+      "name": "red logos",
+      "items": [],
+      "type": "smart",
+      "query": {
+        "color": "red",
+        "collection": "logos"
+      }
+    }
+  ]
+}

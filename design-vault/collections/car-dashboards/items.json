@@ -12,7 +12,8 @@
       "gray",
       "red"
     ],
-    "batch": "2026-08-09-instrument-clusters"
+    "batch": "2026-08-09-instrument-clusters",
+    "dhash": "65c8bccab8bedc9c"
   },
   {
     "file": "2026-08-09-instrument-clusters-02-dashboard-2012-04-1335025482-jpg.JPG",
@@ -26,7 +27,8 @@
     "tags": [
       "black"
     ],
-    "batch": "2026-08-09-instrument-clusters"
+    "batch": "2026-08-09-instrument-clusters",
+    "dhash": "3cf0d406222bc9cf"
   },
   {
     "file": "2026-08-09-instrument-clusters-03-maruthi-suzuki-alto-dashboard-01-jpg.jpg",
@@ -41,7 +43,8 @@
       "gray",
       "black"
     ],
-    "batch": "2026-08-09-instrument-clusters"
+    "batch": "2026-08-09-instrument-clusters",
+    "dhash": "9416b23130d2c9ce"
   },
   {
     "file": "2026-08-09-instrument-clusters-04-2008-maruti-suzuki-alto-dashboard-02-jpg.jpg",
@@ -55,7 +58,8 @@
     "tags": [
       "gray"
     ],
-    "batch": "2026-08-09-instrument-clusters"
+    "batch": "2026-08-09-instrument-clusters",
+    "dhash": "1d3231d1eaee3717"
   },
   {
     "file": "2026-08-09-instrument-clusters-05-instrument-panel-of-kawasaki-ki-61-type1-otsu-jp.jpg",
@@ -70,7 +74,8 @@
       "gray",
       "black"
     ],
-    "batch": "2026-08-09-instrument-clusters"
+    "batch": "2026-08-09-instrument-clusters",
+    "dhash": "c4e1d3f76dec1c0e"
   },
   {
     "file": "2026-08-09-instrument-clusters-06-toyota-prius-c-dashboard-canada-jpg.jpg",
@@ -85,7 +90,8 @@
       "black",
       "blue"
     ],
-    "batch": "2026-08-09-instrument-clusters"
+    "batch": "2026-08-09-instrument-clusters",
+    "dhash": "07352a2b4b0b0f13"
   },
   {
     "file": "2026-08-09-instrument-clusters-07-close-up-of-engine-oil-temperature-gauge-on-car.jpg",
@@ -99,7 +105,8 @@
     "tags": [
       "black"
     ],
-    "batch": "2026-08-09-instrument-clusters"
+    "batch": "2026-08-09-instrument-clusters",
+    "dhash": "760d4f4e93c74c8b"
   },
   {
     "file": "2026-08-09-instrument-clusters-08-maruthi-suzuki-alto-dashboard-03-jpg.jpg",
@@ -114,7 +121,8 @@
       "gray",
       "black"
     ],
-    "batch": "2026-08-09-instrument-clusters"
+    "batch": "2026-08-09-instrument-clusters",
+    "dhash": "5b1b0d3433b3ca6e"
   },
   {
     "file": "2026-08-09-instrument-clusters-09-1303-convertible-dashboard-2024-05-jpg.jpg",
@@ -128,7 +136,8 @@
     "tags": [
       "orange"
     ],
-    "batch": "2026-08-09-instrument-clusters"
+    "batch": "2026-08-09-instrument-clusters",
+    "dhash": "4b65c4dd7d6c6a38"
   },
   {
     "file": "2026-08-09-instrument-clusters-10-003-car-dashboard-manufacturing-process-opel-car.jpg",
@@ -143,6 +152,7 @@
       "gray",
       "yellow"
     ],
-    "batch": "2026-08-09-instrument-clusters"
+    "batch": "2026-08-09-instrument-clusters",
+    "dhash": "13dae7ec6933969f"
   }
 ]

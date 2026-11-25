@@ -65,6 +65,32 @@ What we took, and what's ours:
   complementary source: `claude mcp add --transport http inspo https://inspomcp.dev/api/mcp`
   alongside ours gives an agent both the web's taste and yours.
 
+## Learned from Eagle (eagle.cool)
+
+Eagle is the mature version of "a private, local reference library" — 450k users,
+pay-once, a library folder on disk. What we took (all live):
+
+- **Save from the browser** — right-click image / video / link / page, capture the
+  visible area, shortcuts. (`extension/`, `/api/save`)
+- **Smart folders** — saved, rule-based searches that fill themselves.
+- **Find duplicates** — perceptual hash (dHash) per item, grouped by distance; near-
+  blank images excluded because they all hash alike. (`vault.py dupes`, Duplicates view)
+- **Look-alikes** — nearest by hash, topped up by shared tags, in every item view.
+- **Ratings** — 1–5 stars, keyboard rating, minimum-rating filter.
+- **Layouts + quick preview** — waterfall / grid / list, size slider, Space to preview.
+- **Random mode** — shuffle to rediscover.
+- **Source domain as a facet** — searchable.
+- **Local-only safety** — the server only accepts writes from the app and the extension.
+
+Not yet, and worth it later: auto-tag rules per folder; AI "describe it" search and
+batch AI actions (needs embeddings — phase 4); annotations pinned onto the image;
+reverse image search to find a reference's origin; font and design-file previews;
+password-locked folders.
+
+What stays ours: the review step (Eagle files everything you click; the hive only
+takes what a human kept), provenance on every item, git as the shared mailbox, and the
+MCP server so agents can draw on the library.
+
 ## Phases
 
 | Phase | What | Status |

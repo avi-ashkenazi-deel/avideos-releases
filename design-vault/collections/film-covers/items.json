@@ -12,7 +12,8 @@
       "orange",
       "yellow"
     ],
-    "batch": "2026-08-09-film-posters"
+    "batch": "2026-08-09-film-posters",
+    "dhash": "b8e4b9b6628eced2"
   },
   {
     "file": "2026-08-09-film-posters-02-state-fair-1933-film-poster-restoration-jpg.jpg",
@@ -26,7 +27,8 @@
     "tags": [
       "orange"
     ],
-    "batch": "2026-08-09-film-posters"
+    "batch": "2026-08-09-film-posters",
+    "dhash": "36ae923333f3f894"
   },
   {
     "file": "2026-08-09-film-posters-03-poster-for-quo-vadis-1913-silent-film-jpg.jpg",
@@ -41,7 +43,8 @@
       "red",
       "orange"
     ],
-    "batch": "2026-08-09-film-posters"
+    "batch": "2026-08-09-film-posters",
+    "dhash": "868687b9c7c3c082"
   },
   {
     "file": "2026-08-09-film-posters-04-the-mummy-1932-film-poster-jpg.jpg",
@@ -56,7 +59,8 @@
       "blue",
       "orange"
     ],
-    "batch": "2026-08-09-film-posters"
+    "batch": "2026-08-09-film-posters",
+    "dhash": "66b29a32b236b2b2"
   },
   {
     "file": "2026-08-09-film-posters-05-le-cirque-miniature-c-ndido-de-faria-1908-jpg.jpg",
@@ -71,7 +75,8 @@
       "orange",
       "yellow"
     ],
-    "batch": "2026-08-09-film-posters"
+    "batch": "2026-08-09-film-posters",
+    "dhash": "948080868ccb8290"
   },
   {
     "file": "2026-08-09-film-posters-06-the-great-dictator-1940-poster-jpg.jpg",
@@ -85,7 +90,8 @@
     "tags": [
       "yellow"
     ],
-    "batch": "2026-08-09-film-posters"
+    "batch": "2026-08-09-film-posters",
+    "dhash": "c6d6cedebe929494"
   },
   {
     "file": "2026-08-09-film-posters-07-jaws-movie-poster-jpg.jpg",
@@ -100,7 +106,8 @@
       "black",
       "cyan"
     ],
-    "batch": "2026-08-09-film-posters"
+    "batch": "2026-08-09-film-posters",
+    "dhash": "8a233b0f139a8e8a"
   },
   {
     "file": "2026-08-09-film-posters-08-poster-for-quo-vadis-1913-silent-film-lygia-boun.jpg",
@@ -115,7 +122,8 @@
       "orange",
       "yellow"
     ],
-    "batch": "2026-08-09-film-posters"
+    "batch": "2026-08-09-film-posters",
+    "dhash": "8a8a94b67a786c78"
   },
   {
     "file": "2026-08-09-film-posters-09-poster-freshman-the-1925-03-jpg.jpg",
@@ -130,7 +138,8 @@
       "yellow",
       "orange"
     ],
-    "batch": "2026-08-09-film-posters"
+    "batch": "2026-08-09-film-posters",
+    "dhash": "a8b4b2f2d8b4daf0"
   },
   {
     "file": "2026-08-09-film-posters-10-houston-we-have-a-problem-official-movie-poster.jpg",
@@ -145,7 +154,8 @@
       "red",
       "blue"
     ],
-    "batch": "2026-08-09-film-posters"
+    "batch": "2026-08-09-film-posters",
+    "dhash": "d3f1f0d2fa36d6aa"
   },
   {
     "file": "2026-08-09-film-posters-11-modernegypt-poster-of-yahya-el-hub-cov-319-jpg.jpg",
@@ -159,7 +169,8 @@
     "tags": [
       "orange"
     ],
-    "batch": "2026-08-09-film-posters"
+    "batch": "2026-08-09-film-posters",
+    "dhash": "4d4755597a6e6624"
   },
   {
     "file": "2026-08-09-film-posters-12-lullabox-film-poster-jpg.jpg",
@@ -175,6 +186,7 @@
       "black",
       "yellow"
     ],
-    "batch": "2026-08-09-film-posters"
+    "batch": "2026-08-09-film-posters",
+    "dhash": "0f0b06276761058f"
   }
 ]

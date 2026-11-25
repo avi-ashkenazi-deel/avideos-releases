@@ -1,0 +1,25 @@
+<!doctype html>
+<meta charset="utf-8">
+<style>
+  body { font:13px/1.45 "Avenir Next","Segoe UI",system-ui,sans-serif; margin:0; width:260px; background:#16171a; color:#ecebe6; }
+  main { padding:14px; display:grid; gap:10px; }
+  h1 { font-size:14px; margin:0; }
+  #status { font-size:12px; color:#8f8c85; }
+  #status.ok::before { content:"● "; color:#57a45e; }
+  #status.down::before { content:"● "; color:#d84a4a; }
+  label { display:grid; gap:4px; font-size:11px; color:#8f8c85; }
+  input, select { font:inherit; color:#ecebe6; background:#1c1d21; border:1px solid #26272d; border-radius:7px; padding:6px 8px; }
+  button { font:inherit; cursor:pointer; border-radius:8px; padding:8px; border:1px solid #26272d; background:#1c1d21; color:#ecebe6; }
+  button.primary { background:#d8c96a; color:#0f1012; border-color:#d8c96a; font-weight:700; }
+  .hint { font-size:11px; color:#8f8c85; margin:0; }
+</style>
+<main>
+  <h1>Design Vault</h1>
+  <div id="status">checking…</div>
+  <label>Save into collection <select id="collection"></select></label>
+  <label>Tags for this session <input id="tags" placeholder="e.g. fintech, motion"></label>
+  <button class="primary" id="capture">Capture visible area</button>
+  <button id="page">Save whole page</button>
+  <p class="hint">Or right-click any image, video or link. Shortcuts: ⌥⇧S capture · ⌥⇧P page. Everything lands in the app's Inbox.</p>
+</main>
+<script src="popup.js"></script>

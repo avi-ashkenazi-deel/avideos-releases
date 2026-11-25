@@ -439,6 +439,75 @@ def cmd_colors(_args) -> int:
     return 0
 
 
+def dhash(path: Path) -> str:
+    """64-bit difference hash: robust to resizing and recompression, so re-saves match."""
+    from PIL import Image
+    if is_video(path.name):
+        import subprocess
+        import tempfile
+        with tempfile.NamedTemporaryFile(suffix=".png") as tmp:
+            subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(path), "-frames:v", "1",
+                            tmp.name], capture_output=True)
+            img = Image.open(tmp.name)
+            img.load()
+    else:
+        img = Image.open(path)
+    px = list(img.convert("L").resize((9, 8), Image.LANCZOS).getdata())
+    bits = 0
+    for row in range(8):
+        for col in range(8):
+            bits = (bits << 1) | (px[row * 9 + col] > px[row * 9 + col + 1])
+    return f"{bits:016x}"
+
+
+def cmd_dupes(args) -> int:
+    """Hash every item lacking a dhash, then group near-identical items into dupes.json."""
+    hashed = failed = 0
+    entries = []
+    for catalog_path in sorted(COLLECTIONS.glob("*/items.json")):
+        catalog = json.loads(catalog_path.read_text())
+        changed = False
+        for e in catalog:
+            if not e.get("dhash"):
+                try:
+                    e["dhash"] = dhash(catalog_path.parent / e["file"])
+                    hashed += 1
+                    changed = True
+                except Exception:
+                    failed += 1
+                    continue
+            entries.append((f"collections/{catalog_path.parent.name}/{e['file']}", int(e["dhash"], 16)))
+        if changed:
+            catalog_path.write_text(json.dumps(catalog, indent=2, ensure_ascii=False))
+    # union-find over pairs within the distance threshold
+    parent = list(range(len(entries)))
+
+    def find(i):
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+    for i in range(len(entries)):
+        hi = entries[i][1]
+        # Near-blank images (one tone plus a small mark) hash to almost all 0s or 1s and
+        # would all "match" each other — too little detail to compare, so skip them.
+        if not 8 <= hi.bit_count() <= 56:
+            continue
+        for j in range(i + 1, len(entries)):
+            hj = entries[j][1]
+            if 8 <= hj.bit_count() <= 56 and (hi ^ hj).bit_count() <= args.threshold:
+                parent[find(i)] = find(j)
+    groups = {}
+    for i, (f, _) in enumerate(entries):
+        groups.setdefault(find(i), []).append(f)
+    dupes = [g for g in groups.values() if len(g) > 1]
+    (VAULT / "dupes.json").write_text(json.dumps({"threshold": args.threshold, "groups": dupes}, indent=1))
+    print(f"hashed {hashed} (failed {failed}); {len(dupes)} duplicate groups, "
+          f"{sum(len(g) for g in dupes)} items")
+    cmd_db(None)
+    return 0
+
+
 def cmd_db(_args) -> int:
     """Consolidate every collection catalog into vault.db (SQLite) for offline use."""
     import sqlite3
@@ -458,7 +527,9 @@ def cmd_db(_args) -> int:
             timecode   TEXT,            -- storyboard frames only
             notes      TEXT,            -- DESIGN.md-style annotation (agent- or human-written)
             page_url   TEXT,
-            source_url TEXT
+            source_url TEXT,
+            rating     INTEGER,         -- 1-5 stars, set in the app
+            dhash      TEXT             -- 64-bit perceptual hash (hex), set by `vault.py dupes`
         );
         CREATE INDEX idx_items_collection ON items(collection);
         CREATE INDEX idx_items_year ON items(year);
@@ -467,11 +538,12 @@ def cmd_db(_args) -> int:
     for catalog_path in sorted(COLLECTIONS.glob("*/items.json")):
         collection = catalog_path.parent.name
         for e in json.loads(catalog_path.read_text()):
-            con.execute("INSERT INTO items VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", (
+            con.execute("INSERT INTO items VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)", (
                 collection, f"collections/{collection}/{e['file']}",
                 e.get("title"), e.get("year"), ",".join(e.get("tags", [])),
                 e.get("license"), e.get("artist"), e.get("batch"),
-                e.get("timecode"), e.get("notes"), e.get("page_url"), e.get("source_url")))
+                e.get("timecode"), e.get("notes"), e.get("page_url"), e.get("source_url"),
+                e.get("rating"), e.get("dhash")))
             total += 1
     con.commit()
     con.close()
@@ -507,9 +579,12 @@ def main() -> int:
     bp.add_argument("--thumb-q", type=int, default=68, help="embedded thumbnail JPEG quality")
     sub.add_parser("db")
     sub.add_parser("colors")
+    dp = sub.add_parser("dupes")
+    dp.add_argument("--threshold", type=int, default=4, help="max differing bits to call two items duplicates")
     args = ap.parse_args()
     return {"review": cmd_review, "resolve": cmd_resolve, "tag": cmd_tag,
-            "browse": cmd_browse, "db": cmd_db, "colors": cmd_colors}[args.cmd](args)
+            "browse": cmd_browse, "db": cmd_db, "colors": cmd_colors,
+            "dupes": cmd_dupes}[args.cmd](args)
 
 
 if __name__ == "__main__":

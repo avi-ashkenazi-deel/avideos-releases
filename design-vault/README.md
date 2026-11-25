@@ -12,6 +12,18 @@ Applications, double-click it. The first launch downloads the library into
 `~/design-vault`; after that it opens straight into the vault in its own window.
 Rebuild the DMG with `design-vault/packaging/build_dmg.sh`.
 
+**Save from the browser (Chrome / Arc / Edge / Brave):** open `chrome://extensions`,
+turn on Developer mode, click **Load unpacked**, pick `design-vault/extension`. Then
+right-click any image, video, link or page → *Save to Design Vault*, or press ⌥⇧S to
+capture what's on screen (⌥⇧P saves the whole page). Saves land in the Inbox; the
+toolbar popup picks the collection and tags. The app must be running.
+
+**In the app:** Masonry / Grid / List layouts with a size slider · Space to preview
+the hovered item, ← → to walk, 1–5 to rate, 0 to clear · ⤨ Shuffle · "Save search"
+turns the current search + color + collection + rating into a live smart folder ·
+Duplicates view (run `vault.py dupes` after big imports) · "Looks alike" strip in
+every item view · search matches the source site too (`pitchfork.com radiohead`).
+
 **By hand:**
 
 ```bash
