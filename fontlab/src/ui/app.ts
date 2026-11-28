@@ -1,7 +1,8 @@
 import { store } from './state';
 import { loadLocal } from '../project/storage';
 import { headerBar, markSaved } from './panels/exportPanel';
-import { seedsPanel } from './panels/seeds';
+import { seedsPanel, drawUi } from './panels/seeds';
+import { mountMobile } from './mobile';
 import { gridPanel } from './panels/grid';
 import { effectsPanel } from './panels/effects';
 import { previewPanel } from './panels/preview';
@@ -26,14 +27,11 @@ export async function mountApp(root: HTMLElement): Promise<void> {
     if (legacy) await moveVersions(SCRATCH, legacy.id).catch(() => undefined);
   } catch { /* ignore */ }
   if (!getCurrentId()) { const saved = loadLocal(); if (saved) store.project = saved; }
-  root.replaceChildren(
-    headerBar(),
-    h('main', { class: 'layout' },
-      seedsPanel(),
-      gridPanel((ch) => { store.selected = ch; store.emit('select'); }),
-      h('div', { class: 'right' }, effectsPanel(), previewPanel()),
-    ),
-  );
+  const header = headerBar(), seeds = seedsPanel(), grid = gridPanel((ch) => { store.selected = ch; store.emit('select'); });
+  const effects = effectsPanel(), preview = previewPanel();
+  root.replaceChildren(header, h('main', { class: 'layout' }, seeds, grid, h('div', { class: 'right' }, effects, preview)));
+  // on a phone the same pieces are laid out as one screen with sheets
+  if (drawUi) mountMobile(root, { header, seeds, grid, effects, preview }, drawUi);
   store.emit('project:loaded');
   markSaved();
   scheduleBuild(0);

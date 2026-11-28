@@ -35,6 +35,7 @@ export function fileInput(accept: string, onFile: (f: File) => void, multiple = 
 }
 
 export function toast(msg: string, ms = 2600): void {
+  for (const old of document.querySelectorAll('.toast')) old.remove(); // the newest message replaces the one on screen
   const el = h('div', { class: 'toast' }, msg);
   document.body.append(el);
   requestAnimationFrame(() => el.classList.add('show'));

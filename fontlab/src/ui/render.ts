@@ -2,10 +2,17 @@ import type { Contour, Stroke, FontMetrics } from '../core/glyph';
 
 export interface View { ox: number; oy: number; s: number } // font (x,y) -> canvas (ox + x*s, oy - y*s)
 
-export function fitView(_width: number, height: number, metrics: FontMetrics, pad = 24): View {
+/**
+ * The view that shows the whole em (ascender to descender) in a canvas of this
+ * size. With `advance`, a letter too wide for a narrow canvas (a phone held
+ * upright) is scaled down to fit and centred vertically.
+ */
+export function fitView(width: number, height: number, metrics: FontMetrics, pad = 24, advance?: number): View {
   const top = metrics.ascender + 80, bottom = metrics.descender - 80;
-  const s = (height - pad * 2) / (top - bottom);
-  return { ox: pad + 40 * s, oy: pad + top * s, s };
+  let s = (height - pad * 2) / (top - bottom);
+  if (advance !== undefined && width > pad * 2) s = Math.min(s, (width - pad * 2) / (advance + 80));
+  const spare = height - pad * 2 - (top - bottom) * s;
+  return { ox: pad + 40 * s, oy: pad + spare / 2 + top * s, s };
 }
 
 export function contourPath(contours: Contour[], v: View): Path2D {

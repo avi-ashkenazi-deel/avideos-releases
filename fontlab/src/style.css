@@ -336,3 +336,80 @@ button.danger { color: var(--danger); }
 .holdbanner { display: flex; gap: 8px; align-items: center; background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; margin: 6px 0; font-size: 13px; }
 .holdbanner .avatar { margin: 0; border: 0; }
 canvas.editor.readonly { cursor: not-allowed; }
+
+/* ---- touch: the magnifier shown while a finger drags a point */
+.loupe { position: absolute; z-index: 4; border-radius: 16px; border: 1px solid var(--line); box-shadow: 0 8px 24px rgba(0,0,0,.6); pointer-events: none; }
+
+/* ---- phone layout (html.phone is set while the screen is narrow, see ui/mobile.ts) */
+.m-shell, .m-sheet, .m-backdrop { display: none; }
+html.phone, html.phone body { height: 100%; overflow: hidden; overscroll-behavior: none; }
+html.phone .topbar, html.phone .layout { display: none; }
+html.phone .m-shell { display: flex; flex-direction: column; position: fixed; inset: 0; height: 100dvh; background: var(--bg); touch-action: manipulation; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+html.phone input[type=text], html.phone input[type=number], html.phone select, html.phone textarea { font-size: 16px; } /* smaller text makes iOS zoom the page on focus */
+.m-shell .ib .icon { width: 20px; height: 20px; }
+.m-top { display: flex; align-items: center; gap: 2px; padding: 4px 6px; background: var(--panel); border-bottom: 1px solid var(--line); flex: none; }
+.m-top .ib { border: 0; background: transparent; padding: 10px; border-radius: 10px; color: var(--text); }
+.m-top .ib:active { background: var(--panel-2); }
+.m-top .ib[aria-pressed="false"] { color: var(--muted); }
+.m-preview { display: block; width: 100%; flex: none; height: 64px; padding: 2px 14px; text-align: left; white-space: nowrap; overflow: hidden; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: var(--bg); color: var(--text); font-size: 44px; line-height: 60px; }
+.m-stage { position: relative; flex: 1; min-height: 0; overflow: hidden; }
+html.phone .m-stage .canvaswrap { position: absolute; inset: 0; }
+html.phone .m-stage canvas.editor { width: 100%; height: 100%; aspect-ratio: auto; border: 0; border-radius: 0; outline-offset: -2px; }
+.m-label { position: absolute; left: 8px; top: 8px; padding: 3px 8px; border-radius: 8px; background: rgba(17,18,22,.82); z-index: 3; pointer-events: none; font-size: 11px; line-height: 1.35; color: var(--muted); max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.m-label b { color: var(--accent); font-size: 15px; }
+html.phone .m-stage .holdbanner { position: absolute; left: 8px; right: 8px; top: 48px; z-index: 4; margin: 0; background: var(--panel); }
+.m-ctx { position: absolute; left: 8px; bottom: 8px; z-index: 5; display: flex; gap: 6px; }
+.m-ctx .ib { width: 42px; height: 42px; padding: 0; justify-content: center; border-radius: 50%; background: var(--panel); border: 1px solid var(--line); color: var(--text); box-shadow: 0 4px 14px rgba(0,0,0,.4); }
+.m-ctx .ib.primary { background: var(--accent); color: #111; border-color: var(--accent); }
+.m-ctx .ib:disabled { opacity: .4; }
+.m-said { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 6; padding: 7px 14px; border-radius: 999px; background: var(--panel); border: 1px solid var(--line); color: var(--text); font-size: 13px; font-weight: 600; white-space: nowrap; pointer-events: none; opacity: 0; transition: opacity .2s; }
+.m-said.show { opacity: 1; }
+.m-tools { flex: none; overflow-x: auto; padding: 4px 6px; background: var(--panel); border-top: 1px solid var(--line); scrollbar-width: none; }
+.m-tools::-webkit-scrollbar { display: none; }
+html.phone .m-tools .toolstrip { display: flex; justify-content: space-between; min-width: 100%; gap: 2px; padding: 0; border: 0; background: transparent; }
+html.phone .m-tools .toolstrip .ib { padding: 11px; border-radius: 10px; }
+html.phone .m-tools .toolsep { display: none; }
+.m-nav { display: flex; flex: none; padding: 2px 4px calc(2px + env(safe-area-inset-bottom)); background: var(--panel); border-top: 1px solid var(--line); }
+.m-navbtn { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 7px 0 5px; border: 0; border-radius: 10px; background: transparent; color: var(--muted); font-size: 10px; }
+.m-navbtn:active { background: var(--panel-2); color: var(--text); }
+.m-navbtn:hover { border: 0; }
+
+/* sheets from the bottom */
+html.phone .m-backdrop.open { display: block; position: fixed; inset: 0; z-index: 60; background: rgba(0,0,0,.55); }
+html.phone .m-sheet.open { display: flex; flex-direction: column; position: fixed; left: 0; right: 0; bottom: 0; max-height: 86dvh; z-index: 61; background: var(--panel); border-top: 1px solid var(--line); border-radius: 16px 16px 0 0; box-shadow: 0 -12px 40px rgba(0,0,0,.5); }
+.m-sheethead { display: flex; align-items: center; flex: none; padding: 8px 6px 4px 16px; font-size: 16px; font-weight: 600; }
+.m-sheethead .ib { border: 0; background: transparent; padding: 10px; }
+.m-sheetbody { overflow: auto; overscroll-behavior: contain; padding: 0 14px calc(18px + env(safe-area-inset-bottom)); }
+html.phone .m-sheetbody .panel { border: 0; border-radius: 0; padding: 0; background: transparent; }
+html.phone .m-sheetbody > .panel > h2 { display: none; }
+html.phone .m-sheetbody .grid { grid-template-columns: repeat(auto-fill, minmax(58px, 1fr)); }
+html.phone .m-sheetbody .preview-out { min-height: 90px; }
+/* the header's actions as a list */
+html.phone .m-sheetbody .topbar { display: flex; position: static; flex-direction: column; align-items: stretch; gap: 10px; padding: 0; border: 0; background: transparent; }
+html.phone .m-sheetbody .topbar .fontname { max-width: none; min-width: 0; flex: 1; }
+html.phone .m-sheetbody .topbar .actions { margin: 0; flex-direction: column; align-items: stretch; gap: 8px; }
+html.phone .m-sheetbody .topbar .actions .ib { width: 100%; justify-content: flex-start; padding: 12px; }
+html.phone .m-sheetbody .topbar .sharewrap { display: flex; }
+html.phone .m-sheetbody .topbar .menu-trigger .icon:last-child { margin-left: auto; }
+html.phone .menu-list:not(.ctxmenu) { position: fixed; left: 8px; right: 8px; top: auto; bottom: 8px; max-height: 76dvh; overflow: auto; z-index: 120; }
+html.phone .menu-item { padding: 12px 10px; }
+/* the draw tab splits into "this letter" and "add letters" */
+html.phone .seeds .charstrip, html.phone .seeds .toolrow, html.phone .seeds .tabs { display: none; }
+html.phone .seeds[data-view="letter"] .tab-body:not(.draw), html.phone .seeds[data-view="letter"] .charset, html.phone .seeds[data-view="letter"] .gen { display: none !important; }
+html.phone .seeds[data-view="letter"] .tab-body.draw { display: block !important; }
+html.phone .seeds[data-view="add"] { display: flex; flex-direction: column; }
+html.phone .seeds[data-view="add"] .gen { order: -1; margin: 0 0 14px; }
+html.phone .seeds[data-view="add"] .tab-body.draw { display: none !important; }
+html.phone .seeds[data-view="add"] .tab-body:not(.draw) { display: block !important; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+html.phone .drawtitle { flex-wrap: wrap; }
+/* the rest of the app on a narrow screen */
+html.phone .toast { top: 60px; bottom: auto; z-index: 200; max-width: 92vw; border-radius: 14px; text-align: center; }
+html.phone .modal { width: 100vw; max-width: 100vw; max-height: 90dvh; margin: auto 0 0; overflow: auto; border-radius: 16px 16px 0 0; }
+html.phone .welcome { align-items: flex-start; overflow: auto; }
+html.phone .welcome-inner { padding: 20px 8px; }
+html.phone .welcome-head h1 { font-size: 30px; }
+html.phone .welcome-steps { grid-template-columns: 1fr 1fr; gap: 8px; }
+html.phone .wstep { padding: 12px; }
+html.phone .m-sheetbody .topbar .ib.icon-only::after { content: attr(aria-label); }
+html.phone .m-sheetbody .topbar .sharewrap .ib { flex: 1; }
+.toolrow .fitbtn { margin-left: auto; flex: none; padding: 4px 9px; font-size: 12px; }

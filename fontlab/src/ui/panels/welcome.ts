@@ -14,6 +14,7 @@ const STEPS: { n: string; title: string; body: string; icon: IconName }[] = [
 /** Full-screen first-run overlay. Returns the element; closes on click or Escape. */
 export function showWelcome(force = false): HTMLElement | null {
   if (!force && flag(KEY)) return null;
+  const touch = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
   if (document.querySelector('.welcome')) return null;
   const close = () => { setFlag(KEY); overlay.remove(); window.removeEventListener('keydown', onKey, true); };
   const onKey = (e: KeyboardEvent) => { e.stopPropagation(); if (e.key === 'Escape' || e.key === 'Enter' || e.key === ' ') { e.preventDefault(); close(); } };
@@ -21,8 +22,8 @@ export function showWelcome(force = false): HTMLElement | null {
     h('div', { class: 'welcome-inner' },
       h('div', { class: 'welcome-head' }, h('h1', {}, 'FontLab'), h('p', {}, 'Make a typeface from a few letters, then bend it out of shape.')),
       h('div', { class: 'welcome-steps' }, ...STEPS.map((s) => h('div', { class: 'wstep' }, h('div', { class: 'wnum' }, s.n), icon(s.icon, 22), h('h3', {}, s.title), h('p', {}, s.body)))),
-      h('p', { class: 'welcome-foot' }, 'Arrow keys move between letters · Delete removes a letter · Ctrl/Cmd+Z undoes · right-click a tile for more'),
-      h('p', { class: 'welcome-tap' }, 'Click anywhere to begin'),
+      h('p', { class: 'welcome-foot' }, touch ? 'One finger draws and drags points · two fingers zoom and move the view' : 'Arrow keys move between letters · Delete removes a letter · Ctrl/Cmd+Z undoes · right-click a tile for more'),
+      h('p', { class: 'welcome-tap' }, touch ? 'Tap anywhere to begin' : 'Click anywhere to begin'),
     ),
   );
   overlay.addEventListener('click', close);

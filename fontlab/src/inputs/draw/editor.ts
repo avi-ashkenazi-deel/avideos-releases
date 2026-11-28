@@ -269,8 +269,25 @@ export class EditorModel {
   /** Move a curve handle to `pos` (font units). Mirrors the opposite handle when the anchor was smooth unless `breakSmooth`. */
   dragHandle(ref: HandleRef, pos: Vec, breakSmooth = false): void {
     const snap = this.restoreSnapshot();
-    const c = this.curves[ref.contour], sc = snap.curves![ref.contour];
-    if (!c) return;
+    this.applyHandle(ref, pos, breakSmooth, snap);
+    this.sync();
+  }
+
+  /**
+   * Several fingers at once: each moves its own points (by a delta from the
+   * drag's start) or its own handle (to a position). Everything is applied to
+   * the one snapshot, so the drags do not undo each other.
+   */
+  dragMany(moves: { refs: NodeRef[]; dx: number; dy: number }[], handles: { ref: HandleRef; pos: Vec; breakSmooth?: boolean }[] = []): void {
+    const snap = this.restoreSnapshot();
+    for (const mv of moves) this.applyMove(mv.refs, mv.dx, mv.dy, snap);
+    for (const hd of handles) this.applyHandle(hd.ref, hd.pos, !!hd.breakSmooth, snap);
+    this.sync();
+  }
+
+  private applyHandle(ref: HandleRef, pos: Vec, breakSmooth: boolean, snap: Glyph): void {
+    const c = this.curves[ref.contour], sc = snap.curves?.[ref.contour];
+    if (!c || !sc) return;
     const n = c.segments.length, j = ref.segment;
     const seg = c.segments[j];
     let anchor: Vec, anchorIdx: number, opp: Vec | null, oppSeg: Cubic, oppIdx: 1 | 2;
@@ -291,7 +308,6 @@ export class EditorModel {
         oppSeg[oppIdx] = [anchor[0] + (dx / l) * L, anchor[1] + (dy / l) * L];
       }
     }
-    this.sync();
   }
 
   /** True when the two handles around anchor `j` are collinear within SMOOTH_DEG. */
@@ -478,27 +494,52 @@ export interface PointEditorOptions {
   onPreview?: (glyph: Glyph) => void;
   /** Ask the host to repaint the canvas (it should call editor.draw(ctx) at the end). */
   redraw?: () => void;
-  /** Hit tolerance in canvas px (default 7). */
+  /** Hit tolerance in canvas px (default 7 for a mouse or pen, larger for a finger). */
   tolerance?: number;
+  /**
+   * Snapping while points are dragged: return the lines to snap to (font
+   * units; the editor adds the other points of the letter), or null when
+   * snapping is off.
+   */
+  snap?: () => { xs: number[]; ys: number[] } | null;
 }
 
-type DragMode =
-  | { kind: 'nodes'; startPx: Vec; moved: boolean }
-  | { kind: 'width'; startPx: Vec; moved: boolean }
-  | { kind: 'handle'; ref: HandleRef; moved: boolean }
-  | { kind: 'marquee'; startPx: Vec; curPx: Vec; additive: boolean };
+/** Hit tolerance for a finger, in canvas px. */
+export const TOUCH_TOLERANCE = 18;
+/** How close (canvas px) a dragged point has to come to a line to snap to it. */
+export const SNAP_PX = 9;
+
+/**
+ * One pointer's drag. With touch there can be several at once: the first
+ * moves the selection, every further finger moves the one point or handle it
+ * landed on.
+ */
+type DragMode = { id: number } & (
+  /** `refs`: the points this pointer moves; `grabPos`: where the grabbed point was when the drag began; `base`: how far it had already moved then */
+  | { kind: 'nodes'; refs: NodeRef[]; grab: NodeRef; grabPos: Vec; base: Vec; startPx: Vec; curPx: Vec; moved: boolean }
+  | { kind: 'width'; startPx: Vec; curPx: Vec; moved: boolean }
+  | { kind: 'handle'; ref: HandleRef; pos: Vec; breakSmooth: boolean; moved: boolean }
+  | { kind: 'marquee'; startPx: Vec; curPx: Vec; additive: boolean }
+);
 
 export class PointEditor {
   readonly canvas: HTMLCanvasElement;
   private getView: () => View;
   private opts: PointEditorOptions;
   private model: EditorModel | null = null;
-  private drag: DragMode | null = null;
+  private drags: DragMode[] = [];
+  /** the first pointer's drag (the only one with a mouse) */
+  private get drag(): DragMode | null { return this.drags[0] ?? null; }
+  /** node positions when the drag began (font units), by node key */
+  private startPos = new Map<string, Vec>();
+  /** lines the dragged points are snapped to right now, for the overlay */
+  private snapLines: { x?: number; y?: number }[] = [];
+  /** the last pointer was a finger: larger hit areas and markers */
+  private touch = false;
   private hover: Hit | null = null;
   private accent = '#ffd166';
   private lastEmitted: Glyph | null = null;
   private prevCursor = '';
-  private pointerId: number | null = null;
 
   constructor(canvas: HTMLCanvasElement, getView: () => View, opts: PointEditorOptions) {
     this.canvas = canvas;
@@ -531,7 +572,7 @@ export class PointEditor {
   /** Detach listeners and drop the working copy (history is discarded). */
   disable(): void {
     if (!this.model) return;
-    if (this.drag) { this.model.cancelDrag(); this.drag = null; }
+    if (this.drag) { this.model.cancelDrag(); this.dropDrags(); }
     this.canvas.removeEventListener('pointerdown', this.onDown);
     this.canvas.removeEventListener('pointermove', this.onMove);
     this.canvas.removeEventListener('pointerup', this.onUp);
@@ -574,7 +615,71 @@ export class PointEditor {
     return true;
   }
 
-  private get tol(): number { return this.opts.tolerance ?? HIT_TOLERANCE; }
+  private get tol(): number { return this.opts.tolerance ?? (this.touch ? TOUCH_TOLERANCE : HIT_TOLERANCE); }
+
+  /** A point or handle is being dragged (not a selection box). */
+  get draggingPoints(): boolean { const d = this.drag; return !!d && d.kind !== 'marquee'; }
+
+  /**
+   * While a point is being dragged, a further finger that lands on another
+   * point or handle belongs to the editor (it drags that one too).
+   */
+  wantsPointer(e: PointerEvent): boolean {
+    const m = this.model;
+    if (!m || !this.draggingPoints || this.drag!.kind === 'width') return false;
+    const p = this.px(e);
+    const hit = m.hitTest(p[0], p[1], this.getView(), e.pointerType === 'touch' ? (this.opts.tolerance ?? TOUCH_TOLERANCE) : this.tol);
+    return hit?.type === 'node' || hit?.type === 'handle';
+  }
+
+  /** Take back every drag in progress (the fingers turned out to be a pinch). */
+  cancelPointers(): void {
+    if (!this.model || !this.drags.length) return;
+    if (this.draggingPoints || this.drags.length > 1) this.model.cancelDrag();
+    this.dropDrags();
+    this.repaint();
+  }
+
+  private dropDrags(): void {
+    for (const d of this.drags) { try { this.canvas.releasePointerCapture(d.id); } catch { /* not captured */ } }
+    this.drags = []; this.snapLines = [];
+  }
+
+  private rememberStart(): void {
+    this.startPos.clear();
+    for (const n of this.model!.nodes()) this.startPos.set(nodeKey(n.ref), n.pos);
+  }
+
+  /** Apply every pointer's drag to the snapshot (with snapping for point drags). */
+  private applyDrags(view: View): void {
+    const m = this.model!;
+    const first = this.drags[0];
+    if (!first || first.kind === 'marquee') return;
+    if (first.kind === 'width') { m.dragWidth(-(first.curPx[1] - first.startPx[1]) / view.s); return; }
+    const guide = this.opts.snap?.() ?? null;
+    const moving = new Set<string>();
+    for (const d of this.drags) if (d.kind === 'nodes') for (const r of d.refs) moving.add(nodeKey(r));
+    const still = guide ? [...this.startPos].filter(([k]) => !moving.has(k)).map(([, p]) => p) : [];
+    this.snapLines = [];
+    const moves: { refs: NodeRef[]; dx: number; dy: number }[] = [];
+    const handles: { ref: HandleRef; pos: Vec; breakSmooth: boolean }[] = [];
+    for (const d of this.drags) {
+      if (d.kind === 'handle') { if (d.moved) handles.push({ ref: d.ref, pos: d.pos, breakSmooth: d.breakSmooth }); continue; }
+      if (d.kind !== 'nodes' || !d.moved) continue;
+      let dx = d.base[0] + (d.curPx[0] - d.startPx[0]) / view.s, dy = d.base[1] - (d.curPx[1] - d.startPx[1]) / view.s;
+      if (guide) {
+        const tol = SNAP_PX / view.s;
+        // the font's own lines (baseline, x-height, sidebearings) win over lining up with another point
+        const x = d.grabPos[0] + dx, y = d.grabPos[1] + dy;
+        const sx = nearest(x, guide.xs, tol) ?? nearest(x, still.map((p) => p[0]), tol);
+        const sy = nearest(y, guide.ys, tol) ?? nearest(y, still.map((p) => p[1]), tol);
+        if (sx !== null) { dx = sx - d.grabPos[0]; this.snapLines.push({ x: sx }); }
+        if (sy !== null) { dy = sy - d.grabPos[1]; this.snapLines.push({ y: sy }); }
+      }
+      moves.push({ refs: d.refs, dx, dy });
+    }
+    m.dragMany(moves, handles);
+  }
 
   private readAccent(): void {
     try {
@@ -624,28 +729,53 @@ export class PointEditor {
   private onDown = (e: PointerEvent) => {
     const m = this.model;
     if (!m || e.button !== 0) return;
+    this.touch = e.pointerType === 'touch';
     const view = this.getView();
     const p = this.px(e);
     const hit = m.hitTest(p[0], p[1], view, this.tol);
-    this.pointerId = e.pointerId;
+    if (this.drags.length) {
+      // a further finger: it drags the point or handle it landed on, and nothing else
+      const first = this.drags[0];
+      if (first.kind === 'marquee' || first.kind === 'width' || this.drags.some((d) => d.id === e.pointerId)) return;
+      if (hit?.type === 'handle') {
+        this.drags.push({ id: e.pointerId, kind: 'handle', ref: hit.handle, pos: hit.pos, breakSmooth: false, moved: false });
+      } else if (hit?.type === 'node') {
+        const k = nodeKey(hit.node);
+        const from = this.startPos.get(k), now = m.nodePos(hit.node);
+        if (!from || !now) return;
+        // the other fingers let go of this point; it keeps the place it has reached
+        for (const d of this.drags) if (d.kind === 'nodes') d.refs = d.refs.filter((r) => nodeKey(r) !== k);
+        m.select(hit.node, true);
+        this.emitSelect();
+        this.drags.push({ id: e.pointerId, kind: 'nodes', refs: [hit.node], grab: hit.node, grabPos: from, base: [now[0] - from[0], now[1] - from[1]], startPx: p, curPx: p, moved: true });
+      } else return;
+      try { this.canvas.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+      e.preventDefault();
+      this.repaint();
+      return;
+    }
     try { this.canvas.setPointerCapture(e.pointerId); } catch { /* ignore */ }
     e.preventDefault();
+    const id = e.pointerId;
     if (hit?.type === 'handle') {
-      m.beginDrag();
-      this.drag = { kind: 'handle', ref: hit.handle, moved: false };
+      m.beginDrag(); this.rememberStart();
+      this.drags = [{ id, kind: 'handle', ref: hit.handle, pos: hit.pos, breakSmooth: false, moved: false }];
     } else if (hit?.type === 'node') {
       if (e.shiftKey) m.toggleSelect(hit.node);
       else if (!m.isSelected(hit.node)) m.select(hit.node);
       this.emitSelect();
       if (m.isSelected(hit.node)) {
-        m.beginDrag();
-        this.drag = e.altKey && m.kind === 'stroke' ? { kind: 'width', startPx: p, moved: false } : { kind: 'nodes', startPx: p, moved: false };
+        m.beginDrag(); this.rememberStart();
+        const refs = m.getSelection()?.nodes.map((n) => ({ ...n })) ?? [hit.node];
+        this.drags = [e.altKey && m.kind === 'stroke'
+          ? { id, kind: 'width', startPx: p, curPx: p, moved: false } as DragMode
+          : { id, kind: 'nodes', refs, grab: hit.node, grabPos: this.startPos.get(nodeKey(hit.node)) ?? hit.pos, base: [0, 0], startPx: p, curPx: p, moved: false }];
       }
     } else if (hit?.type === 'midpoint' && e.altKey) {
       if (m.toggleSegmentLine(hit.contour, hit.segment)) this.commit();
     } else {
       if (!e.shiftKey) { m.clearSelection(); this.emitSelect(); }
-      this.drag = { kind: 'marquee', startPx: p, curPx: p, additive: e.shiftKey };
+      this.drags = [{ id, kind: 'marquee', startPx: p, curPx: p, additive: e.shiftKey }];
     }
     this.repaint();
   };
@@ -655,8 +785,8 @@ export class PointEditor {
     if (!m) return;
     const view = this.getView();
     const p = this.px(e);
-    const d = this.drag;
-    if (!d) {
+    if (!this.drags.length) {
+      if (e.pointerType === 'touch') return; // a finger does not hover
       const h = m.hitTest(p[0], p[1], view, this.tol);
       const changed = JSON.stringify(h) !== JSON.stringify(this.hover);
       this.hover = h;
@@ -664,37 +794,34 @@ export class PointEditor {
       if (changed) this.repaint();
       return;
     }
+    const d = this.drags.find((x) => x.id === e.pointerId);
+    if (!d) return;
     switch (d.kind) {
-      case 'nodes': {
-        const dx = (p[0] - d.startPx[0]) / view.s, dy = -(p[1] - d.startPx[1]) / view.s;
-        if (!d.moved && Math.hypot(p[0] - d.startPx[0], p[1] - d.startPx[1]) < 2) return;
-        d.moved = true;
-        m.dragNodes(dx, dy);
+      case 'nodes':
+        if (!d.moved && Math.hypot(p[0] - d.startPx[0], p[1] - d.startPx[1]) < (e.pointerType === 'touch' ? 4 : 2)) return;
+        d.moved = true; d.curPx = p;
         break;
-      }
-      case 'width': {
-        const dw = -(p[1] - d.startPx[1]) / view.s;
-        d.moved = true;
-        m.dragWidth(dw);
+      case 'width':
+        d.moved = true; d.curPx = p;
         break;
-      }
       case 'handle':
-        d.moved = true;
-        m.dragHandle(d.ref, toFont(p, view), e.altKey);
+        d.moved = true; d.pos = toFont(p, view); d.breakSmooth = e.altKey;
         break;
       case 'marquee':
         d.curPx = p;
         break;
     }
+    this.applyDrags(view);
     this.repaint();
   };
 
   private onUp = (e: PointerEvent) => {
     const m = this.model;
-    const d = this.drag;
-    if (!m || !d) return;
-    this.releasePointer(e);
-    this.drag = null;
+    const i = this.drags.findIndex((x) => x.id === e.pointerId);
+    if (!m || i < 0) return;
+    const d = this.drags[i];
+    try { this.canvas.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
+    this.drags.splice(i, 1);
     if (d.kind === 'marquee') {
       const view = this.getView();
       const a = toFont(d.startPx, view), b = toFont(d.curPx, view);
@@ -703,21 +830,15 @@ export class PointEditor {
       this.repaint();
       return;
     }
+    if (this.drags.length) { this.repaint(); return; } // other fingers are still dragging: one history entry when the last one lifts
+    this.snapLines = [];
     if (m.endDrag()) this.commit(); else { m.cancelDrag(); this.repaint(); }
   };
 
   private onCancel = (e: PointerEvent) => {
-    if (!this.model) return;
-    this.releasePointer(e);
-    if (this.drag && this.drag.kind !== 'marquee') this.model.cancelDrag();
-    this.drag = null;
-    this.repaint();
+    if (!this.model || !this.drags.some((x) => x.id === e.pointerId)) return;
+    this.cancelPointers();
   };
-
-  private releasePointer(e: PointerEvent): void {
-    if (this.pointerId !== null) { try { this.canvas.releasePointerCapture(e.pointerId); } catch { /* ignore */ } }
-    this.pointerId = null;
-  }
 
   private onDblClick = (e: MouseEvent) => {
     const m = this.model;
@@ -748,7 +869,7 @@ export class PointEditor {
       case 'Delete': case 'Backspace':
         e.preventDefault(); this.deleteSelected(); return;
       case 'Escape':
-        if (this.drag) { if (this.drag.kind !== 'marquee') m.cancelDrag(); this.drag = null; }
+        if (this.drag) { if (this.drag.kind !== 'marquee') m.cancelDrag(); this.dropDrags(); }
         m.clearSelection(); this.emitSelect(); this.repaint(); return;
       case 'ArrowLeft': case 'ArrowRight': case 'ArrowUp': case 'ArrowDown': {
         const step = e.shiftKey ? 10 : 2;
@@ -779,8 +900,21 @@ export class PointEditor {
       ctx.fillStyle = fill; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
     };
     const hoverKey = this.hover?.type === 'node' ? nodeKey(this.hover.node) : null;
+    const big = this.touch ? 1.5 : 1; // markers a finger can find
     ctx.save();
     ctx.setLineDash([]);
+    // lines the dragged points are snapped to
+    if (this.snapLines.length) {
+      const cw = this.canvas.clientWidth || this.canvas.width, ch = this.canvas.clientHeight || this.canvas.height;
+      ctx.strokeStyle = accent; ctx.lineWidth = 1; ctx.setLineDash([6, 4]);
+      for (const l of this.snapLines) {
+        ctx.beginPath();
+        if (l.x !== undefined) { const x = Math.round(view.ox + l.x * view.s) + 0.5; ctx.moveTo(x, 0); ctx.lineTo(x, ch); }
+        else if (l.y !== undefined) { const y = Math.round(view.oy - l.y * view.s) + 0.5; ctx.moveTo(0, y); ctx.lineTo(cw, y); }
+        ctx.stroke();
+      }
+      ctx.setLineDash([]);
+    }
     if (g.kind === 'stroke') {
       // centrelines
       ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.lineWidth = 1; ctx.lineJoin = 'round';
@@ -819,7 +953,7 @@ export class PointEditor {
         const [ax, ay] = toCanvas(h.anchor, view), [hx, hy] = toCanvas(h.pos, view);
         ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(hx, hy); ctx.stroke();
         const hot = this.hover?.type === 'handle' && sameHandle(this.hover.handle, h.ref);
-        dot(h.pos, hot ? 4 : 3, hot ? accent : withAlpha(accent, 0.85));
+        dot(h.pos, (hot ? 4 : 3) * big, hot ? accent : withAlpha(accent, 0.85));
       }
       // midpoint markers of straight segments
       for (const mp of m.midpoints()) dot(mp.pos, 1.5, 'rgba(255,255,255,.3)');
@@ -828,7 +962,7 @@ export class PointEditor {
     for (const n of m.nodes()) {
       const k = nodeKey(n.ref);
       const sel = m.isSelected(n.ref), hot = k === hoverKey;
-      sq(n.pos, sel ? 8 : 6, sel ? accent : 'rgba(255,255,255,.95)', hot ? accent : 'rgba(0,0,0,.6)');
+      sq(n.pos, (sel ? 8 : 6) * big, sel ? accent : 'rgba(255,255,255,.95)', hot ? accent : 'rgba(0,0,0,.6)');
     }
     // marquee
     if (this.drag?.kind === 'marquee') {
@@ -841,6 +975,13 @@ export class PointEditor {
     }
     ctx.restore();
   }
+}
+
+/** The candidate closest to `v` within `tol`, or null. */
+function nearest(v: number, candidates: number[], tol: number): number | null {
+  let best: number | null = null, bestD = tol;
+  for (const c of candidates) { const d = Math.abs(c - v); if (d <= bestD) { bestD = d; best = c; } }
+  return best;
 }
 
 const sameHandle = (a: HandleRef, b: HandleRef) => a.contour === b.contour && a.segment === b.segment && a.handle === b.handle;

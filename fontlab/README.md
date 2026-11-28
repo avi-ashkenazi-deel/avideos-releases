@@ -64,6 +64,32 @@ npm run test:e2e # Playwright
 If the browser says the page is offline, the server window was closed. Run
 `FontLab.command` (or `npm start`) again and reload.
 
+## On a phone
+
+On a narrow screen (up to 760 px wide) the editor is the whole screen:
+
+- **Top bar**: the Font sheet (name, Share, Spacing, Check, Test, Export, Font
+  menu), Undo, Redo, the bin (the selected points in Edit points, otherwise
+  the letter), this letter's options (brush, lock, re-roll, keep as
+  alternate) and a switch for the preview line.
+- **Preview line**: your text in the live font. Tap it to edit the text.
+- **Canvas**: fills the rest. One finger draws or drags; **two fingers zoom
+  and move the view** in every tool. In Edit points two fingers can each
+  drag their own point or handle, and the whole gesture is one Undo step.
+  While a finger drags, a **magnifier** shows what it hides.
+- **Floating buttons** (bottom left of the canvas): snapping in Edit points
+  (points land on the baseline, x-height, cap height, ascender, descender
+  and sidebearings, or line up with other points), "fit" when zoomed, and a
+  cross and a tick to cancel or close a pen shape.
+- **Tools**, then **Previous / Next / Letters / Add / Effects**. Letters, Add
+  (generate, photo, font file, character set) and Effects open as sheets
+  from the bottom.
+
+The same panels are used as on desktop, only arranged differently, and the
+layout switches by itself when the window gets wider. On desktop the canvas
+zooms with Ctrl/Cmd + scroll or a trackpad pinch; a **Fit** button appears
+next to the tools while zoomed.
+
 ## How to use it
 
 The header is just the font's name (a dot marks unsaved changes), a **Test**

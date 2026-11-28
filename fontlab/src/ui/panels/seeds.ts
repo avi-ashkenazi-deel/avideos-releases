@@ -7,6 +7,8 @@ import { PointEditor } from '../../inputs/draw/editor';
 import { PenTool, applyPenContour } from '../../inputs/draw/pen';
 import { ShapeTool, cssAccent } from '../../inputs/draw/shapes';
 import { KnifeTool, knifeCut } from '../../inputs/draw/knife';
+import { TouchGestures } from '../../inputs/draw/gestures';
+import { Loupe } from '../../inputs/draw/loupe';
 import { notesFor, openNoteCount, addNote, updateNote, removeNote, hitNote, drawNotePins, drawNoteLabel, buildNotePopover, placeNotePopover, NOTE_HIT_PX, type NotePopover } from '../../inputs/draw/notes';
 import { history } from '../history';
 import { autoVersion } from '../versions';
@@ -31,6 +33,35 @@ function blankGlyph(ch: string): Glyph {
 
 const SIDEBEARING = 60;
 
+/**
+ * What the phone layout needs from the draw tab: the pieces it shows on the
+ * main screen and the actions behind its buttons. 'draw:state' is emitted on
+ * the store when the tool, selection, pen path, zoom or snapping changes.
+ */
+export interface DrawUi {
+  canvasWrap: HTMLElement;
+  toolStrip: HTMLElement;
+  holdBanner: HTMLElement;
+  tool(): CanvasMode;
+  toolLabel(): string;
+  setTool(t: CanvasMode): void;
+  undo(): void;
+  redo(): void;
+  /** the selected points in Edit points, otherwise the whole letter */
+  remove(): void;
+  hasSelection(): boolean;
+  /** previous / next letter of the character set */
+  step(dir: -1 | 1): void;
+  pen: { open(): boolean; canClose(): boolean; close(): void; cancel(): void };
+  zoomed(): boolean;
+  resetZoom(): void;
+  snapping(): boolean;
+  setSnapping(on: boolean): void;
+}
+export let drawUi: DrawUi | null = null;
+
+const SNAP_KEY = 'fontlab:snap';
+
 /** The draw tab's tools, in tool-strip order. `id` is the canvas mode; `key` the single-letter shortcut. */
 const TOOLS: { id: CanvasMode; icon: IconName; label: string; key: string; hint: string; testid: string; sepBefore?: boolean }[] = [
   { id: 'draw', icon: 'brush', label: 'Brush', key: 'B', hint: 'draw freehand strokes', testid: 'tool-brush' },
@@ -50,6 +81,18 @@ const TOOL_INFO: Record<Exclude<CanvasMode, 'draw'>, string> = {
   knife: 'Knife: drag a line right through a stroke or shape to cut it in two. The pieces stay in place and move separately in Edit points. Hold Alt to leave a visible gap.',
   note: 'Note: click a spot on the letter to pin a comment for review. Click a pin to edit, resolve or delete it. Enter saves, Shift+Enter starts a new line.',
 };
+
+/** The same hints for fingers: no keyboard, no hover. */
+const TOUCH_INFO: Record<CanvasMode, string> = {
+  draw: 'Draw with one finger. Two fingers zoom and move the view.',
+  edit: 'Drag points and handles; two fingers can each drag a point. Double-tap a line to add a point, the bin removes the selected ones. Two fingers on empty space zoom.',
+  pen: 'Tap for corners, tap and drag for curves. Tap the first point or the tick to close the shape, the cross to cancel. Undo removes the last point.',
+  rect: 'Drag from corner to corner. Drawn inside ink it cuts a hole; inside a counter it fills.',
+  ellipse: 'Drag out its box. Drawn inside ink it cuts a counter; inside a counter it fills.',
+  knife: 'Drag a line right through a stroke or shape to cut it in two. The pieces move separately in Edit points.',
+  note: 'Tap a spot on the letter to pin a comment for review. Tap a pin to edit, resolve or delete it.',
+};
+const coarsePointer = () => typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
 
 export function hasInk(g: Glyph | undefined | null): boolean {
   if (!g) return false;
@@ -135,12 +178,20 @@ export function seedsPanel(): HTMLElement {
       scheduleBuild(60);
       syncEditTools();
     },
-    onSelect: () => syncEditTools(),
+    onSelect: () => { syncEditTools(); store.emit('draw:state'); },
     redraw: () => dc.draw(),
+    snap: () => {
+      if (!snapOn) return null;
+      const m = store.project.metrics, g = store.project.glyphs[store.selected];
+      return { xs: [0, g?.advance ?? 0], ys: [0, m.xHeight, m.capHeight, m.ascender, m.descender] };
+    },
   });
+  let snapOn = false;
+  try { snapOn = localStorage.getItem(SNAP_KEY) === '1'; } catch { /* private mode */ }
   let penChar: string | null = null;
   const pen = new PenTool(canvasEl, () => dc.getView(), {
     onCommit: (c: CurveContour) => commitPen(c),
+    onChange: () => store.emit('draw:state'),
     redraw: () => dc.draw(),
   });
   const shapeTool = new ShapeTool(canvasEl, () => dc.getView(), {
@@ -152,6 +203,33 @@ export function seedsPanel(): HTMLElement {
     onCut: (a, b, gap) => cutWithKnife(a, b, gap),
     redraw: () => dc.draw(),
   });
+
+  // ---------- touch: two fingers zoom and pan in every tool; a magnifier shows what the finger hides
+  const loupe = new Loupe(canvasEl);
+  canvasWrap.append(loupe.el);
+  const fingers = new Set<number>();
+  const LOUPE_TOOLS = new Set<CanvasMode>(['edit', 'pen', 'rect', 'ellipse', 'knife']);
+  const fingerAt = (e: PointerEvent) => {
+    if (e.pointerType !== 'touch' || !LOUPE_TOOLS.has(mode)) return;
+    const r = canvasEl.getBoundingClientRect();
+    loupe.show(e.clientX - r.left, e.clientY - r.top);
+  };
+  canvasEl.addEventListener('pointerdown', (e) => { if (e.pointerType === 'touch') { fingers.add(e.pointerId); fingerAt(e); } });
+  canvasEl.addEventListener('pointermove', (e) => { if (fingers.has(e.pointerId)) fingerAt(e); });
+  const fingerUp = (e: PointerEvent) => { if (fingers.delete(e.pointerId) && !fingers.size) loupe.hide(); };
+  canvasEl.addEventListener('pointerup', fingerUp);
+  canvasEl.addEventListener('pointercancel', fingerUp);
+  new TouchGestures(canvasWrap, canvasEl, {
+    getZoom: () => dc.getZoom(),
+    setZoom: (z) => dc.setZoom(z),
+    claims: (e) => mode === 'edit' && editor.wantsPointer(e),
+    cancelTool: () => {
+      dc.cancelLive(); editor.cancelPointers(); pen.cancelPointer(); shapeTool.cancel(); knife.cancel();
+      fingers.clear(); loupe.hide();
+    },
+  });
+  dc.onZoom = () => { fitBtn.style.display = dc.zoomed ? '' : 'none'; store.emit('draw:state'); };
+  (window as unknown as { __fontlabView: () => unknown }).__fontlabView = () => dc.getView(); // debugging / e2e handle
 
   // ---------- review notes: pins on the canvas in every mode, a popover to write and edit them
   const accent = cssAccent();
@@ -269,13 +347,14 @@ export function seedsPanel(): HTMLElement {
     else if (mode === 'knife') knife.draw(ctx, view);
     drawPeerCursors(ctx, view);
     const list = letterNotes();
-    if (!list.length && !notePop) return;
+    if (!list.length && !notePop) { loupe.render(); return; }
     drawNotePins(ctx, view, list, { accent, activeId: notePop?.noteId, hoverId: hoverNote, pending: notePop && !notePop.noteId ? { x: notePop.at[0], y: notePop.at[1] } : null });
     if (notePop) placeNotePopover(notePop.pop.el, canvasWrap, view.ox + notePop.at[0] * view.s, view.oy - notePop.at[1] * view.s);
     else if (hoverNote) {
       const i = list.findIndex((n) => n.id === hoverNote);
       if (i >= 0) drawNoteLabel(ctx, view, list[i], i + 1, canvasEl.clientWidth, canvasEl.clientHeight);
     }
+    loupe.render();
   };
 
   const select = (ch: string) => { store.selected = ch; store.emit('select'); syncEditor(); };
@@ -302,7 +381,7 @@ export function seedsPanel(): HTMLElement {
     const nOpen = openNoteCount(store.project, ch);
     const noteChip = nOpen ? h('button', { type: 'button', class: 'notechip', 'data-testid': 'note-count', title: 'Open review notes on this letter. Click to use the Note tool.', onClick: () => setTool('note') }, icon('pin', 12), `${nOpen} note${nOpen === 1 ? '' : 's'}`) : null;
     title.replaceChildren(h('span', { class: 'big' }, ch), h('span', { class: 'ucode' }, code), h('small', {}, `${src}${g?.locked ? ' · locked' : ''} · ${parts}${alts ? ` · ${alts} alternate${alts > 1 ? 's' : ''}` : ''}`), ...(noteChip ? [noteChip] : []), pointsToggle);
-    info.textContent = mode !== 'draw' ? TOOL_INFO[mode]
+    info.textContent = coarsePointer() && (mode !== 'draw' || g?.source !== 'generated') ? TOUCH_INFO[mode] : mode !== 'draw' ? TOOL_INFO[mode]
       : g?.source === 'generated' ? 'Generated from your seeds. Draw over it to replace it, re-roll for another take, or switch to Edit points.' : 'Draw with mouse, pen or finger. Pressure and speed change the width. Edit points lets you adjust what is there.';
   };
   const renderStrip = () => {
@@ -371,8 +450,20 @@ export function seedsPanel(): HTMLElement {
     if (!history.redo(store.project)) { toast('Nothing to redo'); return; }
     store.emit('glyph'); scheduleBuild(0);
   };
-  const undoBtn = iconButton('undo', 'Undo', () => { if (mode === 'edit') editor.undo(); else if (mode === 'pen' && pen.inProgress) pen.undoLast(); else undoProject(); }, { title: 'Undo the last change to the font: stroke, delete, generate, import… (Ctrl/Cmd+Z)', testid: 'btn-undo' });
-  const redoBtn = iconButton('redo', 'Redo', () => { if (mode === 'edit') editor.redo(); else if (mode === 'pen' && pen.inProgress) return; else redoProject(); }, { iconOnly: true, title: 'Redo (Shift+Ctrl/Cmd+Z)', testid: 'btn-redo' });
+  const doUndo = () => { if (mode === 'edit') editor.undo(); else if (mode === 'pen' && pen.inProgress) pen.undoLast(); else undoProject(); };
+  const doRedo = () => { if (mode === 'edit') editor.redo(); else if (mode === 'pen' && pen.inProgress) return; else redoProject(); };
+  const undoBtn = iconButton('undo', 'Undo', doUndo, { title: 'Undo the last change to the font: stroke, delete, generate, import… (Ctrl/Cmd+Z)', testid: 'btn-undo' });
+  const redoBtn = iconButton('redo', 'Redo', doRedo, { iconOnly: true, title: 'Redo (Shift+Ctrl/Cmd+Z)', testid: 'btn-redo' });
+  /** previous / next letter of the character set (wraps around) */
+  const stepLetter = (dir: -1 | 1) => {
+    const chars = projectCharset(store.project);
+    const i = chars.indexOf(store.selected);
+    const next = chars[(i < 0 ? 0 : (i + dir + chars.length) % chars.length)];
+    if (!next) return;
+    showTab('draw');
+    select(next);
+    strip.querySelector<HTMLElement>(`.chbtn[data-ch="${CSS.escape(next)}"]`)?.scrollIntoView({ block: 'nearest' });
+  };
   window.addEventListener('keydown', (e) => {
     if (editor.enabled) return; // the point editor has its own history while open
     if (pen.enabled && pen.inProgress) return; // the pen owns the keyboard while a path is open (Ctrl/Cmd+Z removes its last point)
@@ -383,15 +474,8 @@ export function seedsPanel(): HTMLElement {
     else if (mod && (e.key === 'y' || e.key === 'Y')) { e.preventDefault(); redoProject(); }
     else if (!mod && !e.altKey && !e.defaultPrevented && (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === '[' || e.key === ']')) {
       if (document.querySelector('dialog[open]')) return;
-      const chars = projectCharset(store.project);
-      const i = chars.indexOf(store.selected);
-      const dir = e.key === 'ArrowLeft' || e.key === '[' ? -1 : 1;
-      const next = chars[(i < 0 ? 0 : (i + dir + chars.length) % chars.length)];
-      if (!next) return;
       e.preventDefault();
-      showTab('draw');
-      select(next);
-      strip.querySelector<HTMLElement>(`.chbtn[data-ch="${CSS.escape(next)}"]`)?.scrollIntoView({ block: 'nearest' });
+      stepLetter(e.key === 'ArrowLeft' || e.key === '[' ? -1 : 1);
     }
   });
   // tool shortcuts: B V P R O K N pick a tool, Escape goes back to the brush
@@ -416,7 +500,8 @@ export function seedsPanel(): HTMLElement {
     e.preventDefault();
     if (mode !== tool.id) setTool(tool.id);
   });
-  const clear = iconButton('trash', 'Clear', () => { store.update((p) => { delete p.glyphs[store.selected]; }, 'glyph'); recomposeDependents(store.selected); scheduleBuild(0); }, { title: 'Remove this letter (it can be regenerated)' });
+  const clearLetter = () => { store.update((p) => { delete p.glyphs[store.selected]; }, 'glyph'); recomposeDependents(store.selected); scheduleBuild(0); };
+  const clear = iconButton('trash', 'Clear', clearLetter, { title: 'Remove this letter (it can be regenerated)' });
   const lock = iconButton('lock', 'Lock', () => { store.update((p) => { const g = p.glyphs[store.selected]; if (g) g.locked = !g.locked; }, 'glyph'); }, { title: 'Locked letters are never regenerated' });
   const keepAltBtn = iconButton('copy', 'Keep as alternate', () => keepAlternate(store.selected), { title: 'Save this version of the letter as a stylistic set (ss01–ss03), then re-roll or redraw for a new main version', testid: 'btn-keep-alt' });
   const reroll = iconButton('dice', 'Re-roll', () => {
@@ -445,7 +530,10 @@ export function seedsPanel(): HTMLElement {
     toolStrip.append(b);
     toolBtns.set(t.id, b);
   }
-  const toolRow = h('div', { class: 'toolrow' }, toolStrip, toolName);
+  const fitBtn = iconButton('fit', 'Fit', () => dc.resetZoom(), { title: 'Zoomed in or moved. Click to fit the letter again. Ctrl/Cmd + scroll (or a pinch) zooms, scrolling moves the view.', testid: 'btn-fit' });
+  fitBtn.classList.add('fitbtn');
+  fitBtn.style.display = 'none';
+  const toolRow = h('div', { class: 'toolrow' }, toolStrip, toolName, fitBtn);
   const nodeWidth = slider('Point width', { min: 2, max: 200, step: 1, value: 40, onInput: (v) => editor.setSelectedWidth(v), format: (v) => v.toFixed(0) });
   const editTools = h('div', { class: 'row edittools' }, nodeWidth, h('small', { class: 'muted' }, 'Alt+drag a node also changes width'));
   const applyMode = () => {
@@ -465,8 +553,10 @@ export function seedsPanel(): HTMLElement {
     if (mode === 'rect' || mode === 'ellipse') shapeTool.enable(mode); else shapeTool.disable();
     if (mode === 'knife') knife.enable(); else knife.disable();
     if (mode !== 'note') closeNotePop();
+    if (!LOUPE_TOOLS.has(mode)) loupe.hide();
     syncEditor();
     dc.draw();
+    store.emit('draw:state');
   };
   const syncEditTools = () => { const w = editor.getSelectedWidth(); if (w != null) (nodeWidth as any).setValue(w); };
 
@@ -561,6 +651,28 @@ export function seedsPanel(): HTMLElement {
     }
   });
   select(store.selected);
+  drawUi = {
+    canvasWrap, toolStrip, holdBanner,
+    tool: () => mode,
+    toolLabel: () => TOOLS.find((t) => t.id === mode)?.label ?? '',
+    setTool,
+    undo: doUndo,
+    redo: doRedo,
+    remove: () => {
+      if (mode === 'edit' && editor.getSelection()?.nodes.length) { editor.deleteSelected(); return; }
+      const g = store.project.glyphs[store.selected];
+      if (!g || !hasInk(g)) { toast('This letter is already empty'); return; }
+      clearLetter();
+      toast(`“${store.selected}” cleared. Undo brings it back.`);
+    },
+    hasSelection: () => mode === 'edit' && !!editor.getSelection()?.nodes.length,
+    step: stepLetter,
+    pen: { open: () => mode === 'pen' && pen.inProgress, canClose: () => pen.path.canClose(), close: () => { if (!pen.close()) toast('A shape needs at least three points'); }, cancel: () => pen.cancel() },
+    zoomed: () => dc.zoomed,
+    resetZoom: () => dc.resetZoom(),
+    snapping: () => snapOn,
+    setSnapping: (on) => { snapOn = on; try { localStorage.setItem(SNAP_KEY, on ? '1' : '0'); } catch { /* private mode */ } store.emit('draw:state'); },
+  };
   return panel;
 }
 

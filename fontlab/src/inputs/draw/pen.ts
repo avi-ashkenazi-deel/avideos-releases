@@ -174,7 +174,7 @@ export interface PenToolOptions {
   tolerance?: number;
 }
 
-interface PenDrag { index: number; startPx: Vec; moved: boolean }
+interface PenDrag { index: number; startPx: Vec; moved: boolean; added?: boolean }
 
 const toCanvas = (p: Vec, v: View): Vec => [v.ox + p[0] * v.s, v.oy - p[1] * v.s];
 const toFont = (c: Vec, v: View): Vec => [(c[0] - v.ox) / v.s, (v.oy - c[1]) / v.s];
@@ -189,6 +189,8 @@ export class PenTool {
   /** cursor in canvas pixels (null when outside the canvas) */
   private cursor: Vec | null = null;
   private pointerId: number | null = null;
+  /** the last pointer was a finger: larger hit areas */
+  private touch = false;
   private accent = '#ffd166';
   private prevCursor = '';
 
@@ -262,7 +264,22 @@ export class PenTool {
     return true;
   }
 
-  private get tol(): number { return this.opts.tolerance ?? PEN_HIT_TOLERANCE; }
+  private get tol(): number { return this.opts.tolerance ?? (this.touch ? PEN_HIT_TOLERANCE * 2.2 : PEN_HIT_TOLERANCE); }
+
+  /**
+   * Take back what the pointer that is still down has done (a second finger
+   * arrived: it is a pinch, not a point).
+   */
+  cancelPointer(): void {
+    const d = this.drag;
+    if (!d) return;
+    if (this.pointerId !== null) { try { this.canvas.releasePointerCapture(this.pointerId); } catch { /* not captured */ } }
+    this.pointerId = null;
+    this.drag = null;
+    this.cursor = null;
+    if (d.added) this.path.removeLast();
+    this.changed();
+  }
 
   private changed(): void {
     this.updateCursorStyle();
@@ -299,22 +316,24 @@ export class PenTool {
   // ---- pointer handlers
 
   private onDown = (e: PointerEvent) => {
-    if (!this.on || e.button !== 0) return;
+    if (!this.on || e.button !== 0 || this.drag) return; // one point at a time
+    this.touch = e.pointerType === 'touch';
     const view = this.getView();
     const px = this.px(e);
     const p = toFont(px, view);
     this.cursor = px;
     const path = this.path;
     if (path.length && path.canClose() && path.isNearStart(p, this.tol / view.s)) { this.close(); return; }
-    let index: number;
+    let index: number, added = false;
     if (path.last && this.nearPx(path.last.p, px)) {
       index = path.length - 1; // drag handles out of the last point instead of stacking a new one on it
     } else {
       path.addCorner(p);
       index = path.length - 1;
+      added = true;
       this.opts.onChange?.();
     }
-    this.drag = { index, startPx: px, moved: false };
+    this.drag = { index, startPx: px, moved: false, added };
     this.pointerId = e.pointerId;
     try { this.canvas.setPointerCapture(e.pointerId); } catch { /* ignore */ }
     this.updateCursorStyle();
@@ -336,7 +355,7 @@ export class PenTool {
   };
 
   private onUp = (e: PointerEvent) => {
-    if (!this.on || !this.drag) return;
+    if (!this.on || !this.drag || (this.pointerId !== null && e.pointerId !== this.pointerId)) return;
     if (this.pointerId !== null) { try { this.canvas.releasePointerCapture(e.pointerId); } catch { /* ignore */ } }
     this.pointerId = null;
     this.drag = null;

@@ -9,10 +9,10 @@ import { writeOnPlan, drawWriteOnFrame } from '../../export/specimen/writeOn';
 export function previewPanel(): HTMLElement {
   const text = h('textarea', { class: 'preview-input', rows: 2, value: store.project.previewText, placeholder: 'Type to preview…' });
   const out = h('div', { class: 'preview-out', contenteditable: 'true', spellcheck: false, role: 'textbox', 'aria-label': 'preview text (editable)', title: 'Type here to test the font', style: { fontFamily: `'${PREVIEW_FAMILY}', monospace`, fontSize: '64px' } }, store.project.previewText);
-  out.addEventListener('input', () => { store.project.previewText = out.textContent ?? ''; if (text.value !== store.project.previewText) text.value = store.project.previewText; });
-  text.addEventListener('input', () => { store.project.previewText = text.value; out.textContent = text.value; });
+  out.addEventListener('input', () => { store.project.previewText = out.textContent ?? ''; if (text.value !== store.project.previewText) text.value = store.project.previewText; store.emit('preview:typed'); });
+  text.addEventListener('input', () => { store.project.previewText = text.value; out.textContent = text.value; store.emit('preview:typed'); });
   const size = slider('Size', { min: 16, max: 220, step: 1, value: 64, onInput: (v) => { out.style.fontSize = v + 'px'; }, format: (v) => v + 'px' });
-  const sample = iconButton('text', 'Insert sample text', () => { text.value = samplePreview(store.project); store.project.previewText = text.value; out.textContent = text.value; }, { title: 'A pangram for every script you have switched on' });
+  const sample = iconButton('text', 'Insert sample text', () => { text.value = samplePreview(store.project); store.project.previewText = text.value; out.textContent = text.value; store.emit('preview:typed'); }, { title: 'A pangram for every script you have switched on' });
   // Living mode: drift `time` and rebuild only the preview text while on
   let living = false, waiting = false, frames = 0, t0 = 0;
   const DRIFT_OPS = new Set(['wobble', 'melt', 'inkNoise', 'reactionDiffusion']);

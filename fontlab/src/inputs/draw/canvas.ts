@@ -2,6 +2,7 @@ import type { Glyph, Stroke, StrokePoint, FontMetrics, CapStyle, Contour } from 
 import { uid } from '../../core/glyph';
 import { simplifyRDP } from '../../core/geometry';
 import { fitView, drawContours, drawGuides, drawStrokeRaw, type View } from '../../ui/render';
+import { NO_ZOOM, applyZoom, clampZoom, isZoomed, type Zoom } from './zoom';
 
 export interface BrushSettings {
   /** full stroke width in font units */
@@ -32,7 +33,16 @@ export class DrawCanvas {
   readonly canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
   private view: View;
+  /** the view that fits the letter; `view` is this with the zoom applied */
+  private base: View;
+  private zoom: Zoom = NO_ZOOM;
+  /** the letter the view was fitted to (its advance at that moment): the fit must not jump while it is being drawn */
+  private fitChar: string | null = null;
+  private fitAdvance: number | undefined;
   private live: Live | null = null;
+  private livePointer: number | null = null;
+  /** called when the zoom or pan changed */
+  onZoom: () => void = () => {};
   glyph: Glyph | null = null;
   contours: Contour[] = [];
   metrics: FontMetrics;
@@ -50,7 +60,8 @@ export class DrawCanvas {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d')!;
     this.metrics = metrics;
-    this.view = fitView(canvas.clientWidth, canvas.clientHeight, metrics);
+    this.base = fitView(canvas.clientWidth, canvas.clientHeight, metrics);
+    this.view = this.base;
     canvas.style.touchAction = 'none';
     canvas.addEventListener('pointerdown', this.onDown);
     canvas.addEventListener('pointermove', this.onMove);
@@ -66,11 +77,43 @@ export class DrawCanvas {
     const w = this.canvas.clientWidth || 480, h = this.canvas.clientHeight || 520;
     this.canvas.width = Math.round(w * dpr); this.canvas.height = Math.round(h * dpr);
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    this.view = fitView(w, h, this.metrics);
+    this.base = fitView(w, h, this.metrics, 24, this.fitAdvance);
+    this.zoom = clampZoom(this.zoom, w, h);
+    this.view = applyZoom(this.base, this.zoom);
     this.draw();
   }
 
-  setGlyph(g: Glyph | null, contours: Contour[]): void { this.glyph = g; this.contours = contours; this.draw(); }
+  setGlyph(g: Glyph | null, contours: Contour[]): void {
+    this.glyph = g; this.contours = contours;
+    if (g && g.char !== this.fitChar) {
+      // another letter: fit it again and drop the zoom
+      const hadZoom = isZoomed(this.zoom);
+      this.fitChar = g.char; this.fitAdvance = g.advance; this.zoom = NO_ZOOM;
+      this.resize();
+      if (hadZoom) this.onZoom();
+      return;
+    }
+    this.base = fitView(this.canvas.clientWidth || 480, this.canvas.clientHeight || 520, this.metrics, 24, this.fitAdvance);
+    this.view = applyZoom(this.base, this.zoom);
+    this.draw();
+  }
+
+  getZoom(): Zoom { return this.zoom; }
+  get zoomed(): boolean { return isZoomed(this.zoom); }
+  setZoom(z: Zoom): void {
+    this.zoom = clampZoom(z, this.canvas.clientWidth || 480, this.canvas.clientHeight || 520);
+    this.view = applyZoom(this.base, this.zoom);
+    this.draw();
+    this.onZoom();
+  }
+  resetZoom(): void { this.setZoom(NO_ZOOM); }
+  /** Drop the stroke being drawn (a second finger arrived: it is a pinch, not a stroke). */
+  cancelLive(): void {
+    if (!this.live) return;
+    if (this.livePointer !== null) { try { this.canvas.releasePointerCapture(this.livePointer); } catch { /* not captured */ } }
+    this.live = null; this.livePointer = null;
+    this.draw();
+  }
 
   private toFont(e: PointerEvent): [number, number] {
     const r = this.canvas.getBoundingClientRect();
@@ -89,13 +132,14 @@ export class DrawCanvas {
   }
 
   private onDown = (e: PointerEvent) => {
-    if (!this.glyph || this.mode !== 'draw') return;
+    if (!this.glyph || this.mode !== 'draw' || this.live) return; // one stroke at a time: a second finger does not start another
     this.canvas.setPointerCapture(e.pointerId);
+    this.livePointer = e.pointerId;
     const [x, y] = this.toFont(e);
     this.live = { pts: [{ x, y, w: this.widthFor(e, 0), p: e.pressure }], lastT: e.timeStamp, lastX: x, lastY: y };
   };
   private onMove = (e: PointerEvent) => {
-    if (!this.live) return;
+    if (!this.live || e.pointerId !== this.livePointer) return;
     const events = (e as any).getCoalescedEvents?.() as PointerEvent[] | undefined;
     for (const ev of events && events.length ? events : [e]) {
       const [x, y] = this.toFont(ev);
@@ -111,7 +155,8 @@ export class DrawCanvas {
     this.draw();
   };
   private onUp = (e: PointerEvent) => {
-    if (!this.live) return;
+    if (!this.live || e.pointerId !== this.livePointer) return;
+    this.livePointer = null;
     try { this.canvas.releasePointerCapture(e.pointerId); } catch { /* not captured */ }
     const pts = this.finish(this.live.pts);
     this.live = null;
